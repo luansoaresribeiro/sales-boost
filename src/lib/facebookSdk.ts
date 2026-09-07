@@ -14,7 +14,7 @@ interface FBSdk {
   AppEvents?: { logPageView: () => void }
   login?: (
     cb: (res: FBLoginResponse) => void,
-    opts: { config_id: string; response_type: string; override_default_response_type: boolean; extras?: { setup?: Record<string, unknown> } }
+    opts: { config_id: string; response_type: string; override_default_response_type: boolean; extras?: { setup?: Record<string, unknown>; featureType?: string; sessionInfoVersion?: string } }
   ) => void
 }
 declare global {
@@ -85,7 +85,9 @@ export function launchWhatsAppSignup(): Promise<WhatsAppSignupResult> {
       config_id: WHATSAPP_CONFIG_ID,
       response_type: 'code',
       override_default_response_type: true,
-      extras: { setup: {} },
+      // sessionInfoVersion é o que faz a Meta devolver o postMessage com
+      // waba_id/phone_number_id escolhidos — sem isso o número não volta.
+      extras: { setup: {}, featureType: '', sessionInfoVersion: '3' },
     })
   })
 }

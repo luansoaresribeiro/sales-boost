@@ -75,6 +75,10 @@ export default function IntegrationsTab() {
   // número do WhatsApp Business, isso ainda não foi decidido).
   const [waNumber, setWaNumber] = useState('')
   const [waConnectedAt, setWaConnectedAt] = useState<string | null>(null)
+  // Conexão REAL só existe quando o número do WhatsApp (phone_number_id) foi
+  // de fato salvo pelo Embedded Signup — não basta ter um número digitado.
+  const [waPhoneId, setWaPhoneId] = useState<string | null>(null)
+  const waConnected = !!waPhoneId
   const [waSaving, setWaSaving] = useState(false)
   const [waSaved, setWaSaved] = useState(false)
   const [waError, setWaError] = useState('')
@@ -98,7 +102,7 @@ export default function IntegrationsTab() {
     setLoading(true)
     const { data: company } = await supabase
       .from('companies')
-      .select('id, instagram_user_id, instagram_auto_post, instagram_post_frequency, whatsapp_number, whatsapp_connected_at, meta_business_name, meta_business_connected_at, meta_ads_account_id, meta_ads_account_name')
+      .select('id, instagram_user_id, instagram_auto_post, instagram_post_frequency, whatsapp_number, whatsapp_connected_at, whatsapp_phone_number_id, meta_business_name, meta_business_connected_at, meta_ads_account_id, meta_ads_account_name')
       .eq('user_id', user!.id)
       .single()
 
@@ -109,6 +113,7 @@ export default function IntegrationsTab() {
     setIgFrequency(company.instagram_post_frequency ?? 'daily')
     setWaNumber(company.whatsapp_number ?? '')
     setWaConnectedAt(company.whatsapp_connected_at ?? null)
+    setWaPhoneId(company.whatsapp_phone_number_id ?? null)
     setMetaBusinessName(company.meta_business_name ?? null)
     setMetaBusinessConnectedAt(company.meta_business_connected_at ?? null)
     setMetaAdsAccount(company.meta_ads_account_id ? { id: company.meta_ads_account_id, name: company.meta_ads_account_name ?? company.meta_ads_account_id } : null)
@@ -211,15 +216,27 @@ export default function IntegrationsTab() {
         body: JSON.stringify({ code, waba_id: wabaId, phone_number_id: phoneNumberId }),
       })
       const data = await res.json() as { ok?: boolean; error?: string; display_phone_number?: string }
-      if (!res.ok || !data.ok) throw new Error(data.error ?? 'Erro ao conectar o WhatsApp')
+      if (!res.ok || !data.ok) throw new Error(friendlyWaError(data.error))
       setWaNumber(data.display_phone_number ?? '')
       setWaConnectedAt(new Date().toISOString())
+      setWaPhoneId(phoneNumberId) // conexão real: guarda o número escolhido
       setWaSaved(true)
       setTimeout(() => setWaSaved(false), 2000)
     } catch (e) {
       setWaError(e instanceof Error ? e.message : String(e))
     }
     setWaSaving(false)
+  }
+
+  // Traduz erros técnicos da Meta em algo que o dono entende e sabe agir.
+  const friendlyWaError = (err?: string): string => {
+    const raw = err ?? 'Erro ao conectar o WhatsApp'
+    const low = raw.toLowerCase()
+    if (low.includes('permission') || low.includes('advanced access') || low.includes('scope'))
+      return 'A Meta recusou por falta de permissão. Enquanto o app estiver em modo de desenvolvimento, só você e testadores conseguem conectar — pra liberar pra clientes, é preciso a Verificação do Negócio + App Review. (Detalhe técnico: ' + raw + ')'
+    if (low.includes('redirect') || low.includes('config'))
+      return 'Configuração do login do WhatsApp incompleta na Meta. Confira o Configuration ID e as permissões da configuração. (Detalhe: ' + raw + ')'
+    return raw
   }
 
   const handleDisconnectWhatsapp = async () => {
@@ -230,6 +247,7 @@ export default function IntegrationsTab() {
     }).eq('id', companyId)
     setWaNumber('')
     setWaConnectedAt(null)
+    setWaPhoneId(null)
   }
 
   const handleDisconnectMetaBusiness = async () => {
@@ -518,20 +536,21 @@ export default function IntegrationsTab() {
         )}
       </div>
 
-      {/* WhatsApp Business card */}
-      <div style={{ background: CARD, border: `1px solid ${waConnectedAt ? 'rgba(74,222,128,0.25)' : BORDER}`, borderRadius: '14px', overflow: 'hidden', marginBottom: '20px' }}>
+      {/* WhatsApp Business card — "Conectado" só quando a conexão é REAL
+          (phone_number_id salvo). Ter só um número digitado não conta. */}
+      <div style={{ background: CARD, border: `1px solid ${waConnected ? 'rgba(74,222,128,0.25)' : BORDER}`, borderRadius: '14px', overflow: 'hidden', marginBottom: '20px' }}>
         <div style={{ padding: '20px 24px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: waConnectedAt ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>💬</div>
+            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: waConnected ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>💬</div>
             <div>
               <div style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>
                 WhatsApp Business{' '}
-                {waConnectedAt && (
+                {waConnected && (
                   <span style={{ fontSize: '10px', background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>✓ CONECTADO</span>
                 )}
               </div>
-              <div style={{ fontSize: '12px', color: waConnectedAt ? '#4ade80' : MUTED }}>
-                {waConnectedAt ? `✓ Conectado · ${waNumber}` : 'Conecte pra o Agente responder seus clientes pelo WhatsApp'}
+              <div style={{ fontSize: '12px', color: waConnected ? '#4ade80' : MUTED }}>
+                {waConnected ? `✓ Conectado · ${waNumber}` : 'Conecte pra o Agente responder seus clientes pelo WhatsApp'}
               </div>
             </div>
           </div>
@@ -541,11 +560,11 @@ export default function IntegrationsTab() {
                 <span style={{ fontSize: '11px', color: MUTED, fontStyle: 'italic', padding: '8px' }}>WhatsApp ainda não configurado na plataforma</span>
               ) : (
                 <button onClick={connectWhatsapp} disabled={waSaving}
-                  style={{ padding: '8px 18px', background: waConnectedAt ? 'rgba(255,255,255,0.04)' : ORANGE, color: waConnectedAt ? MUTED : '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: waConnectedAt ? `1px solid ${BORDER}` : 'none', cursor: waSaving ? 'wait' : 'pointer' }}>
-                  {waSaving ? 'Conectando...' : waConnectedAt ? 'Reconectar' : 'Conectar WhatsApp →'}
+                  style={{ padding: '8px 18px', background: waConnected ? 'rgba(255,255,255,0.04)' : ORANGE, color: waConnected ? MUTED : '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: waConnected ? `1px solid ${BORDER}` : 'none', cursor: waSaving ? 'wait' : 'pointer' }}>
+                  {waSaving ? 'Conectando...' : waConnected ? 'Reconectar' : 'Conectar WhatsApp →'}
                 </button>
               )}
-              {waConnectedAt && (
+              {(waConnected || waConnectedAt) && (
                 <button onClick={handleDisconnectWhatsapp}
                   style={{ padding: '8px 14px', background: 'transparent', color: '#f87171', fontWeight: 600, fontSize: '12px', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.3)', cursor: 'pointer' }}>
                   Desconectar
@@ -564,7 +583,7 @@ export default function IntegrationsTab() {
             ✓ WhatsApp conectado! O Agente já pode responder as mensagens.
           </div>
         )}
-        {!waConnectedAt && (
+        {!waConnected && (
           <div style={{ padding: '0 24px 20px' }}>
             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>
               Você escolhe (ou cria) o número de WhatsApp Business numa janela do Meta — sem precisar mexer em configuração técnica. Depois disso, o Agente passa a responder as mensagens que chegarem nesse número.
