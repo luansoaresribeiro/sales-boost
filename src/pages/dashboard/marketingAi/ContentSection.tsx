@@ -6,44 +6,70 @@ import CampaignsTab from './CampaignsTab'
 import StoriesTab from './StoriesTab'
 import ContentVault from './ContentVault'
 import ContentLibrary from './ContentLibrary'
+import PerformanceTab from './PerformanceTab'
 
 const ORANGE = '#FF6D29'
 
-type Mode = 'organico' | 'campanhas' | 'stories' | 'vault' | 'biblioteca'
+type Mode = 'conteudo' | 'vault' | 'biblioteca' | 'performance'
+type Sub = 'organico' | 'campanhas' | 'stories'
 
 const TABS: { key: Mode; icon: string; label: string; sub: string }[] = [
-  { key: 'organico', icon: '✍️', label: 'Orgânico', sub: 'Calendário, ideias e criativos' },
-  { key: 'stories', icon: '📖', label: 'Stories', sub: 'Stories + Story Ads (demo)' },
-  { key: 'campanhas', icon: '🎯', label: 'Campanhas', sub: 'Mídia paga com funil (demo)' },
+  { key: 'conteudo', icon: '✍️', label: 'Conteúdo', sub: 'Orgânico, campanhas e stories' },
   { key: 'vault', icon: '⭐', label: 'Vault', sub: 'Aprovados pelo QC, prontos pra publicar' },
   { key: 'biblioteca', icon: '📚', label: 'Biblioteca', sub: 'Frameworks, hooks e personalidades' },
+  { key: 'performance', icon: '📊', label: 'Performance', sub: 'Inteligência real do seu Instagram' },
 ]
 
-// Casa os dois módulos de conteúdo sob uma única seção: o Agente de Conteúdo
-// (orgânico, já existente e intacto) e o novo Estrategista de Campanhas (mídia
-// paga, modo demonstração). O toggle preserva 100% do que já existia.
-export default function ContentSection({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city'> }) {
-  const [mode, setMode] = useState<Mode>('organico')
+const SUBTABS: { key: Sub; icon: string; label: string; sub: string }[] = [
+  { key: 'organico', icon: '✍️', label: 'Orgânico', sub: 'Calendário, ideias e criativos' },
+  { key: 'campanhas', icon: '🎯', label: 'Campanhas', sub: 'Mídia paga com funil (demo)' },
+  { key: 'stories', icon: '📖', label: 'Stories', sub: 'Stories + Story Ads (demo)' },
+]
+
+// Casa os módulos de conteúdo sob uma única aba "Conteúdo" (orgânico, campanhas
+// e stories como sub-opções) + Vault + Biblioteca, e a nova aba Performance
+// (centro de inteligência real do Instagram).
+export default function ContentSection({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city' | 'instagram_user_id' | 'instagram_url'> }) {
+  const [mode, setMode] = useState<Mode>('conteudo')
+  const [sub, setSub] = useState<Sub>('organico')
+
+  // "Criar isto" no Performance manda a ideia pro Agente de Conteúdo (Orgânico).
+  const goToContent = () => { setMode('conteudo'); setSub('organico') }
 
   return (
     <div>
-      <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', marginBottom: '22px' }}>
-        {TABS.map(t => {
-          const active = mode === t.key
-          return (
-            <button key={t.key} onClick={() => setMode(t.key)}
-              style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '9px 15px', background: active ? 'rgba(255,109,41,0.12)' : 'transparent', border: `1px solid ${active ? 'rgba(255,109,41,0.35)' : 'transparent'}`, borderRadius: '9px', cursor: 'pointer', fontFamily: D, textAlign: 'left' }}>
-              <span style={{ fontSize: '17px' }}>{t.icon}</span>
-              <div>
-                <div style={{ fontSize: '12.5px', fontWeight: 700, color: active ? ORANGE : 'white' }}>{t.label}</div>
-                <div style={{ fontSize: '10px', color: MUTED }}>{t.sub}</div>
-              </div>
-            </button>
-          )
-        })}
+      {/* Abas principais */}
+      <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', marginBottom: mode === 'conteudo' ? '14px' : '22px', flexWrap: 'wrap' }}>
+        {TABS.map(t => <TabButton key={t.key} t={t} active={mode === t.key} onClick={() => setMode(t.key)} />)}
       </div>
 
-      {mode === 'organico' ? <ContentAgentTab company={company} /> : mode === 'stories' ? <StoriesTab company={company} /> : mode === 'campanhas' ? <CampaignsTab company={company} /> : mode === 'vault' ? <ContentVault companyId={company.id} /> : <ContentLibrary companyId={company.id} />}
+      {/* Sub-abas aparecem só ao clicar em "Conteúdo" */}
+      {mode === 'conteudo' && (
+        <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.15)', borderRadius: '12px', marginBottom: '22px', marginLeft: '2px', flexWrap: 'wrap' }}>
+          {SUBTABS.map(t => <TabButton key={t.key} t={t} active={sub === t.key} onClick={() => setSub(t.key)} />)}
+        </div>
+      )}
+
+      {mode === 'conteudo' ? (
+        sub === 'organico' ? <ContentAgentTab company={company} />
+          : sub === 'campanhas' ? <CampaignsTab company={company} />
+          : <StoriesTab company={company} />
+      ) : mode === 'vault' ? <ContentVault companyId={company.id} />
+        : mode === 'biblioteca' ? <ContentLibrary companyId={company.id} />
+        : <PerformanceTab company={company} onCreateContent={goToContent} />}
     </div>
+  )
+}
+
+function TabButton({ t, active, onClick }: { t: { icon: string; label: string; sub: string }; active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '9px 15px', background: active ? 'rgba(255,109,41,0.12)' : 'transparent', border: `1px solid ${active ? 'rgba(255,109,41,0.35)' : 'transparent'}`, borderRadius: '9px', cursor: 'pointer', fontFamily: D, textAlign: 'left' }}>
+      <span style={{ fontSize: '17px' }}>{t.icon}</span>
+      <div>
+        <div style={{ fontSize: '12.5px', fontWeight: 700, color: active ? ORANGE : 'white' }}>{t.label}</div>
+        <div style={{ fontSize: '10px', color: MUTED }}>{t.sub}</div>
+      </div>
+    </button>
   )
 }
