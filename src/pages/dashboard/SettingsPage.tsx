@@ -6,6 +6,7 @@ import { useCompany } from '../../contexts/CompanyContext'
 import { useLang } from '../../contexts/LanguageContext'
 import { d } from '../../i18n-dash'
 import NotificationsCard from './settings/NotificationsCard'
+import BusinessUnderstandingCard from './settings/BusinessUnderstandingCard'
 import AgentConfigTab from './marketingAi/AgentConfigTab'
 import ConnectionsTab from './marketingAi/ConnectionsTab'
 import BusinessContextTab from './marketingAi/BusinessContextTab'
@@ -600,6 +601,8 @@ export default function SettingsPage() {
           <Field label="Ticket médio (R$)" value={avgTicket} onChange={setAvgTicket} placeholder="Ex: 80" type="number"
             hint="Valor médio que um cliente gasta numa compra/visita. Usamos isso para calcular a receita recuperável real de cada oportunidade — sem preencher, esse valor não aparece." />
         </SectionCard>
+
+        {companyId && <BusinessUnderstandingCard companyId={companyId} />}
 
         <SectionCard id="section-presenca" title="Links do negócio (opcional)">
           <p style={{ fontSize: '12px', color: MUTED, marginBottom: '18px', lineHeight: 1.6 }}>

@@ -17,6 +17,7 @@ interface OnboardingData {
   phone?: string
   contact_email: string
   goal: string
+  onboarding_context?: Record<string, unknown> // entendimento do negócio (onboarding conversacional)
 }
 
 interface PagespeedResult {
@@ -61,6 +62,7 @@ Deno.serve(async (req) => {
         phone: data.phone || null,
         contact_email: data.contact_email.trim(),
         goal: data.goal,
+        onboarding_context: data.onboarding_context ?? null,
         status: 'processing',
       })
       .select('id')

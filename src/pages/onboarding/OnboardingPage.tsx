@@ -22,6 +22,12 @@ interface OnboardingData {
   phone: string
   contact_email: string
   goal: string
+  // Entendimento do negócio (conversa estratégica)
+  business_description: string
+  ideal_customer: string
+  business_stage: string
+  main_challenges: string
+  current_channels: string[]
 }
 
 const GOALS = [
@@ -30,81 +36,65 @@ const GOALS = [
   'Recuperar clientes inativos',
   'Aumentar ticket médio',
   'Melhorar reputação online',
-  'Melhorar performance do meu site',
+  'Construir minha marca',
+  'Entender melhor meu negócio',
   'Outro',
 ]
+const STAGES = ['Começando agora', 'Crescendo', 'Estabelecido', 'Escalando', 'Preciso dar a volta por cima']
+const CHALLENGES = [
+  'Poucos clientes novos', 'Vendas baixas', 'Redes sociais fracas', 'Não sei o que postar',
+  'Trabalho manual demais', 'Não entendo meus dados', 'Retenção de clientes', 'Concorrência', 'Falta de estratégia', 'Outro',
+]
+const CHANNELS = ['Instagram', 'Facebook', 'WhatsApp', 'Google', 'Site', 'Indicações', 'Anúncios pagos', 'E-mail', 'Equipe de vendas', 'Ainda não sei']
 
 const LOADING_MSGS = [
-  'Verificando performance do site...',
-  'Analisando SEO técnico...',
-  'Checando Core Web Vitals...',
-  'Mapeando presença digital...',
-  'Calculando seu diagnóstico...',
+  'Entendendo seu negócio...', 'Montando seu perfil...', 'Verificando seu site...',
+  'Analisando seu segmento...', 'Preparando seu diagnóstico...',
 ]
 
-function Field({
-  label, value, onChange, placeholder, type = 'text', required = false, hint,
-}: {
-  label: string; value: string; onChange: (v: string) => void
-  placeholder?: string; type?: string; required?: boolean; hint?: string
+function Field({ label, value, onChange, placeholder, type = 'text', required = false, hint }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; required?: boolean; hint?: string
 }) {
   const [focused, setFocused] = useState(false)
   return (
     <div style={{ marginBottom: '16px' }}>
       <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>
-        {label}
-        {required && <span style={{ color: ORANGE }}>*</span>}
+        {label}{required && <span style={{ color: ORANGE }}>*</span>}
       </label>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        style={{
-          width: '100%', padding: '12px 16px', boxSizing: 'border-box',
-          background: 'rgba(255,255,255,0.04)',
-          border: `1px solid ${focused ? 'rgba(255,109,41,0.55)' : BORDER}`,
-          borderRadius: '12px', color: 'white', fontSize: '15px',
-          outline: 'none', transition: 'border-color 0.2s', fontFamily: 'inherit',
-        }}
-      />
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        style={{ width: '100%', padding: '12px 16px', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: `1px solid ${focused ? 'rgba(255,109,41,0.55)' : BORDER}`, borderRadius: '12px', color: 'white', fontSize: '15px', outline: 'none', transition: 'border-color 0.2s', fontFamily: 'inherit' }} />
       {hint && <div style={{ fontSize: '11px', color: MUTED, marginTop: '5px', lineHeight: 1.5 }}>{hint}</div>}
     </div>
   )
 }
 
-function SelectField({
-  label, value, onChange, options, required = false,
-}: {
-  label: string; value: string; onChange: (v: string) => void
-  options: string[]; required?: boolean
+function TextArea({ label, value, onChange, placeholder, hint }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string
+}) {
+  const [focused, setFocused] = useState(false)
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>{label}</label>
+      <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={3}
+        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        style={{ width: '100%', padding: '12px 16px', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: `1px solid ${focused ? 'rgba(255,109,41,0.55)' : BORDER}`, borderRadius: '12px', color: 'white', fontSize: '15px', outline: 'none', transition: 'border-color 0.2s', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }} />
+      {hint && <div style={{ fontSize: '11px', color: MUTED, marginTop: '5px', lineHeight: 1.5 }}>{hint}</div>}
+    </div>
+  )
+}
+
+function SelectField({ label, value, onChange, options, required = false }: {
+  label: string; value: string; onChange: (v: string) => void; options: string[]; required?: boolean
 }) {
   const [focused, setFocused] = useState(false)
   return (
     <div style={{ marginBottom: '16px' }}>
       <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>
-        {label}
-        {required && <span style={{ color: ORANGE }}>*</span>}
+        {label}{required && <span style={{ color: ORANGE }}>*</span>}
       </label>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        style={{
-          width: '100%', padding: '12px 16px', boxSizing: 'border-box',
-          background: '#1a1008',
-          border: `1px solid ${focused ? 'rgba(255,109,41,0.55)' : BORDER}`,
-          borderRadius: '12px', color: value ? 'white' : MUTED,
-          fontSize: '15px', outline: 'none', transition: 'border-color 0.2s',
-          fontFamily: 'inherit', cursor: 'pointer', appearance: 'none',
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23BABABA' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'right 16px center',
-        }}
-      >
+      <select value={value} onChange={e => onChange(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        style={{ width: '100%', padding: '12px 16px', boxSizing: 'border-box', background: '#1a1008', border: `1px solid ${focused ? 'rgba(255,109,41,0.55)' : BORDER}`, borderRadius: '12px', color: value ? 'white' : MUTED, fontSize: '15px', outline: 'none', transition: 'border-color 0.2s', fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23BABABA' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 16px center' }}>
         <option value="" disabled style={{ color: MUTED }}>Selecione...</option>
         {options.map(o => <option key={o} value={o} style={{ background: '#1a1008', color: 'white' }}>{o}</option>)}
       </select>
@@ -112,41 +102,78 @@ function SelectField({
   )
 }
 
-// Tipo de estabelecimento: opções do banco (geridas pelo dono) + "Outro
-// (especifique)" com campo livre, pra ninguém ficar travado.
-function BusinessTypeSelect({ value, onChange, options }: {
-  value: string; onChange: (v: string) => void; options: string[]
+function MultiSelect({ label, values, options, onToggle, hint }: {
+  label: string; values: string[]; options: string[]; onToggle: (v: string) => void; hint?: string
 }) {
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '9px' }}>{label}</label>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        {options.map(o => {
+          const on = values.includes(o)
+          return (
+            <button key={o} type="button" onClick={() => onToggle(o)}
+              style={{ padding: '8px 13px', borderRadius: '99px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', background: on ? 'rgba(255,109,41,0.14)' : 'rgba(255,255,255,0.04)', border: `1px solid ${on ? 'rgba(255,109,41,0.5)' : BORDER}`, color: on ? ORANGE : 'white' }}>
+              {on ? '✓ ' : ''}{o}
+            </button>
+          )
+        })}
+      </div>
+      {hint && <div style={{ fontSize: '11px', color: MUTED, marginTop: '7px', lineHeight: 1.5 }}>{hint}</div>}
+    </div>
+  )
+}
+
+function BusinessTypeSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
   const [otherMode, setOtherMode] = useState(false)
   const known = options.includes(value)
   const showOther = otherMode || (value !== '' && !known && options.length > 0)
   return (
     <>
-      <SelectField
-        label="Tipo de estabelecimento" required
+      <SelectField label="Tipo de negócio" required
         value={showOther ? OTHER_BUSINESS_TYPE : (known ? value : '')}
         onChange={v => { if (v === OTHER_BUSINESS_TYPE) { setOtherMode(true); onChange('') } else { setOtherMode(false); onChange(v) } }}
-        options={[...options, OTHER_BUSINESS_TYPE]}
-      />
-      {showOther && (
-        <div style={{ marginTop: '-8px' }}>
-          <Field label="Qual?" value={value} onChange={onChange} placeholder="Digite o tipo do seu negócio" required />
-        </div>
-      )}
+        options={[...options, OTHER_BUSINESS_TYPE]} />
+      {showOther && <div style={{ marginTop: '-8px' }}><Field label="Qual?" value={value} onChange={onChange} placeholder="Digite o tipo do seu negócio" required /></div>}
     </>
   )
 }
 
-const STEPS = ['Seu negócio', 'Presença digital', 'Seu objetivo']
+// Resumo estruturado + interpretação (composto localmente — sempre funciona,
+// sem depender de API). Vira o Business Context que os agentes leem.
+function buildContext(d: OnboardingData) {
+  const chan = d.current_channels.join(', ') || 'ainda não definidos'
+  const summary = [
+    `Negócio: ${d.business_description || d.business_type || '—'}`,
+    `Tipo: ${d.business_type || '—'}${d.city ? ` · ${d.city}` : ''}`,
+    `Cliente ideal: ${d.ideal_customer || '—'}`,
+    `Objetivo principal: ${d.goal || '—'}`,
+    `Maior desafio: ${d.main_challenges || '—'}`,
+    `Canais atuais: ${chan}`,
+    `Estágio: ${d.business_stage || '—'}`,
+  ].join('\n')
+  const interpretation = `Este é um negócio do tipo "${d.business_type || 'não especificado'}"${d.city ? ` em ${d.city}` : ''}. ${d.business_description ? d.business_description.trim() + '. ' : ''}O cliente ideal é ${d.ideal_customer || 'não especificado'}. O objetivo principal agora é ${(d.goal || 'não especificado').toLowerCase()}, e o maior desafio é ${(d.main_challenges || 'não especificado').toLowerCase()}. Hoje traz clientes por ${chan.toLowerCase()}. Está na fase "${d.business_stage || 'não especificada'}".`
+  return {
+    business_description: d.business_description,
+    ideal_customer: d.ideal_customer,
+    business_stage: d.business_stage,
+    primary_goals: d.goal,
+    main_challenges: d.main_challenges,
+    current_channels: chan,
+    onboarding_summary: summary,
+    agent_business_interpretation: interpretation,
+  }
+}
+
+const STEPS = ['Seu negócio', 'Seu cliente', 'Objetivo', 'Canais', 'Finalizar']
 
 export default function OnboardingPage() {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
   const [data, setData] = useState<OnboardingData>({
-    business_name: '', business_type: '', city: '',
-    website_url: '', instagram_url: '', facebook_url: '',
-    tiktok_url: '', google_maps_url: '', phone: '',
-    contact_email: '', goal: '',
+    business_name: '', business_type: '', city: '', website_url: '', instagram_url: '', facebook_url: '',
+    tiktok_url: '', google_maps_url: '', phone: '', contact_email: '', goal: '',
+    business_description: '', ideal_customer: '', business_stage: '', main_challenges: '', current_channels: [],
   })
   const [submitting, setSubmitting] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState(LOADING_MSGS[0])
@@ -156,51 +183,44 @@ export default function OnboardingPage() {
   useEffect(() => { fetchBusinessTypes().then(setBusinessTypes) }, [])
 
   const set = (k: keyof OnboardingData) => (v: string) => setData(d => ({ ...d, [k]: v }))
+  const toggleChannel = (v: string) => setData(d => ({ ...d, current_channels: d.current_channels.includes(v) ? d.current_channels.filter(x => x !== v) : [...d.current_channels, v] }))
 
   const isValidUrl = (url: string) => {
     const s = url.trim()
     if (!s) return false
-    try {
-      const u = new URL(s.startsWith('http') ? s : `https://${s}`)
-      return u.hostname.includes('.')
-    } catch {
-      return false
-    }
+    try { return new URL(s.startsWith('http') ? s : `https://${s}`).hostname.includes('.') } catch { return false }
   }
 
   const canNext = () => {
-    if (step === 0) return !!(data.business_name.trim() && data.business_type && data.city.trim())
-    if (step === 1) return isValidUrl(data.website_url)
-    if (step === 2) return !!(data.contact_email.trim() && data.goal)
+    if (step === 0) return !!(data.business_description.trim() && data.business_type)
+    if (step === 1) return !!(data.ideal_customer.trim() && data.business_stage)
+    if (step === 2) return !!data.goal
+    if (step === 3) return isValidUrl(data.website_url)
+    if (step === 4) return !!(data.business_name.trim() && data.city.trim() && data.contact_email.trim())
     return false
   }
 
   const handleSubmit = async () => {
-    setSubmitting(true)
-    setError('')
-
+    setSubmitting(true); setError('')
     let msgIdx = 0
-    const interval = setInterval(() => {
-      msgIdx = (msgIdx + 1) % LOADING_MSGS.length
-      setLoadingMsg(LOADING_MSGS[msgIdx])
-    }, 2500)
-
+    const interval = setInterval(() => { msgIdx = (msgIdx + 1) % LOADING_MSGS.length; setLoadingMsg(LOADING_MSGS[msgIdx]) }, 2500)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-
+      const onboarding_context = buildContext(data)
+      const payload = {
+        business_name: data.business_name, business_type: data.business_type, city: data.city,
+        website_url: data.website_url, instagram_url: data.instagram_url, facebook_url: data.facebook_url,
+        tiktok_url: data.tiktok_url, google_maps_url: data.google_maps_url, phone: data.phone,
+        contact_email: data.contact_email, goal: data.goal, onboarding_context,
+      }
       const res = await fetch(`${supabaseUrl}/functions/v1/run-diagnosis`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+        body: JSON.stringify(payload),
       })
-
       const result = await res.json()
       if (!res.ok) throw new Error(result.error ?? 'Erro ao processar diagnóstico')
-
       clearInterval(interval)
       navigate(`/diagnostico/${result.id}`)
     } catch (e) {
@@ -225,126 +245,99 @@ export default function OnboardingPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: BG, display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
       <div style={{ padding: '20px 32px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <a href="/" style={{ fontFamily: D, fontSize: '1.3rem', fontWeight: 900, color: 'white', textDecoration: 'none', letterSpacing: '-0.02em' }}>
           <span style={{ color: ORANGE }}>Sales</span>Boost
         </a>
-        <div style={{ fontSize: '13px', color: MUTED }}>
-          Passo {step + 1} de {STEPS.length}
-        </div>
+        <div style={{ fontSize: '13px', color: MUTED }}>Passo {step + 1} de {STEPS.length}</div>
       </div>
 
-      {/* Progress bar */}
       <div style={{ height: '3px', background: 'rgba(255,255,255,0.06)' }}>
         <div style={{ height: '100%', background: ORANGE, width: `${((step + 1) / STEPS.length) * 100}%`, transition: 'width 0.4s ease', borderRadius: '0 2px 2px 0' }} />
       </div>
 
-      {/* Content */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
-        <div style={{ width: '100%', maxWidth: '520px' }}>
-
-          {/* Step label */}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+        <div style={{ width: '100%', maxWidth: '540px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '24px' }}>
             {STEPS.map((s, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{
-                  width: '24px', height: '24px', borderRadius: '50%',
-                  background: i < step ? ORANGE : i === step ? 'rgba(255,109,41,0.15)' : 'rgba(255,255,255,0.05)',
-                  border: i === step ? `1px solid ${ORANGE}` : i < step ? 'none' : `1px solid ${BORDER}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '10px', fontWeight: 900,
-                  color: i < step ? '#000' : i === step ? ORANGE : MUTED,
-                  flexShrink: 0, transition: 'all 0.3s',
-                }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: i < step ? ORANGE : i === step ? 'rgba(255,109,41,0.15)' : 'rgba(255,255,255,0.05)', border: i === step ? `1px solid ${ORANGE}` : i < step ? 'none' : `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9.5px', fontWeight: 900, color: i < step ? '#000' : i === step ? ORANGE : MUTED, flexShrink: 0 }}>
                   {i < step ? '✓' : i + 1}
                 </div>
-                <span style={{ fontSize: '12px', color: i === step ? 'white' : MUTED, fontWeight: i === step ? 600 : 400, whiteSpace: 'nowrap' }}>{s}</span>
-                {i < STEPS.length - 1 && <div style={{ width: '20px', height: '1px', background: BORDER, margin: '0 4px' }} />}
+                <span style={{ fontSize: '11.5px', color: i === step ? 'white' : MUTED, fontWeight: i === step ? 600 : 400, whiteSpace: 'nowrap' }}>{s}</span>
               </div>
             ))}
           </div>
 
-          {/* Form card */}
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '20px', padding: '32px' }}>
-
             {step === 0 && (
               <>
-                <h1 style={{ fontFamily: D, fontSize: '1.6rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '8px' }}>Sobre seu negócio</h1>
-                <p style={{ color: MUTED, fontSize: '14px', marginBottom: '28px', lineHeight: 1.6 }}>
-                  Conte o básico para personalizarmos seu diagnóstico.
-                </p>
-                <Field label="Nome do negócio" value={data.business_name} onChange={set('business_name')} placeholder="Ex: Studio Beleza Carioca" required />
+                <H t="Vamos começar pelo seu negócio" s="Conte com suas palavras — assim o SalesBoost entende quem você é antes de qualquer coisa." />
+                <TextArea label="O que seu negócio faz?" value={data.business_description} onChange={set('business_description')} placeholder="Ex: Sou um estúdio de beleza que faz cabelo, unha e maquiagem para eventos..." hint="Pode escrever livre. Quanto mais claro, melhores as recomendações." />
                 <BusinessTypeSelect value={data.business_type} onChange={set('business_type')} options={businessTypes} />
-                <Field label="Cidade / UF" value={data.city} onChange={set('city')} placeholder="Ex: Rio de Janeiro, RJ" required />
               </>
             )}
-
             {step === 1 && (
               <>
-                <h1 style={{ fontFamily: D, fontSize: '1.6rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '8px' }}>Sua presença digital</h1>
-                <p style={{ color: MUTED, fontSize: '14px', marginBottom: '28px', lineHeight: 1.6 }}>
-                  Quanto mais canais você preencher, mais completo será o diagnóstico.
-                </p>
-                <Field label="Site" value={data.website_url} onChange={set('website_url')} placeholder="https://seunegocio.com.br" type="url" required hint={data.website_url.trim() && !isValidUrl(data.website_url) ? '⚠️ URL inválida — use o formato: https://seunegocio.com.br' : 'Analisaremos a performance, SEO e experiência do usuário'} />
-                <Field label="Instagram" value={data.instagram_url} onChange={set('instagram_url')} placeholder="https://instagram.com/seuperfil" hint="Coletamos engajamento e menções" />
-                <Field label="Facebook" value={data.facebook_url} onChange={set('facebook_url')} placeholder="https://facebook.com/suapagina" />
-                <Field label="TikTok" value={data.tiktok_url} onChange={set('tiktok_url')} placeholder="https://tiktok.com/@seuperfil" />
-                <Field label="Google Maps" value={data.google_maps_url} onChange={set('google_maps_url')} placeholder="Link do seu negócio no Google Maps" hint="Coletamos suas avaliações e nota" />
-                <Field label="Telefone / WhatsApp" value={data.phone} onChange={set('phone')} placeholder="(21) 99999-9999" type="tel" />
+                <H t="Quem é seu cliente ideal?" s="Pra quem você mais quer vender? Não precisa de termos técnicos." />
+                <TextArea label="Descreva seu cliente ideal" value={data.ideal_customer} onChange={set('ideal_customer')} placeholder="Ex: Mulheres de 25 a 45 anos, no Rio, que valorizam autocuidado..." />
+                <SelectField label="Em que fase está seu negócio hoje?" value={data.business_stage} onChange={set('business_stage')} options={STAGES} required />
               </>
             )}
-
             {step === 2 && (
               <>
-                <h1 style={{ fontFamily: D, fontSize: '1.6rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '8px' }}>Seu objetivo</h1>
-                <p style={{ color: MUTED, fontSize: '14px', marginBottom: '28px', lineHeight: 1.6 }}>
-                  Isso guia a IA para gerar um plano de ação relevante para você.
-                </p>
-                <SelectField label="Principal meta do negócio" value={data.goal} onChange={set('goal')} options={GOALS} required />
-                <Field label="Seu e-mail de contato" value={data.contact_email} onChange={set('contact_email')} placeholder="voce@seunegocio.com.br" type="email" required hint="Usado para acessar seu painel e receber alertas importantes" />
-
-                {error && (
-                  <div style={{ padding: '12px 16px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '10px', fontSize: '13px', color: '#f87171', marginBottom: '16px', lineHeight: 1.5 }}>
-                    {error}
-                  </div>
-                )}
+                <H t="O que você mais quer alcançar agora?" s="Isso guia tudo que os agentes vão priorizar pra você." />
+                <SelectField label="Maior objetivo agora" value={data.goal} onChange={set('goal')} options={GOALS} required />
+                <SelectField label="O que mais te trava hoje?" value={data.main_challenges} onChange={set('main_challenges')} options={CHALLENGES} />
+              </>
+            )}
+            {step === 3 && (
+              <>
+                <H t="Como você traz clientes hoje?" s="Marque os canais que usa. O site é usado pro seu diagnóstico gratuito." />
+                <MultiSelect label="Canais atuais" values={data.current_channels} options={CHANNELS} onToggle={toggleChannel} />
+                <Field label="Site" value={data.website_url} onChange={set('website_url')} type="url" placeholder="https://seunegocio.com.br" required hint={data.website_url.trim() && !isValidUrl(data.website_url) ? '⚠️ URL inválida — use: https://seunegocio.com.br' : 'Analisamos performance, SEO e experiência do site (diagnóstico grátis).'} />
+                <Field label="Instagram (opcional)" value={data.instagram_url} onChange={set('instagram_url')} placeholder="https://instagram.com/seuperfil" />
+              </>
+            )}
+            {step === 4 && (
+              <>
+                <H t="É isso que entendemos?" s="Confira o resumo. Depois é só um último passo pra criar seu painel." />
+                <div style={{ background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.18)', borderRadius: '12px', padding: '14px 16px', marginBottom: '20px', fontSize: '12.5px', color: 'white', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                  {buildContext(data).onboarding_summary}
+                </div>
+                <Field label="Nome do negócio" value={data.business_name} onChange={set('business_name')} placeholder="Ex: Studio Beleza Carioca" required />
+                <Field label="Cidade / UF" value={data.city} onChange={set('city')} placeholder="Ex: Rio de Janeiro, RJ" required />
+                <Field label="Seu e-mail" value={data.contact_email} onChange={set('contact_email')} type="email" placeholder="voce@seunegocio.com.br" required hint="Usado pra acessar seu painel e receber alertas." />
+                {error && <div style={{ padding: '12px 16px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '10px', fontSize: '13px', color: '#f87171', marginBottom: '16px', lineHeight: 1.5 }}>{error}</div>}
               </>
             )}
 
-            {/* Navigation */}
             <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
               {step > 0 && (
-                <button
-                  onClick={() => setStep(s => s - 1)}
-                  style={{ flex: '0 0 auto', padding: '12px 20px', background: 'transparent', color: MUTED, fontWeight: 600, fontSize: '14px', borderRadius: '12px', border: `1px solid ${BORDER}`, cursor: 'pointer', fontFamily: 'inherit' }}
-                >
-                  ← Voltar
-                </button>
+                <button onClick={() => setStep(s => s - 1)}
+                  style={{ flex: '0 0 auto', padding: '12px 20px', background: 'transparent', color: MUTED, fontWeight: 600, fontSize: '14px', borderRadius: '12px', border: `1px solid ${BORDER}`, cursor: 'pointer', fontFamily: 'inherit' }}>← Voltar</button>
               )}
-              <button
-                onClick={step < STEPS.length - 1 ? () => setStep(s => s + 1) : handleSubmit}
-                disabled={!canNext()}
-                style={{
-                  flex: 1, padding: '13px 24px', background: canNext() ? ORANGE : 'rgba(255,109,41,0.2)',
-                  color: canNext() ? '#000' : 'rgba(255,255,255,0.3)', fontWeight: 800, fontSize: '15px',
-                  borderRadius: '12px', border: 'none', cursor: canNext() ? 'pointer' : 'not-allowed',
-                  fontFamily: D, letterSpacing: '-0.01em', transition: 'all 0.2s',
-                  boxShadow: canNext() ? '0 8px 20px rgba(255,109,41,0.3)' : 'none',
-                }}
-              >
-                {step < STEPS.length - 1 ? 'Continuar →' : 'Analisar meu negócio →'}
+              <button onClick={step < STEPS.length - 1 ? () => setStep(s => s + 1) : handleSubmit} disabled={!canNext()}
+                style={{ flex: 1, padding: '13px 24px', background: canNext() ? ORANGE : 'rgba(255,109,41,0.2)', color: canNext() ? '#000' : 'rgba(255,255,255,0.3)', fontWeight: 800, fontSize: '15px', borderRadius: '12px', border: 'none', cursor: canNext() ? 'pointer' : 'not-allowed', fontFamily: D, letterSpacing: '-0.01em', transition: 'all 0.2s', boxShadow: canNext() ? '0 8px 20px rgba(255,109,41,0.3)' : 'none' }}>
+                {step < STEPS.length - 1 ? 'Continuar →' : 'Criar meu painel →'}
               </button>
             </div>
           </div>
 
           <p style={{ textAlign: 'center', fontSize: '12px', color: MUTED, marginTop: '20px', lineHeight: 1.6 }}>
-            Ao continuar, você concorda com nossa{' '}
-            <span style={{ color: ORANGE, cursor: 'pointer' }}>política de privacidade</span>.
-            Seus dados são usados exclusivamente para gerar o diagnóstico.
+            Ao continuar, você concorda com nossa <span style={{ color: ORANGE, cursor: 'pointer' }}>política de privacidade</span>. Seus dados são usados só pra entender seu negócio e gerar o diagnóstico.
           </p>
         </div>
       </div>
     </div>
+  )
+}
+
+function H({ t, s }: { t: string; s: string }) {
+  return (
+    <>
+      <h1 style={{ fontFamily: D, fontSize: '1.5rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '8px' }}>{t}</h1>
+      <p style={{ color: MUTED, fontSize: '14px', marginBottom: '26px', lineHeight: 1.6 }}>{s}</p>
+    </>
   )
 }

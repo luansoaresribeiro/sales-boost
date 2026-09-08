@@ -55,6 +55,10 @@ Deno.serve(async (req) => {
       const trialStartedAt = new Date()
       const trialExpiresAt = new Date(trialStartedAt.getTime() + 3 * 24 * 60 * 60 * 1000)
 
+      // Entendimento do negócio capturado no onboarding conversacional — vira
+      // Business Context que os agentes leem.
+      const oc = (diag.onboarding_context ?? {}) as Record<string, unknown>
+
       // Create companies record from diagnostic data
       const { data: company, error: companyErr } = await serviceClient
         .from('companies')
@@ -71,6 +75,14 @@ Deno.serve(async (req) => {
           phone: diag.phone,
           contact_email: diag.contact_email,
           goal: diag.goal,
+          business_description: oc.business_description ?? null,
+          ideal_customer: oc.ideal_customer ?? null,
+          business_stage: oc.business_stage ?? null,
+          primary_goals: oc.primary_goals ?? null,
+          main_challenges: oc.main_challenges ?? null,
+          current_channels: oc.current_channels ?? null,
+          onboarding_summary: oc.onboarding_summary ?? null,
+          agent_business_interpretation: oc.agent_business_interpretation ?? null,
           plan: 'free',
           trial_started_at: trialStartedAt.toISOString(),
           trial_expires_at: trialExpiresAt.toISOString(),
