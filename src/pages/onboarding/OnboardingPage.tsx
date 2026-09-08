@@ -137,7 +137,7 @@ function BusinessTypeSelect({ value, onChange, options }: {
   )
 }
 
-const STEPS = ['Seu negócio', 'Presença digital', 'Seu objetivo']
+const STEPS = ['Seu negócio', 'Seu objetivo']
 
 export default function OnboardingPage() {
   const navigate = useNavigate()
@@ -157,21 +157,9 @@ export default function OnboardingPage() {
 
   const set = (k: keyof OnboardingData) => (v: string) => setData(d => ({ ...d, [k]: v }))
 
-  const isValidUrl = (url: string) => {
-    const s = url.trim()
-    if (!s) return false
-    try {
-      const u = new URL(s.startsWith('http') ? s : `https://${s}`)
-      return u.hostname.includes('.')
-    } catch {
-      return false
-    }
-  }
-
   const canNext = () => {
     if (step === 0) return !!(data.business_name.trim() && data.business_type && data.city.trim())
-    if (step === 1) return isValidUrl(data.website_url)
-    if (step === 2) return !!(data.contact_email.trim() && data.goal)
+    if (step === 1) return !!(data.contact_email.trim() && data.goal)
     return false
   }
 
@@ -281,21 +269,6 @@ export default function OnboardingPage() {
             )}
 
             {step === 1 && (
-              <>
-                <h1 style={{ fontFamily: D, fontSize: '1.6rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '8px' }}>Sua presença digital</h1>
-                <p style={{ color: MUTED, fontSize: '14px', marginBottom: '28px', lineHeight: 1.6 }}>
-                  Quanto mais canais você preencher, mais completo será o diagnóstico.
-                </p>
-                <Field label="Site" value={data.website_url} onChange={set('website_url')} placeholder="https://seunegocio.com.br" type="url" required hint={data.website_url.trim() && !isValidUrl(data.website_url) ? '⚠️ URL inválida — use o formato: https://seunegocio.com.br' : 'Analisaremos a performance, SEO e experiência do usuário'} />
-                <Field label="Instagram" value={data.instagram_url} onChange={set('instagram_url')} placeholder="https://instagram.com/seuperfil" hint="Coletamos engajamento e menções" />
-                <Field label="Facebook" value={data.facebook_url} onChange={set('facebook_url')} placeholder="https://facebook.com/suapagina" />
-                <Field label="TikTok" value={data.tiktok_url} onChange={set('tiktok_url')} placeholder="https://tiktok.com/@seuperfil" />
-                <Field label="Google Maps" value={data.google_maps_url} onChange={set('google_maps_url')} placeholder="Link do seu negócio no Google Maps" hint="Coletamos suas avaliações e nota" />
-                <Field label="Telefone / WhatsApp" value={data.phone} onChange={set('phone')} placeholder="(21) 99999-9999" type="tel" />
-              </>
-            )}
-
-            {step === 2 && (
               <>
                 <h1 style={{ fontFamily: D, fontSize: '1.6rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '8px' }}>Seu objetivo</h1>
                 <p style={{ color: MUTED, fontSize: '14px', marginBottom: '28px', lineHeight: 1.6 }}>

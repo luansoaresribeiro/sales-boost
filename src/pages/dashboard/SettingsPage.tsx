@@ -601,9 +601,9 @@ export default function SettingsPage() {
             hint="Valor médio que um cliente gasta numa compra/visita. Usamos isso para calcular a receita recuperável real de cada oportunidade — sem preencher, esse valor não aparece." />
         </SectionCard>
 
-        <SectionCard id="section-presenca" title="Presença digital">
+        <SectionCard id="section-presenca" title="Links do negócio (opcional)">
           <p style={{ fontSize: '12px', color: MUTED, marginBottom: '18px', lineHeight: 1.6 }}>
-            Quanto mais canais você preencher, mais completo e assertivo será o diagnóstico e os posts gerados pela IA.
+            Opcional. Estes links viram contexto do negócio pra IA. Conectar de verdade (Instagram, WhatsApp, Google) é feito na aba <strong style={{ color: 'white' }}>Conexões</strong>.
           </p>
           <Field label="Site" value={websiteUrl} onChange={setWebsiteUrl} placeholder="https://seunegocio.com.br" hint="Analisamos performance, SEO e experiência do usuário" />
           <Field label="Instagram" value={instagramUrl} onChange={setInstagramUrl} placeholder="https://instagram.com/seuperfil" />
