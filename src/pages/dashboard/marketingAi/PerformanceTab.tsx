@@ -13,6 +13,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import { useDemoMode } from './growthDemo'
 import { buildPerformanceDemo, type PerformanceData, type Recommendation } from './performanceDemo'
+import { proposeAgentAction } from '../../../lib/agentActions'
 import {
   PerfHeader, KpiCard, ScoreCard, TrendSection, AudienceSection, ReachSection,
   EngagementSection, Panel, RANGES, type RangeKey,
@@ -66,10 +67,29 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
   const data = live ?? demo
   const days = RANGES.find(r => r.key === range)?.days ?? 30
 
-  const handleCreate = (r: Recommendation) => {
+  const handleCreate = async (r: Recommendation) => {
     try { void navigator.clipboard?.writeText(r.prompt) } catch { /* ignore */ }
+    // A recomendação NÃO executa direto — vira uma proposta na Central de
+    // Approvals (Marketing Agent). O dono aprova lá; o executor cria o rascunho.
+    if (session) {
+      try {
+        await proposeAgentAction(session.access_token, {
+          company_id: company.id,
+          agent_key: 'marketing', agent_name: 'Agente de Marketing',
+          action_type: 'create_content', channel: 'instagram', source: 'performance',
+          title: r.title, description: r.action,
+          agent_interpretation: r.reason, reason: r.reason, expected_outcome: r.objective,
+          payload: { prompt: r.prompt, impact: r.impact },
+          risk_level: 'low', priority: r.priority === 'high' ? 'high' : 'normal',
+          automation_enabled: false, // sempre passa pela sua aprovação
+        })
+        setToast('Recomendação enviada pra Central de Approvals — abra "Aprovações" pra revisar e aprovar.')
+        setTimeout(() => setToast(null), 6000)
+        return
+      } catch { /* cai no fallback abaixo */ }
+    }
     onCreateContent?.(r.prompt)
-    setToast('Ideia enviada pro Agente de Conteúdo (e copiada). Abra a aba Conteúdo → Orgânico pra gerar o rascunho.')
+    setToast('Ideia copiada. Abra a aba Conteúdo → Orgânico pra gerar o rascunho.')
     setTimeout(() => setToast(null), 5000)
   }
 
