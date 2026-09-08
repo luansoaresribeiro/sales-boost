@@ -62,6 +62,7 @@ export function launchWhatsAppSignup(): Promise<WhatsAppSignupResult> {
   return new Promise((resolve, reject) => {
     if (!WHATSAPP_CONFIG_ID) { reject(new Error('WhatsApp Embedded Signup não configurado (VITE_WHATSAPP_CONFIG_ID ausente).')); return }
     if (!window.FB?.login) { reject(new Error('SDK do Facebook ainda não carregou. Tenta de novo em alguns segundos.')); return }
+    console.log('[Meta Signup] iniciado (config_id presente)')
 
     let sessionInfo: { wabaId: string | null; phoneNumberId: string | null } = { wabaId: null, phoneNumberId: null }
 
@@ -69,8 +70,11 @@ export function launchWhatsAppSignup(): Promise<WhatsAppSignupResult> {
       if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+        // Logs seguros (IDs não são segredos; NUNCA logar token/secret/code).
+        console.log('[Meta Signup] mensagem recebida', { type: data?.type, event: data?.event })
         if (data?.type === 'WA_EMBEDDED_SIGNUP' && data?.data) {
           sessionInfo = { wabaId: data.data.waba_id ?? null, phoneNumberId: data.data.phone_number_id ?? null }
+          console.log('[Meta Signup] WABA/telefone detectados', { wabaId: sessionInfo.wabaId, phoneNumberId: sessionInfo.phoneNumberId, step: data.data.current_step })
         }
       } catch { /* mensagens que não são JSON não interessam aqui */ }
     }
@@ -79,6 +83,7 @@ export function launchWhatsAppSignup(): Promise<WhatsAppSignupResult> {
     window.FB.login((res: FBLoginResponse) => {
       window.removeEventListener('message', onMessage)
       const code = res.authResponse?.code
+      console.log('[Meta Signup] login concluído', { temCode: !!code, status: res.status, temWaba: !!sessionInfo.wabaId, temPhone: !!sessionInfo.phoneNumberId })
       if (!code) { reject(new Error('Login cancelado ou sem permissão concedida.')); return }
       resolve({ code, wabaId: sessionInfo.wabaId, phoneNumberId: sessionInfo.phoneNumberId })
     }, {

@@ -209,7 +209,9 @@ export default function IntegrationsTab() {
     setWaError('')
     try {
       const { code, wabaId, phoneNumberId } = await launchWhatsAppSignup()
-      if (!wabaId || !phoneNumberId) throw new Error('Não veio o número/WABA escolhido — tenta de novo e conclui o cadastro do número na janela do Meta.')
+      // #13: popup fechado NÃO é sucesso — só seguimos com WABA + phone reais.
+      if (!wabaId || !phoneNumberId) throw new Error('Conexão incompleta: a Meta não devolveu o número (Phone Number ID) e/ou a conta (WABA). Refaça e conclua a seleção do número na janela do Meta até o fim.')
+      console.log('[Meta Signup] backend validação iniciada', { temWaba: !!wabaId, temPhone: !!phoneNumberId })
       const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-embedded-signup`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
@@ -217,6 +219,7 @@ export default function IntegrationsTab() {
       })
       const data = await res.json() as { ok?: boolean; error?: string; display_phone_number?: string }
       if (!res.ok || !data.ok) throw new Error(friendlyWaError(data.error))
+      console.log('[Meta Signup] integração salva', { number: data.display_phone_number })
       setWaNumber(data.display_phone_number ?? '')
       setWaConnectedAt(new Date().toISOString())
       setWaPhoneId(phoneNumberId) // conexão real: guarda o número escolhido
