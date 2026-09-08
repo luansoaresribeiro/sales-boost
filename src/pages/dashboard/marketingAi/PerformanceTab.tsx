@@ -81,9 +81,9 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
           agent_interpretation: r.reason, reason: r.reason, expected_outcome: r.objective,
           payload: { prompt: r.prompt, impact: r.impact },
           risk_level: 'low', priority: r.priority === 'high' ? 'high' : 'normal',
-          automation_enabled: false, // sempre passa pela sua aprovação
+          // Sem forçar: o motor decide auto/manual pela config de Modo automático.
         })
-        setToast('Recomendação enviada pra Central de Approvals — abra "Aprovações" pra revisar e aprovar.')
+        setToast('Recomendação enviada pra Central de Approvals — abra "Aprovações" pra revisar (ou já executa, se o Modo automático estiver ligado).')
         setTimeout(() => setToast(null), 6000)
         return
       } catch { /* cai no fallback abaixo */ }

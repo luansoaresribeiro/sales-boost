@@ -38,12 +38,12 @@ Deno.serve(async (req) => {
     if (!company_id) return json({ error: 'company_id obrigatório' }, 400)
 
     const admin = createClient(supabaseUrl, serviceKey)
-    const { data: company } = await admin.from('companies').select('id, user_id').eq('id', company_id).maybeSingle()
+    const { data: company } = await admin.from('companies').select('id, user_id, agent_automatic_mode').eq('id', company_id).maybeSingle()
     if (!company || company.user_id !== user.id) return json({ error: 'Forbidden' }, 403)
 
     switch (action) {
       case 'list': return await listActions(admin, company_id, body.status)
-      case 'propose': return await proposeAction(admin, company_id, body)
+      case 'propose': return await proposeAction(admin, company_id, body, !!company.agent_automatic_mode)
       case 'approve': return await decide(admin, company_id, body.id, 'APPROVED', user.id)
       case 'reject': return await decide(admin, company_id, body.id, 'REJECTED', user.id)
       case 'cancel': return await decide(admin, company_id, body.id, 'CANCELLED', user.id)
@@ -66,8 +66,10 @@ async function listActions(admin: Supa, companyId: string, status?: string) {
 }
 
 // deno-lint-ignore no-explicit-any
-async function proposeAction(admin: Supa, companyId: string, b: any) {
-  const auto = !!b.automation_enabled
+async function proposeAction(admin: Supa, companyId: string, b: any, autoMode: boolean) {
+  // Quem manda é a configuração da empresa (autoMode). O cliente NÃO decide
+  // sozinho ligar auto — só pode pedir manual (automation_enabled=false).
+  const auto = autoMode && b.automation_enabled !== false
   const row = {
     company_id: companyId,
     agent_key: b.agent_key ?? 'marketing',
