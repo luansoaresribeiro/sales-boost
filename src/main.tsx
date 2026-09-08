@@ -25,7 +25,6 @@ import TrialSummaryPage from './pages/dashboard/TrialSummaryPage.tsx'
 import MarketingAiSectionPage from './pages/dashboard/MarketingAiSectionPage.tsx'
 import ApprovalsPage from './pages/dashboard/ApprovalsPage.tsx'
 import ReportPage from './pages/dashboard/ReportPage.tsx'
-import JarvisPage from './pages/jarvis/JarvisPage.tsx'
 import OwnerPage from './pages/owner/OwnerPage.tsx'
 import CompanyDetailPage from './pages/owner/CompanyDetailPage.tsx'
 import ProspectsPage from './pages/owner/ProspectsPage.tsx'
@@ -134,7 +133,6 @@ function RouterRoot() {
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 
-      <Route path="/jarvis" element={<ClientRoute><JarvisPage /></ClientRoute>} />
       <Route path="/onboarding" element={<OnboardingPage />} />
       <Route path="/diagnostico/:id" element={<DiagnosticoPage />} />
       <Route path="/privacidade" element={<PrivacyPolicyPage />} />

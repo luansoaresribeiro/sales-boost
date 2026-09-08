@@ -9,7 +9,6 @@ import MarketIntelTab from './marketingAi/MarketIntelTab'
 import BrainTab from './marketingAi/BrainTab'
 import TimelineTab from './marketingAi/TimelineTab'
 import ReportsTab from './marketingAi/ReportsTab'
-import ChatTab from './marketingAi/ChatTab'
 import ExperimentsTab from './marketingAi/ExperimentsTab'
 import ToolsTab from './marketingAi/ToolsTab'
 import ConnectionsTab from './marketingAi/ConnectionsTab'
@@ -27,12 +26,12 @@ const ORANGE = '#FF6D29'
 
 const SECTION_TITLE: Record<string, string> = {
   tracking: 'Tracking', content: 'Conteúdo', competitors: 'Inteligência de Mercado', brain: 'Aprendizado',
-  overview: 'Visão Geral', chat: 'Chat', experiments: 'Experimentos', tools: 'Configuração', timeline: 'Central de Execução', reports: 'Relatórios',
+  overview: 'Visão Geral', experiments: 'Experimentos', tools: 'Configuração', timeline: 'Central de Execução', reports: 'Relatórios',
   conexoes: 'Conexões', 'meta-ads': 'Agente de Meta Ads', funil: 'Funil de Vendas', whatsapp: 'Atendimento', feedback: 'Feedback Loop', configuracao: 'Configuração dos Agentes', avaliacoes: 'Avaliações', insights: 'Insights', context: 'Contexto do Negócio', 'saude-meta': 'Saúde da Meta',
 }
 const SECTION_ICON: Record<string, string> = {
   tracking: '📈', content: '✍️', competitors: '🧭', brain: '🧠',
-  overview: '🏠', chat: '✨', experiments: '🧪', tools: '🛠️', timeline: '🕓', reports: '📊',
+  overview: '🏠', experiments: '🧪', tools: '🛠️', timeline: '🕓', reports: '📊',
   conexoes: '🔌', 'meta-ads': '🎯', funil: '🔀', whatsapp: '💬', feedback: '🔁', configuracao: '⚙️', avaliacoes: '⭐', insights: '💡', context: '🧠', 'saude-meta': '❤️‍🩹',
 }
 
@@ -95,8 +94,6 @@ export default function MarketingAiSectionPage() {
         return <MarketIntelTab company={company} />
       case 'brain':
         return <BrainTab nodes={data.brainNodes} accessToken={accessToken} strategyLog={data.strategyLog} onRefresh={data.refresh} />
-      case 'chat':
-        return <ChatTab companyId={company.id} accessToken={accessToken} agentName={data.config?.agent_name ?? 'Agente de Marketing'} />
       case 'experiments':
         return <ExperimentsTab accessToken={accessToken} experiments={data.experiments} onRefresh={data.refresh} />
       case 'tools':

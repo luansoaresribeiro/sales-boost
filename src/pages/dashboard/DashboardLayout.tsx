@@ -18,7 +18,7 @@ const iconStroke = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, str
 type NavItem = { to: string; label: string; icon: React.ReactNode; end?: boolean }
 type NavSection = { section?: string; accent?: boolean; items: NavItem[] }
 
-function makeNavSections(T: typeof d[keyof typeof d], flags: { jarvis: boolean; agentesMenu: boolean; marketingAi: boolean }): NavSection[] {
+function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: boolean; marketingAi: boolean }): NavSection[] {
   return [
     {
       items: [
@@ -28,13 +28,6 @@ function makeNavSections(T: typeof d[keyof typeof d], flags: { jarvis: boolean; 
         },
       ],
     },
-    ...(flags.jarvis ? [{
-      section: T.layout.sections.meetings, accent: true,
-      items: [{
-        to: '/jarvis', label: T.layout.nav.jarvis,
-        icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" /></svg>,
-      }],
-    }] : []),
     ...(flags.marketingAi ? [{
       section: T.layout.sections.marketingAi, accent: true,
       items: [{
@@ -100,7 +93,7 @@ function SidebarInner() {
   const { lang } = useLang()
   const T = d[lang]
   const { company } = useCompany()
-  const flags = { jarvis: company?.jarvis_enabled ?? false, agentesMenu: company?.agent_enabled ?? false, marketingAi: company?.marketing_ai_enabled ?? true }
+  const flags = { agentesMenu: company?.agent_enabled ?? false, marketingAi: company?.marketing_ai_enabled ?? true }
 
   const navSections = makeNavSections(T, flags)
   const bottomItems = makeBottomItems(T)
