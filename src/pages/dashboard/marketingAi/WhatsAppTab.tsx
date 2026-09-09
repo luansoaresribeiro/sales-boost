@@ -5,6 +5,8 @@ import { useRealtime } from '../../../lib/useRealtime'
 import { CARD, MUTED, BORDER, D } from './shared'
 import { buildWhatsAppDemo, WA_STATUS_META, AUTONOMY_META, TEMP_META, CHANNEL_META, type DemoWaConversation, type AutonomyLevel, type FollowUpItem } from './salesDemo'
 import { mapConversations, type ConvRow, type ConvMsgRow } from './salesReal'
+import { useDemoMode } from './growthDemo'
+import DataVeil, { veilMode } from './DataVeil'
 import ChannelFilter, { ChannelBadge, type ChannelFilterValue } from './ChannelFilter'
 
 const ORANGE = '#FF6D29'
@@ -120,6 +122,8 @@ export default function WhatsAppTab({ company }: { company: Pick<CompanyData, 'i
 
   const isReal = !!realConvs && realConvs.length > 0
   const baseConversations = isReal ? realConvs! : demo.conversations
+  const [demoMode, setDemoMode] = useDemoMode(company.id)
+  const mode = veilMode({ hasReal: isReal, demoMode })
 
   // Mesma lógica do Funil: uma só caixa de atendimento, filtrada pela origem.
   const conversations = channel === 'all' ? baseConversations : baseConversations.filter(c => c.channelKey === channel)
@@ -137,16 +141,22 @@ export default function WhatsAppTab({ company }: { company: Pick<CompanyData, 'i
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-      {isReal ? (
+      {mode === 'real' && (
         <div style={{ padding: '12px 16px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
           🟢 <strong>Conversas reais.</strong> Estas são as conversas de verdade do seu WhatsApp, ao vivo. O agente responde, qualifica e <strong>passa pro humano quando precisa</strong>. <span style={{ color: MUTED }}>(A fila de follow-up e o painel de conhecimento abaixo ainda são exemplos — entram em seguida.)</span>
         </div>
-      ) : (
+      )}
+      {mode === 'demo' && (
         <div style={{ padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-          ⏳ <strong>Modo demonstração.</strong> Assim que o WhatsApp estiver conectado, as conversas reais aparecem aqui ao vivo — o agente responde, qualifica, agenda e <strong>passa pro humano quando precisa</strong> (sempre esperando sua aprovação). Você controla a autonomia e o horário aqui embaixo.
+          🔵 <strong>Modo demonstração.</strong> Estas conversas são fictícias. Assim que o WhatsApp estiver conectado, as conversas reais aparecem aqui ao vivo (sempre esperando sua aprovação).
         </div>
       )}
 
+      <DataVeil mode={mode}
+        title="Sem conversas reais ainda"
+        message="Conecte o WhatsApp pra ver as conversas de verdade aqui, ao vivo. Ligue o Modo demonstração pra explorar o layout com exemplos."
+        cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       <ControlBar autonomy={autonomy} setAutonomy={setAutonomy} from={from} to={to} setFrom={setFrom} setTo={setTo} paused={paused} setPaused={setPaused} />
 
       {/* Filtro de canal — Instagram e WhatsApp na mesma caixa de atendimento */}
@@ -272,6 +282,8 @@ export default function WhatsAppTab({ company }: { company: Pick<CompanyData, 'i
           </div>
         </div>
       </div>
+      </div>
+    </DataVeil>
     </div>
   )
 }

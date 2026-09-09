@@ -7,6 +7,8 @@ import {
 } from './storiesDemo'
 import TestingArea from './TestingArea'
 import ModuleLibrary from './ModuleLibrary'
+import { useDemoMode } from './growthDemo'
+import DataVeil, { veilMode } from './DataVeil'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -179,6 +181,9 @@ function AdCard({ a }: { a: StoryAd }) {
 export default function StoriesTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city'> }) {
   const demo = useMemo(() => buildStoriesDemo(company), [company])
   const { organic, ads, learnings, config, overview } = demo
+  // Stories reais virão do Instagram/Meta; sem dado real, layout borrado.
+  const [demoMode, setDemoMode] = useDemoMode(company.id)
+  const mode = veilMode({ hasReal: false, demoMode })
 
   const sectionTitle = (t: string, s: string) => (
     <div style={{ marginBottom: '12px' }}>
@@ -189,6 +194,10 @@ export default function StoriesTab({ company }: { company: Pick<CompanyData, 'id
 
   return (
     <div style={{ maxWidth: '1080px' }}>
+    <DataVeil mode={mode}
+      title="Sem stories reais ainda"
+      message="Este painel de stories é um exemplo do layout. Quando o Instagram estiver conectado, os stories reais entram aqui. Ligue o Modo demonstração pra explorar."
+      cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
       <Banner />
 
       <div style={{ marginBottom: '10px', fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>
@@ -256,6 +265,8 @@ export default function StoriesTab({ company }: { company: Pick<CompanyData, 'id
           ))}
         </div>
       </div>
+
+    </DataVeil>
 
       <ModuleLibrary module="stories" />
       <TestingArea companyId={company.id} kind="stories" />

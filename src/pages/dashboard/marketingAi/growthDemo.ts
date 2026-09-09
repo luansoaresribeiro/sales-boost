@@ -288,9 +288,12 @@ function demoKey(companyId: string | undefined): string {
 
 export function useDemoMode(companyId: string | undefined): [boolean, (v: boolean) => void] {
   const [on, setOn] = useState<boolean>(() => {
-    if (typeof localStorage === 'undefined') return true
+    if (typeof localStorage === 'undefined') return false
     const stored = localStorage.getItem(demoKey(companyId))
-    return stored == null ? true : stored === '1' // default: ligado (mostra o demo de cara)
+    // Default DESLIGADO: em produção nunca mostramos número fictício como se
+    // fosse real. Sem dado real, a tela fica borrada (DataVeil) até o dono
+    // LIGAR o Modo demonstração de propósito.
+    return stored == null ? false : stored === '1'
   })
   const set = useCallback((v: boolean) => {
     setOn(v)

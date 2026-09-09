@@ -7,6 +7,8 @@ import {
 } from './campaignDemo'
 import TestingArea from './TestingArea'
 import ModuleLibrary from './ModuleLibrary'
+import { useDemoMode } from './growthDemo'
+import DataVeil, { veilMode } from './DataVeil'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -204,6 +206,9 @@ export default function CampaignsTab({ company }: { company: Pick<CompanyData, '
   }, [campaigns])
 
   const maxJourney = pixelJourney[0]?.count ?? 1
+  // Campanhas reais virão da Meta Ads; sem dado real, layout borrado.
+  const [demoMode, setDemoMode] = useDemoMode(company.id)
+  const mode = veilMode({ hasReal: false, demoMode })
   const sectionTitle = (t: string, s: string) => (
     <div style={{ marginBottom: '12px' }}>
       <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', fontFamily: D }}>{t}</div>
@@ -213,6 +218,10 @@ export default function CampaignsTab({ company }: { company: Pick<CompanyData, '
 
   return (
     <div style={{ maxWidth: '1080px' }}>
+    <DataVeil mode={mode}
+      title="Sem campanhas reais ainda"
+      message="Este painel de campanhas pagas é um exemplo do layout. Conecte o Meta Ads pra ver campanhas reais — ou ligue o Modo demonstração pra explorar."
+      cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
       <Banner />
 
       <div style={{ marginBottom: '10px', fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>
@@ -352,6 +361,8 @@ export default function CampaignsTab({ company }: { company: Pick<CompanyData, '
           ))}
         </div>
       </div>
+
+    </DataVeil>
 
       <ModuleLibrary module="campanhas" />
       <TestingArea companyId={company.id} kind="campanhas" />

@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { CompanyData } from '../../../contexts/CompanyContext'
 import { CARD, MUTED, BORDER, D } from './shared'
+import { useDemoMode } from './growthDemo'
+import DataVeil, { veilMode } from './DataVeil'
 import {
   buildMetaHealthDemo, classifyHealth, HEALTH_CLASS_META, CHECK_META,
   PRIORITY_META, DIFFICULTY_META,
@@ -139,6 +141,10 @@ function RecCard({ rec }: { rec: HealthRecommendation }) {
 export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city'> }) {
   const demo = useMemo(() => buildMetaHealthDemo(company), [company])
   const { overall, trendDelta, categories, recommendations, actions, history, benchmark, executiveSummary } = demo
+  // Não há fonte real de "Saúde da Meta" ainda → nunca mostra número real
+  // fake. Com Modo demonstração desligado, o layout fica borrado (DataVeil).
+  const [demoMode, setDemoMode] = useDemoMode(company.id)
+  const mode = veilMode({ hasReal: false, demoMode })
 
   const cls = classifyHealth(overall)
   const clsMeta = HEALTH_CLASS_META[cls]
@@ -162,6 +168,10 @@ export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 
 
   return (
     <div style={{ maxWidth: '1080px' }}>
+    <DataVeil mode={mode}
+      title="Sem dados reais ainda"
+      message="A Saúde da Meta cruza seus dados reais de Instagram e anúncios — que ainda não estão disponíveis. Ligue o Modo demonstração pra explorar o layout com um exemplo."
+      cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
       <Banner />
 
       <div style={{ marginBottom: '20px', fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>
@@ -300,6 +310,7 @@ export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 
           <div style={{ fontSize: '13px', color: 'white', lineHeight: 1.65 }}>{executiveSummary}</div>
         </div>
       </div>
+    </DataVeil>
     </div>
   )
 }

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { CompanyData } from '../../../contexts/CompanyContext'
 import { useAuth } from '../../../contexts/AuthContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import {
-  buildMetaAdsDemo, fmtBRL, fmtNum, AD_STATUS_META, AD_RECO_META,
+  buildMetaAdsDemo, fmtBRL, fmtNum, AD_STATUS_META, AD_RECO_META, useDemoMode,
   type DemoAdCampaign, type AdRecommendation,
 } from './growthDemo'
+import DataVeil, { veilMode } from './DataVeil'
 
 interface LiveAds {
   account_name?: string
@@ -93,12 +95,18 @@ function RecoCard({ r, executed, onExecute }: { r: AdRecommendation; executed: b
 export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name'> }) {
   const demo = useMemo(() => buildMetaAdsDemo(company), [company])
   const { session } = useAuth()
+  const navigate = useNavigate()
+  const [demoMode] = useDemoMode(company.id)
   const [executed, setExecuted] = useState<Set<string>>(new Set())
   const [live, setLive] = useState<LiveAds | null>(null)
+  // connected = a conta de anúncios está de fato ligada; apiError = conectada
+  // mas a Meta falhou. Juntos definem o estado real (nunca fingir sucesso).
+  const [connected, setConnected] = useState(false)
+  const [apiError, setApiError] = useState(false)
   const execute = (id: string) => setExecuted(prev => new Set(prev).add(id))
 
-  // Puxa os números REAIS da conta de anúncios (se conectada). Sem conexão,
-  // mantém o demo — mesmo design, só trocam os números.
+  // Puxa os números REAIS da conta de anúncios (se conectada). Sem conexão ou
+  // com erro, NÃO troca por número falso — o layout fica borrado (DataVeil).
   useEffect(() => {
     if (!company.id || !session) return
     let alive = true
@@ -108,10 +116,19 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
       body: JSON.stringify({ company_id: company.id }),
     })
       .then(r => r.json())
-      .then(d => { if (alive && d?.connected && d.totals) setLive(d as LiveAds) })
-      .catch(() => {})
+      .then(d => {
+        if (!alive) return
+        // Conectada de verdade? (connected pode vir true com erro de API.)
+        setConnected(!!d?.connected)
+        if (d?.connected && d.totals && !d.error) { setLive(d as LiveAds); setApiError(false) }
+        else if (d?.connected && (d.error || d.expired)) { setApiError(true); console.error('meta-ads-insights:', d.error ?? 'token expirado') }
+      })
+      .catch((e) => { if (alive) { /* falha de rede: trata como erro só se estava conectada */ console.error('meta-ads-insights fetch falhou:', e) } })
     return () => { alive = false }
   }, [company.id, session])
+
+  // Estado da fonte de dado → decide real / demo / borrado / erro.
+  const mode = veilMode({ hasReal: !!live, demoMode, error: connected && apiError })
 
   // Campanhas reais no formato que a linha de campanha espera.
   const liveCampaigns: DemoAdCampaign[] | null = live
@@ -126,16 +143,22 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '26px' }}>
-      {live ? (
+      {mode === 'real' && (
         <div style={{ padding: '12px 16px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-          🟢 <strong>Dados reais</strong> da sua conta de anúncios{live.account_name ? ` (${live.account_name})` : ''} — últimos 30 dias. Investido, ROAS, campanhas e conversões vêm direto da Meta. Públicos, criativos e recomendações da IA seguem sendo a leitura do agente; "Executar recomendação" continua passando pela sua aprovação.
+          🟢 <strong>Dados reais</strong> da sua conta de anúncios{live?.account_name ? ` (${live.account_name})` : ''} — últimos 30 dias. Investido, ROAS, campanhas e conversões vêm direto da Meta. Públicos, criativos e recomendações da IA seguem sendo a leitura do agente; "Executar recomendação" continua passando pela sua aprovação.
         </div>
-      ) : (
+      )}
+      {mode === 'demo' && (
         <div style={{ padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-          ⏳ <strong>Modo demonstração.</strong> Conecte sua conta de anúncios em <strong>Conexões → Meta Ads Manager</strong> — aí estes números viram os reais da sua conta, sem mudar nada nesta tela. "Executar recomendação da IA" aqui é uma simulação; ao vivo, cada ação continua passando pela sua aprovação.
+          🔵 <strong>Modo demonstração.</strong> Estes números são fictícios, só pra explorar o layout. Conecte sua conta em <strong>Conexões → Meta Ads Manager</strong> pra ver os reais. "Executar recomendação" aqui é uma simulação.
         </div>
       )}
 
+      <DataVeil mode={mode}
+        title="Conecte o Meta Ads"
+        message="Estes números são um exemplo do layout. Conecte sua conta de anúncios pra ver investido, ROAS e campanhas de verdade — ou ligue o Modo demonstração no topo do Growth OS."
+        cta={{ label: 'Conectar Meta Ads', onClick: () => navigate('/dashboard/settings?tab=conexoes') }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '26px' }}>
       {/* KPIs agregados */}
       <section>
         <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '11px' }}>Últimos 30 dias</div>
@@ -216,6 +239,8 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
           ))}
         </div>
       </section>
+      </div>
+      </DataVeil>
     </div>
   )
 }

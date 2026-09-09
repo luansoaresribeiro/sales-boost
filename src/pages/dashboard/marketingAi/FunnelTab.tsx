@@ -3,9 +3,10 @@ import type { CompanyData } from '../../../contexts/CompanyContext'
 import { supabase } from '../../../lib/supabase'
 import { useRealtime } from '../../../lib/useRealtime'
 import { CARD, MUTED, BORDER, D } from './shared'
-import { fmtBRL, fmtNum } from './growthDemo'
+import { fmtBRL, fmtNum, useDemoMode } from './growthDemo'
 import { buildFunnelDemo, STAGE_ORDER, TEMP_META, type DemoLead, type LeadStageKey } from './salesDemo'
 import { mapLeadRow, STAGE_TO_DB, type LeadRow } from './salesReal'
+import DataVeil, { veilMode } from './DataVeil'
 import ChannelFilter, { ChannelBadge, type ChannelFilterValue } from './ChannelFilter'
 
 const ORANGE = '#FF6D29'
@@ -78,6 +79,8 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
 
   const isReal = !!realLeads && realLeads.length > 0
   const allLeads = isReal ? realLeads! : demoLeads
+  const [demoMode, setDemoMode] = useDemoMode(company.id)
+  const mode = veilMode({ hasReal: isReal, demoMode })
 
   const draft = (id: string) => setDrafted(prev => new Set(prev).add(id))
   const advance = async (id: string) => {
@@ -104,16 +107,22 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {isReal ? (
+      {mode === 'real' && (
         <div style={{ padding: '12px 16px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
           🟢 <strong>Dados reais.</strong> Estes são os leads capturados de verdade (Instagram, WhatsApp e outros canais). Avançar de etapa salva no CRM na hora. A IA classifica cada lead e rascunha o follow-up — mas <strong>nada é enviado sem sua aprovação</strong>.
         </div>
-      ) : (
+      )}
+      {mode === 'demo' && (
         <div style={{ padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-          ⏳ <strong>Modo demonstração.</strong> Ainda não há leads reais capturados — assim que chegar o primeiro (Instagram, WhatsApp ou anúncios), este funil passa a mostrar os leads de verdade automaticamente. A IA classifica cada lead, rascunha o follow-up e avisa você — mas <strong>nada é enviado sem sua aprovação</strong>.
+          🔵 <strong>Modo demonstração.</strong> Estes leads são fictícios. Assim que chegar o primeiro lead real (Instagram, WhatsApp ou anúncios), o funil mostra os de verdade automaticamente.
         </div>
       )}
 
+      <DataVeil mode={mode}
+        title="Sem leads reais ainda"
+        message="Assim que o primeiro lead chegar (Instagram, WhatsApp ou anúncios), o funil mostra os leads de verdade aqui, sozinho. Ligue o Modo demonstração pra ver o layout com exemplos."
+        cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Filtro de canal — um único funil, filtra por origem */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
         <ChannelFilter value={channel} onChange={setChannel} />
@@ -150,6 +159,8 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
           )
         })}
       </div>
+      </div>
+    </DataVeil>
     </div>
   )
 }

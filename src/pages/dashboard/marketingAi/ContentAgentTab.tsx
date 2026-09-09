@@ -7,6 +7,8 @@ import {
 } from './intelDemo'
 import TestingArea from './TestingArea'
 import ModuleLibrary from './ModuleLibrary'
+import { useDemoMode } from './growthDemo'
+import DataVeil, { veilMode } from './DataVeil'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -109,11 +111,20 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
   const demo = useMemo(() => buildContentDemo(company), [company])
   const [approved, setApproved] = useState<Set<string>>(new Set())
   const { featured } = demo
+  // O calendário/ideias reais virão de marketing_ai_content; enquanto não há
+  // conteúdo real, o layout fica borrado (sem número/post falso como real).
+  const [demoMode, setDemoMode] = useDemoMode(company.id)
+  const mode = veilMode({ hasReal: false, demoMode })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <DataVeil mode={mode}
+      title="Sem conteúdo real ainda"
+      message="Este calendário é um exemplo do layout. Quando o agente gerar posts de verdade (aba Vault / aprovações), eles aparecem aqui. Ligue o Modo demonstração pra explorar com exemplos."
+      cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div style={{ padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-        ⏳ <strong>Modo demonstração.</strong> O agente monta o calendário, cria ideias, escreve roteiros de Reels, legendas e sugere o criativo — tudo baseado no que a Inteligência de Mercado e o Feedback Loop aprenderam. <strong>Nada é publicado sem sua aprovação.</strong>
+        🔵 <strong>Modo demonstração.</strong> O agente monta o calendário, cria ideias, escreve roteiros de Reels, legendas e sugere o criativo — tudo baseado no que a Inteligência de Mercado e o Feedback Loop aprenderam. <strong>Nada é publicado sem sua aprovação.</strong>
       </div>
 
       <section>
@@ -194,6 +205,8 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
           </button>
         </div>
       </section>
+    </div>
+    </DataVeil>
 
       <ModuleLibrary module="organico" />
       <TestingArea companyId={company.id} kind="organico" />

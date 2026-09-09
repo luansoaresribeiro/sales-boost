@@ -3,6 +3,8 @@ import type { CompanyData } from '../../../contexts/CompanyContext'
 import { CARD, MUTED, BORDER } from './shared'
 import { buildFeedbackDemo, CONFIDENCE_META, type AttributionStep, type Learning } from './feedbackDemo'
 import { buildIcpDemo, type IcpSignal } from './growthIntelDemo'
+import { useDemoMode } from './growthDemo'
+import DataVeil, { veilMode } from './DataVeil'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -192,9 +194,17 @@ function CompanyCore({ metaConnected }: { metaConnected: boolean }) {
 export default function FeedbackLoopTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'instagram_user_id' | 'business_type' | 'city'> }) {
   const demo = useMemo(() => buildFeedbackDemo(company), [company])
   const metaConnected = !!company.instagram_user_id
+  // Ainda não há fonte real de ICP/atribuição → sem número real fake. Modo
+  // demonstração desligado deixa o layout borrado (DataVeil).
+  const [demoMode, setDemoMode] = useDemoMode(company.id)
+  const mode = veilMode({ hasReal: false, demoMode })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '26px' }}>
+    <DataVeil mode={mode}
+      title="Sem dados reais ainda"
+      message="O Feedback Loop cruza dados reais da Meta, do funil e do atendimento — que ainda não estão prontos. Ligue o Modo demonstração pra explorar o layout com um exemplo."
+      cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
       <div style={{ padding: '12px 16px', background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.2)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
         🔁 <strong>O diferencial do Growth OS.</strong> A maioria das ferramentas para no "anúncio → resultado". Aqui a IA acompanha o caminho inteiro — <strong>anúncio → lead → venda → aprendizado</strong> — e ainda aprende <strong>quem é o seu cliente ideal</strong>, refinando sozinha a cada ciclo. No modo demonstração os números são de exemplo; ao vivo, cruzam os dados reais da Meta, do funil e do atendimento.
       </div>
@@ -224,6 +234,7 @@ export default function FeedbackLoopTab({ company }: { company: Pick<CompanyData
           {demo.learnings.map(l => <LearningCard key={l.id} l={l} />)}
         </div>
       </section>
+    </DataVeil>
     </div>
   )
 }
