@@ -156,7 +156,29 @@ async function execute(admin: Supa, act: any): Promise<any> {
       return error ? await fail(error.message) : await done({ approved: 'post', id: act.ref_id })
     }
 
-    // 2) Criar rascunho de conteúdo a partir do payload (produtor → Approvals).
+    // 2) Engagement (Instagram): enviar DM / criar lead — aprovado pelo dono.
+    if (act.source === 'engagement') {
+      const { data: company } = await admin.from('companies').select('id, instagram_user_id, instagram_access_token').eq('id', act.company_id).maybeSingle()
+      const p = act.payload ?? {}
+      let err = ''
+      if ((p.action_type === 'send_dm' || p.action_type === 'answer_question') && p.message) {
+        if (!company?.instagram_access_token) err = 'Instagram não conectado — DM não enviado.'
+        else {
+          const r = await fetch(`https://graph.facebook.com/v21.0/${company.instagram_user_id ?? 'me'}/messages`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${company.instagram_access_token}` },
+            body: JSON.stringify({ recipient: { comment_id: p.comment_id }, message: { text: p.message } }),
+          })
+          if (!r.ok) err = `Falha ao enviar DM: ${await r.text()}`
+        }
+      }
+      if (p.create_lead || p.action_type === 'create_lead') {
+        await admin.from('leads').insert({ company_id: act.company_id, name: p.ig_user ?? 'Lead do Instagram', contact: p.ig_user ?? null, channel: 'instagram', stage: 'new', notes: act.agent_interpretation ?? null })
+      }
+      if (p.event_id) await admin.from('engagement_events').update({ status: err ? 'failed' : (p.create_lead ? 'lead_created' : 'sent'), error: err || null }).eq('id', p.event_id)
+      return err ? await fail(err) : await done({ engagement: true, dm: p.action_type !== 'create_lead', lead: !!p.create_lead })
+    }
+
+    // 3) Criar rascunho de conteúdo a partir do payload (produtor → Approvals).
     if (act.action_type === 'create_content' || act.channel === 'instagram') {
       const p = act.payload ?? {}
       const { data, error } = await admin.from('marketing_ai_content').insert({

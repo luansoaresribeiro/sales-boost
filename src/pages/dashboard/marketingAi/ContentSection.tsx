@@ -7,10 +7,11 @@ import StoriesTab from './StoriesTab'
 import ContentVault from './ContentVault'
 import ContentLibrary from './ContentLibrary'
 import PerformanceTab from './PerformanceTab'
+import EngagementTab from './EngagementTab'
 
 const ORANGE = '#FF6D29'
 
-type Mode = 'conteudo' | 'vault' | 'biblioteca' | 'performance'
+type Mode = 'conteudo' | 'vault' | 'biblioteca' | 'performance' | 'engagement'
 type Sub = 'organico' | 'campanhas' | 'stories'
 
 const TABS: { key: Mode; icon: string; label: string; sub: string }[] = [
@@ -18,6 +19,7 @@ const TABS: { key: Mode; icon: string; label: string; sub: string }[] = [
   { key: 'vault', icon: '⭐', label: 'Vault', sub: 'Aprovados pelo QC, prontos pra publicar' },
   { key: 'biblioteca', icon: '📚', label: 'Biblioteca', sub: 'Frameworks, hooks e personalidades' },
   { key: 'performance', icon: '📊', label: 'Performance', sub: 'Inteligência real do seu Instagram' },
+  { key: 'engagement', icon: '🤝', label: 'Engagement', sub: 'Automação de comentários e DMs' },
 ]
 
 const SUBTABS: { key: Sub; icon: string; label: string; sub: string }[] = [
@@ -56,6 +58,7 @@ export default function ContentSection({ company }: { company: Pick<CompanyData,
           : <StoriesTab company={company} />
       ) : mode === 'vault' ? <ContentVault companyId={company.id} />
         : mode === 'biblioteca' ? <ContentLibrary companyId={company.id} />
+        : mode === 'engagement' ? <EngagementTab company={company} />
         : <PerformanceTab company={company} onCreateContent={goToContent} />}
     </div>
   )
