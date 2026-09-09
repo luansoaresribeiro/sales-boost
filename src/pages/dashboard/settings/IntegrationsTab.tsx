@@ -82,6 +82,12 @@ export default function IntegrationsTab() {
   const [waSaving, setWaSaving] = useState(false)
   const [waSaved, setWaSaved] = useState(false)
   const [waError, setWaError] = useState('')
+  // Conexão manual (número próprio do dono, via WhatsApp → Configuração da API
+  // na Meta). Alternativa ao Embedded Signup, que exige app Tech Provider.
+  const [waManualOpen, setWaManualOpen] = useState(false)
+  const [waManualWaba, setWaManualWaba] = useState('')
+  const [waManualPhoneId, setWaManualPhoneId] = useState('')
+  const [waManualToken, setWaManualToken] = useState('')
   // Login com o Meta Business Suite — dá acesso real (não mock) às Páginas,
   // Instagram vinculado e negócios do Business Manager.
   const [metaBusinessName, setMetaBusinessName] = useState<string | null>(null)
@@ -225,6 +231,35 @@ export default function IntegrationsTab() {
       setWaPhoneId(phoneNumberId) // conexão real: guarda o número escolhido
       setWaSaved(true)
       setTimeout(() => setWaSaved(false), 2000)
+    } catch (e) {
+      setWaError(e instanceof Error ? e.message : String(e))
+    }
+    setWaSaving(false)
+  }
+
+  // Conexão manual: o dono cola Phone Number ID + WABA ID + token (da Meta) e
+  // a gente valida no servidor e salva. O token vai por HTTPS direto pro backend.
+  const connectWhatsappManual = async () => {
+    if (!session) return
+    setWaSaving(true)
+    setWaError('')
+    try {
+      if (!waManualWaba.trim() || !waManualPhoneId.trim() || !waManualToken.trim())
+        throw new Error('Preencha os 3 campos: ID do número, ID da conta (WABA) e token.')
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-manual-connect`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ waba_id: waManualWaba.trim(), phone_number_id: waManualPhoneId.trim(), access_token: waManualToken.trim() }),
+      })
+      const data = await res.json() as { ok?: boolean; error?: string; display_phone_number?: string }
+      if (!res.ok || !data.ok) throw new Error(friendlyWaError(data.error))
+      setWaNumber(data.display_phone_number ?? '')
+      setWaConnectedAt(new Date().toISOString())
+      setWaPhoneId(waManualPhoneId.trim())
+      setWaManualToken('') // não mantém o token em memória no browser após salvar
+      setWaManualOpen(false)
+      setWaSaved(true)
+      setTimeout(() => setWaSaved(false), 2500)
     } catch (e) {
       setWaError(e instanceof Error ? e.message : String(e))
     }
@@ -591,6 +626,28 @@ export default function IntegrationsTab() {
             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>
               Você escolhe (ou cria) o número de WhatsApp Business numa janela do Meta — sem precisar mexer em configuração técnica. Depois disso, o Agente passa a responder as mensagens que chegarem nesse número.
             </div>
+
+            {/* Conexão manual: pro dono ligar o próprio número hoje, sem depender
+                do app ser Tech Provider verificado. */}
+            <button onClick={() => setWaManualOpen(o => !o)}
+              style={{ marginTop: '12px', background: 'transparent', border: 'none', color: ORANGE, fontSize: '12px', fontWeight: 700, cursor: 'pointer', padding: 0, fontFamily: D }}>
+              {waManualOpen ? '▾ Conectar meu próprio número (avançado)' : '▸ Conectar meu próprio número (avançado)'}
+            </button>
+
+            {waManualOpen && (
+              <div style={{ marginTop: '12px', padding: '16px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
+                <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.6, marginBottom: '14px' }}>
+                  Pegue estes 3 dados no painel da Meta em <strong style={{ color: 'white' }}>WhatsApp → Configuração da API</strong> e cole aqui. O token é enviado com segurança e guardado só no servidor — <strong style={{ color: 'white' }}>nunca</strong> fica salvo no seu navegador.
+                </div>
+                <ManualField label="ID do número (Phone Number ID)" placeholder="ex: 123456789012345" value={waManualPhoneId} onChange={setWaManualPhoneId} />
+                <ManualField label="ID da conta do WhatsApp (WhatsApp Business Account ID / WABA)" placeholder="ex: 987654321098765" value={waManualWaba} onChange={setWaManualWaba} />
+                <ManualField label="Token de acesso" placeholder="Cole o token gerado na Meta" value={waManualToken} onChange={setWaManualToken} secret />
+                <button onClick={connectWhatsappManual} disabled={waSaving}
+                  style={{ marginTop: '6px', padding: '9px 18px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: waSaving ? 'wait' : 'pointer', fontFamily: D }}>
+                  {waSaving ? 'Conectando...' : 'Conectar número →'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -687,6 +744,24 @@ export default function IntegrationsTab() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// Campo de texto usado no formulário de conexão manual do WhatsApp.
+function ManualField({ label, placeholder, value, onChange, secret }: { label: string; placeholder: string; value: string; onChange: (v: string) => void; secret?: boolean }) {
+  return (
+    <div style={{ marginBottom: '12px' }}>
+      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, marginBottom: '5px' }}>{label}</label>
+      <input
+        type={secret ? 'password' : 'text'}
+        value={value}
+        placeholder={placeholder}
+        onChange={e => onChange(e.target.value)}
+        autoComplete="off"
+        spellCheck={false}
+        style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', background: '#0E0B0A', border: `1px solid ${BORDER}`, borderRadius: '8px', color: 'white', fontSize: '12.5px', fontFamily: D, outline: 'none' }}
+      />
     </div>
   )
 }
