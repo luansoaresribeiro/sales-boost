@@ -64,28 +64,43 @@ export function launchWhatsAppSignup(): Promise<WhatsAppSignupResult> {
     if (!window.FB?.login) { reject(new Error('SDK do Facebook ainda não carregou. Tenta de novo em alguns segundos.')); return }
     console.log('[Meta Signup] iniciado (config_id presente)')
 
-    let sessionInfo: { wabaId: string | null; phoneNumberId: string | null } = { wabaId: null, phoneNumberId: null }
+    const sessionInfo: { wabaId: string | null; phoneNumberId: string | null } = { wabaId: null, phoneNumberId: null }
+    let signupError = ''   // erro reportado pela própria janela do Meta
+    let userCancelled = false
 
     const onMessage = (event: MessageEvent) => {
-      if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return
+      // Aceita qualquer subdomínio do facebook.com (www, web, business, etc.) —
+      // filtrar demais era o que fazia a gente perder a mensagem do número.
+      let host = ''
+      try { host = new URL(event.origin).hostname } catch { return }
+      if (!host.endsWith('facebook.com')) return
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+        if (data?.type !== 'WA_EMBEDDED_SIGNUP') return
         // Logs seguros (IDs não são segredos; NUNCA logar token/secret/code).
-        console.log('[Meta Signup] mensagem recebida', { type: data?.type, event: data?.event })
-        if (data?.type === 'WA_EMBEDDED_SIGNUP' && data?.data) {
-          sessionInfo = { wabaId: data.data.waba_id ?? null, phoneNumberId: data.data.phone_number_id ?? null }
-          console.log('[Meta Signup] WABA/telefone detectados', { wabaId: sessionInfo.wabaId, phoneNumberId: sessionInfo.phoneNumberId, step: data.data.current_step })
-        }
+        console.log('[Meta Signup] mensagem recebida', { event: data?.event, step: data?.data?.current_step })
+        const d = data.data ?? {}
+        // Captura assim que aparecer — pode vir em passos intermediários.
+        if (d.waba_id) sessionInfo.wabaId = d.waba_id
+        if (d.phone_number_id) sessionInfo.phoneNumberId = d.phone_number_id
+        if (data.event === 'CANCEL') userCancelled = true
+        if (data.event === 'ERROR') signupError = d.error_message || 'A janela do Meta reportou um erro no cadastro.'
       } catch { /* mensagens que não são JSON não interessam aqui */ }
     }
     window.addEventListener('message', onMessage)
 
     window.FB.login((res: FBLoginResponse) => {
-      window.removeEventListener('message', onMessage)
       const code = res.authResponse?.code
-      console.log('[Meta Signup] login concluído', { temCode: !!code, status: res.status, temWaba: !!sessionInfo.wabaId, temPhone: !!sessionInfo.phoneNumberId })
-      if (!code) { reject(new Error('Login cancelado ou sem permissão concedida.')); return }
-      resolve({ code, wabaId: sessionInfo.wabaId, phoneNumberId: sessionInfo.phoneNumberId })
+      // Dá um respiro pra uma mensagem de número que chegue logo após o login
+      // (às vezes o postMessage do FINISH vem milissegundos depois do callback).
+      setTimeout(() => {
+        window.removeEventListener('message', onMessage)
+        console.log('[Meta Signup] login concluído', { temCode: !!code, status: res.status, temWaba: !!sessionInfo.wabaId, temPhone: !!sessionInfo.phoneNumberId, cancel: userCancelled, erro: !!signupError })
+        if (signupError) { reject(new Error(signupError)); return }
+        if (userCancelled) { reject(new Error('Você fechou a janela antes de terminar. Refaça e vá até o fim: escolha a conta do WhatsApp (WABA), selecione ou cadastre o número e clique em concluir.')); return }
+        if (!code) { reject(new Error('Login cancelado ou sem permissão concedida.')); return }
+        resolve({ code, wabaId: sessionInfo.wabaId, phoneNumberId: sessionInfo.phoneNumberId })
+      }, 1500)
     }, {
       config_id: WHATSAPP_CONFIG_ID,
       response_type: 'code',

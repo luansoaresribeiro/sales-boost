@@ -210,7 +210,7 @@ export default function IntegrationsTab() {
     try {
       const { code, wabaId, phoneNumberId } = await launchWhatsAppSignup()
       // #13: popup fechado NÃO é sucesso — só seguimos com WABA + phone reais.
-      if (!wabaId || !phoneNumberId) throw new Error('Conexão incompleta: a Meta não devolveu o número (Phone Number ID) e/ou a conta (WABA). Refaça e conclua a seleção do número na janela do Meta até o fim.')
+      if (!wabaId || !phoneNumberId) throw new Error('A janela do Meta terminou sem devolver o número. Isso acontece quando o cadastro não vai até o fim: refaça e, na janela, escolha o Portfólio de Negócios → a conta do WhatsApp (WABA) → selecione ou cadastre o número → clique em Concluir/Continuar até a janela fechar sozinha. Se a janela não chegou a pedir um número, o problema é a configuração do login do WhatsApp na Meta (Configuration ID sem o produto WhatsApp).')
       console.log('[Meta Signup] backend validação iniciada', { temWaba: !!wabaId, temPhone: !!phoneNumberId })
       const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-embedded-signup`, {
         method: 'POST',
