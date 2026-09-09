@@ -7,6 +7,7 @@ import {
   listAgentActions, decideAgentAction, editAgentAction,
   APPROVAL_META, EXECUTION_META, type AgentAction,
 } from '../../lib/agentActions'
+import { useRealtime } from '../../lib/useRealtime'
 
 const FORMAT_ICON: Record<string, string> = { reel: '🎬', carrossel: '🎠', story: '📱', foto: '📸' }
 const CHANNEL_ICON: Record<string, string> = { instagram: '📸', whatsapp: '💬', google: '⭐', email: '✉️', facebook: '📘', website: '🌐', internal: '⚙️' }
@@ -163,6 +164,8 @@ export default function ApprovalsPage() {
   }, [user, token])
 
   useEffect(() => { if (user) void load() }, [user, load])
+  // Sincronização ao vivo: novas ações/mudanças aparecem sem recarregar.
+  useRealtime('agent_actions', companyId, load)
 
   const decide = async (id: string, decision: 'approve' | 'reject') => {
     if (!companyId) return

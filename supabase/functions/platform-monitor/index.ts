@@ -224,6 +224,12 @@ Deno.serve(async (req) => {
       } else if (!bad && openInc) {
         await admin.from('platform_incidents').update({ status: 'resolved', resolved_at: now, recovery_status: 'recovered' }).eq('id', (openInc as { id: string }).id)
         resolved++
+        // Avisa no Telegram que o serviço crítico VOLTOU (espelha o alerta de
+        // queda — só pra quem recebeu o "INCIDENTE CRÍTICO" também saber que
+        // normalizou, sem precisar ficar checando).
+        if ((openInc as { severity?: string }).severity === 'critical' && cfg.notify_telegram && cfg.admin_telegram_chat_id && env.TELEGRAM_BOT_TOKEN) {
+          await sendTelegram(env.TELEGRAM_BOT_TOKEN, cfg.admin_telegram_chat_id, `✅ SERVIÇO RECUPERADO\n${svc.name} voltou a funcionar normalmente.\n\nStatus atual: ${result.detail ?? 'OK'}${result.latency ? ` (${result.latency}ms)` : ''}`)
+        }
       }
     }
 
