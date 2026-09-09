@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { CompanyData } from '../../../contexts/CompanyContext'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
+import { useRealtime } from '../../../lib/useRealtime'
 import { CARD, MUTED, BORDER, D } from './shared'
 import { buildInsightsDemo, INSIGHT_CATEGORY_META, PRIORITY_META, type InsightCategory, type InsightItem } from './growthIntelDemo'
 
@@ -81,6 +82,7 @@ export default function InsightsTab({ company }: { company: Pick<CompanyData, 'i
     setLoading(false)
   }
   useEffect(() => { load() /* eslint-disable-next-line */ }, [company.id])
+  useRealtime('external_insights', company.id, load)
 
   const refresh = async () => {
     if (!session || refreshing) return

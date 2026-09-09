@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { useRealtime } from '../../lib/useRealtime'
 import { useNavigate } from 'react-router-dom'
 import { useCompany, type CompanyData } from '../../contexts/CompanyContext'
 import { useLang } from '../../contexts/LanguageContext'
@@ -267,6 +268,14 @@ export default function OpportunitiesPage() {
   const [activeTab, setActiveTab] = useState('oportunidades')
 
   useEffect(() => { scan() }, [])
+
+  // Ultra-sync: refetch leve (sem re-escanear) quando as oportunidades mudarem.
+  const refetchOpps = useCallback(async () => {
+    if (!company?.id) return
+    const { data } = await supabase.from('opportunities').select('*').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false })
+    if (data) setOpportunities(data as Opportunity[])
+  }, [company?.id])
+  useRealtime('opportunities', company?.id, refetchOpps)
 
   const scan = async () => {
     if (!session) return

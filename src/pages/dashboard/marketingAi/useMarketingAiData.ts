@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { useRealtime } from '../../../lib/useRealtime'
 import {
   type MarketingAiConfig, type TrackingSnapshot, type Insight, type ContentItem, type CompetitorRow,
   type StrategyLogRow, type ActivityLogRow, type BrainNode, type Experiment, type ToolRegistryRow,
@@ -60,6 +61,15 @@ export function useMarketingAiData(companyId: string | undefined) {
   }, [companyId])
 
   useEffect(() => { void loadAll() }, [loadAll])
+
+  // Ultra-sync: qualquer mudança nessas tabelas atualiza o hub sem recarregar.
+  useRealtime('marketing_ai_content', companyId, loadAll)
+  useRealtime('marketing_ai_insights', companyId, loadAll)
+  useRealtime('marketing_ai_activity_log', companyId, loadAll)
+  useRealtime('marketing_ai_strategy_log', companyId, loadAll)
+  useRealtime('marketing_ai_tracking_snapshots', companyId, loadAll)
+  useRealtime('marketing_ai_competitors', companyId, loadAll)
+  useRealtime('marketing_ai_campaigns', companyId, loadAll)
 
   return {
     loading, config, snapshots, insights, content, competitors, strategyLog, activity,

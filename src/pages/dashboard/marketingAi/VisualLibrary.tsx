@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { useRealtime } from '../../../lib/useRealtime'
 import { CARD, MUTED, BORDER, D, timeAgo } from './shared'
 import { ImageModal } from './TestingArea'
 import BrandKit from './BrandKit'
@@ -46,6 +47,8 @@ export default function VisualLibrary({ companyId }: { companyId: string }) {
     setLoading(false)
   }, [companyId])
   useEffect(() => { load() }, [load])
+  useRealtime('instagram_content_performance', companyId, load)
+  useRealtime('instagram_posts', companyId, load)
 
   return (
     <div>

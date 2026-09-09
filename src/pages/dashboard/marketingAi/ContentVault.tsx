@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useRealtime } from '../../../lib/useRealtime'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { CARD, MUTED, BORDER, D, timeAgo } from './shared'
@@ -38,6 +39,7 @@ export default function ContentVault({ companyId, reloadKey }: { companyId: stri
   const toggleExpanded = (id: string) => setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   useEffect(() => { load() }, [load, reloadKey])
+  useRealtime('marketing_ai_test_content', companyId, load)
 
   const publish = async (id: string) => {
     setBusyId(id); setError(''); setOkMsg('')
