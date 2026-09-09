@@ -709,7 +709,7 @@ function PricingSection({ lang }: { lang: Lang }) {
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 gap-5 max-w-md mx-auto">
           {plans.map((plan, i) => {
             const isUltra = plan.name === 'Ultra'
             const cardBg   = plan.popular ? '#1E1008' : isUltra ? '#1A0C04' : CARD

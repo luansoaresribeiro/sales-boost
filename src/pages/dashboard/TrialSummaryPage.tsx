@@ -10,8 +10,8 @@ import { supabase } from '../../lib/supabase'
 import { getTrialInfo, formatExpiresAt } from '../../lib/trialState'
 import { CARD, MUTED, BORDER, ORANGE, D, SUPABASE_URL } from './marketingAi/shared'
 
-const PLAN_PRICE_BR = 'R$397'
-const PLAN_PRICE_US = '$197'
+const PLAN_PRICE_BR = 'R$14,49'
+const PLAN_PRICE_US = '$2.99'
 
 interface Metrics {
   opportunities: number

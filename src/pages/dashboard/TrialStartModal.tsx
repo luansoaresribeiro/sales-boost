@@ -9,8 +9,8 @@ import { CARD, MUTED, BORDER, ORANGE, D } from './marketingAi/shared'
 
 // Mesmo plano/preço já mostrados na home antes do cadastro (Pro — o mais
 // popular) — não inventa número novo, só repete o que já está público.
-const PLAN_PRICE_BR = 'R$397'
-const PLAN_PRICE_US = '$197'
+const PLAN_PRICE_BR = 'R$14,49'
+const PLAN_PRICE_US = '$2.99'
 
 export default function TrialStartModal() {
   const { company, refreshCompany } = useCompany()

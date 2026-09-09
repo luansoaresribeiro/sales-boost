@@ -69,10 +69,9 @@ async function handlePreco(chatId: number, _text: string, env: Record<string, st
   await sendMessage(
     env,
     chatId,
-    'Planos:\\n' +
-      '• Básico: R$ 497/mês — até 500 mensagens/mês e relatórios básicos\\n' +
-      '• Pro: R$ 997/mês — relatórios avançados + integrações\\n' +
-      '• Enterprise: sob consulta\\n\\n' +
+    'Plano SalesBoost:\\n' +
+      '• R$ 14,49/mês — tudo incluído: conteúdo com IA, oportunidades de receita, atendimento automático e automação 24/7\\n' +
+      '• 3 dias grátis pra testar, cancela quando quiser\\n\\n' +
       'Use /agendar para uma demonstração personalizada.',
   );
   await logEvent(env, chatId, 'preco', '💰 Lead consultou preços');

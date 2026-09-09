@@ -132,25 +132,11 @@ interface SyncJob {
 
 const PLANS = [
   {
-    key: 'basic',
-    name: 'Basic',
-    price: 'R$197/mês',
-    postLimit: 15,
-    features: ['15 posts/mês com imagem IA', 'Jarvis — assistente de voz', 'Diagnóstico de site', 'Suporte por e-mail'],
-  },
-  {
     key: 'pro',
-    name: 'Pro',
-    price: 'R$397/mês',
-    postLimit: 35,
-    features: ['35 posts/mês com imagem IA', 'Revenue Opportunities', 'Respostas automáticas a reviews', 'Relatórios mensais em PDF', 'Suporte prioritário'],
-  },
-  {
-    key: 'ultra',
-    name: 'Ultra',
-    price: 'R$697/mês',
+    name: 'SalesBoost',
+    price: 'R$14,49/mês',
     postLimit: 50,
-    features: ['50 posts/mês com imagem IA', 'Multi-agente (7 especialistas)', 'Relatório white-label', 'Tudo do Pro', 'Suporte dedicado'],
+    features: ['Posts com imagem por IA', 'Revenue Opportunities', 'Atendimento automático a leads', 'Respostas automáticas a reviews', 'Automação 24/7', 'Relatórios mensais em PDF'],
   },
 ]
 
