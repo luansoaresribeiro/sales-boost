@@ -2,6 +2,13 @@
   "name": "sales-boost-restaurants",
   "compatibility_date": "2026-06-16",
   "compatibility_flags": ["nodejs_compat"],
+  // Domínio próprio: ao rodar `npx wrangler deploy`, a Cloudflare liga o
+  // getsaleboost.com neste site e provisiona o HTTPS sozinha (o domínio já
+  // está na conta). É o que faz a Meta aceitar o login do WhatsApp — ela
+  // recusava o endereço .workers.dev por ser compartilhado.
+  "routes": [
+    { "pattern": "getsaleboost.com", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
