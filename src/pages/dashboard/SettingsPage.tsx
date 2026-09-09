@@ -118,10 +118,6 @@ function SectionCard({ title, id, children }: { title: string; id?: string; chil
   )
 }
 
-interface PlaceCandidate {
-  place_id: string; name: string; address: string; rating: number | null; review_count: number | null
-  lat?: number | null; lng?: number | null
-}
 
 interface SyncStep {
   key: string; label: string; status: 'pending' | 'running' | 'done' | 'error'; message?: string
@@ -130,15 +126,6 @@ interface SyncJob {
   id: string; status: 'running' | 'done' | 'error'; steps: SyncStep[]
 }
 
-const PLANS = [
-  {
-    key: 'pro',
-    name: 'SalesBoost',
-    price: 'R$14,49/mês',
-    postLimit: 50,
-    features: ['Posts com imagem por IA', 'Revenue Opportunities', 'Atendimento automático a leads', 'Respostas automáticas a reviews', 'Automação 24/7', 'Relatórios mensais em PDF'],
-  },
-]
 
 export default function SettingsPage() {
   const { user, session } = useAuth()
@@ -169,7 +156,6 @@ export default function SettingsPage() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [currentPlan, setCurrentPlan] = useState<string>('free')
   const [agentUsed, setAgentUsed] = useState(0)
-  const [upgrading, setUpgrading] = useState<string | null>(null)
   const [upgradeSuccess, setUpgradeSuccess] = useState(searchParams.get('upgrade') === 'success')
   const [businessName, setBusinessName] = useState('')
   const [businessType, setBusinessType] = useState('')
@@ -202,11 +188,6 @@ export default function SettingsPage() {
   const syncPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Places search
-  const [placeQuery, setPlaceQuery] = useState('')
-  const [placeCandidates, setPlaceCandidates] = useState<PlaceCandidate[]>([])
-  const [placesLoading, setPlacesLoading] = useState(false)
-  const [placesError, setPlacesError] = useState('')
-  const placeSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -274,124 +255,11 @@ export default function SettingsPage() {
 
   useEffect(() => () => { if (syncPollRef.current) clearInterval(syncPollRef.current) }, [])
 
-  const searchPlaces = async (q: string) => {
-    if (!q.trim() || !session) return
-    setPlacesLoading(true)
-    setPlacesError('')
-    try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/find-place`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        const hint = data.hint ? `\n${data.hint}` : ''
-        throw new Error((data.error ?? 'Erro na busca') + hint)
-      }
-      setPlaceCandidates(data.results ?? [])
-    } catch (e: unknown) {
-      setPlacesError(e instanceof Error ? e.message : String(e))
-    }
-    setPlacesLoading(false)
-  }
-
-  const handlePlaceQueryChange = (v: string) => {
-    setPlaceQuery(v)
-    setPlaceCandidates([])
-    if (placeSearchTimeout.current) clearTimeout(placeSearchTimeout.current)
-    if (v.trim().length >= 3) {
-      placeSearchTimeout.current = setTimeout(() => searchPlaces(v), 700)
-    }
-  }
-
-  const selectPlace = async (p: PlaceCandidate) => {
-    setGooglePlaceId(p.place_id)
-    setGoogleRating(p.rating)
-    setGoogleReviewCount(p.review_count)
-    setPlaceCandidates([])
-    setPlaceQuery('')
-    if (!businessName.trim()) setBusinessName(p.name)
-    if (!city.trim() && p.address) {
-      const parts = p.address.split(',')
-      setCity(parts[parts.length - 2]?.trim() ?? '')
-    }
-    // Save place_id immediately if company exists — the same fields are also
-    // included in handleSave's payload so a fresh company (created via the
-    // insert branch below) never ends up with a place_id but no rating/count.
-    if (companyId) {
-      const changingPlace = googlePlaceId && googlePlaceId !== p.place_id
-      const { error } = await supabase.from('companies').update({
-        google_place_id: p.place_id,
-        google_rating: p.rating,
-        google_review_count: p.review_count,
-        ...(p.lat != null ? { lat: p.lat, lng: p.lng } : {}),
-      }).eq('id', companyId)
-      if (error) { setSaveError(error.message); return }
-      // Switching to a different Google business — reviews already fetched
-      // for the old place have no place-level column to filter by, so they'd
-      // otherwise sit mixed in with the new place's reviews forever. Clear
-      // them out now; apify-sync will refetch fresh ones for the new place.
-      if (changingPlace) {
-        await supabase.from('reviews').delete().eq('company_id', companyId).eq('source', 'google')
-      }
-      void refreshCompany()
-    }
-  }
-
-  const unlinkGoogle = async () => {
-    setGooglePlaceId(null)
-    setGoogleRating(null)
-    setGoogleReviewCount(null)
-    // Persist right away — leaving this until the "Salvar alterações" button
-    // is pressed lets background review sync keep pulling from the old
-    // (now-hidden) place_id, causing reviews from the wrong business to show up.
-    if (companyId) {
-      const { error } = await supabase.from('companies').update({
-        google_place_id: null,
-        google_rating: null,
-        google_review_count: null,
-      }).eq('id', companyId)
-      if (error) { setSaveError(error.message); return }
-      // Same reasoning as selectPlace — reviews aren't tagged with the place
-      // they came from, so unlinking must also clear them or they'd linger
-      // and get mixed in if a different Google business is linked later.
-      await supabase.from('reviews').delete().eq('company_id', companyId).eq('source', 'google')
-      void refreshCompany()
-    }
-  }
-
   const cancelTrial = async () => {
     if (!companyId) return
     if (!window.confirm('Cancelar o trial? Você perde o acesso ao dashboard, mas nada do que já foi feito (progresso, descobertas, conquistas) é apagado — pode voltar quando quiser.')) return
     await supabase.from('companies').update({ trial_cancelled_at: new Date().toISOString() }).eq('id', companyId)
     void refreshCompany()
-  }
-
-  const handleUpgrade = async (plan: string) => {
-    if (!session) return
-    setUpgrading(plan)
-    try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/create-checkout`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          plan,
-          success_url: `${window.location.origin}/dashboard/settings?upgrade=success`,
-          cancel_url: `${window.location.origin}/dashboard/settings`,
-        }),
-      })
-      const data = await res.json()
-      if (data.url) {
-        window.location.href = data.url
-      }
-    } catch {
-      // silently fail — user stays on page
-    }
-    setUpgrading(null)
   }
 
   // Fires right after a successful save — kicks off a background sync job that
@@ -530,52 +398,6 @@ export default function SettingsPage() {
 
         {tab === 'info' && (
         <>
-        {/* Google Places search */}
-        <SectionCard id="section-google" title="Vincular ao Google">
-          {googlePlaceId ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 14px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: '10px', marginBottom: '4px' }}>
-              <div>
-                <div style={{ fontSize: '13px', color: '#4ade80', fontWeight: 600 }}>✓ Negócio vinculado ao Google</div>
-                {googleRating && <div style={{ fontSize: '12px', color: MUTED, marginTop: '2px' }}>Nota: {googleRating}★ · {googleReviewCount ?? '?'} avaliações</div>}
-              </div>
-              <button onClick={unlinkGoogle}
-                style={{ fontSize: '11px', color: MUTED, background: 'none', border: 'none', cursor: 'pointer' }}>Desvincular</button>
-            </div>
-          ) : (
-            <>
-              <p style={{ fontSize: '12px', color: MUTED, marginBottom: '14px', lineHeight: 1.6 }}>
-                Vincule ao Google para importar avaliações reais e monitorar sua nota automaticamente.
-              </p>
-              <div style={{ position: 'relative' }}>
-                <Field
-                  label="Buscar seu negócio no Google"
-                  value={placeQuery}
-                  onChange={handlePlaceQueryChange}
-                  placeholder={`Ex: ${businessName || 'Studio Beleza Carioca'} Rio de Janeiro`}
-                  hint={placesLoading ? 'Buscando...' : 'Digite o nome + cidade para encontrar seu negócio'}
-                />
-                {placesError && (
-                  <div style={{ fontSize: '12px', color: '#f87171', marginTop: '-10px', marginBottom: '12px', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
-                    {placesError}
-                  </div>
-                )}
-                {placeCandidates.length > 0 && (
-                  <div style={{ background: '#1A1008', border: `1px solid ${BORDER}`, borderRadius: '10px', overflow: 'hidden', marginTop: '-8px', marginBottom: '12px' }}>
-                    {placeCandidates.map(p => (
-                      <button key={p.place_id} onClick={() => selectPlace(p)}
-                        style={{ width: '100%', padding: '12px 14px', background: 'transparent', border: 'none', borderBottom: `1px solid ${BORDER}`, textAlign: 'left', cursor: 'pointer', display: 'block' }}
-                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,109,41,0.08)')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                        <div style={{ fontSize: '13px', color: 'white', fontWeight: 600 }}>{p.name}</div>
-                        <div style={{ fontSize: '11px', color: MUTED, marginTop: '2px' }}>{p.address}{p.rating ? ` · ${p.rating}★ (${p.review_count} aval.)` : ''}</div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </SectionCard>
 
         <SectionCard id="section-negocio" title="Sobre o negócio">
           <Field label="Nome do negócio" value={businessName} onChange={setBusinessName} placeholder="Ex: Studio Beleza Carioca" />
@@ -590,19 +412,7 @@ export default function SettingsPage() {
 
         {companyId && <BusinessUnderstandingCard companyId={companyId} />}
 
-        <SectionCard id="section-presenca" title="Links do negócio (opcional)">
-          <p style={{ fontSize: '12px', color: MUTED, marginBottom: '18px', lineHeight: 1.6 }}>
-            Opcional. Estes links viram contexto do negócio pra IA. Conectar de verdade (Instagram, WhatsApp, Google) é feito na aba <strong style={{ color: 'white' }}>Conexões</strong>.
-          </p>
-          <Field label="Site" value={websiteUrl} onChange={setWebsiteUrl} placeholder="https://seunegocio.com.br" hint="Analisamos performance, SEO e experiência do usuário" />
-          <Field label="Instagram" value={instagramUrl} onChange={setInstagramUrl} placeholder="https://instagram.com/seuperfil" />
-          <Field label="Facebook" value={facebookUrl} onChange={setFacebookUrl} placeholder="https://facebook.com/suapagina" />
-          <Field label="TikTok" value={tiktokUrl} onChange={setTiktokUrl} placeholder="https://tiktok.com/@seuperfil" />
-          <Field label="Google Maps" value={googleMapsUrl} onChange={setGoogleMapsUrl} placeholder="Link do seu negócio no Google Maps" hint="Coletamos suas avaliações e nota" />
-          <Field label="TripAdvisor" value={tripadvisorUrl} onChange={setTripadvisorUrl} placeholder="Link da página do seu negócio no TripAdvisor" />
-          <Field label="Reclame Aqui" value={reclameAquiUrl} onChange={setReclameAquiUrl} placeholder="Link da página do seu negócio no Reclame Aqui" />
-          <Field label="iFood" value={ifoodUrl} onChange={setIfoodUrl} placeholder="Link da sua loja no iFood" />
-
+        <SectionCard id="section-salvar" title="Salvar">
           {saveError && (
             <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '12px', padding: '10px 14px', background: 'rgba(248,113,113,0.08)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)' }}>
               {saveError}
@@ -688,59 +498,6 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Plan cards */}
-          {currentPlan !== 'ultra' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-              {PLANS.filter(p => {
-                const order = ['basic', 'pro', 'ultra']
-                return order.indexOf(p.key) > order.indexOf(currentPlan === 'free' ? '' : currentPlan)
-              }).map(plan => {
-                const isUltra = plan.key === 'ultra'
-                const isPro = plan.key === 'pro'
-                const highlighted = isPro || isUltra
-                const cardBorder = isUltra
-                  ? `2px solid ${ORANGE}`
-                  : isPro
-                  ? `1px solid rgba(255,109,41,0.35)`
-                  : `1px solid ${BORDER}`
-                const cardBg = isUltra ? 'rgba(255,109,41,0.05)' : isPro ? 'rgba(255,109,41,0.03)' : 'rgba(255,255,255,0.02)'
-                const btnBg = highlighted ? ORANGE : 'rgba(255,109,41,0.12)'
-                const btnColor = highlighted ? '#000' : ORANGE
-                return (
-                  <div key={plan.key} style={{ background: cardBg, border: cardBorder, borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: isUltra ? '0 0 24px rgba(255,109,41,0.1)' : 'none' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 700, color: isUltra ? ORANGE : 'white' }}>{plan.name}</span>
-                        {isPro && !isUltra && <span style={{ fontSize: '10px', fontWeight: 700, background: ORANGE, color: '#000', padding: '2px 7px', borderRadius: '99px' }}>POPULAR</span>}
-                        {isUltra && <span style={{ fontSize: '10px', fontWeight: 700, background: ORANGE, color: '#000', padding: '2px 7px', borderRadius: '99px' }}>ULTRA</span>}
-                      </div>
-                      <div style={{ fontSize: '18px', fontWeight: 800, color: highlighted ? ORANGE : 'white' }}>{plan.price}</div>
-                    </div>
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {plan.features.map(f => (
-                        <li key={f} style={{ fontSize: '12px', color: MUTED, display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
-                          <span style={{ color: ORANGE, flexShrink: 0, marginTop: '1px' }}>✓</span>{f}
-                        </li>
-                      ))}
-                    </ul>
-                    <button
-                      onClick={() => handleUpgrade(plan.key)}
-                      disabled={upgrading === plan.key}
-                      style={{ padding: '10px', background: btnBg, color: btnColor, fontWeight: 700, fontSize: '13px', borderRadius: '9px', border: highlighted ? 'none' : `1px solid rgba(255,109,41,0.3)`, cursor: upgrading ? 'not-allowed' : 'pointer', opacity: upgrading ? 0.7 : 1, transition: 'opacity 0.2s', boxShadow: highlighted ? '0 4px 14px rgba(255,109,41,0.25)' : 'none' }}
-                    >
-                      {upgrading === plan.key ? 'Redirecionando...' : `Assinar ${plan.name} →`}
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {currentPlan === 'ultra' && (
-            <div style={{ fontSize: '13px', color: MUTED, lineHeight: 1.6 }}>
-              Você está no plano Ultra. Para gerenciar sua assinatura, acesse o portal do cliente no e-mail de confirmação do Stripe.
-            </div>
-          )}
         </SectionCard>
 
         <SectionCard title="Zona de perigo">
