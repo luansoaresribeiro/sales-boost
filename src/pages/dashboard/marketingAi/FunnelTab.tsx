@@ -1,8 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CompanyData } from '../../../contexts/CompanyContext'
+import { supabase } from '../../../lib/supabase'
+import { useRealtime } from '../../../lib/useRealtime'
 import { CARD, MUTED, BORDER, D } from './shared'
 import { fmtBRL, fmtNum } from './growthDemo'
 import { buildFunnelDemo, STAGE_ORDER, TEMP_META, type DemoLead, type LeadStageKey } from './salesDemo'
+import { mapLeadRow, STAGE_TO_DB, type LeadRow } from './salesReal'
 import ChannelFilter, { ChannelBadge, type ChannelFilterValue } from './ChannelFilter'
 
 const ORANGE = '#FF6D29'
@@ -57,16 +60,38 @@ function LeadCard({ lead, drafted, onDraft, onAdvance }: { lead: DemoLead; draft
 
 export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name'> }) {
   const demo = useMemo(() => buildFunnelDemo(company), [company])
-  const [allLeads, setLeads] = useState<DemoLead[]>(demo.leads)
+  // Dado real da tabela `leads`. null = ainda carregando; [] = carregou e não
+  // há lead real (então cai no demo, preservando o design).
+  const [realLeads, setRealLeads] = useState<DemoLead[] | null>(null)
+  const [demoLeads, setDemoLeads] = useState<DemoLead[]>(demo.leads)
   const [drafted, setDrafted] = useState<Set<string>>(new Set())
   const [channel, setChannel] = useState<ChannelFilterValue>('all')
 
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('leads')
+      .select('id, name, contact, channel, stage, value_estimate, last_contact_at, notes, created_at')
+      .eq('company_id', company.id).order('created_at', { ascending: false })
+    setRealLeads(((data ?? []) as LeadRow[]).map(mapLeadRow))
+  }, [company.id])
+  useEffect(() => { void load() }, [load])
+  useRealtime('leads', company.id, load)
+
+  const isReal = !!realLeads && realLeads.length > 0
+  const allLeads = isReal ? realLeads! : demoLeads
+
   const draft = (id: string) => setDrafted(prev => new Set(prev).add(id))
-  const advance = (id: string) => setLeads(prev => prev.map(l => {
-    if (l.id !== id) return l
-    const nx = nextStage(l.stageKey)
-    return nx ? { ...l, stageKey: nx, noReply: false } : l
-  }))
+  const advance = async (id: string) => {
+    const lead = allLeads.find(l => l.id === id)
+    const nx = lead ? nextStage(lead.stageKey) : null
+    if (!nx) return
+    if (isReal) {
+      // Lead real: grava a etapa nova no banco (o realtime recarrega sozinho).
+      setRealLeads(prev => prev?.map(l => l.id === id ? { ...l, stageKey: nx, noReply: false } : l) ?? prev)
+      await supabase.from('leads').update({ stage: STAGE_TO_DB[nx], last_contact_at: new Date().toISOString() }).eq('id', id).eq('company_id', company.id)
+    } else {
+      setDemoLeads(prev => prev.map(l => l.id === id ? { ...l, stageKey: nx, noReply: false } : l))
+    }
+  }
 
   // Um único funil — o filtro apenas mostra os leads do canal escolhido.
   const leads = channel === 'all' ? allLeads : allLeads.filter(l => l.channelKey === channel)
@@ -79,9 +104,15 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-        ⏳ <strong>Modo demonstração.</strong> O CRM captura leads do WhatsApp, do Instagram e dos anúncios automaticamente quando as integrações forem verificadas. A IA classifica cada lead (quente/morno/frio), rascunha o follow-up e avisa você — mas <strong>nada é enviado sem sua aprovação</strong>.
-      </div>
+      {isReal ? (
+        <div style={{ padding: '12px 16px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
+          🟢 <strong>Dados reais.</strong> Estes são os leads capturados de verdade (Instagram, WhatsApp e outros canais). Avançar de etapa salva no CRM na hora. A IA classifica cada lead e rascunha o follow-up — mas <strong>nada é enviado sem sua aprovação</strong>.
+        </div>
+      ) : (
+        <div style={{ padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
+          ⏳ <strong>Modo demonstração.</strong> Ainda não há leads reais capturados — assim que chegar o primeiro (Instagram, WhatsApp ou anúncios), este funil passa a mostrar os leads de verdade automaticamente. A IA classifica cada lead, rascunha o follow-up e avisa você — mas <strong>nada é enviado sem sua aprovação</strong>.
+        </div>
+      )}
 
       {/* Filtro de canal — um único funil, filtra por origem */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>

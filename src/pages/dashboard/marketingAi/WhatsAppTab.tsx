@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CompanyData } from '../../../contexts/CompanyContext'
+import { supabase } from '../../../lib/supabase'
+import { useRealtime } from '../../../lib/useRealtime'
 import { CARD, MUTED, BORDER, D } from './shared'
 import { buildWhatsAppDemo, WA_STATUS_META, AUTONOMY_META, TEMP_META, CHANNEL_META, type DemoWaConversation, type AutonomyLevel, type FollowUpItem } from './salesDemo'
+import { mapConversations, type ConvRow, type ConvMsgRow } from './salesReal'
 import ChannelFilter, { ChannelBadge, type ChannelFilterValue } from './ChannelFilter'
 
 const ORANGE = '#FF6D29'
@@ -96,12 +99,30 @@ function FollowUpCard({ item, done, onApprove }: { item: FollowUpItem; done: boo
 
 export default function WhatsAppTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type'> }) {
   const demo = useMemo(() => buildWhatsAppDemo(company), [company])
-  const [activeId, setActiveId] = useState(demo.conversations[0]?.id ?? '')
-  const [transferred, setTransferred] = useState<Set<string>>(new Set(['wa_3']))
+  const [activeId, setActiveId] = useState('')
+  const [transferred, setTransferred] = useState<Set<string>>(new Set())
   const [channel, setChannel] = useState<ChannelFilterValue>('all')
 
+  // Conversas REAIS do WhatsApp (whatsapp_conversations + _messages). null =
+  // carregando; [] = sem conversa real → cai no demo (design preservado).
+  const [realConvs, setRealConvs] = useState<DemoWaConversation[] | null>(null)
+  const load = useCallback(async () => {
+    const { data: convs } = await supabase.from('whatsapp_conversations')
+      .select('id, wa_contact_id, contact_name, created_at').eq('company_id', company.id)
+    if (!convs || convs.length === 0) { setRealConvs([]); return }
+    const ids = convs.map((c: ConvRow) => c.id)
+    const { data: msgs } = await supabase.from('whatsapp_conversation_messages')
+      .select('id, conversation_id, role, content, created_at').in('conversation_id', ids).order('created_at', { ascending: true })
+    setRealConvs(mapConversations(convs as ConvRow[], (msgs ?? []) as ConvMsgRow[]))
+  }, [company.id])
+  useEffect(() => { void load() }, [load])
+  useRealtime('whatsapp_conversations', company.id, load)
+
+  const isReal = !!realConvs && realConvs.length > 0
+  const baseConversations = isReal ? realConvs! : demo.conversations
+
   // Mesma lógica do Funil: uma só caixa de atendimento, filtrada pela origem.
-  const conversations = channel === 'all' ? demo.conversations : demo.conversations.filter(c => c.channelKey === channel)
+  const conversations = channel === 'all' ? baseConversations : baseConversations.filter(c => c.channelKey === channel)
   const followUps = channel === 'all' ? demo.followUps : demo.followUps.filter(f => f.channelKey === channel)
   // Conversa aberta precisa estar na lista visível; se não estiver, abre a 1ª.
   const active = conversations.find(c => c.id === activeId) ?? conversations[0]
@@ -116,9 +137,15 @@ export default function WhatsAppTab({ company }: { company: Pick<CompanyData, 'i
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-      <div style={{ padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-        ⏳ <strong>Modo demonstração.</strong> Com o WhatsApp e o Instagram conectados, o agente responde as conversas dos <strong>dois canais num lugar só</strong>, qualifica, agenda e <strong>passa pro humano quando precisa</strong> — e reaquece clientes que sumiram com <strong>follow-up automático</strong> (sempre esperando sua aprovação). Você controla a autonomia e o horário aqui embaixo.
-      </div>
+      {isReal ? (
+        <div style={{ padding: '12px 16px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
+          🟢 <strong>Conversas reais.</strong> Estas são as conversas de verdade do seu WhatsApp, ao vivo. O agente responde, qualifica e <strong>passa pro humano quando precisa</strong>. <span style={{ color: MUTED }}>(A fila de follow-up e o painel de conhecimento abaixo ainda são exemplos — entram em seguida.)</span>
+        </div>
+      ) : (
+        <div style={{ padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
+          ⏳ <strong>Modo demonstração.</strong> Assim que o WhatsApp estiver conectado, as conversas reais aparecem aqui ao vivo — o agente responde, qualifica, agenda e <strong>passa pro humano quando precisa</strong> (sempre esperando sua aprovação). Você controla a autonomia e o horário aqui embaixo.
+        </div>
+      )}
 
       <ControlBar autonomy={autonomy} setAutonomy={setAutonomy} from={from} to={to} setFrom={setFrom} setTo={setTo} paused={paused} setPaused={setPaused} />
 
