@@ -29,6 +29,30 @@ async function safeGet(url: string): Promise<any | null> {
     return await r.json()
   } catch { return null }
 }
+
+// A Meta assina media_url/thumbnail_url com validade curta (poucos dias) —
+// confirmado direto no parâmetro "oe" (timestamp de expiração) de URLs reais
+// já guardadas: seguem quebrando o "cover" no Arquivo depois de expirar.
+// Baixa a imagem uma vez e hospeda no nosso próprio storage (permanente) —
+// mesmo padrão já usado pra logo/fotos de produto.
+async function rehostCover(
+  admin: ReturnType<typeof createClient>, companyId: string, mediaId: string, sourceUrl: string | null,
+): Promise<string | null> {
+  if (!sourceUrl) return null
+  try {
+    const res = await fetch(sourceUrl)
+    if (!res.ok) return null
+    const contentType = res.headers.get('content-type') ?? 'image/jpeg'
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    const path = `renders/${companyId}/ig-cover-${mediaId}.jpg`
+    const { error } = await admin.storage.from('post-images').upload(path, bytes, { contentType, upsert: true })
+    if (error) return null
+    const { data } = admin.storage.from('post-images').getPublicUrl(path)
+    return data.publicUrl
+  } catch {
+    return null
+  }
+}
 // deno-lint-ignore no-explicit-any
 function igMetric(insights: any, name: string): number | null {
   const row = insights?.data?.find((d: any) => d.name === name)
@@ -77,7 +101,7 @@ Deno.serve(async (req) => {
     const websiteClicks = igMetric(accIns, 'website_clicks')
 
     // 3. Mídias recentes + insights por mídia
-    const mediaRes = await safeGet(`${IG}/me/media?fields=id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,like_count,comments_count&limit=25&access_token=${token}`)
+    const mediaRes = await safeGet(`${IG}/me/media?fields=id,caption,media_type,media_product_type,timestamp,permalink,media_url,thumbnail_url,like_count,comments_count&limit=25&access_token=${token}`)
     const media = (mediaRes?.data ?? []) as any[]
     const content: any[] = []
     for (const m of media) {
@@ -92,9 +116,12 @@ Deno.serve(async (req) => {
       const likes = num(m.like_count) ?? 0
       const comments = num(m.comments_count) ?? 0
       const total = likes + comments + (shares ?? 0) + (saves ?? 0)
+      // Cover pro Arquivo: sempre a nossa cópia permanente (thumbnail pra
+      // reel/vídeo, a própria foto quando não há thumbnail dedicado).
+      const rehosted = await rehostCover(admin, company_id, m.id, m.thumbnail_url ?? m.media_url ?? null)
       content.push({
         id: m.id, type, date: m.timestamp, caption: (m.caption ?? '').slice(0, 90) || 'Sem legenda',
-        thumb: m.thumbnail_url ?? null, permalink: m.permalink ?? null,
+        thumb: rehosted ?? m.thumbnail_url ?? null, mediaUrl: m.media_url ?? null, permalink: m.permalink ?? null,
         reach, impressions: null, likes, comments, shares, saves,
         engagementRate: reach ? round1((total / reach) * 100) : 0,
         followersGained: null, pillar: pillarOf(m.caption ?? ''), funnel: funnelOf(type),
@@ -141,7 +168,7 @@ Deno.serve(async (req) => {
     }, { onConflict: 'company_id,captured_for' })
     if (content.length) {
       await admin.from('instagram_content_performance').upsert(content.map(c => ({
-        company_id, media_id: c.id, media_type: c.type, caption: c.caption, thumbnail_url: c.thumb,
+        company_id, media_id: c.id, media_type: c.type, caption: c.caption, thumbnail_url: c.thumb, media_url: c.mediaUrl,
         permalink: c.permalink, posted_at: c.date, reach: c.reach, likes: c.likes, comments: c.comments,
         shares: c.shares, saves: c.saves, engagement_rate: c.engagementRate, pillar: c.pillar, funnel_stage: c.funnel,
         updated_at: new Date().toISOString(),
