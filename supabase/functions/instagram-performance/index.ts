@@ -173,6 +173,17 @@ Deno.serve(async (req) => {
         shares: c.shares, saves: c.saves, engagement_rate: c.engagementRate, pillar: c.pillar, funnel_stage: c.funnel,
         updated_at: new Date().toISOString(),
       })), { onConflict: 'company_id,media_id' })
+
+      // Casa cada post real com o registro interno que o publicou (quando a
+      // Central de Approvals publicou por aqui e guardou o media_id em
+      // posts.instagram_media_id) — assim dá pra saber depois qual ideia/post
+      // interno gerou qual resultado real.
+      const { data: ownPosts } = await admin.from('posts').select('id, instagram_media_id').eq('company_id', company_id).not('instagram_media_id', 'is', null)
+      const byMediaId = new Map((ownPosts ?? []).map(p => [p.instagram_media_id as string, p.id as string]))
+      for (const c of content) {
+        const postId = byMediaId.get(c.id)
+        if (postId) await admin.from('instagram_content_performance').update({ source_post_id: postId }).eq('company_id', company_id).eq('media_id', c.id)
+      }
     }
 
     // 8. Monta o trend a partir do histórico real (dias que já temos)

@@ -68,6 +68,10 @@ export interface ProposeInput {
   ref_type?: string
   ref_id?: string
   automation_enabled?: boolean
+  /** Quem está chamando é o próprio dono decidindo agora (ex.: botão "Publicar"
+   * no Vault, "Aprovar" na Central) — propõe já aprovado, sem exigir um
+   * segundo clique em outro lugar. */
+  approve_now?: boolean
 }
 
 export const proposeAgentAction = (token: string, input: ProposeInput) =>

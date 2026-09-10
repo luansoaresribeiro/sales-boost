@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { d } from '../../i18n-dash'
 import {
-  listAgentActions, decideAgentAction, editAgentAction,
+  listAgentActions, decideAgentAction, editAgentAction, proposeAgentAction,
   APPROVAL_META, EXECUTION_META, type AgentAction,
 } from '../../lib/agentActions'
 import { useRealtime } from '../../lib/useRealtime'
@@ -180,10 +180,24 @@ export default function ApprovalsPage() {
     try { await editAgentAction(token, companyId, id, { description }) } catch { /* ignore */ }
     setBusyId(null); await load()
   }
-  const approveContent = async (id: string) => {
-    setBusyId(id)
-    await supabase.from('marketing_ai_content').update({ status: 'approved', updated_at: new Date().toISOString() }).eq('id', id)
-    setContent(prev => prev.filter(i => i.id !== id)); setBusyId(null)
+  // Aprovar aqui É a decisão do dono — propõe já aprovado (approve_now) pra
+  // passar pelo mesmo motor/auditoria da Central de Approvals, sem exigir um
+  // segundo clique em outro lugar.
+  const approveContent = async (item: AiContent) => {
+    if (!companyId) return
+    setBusyId(item.id)
+    try {
+      await proposeAgentAction(token, {
+        company_id: companyId,
+        agent_key: 'content', agent_name: 'Conteúdo',
+        action_type: 'create_content', channel: 'instagram', source: 'manual',
+        ref_type: 'marketing_ai_content', ref_id: item.id,
+        title: item.idea ?? 'Conteúdo',
+        payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags },
+        approve_now: true,
+      })
+    } catch { /* ignore — item segue na lista, dono pode tentar de novo */ }
+    setContent(prev => prev.filter(i => i.id !== item.id)); setBusyId(null)
   }
   const discardContent = async (id: string) => {
     setBusyId(id)
@@ -229,7 +243,7 @@ export default function ApprovalsPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {content.map(item => (
                     <ContentCard key={item.id} item={item} busy={busyId === item.id} lang={lang}
-                      onApprove={() => approveContent(item.id)} onDiscard={() => discardContent(item.id)} />
+                      onApprove={() => approveContent(item)} onDiscard={() => discardContent(item.id)} />
                   ))}
                 </div>
               </section>

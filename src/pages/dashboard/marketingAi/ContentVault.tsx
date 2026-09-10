@@ -3,8 +3,9 @@ import { useRealtime } from '../../../lib/useRealtime'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { CARD, MUTED, BORDER, D, timeAgo } from './shared'
-import { callContentTest, ScoreBreakdown, BriefBlock, PostMedia, VideoScript, type TestPost } from './TestingArea'
+import { ScoreBreakdown, BriefBlock, PostMedia, VideoScript, type TestPost } from './TestingArea'
 import AdaptModal, { type VaultPost } from './AdaptModal'
+import { proposeAgentAction } from '../../../lib/agentActions'
 
 const GREEN = '#4ade80'
 const ORANGE = '#FF6D29'
@@ -41,11 +42,30 @@ export default function ContentVault({ companyId, reloadKey }: { companyId: stri
   useEffect(() => { load() }, [load, reloadKey])
   useRealtime('marketing_ai_test_content', companyId, load)
 
-  const publish = async (id: string) => {
-    setBusyId(id); setError(''); setOkMsg('')
+  // Propõe já aprovado (approve_now) — o clique em "Publicar" É a decisão do
+  // dono. Passa pela Central de Approvals (agent_actions), que executa na
+  // hora: publica de verdade no Instagram se conectado, senão salva como
+  // aprovado pra publicar manualmente na aba Posts.
+  const publish = async (item: TestPost & { kind: string }) => {
+    setBusyId(item.id); setError(''); setOkMsg('')
     try {
-      await callContentTest(token, { action: 'approve', test_id: id })
-      setOkMsg('Publicado na aba Posts (como aprovado) ✓')
+      const action = await proposeAgentAction(token, {
+        company_id: companyId,
+        agent_key: 'content', agent_name: 'Vault',
+        action_type: 'create_content', channel: 'instagram', source: 'vault',
+        ref_type: 'marketing_ai_test_content', ref_id: item.id,
+        title: item.idea ?? 'Post do Vault',
+        agent_interpretation: `Aprovado pelo controle de qualidade (nota ${item.quality_score ?? '—'}), publicado direto do Vault.`,
+        payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags, cta: item.cta, image_url: item.image_url },
+        approve_now: true,
+      })
+      if (action.execution_status === 'EXECUTED' && (action.execution_result as { published_to_instagram?: boolean } | null)?.published_to_instagram) {
+        setOkMsg('Publicado de verdade no Instagram ✓')
+      } else if (action.execution_status === 'FAILED') {
+        setError(action.execution_error ?? 'Post aprovado, mas não foi possível publicar no Instagram agora.')
+      } else {
+        setOkMsg('Aprovado — publique na aba Posts ✓')
+      }
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao publicar')
@@ -70,7 +90,7 @@ export default function ContentVault({ companyId, reloadKey }: { companyId: stri
   return (
     <div>
       <div style={{ padding: '12px 16px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '20px' }}>
-        ⭐ <strong>Content Vault.</strong> Só o conteúdo que passou no controle de qualidade (nota ≥90). Daqui você publica pra aba Posts quando quiser — a criação e a publicação ficam separadas.
+        ⭐ <strong>Content Vault.</strong> Só o conteúdo que passou no controle de qualidade (nota ≥90). Daqui você publica quando quiser — se o Instagram estiver conectado, publica de verdade; a ação sempre fica registrada na Central de Approvals.
       </div>
 
       {error && <div style={{ color: '#f87171', fontSize: '11.5px', marginBottom: '12px' }}>{error}</div>}
@@ -104,7 +124,7 @@ export default function ContentVault({ companyId, reloadKey }: { companyId: stri
                   <ScoreBreakdown post={t} />
 
                   <div style={{ display: 'flex', gap: '7px', marginTop: 'auto', paddingTop: '2px', flexWrap: 'wrap' }}>
-                    <button onClick={() => publish(t.id)} disabled={busy}
+                    <button onClick={() => publish(t)} disabled={busy}
                       style={{ flex: 1, padding: '8px', background: 'rgba(74,222,128,0.14)', border: '1px solid rgba(74,222,128,0.4)', borderRadius: '8px', color: GREEN, fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
                       {busy ? '...' : '🚀 Publicar'}
                     </button>
@@ -136,7 +156,7 @@ export default function ContentVault({ companyId, reloadKey }: { companyId: stri
                               <div style={{ padding: '5px 6px' }}>
                                 <div style={{ fontSize: '8.5px', color: MUTED, marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.format}</div>
                                 <div style={{ display: 'flex', gap: '4px' }}>
-                                  <button onClick={() => publish(a.id)} disabled={busyId === a.id} title="Aprovar/Publicar" style={{ flex: 1, padding: '3px', background: 'rgba(74,222,128,0.14)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: '5px', color: GREEN, fontSize: '9px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>✓</button>
+                                  <button onClick={() => publish(a)} disabled={busyId === a.id} title="Aprovar/Publicar" style={{ flex: 1, padding: '3px', background: 'rgba(74,222,128,0.14)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: '5px', color: GREEN, fontSize: '9px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>✓</button>
                                   <button onClick={() => discard(a.id)} disabled={busyId === a.id} title="Excluir" style={{ padding: '3px 6px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '5px', color: MUTED, fontSize: '9px', cursor: 'pointer', fontFamily: D }}>🗑</button>
                                 </div>
                               </div>

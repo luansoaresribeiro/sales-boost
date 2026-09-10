@@ -7,9 +7,10 @@
  * mas grava numa tabela isolada (marketing_ai_test_content) — nunca na fila
  * principal (marketing_ai_content). Assim a automação nunca enxerga os testes.
  *
- * Só entram no fluxo real quando o dono aprova: aí viram um post 'aprovado' na
- * tabela `posts` (a aba Posts existente) e o rascunho de teste é removido.
- * Nada aqui publica sozinho — segue a regra human-in-the-loop.
+ * Só entram no fluxo real quando o dono aprova — isso acontece na Central de
+ * Approvals (agent_actions): o Vault propõe a ação, aprovar publica de
+ * verdade no Instagram e vira um post na aba Posts; o rascunho de teste é
+ * removido. Nada aqui publica sozinho — segue a regra human-in-the-loop.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -198,26 +199,6 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       return json({ ok: true, id: inserted.id, image_generated: !!url })
     }
 
-    // ── Aprovar → move pra aba Posts (fluxo existente) ───────────────────
-    if (action === 'approve') {
-      const testId = String(body.test_id ?? '')
-      if (!testId) return json({ error: 'test_id é obrigatório' }, 400)
-      const { data: tRow } = await admin.from('marketing_ai_test_content')
-        .select('id, idea, caption, hashtags, cta, image_url, reasoning')
-        .eq('id', testId).eq('company_id', company.id).maybeSingle()
-      const t = tRow as { id: string; idea: string | null; caption: string | null; hashtags: string | null; cta: string | null; image_url: string | null; reasoning: string | null } | null
-      if (!t) return json({ error: 'Post de teste não encontrado' }, 404)
-
-      const content = [t.caption, t.cta, t.hashtags].map(x => (x ?? '').trim()).filter(Boolean).join('\n\n')
-      const { error: insErr } = await admin.from('posts').insert({
-        company_id: company.id, content, image_url: t.image_url, image_suggestion: t.idea,
-        agent_notes: t.reasoning, platform: 'instagram', status: 'aprovado',
-      })
-      if (insErr) return json({ error: insErr.message }, 500)
-      await admin.from('marketing_ai_test_content').delete().eq('id', t.id)
-      return json({ ok: true })
-    }
-
     // ── Avaliar (Testing Pipeline → Quality Score) ──────────────────────
     if (action === 'score') {
       const testId = String(body.test_id ?? '')
@@ -293,7 +274,7 @@ Retorne APENAS um JSON: {"idea":"...","caption":"...","hashtags":"#...","cta":".
       return json({ ok: true })
     }
 
-    return json({ error: 'action inválida. Use generate, score, regenerate, to_vault ou approve.' }, 400)
+    return json({ error: 'action inválida. Use generate, score, regenerate ou to_vault.' }, 400)
   } catch (err) {
     console.error('content-test error:', err)
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)

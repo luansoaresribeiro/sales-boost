@@ -19,6 +19,7 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 type Supa = ReturnType<typeof createClient>
+const IG_API = 'https://graph.instagram.com/v21.0'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -43,7 +44,7 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case 'list': return await listActions(admin, company_id, body.status)
-      case 'propose': return await proposeAction(admin, company_id, body, !!company.agent_automatic_mode)
+      case 'propose': return await proposeAction(admin, company_id, body, !!company.agent_automatic_mode, !!body.approve_now, user.id)
       case 'approve': return await decide(admin, company_id, body.id, 'APPROVED', user.id)
       case 'reject': return await decide(admin, company_id, body.id, 'REJECTED', user.id)
       case 'cancel': return await decide(admin, company_id, body.id, 'CANCELLED', user.id)
@@ -66,10 +67,13 @@ async function listActions(admin: Supa, companyId: string, status?: string) {
 }
 
 // deno-lint-ignore no-explicit-any
-async function proposeAction(admin: Supa, companyId: string, b: any, autoMode: boolean) {
+async function proposeAction(admin: Supa, companyId: string, b: any, autoMode: boolean, forceApprove: boolean, userId: string) {
   // Quem manda é a configuração da empresa (autoMode). O cliente NÃO decide
   // sozinho ligar auto — só pode pedir manual (automation_enabled=false).
-  const auto = autoMode && b.automation_enabled !== false
+  // forceApprove é diferente: é o dono clicando um botão que JÁ É a decisão
+  // dele agora (ex.: "Publicar" no Vault, "Aprovar" na Central) — propõe e
+  // aprova no mesmo passo, sem exigir um segundo clique em outro lugar.
+  const auto = forceApprove || (autoMode && b.automation_enabled !== false)
   const row = {
     company_id: companyId,
     agent_key: b.agent_key ?? 'marketing',
@@ -91,9 +95,10 @@ async function proposeAction(admin: Supa, companyId: string, b: any, autoMode: b
     ref_id: b.ref_id ?? null,
     automation_enabled: auto,
     // Engine: modo automático NÃO pula o motor — só marca AUTO_APPROVED + fila.
-    approval_status: auto ? 'AUTO_APPROVED' : 'PENDING',
+    approval_status: forceApprove ? 'APPROVED' : auto ? 'AUTO_APPROVED' : 'PENDING',
     execution_status: auto ? 'QUEUED' : 'NOT_READY',
     approved_at: auto ? new Date().toISOString() : null,
+    approved_by: forceApprove ? userId : null,
   }
   const { data, error } = await admin.from('agent_actions').insert(row).select('*').single()
   if (error) return json({ error: error.message }, 500)
@@ -156,6 +161,40 @@ async function execute(admin: Supa, act: any): Promise<any> {
       return error ? await fail(error.message) : await done({ approved: 'post', id: act.ref_id })
     }
 
+    // 1b) Conteúdo que passou pela Área de Testes/Vault (nota de QC ≥90):
+    // aprovar aqui publica DE VERDADE no Instagram (se conectado) e vira um
+    // post 'publicado' já com o media_id real — fecha o loop até a
+    // instagram-performance conseguir medir esse post depois.
+    if (act.ref_type === 'marketing_ai_test_content' && act.ref_id) {
+      const p = act.payload ?? {}
+      const caption = [p.caption, p.cta, p.hashtags].map(x => (x ? String(x) : '').trim()).filter(Boolean).join('\n\n')
+      const { data: company } = await admin.from('companies').select('instagram_user_id, instagram_access_token').eq('id', act.company_id).maybeSingle()
+
+      let mediaId: string | null = null
+      let publishError: string | null = null
+      if (company?.instagram_user_id && company?.instagram_access_token && p.image_url) {
+        try {
+          mediaId = await publishToInstagram(String(company.instagram_user_id), String(company.instagram_access_token), String(p.image_url), caption)
+        } catch (e) {
+          publishError = e instanceof Error ? e.message : String(e)
+        }
+      } else if (!company?.instagram_user_id || !company?.instagram_access_token) {
+        publishError = 'Instagram não conectado — post salvo como aprovado, publique manualmente na aba Posts.'
+      }
+
+      const { data: postRow, error } = await admin.from('posts').insert({
+        company_id: act.company_id, content: caption, image_url: p.image_url ?? null, image_suggestion: p.idea ?? null,
+        agent_notes: act.agent_interpretation ?? act.reason ?? null, platform: 'instagram',
+        status: mediaId ? 'publicado' : 'aprovado',
+        instagram_media_id: mediaId, published_at: mediaId ? new Date().toISOString() : null,
+      }).select('id').single()
+      if (error) return await fail(error.message)
+      await admin.from('marketing_ai_test_content').delete().eq('id', act.ref_id).eq('company_id', act.company_id)
+
+      if (publishError) return await fail(publishError)
+      return await done({ created: 'post', id: postRow?.id, published_to_instagram: !!mediaId }, postRow?.id ?? mediaId ?? undefined)
+    }
+
     // 2) Engagement (Instagram): enviar DM / criar lead — aprovado pelo dono.
     if (act.source === 'engagement') {
       const { data: company } = await admin.from('companies').select('id, instagram_user_id, instagram_access_token').eq('id', act.company_id).maybeSingle()
@@ -201,6 +240,33 @@ async function execute(admin: Supa, act: any): Promise<any> {
   } catch (err) {
     return await fail(err instanceof Error ? err.message : String(err))
   }
+}
+
+// Publica de verdade no Instagram (Instagram Business Login — mesmas chamadas
+// de graph.instagram.com usadas em publish-instagram). Só chamada quando o
+// executor já tem uma imagem real (nunca gera imagem nova aqui — a imagem
+// aprovada é a que sai).
+async function publishToInstagram(igUserId: string, token: string, imageUrl: string, caption: string): Promise<string> {
+  const containerRes = await fetch(`${IG_API}/${igUserId}/media`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image_url: imageUrl, caption, access_token: token }),
+  })
+  if (!containerRes.ok) {
+    const err = await containerRes.json().catch(() => ({}))
+    throw new Error(`Falha ao preparar mídia no Instagram: ${err.error?.message ?? JSON.stringify(err)}`)
+  }
+  const { id: creationId } = await containerRes.json()
+
+  const publishRes = await fetch(`${IG_API}/${igUserId}/media_publish`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ creation_id: creationId, access_token: token }),
+  })
+  if (!publishRes.ok) {
+    const err = await publishRes.json().catch(() => ({}))
+    throw new Error(`Falha ao publicar no Instagram: ${err.error?.message ?? JSON.stringify(err)}`)
+  }
+  const { id: mediaId } = await publishRes.json()
+  return mediaId
 }
 
 async function finish(admin: Supa, id: string, status: 'EXECUTED' | 'FAILED', extra: Record<string, unknown>) {

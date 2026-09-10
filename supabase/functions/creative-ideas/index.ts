@@ -1,8 +1,10 @@
 /**
  * creative-ideas — Creative Agent: gera IDEIAS de post (não o post final).
  *
- * Olha a marca, os insights abertos, a biblioteca, os formatos disponíveis e
- * posts virais reais do segmento (Apify, por hashtag) e devolve ~6 conceitos
+ * Olha a marca, os insights abertos, a biblioteca, os formatos disponíveis,
+ * a PERFORMANCE REAL dos próprios posts (instagram_content_performance — o
+ * que já funcionou de verdade) e posts virais reais do segmento (Apify, por
+ * hashtag) e devolve ~6 conceitos
  * de post (gancho + ângulo + formato + módulo sugerido). Cada ideia vira card
  * no dashboard; o dono manda a que quiser pro creative-generate (idea seed)
  * pra virar um post de teste. Nada publica.
@@ -77,6 +79,21 @@ Com base SOMENTE nessas legendas (não invente nada fora do que está nelas), id
   return error ? 0 : rows.length
 }
 
+interface OwnPost { pillar: string | null; media_type: string | null; caption: string | null; engagement_rate: number | null; likes: number | null; comments: number | null }
+
+// Fecha o loop: lê a performance REAL dos próprios posts (instagram_content_performance,
+// alimentada por instagram-performance) pra saber o que já funcionou de
+// verdade — não só o que está viralizando lá fora (fetchViralPosts). Sem post
+// medido ainda, volta vazio (nunca inventa "o que funciona").
+async function fetchOwnTopPerformers(admin: ReturnType<typeof createClient>, companyId: string): Promise<OwnPost[]> {
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+  const { data } = await admin.from('instagram_content_performance')
+    .select('pillar, media_type, caption, engagement_rate, likes, comments')
+    .eq('company_id', companyId).gte('posted_at', ninetyDaysAgo).not('engagement_rate', 'is', null)
+    .order('engagement_rate', { ascending: false }).limit(8)
+  return (data ?? []) as OwnPost[]
+}
+
 async function notifyMarketing(chatId: number | null | undefined, companyId: string, event: string, data?: Record<string, unknown>) {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const secret = Deno.env.get('BOT_WEBHOOK_SECRET')
@@ -125,6 +142,7 @@ async function generateForCompany(
   const lib = (libRows ?? []) as { kind: string; title: string }[]
   const formats = (fmtRows ?? []) as { title: string; content: string | null }[]
   const viral = apifyToken ? await fetchViralPosts(apifyToken, company.business_type) : []
+  const ownTop = await fetchOwnTopPerformers(admin, company.id)
   // Trend Agent: grava as tendências reais separado das ideias — mesmo sem
   // gerar nenhuma ideia nova, a tela de tendências fica atualizada.
   if (viral.length > 0) await saveRealTrends(admin, anthropicKey, company.id, company.business_type, viral).catch(() => 0)
@@ -133,6 +151,7 @@ async function generateForCompany(
 Voz da marca: ${cfg.brand_voice ?? 'não definida'}. Tom: ${cfg.tone ?? 'não definido'}. Público: ${cfg.target_audience ?? 'não definido'}.
 Pilares: ${(cfg.content_pillars ?? []).join(', ') || 'não definidos'}. Objetivo: ${cfg.marketing_goals ?? company.goal ?? 'crescer e engajar'}.
 ${insights.length ? `\nInsights reais abertos (use-os como gatilho das ideias):\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
+${ownTop.length ? `\nO que JÁ FUNCIONOU DE VERDADE no seu próprio Instagram (dados reais de performance dos últimos 90 dias, do melhor pro pior — priorize pilar/formato parecido com o que engaja mais aqui):\n${ownTop.map(o => `- [${o.pillar ?? 'sem pilar'} · ${o.media_type ?? '—'}] engajamento ${o.engagement_rate ?? 0}% (${o.likes ?? 0} curtidas, ${o.comments ?? 0} comentários): "${(o.caption ?? '').slice(0, 120)}"`).join('\n')}` : ''}
 ${viral.length ? `\nPosts reais que estão viralizando agora no seu segmento (use como referência de formato/gancho que está funcionando, NUNCA copie o conteúdo, adapte pro negócio):\n${viral.map(v => `- (${v.likesCount} curtidas, ${v.commentsCount} comentários) "${v.caption}"`).join('\n')}` : ''}
 ${formats.length ? `\nFormatos disponíveis (prefira sugerir um destes quando encaixar):\n${formats.map(f => `- ${f.title}${f.content ? `: ${f.content}` : ''}`).join('\n')}` : ''}
 ${lib.length ? `\nRecursos na biblioteca (hooks/frameworks já cadastrados): ${lib.map(l => l.title).slice(0, 20).join(', ')}` : ''}
@@ -142,7 +161,7 @@ ${focus ? `IMPORTANTE: gere TODAS as 6 ideias para o formato "${focus}".` : ''}
 "module" é onde a ideia se encaixa: "organico" (feed), "stories" ou "campanhas" (mídia paga).
 "format" é o formato sugerido (ex: carrossel, reel, foto, story, tweet, infográfico...).
 Retorne APENAS um JSON array, sem texto antes ou depois:
-[{"title":"título curto da ideia","hook":"o gancho/primeira frase que prende","angle":"o ângulo em 1 frase","format":"carrossel","module":"organico","rationale":"por que essa ideia faz sentido agora, citando o insight/pilar/tendência"}]`
+[{"title":"título curto da ideia","hook":"o gancho/primeira frase que prende","angle":"o ângulo em 1 frase","format":"carrossel","module":"organico","rationale":"por que essa ideia faz sentido agora, citando o insight/pilar/tendência/performance real"}]`
 
   const ideas = parseArr(await callClaude(anthropicKey, prompt)).slice(0, 6)
   if (ideas.length === 0) return 0
