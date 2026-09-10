@@ -58,6 +58,42 @@ async function notifyMarketing(adminDb: ReturnType<typeof createClient>, company
   } catch { /* fire-and-forget */ }
 }
 
+async function runApifyActor(token: string, actorId: string, input: Record<string, unknown>, timeoutSecs = 45): Promise<unknown[]> {
+  const url = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${token}&timeout=${timeoutSecs}&memory=256`
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) })
+  if (!res.ok) throw new Error(`Apify error (${actorId}): ${await res.text()}`)
+  return res.json()
+}
+
+interface GoogleSearchResultItem { organicResults?: { url?: string }[] }
+
+// O Google Places só traz Instagram quando o próprio dono cadastrou o link
+// como "website" do negócio — raro na prática. Pra achar de verdade sem
+// depender do cliente colar o link, busca "<nome> <endereço> instagram" e
+// pega o primeiro resultado que é um perfil (não post/reel/explore/login).
+function extractInstagramProfileUrl(results: { url?: string }[] | undefined): string | null {
+  if (!results) return null
+  const skip = new Set(['p', 'explore', 'accounts', 'reel', 'reels', 'stories', 'tv', 'direct'])
+  for (const r of results) {
+    const m = r.url?.match(/^https?:\/\/(?:www\.)?instagram\.com\/([a-zA-Z0-9_.]+)\/?(?:\?.*)?$/i)
+    if (m && !skip.has(m[1].toLowerCase())) return `https://www.instagram.com/${m[1]}/`
+  }
+  return null
+}
+
+async function findInstagramViaSearch(apifyToken: string, name: string, addressHint: string): Promise<string | null> {
+  try {
+    const items = await runApifyActor(apifyToken, 'apify~google-search-scraper', {
+      queries: `${name} ${addressHint} instagram`.trim(),
+      maxPagesPerQuery: 1,
+      resultsPerPage: 10,
+    }) as GoogleSearchResultItem[]
+    return extractInstagramProfileUrl(items[0]?.organicResults)
+  } catch {
+    return null
+  }
+}
+
 async function getPlaceDetails(placeId: string, apiKey: string): Promise<PlaceDetails | null> {
   const fields = 'name,place_id,geometry,rating,user_ratings_total,price_level,types,website,formatted_phone_number,formatted_address,editorial_summary,opening_hours,business_status'
   const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=${fields}&language=pt-BR&key=${apiKey}`
@@ -138,6 +174,7 @@ async function scanCompetitors(
   admin: ReturnType<typeof createClient>,
   apiKey: string,
   anthropicKey: string,
+  apifyToken: string,
   company: CompanyRow,
   radiusKm: number,
 ): Promise<{ mapped: number; newCompetitorNames: string[] }> {
@@ -193,28 +230,41 @@ async function scanCompetitors(
     return /instagram\.com/i.test(url) ? url : null
   }
 
-  const rows = verifiedPlaces.map(p => ({
-    company_id: company.id,
-    google_place_id: p.place_id,
-    name: p.name,
-    rating: p.rating ?? null,
-    review_count: p.user_ratings_total ?? 0,
-    distance_m: Math.round(haversine(lat, lng, p.geometry.location.lat, p.geometry.location.lng)),
-    price_level: p.price_level ?? null,
-    website: p.website ?? null,
-    instagram_url: igFromWebsite(p.website),
-    phone: p.formatted_phone_number ?? null,
-    address: p.formatted_address ?? null,
-    opening_hours: p.opening_hours
-      ? { weekday_text: p.opening_hours.weekday_text ?? [], open_now: p.opening_hours.open_now ?? null }
-      : null,
-    google_types: p.types ?? [],
-    editorial_summary: p.editorial_summary?.overview ?? null,
-    is_verified_competitor: true,
-  }))
-
-  const { data: existing } = await admin.from('competitors').select('id, google_place_id').eq('company_id', company.id)
+  const { data: existing } = await admin.from('competitors').select('id, google_place_id, instagram_url').eq('company_id', company.id)
   const existingPlaceIds = new Set((existing ?? []).map(e => e.google_place_id))
+  const existingInstagramByPlaceId = new Map((existing ?? []).map(e => [e.google_place_id, e.instagram_url as string | null]))
+
+  // Acha o Instagram sozinho quando o Google não trouxe (o normal — o campo
+  // "website" raramente é o próprio Instagram). Limita a busca a 10 por
+  // rodada pra não estourar custo do Apify; quem não achar essa semana tenta
+  // de novo na próxima (o cron só re-varre a cada 7 dias).
+  let searchBudget = 10
+  const rows = await Promise.all(verifiedPlaces.map(async p => {
+    let instagram = igFromWebsite(p.website) ?? existingInstagramByPlaceId.get(p.place_id) ?? null
+    if (!instagram && apifyToken && searchBudget > 0) {
+      searchBudget--
+      instagram = await findInstagramViaSearch(apifyToken, p.name, p.formatted_address ?? '')
+    }
+    return {
+      company_id: company.id,
+      google_place_id: p.place_id,
+      name: p.name,
+      rating: p.rating ?? null,
+      review_count: p.user_ratings_total ?? 0,
+      distance_m: Math.round(haversine(lat, lng, p.geometry.location.lat, p.geometry.location.lng)),
+      price_level: p.price_level ?? null,
+      website: p.website ?? null,
+      instagram_url: instagram,
+      phone: p.formatted_phone_number ?? null,
+      address: p.formatted_address ?? null,
+      opening_hours: p.opening_hours
+        ? { weekday_text: p.opening_hours.weekday_text ?? [], open_now: p.opening_hours.open_now ?? null }
+        : null,
+      google_types: p.types ?? [],
+      editorial_summary: p.editorial_summary?.overview ?? null,
+      is_verified_competitor: true,
+    }
+  }))
 
   let upserted: { id: string; google_place_id: string | null }[] = []
   if (rows.length > 0) {
@@ -262,6 +312,7 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? supabaseAnonKey
     const apiKey = Deno.env.get('GOOGLE_PLACES_API_KEY')
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
+    const apifyToken = Deno.env.get('APIFY_TOKEN') ?? ''
     const cronSecretEnv = Deno.env.get('CRON_SECRET')
 
     if (!apiKey) return json({ error: 'GOOGLE_PLACES_API_KEY não configurada no servidor.' }, 503)
@@ -295,7 +346,7 @@ Deno.serve(async (req) => {
 
           if (recentSnap?.collected_at && recentSnap.collected_at > sevenDaysAgo) { skipped++; continue }
 
-          await scanCompetitors(admin, apiKey, anthropicKey, company, 3)
+          await scanCompetitors(admin, apiKey, anthropicKey, apifyToken, company, 3)
           scanned++
         } catch (e) {
           console.error(`map-competitors cron: company ${company.id} error:`, e)
@@ -320,7 +371,7 @@ Deno.serve(async (req) => {
     // that are clamped, not rejected, so we clamp here too to keep it honest.
     const radiusKm = Math.min(50, Math.max(1, Math.round((rawBody.radius_km as number) ?? 3)))
 
-    const result = await scanCompetitors(admin, apiKey, anthropicKey, company as CompanyRow, radiusKm)
+    const result = await scanCompetitors(admin, apiKey, anthropicKey, apifyToken, company as CompanyRow, radiusKm)
 
     return json({ mapped: result.mapped, verified_competitors: result.mapped, radius_km: radiusKm })
   } catch (err) {

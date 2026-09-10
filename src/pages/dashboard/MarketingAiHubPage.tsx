@@ -4,6 +4,7 @@ import { useCompany } from '../../contexts/CompanyContext'
 import { ModuleCard } from './agentCardShared'
 import GrowthCommandCenter from './marketingAi/GrowthCommandCenter'
 import { buildGrowthDemo, useDemoMode } from './marketingAi/growthDemo'
+import DataVeil, { veilMode } from './marketingAi/DataVeil'
 import { MUTED, BORDER, D } from './marketingAi/shared'
 
 const ORANGE = '#FF6D29'
@@ -67,13 +68,18 @@ export default function MarketingAiHubPage() {
         </div>
       </div>
 
-      {demoMode ? (
-        <GrowthCommandCenter data={demo} onOpenModule={open} />
-      ) : (
-        <div style={{ margin: '24px 32px 0', padding: '16px 20px', background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.2)', borderRadius: '12px', fontSize: '12.5px', color: 'white', lineHeight: 1.6 }}>
-          O modo demonstração está desligado. Os painéis com receita, ROAS e funil ficam vazios até as integrações reais (Meta, WhatsApp) serem conectadas e verificadas. Ligue o modo demonstração acima para ver o produto funcionando de ponta a ponta.
-        </div>
-      )}
+      {/* Receita/ROAS/funil agregados ainda não têm uma fonte real única —
+          cada peça (Meta Ads, WhatsApp, leads) já é real nas próprias abas,
+          mas o resumo aqui em cima segue sem cálculo real. Nunca mostra
+          fictício como se fosse real: fica borrado até ligar o demo. */}
+      <div style={{ margin: '24px 32px 0' }}>
+        <DataVeil mode={veilMode({ hasReal: false, demoMode })}
+          title="Painel-resumo ainda sem dado real"
+          message="Receita, ROAS e funil agregados aqui em cima ainda não têm um cálculo real único — cada peça (Meta Ads, WhatsApp, leads) já é real dentro da própria aba. Ligue o Modo demonstração pra ver como fica quando tudo estiver somado."
+          cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+          <GrowthCommandCenter data={demo} onOpenModule={open} />
+        </DataVeil>
+      </div>
 
       <div style={{ padding: '10px 32px 32px' }}>
         <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '14px' }}>

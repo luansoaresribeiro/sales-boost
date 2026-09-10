@@ -7,12 +7,62 @@ const corsHeaders = {
 
 interface ApifyPost {
   timestamp?: string
+  likesCount?: number
+  commentsCount?: number
+  caption?: string
 }
 
 interface ApifyProfile {
   followersCount?: number
   postsCount?: number
   latestPosts?: ApifyPost[]
+}
+
+interface MoveClassification { move: string; moveType: 'preco' | 'conteudo' | 'promocao' | 'crescimento' }
+
+function avgEngagement(posts: ApifyPost[], followers: number | undefined): number | null {
+  if (!followers || followers <= 0) return null
+  const rates = posts
+    .filter(p => typeof p.likesCount === 'number' || typeof p.commentsCount === 'number')
+    .map(p => ((p.likesCount ?? 0) + (p.commentsCount ?? 0)) / followers * 100)
+  if (rates.length === 0) return null
+  return Math.round((rates.reduce((a, b) => a + b, 0) / rates.length) * 100) / 100
+}
+
+// Resume e classifica o que o concorrente andou fazendo, só com base nas
+// legendas reais dos posts coletados — sem legenda nenhuma, não classifica
+// (fica sem dado em vez de inventar).
+async function classifyMove(anthropicKey: string, competitorName: string, businessType: string, captions: string[]): Promise<MoveClassification | null> {
+  if (captions.length === 0) return null
+  const prompt = `Você é um analista de inteligência de mercado para negócios locais (segmento: ${businessType}).
+Abaixo estão as legendas reais dos posts mais recentes do concorrente "${competitorName}" no Instagram.
+
+Legendas:
+${captions.map((c, i) => `[${i + 1}] "${c}"`).join('\n')}
+
+Com base SOMENTE nessas legendas (não invente nada que não esteja nelas), resuma em UMA frase curta (até 140 caracteres, em português) o que esse concorrente andou fazendo, e classifique em uma categoria.
+
+Responda SOMENTE com um JSON: {"move": "...", "moveType": "preco"|"conteudo"|"promocao"|"crescimento"}
+- "preco": mudou preço ou fez comparação de preço
+- "promocao": oferta, desconto, campanha promocional
+- "crescimento": expansão, nova unidade, contratação, marco de seguidores
+- "conteudo": qualquer outra coisa (conteúdo educativo, bastidores, engajamento)`
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 300, messages: [{ role: 'user', content: prompt }] }),
+  })
+  if (!res.ok) return null
+  const data = await res.json()
+  const rawText = (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+  try {
+    const parsed = JSON.parse(rawText)
+    if (!parsed.move || !parsed.moveType) return null
+    return { move: String(parsed.move).slice(0, 200), moveType: parsed.moveType }
+  } catch {
+    return null
+  }
 }
 
 async function notifyMarketing(chatId: number | null | undefined, companyId: string, event: string, data?: Record<string, unknown>) {
@@ -46,6 +96,7 @@ async function monitorCompanyCompetitors(
   admin: ReturnType<typeof createClient>,
   apifyToken: string,
   companyId: string,
+  anthropicKey: string | undefined,
 ): Promise<{ monitored: number; total: number; results: Array<{ name: string; ok: boolean; error?: string }> }> {
   const { data: competitors } = await admin
     .from('competitors')
@@ -55,6 +106,9 @@ async function monitorCompanyCompetitors(
     .limit(10) // bound cost — each one is a real Apify run
 
   if (!competitors || competitors.length === 0) return { monitored: 0, total: 0, results: [] }
+
+  const { data: companyRow } = await admin.from('companies').select('business_type').eq('id', companyId).maybeSingle()
+  const businessType = (companyRow?.business_type as string | null) ?? 'negócio local'
 
   const results: Array<{ name: string; ok: boolean; error?: string }> = []
 
@@ -68,11 +122,18 @@ async function monitorCompanyCompetitors(
       const profile = items[0]
       if (!profile) { results.push({ name: comp.name, ok: false, error: 'perfil não encontrado' }); continue }
 
+      const posts = profile.latestPosts ?? []
+      const captions = posts.map(p => p.caption?.trim()).filter((c): c is string => !!c).slice(0, 5)
+      const move = anthropicKey ? await classifyMove(anthropicKey, comp.name, businessType, captions).catch(() => null) : null
+
       await admin.from('competitor_snapshots').insert({
         competitor_id: comp.id,
         instagram_followers: profile.followersCount ?? null,
         instagram_posts_count: profile.postsCount ?? null,
-        instagram_posting_freq_days: postingFrequencyDays(profile.latestPosts ?? []),
+        instagram_posting_freq_days: postingFrequencyDays(posts),
+        avg_engagement: avgEngagement(posts, profile.followersCount),
+        latest_move: move?.move ?? null,
+        latest_move_type: move?.moveType ?? null,
       })
       results.push({ name: comp.name, ok: true })
     } catch (e) {
@@ -91,6 +152,7 @@ Deno.serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? supabaseAnonKey
     const apifyToken = Deno.env.get('APIFY_TOKEN')
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
     const cronSecretEnv = Deno.env.get('CRON_SECRET')
     if (!apifyToken) return json({ error: 'APIFY_TOKEN não configurado.' }, 503)
 
@@ -123,7 +185,7 @@ Deno.serve(async (req) => {
 
           if (recentSnap?.collected_at && recentSnap.collected_at > sevenDaysAgo) { skipped++; continue }
 
-          const r = await monitorCompanyCompetitors(admin, apifyToken, company.id)
+          const r = await monitorCompanyCompetitors(admin, apifyToken, company.id, anthropicKey)
           if (r.monitored > 0) {
             scanned++
             const prefs = (company.notification_prefs as Record<string, boolean> | null) ?? {}
@@ -152,7 +214,7 @@ Deno.serve(async (req) => {
     const { data: company } = await admin.from('companies').select('id').eq('user_id', user.id).maybeSingle()
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
 
-    const result = await monitorCompanyCompetitors(admin, apifyToken, company.id)
+    const result = await monitorCompanyCompetitors(admin, apifyToken, company.id, anthropicKey)
     if (result.total === 0) {
       return json({ monitored: 0, message: 'Nenhum concorrente com Instagram identificado ainda. Rode "Mapear concorrentes" primeiro.' })
     }
