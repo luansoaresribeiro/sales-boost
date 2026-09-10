@@ -5,7 +5,6 @@ import {
   buildCampaignDemo, FUNNEL_META, STATUS_META,
   type Campaign, type CampaignRecommendation, type FunnelStage,
 } from './campaignDemo'
-import TestingArea from './TestingArea'
 import ModuleLibrary from './ModuleLibrary'
 import { useDemoMode } from './growthDemo'
 import DataVeil, { veilMode } from './DataVeil'
@@ -365,7 +364,6 @@ export default function CampaignsTab({ company }: { company: Pick<CompanyData, '
     </DataVeil>
 
       <ModuleLibrary module="campanhas" />
-      <TestingArea companyId={company.id} kind="campanhas" />
     </div>
   )
 }

@@ -1,10 +1,14 @@
 /**
  * creative-ideas — Creative Agent: gera IDEIAS de post (não o post final).
  *
- * Olha a marca, os insights abertos, a biblioteca e os formatos disponíveis e
- * devolve ~6 conceitos de post (gancho + ângulo + formato + módulo sugerido).
- * Cada ideia vira card no dashboard; o dono manda a que quiser pro
- * creative-generate (idea seed) pra virar um post de teste. Nada publica.
+ * Olha a marca, os insights abertos, a biblioteca, os formatos disponíveis e
+ * posts virais reais do segmento (Apify, por hashtag) e devolve ~6 conceitos
+ * de post (gancho + ângulo + formato + módulo sugerido). Cada ideia vira card
+ * no dashboard; o dono manda a que quiser pro creative-generate (idea seed)
+ * pra virar um post de teste. Nada publica.
+ *
+ * Roda sozinho (cron semanal, `cron_secret`) além do refresh manual — o
+ * cliente não precisa clicar em nada pra ideias novas aparecerem.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -14,6 +18,74 @@ const cors = {
 }
 
 interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null }
+
+const HASHTAG_BY_TYPE: Record<string, string> = {
+  'Restaurante / Food': 'restaurante', 'Bar & Pub': 'barpub', 'Varejo / E-commerce': 'lojavirtual',
+  'Beleza & Estética': 'estetica', 'Barbearia': 'barbearia', 'Saúde & Bem-estar': 'bemestar',
+  'Clínica / Consultório': 'clinica', 'Academia / Fitness': 'academia', 'Serviços': 'empreendedorismo',
+  'Serviços Gerais': 'empreendedorismo',
+}
+
+interface ViralPost { caption: string; likesCount: number; commentsCount: number; ownerUsername: string }
+
+async function fetchViralPosts(apifyToken: string, businessType: string | null): Promise<ViralPost[]> {
+  const tag = HASHTAG_BY_TYPE[businessType ?? ''] ?? 'empreendedorismo'
+  try {
+    const url = `https://api.apify.com/v2/acts/apify~instagram-hashtag-scraper/run-sync-get-dataset-items?token=${apifyToken}&timeout=45&memory=256`
+    const res = await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hashtags: [tag], resultsType: 'posts', resultsLimit: 8 }),
+    })
+    if (!res.ok) return []
+    const items = await res.json() as Array<{ caption?: string; likesCount?: number; commentsCount?: number; ownerUsername?: string }>
+    return items
+      .filter(i => i.caption)
+      .map(i => ({ caption: String(i.caption).slice(0, 200), likesCount: i.likesCount ?? 0, commentsCount: i.commentsCount ?? 0, ownerUsername: i.ownerUsername ?? 'perfil' }))
+      .sort((a, b) => b.likesCount - a.likesCount)
+      .slice(0, 6)
+  } catch {
+    return []
+  }
+}
+
+// Trend Agent: grava as tendências REAIS (grounded nos posts virais que
+// acabamos de escanear) na marketing_ai_trends já existente — mesma tabela
+// que a IA usa pra raciocínio puro (source=null), aqui marcada como
+// source='instagram_scan'. Sem post real pra ler, não grava nada (fica sem
+// dado em vez de inventar).
+async function saveRealTrends(admin: ReturnType<typeof createClient>, anthropicKey: string, companyId: string, businessType: string | null, viral: ViralPost[]): Promise<number> {
+  if (viral.length === 0) return 0
+  const prompt = `Você é um analista de tendências de marketing digital (segmento: ${businessType ?? 'negócio local'}).
+Abaixo estão legendas reais de posts que estão viralizando agora nesse segmento no Instagram.
+
+${viral.map((v, i) => `[${i + 1}] (${v.likesCount} curtidas, ${v.commentsCount} comentários) "${v.caption}"`).join('\n')}
+
+Com base SOMENTE nessas legendas (não invente nada fora do que está nelas), identifique até 3 tendências reais (formato, tema ou abordagem que se repete). Retorne APENAS um JSON array:
+[{"title":"título curto","description":"o que é essa tendência, citando o padrão real observado","category":"formato"|"tema"|"sazonal","relevance":"high"|"medium"|"low"}]`
+
+  const raw = await callClaude(anthropicKey, prompt, 600)
+  const trends = parseArr(raw).slice(0, 3)
+  if (trends.length === 0) return 0
+
+  await admin.from('marketing_ai_trends').delete().eq('company_id', companyId).eq('source', 'instagram_scan')
+  const rows = trends.map(t => ({
+    company_id: companyId, title: String(t.title ?? '').slice(0, 160), description: t.description ? String(t.description) : null,
+    category: t.category ? String(t.category) : null, relevance: t.relevance ? String(t.relevance) : null, source: 'instagram_scan',
+  })).filter(r => r.title)
+  if (rows.length === 0) return 0
+  const { error } = await admin.from('marketing_ai_trends').insert(rows)
+  return error ? 0 : rows.length
+}
+
+async function notifyMarketing(chatId: number | null | undefined, companyId: string, event: string, data?: Record<string, unknown>) {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const secret = Deno.env.get('BOT_WEBHOOK_SECRET')
+  if (!supabaseUrl) return
+  fetch(`${supabaseUrl}/functions/v1/log-bot-event`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ secret: secret ?? '', bot_name: 'marketing', event_type: event, company_id: companyId, telegram_chat_id: chatId ?? null, data }),
+  }).catch(() => {})
+}
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1600): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -35,44 +107,33 @@ function parseArr(raw: string): Record<string, unknown>[] {
   return []
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? anonKey
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
-    if (!anthropicKey) return json({ error: 'ANTHROPIC_API_KEY não configurada.' }, 503)
+async function generateForCompany(
+  admin: ReturnType<typeof createClient>,
+  anthropicKey: string,
+  apifyToken: string | undefined,
+  company: Company,
+  focus: string | null,
+): Promise<number> {
+  const [{ data: cfgRow }, { data: insRows }, { data: libRows }, { data: fmtRows }] = await Promise.all([
+    admin.from('marketing_ai_config').select('brand_voice, tone, target_audience, content_pillars, marketing_goals').eq('company_id', company.id).maybeSingle(),
+    admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(8),
+    admin.from('marketing_ai_knowledge').select('kind, title').or(`company_id.is.null,company_id.eq.${company.id}`).in('module', ['core', 'organico', 'stories', 'campanhas']).limit(40),
+    admin.from('marketing_ai_knowledge').select('title, content').eq('company_id', company.id).eq('module', 'formato').limit(12),
+  ])
+  const cfg = (cfgRow ?? {}) as { brand_voice?: string; tone?: string; target_audience?: string; content_pillars?: string[]; marketing_goals?: string }
+  const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
+  const lib = (libRows ?? []) as { kind: string; title: string }[]
+  const formats = (fmtRows ?? []) as { title: string; content: string | null }[]
+  const viral = apifyToken ? await fetchViralPosts(apifyToken, company.business_type) : []
+  // Trend Agent: grava as tendências reais separado das ideias — mesmo sem
+  // gerar nenhuma ideia nova, a tela de tendências fica atualizada.
+  if (viral.length > 0) await saveRealTrends(admin, anthropicKey, company.id, company.business_type, viral).catch(() => 0)
 
-    const bearer = req.headers.get('Authorization') ?? ''
-    if (!bearer) return json({ error: 'Unauthorized' }, 401)
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
-    const { data: { user } } = await userClient.auth.getUser()
-    if (!user) return json({ error: 'Unauthorized' }, 401)
-
-    const admin = createClient(supabaseUrl, serviceKey)
-    const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal').eq('user_id', user.id).maybeSingle()
-    const company = companyRow as Company | null
-    if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
-
-    const body = await req.json().catch(() => ({})) as { focus_module?: string }
-    const focus = ['organico', 'stories', 'campanhas'].includes(String(body.focus_module)) ? String(body.focus_module) : null
-
-    const [{ data: cfgRow }, { data: insRows }, { data: libRows }, { data: fmtRows }] = await Promise.all([
-      admin.from('marketing_ai_config').select('brand_voice, tone, target_audience, content_pillars, marketing_goals').eq('company_id', company.id).maybeSingle(),
-      admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(8),
-      admin.from('marketing_ai_knowledge').select('kind, title').or(`company_id.is.null,company_id.eq.${company.id}`).in('module', ['core', 'organico', 'stories', 'campanhas']).limit(40),
-      admin.from('marketing_ai_knowledge').select('title, content').eq('company_id', company.id).eq('module', 'formato').limit(12),
-    ])
-    const cfg = (cfgRow ?? {}) as { brand_voice?: string; tone?: string; target_audience?: string; content_pillars?: string[]; marketing_goals?: string }
-    const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
-    const lib = (libRows ?? []) as { kind: string; title: string }[]
-    const formats = (fmtRows ?? []) as { title: string; content: string | null }[]
-
-    const prompt = `Você é o CREATIVE AGENT (diretor de ideias) da agência de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
+  const prompt = `Você é o CREATIVE AGENT (diretor de ideias) da agência de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
 Voz da marca: ${cfg.brand_voice ?? 'não definida'}. Tom: ${cfg.tone ?? 'não definido'}. Público: ${cfg.target_audience ?? 'não definido'}.
 Pilares: ${(cfg.content_pillars ?? []).join(', ') || 'não definidos'}. Objetivo: ${cfg.marketing_goals ?? company.goal ?? 'crescer e engajar'}.
 ${insights.length ? `\nInsights reais abertos (use-os como gatilho das ideias):\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
+${viral.length ? `\nPosts reais que estão viralizando agora no seu segmento (use como referência de formato/gancho que está funcionando, NUNCA copie o conteúdo, adapte pro negócio):\n${viral.map(v => `- (${v.likesCount} curtidas, ${v.commentsCount} comentários) "${v.caption}"`).join('\n')}` : ''}
 ${formats.length ? `\nFormatos disponíveis (prefira sugerir um destes quando encaixar):\n${formats.map(f => `- ${f.title}${f.content ? `: ${f.content}` : ''}`).join('\n')}` : ''}
 ${lib.length ? `\nRecursos na biblioteca (hooks/frameworks já cadastrados): ${lib.map(l => l.title).slice(0, 20).join(', ')}` : ''}
 
@@ -81,26 +142,88 @@ ${focus ? `IMPORTANTE: gere TODAS as 6 ideias para o formato "${focus}".` : ''}
 "module" é onde a ideia se encaixa: "organico" (feed), "stories" ou "campanhas" (mídia paga).
 "format" é o formato sugerido (ex: carrossel, reel, foto, story, tweet, infográfico...).
 Retorne APENAS um JSON array, sem texto antes ou depois:
-[{"title":"título curto da ideia","hook":"o gancho/primeira frase que prende","angle":"o ângulo em 1 frase","format":"carrossel","module":"organico","rationale":"por que essa ideia faz sentido agora, citando o insight/pilar"}]`
+[{"title":"título curto da ideia","hook":"o gancho/primeira frase que prende","angle":"o ângulo em 1 frase","format":"carrossel","module":"organico","rationale":"por que essa ideia faz sentido agora, citando o insight/pilar/tendência"}]`
 
-    const ideas = parseArr(await callClaude(anthropicKey, prompt)).slice(0, 6)
-    if (ideas.length === 0) return json({ error: 'A IA não retornou ideias. Tente de novo.' }, 502)
+  const ideas = parseArr(await callClaude(anthropicKey, prompt)).slice(0, 6)
+  if (ideas.length === 0) return 0
 
-    const MODS = ['organico', 'stories', 'campanhas']
-    const rows = ideas.map(i => ({
-      company_id: company.id,
-      title: String(i.title ?? 'Ideia').slice(0, 160),
-      hook: i.hook ? String(i.hook) : null,
-      angle: i.angle ? String(i.angle) : null,
-      format: i.format ? String(i.format) : null,
-      module: focus ?? (MODS.includes(String(i.module)) ? String(i.module) : 'organico'),
-      rationale: i.rationale ? String(i.rationale) : null,
-      status: 'new',
-    }))
-    const { data: inserted, error } = await admin.from('marketing_ai_ideas').insert(rows).select('*')
-    if (error) return json({ error: error.message }, 500)
+  const MODS = ['organico', 'stories', 'campanhas']
+  const rows = ideas.map(i => ({
+    company_id: company.id,
+    title: String(i.title ?? 'Ideia').slice(0, 160),
+    hook: i.hook ? String(i.hook) : null,
+    angle: i.angle ? String(i.angle) : null,
+    format: i.format ? String(i.format) : null,
+    module: focus ?? (MODS.includes(String(i.module)) ? String(i.module) : 'organico'),
+    rationale: i.rationale ? String(i.rationale) : null,
+    status: 'new',
+  }))
+  const { error } = await admin.from('marketing_ai_ideas').insert(rows)
+  return error ? 0 : rows.length
+}
 
-    return json({ ok: true, ideas: inserted ?? [] })
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? anonKey
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
+    const apifyToken = Deno.env.get('APIFY_TOKEN')
+    const cronSecretEnv = Deno.env.get('CRON_SECRET')
+    if (!anthropicKey) return json({ error: 'ANTHROPIC_API_KEY não configurada.' }, 503)
+
+    const admin = createClient(supabaseUrl, serviceKey)
+    const rawBody = await req.json().catch(() => ({})) as Record<string, unknown>
+    const isCron = cronSecretEnv && rawBody.cron_secret === cronSecretEnv
+
+    if (isCron) {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      const { data: companies } = await admin.from('companies')
+        .select('id, business_name, business_type, city, goal, telegram_chat_id, notification_prefs')
+        .eq('active', true)
+
+      let generated = 0, skipped = 0
+      for (const company of (companies ?? []) as (Company & { telegram_chat_id: number | null; notification_prefs: Record<string, boolean> | null })[]) {
+        try {
+          const { data: recent } = await admin.from('marketing_ai_ideas')
+            .select('created_at').eq('company_id', company.id)
+            .order('created_at', { ascending: false }).limit(1).maybeSingle()
+          if (recent?.created_at && recent.created_at > sevenDaysAgo) { skipped++; continue }
+
+          const count = await generateForCompany(admin, anthropicKey, apifyToken, company, null)
+          if (count > 0) {
+            generated++
+            const prefs = company.notification_prefs ?? {}
+            if (prefs.agent_actions !== false) {
+              notifyMarketing(company.telegram_chat_id, company.id, 'AGENT_ACTION', {
+                action: 'creative_ideas_generated', count,
+                reason: 'Geração semanal automática de ideias (Creative Agent, com base em tendências reais do segmento)',
+              })
+            }
+          }
+        } catch (e) {
+          console.error(`creative-ideas cron: company ${company.id} error:`, e)
+        }
+      }
+      return json({ ok: true, cron: true, generated, skipped })
+    }
+
+    const bearer = req.headers.get('Authorization') ?? ''
+    if (!bearer) return json({ error: 'Unauthorized' }, 401)
+    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
+    const { data: { user } } = await userClient.auth.getUser()
+    if (!user) return json({ error: 'Unauthorized' }, 401)
+
+    const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal').eq('user_id', user.id).maybeSingle()
+    const company = companyRow as Company | null
+    if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
+
+    const focus = ['organico', 'stories', 'campanhas'].includes(String(rawBody.focus_module)) ? String(rawBody.focus_module) : null
+    const count = await generateForCompany(admin, anthropicKey, apifyToken, company, focus)
+    if (count === 0) return json({ error: 'A IA não retornou ideias. Tente de novo.' }, 502)
+
+    return json({ ok: true, count })
   } catch (err) {
     console.error('creative-ideas error:', err)
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)

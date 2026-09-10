@@ -6,7 +6,6 @@ import {
   buildContentDemo, CONTENT_FORMAT_ICON, CONTENT_STATUS_META, CONTENT_FUNNEL_META,
   type CalendarPost, type ContentIdea, type ContentFunnel, type ContentFormat, type ContentStatus,
 } from './intelDemo'
-import TestingArea from './TestingArea'
 import ModuleLibrary from './ModuleLibrary'
 import { useDemoMode } from './growthDemo'
 import DataVeil, { veilMode } from './DataVeil'
@@ -278,7 +277,6 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
       </DataVeil>
 
       <ModuleLibrary module="organico" />
-      <TestingArea companyId={company.id} kind="organico" />
     </div>
   )
 }

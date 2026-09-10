@@ -4,20 +4,20 @@ import { BORDER, MUTED, D } from './shared'
 import ContentAgentTab from './ContentAgentTab'
 import CampaignsTab from './CampaignsTab'
 import StoriesTab from './StoriesTab'
-import ContentVault from './ContentVault'
 import ContentLibrary from './ContentLibrary'
 import PerformanceTab from './PerformanceTab'
 import EngagementTab from './EngagementTab'
 
 const ORANGE = '#FF6D29'
 
-type Mode = 'conteudo' | 'vault' | 'biblioteca' | 'performance' | 'engagement'
+type Mode = 'conteudo' | 'biblioteca' | 'performance' | 'engagement'
 type Sub = 'organico' | 'campanhas' | 'stories'
 
+// Vault e Testes agora vivem dentro de Biblioteca (canônicos, não duplicados
+// aqui) — ver ContentLibrary.tsx.
 const TABS: { key: Mode; icon: string; label: string; sub: string }[] = [
   { key: 'conteudo', icon: '✍️', label: 'Conteúdo', sub: 'Orgânico, campanhas e stories' },
-  { key: 'vault', icon: '⭐', label: 'Vault', sub: 'Aprovados pelo QC, prontos pra publicar' },
-  { key: 'biblioteca', icon: '📚', label: 'Biblioteca', sub: 'Frameworks, hooks e personalidades' },
+  { key: 'biblioteca', icon: '📚', label: 'Biblioteca', sub: 'Ideias, formatos, estilos, testes e vault' },
   { key: 'performance', icon: '📊', label: 'Performance', sub: 'Inteligência real do seu Instagram' },
   { key: 'engagement', icon: '🤝', label: 'Engagement', sub: 'Automação de comentários e DMs' },
 ]
@@ -56,8 +56,7 @@ export default function ContentSection({ company }: { company: Pick<CompanyData,
         sub === 'organico' ? <ContentAgentTab company={company} />
           : sub === 'campanhas' ? <CampaignsTab company={company} />
           : <StoriesTab company={company} />
-      ) : mode === 'vault' ? <ContentVault companyId={company.id} />
-        : mode === 'biblioteca' ? <ContentLibrary companyId={company.id} />
+      ) : mode === 'biblioteca' ? <ContentLibrary companyId={company.id} />
         : mode === 'engagement' ? <EngagementTab company={company} />
         : <PerformanceTab company={company} onCreateContent={goToContent} />}
     </div>
