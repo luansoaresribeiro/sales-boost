@@ -96,7 +96,7 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
   const demo = useMemo(() => buildMetaAdsDemo(company), [company])
   const { session } = useAuth()
   const navigate = useNavigate()
-  const [demoMode] = useDemoMode(company.id)
+  const [demoMode, setDemoMode] = useDemoMode(company.id)
   const [executed, setExecuted] = useState<Set<string>>(new Set())
   const [live, setLive] = useState<LiveAds | null>(null)
   // connected = a conta de anúncios está de fato ligada; apiError = conectada
@@ -183,6 +183,14 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
         </div>
       </section>
 
+      {/* Públicos/criativos/recomendações — sem fonte real ainda (a Marketing
+          API não devolve essa leitura hoje); independente das KPIs/campanhas
+          acima, que já podem estar reais. */}
+      <DataVeil mode={veilMode({ hasReal: false, demoMode })}
+        title="Ainda sem essa leitura real"
+        message="Públicos, criativos e recomendações da IA ainda são a leitura do agente, não um dado direto da Marketing API. Ligue o Modo demonstração pra ver o layout com um exemplo."
+        cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '26px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '20px', alignItems: 'start' }}>
         {/* Públicos */}
         <section>
@@ -239,6 +247,8 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
           ))}
         </div>
       </section>
+      </div>
+      </DataVeil>
       </div>
       </DataVeil>
     </div>
