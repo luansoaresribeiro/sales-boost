@@ -29,7 +29,11 @@ async function gatherRealPhotoUrls(admin: ReturnType<typeof createClient>, compa
     admin.from('instagram_content_performance').select('media_url, thumbnail_url').eq('company_id', companyId).order('posted_at', { ascending: false }).limit(20),
     admin.from('marketing_ai_knowledge').select('image_url').eq('company_id', companyId).eq('module', 'visual').eq('kind', 'product').order('created_at', { ascending: false }).limit(10),
   ])
-  const fromPosts = (posts ?? []).map(p => (p.media_url as string | null) ?? (p.thumbnail_url as string | null))
+  // thumbnail_url é a nossa cópia permanente (rehostada pelo instagram-performance);
+  // media_url é o link original da Meta, que expira em poucos dias — sempre
+  // preferir a cópia permanente, senão a IA recebe um link morto e falha
+  // silenciosamente.
+  const fromPosts = (posts ?? []).map(p => (p.thumbnail_url as string | null) ?? (p.media_url as string | null))
   const fromProducts = (products ?? []).map(p => p.image_url as string | null)
   return [...fromPosts, ...fromProducts].filter((u): u is string => !!u && IMG_RE.test(u)).slice(0, 8)
 }
