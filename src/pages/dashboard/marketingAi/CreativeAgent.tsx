@@ -51,8 +51,27 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
     setIdeas((i ?? []) as Idea[])
     setTrends((t ?? []) as Trend[])
     setLoading(false)
+    return (i?.length ?? 0) > 0 || (t?.length ?? 0) > 0
   }, [companyId])
-  useEffect(() => { load() }, [load])
+
+  // Primeira visita sem nada ainda (nem ideia, nem tendência): dispara sozinho
+  // na hora, sem esperar o cron semanal — mesmo padrão do Kit da Marca.
+  // Silencioso; só mostra se conseguiu ou não.
+  useEffect(() => {
+    load().then(async hasAny => {
+      if (hasAny || !token) return
+      setGenerating(true)
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/creative-ideas`, {
+          method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        })
+        const r = await res.json().catch(() => ({}))
+        if (res.ok && r.ok) { setMsg('✓ O agente trouxe as primeiras ideias e tendências sozinho.'); await load() }
+      } catch { /* silencioso — sem dado real suficiente ainda, tudo bem */ }
+      setGenerating(false)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, token])
 
   const generateIdeas = async () => {
     setGenerating(true); setErr(''); setMsg('')
