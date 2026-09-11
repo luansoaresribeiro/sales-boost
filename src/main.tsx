@@ -19,6 +19,7 @@ import InsightsPage from './pages/dashboard/InsightsPage.tsx'
 import SettingsPage from './pages/dashboard/SettingsPage.tsx'
 import OpportunitiesPage from './pages/dashboard/OpportunitiesPage.tsx'
 import MarketingAiHubPage from './pages/dashboard/MarketingAiHubPage.tsx'
+import MetaAdsPage from './pages/dashboard/MetaAdsPage.tsx'
 import BusinessProgressPage from './pages/dashboard/BusinessProgressPage.tsx'
 import TrialSummaryPage from './pages/dashboard/TrialSummaryPage.tsx'
 import AccessBlockedPage from './pages/dashboard/AccessBlockedPage.tsx'
@@ -126,11 +127,12 @@ function RouterRoot() {
         <Route path="agente" element={<Navigate to="/dashboard/marketing-ai" replace />} />
         <Route path="marketing-ai" element={<MarketingAiHubPage />} />
         <Route path="marketing-ai/:section" element={<MarketingAiSectionPage />} />
+        <Route path="meta-ads" element={<MetaAdsPage />} />
         <Route path="progresso" element={<BusinessProgressPage />} />
         <Route path="trial" element={<TrialSummaryPage />} />
         <Route path="access-blocked" element={<AccessBlockedPage />} />
         <Route path="oportunidades" element={<OpportunitiesPage />} />
-        <Route path="concorrentes" element={<Navigate to="/dashboard/marketing-ai/competitors" replace />} />
+        <Route path="concorrentes" element={<Navigate to="/dashboard/marketing-ai/dados" replace />} />
         <Route path="aprovacoes" element={<ApprovalsPage />} />
         <Route path="relatorio" element={<ReportPage />} />
         <Route path="settings" element={<SettingsPage />} />

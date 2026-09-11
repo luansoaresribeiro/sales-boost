@@ -18,7 +18,7 @@ const iconStroke = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, str
 type NavItem = { to: string; label: string; icon: React.ReactNode; end?: boolean }
 type NavSection = { section?: string; accent?: boolean; items: NavItem[] }
 
-function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: boolean; marketingAi: boolean }): NavSection[] {
+function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: boolean; marketingAi: boolean }, businessName: string | null): NavSection[] {
   return [
     {
       items: [
@@ -28,11 +28,20 @@ function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: bool
         },
       ],
     },
+    // O nome cadastrado da empresa aparece aqui no lugar de "Marketing AI" —
+    // é a porta de entrada do Growth OS dessa empresa.
     ...(flags.marketingAi ? [{
       section: T.layout.sections.marketingAi, accent: true,
       items: [{
-        to: '/dashboard/marketing-ai', label: T.layout.nav.marketingAi,
+        to: '/dashboard/marketing-ai', label: businessName ?? T.layout.nav.marketingAi,
         icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" /></svg>,
+      }],
+    }] : []),
+    // Agente de Meta Ads — item próprio, fora do fluxo Dados→Conteúdo→Conversão.
+    ...(flags.marketingAi ? [{
+      items: [{
+        to: '/dashboard/meta-ads', label: 'Agente de Meta Ads',
+        icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-5.25 0a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>,
       }],
     }] : []),
     {
@@ -95,7 +104,7 @@ function SidebarInner() {
   const { company } = useCompany()
   const flags = { agentesMenu: company?.agent_enabled ?? false, marketingAi: company?.marketing_ai_enabled ?? true }
 
-  const navSections = makeNavSections(T, flags)
+  const navSections = makeNavSections(T, flags, company?.business_name ?? null)
   const bottomItems = makeBottomItems(T)
 
   const handleSignOut = async () => { await signOut(); navigate('/') }

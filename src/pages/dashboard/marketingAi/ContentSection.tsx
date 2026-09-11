@@ -5,20 +5,19 @@ import ContentAgentTab from './ContentAgentTab'
 import CampaignsTab from './CampaignsTab'
 import StoriesTab from './StoriesTab'
 import ContentLibrary from './ContentLibrary'
-import PerformanceTab from './PerformanceTab'
 import EngagementTab from './EngagementTab'
 
 const ORANGE = '#FF6D29'
 
-type Mode = 'conteudo' | 'biblioteca' | 'performance' | 'engagement'
+type Mode = 'conteudo' | 'biblioteca' | 'engagement'
 type Sub = 'organico' | 'campanhas' | 'stories'
 
 // Vault e Testes agora vivem dentro de Biblioteca (canônicos, não duplicados
-// aqui) — ver ContentLibrary.tsx.
+// aqui) — ver ContentLibrary.tsx. Performance saiu daqui — agora mora no
+// Agente de Dados (junto com Inteligência de Mercado), acima na sequência.
 const TABS: { key: Mode; icon: string; label: string; sub: string }[] = [
   { key: 'conteudo', icon: '✍️', label: 'Conteúdo', sub: 'Orgânico, campanhas e stories' },
   { key: 'biblioteca', icon: '📚', label: 'Biblioteca', sub: 'Ideias, formatos, estilos, testes e vault' },
-  { key: 'performance', icon: '📊', label: 'Performance', sub: 'Inteligência real do seu Instagram' },
   { key: 'engagement', icon: '🤝', label: 'Engagement', sub: 'Automação de comentários e DMs' },
 ]
 
@@ -34,9 +33,6 @@ const SUBTABS: { key: Sub; icon: string; label: string; sub: string }[] = [
 export default function ContentSection({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city' | 'instagram_user_id' | 'instagram_url'> }) {
   const [mode, setMode] = useState<Mode>('conteudo')
   const [sub, setSub] = useState<Sub>('organico')
-
-  // "Criar isto" no Performance manda a ideia pro Agente de Conteúdo (Orgânico).
-  const goToContent = () => { setMode('conteudo'); setSub('organico') }
 
   return (
     <div>
@@ -57,8 +53,7 @@ export default function ContentSection({ company }: { company: Pick<CompanyData,
           : sub === 'campanhas' ? <CampaignsTab company={company} />
           : <StoriesTab company={company} />
       ) : mode === 'biblioteca' ? <ContentLibrary companyId={company.id} />
-        : mode === 'engagement' ? <EngagementTab company={company} />
-        : <PerformanceTab company={company} onCreateContent={goToContent} />}
+        : <EngagementTab company={company} />}
     </div>
   )
 }
