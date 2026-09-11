@@ -94,15 +94,21 @@ async function findInstagramViaSearch(apifyToken: string, name: string, addressH
   }
 }
 
-async function getPlaceDetails(placeId: string, apiKey: string): Promise<PlaceDetails | null> {
+// null = a Google genuinely não tem esse place (ex: place_id inválido).
+// undefined = a chamada falhou (rede/timeout/rate limit) — diferente de "não
+// existe", nunca deve ser tratado como evidência de que o concorrente sumiu.
+async function getPlaceDetails(placeId: string, apiKey: string): Promise<PlaceDetails | null | undefined> {
   const fields = 'name,place_id,geometry,rating,user_ratings_total,price_level,types,website,formatted_phone_number,formatted_address,editorial_summary,opening_hours,business_status'
   const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=${fields}&language=pt-BR&key=${apiKey}`
   try {
     const res = await fetch(url)
     const data = await res.json()
     if (data.status === 'OK') return data.result as PlaceDetails
-  } catch { /* ignore */ }
-  return null
+    if (data.status === 'NOT_FOUND') return null
+    return undefined // OVER_QUERY_LIMIT, UNKNOWN_ERROR, etc — falha, não ausência
+  } catch {
+    return undefined // erro de rede/timeout — falha, não ausência
+  }
 }
 
 async function verifyCompetitors(
@@ -190,20 +196,25 @@ async function scanCompetitors(
   const cfg = BT_CONFIG[company.business_type ?? ''] ?? BT_CONFIG['Outro']
   const keywordParam = cfg.keyword ? `&keyword=${encodeURIComponent(cfg.keyword)}` : ''
 
+  // Cada busca por tipo marca se REALMENTE funcionou (OK/ZERO_RESULTS) ou se
+  // falhou (rate limit, erro de rede, status inesperado) — uma falha parcial
+  // nunca pode virar "esses concorrentes não existem mais" (ver uso de
+  // anyTypeSearchFailed abaixo, na hora de decidir o que apagar).
   const searchResults = await Promise.all(
     cfg.types.map(searchType =>
       fetch(`https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusM}&type=${searchType}${keywordParam}&language=pt-BR&key=${apiKey}`)
         .then(r => r.json())
         .then((d: { status: string; results?: { place_id: string; business_status?: string }[] }) =>
-          (d.status === 'OK' || d.status === 'ZERO_RESULTS') ? (d.results ?? []) : []
+          (d.status === 'OK' || d.status === 'ZERO_RESULTS') ? { ok: true, results: d.results ?? [] } : { ok: false, results: [] as { place_id: string; business_status?: string }[] }
         )
-        .catch(() => [] as { place_id: string; business_status?: string }[])
+        .catch(() => ({ ok: false, results: [] as { place_id: string; business_status?: string }[] }))
     )
   )
+  const anyTypeSearchFailed = searchResults.some(r => !r.ok)
 
   const seen = new Set<string>()
   const nearby = searchResults
-    .flat()
+    .flatMap(r => r.results)
     .filter((p: { place_id: string; business_status?: string }) => {
       if (seen.has(p.place_id) || p.place_id === company.google_place_id || p.business_status === 'CLOSED_PERMANENTLY') return false
       seen.add(p.place_id)
@@ -213,9 +224,13 @@ async function scanCompetitors(
 
   if (nearby.length === 0) return { mapped: 0, newCompetitorNames: [] }
 
-  const detailedPlaces = (
-    await Promise.all(nearby.map((p: { place_id: string }) => getPlaceDetails(p.place_id, apiKey)))
-  ).filter((p): p is PlaceDetails => p !== null && p.business_status !== 'CLOSED_PERMANENTLY')
+  const detailsResults = await Promise.all(nearby.map(async (p: { place_id: string }) => ({ placeId: p.place_id, details: await getPlaceDetails(p.place_id, apiKey) })))
+  // undefined = a chamada de detalhes falhou pra esse lugar específico — não
+  // é evidência de que ele sumiu, só não temos dado novo dele nesta rodada.
+  const detailsFailedPlaceIds = new Set(detailsResults.filter(r => r.details === undefined).map(r => r.placeId))
+  const detailedPlaces = detailsResults
+    .map(r => r.details)
+    .filter((p): p is PlaceDetails => !!p && p.business_status !== 'CLOSED_PERMANENTLY')
 
   const preFiltered = detailedPlaces.filter(p => {
     const placeTypes = p.types ?? []
@@ -275,9 +290,17 @@ async function scanCompetitors(
     upserted = data ?? []
   }
 
-  const keepPlaceIds = new Set(rows.map(r => r.google_place_id))
-  const staleIds = (existing ?? []).filter(e => !keepPlaceIds.has(e.google_place_id ?? '')).map(e => e.id)
-  if (staleIds.length > 0) await admin.from('competitors').delete().in('id', staleIds)
+  // Só apaga concorrente "sumido" quando a varredura desta rodada foi
+  // completa e confiável: nenhuma busca por tipo falhou, e o lugar em
+  // questão não é um que só não tivemos detalhes por falha transitória.
+  // Falha parcial de API nunca deve apagar dado real (bug corrigido).
+  if (!anyTypeSearchFailed) {
+    const keepPlaceIds = new Set(rows.map(r => r.google_place_id))
+    const staleIds = (existing ?? [])
+      .filter(e => !keepPlaceIds.has(e.google_place_id ?? '') && !detailsFailedPlaceIds.has(e.google_place_id ?? ''))
+      .map(e => e.id)
+    if (staleIds.length > 0) await admin.from('competitors').delete().in('id', staleIds)
+  }
 
   if (upserted.length > 0) {
     const byPlaceId = new Map(rows.map(r => [r.google_place_id, r]))

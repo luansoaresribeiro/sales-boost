@@ -102,6 +102,10 @@ Deno.serve(async (req) => {
 
     // 3. Mídias recentes + insights por mídia
     const mediaRes = await safeGet(`${IG}/me/media?fields=id,caption,media_type,media_product_type,timestamp,permalink,media_url,thumbnail_url,like_count,comments_count&limit=25&access_token=${token}`)
+    // null = a chamada falhou de verdade (rede/permissão/rate limit) — bem
+    // diferente de "a conta tem zero posts". Nunca pode virar um dia de
+    // engajamento zero gravado pra sempre no histórico (bug corrigido).
+    const mediaFetchFailed = mediaRes === null
     const media = (mediaRes?.data ?? []) as any[]
     const content: any[] = []
     for (const m of media) {
@@ -155,17 +159,21 @@ Deno.serve(async (req) => {
     const scoreLabel = total >= 80 ? 'Desempenho forte' : total >= 60 ? 'Desempenho bom' : total >= 40 ? 'Precisa de atenção' : 'Desempenho crítico'
     const health = total >= 80 ? 'excellent' : total >= 60 ? 'good' : total >= 40 ? 'attention' : 'critical'
 
-    // 7. Persiste snapshots (upsert, idempotente por dia) — só service role escreve
-    await admin.from('instagram_performance_snapshots').upsert({
-      company_id, captured_for: today, followers, reach: reach30, impressions: null,
-      profile_visits: profileVisits, website_clicks: websiteClicks, engagement: engSum,
-      engagement_rate: engRate, published: publishedCount,
-      raw: { followers_count: followers, media_count: profile.media_count },
-    }, { onConflict: 'company_id,captured_for' })
-    await admin.from('instagram_performance_scores').upsert({
-      company_id, captured_for: today, total,
-      growth: growthComp, reach: reachComp, engagement: engComp, content: contentComp, consistency: consistencyComp,
-    }, { onConflict: 'company_id,captured_for' })
+    // 7. Persiste snapshots (upsert, idempotente por dia) — só service role escreve.
+    // Se a busca de mídia falhou de verdade, NÃO grava o dia de hoje — melhor
+    // faltar um dia no histórico do que gravar um "zero" que nunca aconteceu.
+    if (!mediaFetchFailed) {
+      await admin.from('instagram_performance_snapshots').upsert({
+        company_id, captured_for: today, followers, reach: reach30, impressions: null,
+        profile_visits: profileVisits, website_clicks: websiteClicks, engagement: engSum,
+        engagement_rate: engRate, published: publishedCount,
+        raw: { followers_count: followers, media_count: profile.media_count },
+      }, { onConflict: 'company_id,captured_for' })
+      await admin.from('instagram_performance_scores').upsert({
+        company_id, captured_for: today, total,
+        growth: growthComp, reach: reachComp, engagement: engComp, content: contentComp, consistency: consistencyComp,
+      }, { onConflict: 'company_id,captured_for' })
+    }
     if (content.length) {
       await admin.from('instagram_content_performance').upsert(content.map(c => ({
         company_id, media_id: c.id, media_type: c.type, caption: c.caption, thumbnail_url: c.thumb, media_url: c.mediaUrl,
@@ -240,7 +248,7 @@ Deno.serve(async (req) => {
       competitor: { hasData: false, rows: [], you: { postsPerWeek: recentPerWeek(content), engagement: engRate } },
       recommendations: buildRecs(content),
       game: buildGame(followers, prevSnap, reach30, total, recentPerWeek(content)),
-      sync: { status: 'connected', lastSync: new Date().toISOString(), error: null },
+      sync: { status: 'connected', lastSync: new Date().toISOString(), error: mediaFetchFailed ? 'Falha ao buscar mídias do Instagram — dados de hoje não foram salvos, mostrando o último dado real disponível.' : null },
     }
     return json(payload)
   } catch (err) {
