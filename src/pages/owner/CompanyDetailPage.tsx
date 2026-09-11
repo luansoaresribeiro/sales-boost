@@ -36,6 +36,41 @@ interface CompanyDetail {
   agent_enabled: boolean
   marketing_ai_enabled: boolean
   created_at: string
+  trial_started_at: string | null
+  trial_expires_at: string | null
+  trial_cancelled_at: string | null
+  subscription_status: string | null
+  current_period_start: string | null
+  current_period_end: string | null
+  subscription_cancelled_at: string | null
+  manual_access: boolean
+  manual_access_granted_at: string | null
+  manual_access_granted_by: string | null
+  manual_access_reason: string | null
+  access_blocked_at: string | null
+  access_blocked_by: string | null
+  access_blocked_reason: string | null
+}
+
+type AccessSource = 'paid' | 'trial' | 'manual' | 'blocked' | 'none'
+type AccessStatusLabel = 'Active' | 'Trial' | 'Expired' | 'Suspended' | 'Cancelled'
+interface AccessStatus { granted: boolean; source: AccessSource; status_label: AccessStatusLabel }
+interface AccessLogEntry { id: string; event: string; actor: string; actor_email: string | null; detail: string | null; created_at: string }
+
+const ACCESS_STATUS_META: Record<AccessStatusLabel, { color: string; dot: string }> = {
+  Active: { color: '#4ade80', dot: '🟢' },
+  Trial: { color: '#60a5fa', dot: '🔵' },
+  Expired: { color: '#f87171', dot: '🔴' },
+  Suspended: { color: '#f87171', dot: '🔴' },
+  Cancelled: { color: '#BABABA', dot: '⚪' },
+}
+const ACCESS_SOURCE_LABEL: Record<AccessSource, string> = { paid: 'Paid', trial: 'Trial', manual: 'Manually Granted', blocked: 'Blocked', none: 'None' }
+const AUDIT_EVENT_LABEL: Record<string, string> = {
+  access_granted: 'Owner manually granted access',
+  access_blocked: 'Owner manually blocked access',
+  payment_confirmed: 'Payment confirmed — access restored automatically',
+  subscription_updated: 'Subscription status updated',
+  subscription_cancelled: 'Subscription cancelled',
 }
 
 interface MarketingAiConfig {
@@ -111,6 +146,12 @@ export default function CompanyDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
 
+  const [access, setAccess] = useState<AccessStatus | null>(null)
+  const [accessLog, setAccessLog] = useState<AccessLogEntry[]>([])
+  const [accessBusy, setAccessBusy] = useState(false)
+  const [accessReason, setAccessReason] = useState('')
+  const [showAccessReason, setShowAccessReason] = useState(false)
+
   useEffect(() => {
     if (!session || !id) return
     void load()
@@ -125,7 +166,7 @@ export default function CompanyDetailPage() {
         headers: { Authorization: `Bearer ${session!.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ company_id: id, limit: 30 }),
       })
-      const data = await res.json() as { company?: CompanyDetail; messages?: AgentMessage[]; telegram?: TelegramConv[]; marketing_ai?: MarketingAiConfig | null; activity?: ClientActivity[]; error?: string }
+      const data = await res.json() as { company?: CompanyDetail; messages?: AgentMessage[]; telegram?: TelegramConv[]; marketing_ai?: MarketingAiConfig | null; activity?: ClientActivity[]; access?: AccessStatus | null; access_log?: AccessLogEntry[]; error?: string }
       if (!res.ok || !data.company) {
         setLoadError(data.error ?? `Erro ao carregar (${res.status}).`)
       } else {
@@ -133,6 +174,8 @@ export default function CompanyDetailPage() {
         setMessages(data.messages ?? [])
         setTelegram(data.telegram ?? [])
         setActivity(data.activity ?? [])
+        setAccess(data.access ?? null)
+        setAccessLog(data.access_log ?? [])
         setForm({
           business_name: data.company.business_name ?? '',
           business_type: data.company.business_type ?? '',
@@ -169,6 +212,23 @@ export default function CompanyDetailPage() {
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  const setAccessState = async (kind: 'grant_access' | 'block_access') => {
+    setAccessBusy(true)
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/owner-company-activity`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session!.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: id, action: kind, reason: accessReason.trim() || undefined }),
+      })
+      const data = await res.json() as { access?: AccessStatus; error?: string }
+      if (res.ok && data.access) setAccess(data.access)
+      setAccessReason('')
+      setShowAccessReason(false)
+      await load()
+    } catch { /* fica no estado anterior; o load acima ainda tenta atualizar */ }
+    setAccessBusy(false)
   }
 
   const toggleFeature = async (feature: 'marketing_ai_enabled', value: boolean) => {
@@ -276,6 +336,83 @@ export default function CompanyDetailPage() {
       </div>
 
       <div style={{ padding: '32px', maxWidth: '1100px', margin: '0 auto' }}>
+        {/* Access & Subscription — fonte central de verdade do acesso do cliente. */}
+        <div style={{ background: CARD, border: `1px solid ${access?.source === 'blocked' ? 'rgba(248,113,113,0.35)' : BORDER}`, borderRadius: '14px', padding: '22px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>🔐 Access &amp; Subscription</div>
+            {access && (
+              <span style={{ fontSize: '12px', fontWeight: 800, color: ACCESS_STATUS_META[access.status_label].color }}>
+                {ACCESS_STATUS_META[access.status_label].dot} {access.status_label}
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '14px', marginBottom: '18px' }}>
+            {[
+              ['Access type', access ? ACCESS_SOURCE_LABEL[access.source] : '—'],
+              ['Trial started', detail.trial_started_at ? new Date(detail.trial_started_at).toLocaleDateString('pt-BR') : '—'],
+              ['Trial expires', detail.trial_expires_at ? new Date(detail.trial_expires_at).toLocaleDateString('pt-BR') : '—'],
+              ['Subscription', detail.subscription_status ?? 'No active subscription'],
+              ['Renews', detail.current_period_end ? new Date(detail.current_period_end).toLocaleDateString('pt-BR') : '—'],
+            ].map(([label, val]) => (
+              <div key={label}>
+                <div style={{ fontSize: '9.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{label}</div>
+                <div style={{ fontSize: '12.5px', color: 'white', fontWeight: 600 }}>{val}</div>
+              </div>
+            ))}
+          </div>
+
+          {access?.source === 'manual' && (
+            <div style={{ padding: '10px 13px', background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '9px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '14px' }}>
+              🟡 <strong>Manual access.</strong> Sem assinatura ativa — liberado por {detail.manual_access_granted_by ?? 'um owner'}{detail.manual_access_granted_at ? ` em ${new Date(detail.manual_access_granted_at).toLocaleDateString('pt-BR')}` : ''}.{detail.manual_access_reason ? ` Motivo: "${detail.manual_access_reason}"` : ''}
+            </div>
+          )}
+          {access?.source === 'blocked' && (
+            <div style={{ padding: '10px 13px', background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: '9px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '14px' }}>
+              🔴 <strong>Bloqueado manualmente</strong> por {detail.access_blocked_by ?? 'um owner'}{detail.access_blocked_at ? ` em ${new Date(detail.access_blocked_at).toLocaleDateString('pt-BR')}` : ''}.{detail.access_blocked_reason ? ` Motivo: "${detail.access_blocked_reason}"` : ''}
+            </div>
+          )}
+
+          {showAccessReason && (
+            <input value={accessReason} onChange={e => setAccessReason(e.target.value)} placeholder="Motivo (opcional)" style={{ ...inputStyle, marginBottom: '10px' }} />
+          )}
+
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            {access?.granted ? (
+              <button onClick={() => setAccessState('block_access')} disabled={accessBusy}
+                style={{ padding: '10px 20px', background: 'rgba(248,113,113,0.14)', border: '1px solid rgba(248,113,113,0.4)', borderRadius: '9px', color: '#f87171', fontWeight: 700, fontSize: '13px', cursor: accessBusy ? 'default' : 'pointer' }}>
+                {accessBusy ? '...' : '🔒 Bloquear acesso'}
+              </button>
+            ) : (
+              <button onClick={() => setAccessState('grant_access')} disabled={accessBusy}
+                style={{ padding: '10px 20px', background: ORANGE, border: 'none', borderRadius: '9px', color: '#000', fontWeight: 700, fontSize: '13px', cursor: accessBusy ? 'default' : 'pointer' }}>
+                {accessBusy ? '...' : '🔓 Liberar acesso'}
+              </button>
+            )}
+            <button onClick={() => setShowAccessReason(s => !s)} style={{ padding: '10px 16px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '9px', color: MUTED, fontSize: '12px', cursor: 'pointer' }}>
+              {showAccessReason ? 'Cancelar motivo' : '+ motivo'}
+            </button>
+          </div>
+
+          <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: `1px solid ${BORDER}` }}>
+            <div style={{ fontSize: '9.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '9px' }}>Histórico de acesso</div>
+            {accessLog.length === 0 ? (
+              <div style={{ fontSize: '11.5px', color: MUTED }}>Nenhum evento registrado ainda.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {accessLog.map(e => (
+                  <div key={e.id} style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.5 }}>
+                    <span style={{ color: 'white' }}>{new Date(e.created_at).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                    {' — '}{AUDIT_EVENT_LABEL[e.event] ?? e.event}
+                    {e.actor_email ? ` (${e.actor_email})` : ''}
+                    {e.detail ? `: ${e.detail}` : ''}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '22px' }}>
             <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '16px' }}>Dados da conta</div>
