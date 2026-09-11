@@ -9,6 +9,36 @@ import {
 import ModuleLibrary from './ModuleLibrary'
 import { useDemoMode } from './growthDemo'
 import DataVeil, { veilMode } from './DataVeil'
+import { BriefBlock, VideoScript, ScoreBreakdown, PostMedia, type TestPost } from './TestingArea'
+
+const FORMAT_ICON_LC: Record<string, string> = { reel: '🎬', carrossel: '🖼️', story: '⚡', foto: '📷' }
+
+// Roteiro e direção de arte (brief) JÁ são reais — o creative-generate grava
+// isso em marketing_ai_test_content (Área de Testes/Vault), só não estava
+// ligado aqui. Pega o melhor post que passou pelo QC (status='vault') pra
+// mostrar como "pronto pra aprovar" — sem vault ainda, fica sem fonte real
+// (não inventa um post de exemplo como se fosse real).
+interface VaultTestRow {
+  id: string; idea: string | null; caption: string | null; hashtags: string | null; cta: string | null
+  format: string | null; reasoning: string | null; video_script: string | null; video_url: string | null
+  brief: Record<string, string> | null; personality: string | null
+  quality_score: number | null; scores: Record<string, { score: number; comment: string }> | null
+  image_url: string | null; slides: { text?: string; image_url?: string | null }[] | null; created_at: string
+}
+function useLatestVaultContent(companyId: string | undefined) {
+  const [item, setItem] = useState<VaultTestRow | null>(null)
+  useEffect(() => {
+    if (!companyId) return
+    let alive = true
+    supabase.from('marketing_ai_test_content')
+      .select('id, idea, caption, hashtags, cta, format, reasoning, video_script, video_url, brief, personality, quality_score, scores, image_url, slides, created_at')
+      .eq('company_id', companyId).eq('status', 'vault')
+      .order('quality_score', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => { if (alive) setItem((data ?? null) as VaultTestRow | null) })
+    return () => { alive = false }
+  }, [companyId])
+  return item
+}
 
 interface RealContentRow {
   id: string; idea: string | null; reasoning: string | null; format: string | null
@@ -170,9 +200,13 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
   const ideas = hasRealContent ? realContent.map(toContentIdea) : demo.ideas
   const calendarMode = veilMode({ hasReal: hasRealContent, demoMode })
 
-  // Equilíbrio do funil + conteúdo detalhado (roteiro/direção de arte) não têm
-  // fonte real ainda — nenhum campo desses existe em marketing_ai_content.
-  const detailMode = veilMode({ hasReal: false, demoMode })
+  // Equilíbrio do funil ainda não tem fonte real (nenhum post tem etapa do
+  // funil salva) — continua como exemplo. Roteiro/direção de arte JÁ são
+  // reais quando há algo no Vault (marketing_ai_test_content).
+  const funnelBalanceMode = veilMode({ hasReal: false, demoMode })
+  const vaultItem = useLatestVaultContent(company.id)
+  const hasVaultContent = !!vaultItem
+  const detailMode = veilMode({ hasReal: hasVaultContent, demoMode })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -213,67 +247,114 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
         </div>
       </DataVeil>
 
-      {/* Equilíbrio do funil + conteúdo detalhado — sem fonte real (etapa do
-          funil, roteiro e direção de arte não existem em marketing_ai_content) */}
-      <DataVeil mode={detailMode}
+      {/* Equilíbrio do funil — ainda sem fonte real (etapa do funil não
+          existe em marketing_ai_content). */}
+      <DataVeil mode={funnelBalanceMode}
         title="Sem essa análise real ainda"
-        message="Equilíbrio do funil, roteiro e direção de arte são uma leitura mais profunda que ainda não tem fonte real. Ligue o Modo demonstração pra ver o layout com um exemplo."
+        message="O equilíbrio do funil é uma leitura mais profunda que ainda não tem fonte real. Ligue o Modo demonstração pra ver o layout com um exemplo."
         cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <FunnelBalance counts={demo.balance.counts} insight={demo.balance.insight} />
+        <FunnelBalance counts={demo.balance.counts} insight={demo.balance.insight} />
+      </DataVeil>
 
-          {/* Conteúdo detalhado */}
-          <section>
-            <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>🎬 Conteúdo pronto pra aprovar</div>
-            <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '20px 22px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', flexWrap: 'wrap' }}>
-                <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{CONTENT_FORMAT_ICON[featured.format]} {featured.title}</div>
-                <FunnelTag funnel={featured.funnel} />
-              </div>
-              <div style={{ fontSize: '11px', color: MUTED, marginBottom: '14px' }}>{CONTENT_FUNNEL_META[featured.funnel].goal}</div>
-
-              <Block label="Roteiro">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {featured.script.map((line, i) => (
-                    <div key={i} style={{ fontSize: '12px', color: 'white', lineHeight: 1.5, paddingLeft: '12px', borderLeft: `2px solid rgba(255,109,41,0.4)` }}>{line}</div>
-                  ))}
+      {/* Conteúdo detalhado (roteiro + direção de arte): real assim que houver
+          algo no Vault — o mesmo dado que a Área de Testes/Vault já gravam,
+          só reaproveitado aqui. */}
+      <DataVeil mode={detailMode}
+        title="Sem conteúdo aprovado ainda"
+        message="Assim que um post passar pelo controle de qualidade na Área de Testes (nota ≥90) e for pro Vault, ele aparece aqui com roteiro e direção de arte completos. Ligue o Modo demonstração pra ver o layout com um exemplo."
+        cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+        <section>
+          <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>🎬 Conteúdo pronto pra aprovar</div>
+          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '20px 22px' }}>
+            {hasVaultContent && vaultItem ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{FORMAT_ICON_LC[vaultItem.format ?? ''] ?? '📝'} {vaultItem.idea ?? 'Post sem título'}</div>
+                  {vaultItem.quality_score != null && <span style={{ fontSize: '9px', fontWeight: 700, color: GREEN, border: '1px solid rgba(74,222,128,0.4)', borderRadius: '99px', padding: '2px 8px' }}>nota {vaultItem.quality_score}</span>}
                 </div>
-              </Block>
+                {vaultItem.reasoning && <div style={{ fontSize: '11px', color: MUTED, marginBottom: '14px' }}>{vaultItem.reasoning}</div>}
 
-              <Block label="Legenda">
-                <div style={{ fontSize: '12px', color: 'white', lineHeight: 1.6, background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '11px 13px' }}>{featured.caption}</div>
-              </Block>
+                <Block label="Prévia">
+                  <div style={{ maxWidth: '260px', borderRadius: '9px', overflow: 'hidden' }}>
+                    <PostMedia post={{ ...vaultItem, status: 'vault' } as TestPost} height={200} />
+                  </div>
+                </Block>
 
-              <Block label="Hashtags">
-                <div style={{ fontSize: '11.5px', color: '#60a5fa' }}>{featured.hashtags}</div>
-              </Block>
+                <Block label="Roteiro">
+                  <VideoScript post={{ ...vaultItem, status: 'vault' } as TestPost} />
+                </Block>
 
-              <Block label="Sugestão de criativo">
-                <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55 }}>{featured.creative}</div>
-              </Block>
+                <Block label="Legenda">
+                  <div style={{ fontSize: '12px', color: 'white', lineHeight: 1.6, background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '11px 13px' }}>{vaultItem.caption}</div>
+                </Block>
 
-              <Block label="🎨 Direção criativa (do DNA da marca)">
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '9px' }}>
-                  {[
-                    { k: 'Paleta', v: featured.art.palette },
-                    { k: 'Estilo', v: featured.art.style },
-                    { k: 'Referência visual', v: featured.art.reference },
-                    { k: 'Evitar', v: featured.art.doNot },
-                  ].map(row => (
-                    <div key={row.k} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '9px', padding: '10px 12px' }}>
-                      <div style={{ fontSize: '9.5px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>{row.k}</div>
-                      <div style={{ fontSize: '11.5px', color: 'white', lineHeight: 1.5 }}>{row.v}</div>
-                    </div>
-                  ))}
+                {vaultItem.hashtags && (
+                  <Block label="Hashtags">
+                    <div style={{ fontSize: '11.5px', color: '#60a5fa' }}>{vaultItem.hashtags}</div>
+                  </Block>
+                )}
+
+                <Block label="🎬 Direção criativa (brief do Diretor)">
+                  <BriefBlock post={{ ...vaultItem, status: 'vault' } as TestPost} />
+                </Block>
+
+                <Block label="Nota de qualidade">
+                  <ScoreBreakdown post={{ ...vaultItem, status: 'vault' } as TestPost} />
+                </Block>
+
+                <div style={{ fontSize: '11px', color: MUTED, marginTop: '4px' }}>Aprovar e publicar esse post é feito no <strong style={{ color: 'white' }}>Vault</strong> (Biblioteca → Testes → Vault) — a mesma aprovação central de sempre.</div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{CONTENT_FORMAT_ICON[featured.format]} {featured.title}</div>
+                  <FunnelTag funnel={featured.funnel} />
                 </div>
-              </Block>
+                <div style={{ fontSize: '11px', color: MUTED, marginBottom: '14px' }}>{CONTENT_FUNNEL_META[featured.funnel].goal}</div>
 
-              <button style={{ marginTop: '6px', padding: '8px 18px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', border: 'none', borderRadius: '9px', cursor: 'pointer', fontFamily: D }}>
-                Aprovar e agendar
-              </button>
-            </div>
-          </section>
-        </div>
+                <Block label="Roteiro">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {featured.script.map((line, i) => (
+                      <div key={i} style={{ fontSize: '12px', color: 'white', lineHeight: 1.5, paddingLeft: '12px', borderLeft: `2px solid rgba(255,109,41,0.4)` }}>{line}</div>
+                    ))}
+                  </div>
+                </Block>
+
+                <Block label="Legenda">
+                  <div style={{ fontSize: '12px', color: 'white', lineHeight: 1.6, background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '11px 13px' }}>{featured.caption}</div>
+                </Block>
+
+                <Block label="Hashtags">
+                  <div style={{ fontSize: '11.5px', color: '#60a5fa' }}>{featured.hashtags}</div>
+                </Block>
+
+                <Block label="Sugestão de criativo">
+                  <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55 }}>{featured.creative}</div>
+                </Block>
+
+                <Block label="🎨 Direção criativa (do DNA da marca)">
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '9px' }}>
+                    {[
+                      { k: 'Paleta', v: featured.art.palette },
+                      { k: 'Estilo', v: featured.art.style },
+                      { k: 'Referência visual', v: featured.art.reference },
+                      { k: 'Evitar', v: featured.art.doNot },
+                    ].map(row => (
+                      <div key={row.k} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '9px', padding: '10px 12px' }}>
+                        <div style={{ fontSize: '9.5px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>{row.k}</div>
+                        <div style={{ fontSize: '11.5px', color: 'white', lineHeight: 1.5 }}>{row.v}</div>
+                      </div>
+                    ))}
+                  </div>
+                </Block>
+
+                <button style={{ marginTop: '6px', padding: '8px 18px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', border: 'none', borderRadius: '9px', cursor: 'pointer', fontFamily: D }}>
+                  Aprovar e agendar
+                </button>
+              </>
+            )}
+          </div>
+        </section>
       </DataVeil>
 
       <ModuleLibrary module="organico" />
