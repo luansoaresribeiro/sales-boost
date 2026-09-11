@@ -1,11 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCompany } from '../../contexts/CompanyContext'
+import { useAuth } from '../../contexts/AuthContext'
+import { supabase } from '../../lib/supabase'
 import { ModuleCard } from './agentCardShared'
 import GrowthCommandCenter from './marketingAi/GrowthCommandCenter'
-import { buildGrowthDemo, useDemoMode } from './marketingAi/growthDemo'
+import { buildGrowthDemo, useDemoMode, type GrowthDemoData, type CommandInsight, type DemoAgentStatus } from './marketingAi/growthDemo'
+import { mapStage, type LeadRow } from './marketingAi/salesReal'
+import type { LeadStageKey } from './marketingAi/salesDemo'
 import DataVeil, { veilMode } from './marketingAi/DataVeil'
-import { MUTED, BORDER, D } from './marketingAi/shared'
+import { MUTED, BORDER, D, SUPABASE_URL } from './marketingAi/shared'
 
 const ORANGE = '#FF6D29'
 const CARD = '#150E08'
@@ -32,18 +36,118 @@ const INTEL_MODULES: ModuleDef[] = [
   { section: 'saude-meta', title: 'Saúde da Meta', desc: 'Um score de 0 a 100: quão saudável está seu ecossistema na Meta e o que melhorar primeiro.', icon: '❤️‍🩹' },
 ]
 
+const STAGE_ORDER: LeadStageKey[] = ['novo', 'contato', 'qualificado', 'proposta', 'venda']
+const STAGE_LABEL: Record<LeadStageKey, string> = { novo: 'Novo Lead', contato: 'Contato realizado', qualificado: 'Qualificado', proposta: 'Proposta', venda: 'Venda realizada' }
+const TAB_LABEL: Record<string, string> = { avaliacoes: 'Avaliações', opinioes: 'Opiniões', concorrentes: 'Concorrentes', crescimento: 'Crescimento', performance: 'Performance', audiencia: 'Audiência', diagnostico: 'Diagnóstico de links' }
+
+interface RealGrowth { data: GrowthDemoData; hasReal: boolean }
+
+// Painel-resumo real: soma o que já é real em cada aba (leads → funil,
+// instagram_performance_snapshots → crescimento/engajamento, meta-ads-insights
+// → receita/ROAS ao vivo, insights_reports → recomendações da IA) num só
+// objeto na MESMA forma que o demo usa. Nenhuma peça sem fonte real vira
+// número inventado — fica null e o KpiTile mostra "—".
+function useRealGrowth(companyId: string, token: string): { real: RealGrowth | null; loading: boolean } {
+  const [state, setState] = useState<{ real: RealGrowth | null; loading: boolean }>({ real: null, loading: true })
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const [{ data: leadRows }, { data: snapRows }, { data: reportRows }, { data: companyRow }, { data: ideaRow }, { data: trendRow }] = await Promise.all([
+        supabase.from('leads').select('stage, value_estimate, created_at').eq('company_id', companyId),
+        supabase.from('instagram_performance_snapshots').select('captured_for, followers, engagement_rate').eq('company_id', companyId).order('captured_for', { ascending: false }).limit(30),
+        supabase.from('insights_reports').select('tab_key, summary, suggestions, created_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(3),
+        supabase.from('companies').select('meta_ads_account_id, whatsapp_phone_number_id').eq('id', companyId).maybeSingle(),
+        supabase.from('marketing_ai_ideas').select('created_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('marketing_ai_trends').select('detected_at').eq('company_id', companyId).eq('source', 'instagram_scan').order('detected_at', { ascending: false }).limit(1).maybeSingle(),
+      ])
+      let ads: { connected: boolean; totals?: { spend: number; revenue: number; roas: number } } | null = null
+      if (token) {
+        ads = await fetch(`${SUPABASE_URL}/functions/v1/meta-ads-insights`, {
+          method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ company_id: companyId }),
+        }).then(r => r.json()).catch(() => null)
+      }
+      if (cancelled) return
+
+      // Funil real: cumulativo por estágio atual (quem já chegou em cada
+      // etapa ou passou dela) — o mesmo jeito que um CRM lê um funil real.
+      const leads = (leadRows ?? []) as LeadRow[]
+      const stages = leads.map(l => mapStage(l.stage))
+      const idx = (s: LeadStageKey) => STAGE_ORDER.indexOf(s)
+      const funnel = STAGE_ORDER.map(stage => {
+        const at = leads.filter((_, i) => idx(stages[i]) >= idx(stage))
+        return { key: stage, label: STAGE_LABEL[stage], count: at.length, value: at.reduce((s, l) => s + Number(l.value_estimate ?? 0), 0) }
+      })
+      const salesCount = funnel[funnel.length - 1].count
+      const funnelConversion = leads.length > 0 ? Number(((salesCount / leads.length) * 100).toFixed(1)) : null
+
+      // Instagram: crescimento/engajamento reais das snapshots já coletadas
+      // (mesma tabela que a aba Performance usa) — sem re-sincronizar aqui.
+      const snaps = snapRows ?? []
+      const latest = snaps[0] ?? null
+      const oldest = snaps.length > 1 ? snaps[snaps.length - 1] : null
+      const igFollowers = latest?.followers ?? null
+      const igFollowersGained = latest && oldest && oldest.captured_for !== latest.captured_for ? (latest.followers ?? 0) - (oldest.followers ?? 0) : null
+      const contentEngagement = latest?.engagement_rate ?? null
+
+      const adsConnected = !!ads?.connected && !!ads.totals
+      const revenue = adsConnected ? ads!.totals!.revenue : null
+      const roas = adsConnected ? ads!.totals!.roas : null
+      const adSpend = adsConnected ? ads!.totals!.spend : null
+
+      const insights: CommandInsight[] = (reportRows ?? []).flatMap(r => {
+        const suggestion = (r.suggestions as string[] | null)?.[0]
+        if (!suggestion) return []
+        return [{ id: `${r.tab_key}-${r.created_at}`, kind: 'acao_recomendada' as const, title: TAB_LABEL[r.tab_key] ?? r.tab_key, description: suggestion, impact: 'medium' as const }]
+      })
+
+      const pending = leads.filter(l => { const s = mapStage(l.stage); return s === 'novo' || s === 'contato' }).length
+      const agents: DemoAgentStatus[] = [
+        { key: 'market', name: 'Inteligência de Mercado', icon: '🧭', state: trendRow?.detected_at ? 'active' : 'idle', lastAction: trendRow?.detected_at ? `Última varredura real em ${new Date(trendRow.detected_at).toLocaleDateString('pt-BR')}` : 'Ainda sem varredura registrada' },
+        { key: 'content', name: 'Conteúdo', icon: '✍️', state: ideaRow?.created_at ? 'active' : 'idle', lastAction: ideaRow?.created_at ? `Última ideia gerada em ${new Date(ideaRow.created_at).toLocaleDateString('pt-BR')}` : 'Ainda sem ideias geradas' },
+        { key: 'ads', name: 'Meta Ads', icon: '🎯', state: companyRow?.meta_ads_account_id ? 'active' : 'soon', lastAction: companyRow?.meta_ads_account_id ? 'Conectado' : 'Aguardando conexão da conta de anúncios' },
+        { key: 'sales', name: 'Vendas (Funil)', icon: '🔀', state: 'idle', lastAction: `${pending} lead${pending === 1 ? '' : 's'} aguardando follow-up` },
+        { key: 'whatsapp', name: 'Atendimento WhatsApp', icon: '💬', state: companyRow?.whatsapp_phone_number_id ? 'active' : 'soon', lastAction: companyRow?.whatsapp_phone_number_id ? 'Conectado' : 'Aguardando conexão do WhatsApp' },
+      ]
+
+      const hasReal = leads.length > 0 || snaps.length > 0 || adsConnected
+      const data: GrowthDemoData = {
+        kpis: {
+          revenue, revenueDelta: null,
+          leads: leads.length, leadsDelta: null,
+          funnelConversion, funnelConversionDelta: null,
+          roas, roasDelta: null,
+          adSpend,
+          igFollowers, igFollowersGained,
+          contentEngagement, contentEngagementDelta: null,
+        },
+        connections: [], funnel, agents, insights,
+      }
+      setState({ real: { data, hasReal }, loading: false })
+    }
+    load()
+    return () => { cancelled = true }
+  }, [companyId, token])
+
+  return state
+}
+
 export default function MarketingAiHubPage() {
   const { company } = useCompany()
+  const { session } = useAuth()
   const navigate = useNavigate()
   const [demoMode, setDemoMode] = useDemoMode(company?.id)
 
   const demo = useMemo(() => (company ? buildGrowthDemo(company) : null), [company])
+  const { real, loading: realLoading } = useRealGrowth(company?.id ?? '', session?.access_token ?? '')
 
   if (!company || !demo) {
     return <div style={{ padding: '48px', color: MUTED, fontSize: '14px' }}>Carregando...</div>
   }
 
   const open = (section: string) => navigate(`/dashboard/marketing-ai/${section}`)
+  const panelData = real?.hasReal ? real.data : demo
+  const panelMode = veilMode({ hasReal: !!real?.hasReal, demoMode, error: undefined })
 
   return (
     <div>
@@ -68,17 +172,19 @@ export default function MarketingAiHubPage() {
         </div>
       </div>
 
-      {/* Receita/ROAS/funil agregados ainda não têm uma fonte real única —
-          cada peça (Meta Ads, WhatsApp, leads) já é real nas próprias abas,
-          mas o resumo aqui em cima segue sem cálculo real. Nunca mostra
-          fictício como se fosse real: fica borrado até ligar o demo. */}
+      {/* Receita/ROAS/funil agregados: soma o que já é real em cada peça
+          (leads → funil, Instagram → crescimento/engajamento, Meta Ads → ao
+          vivo, insights_reports → recomendações). Sem nenhuma peça real
+          ainda, fica borrado até ligar o demo — nunca mostra 0 fingido. */}
       <div style={{ margin: '24px 32px 0' }}>
-        <DataVeil mode={veilMode({ hasReal: false, demoMode })}
-          title="Painel-resumo ainda sem dado real"
-          message="Receita, ROAS e funil agregados aqui em cima ainda não têm um cálculo real único — cada peça (Meta Ads, WhatsApp, leads) já é real dentro da própria aba. Ligue o Modo demonstração pra ver como fica quando tudo estiver somado."
-          cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
-          <GrowthCommandCenter data={demo} onOpenModule={open} />
-        </DataVeil>
+        {!realLoading && (
+          <DataVeil mode={panelMode}
+            title="Painel-resumo ainda sem dado real"
+            message="Receita, ROAS e funil agregados aqui em cima ainda não têm dado real — assim que houver leads, Instagram ou Meta Ads conectados, cada peça some aqui automaticamente. Ligue o Modo demonstração pra ver como fica quando tudo estiver somado."
+            cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+            <GrowthCommandCenter data={panelData} onOpenModule={open} />
+          </DataVeil>
+        )}
       </div>
 
       <div style={{ padding: '10px 32px 32px' }}>

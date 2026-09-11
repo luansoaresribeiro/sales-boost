@@ -80,14 +80,16 @@ function FunnelBar({ data }: { data: GrowthDemoData }) {
 
 export default function GrowthCommandCenter({ data, onOpenModule }: { data: GrowthDemoData; onOpenModule: (section: string) => void }) {
   const { kpis } = data
+  const dash = (v: number | null, fmt: (n: number) => string) => (v == null ? '—' : fmt(v))
+  const delta = (v: number | null) => (v == null ? undefined : fmtDelta(v))
 
   const tiles: Kpi[] = [
-    { label: 'Receita gerada (mês)', value: fmtBRL(kpis.revenue, true), delta: fmtDelta(kpis.revenueDelta), hint: 'atribuída às campanhas' },
-    { label: 'Leads capturados', value: fmtNum(kpis.leads), delta: fmtDelta(kpis.leadsDelta), onClick: () => onOpenModule('funil') },
-    { label: 'Conversão do funil', value: `${kpis.funnelConversion}%`, delta: fmtDelta(kpis.funnelConversionDelta), hint: 'lead → venda', onClick: () => onOpenModule('funil') },
-    { label: 'ROAS das campanhas', value: `${kpis.roas}x`, delta: fmtDelta(kpis.roasDelta), hint: `investido ${fmtBRL(kpis.adSpend, true)}`, onClick: () => onOpenModule('meta-ads') },
-    { label: 'Crescimento Instagram', value: fmtNum(kpis.igFollowers), delta: { text: `+${fmtNum(kpis.igFollowersGained)}`, positive: true }, hint: 'novos seguidores no mês', onClick: () => onOpenModule('tracking') },
-    { label: 'Engajamento do conteúdo', value: `${kpis.contentEngagement}%`, delta: fmtDelta(kpis.contentEngagementDelta), onClick: () => onOpenModule('content') },
+    { label: 'Receita gerada (mês)', value: dash(kpis.revenue, n => fmtBRL(n, true)), delta: delta(kpis.revenueDelta), hint: kpis.revenue == null ? 'Conecte o Meta Ads' : 'atribuída às campanhas' },
+    { label: 'Leads capturados', value: fmtNum(kpis.leads), delta: delta(kpis.leadsDelta), onClick: () => onOpenModule('funil') },
+    { label: 'Conversão do funil', value: dash(kpis.funnelConversion, n => `${n}%`), delta: delta(kpis.funnelConversionDelta), hint: 'lead → venda', onClick: () => onOpenModule('funil') },
+    { label: 'ROAS das campanhas', value: dash(kpis.roas, n => `${n}x`), delta: delta(kpis.roasDelta), hint: kpis.adSpend == null ? 'Conecte o Meta Ads' : `investido ${fmtBRL(kpis.adSpend, true)}`, onClick: () => onOpenModule('meta-ads') },
+    { label: 'Crescimento Instagram', value: dash(kpis.igFollowers, fmtNum), delta: kpis.igFollowersGained == null ? undefined : { text: `+${fmtNum(kpis.igFollowersGained)}`, positive: true }, hint: kpis.igFollowers == null ? 'Conecte o Instagram' : 'novos seguidores no período', onClick: () => onOpenModule('tracking') },
+    { label: 'Engajamento do conteúdo', value: dash(kpis.contentEngagement, n => `${n}%`), delta: delta(kpis.contentEngagementDelta), onClick: () => onOpenModule('content') },
   ]
 
   const grouped: CommandInsightKind[] = ['problema', 'oportunidade', 'acao_recomendada', 'acao_executada']
