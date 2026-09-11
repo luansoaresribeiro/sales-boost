@@ -369,10 +369,12 @@ Deno.serve(async (req) => {
 
           if (recentSnap?.collected_at && recentSnap.collected_at > sevenDaysAgo) { skipped++; continue }
 
-          await scanCompetitors(admin, apiKey, anthropicKey, apifyToken, company, 3)
+          const result = await scanCompetitors(admin, apiKey, anthropicKey, apifyToken, company, 3)
+          await logSync(admin, company.id, { ok: true, status: 'healthy', recordsSynced: result.mapped })
           scanned++
         } catch (e) {
           console.error(`map-competitors cron: company ${company.id} error:`, e)
+          await logSync(admin, company.id, { ok: false, status: 'error', error: e instanceof Error ? e.message : String(e) })
         }
       }
       return json({ ok: true, cron: true, scanned, skipped })
@@ -394,7 +396,14 @@ Deno.serve(async (req) => {
     // that are clamped, not rejected, so we clamp here too to keep it honest.
     const radiusKm = Math.min(50, Math.max(1, Math.round((rawBody.radius_km as number) ?? 3)))
 
-    const result = await scanCompetitors(admin, apiKey, anthropicKey, apifyToken, company as CompanyRow, radiusKm)
+    let result: { mapped: number; newCompetitorNames: string[] }
+    try {
+      result = await scanCompetitors(admin, apiKey, anthropicKey, apifyToken, company as CompanyRow, radiusKm)
+      await logSync(admin, company.id, { ok: true, status: 'healthy', recordsSynced: result.mapped })
+    } catch (e) {
+      await logSync(admin, company.id, { ok: false, status: 'error', error: e instanceof Error ? e.message : String(e) })
+      throw e
+    }
 
     return json({ mapped: result.mapped, verified_competitors: result.mapped, radius_km: radiusKm })
   } catch (err) {
@@ -404,4 +413,18 @@ Deno.serve(async (req) => {
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+}
+
+// Fase 1 do plano de arquitetura de sincronização — grava saúde/freshness
+// central (integration_sync_status). last_success_at só é tocado quando
+// ok=true, preservando a última sincronização boa mesmo quando esta falhou.
+async function logSync(admin: ReturnType<typeof createClient>, companyId: string, result: { ok: boolean; status: 'healthy' | 'error' | 'disconnected'; error?: string | null; recordsSynced?: number }) {
+  const now = new Date().toISOString()
+  const row: Record<string, unknown> = {
+    company_id: companyId, integration: 'competitors',
+    last_synced_at: now, status: result.status, last_error: result.error ?? null,
+    records_synced: result.recordsSynced ?? null, updated_at: now,
+  }
+  if (result.ok) row.last_success_at = now
+  try { await admin.from('integration_sync_status').upsert(row, { onConflict: 'company_id,integration' }) } catch { /* nunca derruba a sync por causa do log */ }
 }

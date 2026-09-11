@@ -186,6 +186,11 @@ Deno.serve(async (req) => {
           if (recentSnap?.collected_at && recentSnap.collected_at > sevenDaysAgo) { skipped++; continue }
 
           const r = await monitorCompanyCompetitors(admin, apifyToken, company.id, anthropicKey)
+          if (r.total > 0) {
+            await logSync(admin, company.id, r.monitored === r.total
+              ? { ok: true, status: 'healthy', recordsSynced: r.monitored }
+              : { ok: false, status: 'error', error: `${r.total - r.monitored} de ${r.total} concorrentes falharam`, recordsSynced: r.monitored })
+          }
           if (r.monitored > 0) {
             scanned++
             const prefs = (company.notification_prefs as Record<string, boolean> | null) ?? {}
@@ -218,6 +223,9 @@ Deno.serve(async (req) => {
     if (result.total === 0) {
       return json({ monitored: 0, message: 'Nenhum concorrente com Instagram identificado ainda. Rode "Mapear concorrentes" primeiro.' })
     }
+    await logSync(admin, company.id, result.monitored === result.total
+      ? { ok: true, status: 'healthy', recordsSynced: result.monitored }
+      : { ok: false, status: 'error', error: `${result.total - result.monitored} de ${result.total} concorrentes falharam`, recordsSynced: result.monitored })
 
     return json({ monitored: result.monitored, total: result.total, results: result.results })
   } catch (err) {
@@ -227,4 +235,18 @@ Deno.serve(async (req) => {
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+}
+
+// Fase 1 do plano de arquitetura de sincronização — grava saúde/freshness
+// central (integration_sync_status). last_success_at só é tocado quando
+// ok=true, preservando a última sincronização boa mesmo quando esta falhou.
+async function logSync(admin: ReturnType<typeof createClient>, companyId: string, result: { ok: boolean; status: 'healthy' | 'error' | 'disconnected'; error?: string | null; recordsSynced?: number }) {
+  const now = new Date().toISOString()
+  const row: Record<string, unknown> = {
+    company_id: companyId, integration: 'competitor_social',
+    last_synced_at: now, status: result.status, last_error: result.error ?? null,
+    records_synced: result.recordsSynced ?? null, updated_at: now,
+  }
+  if (result.ok) row.last_success_at = now
+  try { await admin.from('integration_sync_status').upsert(row, { onConflict: 'company_id,integration' }) } catch { /* nunca derruba a sync por causa do log */ }
 }

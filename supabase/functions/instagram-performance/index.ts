@@ -53,6 +53,21 @@ async function rehostCover(
     return null
   }
 }
+// Fase 1 do plano de arquitetura de sincronização — grava saúde/freshness
+// central (integration_sync_status), reutilizada pela UI e futuramente pelos
+// agentes. last_success_at só é tocado quando ok=true, preservando a última
+// sincronização boa mesmo quando esta rodada falhou.
+async function logSync(admin: ReturnType<typeof createClient>, companyId: string, result: { ok: boolean; status: 'healthy' | 'error' | 'disconnected'; error?: string | null; recordsSynced?: number }) {
+  const now = new Date().toISOString()
+  const row: Record<string, unknown> = {
+    company_id: companyId, integration: 'instagram',
+    last_synced_at: now, status: result.status, last_error: result.error ?? null,
+    records_synced: result.recordsSynced ?? null, updated_at: now,
+  }
+  if (result.ok) row.last_success_at = now
+  try { await admin.from('integration_sync_status').upsert(row, { onConflict: 'company_id,integration' }) } catch { /* nunca derruba a sync por causa do log */ }
+}
+
 // deno-lint-ignore no-explicit-any
 function igMetric(insights: any, name: string): number | null {
   const row = insights?.data?.find((d: any) => d.name === name)
@@ -83,6 +98,7 @@ Deno.serve(async (req) => {
     if (!company || company.user_id !== user.id) return json({ error: 'Forbidden' }, 403)
     if (!company.instagram_user_id || !company.instagram_access_token) return json({ connected: false })
     if (company.instagram_token_expires_at && new Date(company.instagram_token_expires_at) < new Date()) {
+      await logSync(admin, company_id, { ok: false, status: 'disconnected', error: 'Token expirado' })
       return json({ connected: false, expired: true })
     }
 
@@ -91,7 +107,11 @@ Deno.serve(async (req) => {
 
     // 1. Perfil
     const profile = await safeGet(`${IG}/me?fields=user_id,username,account_type,media_count,followers_count,follows_count,profile_picture_url&access_token=${token}`)
-    if (!profile || profile.error) return json({ connected: true, error: profile?.error?.message ?? 'Falha ao ler o perfil' })
+    if (!profile || profile.error) {
+      const errMsg = profile?.error?.message ?? 'Falha ao ler o perfil'
+      await logSync(admin, company_id, { ok: false, status: 'error', error: errMsg })
+      return json({ connected: true, error: errMsg })
+    }
     const followers = num(profile.followers_count)
 
     // 2. Insights da conta (best-effort — depende de permissão/tamanho da conta)
@@ -173,6 +193,9 @@ Deno.serve(async (req) => {
         company_id, captured_for: today, total,
         growth: growthComp, reach: reachComp, engagement: engComp, content: contentComp, consistency: consistencyComp,
       }, { onConflict: 'company_id,captured_for' })
+      await logSync(admin, company_id, { ok: true, status: 'healthy', recordsSynced: content.length })
+    } else {
+      await logSync(admin, company_id, { ok: false, status: 'error', error: 'Falha ao buscar mídias do Instagram' })
     }
     if (content.length) {
       await admin.from('instagram_content_performance').upsert(content.map(c => ({
