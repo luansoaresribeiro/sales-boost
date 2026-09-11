@@ -7,12 +7,14 @@ const cors = {
 type SupaClient = ReturnType<typeof createClient>
 
 interface ContentRow { id: string; company_id: string; idea: string | null; caption: string | null; image_url: string | null }
-interface Company { id: string; user_id: string; business_type: string | null }
+interface Company { id: string; user_id: string; business_type: string | null; business_description: string | null }
 
-// Monta o prompt visual a partir da ideia do post + tipo do negócio.
-function imagePrompt(content: ContentRow, businessType: string | null): string {
-  const evoke = (content.idea ?? content.caption ?? '').slice(0, 300)
-  return `Professional social media photo for a Brazilian small business (${businessType ?? 'negócio local'}). Commercial photography, warm natural lighting, polished and inviting, no people, no text, no logos, no watermark. Evokes: ${evoke}`
+// Monta o prompt visual a partir da ideia do post + o que o negócio
+// realmente faz (onboarding — sempre real, não depende do Marketing AI
+// estar configurado).
+function imagePrompt(content: ContentRow, businessType: string | null, businessDescription: string | null): string {
+  const evoke = [content.idea, content.caption].filter(Boolean).join('. ').slice(0, 600) || 'foto do negócio'
+  return `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}. Commercial photography, warm natural lighting, polished and inviting, no text, no logos, no watermark. The photo must clearly and specifically depict this exact post concept, not a generic stock photo: ${evoke}`
 }
 
 // Chama a generate-image (OpenAI) com a service key. Devolve URLs.
@@ -58,7 +60,7 @@ Deno.serve(async (req) => {
     if (!content) return json({ error: 'Conteúdo não encontrado' }, 404)
 
     // Autorização: o dono do negócio (user_id da empresa) ou um owner da plataforma.
-    const { data: companyRow } = await admin.from('companies').select('id, user_id, business_type').eq('id', content.company_id).maybeSingle()
+    const { data: companyRow } = await admin.from('companies').select('id, user_id, business_type, business_description').eq('id', content.company_id).maybeSingle()
     const company = companyRow as Company | null
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
     if (!trusted && company.user_id !== user!.id) {
@@ -73,7 +75,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, image_url: url })
     }
 
-    const prompt = imagePrompt(content, company.business_type)
+    const prompt = imagePrompt(content, company.business_type, company.business_description)
 
     if (action === 'generate') {
       const [url] = await genImages(supabaseUrl, serviceKey, prompt, 1)

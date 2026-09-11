@@ -174,22 +174,36 @@ ${formats.length ? `\nFormatos disponíveis (prefira sugerir um destes quando en
 ${lib.length ? `\nRecursos na biblioteca (hooks/frameworks já cadastrados): ${lib.map(l => l.title).slice(0, 20).join(', ')}` : ''}
 
 Gere 6 IDEIAS de post FORTES e específicas desse negócio (nada genérico). Cada ideia deve poder virar um post real.
+Varie os formatos entre as 6 ideias — nem toda ideia precisa de carrossel; uma foto única bem pensada costuma performar tão bem quanto, e é mais rápida de aprovar.
 ${focus ? `IMPORTANTE: gere TODAS as 6 ideias para o formato "${focus}".` : ''}
 "module" é onde a ideia se encaixa: "organico" (feed), "stories" ou "campanhas" (mídia paga).
-"format" é o formato sugerido (ex: carrossel, reel, foto, story, tweet, infográfico...).
+"format" é o formato sugerido — use EXATAMENTE um destes rótulos, nunca invente outro nem combine dois: "foto", "carrossel", "reel", "story".
 Retorne APENAS um JSON array, sem texto antes ou depois:
-[{"title":"título curto da ideia","hook":"o gancho/primeira frase que prende","angle":"o ângulo em 1 frase","format":"carrossel","module":"organico","rationale":"por que essa ideia faz sentido agora, citando o insight/pilar/tendência/performance real"}]`
+[{"title":"título curto da ideia","hook":"o gancho/primeira frase que prende","angle":"o ângulo em 1 frase","format":"foto"|"carrossel"|"reel"|"story","module":"organico","rationale":"por que essa ideia faz sentido agora, citando o insight/pilar/tendência/performance real"}]`
 
   const ideas = parseArr(await callClaude(anthropicKey, prompt)).slice(0, 6)
   if (ideas.length === 0) return 0
 
   const MODS = ['organico', 'stories', 'campanhas']
+  const FORMATS = ['foto', 'carrossel', 'reel', 'story']
+  // Rede de segurança: mesmo pedindo só esses 4 rótulos, garante que nunca
+  // sobra um formato livre/misto que o creative-generate não saiba honrar —
+  // o Diretor Criativo lá na frente precisa confiar nesse valor.
+  const normalizeFormat = (f: unknown): string | null => {
+    const s = String(f ?? '').toLowerCase().trim()
+    if (FORMATS.includes(s)) return s
+    if (s.includes('carrossel')) return 'carrossel'
+    if (s.includes('reel') || s.includes('vídeo') || s.includes('video')) return 'reel'
+    if (s.includes('story') || s.includes('stories')) return 'story'
+    if (s.includes('foto') || s.includes('post') || s.includes('imagem')) return 'foto'
+    return null
+  }
   const rows = ideas.map(i => ({
     company_id: company.id,
     title: String(i.title ?? 'Ideia').slice(0, 160),
     hook: i.hook ? String(i.hook) : null,
     angle: i.angle ? String(i.angle) : null,
-    format: i.format ? String(i.format) : null,
+    format: normalizeFormat(i.format),
     module: focus ?? (MODS.includes(String(i.module)) ? String(i.module) : 'organico'),
     rationale: i.rationale ? String(i.rationale) : null,
     status: 'new',

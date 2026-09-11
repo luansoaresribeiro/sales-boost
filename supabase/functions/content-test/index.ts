@@ -72,12 +72,12 @@ function parseJsonArray<T>(raw: string): T[] {
 
 // Mesma função central de imagem do resto da plataforma (OpenAI, com fallback
 // de chave no _app_config). Defensivo: sem imagem nunca quebra o teste.
-async function generateImage(businessType: string | null, idea: string): Promise<string | null> {
+async function generateImage(businessType: string | null, idea: string, businessDescription?: string | null): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')
   if (!supabaseUrl || !serviceKey) return null
   try {
-    const prompt = `Professional social media photo for a Brazilian small business (${businessType ?? 'negócio'}). Commercial photography, warm natural lighting, polished and inviting, no people, no text, no logos, no watermark. Evokes: ${idea}`
+    const prompt = `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}. Commercial photography, warm natural lighting, polished and inviting, no text, no logos, no watermark. The photo must clearly and specifically depict this exact post concept, not a generic stock photo: ${idea}`
     const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
       method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, size: '1024x1024' }),
@@ -197,7 +197,7 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       }).select('id').single()
       if (insErr) return json({ error: insErr.message }, 500)
 
-      const url = await generateImage(company.business_type, idea.idea)
+      const url = await generateImage(company.business_type, idea.idea, company.business_description)
       if (url) await admin.from('marketing_ai_test_content').update({ image_url: url }).eq('id', inserted.id)
 
       return json({ ok: true, id: inserted.id, image_generated: !!url })
@@ -234,7 +234,7 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
 
       if (weakest === 'visual') {
         // ponto fraco é o visual → regenera SÓ a imagem, mantém o texto
-        const url = await generateImage(company.business_type, t.idea ?? t.caption ?? '')
+        const url = await generateImage(company.business_type, t.idea ?? t.caption ?? '', company.business_description)
         if (url) await admin.from('marketing_ai_test_content').update({ image_url: url }).eq('id', testId)
       } else {
         // ponto fraco é texto → reescreve legenda/hook/CTA guiado pelo feedback, mantém a imagem
