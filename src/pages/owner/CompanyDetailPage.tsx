@@ -33,7 +33,6 @@ interface CompanyDetail {
   google_review_count: number | null
   telegram_chat_id: string | null
   business_dna: BusinessDna | null
-  jarvis_enabled: boolean
   agent_enabled: boolean
   marketing_ai_enabled: boolean
   created_at: string
@@ -66,7 +65,6 @@ const EVENT_META: Record<string, { icon: string; label: string }> = {
   post_approved: { icon: '✅', label: 'Aprovou um post' },
   post_rejected: { icon: '🗑️', label: 'Descartou um post' },
   agent_message_sent: { icon: '💬', label: 'Falou com o agente' },
-  jarvis_opened: { icon: '🎙️', label: 'Abriu o Jarvis' },
   channel_connected: { icon: '🔗', label: 'Conectou um canal' },
 }
 const eventMeta = (e: string) => EVENT_META[e] ?? { icon: '•', label: e.replace(/_/g, ' ') }
@@ -87,7 +85,6 @@ export default function CompanyDetailPage() {
 
   const [form, setForm] = useState({ business_name: '', business_type: '', city: '', goal: '', plan: '' })
   const [dna, setDna] = useState<BusinessDna>({})
-  const [jarvisEnabled, setJarvisEnabled] = useState(false)
   const [marketingAiEnabled, setMarketingAiEnabled] = useState(true)
   const [togglingFeature, setTogglingFeature] = useState(false)
   const [newValue, setNewValue] = useState('')
@@ -144,7 +141,6 @@ export default function CompanyDetailPage() {
           plan: data.company.plan ?? '',
         })
         setDna(data.company.business_dna ?? {})
-        setJarvisEnabled(!!data.company.jarvis_enabled)
         setMarketingAiEnabled(data.company.marketing_ai_enabled ?? true)
 
         const ma = data.marketing_ai
@@ -175,10 +171,9 @@ export default function CompanyDetailPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const toggleFeature = async (feature: 'jarvis_enabled' | 'marketing_ai_enabled', value: boolean) => {
+  const toggleFeature = async (feature: 'marketing_ai_enabled', value: boolean) => {
     setTogglingFeature(true)
-    if (feature === 'jarvis_enabled') setJarvisEnabled(value)
-    else setMarketingAiEnabled(value)
+    setMarketingAiEnabled(value)
     await fetch(`${SUPABASE_URL}/functions/v1/owner-company-activity`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${session!.access_token}`, 'Content-Type': 'application/json' },
@@ -455,19 +450,12 @@ export default function CompanyDetailPage() {
           <div style={{ fontSize: '11px', color: MUTED, marginBottom: '16px', lineHeight: 1.5 }}>
             Liga/desliga na hora — o que estiver desligado some do menu do dashboard dessa empresa (a página continua existindo, só não aparece no menu).
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 14px', borderRadius: '9px', border: `1px solid ${marketingAiEnabled ? 'rgba(255,109,41,0.3)' : BORDER}`, background: marketingAiEnabled ? 'rgba(255,109,41,0.05)' : 'rgba(255,255,255,0.02)', cursor: 'pointer', gridColumn: '1 / -1' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 14px', borderRadius: '9px', border: `1px solid ${marketingAiEnabled ? 'rgba(255,109,41,0.3)' : BORDER}`, background: marketingAiEnabled ? 'rgba(255,109,41,0.05)' : 'rgba(255,255,255,0.02)', cursor: 'pointer' }}>
               <input type="checkbox" checked={marketingAiEnabled} disabled={togglingFeature} onChange={e => toggleFeature('marketing_ai_enabled', e.target.checked)} style={{ width: '16px', height: '16px', accentColor: ORANGE }} />
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: 'white' }}>✨ Marketing AI <span style={{ fontSize: '9.5px', fontWeight: 700, color: ORANGE, border: '1px solid rgba(255,109,41,0.4)', borderRadius: '99px', padding: '1px 7px', marginLeft: '4px' }}>PRINCIPAL</span></div>
                 <div style={{ fontSize: '10.5px', color: MUTED }}>O agente principal (Growth OS). Desligado, o cliente cai em Atividades.</div>
-              </div>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 14px', borderRadius: '9px', border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.02)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={jarvisEnabled} disabled={togglingFeature} onChange={e => toggleFeature('jarvis_enabled', e.target.checked)} style={{ width: '16px', height: '16px', accentColor: ORANGE }} />
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'white' }}>🎙️ Jarvis</div>
-                <div style={{ fontSize: '10.5px', color: MUTED }}>Assistente de voz</div>
               </div>
             </label>
           </div>

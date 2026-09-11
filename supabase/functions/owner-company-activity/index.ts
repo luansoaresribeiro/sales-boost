@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
 
     // Update company settings (owner edit)
     if (action === 'update' && updates) {
-      const allowed = ['business_name', 'business_type', 'city', 'goal', 'plan', 'business_dna', 'jarvis_enabled', 'agent_enabled', 'marketing_ai_enabled']
+      const allowed = ['business_name', 'business_type', 'city', 'goal', 'plan', 'business_dna', 'agent_enabled', 'marketing_ai_enabled']
       const safe: Record<string, unknown> = {}
       for (const key of allowed) {
         if (key in updates) safe[key] = updates[key]
@@ -48,11 +48,18 @@ Deno.serve(async (req) => {
     // configura mais isso em /dashboard/settings. RLS de marketing_ai_config
     // só deixa o dono da empresa (client) gravar direto, então o owner passa
     // por aqui (service role) sempre. Só grava os campos operacionais vindos
-    // da UI — brand_voice/target_audience são DERIVADOS do Business DNA da
-    // empresa (fonte única, evita pedir a mesma coisa duas vezes), nunca
-    // vêm do formulário.
+    // da UI. target_audience é DERIVADO do Business DNA (ninguém mais grava
+    // ali, então é seguro sempre sincronizar). brand_voice também nasce do
+    // Business DNA, mas o cliente pode sobrescrever pelo Kit da Marca
+    // (BrandKit.tsx grava direto em marketing_ai_config.brand_voice, com
+    // base em fotos reais) — por isso só usamos o valor do Business DNA
+    // como SEED inicial, nunca sobrescrevendo um valor real que o cliente já
+    // tenha definido.
     if (action === 'update_marketing_ai' && marketing_ai) {
-      const { data: company } = await admin.from('companies').select('business_dna').eq('id', company_id).maybeSingle()
+      const [{ data: company }, { data: existingCfg }] = await Promise.all([
+        admin.from('companies').select('business_dna').eq('id', company_id).maybeSingle(),
+        admin.from('marketing_ai_config').select('brand_voice').eq('company_id', company_id).maybeSingle(),
+      ])
       const dna = (company?.business_dna as { brand_voice?: string; target_audience?: string } | null) ?? {}
 
       const operationalKeys = ['agent_name', 'posting_frequency', 'preferred_content_types', 'content_pillars', 'marketing_goals', 'competitors']
@@ -60,7 +67,7 @@ Deno.serve(async (req) => {
       for (const key of operationalKeys) {
         if (key in marketing_ai) payload[key] = marketing_ai[key]
       }
-      payload.brand_voice = dna.brand_voice ?? null
+      if (!existingCfg?.brand_voice) payload.brand_voice = dna.brand_voice ?? null
       payload.target_audience = dna.target_audience ?? null
       payload.updated_at = new Date().toISOString()
 
@@ -72,7 +79,7 @@ Deno.serve(async (req) => {
     // Fetch company detail + agent messages + telegram conversations + client diary
     const [companyRes, messagesRes, telegramRes, marketingAiRes, activityRes] = await Promise.all([
       admin.from('companies')
-        .select('id, business_name, business_type, city, goal, plan, instagram_url, website_url, google_rating, google_review_count, telegram_chat_id, business_dna, jarvis_enabled, agent_enabled, marketing_ai_enabled, created_at')
+        .select('id, business_name, business_type, city, goal, plan, instagram_url, website_url, google_rating, google_review_count, telegram_chat_id, business_dna, agent_enabled, marketing_ai_enabled, created_at')
         .eq('id', company_id)
         .single(),
       admin.from('agent_messages')
