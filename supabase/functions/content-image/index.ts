@@ -12,7 +12,7 @@ interface Company { id: string; user_id: string; business_type: string | null }
 // Monta o prompt visual a partir da ideia do post + tipo do negócio.
 function imagePrompt(content: ContentRow, businessType: string | null): string {
   const evoke = (content.idea ?? content.caption ?? '').slice(0, 300)
-  return `Professional social media photo for a Brazilian small business (${businessType ?? 'negócio local'}). Commercial photography, warm natural lighting, appetizing and inviting, no people, no text, no logos, no watermark. Evokes: ${evoke}`
+  return `Professional social media photo for a Brazilian small business (${businessType ?? 'negócio local'}). Commercial photography, warm natural lighting, polished and inviting, no people, no text, no logos, no watermark. Evokes: ${evoke}`
 }
 
 // Chama a generate-image (OpenAI) com a service key. Devolve URLs.

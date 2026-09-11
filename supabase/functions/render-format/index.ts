@@ -234,7 +234,7 @@ Deno.serve(async (req) => {
     if (template === 'photo' && !bgUrl && body.generate_bg) {
       const palette = (brand.primary ? `Brand colors ${[brand.primary, brand.primary2, brand.accent].filter(Boolean).join(', ')}.` : '')
       const subj = String(body.bg_prompt ?? subject ?? fields.headline ?? 'the business')
-      bgUrl = await generateBg(`Professional social media background photo. ${subj}. ${palette} Warm natural lighting, appetizing, room at the bottom for text overlay, no people, no text, no logos, no watermark.`)
+      bgUrl = await generateBg(`Professional social media background photo. ${subj}. ${palette} Warm natural lighting, polished, room at the bottom for text overlay, no people, no text, no logos, no watermark.`)
     }
     const bgData = bgUrl ? await toDataUri(bgUrl) : null
     const logoData = template === 'photo' && brand.logoUrl ? await toDataUri(brand.logoUrl) : null

@@ -71,7 +71,7 @@ async function generateImage(businessType: string | null, idea: string, visualSy
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')
   if (!supabaseUrl || !serviceKey) return null
   try {
-    const prompt = `Professional social media photo for a Brazilian small business (${businessType ?? 'negócio'}).${visualSystem ? ` Visual style: ${visualSystem}.` : ''}${brandStyle ? ` ${brandStyle}` : ''} Commercial photography, warm natural lighting, appetizing and inviting, no people, no text, no logos, no watermark. Evokes: ${idea}`
+    const prompt = `Professional social media photo for a Brazilian small business (${businessType ?? 'negócio'}).${visualSystem ? ` Visual style: ${visualSystem}.` : ''}${brandStyle ? ` ${brandStyle}` : ''} Commercial photography, warm natural lighting, polished and inviting, no people, no text, no logos, no watermark. Evokes: ${idea}`
     const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
       method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, size: '1024x1024' }),
