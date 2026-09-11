@@ -1,7 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { getTrialInfo } from './lib/trialState.ts'
 import './lib/analytics' // inicializa o PostHog antes da app renderizar
 import './lib/facebookSdk' // carrega o Facebook SDK (JS) — exigência da Meta
 import './index.css'
@@ -22,6 +21,7 @@ import OpportunitiesPage from './pages/dashboard/OpportunitiesPage.tsx'
 import MarketingAiHubPage from './pages/dashboard/MarketingAiHubPage.tsx'
 import BusinessProgressPage from './pages/dashboard/BusinessProgressPage.tsx'
 import TrialSummaryPage from './pages/dashboard/TrialSummaryPage.tsx'
+import AccessBlockedPage from './pages/dashboard/AccessBlockedPage.tsx'
 import MarketingAiSectionPage from './pages/dashboard/MarketingAiSectionPage.tsx'
 import ApprovalsPage from './pages/dashboard/ApprovalsPage.tsx'
 import ReportPage from './pages/dashboard/ReportPage.tsx'
@@ -57,7 +57,7 @@ function DashboardIndex() {
 
 function ClientRoute({ children }: { children: React.ReactNode }) {
   const { user, role, loading } = useAuth()
-  const { company, loading: companyLoading } = useCompany()
+  const { company, access, loading: companyLoading } = useCompany()
   const location = useLocation()
   if (loading) return <Spinner />
   if (!user) return <Navigate to="/login" replace />
@@ -67,12 +67,14 @@ function ClientRoute({ children }: { children: React.ReactNode }) {
   // place that gate is enforced, so it can't be skipped regardless of how
   // the account was created (signup, magic link, abandoned onboarding...).
   if (!company) return <Navigate to="/onboarding" replace />
-  // Trial acabou (ou foi cancelado) e não assinou — manda pra tela de
-  // resumo/conversão em vez do dashboard normal. Nunca apaga nada, só
-  // bloqueia o acesso até decidir continuar.
-  const trial = getTrialInfo(company)
-  if (trial.isBlocked && !location.pathname.startsWith('/dashboard/trial') && !location.pathname.startsWith('/dashboard/settings')) {
-    return <Navigate to="/dashboard/trial" replace />
+  // Acesso negado — mesma função central (company_access_status) que o
+  // botão Liberar/Bloquear do Owner usa, então os dois nunca discordam.
+  // access===null só acontece enquanto ainda está carregando (companyLoading
+  // já cobre isso) ou se a chamada falhou — nesse caso não bloqueia (falha
+  // aberta), pra um erro de rede não trancar um cliente de verdade fora.
+  const exempt = location.pathname.startsWith('/dashboard/trial') || location.pathname.startsWith('/dashboard/settings') || location.pathname.startsWith('/dashboard/access-blocked')
+  if (access && !access.granted && !exempt) {
+    return <Navigate to={access.source === 'blocked' ? '/dashboard/access-blocked' : '/dashboard/trial'} replace />
   }
   return <>{children}</>
 }
@@ -126,6 +128,7 @@ function RouterRoot() {
         <Route path="marketing-ai/:section" element={<MarketingAiSectionPage />} />
         <Route path="progresso" element={<BusinessProgressPage />} />
         <Route path="trial" element={<TrialSummaryPage />} />
+        <Route path="access-blocked" element={<AccessBlockedPage />} />
         <Route path="oportunidades" element={<OpportunitiesPage />} />
         <Route path="concorrentes" element={<Navigate to="/dashboard/marketing-ai/competitors" replace />} />
         <Route path="aprovacoes" element={<ApprovalsPage />} />
