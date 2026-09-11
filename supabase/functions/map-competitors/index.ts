@@ -26,6 +26,18 @@ const BT_CONFIG: Record<string, BTEntry> = {
   'Outro':                 { types: ['establishment'],      keyword: '',                                  aiLabel: 'local business',                         excludeGoogleTypes: ['lodging', 'hotel'] },
 }
 
+// business_type é texto livre (cadastro dinâmico, "Outro" aceita qualquer
+// segmento) — pra tipos fora da lista curada acima, usa o próprio texto
+// digitado como keyword da busca no Google Places (busca fuzzy, funciona bem
+// com texto livre) em vez de cair sempre no genérico sem palavra-chave
+// nenhuma. Funciona pra qualquer segmento novo sem precisar cadastrar um por um.
+function configFor(businessType: string | null): BTEntry {
+  const known = BT_CONFIG[businessType ?? '']
+  if (known) return known
+  if (!businessType) return BT_CONFIG['Outro']
+  return { types: ['establishment'], keyword: businessType, aiLabel: businessType, excludeGoogleTypes: ['lodging', 'hotel'] }
+}
+
 interface PlaceDetails {
   place_id: string
   name: string
@@ -119,7 +131,7 @@ async function verifyCompetitors(
 ): Promise<Set<string>> {
   if (!anthropicKey || places.length === 0) return new Set(places.map(p => p.place_id))
 
-  const cfg = BT_CONFIG[businessType] ?? BT_CONFIG['Outro']
+  const cfg = configFor(businessType)
   const list = places.map(p => ({
     id: p.place_id,
     name: p.name,
@@ -193,7 +205,7 @@ async function scanCompetitors(
   if (details.status !== 'OK') throw new Error(`Google Places error: ${details.status}`)
 
   const { lat, lng } = details.result.geometry.location
-  const cfg = BT_CONFIG[company.business_type ?? ''] ?? BT_CONFIG['Outro']
+  const cfg = configFor(company.business_type)
   const keywordParam = cfg.keyword ? `&keyword=${encodeURIComponent(cfg.keyword)}` : ''
 
   // Cada busca por tipo marca se REALMENTE funcionou (OK/ZERO_RESULTS) ou se

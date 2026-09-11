@@ -27,11 +27,27 @@ const HASHTAG_BY_TYPE: Record<string, string> = {
   'Clínica / Consultório': 'clinica', 'Academia / Fitness': 'academia', 'Serviços': 'empreendedorismo',
   'Serviços Gerais': 'empreendedorismo',
 }
+const PT_CONNECTORS = /\b(e|de|do|da|dos|das|em)\b/g
+
+// business_type é texto livre (cadastro dinâmico, "Outro" aceita qualquer
+// segmento) — pra tipos fora da lista curada acima, deriva o hashtag do
+// próprio texto digitado (ex: "Logística" -> "logistica") em vez de cair
+// sempre no genérico "empreendedorismo". Funciona pra qualquer segmento
+// novo sem precisar cadastrar um por um.
+function hashtagFor(businessType: string | null): string {
+  const known = HASHTAG_BY_TYPE[businessType ?? '']
+  if (known) return known
+  if (!businessType) return 'empreendedorismo'
+  const slug = businessType
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(PT_CONNECTORS, '').replace(/[^a-z0-9]+/g, '')
+  return slug || 'empreendedorismo'
+}
 
 interface ViralPost { caption: string; likesCount: number; commentsCount: number; ownerUsername: string }
 
 async function fetchViralPosts(apifyToken: string, businessType: string | null): Promise<ViralPost[]> {
-  const tag = HASHTAG_BY_TYPE[businessType ?? ''] ?? 'empreendedorismo'
+  const tag = hashtagFor(businessType)
   try {
     const url = `https://api.apify.com/v2/acts/apify~instagram-hashtag-scraper/run-sync-get-dataset-items?token=${apifyToken}&timeout=45&memory=256`
     const res = await fetch(url, {
