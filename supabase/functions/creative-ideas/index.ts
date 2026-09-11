@@ -19,7 +19,7 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null }
+interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null }
 
 const HASHTAG_BY_TYPE: Record<string, string> = {
   'Restaurante / Food': 'restaurante', 'Bar & Pub': 'barpub', 'Varejo / E-commerce': 'lojavirtual',
@@ -164,7 +164,8 @@ async function generateForCompany(
   if (viral.length > 0) await saveRealTrends(admin, anthropicKey, company.id, company.business_type, viral).catch(() => 0)
 
   const prompt = `Você é o CREATIVE AGENT (diretor de ideias) da agência de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
-Voz da marca: ${cfg.brand_voice ?? 'não definida'}. Tom: ${cfg.tone ?? 'não definido'}. Público: ${cfg.target_audience ?? 'não definido'}.
+${company.business_description ? `O que o negócio faz de verdade: ${company.business_description}.` : ''}
+Voz da marca: ${cfg.brand_voice ?? 'não definida'}. Tom: ${cfg.tone ?? 'não definido'}. Público: ${cfg.target_audience ?? company.ideal_customer ?? 'não definido'}.
 Pilares: ${(cfg.content_pillars ?? []).join(', ') || 'não definidos'}. Objetivo: ${cfg.marketing_goals ?? company.goal ?? 'crescer e engajar'}.
 ${insights.length ? `\nInsights reais abertos (use-os como gatilho das ideias):\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
 ${ownTop.length ? `\nO que JÁ FUNCIONOU DE VERDADE no seu próprio Instagram (dados reais de performance dos últimos 90 dias, do melhor pro pior — priorize pilar/formato parecido com o que engaja mais aqui):\n${ownTop.map(o => `- [${o.pillar ?? 'sem pilar'} · ${o.media_type ?? '—'}] engajamento ${o.engagement_rate ?? 0}% (${o.likes ?? 0} curtidas, ${o.comments ?? 0} comentários): "${(o.caption ?? '').slice(0, 120)}"`).join('\n')}` : ''}
@@ -215,7 +216,7 @@ Deno.serve(async (req) => {
     if (isCron) {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
       const { data: companies } = await admin.from('companies')
-        .select('id, business_name, business_type, city, goal, telegram_chat_id, notification_prefs')
+        .select('id, business_name, business_type, city, goal, business_description, ideal_customer, telegram_chat_id, notification_prefs')
         .eq('active', true)
 
       let generated = 0, skipped = 0
@@ -250,7 +251,7 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser()
     if (!user) return json({ error: 'Unauthorized' }, 401)
 
-    const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal').eq('user_id', user.id).maybeSingle()
+    const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal, business_description, ideal_customer').eq('user_id', user.id).maybeSingle()
     const company = companyRow as Company | null
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
 
