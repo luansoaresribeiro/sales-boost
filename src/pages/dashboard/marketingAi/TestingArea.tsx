@@ -138,10 +138,13 @@ export function BriefBlock({ post }: { post: TestPost }) {
 
 export const CAT_LABEL: Record<string, string> = {
   creative: 'Criativo', novelty: 'Novidade', brand: 'Marca', hook: 'Hook', cta: 'CTA',
-  visual: 'Visual', engagement: 'Engaj.', conversion: 'Conversão', readability: 'Leitura',
+  visual: 'Visual', engagement: 'Engaj.', conversion: 'Conversão', readability: 'Leitura', grammar: 'Gramática',
 }
 export const CAT_ORDER = ['creative', 'novelty', 'brand', 'hook', 'cta', 'visual', 'engagement', 'conversion', 'readability']
 export const scoreColor = (n: number) => (n >= 90 ? GREEN : n >= 75 ? '#FBBF24' : '#f87171')
+// Gramática é ELIMINATÓRIA (única coisa que bloqueia o Vault) — as outras 9
+// dimensões acima são só consultivas, já que nenhum post real batia 90+ nelas.
+export const grammarOk = (post: TestPost) => post.scores?.grammar != null && post.scores.grammar.score === 100
 
 export async function callContentTest(token: string, payload: Record<string, unknown>) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/content-test`, {
@@ -154,14 +157,29 @@ export async function callContentTest(token: string, payload: Record<string, unk
   return data as { id?: string; quality_score?: number; regenerated?: string; image_generated?: boolean }
 }
 
-// Grade de notas do júri: nota final ponderada + cada dimensão (comentário no hover).
+// Grade de notas do júri: nota final ponderada (consultiva) + cada dimensão
+// (comentário no hover). Gramática vem separada, em destaque — é a única que
+// bloqueia o Vault.
 export function ScoreBreakdown({ post }: { post: TestPost }) {
   if (post.quality_score == null || !post.scores) return null
+  const grammar = post.scores.grammar
   return (
     <div style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '8px', padding: '9px 10px' }}>
+      {grammar && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '8px', padding: '6px 8px', borderRadius: '6px',
+          background: grammar.score === 100 ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.1)',
+          border: `1px solid ${grammar.score === 100 ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.35)'}`,
+        }}>
+          <span style={{ fontSize: '11px' }}>{grammar.score === 100 ? '✓' : '⚠️'}</span>
+          <span style={{ fontSize: '10.5px', color: grammar.score === 100 ? GREEN : '#f87171', lineHeight: 1.4 }}>
+            {grammar.score === 100 ? 'Sem erro de gramática/ortografia' : grammar.comment || 'Erro de gramática/ortografia encontrado'}
+          </span>
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '7px', marginBottom: '7px' }}>
         <span style={{ fontSize: '22px', fontWeight: 800, color: scoreColor(post.quality_score), lineHeight: 1 }}>{post.quality_score}</span>
-        <span style={{ fontSize: '10px', color: MUTED }}>/100 · nota de qualidade</span>
+        <span style={{ fontSize: '10px', color: MUTED }}>/100 · nota de qualidade (referência, não bloqueia)</span>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
         {CAT_ORDER.filter(c => post.scores![c]).map(c => (
@@ -176,8 +194,9 @@ export function ScoreBreakdown({ post }: { post: TestPost }) {
 }
 
 // Área de Testes (QC): gera com o mesmo motor da automação, avalia com o júri
-// (nota ponderada), e roteia: passou (>=90) → Vault; reprovou → regenera só o
-// componente fraco. Isolado da fila principal; só publica quando o dono manda.
+// (nota ponderada, consultiva) e checa gramática/ortografia (eliminatória):
+// sem erro de língua → Vault; com erro → regenera o texto. Isolado da fila
+// principal; só publica quando o dono manda.
 export default function TestingArea({ companyId, kind, onVaultChange }: { companyId: string; kind: Kind; onVaultChange?: () => void }) {
   const { session } = useAuth()
   const token = session?.access_token ?? ''
@@ -253,7 +272,7 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
         <div style={{ maxWidth: '600px' }}>
           <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🧪 Área de Testes + Controle de Qualidade</div>
           <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55 }}>
-            Gera com o <strong>mesmo motor</strong> da automação e passa por um <strong>júri de revisores</strong> que dá uma nota de qualidade. <strong>Passou (≥90)</strong> → vai pro Vault. <strong>Reprovou</strong> → regenera só o ponto fraco. Só do Vault é que você publica.
+            Gera com o <strong>mesmo motor</strong> da automação e passa por um <strong>júri de revisores</strong>. <strong>Sem erro de gramática/ortografia</strong> → vai pro Vault. As notas de criativo, hook, etc. ficam visíveis como referência, mas não bloqueiam mais o envio. Só do Vault é que você publica.
           </div>
         </div>
         <button onClick={generate} disabled={generating || !token}
@@ -303,7 +322,7 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
                         style={{ flex: 1, padding: '8px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${BORDER}`, borderRadius: '8px', color: 'white', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
                         {busy ? '...' : 'Avaliar'}
                       </button>
-                    ) : t.quality_score >= 90 ? (
+                    ) : grammarOk(t) ? (
                       <button onClick={() => act(t.id, { action: 'to_vault' }, 'Enviado pro Vault ✓')} disabled={busy}
                         style={{ flex: 1, padding: '8px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: '8px', color: GREEN, fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
                         {busy ? '...' : '⭐ Enviar pro Vault'}
@@ -311,7 +330,7 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
                     ) : (
                       <button onClick={() => act(t.id, { action: 'regenerate' })} disabled={busy}
                         style={{ flex: 1, padding: '8px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '8px', color: '#FBBF24', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-                        {busy ? 'Regenerando...' : '🔁 Regenerar fraco'}
+                        {busy ? 'Regenerando...' : '🔁 Corrigir erro de língua'}
                       </button>
                     )}
                     <button onClick={() => discard(t.id)} disabled={busy}

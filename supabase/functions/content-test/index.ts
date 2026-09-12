@@ -100,10 +100,16 @@ async function loadConfig(admin: SupaClient, company: Company): Promise<Config> 
 // ── Testing Pipeline: júri de revisores ────────────────────────────────────
 // Cada dimensão recebe nota 0-100 + comentário. A nota final é PONDERADA pelos
 // pesos abaixo (somam 100%). readability é avaliada e mostrada, mas não pesa.
+// Essas 9 dimensões são CONSULTIVAS: guiam o dono, mas não bloqueiam o Vault
+// (nenhum post real batia 90+ nelas — ver `grammar` abaixo pro que realmente
+// bloqueia).
 const SCORE_WEIGHTS: Record<string, number> = {
   creative: 0.20, novelty: 0.15, brand: 0.15, hook: 0.15, cta: 0.10, visual: 0.10, engagement: 0.10, conversion: 0.05,
 }
 const SCORE_CATS = ['creative', 'novelty', 'brand', 'hook', 'cta', 'visual', 'engagement', 'conversion', 'readability']
+// `grammar` é ELIMINATÓRIA: qualquer erro de português/ortografia/concordância
+// barra o Vault, direto — identidade de marca já é garantida pelos dados reais
+// do agente de dados, então o que falta checar aqui é só "o texto saiu certo".
 
 interface CatScore { score: number; comment: string }
 type Scores = Record<string, CatScore>
@@ -131,15 +137,19 @@ Post:
 
 Dimensões: creative (força criativa geral), novelty (originalidade vs clichê), brand (consistência com voz/público), hook (força da primeira linha), cta (clareza/persuasão da chamada), visual (adequação do conceito visual), engagement (potencial de curtidas/comentários/salvamentos), conversion (potencial de gerar lead/venda), readability (clareza/facilidade de leitura).
 
-Retorne APENAS um JSON: {"creative":{"score":0,"comment":""},"novelty":{"score":0,"comment":""},"brand":{"score":0,"comment":""},"hook":{"score":0,"comment":""},"cta":{"score":0,"comment":""},"visual":{"score":0,"comment":""},"engagement":{"score":0,"comment":""},"conversion":{"score":0,"comment":""},"readability":{"score":0,"comment":""}}`
+Além disso, revise ortografia, gramática, concordância e pontuação da legenda/hashtags/CTA com o rigor de um revisor de texto profissional — isso é ELIMINATÓRIO, então marque "ok":false para QUALQUER erro real, por menor que seja (não confunda com escolha de estilo/gíria proposital).
+
+Retorne APENAS um JSON: {"creative":{"score":0,"comment":""},"novelty":{"score":0,"comment":""},"brand":{"score":0,"comment":""},"hook":{"score":0,"comment":""},"cta":{"score":0,"comment":""},"visual":{"score":0,"comment":""},"engagement":{"score":0,"comment":""},"conversion":{"score":0,"comment":""},"readability":{"score":0,"comment":""},"grammar":{"ok":true,"issues":""}}`
 
   const raw = await callClaude(anthropicKey, prompt, 1200)
-  const parsed = parseJsonObject(raw)
+  const parsed = parseJsonObject(raw) as Record<string, { score?: number; comment?: string; ok?: boolean; issues?: string }>
   const scores: Scores = {}
   for (const cat of SCORE_CATS) {
     const s = Math.max(0, Math.min(100, Math.round(Number(parsed[cat]?.score ?? 0))))
     scores[cat] = { score: s, comment: String(parsed[cat]?.comment ?? '') }
   }
+  const grammarOk = parsed.grammar?.ok !== false
+  scores.grammar = { score: grammarOk ? 100 : 0, comment: String(parsed.grammar?.issues ?? '') }
   let quality = 0
   for (const [cat, w] of Object.entries(SCORE_WEIGHTS)) quality += (scores[cat]?.score ?? 0) * w
   return { scores, quality: Math.round(quality) }
@@ -230,22 +240,26 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       if (!t) return json({ error: 'Post de teste não encontrado' }, 404)
       const config = await loadConfig(admin, company)
       const scores = t.scores ?? {}
+      // gramática é eliminatória — se falhou, tem que consertar o TEXTO, nunca
+      // a imagem, mesmo que "visual" seja a dimensão ponderada mais fraca.
+      const grammarFailed = (scores.grammar?.score ?? 100) < 100
 
       // acha a categoria PONDERADA mais fraca (só as que entram na nota final)
       let weakest = 'creative'; let min = 101
       for (const cat of Object.keys(SCORE_WEIGHTS)) { const s = scores[cat]?.score ?? 100; if (s < min) { min = s; weakest = cat } }
 
-      if (weakest === 'visual') {
+      if (weakest === 'visual' && !grammarFailed) {
         // ponto fraco é o visual → regenera SÓ a imagem, mantém o texto
         const url = await generateImage(company.id, company.business_type, t.idea ?? t.caption ?? '', company.business_description, true)
         if (url) await admin.from('marketing_ai_test_content').update({ image_url: url }).eq('id', testId)
       } else {
-        // ponto fraco é texto → reescreve legenda/hook/CTA guiado pelo feedback, mantém a imagem
-        const weak = Object.entries(scores).filter(([, v]) => (v as CatScore).score < 75).map(([k, v]) => `- ${k}: ${(v as CatScore).comment}`).join('\n')
+        // ponto fraco é texto (ou tem erro de língua) → reescreve legenda/hook/CTA guiado pelo feedback, mantém a imagem
+        const weak = Object.entries(scores).filter(([k, v]) => k !== 'grammar' && (v as CatScore).score < 75).map(([k, v]) => `- ${k}: ${(v as CatScore).comment}`).join('\n')
         const prompt = `${preamble(config, company)}
 
 Você é o Copywriter da agência. Reescreva/melhore o post mantendo a MESMA ideia central e formato, corrigindo especificamente estes pontos fracos apontados pelo controle de qualidade:
 ${weak || `- ${weakest}: melhore este aspecto`}
+${grammarFailed ? `\nIMPORTANTE — prioridade máxima: o controle de qualidade encontrou erro de português/ortografia/concordância: "${scores.grammar?.comment ?? ''}". Corrija isso, mesmo que precise reescrever a frase inteira.` : ''}
 
 Post atual:
 - Ideia: ${t.idea ?? ''}
@@ -266,17 +280,23 @@ Retorne APENAS um JSON: {"idea":"...","caption":"...","hashtags":"#...","cta":".
       const f = fresh as PostShape & { image_url: string | null }
       const { scores: ns, quality } = await scoreContent(anthropicKey, config, company, { idea: f.idea, caption: f.caption, hashtags: f.hashtags, cta: f.cta, format: f.format, hasImage: !!f.image_url })
       await admin.from('marketing_ai_test_content').update({ scores: ns, quality_score: quality }).eq('id', testId)
-      return json({ ok: true, regenerated: weakest, scores: ns, quality_score: quality })
+      return json({ ok: true, regenerated: grammarFailed ? 'grammar' : weakest, scores: ns, quality_score: quality })
     }
 
     // ── Enviar pro Vault (aprovado pelo QC, aguardando publicação) ──────
+    // Gate ELIMINATÓRIO é só gramática/ortografia — identidade de marca já é
+    // garantida pelos dados reais do agente de dados, então as outras 9
+    // dimensões (criativo, hook, etc.) ficam só consultivas: nenhum post real
+    // batia 90+ de nota ponderada, o que travava o Vault pra sempre.
     if (action === 'to_vault') {
       const testId = String(body.test_id ?? '')
       if (!testId) return json({ error: 'test_id é obrigatório' }, 400)
-      const { data: tRow } = await admin.from('marketing_ai_test_content').select('id, quality_score').eq('id', testId).eq('company_id', company.id).maybeSingle()
-      const t = tRow as { id: string; quality_score: number | null } | null
+      const { data: tRow } = await admin.from('marketing_ai_test_content').select('id, scores').eq('id', testId).eq('company_id', company.id).maybeSingle()
+      const t = tRow as { id: string; scores: Scores | null } | null
       if (!t) return json({ error: 'Post de teste não encontrado' }, 404)
-      if ((t.quality_score ?? 0) < 90) return json({ error: 'Nota abaixo de 90 — regenere os pontos fracos antes de mandar pro Vault.' }, 400)
+      const grammar = t.scores?.grammar
+      if (!grammar) return json({ error: 'Ainda não foi avaliado — clique em Avaliar antes de mandar pro Vault.' }, 400)
+      if (grammar.score < 100) return json({ error: `Erro de gramática/ortografia encontrado: ${grammar.comment || 'corrija o texto'}` }, 400)
       await admin.from('marketing_ai_test_content').update({ status: 'vault' }).eq('id', testId)
       return json({ ok: true })
     }
