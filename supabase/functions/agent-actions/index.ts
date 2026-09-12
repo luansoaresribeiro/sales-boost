@@ -151,10 +151,38 @@ async function execute(admin: Supa, act: any): Promise<any> {
   const fail = (msg: string) => finish(admin, act.id, 'FAILED', { execution_error: msg })
 
   try {
-    // 1) Aprovação de conteúdo já existente (fluxo real de hoje).
+    // 1) Aprovação de conteúdo já existente (Central de Approvals — Ideias/
+    // calendário). Mesma regra do Vault: aprovar aqui publica DE VERDADE no
+    // Instagram quando há imagem e conexão; sem isso, honestamente fica só
+    // "approved" (o status do enum desta tabela é em inglês, diferente de
+    // posts/marketing_ai_test_content — respeita o que já existe).
     if (act.ref_type === 'marketing_ai_content' && act.ref_id) {
-      const { error } = await admin.from('marketing_ai_content').update({ status: 'approved', updated_at: new Date().toISOString() }).eq('id', act.ref_id).eq('company_id', act.company_id)
-      return error ? await fail(error.message) : await done({ approved: 'marketing_ai_content', id: act.ref_id })
+      const { data: content } = await admin.from('marketing_ai_content').select('caption, hashtags, image_url').eq('id', act.ref_id).eq('company_id', act.company_id).maybeSingle()
+      const { data: company } = await admin.from('companies').select('instagram_user_id, instagram_access_token').eq('id', act.company_id).maybeSingle()
+      const caption = [content?.caption, content?.hashtags].map(x => (x ? String(x) : '').trim()).filter(Boolean).join('\n\n')
+
+      let mediaId: string | null = null
+      let publishError: string | null = null
+      if (company?.instagram_user_id && company?.instagram_access_token && content?.image_url) {
+        try {
+          mediaId = await publishToInstagram(String(company.instagram_user_id), String(company.instagram_access_token), String(content.image_url), caption)
+        } catch (e) {
+          publishError = e instanceof Error ? e.message : String(e)
+        }
+      } else if (!company?.instagram_user_id || !company?.instagram_access_token) {
+        publishError = 'Instagram não conectado — aprovado, mas não publicado.'
+      } else if (!content?.image_url) {
+        publishError = 'Sem imagem gerada ainda — aprovado, mas não publicado.'
+      }
+
+      const { error } = await admin.from('marketing_ai_content').update({
+        status: mediaId ? 'published' : 'approved', updated_at: new Date().toISOString(),
+        published_at: mediaId ? new Date().toISOString() : null,
+      }).eq('id', act.ref_id).eq('company_id', act.company_id)
+      if (error) return await fail(error.message)
+
+      if (publishError) return await fail(publishError)
+      return await done({ approved: 'marketing_ai_content', id: act.ref_id, published_to_instagram: !!mediaId }, act.ref_id)
     }
     if (act.ref_type === 'post' && act.ref_id) {
       const { error } = await admin.from('posts').update({ status: 'aprovado', updated_at: new Date().toISOString() }).eq('id', act.ref_id).eq('company_id', act.company_id)

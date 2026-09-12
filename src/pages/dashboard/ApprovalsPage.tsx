@@ -139,6 +139,7 @@ export default function ApprovalsPage() {
   const [history, setHistory] = useState<AgentAction[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [contentMsg, setContentMsg] = useState('')
 
   const token = session?.access_token ?? ''
 
@@ -185,9 +186,9 @@ export default function ApprovalsPage() {
   // segundo clique em outro lugar.
   const approveContent = async (item: AiContent) => {
     if (!companyId) return
-    setBusyId(item.id)
+    setBusyId(item.id); setContentMsg('')
     try {
-      await proposeAgentAction(token, {
+      const action = await proposeAgentAction(token, {
         company_id: companyId,
         agent_key: 'content', agent_name: 'Conteúdo',
         action_type: 'create_content', channel: 'instagram', source: 'manual',
@@ -196,6 +197,13 @@ export default function ApprovalsPage() {
         payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags },
         approve_now: true,
       })
+      if (action.execution_status === 'EXECUTED' && (action.execution_result as { published_to_instagram?: boolean } | null)?.published_to_instagram) {
+        setContentMsg('✓ Aprovado e publicado de verdade no Instagram.')
+      } else if (action.execution_status === 'FAILED') {
+        setContentMsg(`Aprovado, mas não publicado: ${action.execution_error ?? 'sem imagem ou Instagram desconectado'}.`)
+      } else {
+        setContentMsg('✓ Aprovado.')
+      }
     } catch { /* ignore — item segue na lista, dono pode tentar de novo */ }
     setContent(prev => prev.filter(i => i.id !== item.id)); setBusyId(null)
   }
@@ -240,6 +248,7 @@ export default function ApprovalsPage() {
             {content.length > 0 && (
               <section style={{ marginBottom: '28px' }}>
                 <SectionTitle label={lang === 'en' ? 'Content to approve' : 'Conteúdo pra aprovar'} count={content.length} />
+                {contentMsg && <div style={{ fontSize: '11.5px', color: contentMsg.startsWith('✓') ? GREEN : '#f87171', marginBottom: '10px' }}>{contentMsg}</div>}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {content.map(item => (
                     <ContentCard key={item.id} item={item} busy={busyId === item.id} lang={lang}
