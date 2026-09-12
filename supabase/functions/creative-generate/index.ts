@@ -123,13 +123,14 @@ Deno.serve(async (req) => {
 
     const kind = ['organico', 'stories', 'campanhas'].includes(String(body.kind)) ? String(body.kind) : 'organico'
 
-    const [{ data: cfgRow }, { data: insRows }, { data: libRows }, { data: visRows }, { data: fmtRows }, { data: bdRow }] = await Promise.all([
+    const [{ data: cfgRow }, { data: insRows }, { data: libRows }, { data: visRows }, { data: fmtRows }, { data: bdRow }, { data: recentRows }] = await Promise.all([
       admin.from('marketing_ai_config').select('agent_name, brand_voice, tone, target_audience, content_pillars, marketing_goals, business_objectives').eq('company_id', company.id).maybeSingle(),
       admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(6),
       admin.from('marketing_ai_knowledge').select('kind, title, content, module').or(`company_id.is.null,company_id.eq.${company.id}`).in('module', ['core', kind]),
       admin.from('marketing_ai_knowledge').select('title, meta').or(`company_id.is.null,company_id.eq.${company.id}`).eq('module', 'visual').eq('kind', 'layout').order('created_at', { ascending: false }).limit(8),
       admin.from('marketing_ai_knowledge').select('title, content, meta').eq('company_id', company.id).eq('module', 'formato').order('created_at', { ascending: false }).limit(10),
       admin.from('brand_dna').select('colors, design_notes').eq('company_id', company.id).maybeSingle(),
+      admin.from('marketing_ai_test_content').select('format, brief').eq('company_id', company.id).order('created_at', { ascending: false }).limit(5),
     ])
     const config = (cfgRow as Config | null) ?? defaultConfig(company)
     const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
@@ -153,6 +154,15 @@ Deno.serve(async (req) => {
     const brandColors = (bd?.colors ?? []).slice(0, 4).join(', ')
     const brandStyle = [brandColors ? `Brand color palette: ${brandColors}.` : '', bd?.design_notes ? `Art direction: ${bd.design_notes}.` : ''].filter(Boolean).join(' ') || undefined
 
+    // Últimos formatos/sistemas visuais/frameworks já usados — sem isso o
+    // Diretor converge sempre na MESMA escolha "mais lógica" pro negócio
+    // (ex: sempre "Antes/Depois" + "BAB" pra um negócio sobre transformação),
+    // porque o contexto da empresa não muda entre gerações. Pedir variedade
+    // explícita evita repetir o mesmo formato/visual toda vez.
+    const recent = (recentRows ?? []) as { format: string | null; brief: { visual_system?: string; framework?: string } | null }[]
+    const recentUsed = recent.filter(r => r.format || r.brief?.visual_system || r.brief?.framework)
+      .map(r => `- formato "${r.format ?? '—'}", sistema visual "${r.brief?.visual_system ?? '—'}", framework "${r.brief?.framework ?? '—'}"`).join('\n')
+
     // Ideia-semente vinda do Creative Agent (opcional): o dono escolheu uma
     // ideia; o Diretor constrói o brief em cima dela em vez de inventar do zero.
     const seed = body.idea && typeof body.idea === 'object' ? body.idea as { title?: string; hook?: string; angle?: string; format?: string } : null
@@ -167,6 +177,7 @@ Deno.serve(async (req) => {
 
 Você é o DIRETOR CRIATIVO de uma agência. Vai criar um conteúdo do tipo "${modLabel}". Decida o brief usando os insights reais e as boas práticas ESPECÍFICAS desse formato (não use regra genérica).
 ${seedBlock}${insights.length ? `\nInsights abertos:\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
+${recentUsed ? `\nÚltimos posts desse negócio (formato/sistema visual/framework já usados — VARIE, não repita o mesmo combo à toa só porque "faz sentido pro negócio"; só repita se você tiver um motivo estratégico real e disser isso em "reasoning"):\n${recentUsed}` : ''}
 
 Boas práticas do formato ${modLabel}:\n${moduleKnow}
 ${formatsRef ? `\nFormatos disponíveis (escolha a anatomia certa e cite em "format" quando usar um):\n${formatsRef}` : ''}
