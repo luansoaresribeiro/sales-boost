@@ -22,6 +22,7 @@ import ReviewsAgentTab from './marketingAi/ReviewsAgentTab'
 import InsightsTab from './marketingAi/InsightsTab'
 import BusinessContextTab from './marketingAi/BusinessContextTab'
 import MetaHealthTab from './marketingAi/MetaHealthTab'
+import VisualLibrary from './marketingAi/VisualLibrary'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
 
 const ORANGE = '#FF6D29'
@@ -218,20 +219,24 @@ function SubTabButton({ active, onClick, icon, label }: { active: boolean; onCli
 const subTabsRow: React.CSSProperties = { display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '20px' }
 
 // Agente de Dados — Performance real do Instagram + Inteligência de Mercado
-// (concorrentes/tendências) num único lugar, upstream do Agente de Conteúdo
-// no fluxo (Dados → Conteúdo → Conversão).
+// (concorrentes/tendências) + Estilos e Visuais (identidade da marca) num
+// único lugar, upstream do Agente de Conteúdo no fluxo (Dados → Conteúdo →
+// Conversão). Estilos e Visuais mudou pra cá porque já é dado de contexto
+// que o agente consome, não algo pra "testar" ou "publicar".
 function DadosSection({ company }: { company: CompanyData }) {
   const navigate = useNavigate()
-  const [sub, setSub] = useState<'performance' | 'mercado'>('performance')
+  const [sub, setSub] = useState<'performance' | 'mercado' | 'visual'>('performance')
   return (
     <div>
       <div style={subTabsRow}>
         <SubTabButton active={sub === 'performance'} onClick={() => setSub('performance')} icon="📊" label="Performance" />
         <SubTabButton active={sub === 'mercado'} onClick={() => setSub('mercado')} icon="🧭" label="Inteligência de Mercado" />
+        <SubTabButton active={sub === 'visual'} onClick={() => setSub('visual')} icon="🎨" label="Estilos e Visuais" />
       </div>
       {sub === 'performance'
         ? <PerformanceTab company={company} onCreateContent={() => navigate('/dashboard/marketing-ai/content')} />
-        : <MarketIntelTab company={company} />}
+        : sub === 'mercado' ? <MarketIntelTab company={company} />
+        : <VisualLibrary company={company} />}
     </div>
   )
 }

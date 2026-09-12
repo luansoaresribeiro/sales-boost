@@ -19,7 +19,7 @@ const cors = {
 }
 type SupaClient = ReturnType<typeof createClient>
 
-interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null }
+interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null; language: string | null }
 interface Config { agent_name: string; brand_voice: string | null; tone: string | null; target_audience: string | null; content_pillars: string[]; marketing_goals: string | null; business_objectives: string | null }
 interface Know { kind: string; title: string; content: string; module?: string }
 
@@ -35,7 +35,8 @@ ${company.business_description ? `O que o negócio faz de verdade: ${company.bus
 Voz da marca: ${config.brand_voice ?? 'não definida'}. Tom: ${config.tone ?? 'não definido'}.
 Público-alvo: ${config.target_audience ?? company.ideal_customer ?? 'não definido'}.
 Pilares: ${config.content_pillars.join(', ') || 'não definidos'}.
-Objetivos: ${config.marketing_goals ?? config.business_objectives ?? 'crescer e engajar'}.`
+Objetivos: ${config.marketing_goals ?? config.business_objectives ?? 'crescer e engajar'}.
+${company.language === 'en' ? 'IMPORTANTE: escreva TODO o conteúdo (legenda, hook, CTA, hashtags) em inglês — este negócio atende clientes que falam inglês.' : ''}`
 }
 
 function defaultConfig(company: Company): Config {
@@ -117,7 +118,7 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser()
     if (!user) return json({ error: 'Unauthorized' }, 401)
 
-    const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal, business_description, ideal_customer').eq('user_id', user.id).maybeSingle()
+    const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal, business_description, ideal_customer, language').eq('user_id', user.id).maybeSingle()
     const company = companyRow as Company | null
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
 

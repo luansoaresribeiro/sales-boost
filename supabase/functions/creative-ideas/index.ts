@@ -19,7 +19,7 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null }
+interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null; language: string | null }
 
 const HASHTAG_BY_TYPE: Record<string, string> = {
   'Restaurante / Food': 'restaurante', 'Bar & Pub': 'barpub', 'Varejo / E-commerce': 'lojavirtual',
@@ -172,6 +172,7 @@ ${ownTop.length ? `\nO que JÁ FUNCIONOU DE VERDADE no seu próprio Instagram (d
 ${viral.length ? `\nPosts reais que estão viralizando agora no seu segmento (use como referência de formato/gancho que está funcionando, NUNCA copie o conteúdo, adapte pro negócio):\n${viral.map(v => `- (${v.likesCount} curtidas, ${v.commentsCount} comentários) "${v.caption}"`).join('\n')}` : ''}
 ${formats.length ? `\nFormatos disponíveis (prefira sugerir um destes quando encaixar):\n${formats.map(f => `- ${f.title}${f.content ? `: ${f.content}` : ''}`).join('\n')}` : ''}
 ${lib.length ? `\nRecursos na biblioteca (hooks/frameworks já cadastrados): ${lib.map(l => l.title).slice(0, 20).join(', ')}` : ''}
+${company.language === 'en' ? '\nIMPORTANTE: escreva title/hook/angle/rationale em inglês — este negócio atende clientes que falam inglês.' : ''}
 
 Gere 6 IDEIAS de post FORTES e específicas desse negócio (nada genérico). Cada ideia deve poder virar um post real.
 Varie os formatos entre as 6 ideias — nem toda ideia precisa de carrossel; uma foto única bem pensada costuma performar tão bem quanto, e é mais rápida de aprovar.
@@ -230,7 +231,7 @@ Deno.serve(async (req) => {
     if (isCron) {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
       const { data: companies } = await admin.from('companies')
-        .select('id, business_name, business_type, city, goal, business_description, ideal_customer, telegram_chat_id, notification_prefs')
+        .select('id, business_name, business_type, city, goal, business_description, ideal_customer, language, telegram_chat_id, notification_prefs')
         .eq('active', true)
 
       let generated = 0, skipped = 0
@@ -265,7 +266,7 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser()
     if (!user) return json({ error: 'Unauthorized' }, 401)
 
-    const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal, business_description, ideal_customer').eq('user_id', user.id).maybeSingle()
+    const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal, business_description, ideal_customer, language').eq('user_id', user.id).maybeSingle()
     const company = companyRow as Company | null
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
 

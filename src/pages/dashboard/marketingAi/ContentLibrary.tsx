@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { MUTED, BORDER, D } from './shared'
-import VisualLibrary from './VisualLibrary'
 import CreativeAgent from './CreativeAgent'
 import FormatsLibrary from './FormatsLibrary'
 import TestingArea from './TestingArea'
@@ -11,10 +10,11 @@ const ORANGE = '#FF6D29'
 // Abas de topo da Biblioteca — Ideias (ex-Creative Agent) leva ao Trend
 // Agent + geração de ideias; Testes e Vault vivem aqui agora (canônicos,
 // não duplicados em Conteúdo/Stories/Campanhas nem soltos em Conteúdo).
+// Estilos e Visuais mudou pra aba Agente de Dados — identidade visual/marca é
+// dado de contexto pro agente, não algo que se "testa" ou "publica" daqui.
 const TOP_TABS: { key: string; icon: string; label: string }[] = [
   { key: 'creative', icon: '💡', label: 'Ideias' },
   { key: 'formatos', icon: '🧩', label: 'Formatos' },
-  { key: 'visual', icon: '🎨', label: 'Estilos e Visuais' },
   { key: 'testes', icon: '🧪', label: 'Testes' },
   { key: 'vault', icon: '⭐', label: 'Vault' },
 ]
@@ -39,8 +39,8 @@ export const KIND_LABEL: Record<string, string> = {
 export const kindLabel = (k: string) => KIND_LABEL[k] ?? k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ')
 
 // Biblioteca: Ideias (Trend Agent + Creative Agent), Formatos (a anatomia de
-// cada imagem), Estilos e Visuais (Kit da marca), Testes (QC) e Vault
-// (aprovados) — tudo num lugar só.
+// cada imagem), Testes (QC) e Vault (aprovados) — tudo num lugar só. Estilos
+// e Visuais fica na aba Agente de Dados agora.
 export default function ContentLibrary({ companyId }: { companyId: string }) {
   const [top, setTop] = useState('creative')
   const [mod, setMod] = useState<'organico' | 'stories' | 'campanhas'>('organico')
@@ -50,7 +50,7 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
       <div style={{ marginBottom: '18px' }}>
         <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>📚 Biblioteca do Agente de Conteúdo</div>
         <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55, maxWidth: '760px' }}>
-          <strong style={{ color: 'white' }}>Ideias</strong> (tendências reais + sugestões), <strong style={{ color: 'white' }}>Formatos</strong> (a anatomia de cada imagem), <strong style={{ color: 'white' }}>Estilos e Visuais</strong> (o Kit da marca), <strong style={{ color: 'white' }}>Testes</strong> (controle de qualidade) e <strong style={{ color: 'white' }}>Vault</strong> (aprovados, prontos pra publicar).
+          <strong style={{ color: 'white' }}>Ideias</strong> (tendências reais + sugestões), <strong style={{ color: 'white' }}>Formatos</strong> (a anatomia de cada imagem), <strong style={{ color: 'white' }}>Testes</strong> (controle de qualidade) e <strong style={{ color: 'white' }}>Vault</strong> (aprovados, prontos pra publicar). Estilos e Visuais (Kit da marca) agora fica na aba <strong style={{ color: 'white' }}>Agente de Dados</strong>.
         </div>
       </div>
 
@@ -69,8 +69,7 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
       </div>
 
       {/* Sub-abas de módulo (Orgânico/Stories/Campanhas) — aparecem em Ideias,
-          Formatos e Testes (Estilos e Visuais e Vault são da marca/QC como um
-          todo, não por módulo). */}
+          Formatos e Testes (Vault é da marca/QC como um todo, não por módulo). */}
       {(top === 'creative' || top === 'formatos' || top === 'testes') && (
         <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '20px', flexWrap: 'wrap' }}>
           {MODULES.map(m => {
@@ -88,7 +87,6 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
 
       {top === 'creative' ? <CreativeAgent companyId={companyId} module={mod} />
         : top === 'formatos' ? <FormatsLibrary companyId={companyId} module={mod} />
-        : top === 'visual' ? <VisualLibrary companyId={companyId} />
         : top === 'testes' ? <TestingArea companyId={companyId} kind={mod} />
         : <ContentVault companyId={companyId} />}
     </div>
