@@ -76,7 +76,7 @@ function extractOne(raw: string): Record<string, unknown> | null {
 // genérico); visualSystem aqui é o CONTEÚDO resolvido do sistema visual
 // escolhido pelo Diretor (não só o título) — sem isso a imagem só sabia o
 // nome do estilo, não o que ele realmente descreve.
-async function generateImage(businessType: string | null, evoke: string, visualSystem?: string, brandStyle?: string, businessDescription?: string): Promise<string | null> {
+async function generateImage(companyId: string, businessType: string | null, evoke: string, visualSystem?: string, brandStyle?: string, businessDescription?: string): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')
   if (!supabaseUrl || !serviceKey) return null
@@ -84,7 +84,7 @@ async function generateImage(businessType: string | null, evoke: string, visualS
     const prompt = `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}.${visualSystem ? ` Visual style/composition: ${visualSystem}.` : ''}${brandStyle ? ` ${brandStyle}` : ''} Commercial photography, warm natural lighting, polished and inviting, no text, no logos, no watermark. The photo must clearly and specifically depict this exact post concept, not a generic stock photo: ${evoke}`
     const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
       method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, size: '1024x1024' }),
+      body: JSON.stringify({ prompt, size: '1024x1024', company_id: companyId }),
     })
     const data = await res.json().catch(() => ({})) as { url?: string }
     return res.ok && data.url ? data.url : null
@@ -245,14 +245,14 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
     let mainImage: string | null = null
     let slides: { text: string; image_prompt: string; image_url: string | null }[] | null = null
     if (fmt === 'carrossel' && rawSlides.length > 0) {
-      const urls = await Promise.all(rawSlides.map(s => generateImage(company.business_type, String(s.image ?? s.text ?? idea ?? ''), visual, brandStyle, company.business_description ?? undefined)))
+      const urls = await Promise.all(rawSlides.map(s => generateImage(company.id, company.business_type, String(s.image ?? s.text ?? idea ?? ''), visual, brandStyle, company.business_description ?? undefined)))
       slides = rawSlides.map((s, i) => ({ text: String(s.text ?? ''), image_prompt: String(s.image ?? ''), image_url: urls[i] }))
       mainImage = slides.find(s => s.image_url)?.image_url ?? null
     } else {
       // Uma foto só: junta a ideia + o gancho/oferta do brief — não só um
       // resumo curto — pra imagem casar de verdade com o post específico.
       const evoke = [idea, brief.hook_angle as string | undefined, brief.offer as string | undefined, caption].filter(Boolean).join('. ').slice(0, 600) || 'foto do negócio'
-      mainImage = await generateImage(company.business_type, evoke, visual, brandStyle, company.business_description ?? undefined)
+      mainImage = await generateImage(company.id, company.business_type, evoke, visual, brandStyle, company.business_description ?? undefined)
     }
     await admin.from('marketing_ai_test_content').update({ image_url: mainImage, slides }).eq('id', inserted.id)
 

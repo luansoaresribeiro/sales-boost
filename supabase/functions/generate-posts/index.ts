@@ -24,8 +24,6 @@ interface ImageResult {
 }
 
 async function notifyMarketing(chatId: number | null | undefined, companyId: string, event: string, data?: Record<string, unknown>) {
-  // Sempre grava na aba Atividades, mesmo sem Telegram conectado — o envio
-  // ao Telegram (dentro de log-bot-event) é só um bônus quando existe chatId.
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const secret = Deno.env.get('BOT_WEBHOOK_SECRET')
   if (!supabaseUrl) return
@@ -64,10 +62,10 @@ async function callClaude(prompt: string, anthropicKey: string): Promise<string>
 }
 
 // Gera a imagem do post pela função central generate-image (OpenAI, com
-// fallback de chave no _app_config). Antes usava Replicate (flux-schnell), que
-// foi desativado na plataforma — por isso os posts vinham só com texto.
+// fallback de chave no _app_config). Antes usava Replicate (desativado).
 async function generateImage(
   imageSuggestion: string,
+  companyId: string,
 ): Promise<{ url: string | null; error: string | null }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')
@@ -84,7 +82,7 @@ async function generateImage(
     const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, size: '1024x1024' }),
+      body: JSON.stringify({ prompt, size: '1024x1024', company_id: companyId }),
     })
     const data = await res.json().catch(() => ({})) as { url?: string; error?: string }
     if (!res.ok || !data.url) return { url: null, error: data.error ?? `generate-image ${res.status}` }
@@ -129,11 +127,6 @@ async function runForCompany(
 
   if (remaining === 0) return { generated: 0, quota_reached: true, monthly_count: monthlyCount, limit }
 
-  // Safety valve: no matter who's calling this (cron, frontend, a stray retry),
-  // never keep piling drafts on top of a backlog the owner hasn't reviewed yet.
-  // This is a hard floor independent of the cron-only no_content/stale_draft
-  // gate below, since that gate can be bypassed by calling this authenticated
-  // (non-cron) path directly.
   const pendingCount = await countPendingDrafts(db, companyId)
   if (pendingCount >= PENDING_DRAFT_LIMIT) {
     return { generated: 0, quota_reached: false, monthly_count: monthlyCount, limit, pileup_blocked: true }
@@ -199,7 +192,7 @@ Regras: legenda pronta (sem colchetes), dados reais, tom natural, CTA alinhado, 
           imageResults.push({ post_id: row.id, step: 'skipped', error: 'no image_suggestion', url: null })
           return
         }
-        const { url, error } = await generateImage(row.image_suggestion)
+        const { url, error } = await generateImage(row.image_suggestion, companyId)
         imageResults.push({ post_id: row.id, step: url ? 'done' : 'image_failed', error, url })
         if (!url) return
         const { error: updErr } = await db.from('posts').update({ image_url: url }).eq('id', row.id)
@@ -236,10 +229,6 @@ Deno.serve(async (req) => {
       let total = 0, skipped = 0
       for (const c of (companies ?? [])) {
         try {
-          // Decide antes de agir: só gera post novo quando detect-opportunities já sinalizou
-          // falta real de conteúdo (no_content) — e nunca se já existe pilha de rascunhos
-          // parados sem aprovação (stale_draft). Sem essa checagem o cron gerava até 4 posts
-          // a cada 30 min, sem parar, mesmo com dezenas de rascunhos já esperando aprovação.
           const { data: openOpps } = await db.from('opportunities')
             .select('type')
             .eq('company_id', c.id)

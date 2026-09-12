@@ -45,13 +45,13 @@ async function toDataUri(url: string): Promise<string | null> {
 }
 
 // Gera 1 imagem de fundo com a IA (generate-image) — só quando NÃO há asset.
-async function generateBg(prompt: string): Promise<string | null> {
+async function generateBg(prompt: string, companyId: string): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL'), key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')
   if (!supabaseUrl || !key) return null
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
       method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, size: '1024x1024' }),
+      body: JSON.stringify({ prompt, size: '1024x1024', company_id: companyId }),
     })
     const d = await res.json().catch(() => ({})) as { url?: string }
     return res.ok && d.url ? d.url : null
@@ -234,7 +234,7 @@ Deno.serve(async (req) => {
     if (template === 'photo' && !bgUrl && body.generate_bg) {
       const palette = (brand.primary ? `Brand colors ${[brand.primary, brand.primary2, brand.accent].filter(Boolean).join(', ')}.` : '')
       const subj = String(body.bg_prompt ?? subject ?? fields.headline ?? 'the business')
-      bgUrl = await generateBg(`Professional social media background photo. ${subj}. ${palette} Warm natural lighting, polished, room at the bottom for text overlay, no people, no text, no logos, no watermark.`)
+      bgUrl = await generateBg(`Professional social media background photo. ${subj}. ${palette} Warm natural lighting, polished, room at the bottom for text overlay, no people, no text, no logos, no watermark.`, companyId)
     }
     const bgData = bgUrl ? await toDataUri(bgUrl) : null
     const logoData = template === 'photo' && brand.logoUrl ? await toDataUri(brand.logoUrl) : null

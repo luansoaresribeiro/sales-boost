@@ -53,6 +53,33 @@ async function upload(admin: SupaClient, bytes: Uint8Array): Promise<string> {
   return data.publicUrl
 }
 
+// Hash determinístico do prompt+tamanho — mesma empresa + mesmo pedido exato
+// = mesma imagem, sem pagar a OpenAI de novo. Nunca cacheia entre empresas
+// diferentes (o prompt já carrega contexto da empresa, mas isolar por
+// company_id evita qualquer chance de imagem de um negócio vazar pro outro).
+async function cacheKeyFor(prompt: string, size: string): Promise<string> {
+  const data = new TextEncoder().encode(`${prompt}|${size}`)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// Estimativa — a OpenAI cobra gpt-image-1/dall-e-3 por token de saída (varia
+// com tamanho/qualidade), não um preço fixo por imagem publicado. Ajuste este
+// número aqui se a fatura real mostrar outro valor médio; é o único lugar que
+// precisa mudar. Mesmo padrão de "estimativa clara" já usado pro custo de
+// texto (ESTIMATED_COST_PER_1K_TOKENS, no hermes-proxy).
+const ESTIMATED_COST_PER_IMAGE_USD: Record<string, number> = { 'gpt-image-1': 0.04, 'dall-e-3': 0.04 }
+
+async function logImageCost(admin: SupaClient, companyId: string, model: string, latencyMs: number) {
+  try {
+    await admin.from('agent_performance').insert({
+      company_id: companyId, agent_role: 'imagem', task_key: 'image_generation',
+      task_description: `Geração de imagem (${model})`, success: true, latency_ms: Math.round(latencyMs),
+      cost_usd: ESTIMATED_COST_PER_IMAGE_USD[model] ?? 0.04,
+    })
+  } catch { /* nunca derruba a geração por causa do log de custo */ }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
@@ -79,6 +106,31 @@ Deno.serve(async (req) => {
     if (!prompt) return json({ error: 'prompt obrigatório' }, 400)
     const size = ['1024x1024', '1024x1536', '1536x1024'].includes(String(body.size)) ? String(body.size) : '1024x1024'
     const n = Math.max(1, Math.min(4, Number(body.n) || 1))
+    // company_id é opcional (compat com qualquer chamador antigo que ainda não
+    // o envie), mas sem ele não dá pra cachear nem contar custo por empresa —
+    // esses dois recursos só entram em ação quando informado.
+    const companyId = body.company_id ? String(body.company_id) : null
+
+    // Cache: mesmo pedido exato (mesma empresa) já gerado antes → reusa sem
+    // chamar a OpenAI de novo. Só pra n=1 (o caso de todo chamador hoje) — um
+    // lote de várias imagens não tem um "match" único pra cachear. force_new
+    // pula a LEITURA do cache (mas ainda grava o resultado, substituindo a
+    // entrada antiga) — usado quando o pedido é EXPLICITAMENTE "quero uma
+    // imagem diferente pro mesmo texto" (ex: regenerar por nota baixa no QC),
+    // onde devolver a mesma imagem de novo seria o oposto do pedido.
+    const forceNew = body.force_new === true
+    let cacheKey: string | null = null
+    if (companyId && n === 1) {
+      cacheKey = await cacheKeyFor(prompt, size)
+      if (!forceNew) {
+        const { data: cached } = await admin.from('generated_images')
+          .select('id, image_url, model, reused_count').eq('company_id', companyId).eq('cache_key', cacheKey).maybeSingle()
+        if (cached) {
+          await admin.from('generated_images').update({ reused_count: (cached.reused_count ?? 0) + 1, last_used_at: new Date().toISOString() }).eq('id', cached.id)
+          return json({ ok: true, url: cached.image_url, urls: [cached.image_url], model: cached.model, cached: true })
+        }
+      }
+    }
 
     let apiKey = env.OPENAI_API_KEY
     if (!apiKey) {
@@ -87,8 +139,22 @@ Deno.serve(async (req) => {
     }
     if (!apiKey) return json({ error: 'OPENAI_API_KEY não configurada' }, 200)
 
+    const genStart = Date.now()
     const { images, model } = await openaiImages(apiKey, prompt, size, n)
     const urls = await Promise.all(images.map(b => upload(admin, b)))
+
+    if (companyId) {
+      await logImageCost(admin, companyId, model, Date.now() - genStart)
+      if (cacheKey) {
+        try {
+          await admin.from('generated_images').upsert(
+            { company_id: companyId, cache_key: cacheKey, prompt, image_url: urls[0], model, reused_count: 0, last_used_at: new Date().toISOString() },
+            { onConflict: 'company_id,cache_key' },
+          )
+        } catch { /* cache é bônus, nunca falha a geração */ }
+      }
+    }
+
     return json({ ok: true, url: urls[0], urls, model })
   } catch (err) {
     console.error('generate-image error:', err)

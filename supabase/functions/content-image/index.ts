@@ -18,11 +18,11 @@ function imagePrompt(content: ContentRow, businessType: string | null, businessD
 }
 
 // Chama a generate-image (OpenAI) com a service key. Devolve URLs.
-async function genImages(supabaseUrl: string, serviceKey: string, prompt: string, n: number): Promise<string[]> {
+async function genImages(supabaseUrl: string, serviceKey: string, prompt: string, n: number, companyId: string): Promise<string[]> {
   const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, n, size: '1024x1024' }),
+    body: JSON.stringify({ prompt, n, size: '1024x1024', company_id: companyId }),
   })
   const data = await res.json().catch(() => ({})) as { urls?: string[]; url?: string; error?: string }
   if (!res.ok || data.error) throw new Error(data.error ?? `generate-image ${res.status}`)
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
     const prompt = imagePrompt(content, company.business_type, company.business_description)
 
     if (action === 'generate') {
-      const [url] = await genImages(supabaseUrl, serviceKey, prompt, 1)
+      const [url] = await genImages(supabaseUrl, serviceKey, prompt, 1, company.id)
       if (!url) return json({ error: 'Nenhuma imagem gerada' }, 502)
       await admin.from('marketing_ai_content').update({ image_url: url, updated_at: new Date().toISOString() }).eq('id', contentId)
       return json({ ok: true, image_url: url })
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
 
     if (action === 'variations') {
       const n = Math.max(2, Math.min(4, Number(body.n) || 3))
-      const urls = await genImages(supabaseUrl, serviceKey, prompt, n)
+      const urls = await genImages(supabaseUrl, serviceKey, prompt, n, company.id)
       if (urls.length === 0) return json({ error: 'Nenhuma variação gerada' }, 502)
       await admin.from('marketing_ai_content').update({ image_options: urls, updated_at: new Date().toISOString() }).eq('id', contentId)
       return json({ ok: true, options: urls })
