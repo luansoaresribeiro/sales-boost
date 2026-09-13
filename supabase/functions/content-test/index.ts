@@ -64,6 +64,38 @@ async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1500
   return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
 }
 
+// Analista VISUAL usa a imagem de verdade (Claude com visão) — baixa e
+// manda como base64 porque a API não aceita URL direto de qualquer host.
+async function fetchImageBase64(url: string): Promise<{ data: string; mediaType: string } | null> {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const buf = new Uint8Array(await res.arrayBuffer())
+    const mediaType = res.headers.get('content-type')?.split(';')[0] || 'image/png'
+    let binary = ''
+    const chunk = 0x8000
+    for (let i = 0; i < buf.length; i += chunk) binary += String.fromCharCode(...buf.subarray(i, i + chunk))
+    return { data: btoa(binary), mediaType }
+  } catch { return null }
+}
+
+async function callClaudeVision(anthropicKey: string, prompt: string, image: { data: string; mediaType: string }, maxTokens = 300): Promise<string> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6', max_tokens: maxTokens,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } },
+        { type: 'text', text: prompt },
+      ] }],
+    }),
+  })
+  if (!res.ok) throw new Error(`Claude vision error: ${await res.text()}`)
+  const data = await res.json()
+  return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+}
+
 function parseJsonArray<T>(raw: string): T[] {
   try { const p = JSON.parse(raw); return Array.isArray(p) ? p : [] } catch { /* fall through */ }
   const match = raw.match(/\[[\s\S]*\]/)
@@ -111,7 +143,7 @@ const COHERENCE_BAD_THRESHOLD = 50
 
 interface CatScore { score: number; comment: string }
 type Scores = Record<string, CatScore>
-interface PostShape { idea: string | null; caption: string | null; hashtags: string | null; cta: string | null; format: string | null; hasImage: boolean }
+interface PostShape { idea: string | null; caption: string | null; hashtags: string | null; cta: string | null; format: string | null; imageUrl: string | null }
 
 function parseJsonLoose<T = Record<string, unknown>>(raw: string): T {
   try { return JSON.parse(raw) as T } catch { /* fall through */ }
@@ -131,7 +163,7 @@ Post:
 - Legenda: ${post.caption ?? '—'}
 - Hashtags: ${post.hashtags ?? '—'}
 - CTA: ${post.cta ?? '—'}
-- Imagem: ${post.hasImage ? 'tem imagem gerada por IA evocando a ideia' : 'sem imagem'}
+- Imagem: ${post.imageUrl ? 'tem imagem gerada' : 'sem imagem'}
 
 Dê nota de 0 a 100. SEJA GENEROSO — a maioria dos posts bem escritos deve ficar acima de 70. Só dê nota abaixo de ${COHERENCE_BAD_THRESHOLD} em casos CLARAMENTE ruins:
 - A legenda contradiz a ideia/hook, ou fala de algo completamente diferente.
@@ -147,6 +179,27 @@ Retorne APENAS um JSON: {"score":0,"comment":"1 frase curta — o que está bom,
   const parsed = parseJsonLoose<{ score?: number; comment?: string }>(raw)
   const score = Math.max(0, Math.min(100, Math.round(Number(parsed.score ?? 100))))
   const scores: Scores = { coherence: { score, comment: String(parsed.comment ?? '') } }
+
+  // Analista VISUAL — a imagem de verdade, não o texto. Pega bug de layout
+  // (texto cortado/sobreposto no card) que a checagem de texto não enxerga.
+  // Mesma calibração generosa: só nota baixa em problema visual CLARO.
+  if (post.imageUrl) {
+    try {
+      const img = await fetchImageBase64(post.imageUrl)
+      if (img) {
+        const visPrompt = `Você é um ANALISTA VISUAL — a ÚNICA coisa que você avalia é se esta imagem está PRONTA PRA PUBLICAR de verdade: todo texto legível e COMPLETO (nada cortado na borda, nada sobrepondo outro elemento ou saindo do card), composição sem nada quebrado ou fora do lugar. NÃO avalie o conteúdo criativo, a mensagem ou a marca — só a execução visual.
+
+Dê nota de 0 a 100. SEJA GENEROSO — a maioria das imagens deve passar fácil. Só dê nota abaixo de ${COHERENCE_BAD_THRESHOLD} em problema visual CLARO: texto cortado/sobreposto/ilegível, elemento quebrado, faltando ou fora do lugar.
+
+Retorne APENAS um JSON: {"score":0,"comment":"1 frase curta — o que está bom, ou o que especificamente está quebrado, se houver"}`
+        const rawV = await callClaudeVision(anthropicKey, visPrompt, img, 300)
+        const parsedV = parseJsonLoose<{ score?: number; comment?: string }>(rawV)
+        const scoreV = Math.max(0, Math.min(100, Math.round(Number(parsedV.score ?? 100))))
+        scores.visual_coherence = { score: scoreV, comment: String(parsedV.comment ?? '') }
+      }
+    } catch (e) { console.error('scoreContent: analista visual falhou (segue sem essa nota)', e) }
+  }
+
   return { scores, quality: score }
 }
 
@@ -230,7 +283,7 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       const t = tRow as (PostShape & { id: string; image_url: string | null }) | null
       if (!t) return json({ error: 'Post de teste não encontrado' }, 404)
       const config = await loadConfig(admin, company)
-      const { scores, quality } = await scoreContent(anthropicKey, config, company, { idea: t.idea, caption: t.caption, hashtags: t.hashtags, cta: t.cta, format: t.format, hasImage: !!t.image_url })
+      const { scores, quality } = await scoreContent(anthropicKey, config, company, { idea: t.idea, caption: t.caption, hashtags: t.hashtags, cta: t.cta, format: t.format, imageUrl: t.image_url })
       await admin.from('marketing_ai_test_content').update({ scores, quality_score: quality }).eq('id', testId)
       return json({ ok: true, scores, quality_score: quality })
     }
@@ -240,11 +293,37 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       const testId = String(body.test_id ?? '')
       if (!testId) return json({ error: 'test_id é obrigatório' }, 400)
       const { data: tRow } = await admin.from('marketing_ai_test_content')
-        .select('id, idea, caption, hashtags, cta, format, image_url, scores').eq('id', testId).eq('company_id', company.id).maybeSingle()
-      const t = tRow as { id: string; idea: string | null; caption: string | null; hashtags: string | null; cta: string | null; format: string | null; image_url: string | null; scores: Scores | null } | null
+        .select('id, idea, caption, hashtags, cta, format, image_url, scores, brief').eq('id', testId).eq('company_id', company.id).maybeSingle()
+      const t = tRow as { id: string; idea: string | null; caption: string | null; hashtags: string | null; cta: string | null; format: string | null; image_url: string | null; scores: Scores | null; brief: { template?: string } | null } | null
       if (!t) return json({ error: 'Post de teste não encontrado' }, 404)
       const config = await loadConfig(admin, company)
       const coherence = t.scores?.coherence
+      const visual = t.scores?.visual_coherence
+      const coherenceBad = (coherence?.score ?? 100) < COHERENCE_BAD_THRESHOLD
+      const template = t.brief?.template ?? 'livre'
+
+      // Problema é só VISUAL (texto tá ok) e é uma foto de IA de verdade
+      // ("livre" ou sem template, ex: posts antigos) — regenera só a
+      // imagem, mantém o texto. Cards de texto (tweet/announcement/product)
+      // não têm imagem de IA pra regenerar aqui — precisam ser refeitos do
+      // zero (o texto do card já sai curto por design agora, ver
+      // creative-generate), então só mostra o aviso, sem botão mágico que
+      // trocaria o card por uma foto genérica sem querer.
+      const visualBad = (visual?.score ?? 100) < COHERENCE_BAD_THRESHOLD
+      if (!coherenceBad && visualBad && (template === 'livre' || !t.brief)) {
+        const url = await generateImage(company.id, company.business_type, t.idea ?? t.caption ?? '', company.business_description, true)
+        if (url) await admin.from('marketing_ai_test_content').update({ image_url: url }).eq('id', testId)
+        const { scores: ns, quality } = await scoreContent(anthropicKey, config, company, { idea: t.idea, caption: t.caption, hashtags: t.hashtags, cta: t.cta, format: t.format, imageUrl: url ?? t.image_url })
+        await admin.from('marketing_ai_test_content').update({ scores: ns, quality_score: quality }).eq('id', testId)
+        return json({ ok: true, regenerated: 'visual', scores: ns, quality_score: quality })
+      }
+      // Visual ruim mas é um card de texto (tweet/announcement/product) —
+      // não dá pra regenerar aqui sem risco de trocar o card por uma foto
+      // genérica. Se a coerência de texto também tá ok, não tem o que
+      // regenerar de verdade — avisa em vez de mexer em algo que já tá bom.
+      if (!coherenceBad && visualBad) {
+        return json({ error: 'Esse card tem um problema visual, mas não dá pra corrigir automaticamente aqui — descarte e gere um post novo.' }, 400)
+      }
 
       const prompt = `${preamble(config, company)}
 
@@ -266,7 +345,7 @@ Retorne APENAS um JSON: {"idea":"...","caption":"...","hashtags":"#...","cta":".
       const { data: fresh } = await admin.from('marketing_ai_test_content')
         .select('idea, caption, hashtags, cta, format, image_url').eq('id', testId).single()
       const f = fresh as PostShape & { image_url: string | null }
-      const { scores: ns, quality } = await scoreContent(anthropicKey, config, company, { idea: f.idea, caption: f.caption, hashtags: f.hashtags, cta: f.cta, format: f.format, hasImage: !!f.image_url })
+      const { scores: ns, quality } = await scoreContent(anthropicKey, config, company, { idea: f.idea, caption: f.caption, hashtags: f.hashtags, cta: f.cta, format: f.format, imageUrl: f.image_url })
       await admin.from('marketing_ai_test_content').update({ scores: ns, quality_score: quality }).eq('id', testId)
       return json({ ok: true, regenerated: 'coherence', scores: ns, quality_score: quality })
     }

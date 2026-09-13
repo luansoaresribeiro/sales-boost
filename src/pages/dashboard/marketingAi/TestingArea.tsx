@@ -148,6 +148,10 @@ export function BriefBlock({ post }: { post: TestPost }) {
 // (content-test's COHERENCE_BAD_THRESHOLD).
 const COHERENCE_BAD_THRESHOLD = 50
 export const coherenceIsBad = (post: TestPost) => (post.scores?.coherence?.score ?? 100) < COHERENCE_BAD_THRESHOLD
+// Analista visual — olha a IMAGEM de verdade (Claude com visão), separado
+// do analista de texto: pega bug de layout (texto cortado no card) que a
+// checagem de texto não enxerga. Mesma régua: nunca bloqueia, só avisa.
+export const visualIsBad = (post: TestPost) => (post.scores?.visual_coherence?.score ?? 100) < COHERENCE_BAD_THRESHOLD
 
 export async function callContentTest(token: string, payload: Record<string, unknown>) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/content-test`, {
@@ -160,22 +164,37 @@ export async function callContentTest(token: string, payload: Record<string, unk
   return data as { id?: string; quality_score?: number; regenerated?: string; image_generated?: boolean }
 }
 
-// Nota de coerência + comentário — único sinal de qualidade que existe agora.
-export function ScoreBreakdown({ post }: { post: TestPost }) {
-  if (post.quality_score == null || !post.scores?.coherence) return null
-  const coherence = post.scores.coherence
-  const bad = coherenceIsBad(post)
+function CoherenceRow({ label, score, comment, bad }: { label: string; score: number; comment: string; bad: boolean }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '9px 10px', borderRadius: '8px',
       background: bad ? 'rgba(248,113,113,0.08)' : 'rgba(74,222,128,0.06)',
       border: `1px solid ${bad ? 'rgba(248,113,113,0.3)' : 'rgba(74,222,128,0.25)'}`,
     }}>
-      <span style={{ fontSize: '18px', fontWeight: 800, color: bad ? '#f87171' : GREEN, lineHeight: 1, flexShrink: 0 }}>{coherence.score}</span>
+      <span style={{ fontSize: '18px', fontWeight: 800, color: bad ? '#f87171' : GREEN, lineHeight: 1, flexShrink: 0 }}>{score}</span>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '2px' }}>Coerência</div>
-        <div style={{ fontSize: '10.5px', color: bad ? '#f87171' : 'rgba(255,255,255,0.75)', lineHeight: 1.4 }}>{coherence.comment || (bad ? 'Post incoerente' : 'Post coerente')}</div>
+        <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '2px' }}>{label}</div>
+        <div style={{ fontSize: '10.5px', color: bad ? '#f87171' : 'rgba(255,255,255,0.75)', lineHeight: 1.4 }}>{comment}</div>
       </div>
+    </div>
+  )
+}
+
+// Dois sinais: coerência de TEXTO (a ideia/legenda fazem sentido?) e
+// coerência VISUAL (a imagem saiu legível, sem nada cortado/quebrado?).
+// Nenhum dos dois bloqueia o Vault — são avisos, quem decide é o dono.
+export function ScoreBreakdown({ post }: { post: TestPost }) {
+  if (post.quality_score == null || !post.scores?.coherence) return null
+  const coherence = post.scores.coherence
+  const visual = post.scores.visual_coherence
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <CoherenceRow label="Coerência" score={coherence.score} bad={coherenceIsBad(post)}
+        comment={coherence.comment || (coherenceIsBad(post) ? 'Post incoerente' : 'Post coerente')} />
+      {visual && (
+        <CoherenceRow label="Coerência visual" score={visual.score} bad={visualIsBad(post)}
+          comment={visual.comment || (visualIsBad(post) ? 'Imagem com problema visual' : 'Imagem sem problema visual')} />
+      )}
     </div>
   )
 }
@@ -300,7 +319,7 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
         <div style={{ maxWidth: '600px' }}>
           <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🧪 Área de Testes + Controle de Qualidade</div>
           <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55 }}>
-            Gera com o <strong>mesmo motor</strong> da automação e é avaliado por um <strong>analista de coerência</strong> — só checa se o post faz sentido do início ao fim. É um sinal, não um portão: <strong>"Enviar pro Vault" sempre aparece</strong>, e "Corrigir coerência" só some/aparece quando o post estiver claramente ruim. Só do Vault é que você publica.
+            Gera com o <strong>mesmo motor</strong> da automação e é avaliado por dois analistas — <strong>coerência</strong> (o post faz sentido do início ao fim?) e <strong>coerência visual</strong> (a imagem saiu legível, sem nada cortado/quebrado?). São sinais, não um portão: <strong>"Enviar pro Vault" sempre aparece</strong>, e "Corrigir" só aparece quando algo estiver claramente ruim. Só do Vault é que você publica.
           </div>
         </div>
         <button onClick={generate} disabled={generating || !token}
@@ -388,10 +407,10 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
                           style={{ flex: 1, padding: '8px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: '8px', color: GREEN, fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
                           {busy ? '...' : '⭐ Enviar pro Vault'}
                         </button>
-                        {coherenceIsBad(t) && (
+                        {(coherenceIsBad(t) || visualIsBad(t)) && (
                           <button onClick={() => act(t.id, { action: 'regenerate' })} disabled={busy}
                             style={{ flex: 1, padding: '8px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '8px', color: '#FBBF24', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-                            {busy ? 'Regenerando...' : '🔁 Corrigir coerência'}
+                            {busy ? 'Regenerando...' : coherenceIsBad(t) ? '🔁 Corrigir coerência' : '🔁 Corrigir imagem'}
                           </button>
                         )}
                       </>

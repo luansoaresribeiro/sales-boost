@@ -137,6 +137,34 @@ const TEMPLATE_DESC = (hasProduct: boolean): Record<string, string> => ({
   ...(hasProduct ? { product: 'Produto centralizado tipo pôster (usa uma foto de produto real já cadastrada), com nome/chamada. Só quando o post é sobre esse produto específico.' } : {}),
 })
 
+// Os cards gráficos (tweet/announcement/product) têm espaço FIXO e pequeno —
+// diferente da legenda do Instagram, que é livre e longa. Cortar a legenda
+// pra caber no card (substring bruto) sempre saía cortado no meio da frase,
+// ilegível — o bug real que gerou a imagem quebrada mostrada pelo dono.
+// A correção certa é pedir pro Copywriter escrever um texto CURTO e
+// COMPLETO específico pro card, nunca derivar truncando o texto longo.
+const CARD_FIELD_INSTRUCTIONS: Record<string, string> = {
+  tweet: '- Preencha TAMBÉM "card_text": a frase de efeito que vai DENTRO do card gráfico (máx. 180 caracteres) — uma frase CURTA e COMPLETA, nunca cortada no meio.',
+  announcement: '- Preencha TAMBÉM "card_headline" (máx. 8 palavras, frase de impacto COMPLETA), "card_subtext" (máx. 18 palavras, frase COMPLETA) e "card_cta" (máx. 4 palavras, tipo "Agende agora" — NUNCA uma frase longa). São o que vai IMPRESSO na imagem do pôster: tem que caber e fazer sentido sozinho, nunca cortado.',
+  product: '- Preencha TAMBÉM "card_cta" (máx. 4 palavras, tipo "Compre agora" — NUNCA uma frase longa) — vai IMPRESSO no botão da imagem do produto.',
+  beforeafter: '- Preencha TAMBÉM "card_caption" (máx. 12 palavras, frase COMPLETA que resume o resultado) — vai IMPRESSO embaixo da comparação antes/depois.',
+}
+const CARD_FIELD_JSON: Record<string, string> = {
+  tweet: ',"card_text":""',
+  announcement: ',"card_headline":"","card_subtext":"","card_cta":""',
+  product: ',"card_cta":""',
+  beforeafter: ',"card_caption":""',
+}
+// Corta no limite de PALAVRA (nunca no meio de uma) e nunca finge que o
+// texto continua — evita repetir o bug de truncar substring bruto.
+function capWords(s: string, maxChars: number): string {
+  const t = (s ?? '').trim()
+  if (t.length <= maxChars) return t
+  const cut = t.slice(0, maxChars)
+  const lastSpace = cut.lastIndexOf(' ')
+  return (lastSpace > maxChars * 0.6 ? cut.slice(0, lastSpace) : cut).trim() + '…'
+}
+
 // Pro template "livre", traduz o sistema visual escolhido (quando SÃO
 // fotografáveis) numa composição fotográfica de verdade — 'Infográfico'
 // fica de fora (dado real ou nada, não dá pra fabricar estatística visual).
@@ -330,8 +358,9 @@ Escreva o post pronto pra publicar. Regras importantes:
 - "caption" é APENAS a legenda que vai no Instagram (texto pro público). NUNCA coloque nela instruções de imagem, descrição de foto nem "Slide 1/2/3".
 - Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
 - Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
+${CARD_FIELD_INSTRUCTIONS[String(brief.template ?? '')] ?? ''}
 Retorne APENAS um JSON array:
-[{"idea":"resumo curto do post","caption":"só a legenda do Instagram, texto pro público","hashtags":"#tag1 #tag2 #tag3","cta":"chamada pra ação final","format":"${brief.format ?? 'foto'}","video_script":"","slides":[{"text":"","image":""}]}]`
+[{"idea":"resumo curto do post","caption":"só a legenda do Instagram, texto pro público","hashtags":"#tag1 #tag2 #tag3","cta":"chamada pra ação final","format":"${brief.format ?? 'foto'}","video_script":"","slides":[{"text":"","image":""}]${CARD_FIELD_JSON[String(brief.template ?? '')] ?? ''}}]`
 
   const execRaw = await callClaude(anthropicKey, execPrompt, 2000)
   let post = extractOne(execRaw)
@@ -383,20 +412,28 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
       const template = String(brief.template ?? 'livre')
       if (template === 'tweet') {
         // Tweet Print de verdade — card gráfico via render-format, texto nítido, ZERO geração de imagem.
-        const text = (caption ?? idea ?? '').slice(0, 200)
+        // "card_text" é escrito CURTO de propósito pelo Copywriter (ver
+        // CARD_FIELD_INSTRUCTIONS) — nunca mais corta a legenda/ideia no
+        // meio da frase pra caber (era o bug real da imagem quebrada).
+        const text = capWords(String(post.card_text ?? caption ?? idea ?? ''), 180)
         mainImage = await renderGraphicCard(opts, company.id, 'tweet', { text, name: company.business_name, handle: slugHandle(company.business_name) }, cardBrand)
         if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), undefined, brandStyle, company.business_description ?? undefined)
       } else if (template === 'announcement') {
-        // Pôster de texto — também zero geração de imagem.
-        const headline = String(idea ?? brief.hook_angle ?? 'Novidade').slice(0, 90)
+        // Pôster de texto — também zero geração de imagem. Campos "card_*"
+        // são escritos CURTOS de propósito pelo Copywriter; capWords é só
+        // uma rede de segurança (corta em palavra inteira, nunca no meio).
+        const headline = capWords(String(post.card_headline ?? idea ?? brief.hook_angle ?? 'Novidade'), 70)
+        const subtext = capWords(String(post.card_subtext ?? ''), 120)
+        const ctaText = capWords(String(post.card_cta ?? ''), 28)
         mainImage = await renderGraphicCard(opts, company.id, 'announcement', {
-          headline, subtext: caption ? caption.slice(0, 140) : '', offer: String(brief.offer ?? ''), cta: String(post.cta ?? brief.cta ?? ''),
+          headline, subtext, offer: String(brief.offer ?? ''), cta: ctaText,
         }, cardBrand)
         if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), undefined, brandStyle, company.business_description ?? undefined)
       } else if (template === 'product' && product?.image_url) {
         // Produto real já cadastrado — zero geração de imagem, reusa a foto de verdade.
+        const ctaText = capWords(String(post.card_cta ?? ''), 28)
         mainImage = await renderGraphicCard(opts, company.id, 'product', {
-          productImage: product.image_url, name: product.title, price: '', cta: String(post.cta ?? brief.cta ?? ''),
+          productImage: product.image_url, name: product.title, price: '', cta: ctaText,
         }, cardBrand)
         if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), undefined, brandStyle, company.business_description ?? undefined)
       } else if (template === 'beforeafter') {
@@ -408,8 +445,9 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
           generateImage(company.id, company.business_type, `BEFORE state: ${subject} — the problem, worn out or unimpressive starting point, before any improvement. ${idea ?? ''}`, undefined, brandStyle, company.business_description ?? undefined),
           generateImage(company.id, company.business_type, `AFTER state: ${subject} — the improved, polished, impressive result after the transformation. ${idea ?? ''}`, undefined, brandStyle, company.business_description ?? undefined),
         ])
+        const bfCaption = capWords(String(post.card_caption ?? brief.hook_angle ?? idea ?? ''), 80)
         mainImage = await renderGraphicCard(opts, company.id, 'beforeafter', {
-          beforeImage: beforeUrl ?? '', afterImage: afterUrl ?? '', beforeLabel: 'Antes', afterLabel: 'Depois', caption: String(brief.hook_angle ?? idea ?? ''),
+          beforeImage: beforeUrl ?? '', afterImage: afterUrl ?? '', beforeLabel: 'Antes', afterLabel: 'Depois', caption: bfCaption,
         }, cardBrand)
         if (!mainImage) mainImage = beforeUrl ?? afterUrl
       } else {
