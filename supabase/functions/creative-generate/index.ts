@@ -114,7 +114,12 @@ async function generateImage(companyId: string, businessType: string | null, evo
     const prompt = `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}.${conceptHint ? ` Composition: ${conceptHint}.` : ''}${brandStyle ? ` ${brandStyle}` : ''} Commercial photography, warm natural lighting, polished and inviting, no text, no logos, no watermark. The photo must clearly and specifically depict this exact post concept, not a generic stock photo: ${evoke}`
     const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
       method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, size: '1024x1024', company_id: companyId }),
+      // force_new: cada post de teste tem que ser uma imagem NOVA de verdade —
+      // sem isso, o generate-image cacheia por prompt+empresa e, quando o
+      // Diretor/Copywriter convergem numa ideia parecida com a de um post
+      // recente (ou já agendado pro Vault), devolvia a MESMA imagem já usada
+      // — o dono viu isso acontecer com um post agendado pro dia seguinte.
+      body: JSON.stringify({ prompt, size: '1024x1024', company_id: companyId, force_new: true }),
     })
     const data = await res.json().catch(() => ({})) as { url?: string }
     return res.ok && data.url ? data.url : null
@@ -225,6 +230,10 @@ interface GenOpts {
   seed?: { title?: string; hook?: string; angle?: string; format?: string } | null
   ideaId?: string | null
   skipImage?: boolean
+  // Escolha manual do dono no botão "Gerar post de teste": undefined/null =
+  // automático (rotação estrita), 'random' = sorteia um dos templates
+  // existentes, ou a chave exata de um template (força esse e força "foto").
+  templateChoice?: string | null
 }
 
 // O núcleo da geração — usado tanto pelo modo interativo (1 empresa, o
@@ -303,6 +312,21 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
   const allowedFormats = allowCarrossel ? baseFormats : baseFormats.filter(f => f !== 'carrossel')
   const fmtList = allowedFormats.map(f => `"${f}"`).join('|')
 
+  // Template: nunca fica só na mão da IA. Ela convergia sempre no "mais
+  // lógico" pro negócio (repetindo o mesmo template, às vezes até gerando
+  // conceito quase idêntico a um post recente) — pedido explícito do dono
+  // depois de ver uma imagem duplicada de um post já agendado. Resolvido
+  // ANTES do Diretor, em ordem de força:
+  //  1) o dono escolheu um template específico no botão (ou pediu "random",
+  //     já sorteado aqui) → esse manda, sempre, e força "foto".
+  //  2) sem escolha manual → rotação estrita pelo PRÓXIMO template da lista
+  //     (nunca repete o do post anterior enquanto houver outro disponível),
+  //     aplicada depois que o Diretor decidir "format" (só vale se for foto).
+  const templateChoiceInput = opts.templateChoice ?? null
+  const forcedTemplate = templateChoiceInput === 'random'
+    ? templateKeys[Math.floor(Math.random() * templateKeys.length)]
+    : (templateChoiceInput && templateKeys.includes(templateChoiceInput) ? templateChoiceInput : null)
+
   const directorPrompt = `${preamble(config, company)}
 
 Você é o DIRETOR CRIATIVO de uma agência. Vai criar um conteúdo do tipo "${modLabel}". Decida o brief usando os insights reais e as boas práticas ESPECÍFICAS desse formato (não use regra genérica).
@@ -320,6 +344,7 @@ Modelos de imagem disponíveis pra "template" (o motor real que monta a imagem �
 ${templateKeys.map(k => `- ${k}: ${templateDesc[k]}`).join('\n')}
 ${product ? `Produto real cadastrado disponível: "${product.title}" (só use "template":"product" se o post for de fato sobre ele).` : ''}
 
+${forcedTemplate ? `\nTEMPLATE JÁ DECIDIDO (não escolha outro — use exatamente "${forcedTemplate}" no seu "template" e monte hook/CTA/oferta pra ele funcionar bem, isso força "format":"foto"): "${forcedTemplate}".\n` : ''}
 IMPORTANTE: "format" só pode ser um destes (${modLabel} não suporta os outros): ${fmtList}. "template" só pode ser um destes: ${templateList} — só é usado de verdade quando "format" for "foto" (ignore pra carrossel/reel/story). Passe pelas opções de verdade, uma por uma, e escolha a que MELHOR serve essa ideia específica — nenhuma delas (nem "livre") é o padrão pra quando você não souber o que escolher; TODAS exigem motivo real, que você explica em "reasoning" (cite ali por que escolheu esse template e não outro). VARIE de verdade (veja "Últimos posts" acima — não deixe o mesmo template se repetir sem um motivo estratégico real).
 Decida o brief. Retorne APENAS um JSON:
 {"objective":"awareness|engagement|conversion","format":${fmtList},"template":${templateList},"visual_system":"<título exato da biblioteca>","personality":"<título exato da biblioteca>","framework":"<título exato da biblioteca>","hook_angle":"ângulo do gancho em 1 frase","cta":"chamada pra ação","offer":"oferta/valor em 1 frase (ou vazio)","reasoning":"por que essas escolhas (incluindo o template), citando o insight"}`
@@ -329,6 +354,20 @@ Decida o brief. Retorne APENAS um JSON:
   // template permitido mais próximo em vez de deixar vazar algo não suportado.
   if (!allowedFormats.includes(String(brief.format))) brief.format = allowedFormats[0]
   if (!templateKeys.includes(String(brief.template))) brief.template = 'livre'
+  if (forcedTemplate) {
+    // Escolha manual do dono (ou "aleatório" já sorteado) — sempre vence.
+    brief.template = forcedTemplate
+    brief.format = 'foto'
+  } else if (String(brief.format) === 'foto') {
+    // Automático: ignora o palpite da IA e gira pro PRÓXIMO template da
+    // lista (round-robin real, não só "pedir educadamente pra variar" —
+    // isso não bastava, a IA repetia/quase-duplicava mesmo assim).
+    const lastTemplate = recent[0]?.brief?.template
+    const lastIdx = lastTemplate && templateKeys.includes(lastTemplate) ? templateKeys.indexOf(lastTemplate) : -1
+    const rotated = templateKeys[(lastIdx + 1) % templateKeys.length]
+    if (rotated !== brief.template) brief.reasoning = `${brief.reasoning ?? ''} (Template ajustado para "${rotated}" pela rotação automática entre todos os formatos.)`.trim()
+    brief.template = rotated
+  }
   const personality = String(brief.personality ?? 'Copywriter')
 
   // ── Passo 2: a personalidade EXECUTA, consultando a biblioteca ───────
@@ -520,9 +559,12 @@ Deno.serve(async (req) => {
 
     const kind = ['organico', 'stories', 'campanhas'].includes(String(body.kind)) ? String(body.kind) : 'organico'
     const seed = body.idea && typeof body.idea === 'object' ? body.idea as { title?: string; hook?: string; angle?: string; format?: string } : null
+    // Botão "Gerar post de teste": o dono pode escolher um template específico
+    // ou "random" — sem isso (undefined), cai na rotação automática.
+    const templateChoice = body.template ? String(body.template) : null
 
     const result = await generateForCompany(admin, anthropicKey, company, kind, {
-      bearer, isCron: false, seed, ideaId: body.idea_id ? String(body.idea_id) : null,
+      bearer, isCron: false, seed, ideaId: body.idea_id ? String(body.idea_id) : null, templateChoice,
     })
     return json({ ok: true, ...result })
   } catch (err) {

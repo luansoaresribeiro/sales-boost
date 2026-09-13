@@ -229,6 +229,9 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
   const [allowCarrossel, setAllowCarrossel] = useState(false)
   const [autoLoaded, setAutoLoaded] = useState(false)
   const [autoSaving, setAutoSaving] = useState(false)
+  // '' = automático (rotaciona por todos os templates sozinho); 'random' =
+  // sorteia um; ou a chave exata de um template pra forçar aquele.
+  const [templateChoice, setTemplateChoice] = useState('')
 
   // Geração automática (1x/dia, 10h de Brasília, sempre no formato Orgânico —
   // ver creative-generate) — liga/desliga por empresa, não por módulo.
@@ -280,7 +283,7 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
       // dentro de creative-generate agora (já devolve com quality_score pronto).
       const res = await fetch(`${SUPABASE_URL}/functions/v1/creative-generate`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind }),
+        body: JSON.stringify({ kind, ...(templateChoice ? { template: templateChoice } : {}) }),
       })
       const r = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(r.error ?? 'Erro ao gerar post de teste')
@@ -322,10 +325,21 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
             Gera com o <strong>mesmo motor</strong> da automação e é avaliado por dois analistas — <strong>coerência</strong> (o post faz sentido do início ao fim?) e <strong>coerência visual</strong> (a imagem saiu legível, sem nada cortado/quebrado?). São sinais, não um portão: <strong>"Enviar pro Vault" sempre aparece</strong>, e "Corrigir" só aparece quando algo estiver claramente ruim. Só do Vault é que você publica.
           </div>
         </div>
-        <button onClick={generate} disabled={generating || !token}
-          style={{ padding: '9px 16px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '9px', border: 'none', cursor: generating ? 'default' : 'pointer', fontFamily: D, flexShrink: 0, opacity: generating ? 0.7 : 1 }}>
-          {generating ? 'Gerando + avaliando...' : '✨ Gerar post de teste'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          {kind === 'organico' && (
+            <select value={templateChoice} onChange={e => setTemplateChoice(e.target.value)} disabled={generating}
+              title="Escolha o template da imagem — ou deixe automático pra ele rotacionar sozinho por todos"
+              style={{ padding: '9px 10px', background: 'rgba(255,255,255,0.04)', color: 'white', fontSize: '11.5px', borderRadius: '9px', border: `1px solid ${BORDER}`, fontFamily: D, cursor: generating ? 'default' : 'pointer' }}>
+              <option value="">🔀 Automático (rotaciona)</option>
+              <option value="random">🎲 Aleatório</option>
+              {Object.entries(TEMPLATE_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          )}
+          <button onClick={generate} disabled={generating || !token}
+            style={{ padding: '9px 16px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '9px', border: 'none', cursor: generating ? 'default' : 'pointer', fontFamily: D, flexShrink: 0, opacity: generating ? 0.7 : 1 }}>
+            {generating ? 'Gerando + avaliando...' : '✨ Gerar post de teste'}
+          </button>
+        </div>
       </div>
 
       {kind === 'organico' && (
