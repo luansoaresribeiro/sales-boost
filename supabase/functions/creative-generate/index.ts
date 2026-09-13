@@ -74,15 +74,22 @@ function extractOne(raw: string): Record<string, unknown> | null {
 }
 
 // businessDescription conecta a foto ao negócio de verdade (não só ao tipo
-// genérico); visualSystem aqui é o CONTEÚDO resolvido do sistema visual
-// escolhido pelo Diretor (não só o título) — sem isso a imagem só sabia o
-// nome do estilo, não o que ele realmente descreve.
-async function generateImage(companyId: string, businessType: string | null, evoke: string, visualSystem?: string, brandStyle?: string, businessDescription?: string): Promise<string | null> {
+// genérico). NÃO recebe visual_system: as 7 opções da Biblioteca (Tweet
+// Print, Antes/Depois, Checklist, Comparação, Infográfico, Timeline,
+// Citação) são conceitos de CARD GRÁFICO/TEXTO (a mesma família dos
+// templates SVG do render-format), não de composição fotográfica — mandar
+// esse texto pro gerador de foto fazia a IA tentar desenhar um card de
+// UI com texto embutido (garantido "no text" logo depois no mesmo prompt),
+// o que sai borrado/ilegível e às vezes vira uma colagem de vários
+// "quadros" numa imagem só. O visual_system continua guiando a REDAÇÃO
+// (ver "Conceito visual a evocar" no execPrompt) — só não vira instrução
+// de foto.
+async function generateImage(companyId: string, businessType: string | null, evoke: string, brandStyle?: string, businessDescription?: string): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')
   if (!supabaseUrl || !serviceKey) return null
   try {
-    const prompt = `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}.${visualSystem ? ` Visual style/composition: ${visualSystem}.` : ''}${brandStyle ? ` ${brandStyle}` : ''} Commercial photography, warm natural lighting, polished and inviting, no text, no logos, no watermark. The photo must clearly and specifically depict this exact post concept, not a generic stock photo: ${evoke}`
+    const prompt = `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}.${brandStyle ? ` ${brandStyle}` : ''} Commercial photography, warm natural lighting, polished and inviting, no text, no logos, no watermark. The photo must clearly and specifically depict this exact post concept, not a generic stock photo: ${evoke}`
     const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
       method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, size: '1024x1024', company_id: companyId }),
@@ -249,22 +256,21 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
     if (insErr) return json({ error: insErr.message }, 500)
 
     // Imagens: carrossel gera 1 imagem por slide (paralelo, até 6); demais, 1 imagem.
-    // Usa o CONTEÚDO do sistema visual (visualContent, já resolvido acima pro
-    // passo de execução), não só o título — senão a imagem só sabe o nome do
-    // estilo, não o que ele descreve.
-    const visual = visualContent || (brief.visual_system as string | undefined)
+    // visual_system NÃO entra aqui (ver comentário em generateImage) — cada
+    // slide vira uma foto do SEU PRÓPRIO conteúdo específico, nunca um card
+    // gráfico genérico do sistema visual escolhido.
     const rawSlides = Array.isArray(post.slides) ? (post.slides as { text?: string; image?: string }[]).slice(0, 6) : []
     let mainImage: string | null = null
     let slides: { text: string; image_prompt: string; image_url: string | null }[] | null = null
     if (fmt === 'carrossel' && rawSlides.length > 0) {
-      const urls = await Promise.all(rawSlides.map(s => generateImage(company.id, company.business_type, String(s.image ?? s.text ?? idea ?? ''), visual, brandStyle, company.business_description ?? undefined)))
+      const urls = await Promise.all(rawSlides.map(s => generateImage(company.id, company.business_type, String(s.image ?? s.text ?? idea ?? ''), brandStyle, company.business_description ?? undefined)))
       slides = rawSlides.map((s, i) => ({ text: String(s.text ?? ''), image_prompt: String(s.image ?? ''), image_url: urls[i] }))
       mainImage = slides.find(s => s.image_url)?.image_url ?? null
     } else {
       // Uma foto só: junta a ideia + o gancho/oferta do brief — não só um
       // resumo curto — pra imagem casar de verdade com o post específico.
       const evoke = [idea, brief.hook_angle as string | undefined, brief.offer as string | undefined, caption].filter(Boolean).join('. ').slice(0, 600) || 'foto do negócio'
-      mainImage = await generateImage(company.id, company.business_type, evoke, visual, brandStyle, company.business_description ?? undefined)
+      mainImage = await generateImage(company.id, company.business_type, evoke, brandStyle, company.business_description ?? undefined)
     }
     await admin.from('marketing_ai_test_content').update({ image_url: mainImage, slides }).eq('id', inserted.id)
 
