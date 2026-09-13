@@ -208,6 +208,28 @@ export async function callContentImage(accessToken: string, contentId: string, a
 
 export const inputStyle = { padding: '8px 12px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '8px', color: 'white', fontSize: '13px', outline: 'none' } as const
 
+// Classificação de cada formato de imagem: em que etapa do FUNIL ele funciona
+// melhor (Topo/Meio/Fundo) e qual OBJETIVO principal (Awareness/Consideration/
+// Conversion/Flexible) — pra escolher o formato certo pra cada momento do
+// cliente, não só pelo visual. Uma tabela só, reusada nos dois motores de
+// template que existem: o motor manual (formatTemplates.tsx/FormatStudio —
+// chaves tweet/beforeafter/product/announcement/photo/stat) e o motor do
+// Diretor Criativo (creative-generate/TestingArea — chaves livre/tweet/
+// beforeafter/announcement/product; "livre" é o equivalente de "photo").
+export type FunnelStage = 'topo' | 'meio' | 'fundo'
+export interface FormatClass { funnel: FunnelStage[]; objective: string }
+export const FORMAT_CLASS: Record<string, FormatClass> = {
+  tweet: { funnel: ['topo'], objective: 'Awareness' },
+  stat: { funnel: ['topo', 'meio'], objective: 'Awareness' },
+  beforeafter: { funnel: ['meio', 'fundo'], objective: 'Consideration' },
+  product: { funnel: ['meio', 'fundo'], objective: 'Consideration' },
+  announcement: { funnel: ['fundo'], objective: 'Conversion' },
+  photo: { funnel: ['topo', 'meio', 'fundo'], objective: 'Flexible' },
+  livre: { funnel: ['topo', 'meio', 'fundo'], objective: 'Flexible' },
+}
+export const FUNNEL_LABEL: Record<FunnelStage, string> = { topo: 'Topo', meio: 'Meio', fundo: 'Fundo' }
+export const funnelText = (key: string): string => FORMAT_CLASS[key]?.funnel.map(f => FUNNEL_LABEL[f].toUpperCase()).join(' / ') ?? ''
+
 export function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diffMs / 60000)

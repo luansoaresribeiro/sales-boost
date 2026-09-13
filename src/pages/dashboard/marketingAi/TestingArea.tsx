@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { track } from '../../../lib/analytics'
-import { CARD, MUTED, BORDER, D, SUPABASE_URL, timeAgo } from './shared'
+import { CARD, MUTED, BORDER, D, SUPABASE_URL, timeAgo, FORMAT_CLASS, FUNNEL_LABEL } from './shared'
 import AdaptModal, { type VaultPost } from './AdaptModal'
 
 const KIND_PT: Record<string, string> = { organico: 'Orgânico', stories: 'Stories', campanhas: 'Campanhas' }
@@ -338,6 +338,16 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
               <option value="random">🎲 Aleatório</option>
               {Object.entries(TEMPLATE_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
             </select>
+          )}
+          {kind === 'organico' && templateChoice && FORMAT_CLASS[templateChoice] && (
+            <div style={{ display: 'flex', gap: '5px' }}>
+              <span style={{ fontSize: '9px', fontWeight: 800, color: '#A78BFA', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: '99px', padding: '3px 9px', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+                {FORMAT_CLASS[templateChoice].funnel.map(f => FUNNEL_LABEL[f].toUpperCase()).join(' / ')}
+              </span>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: '#60a5fa', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', borderRadius: '99px', padding: '3px 9px', whiteSpace: 'nowrap' }}>
+                {FORMAT_CLASS[templateChoice].objective}
+              </span>
+            </div>
           )}
           <button onClick={generate} disabled={generating || !token}
             style={{ padding: '9px 16px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '9px', border: 'none', cursor: generating ? 'default' : 'pointer', fontFamily: D, flexShrink: 0, opacity: generating ? 0.7 : 1 }}>

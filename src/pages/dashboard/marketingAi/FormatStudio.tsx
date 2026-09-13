@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { track } from '../../../lib/analytics'
-import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL } from './shared'
+import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL, FORMAT_CLASS, FUNNEL_LABEL } from './shared'
 import type { Template, Brand } from './formatTemplates'
 import { STANDARD_FORMATS, safePx, type FormatDef } from './formats'
 import { callContentTest } from './TestingArea'
@@ -196,8 +196,18 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#0E0B0A', border: `1px solid ${BORDER}`, borderRadius: '16px', width: '100%', maxWidth: '860px', maxHeight: '92vh', overflow: 'auto', padding: '22px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '16px' }}>
           <div style={{ fontSize: '15px', fontWeight: 800, color: 'white' }}>{template.icon} {template.label}</div>
+          {FORMAT_CLASS[template.key] && (
+            <>
+              <span style={{ fontSize: '9px', fontWeight: 800, color: '#A78BFA', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: '99px', padding: '3px 9px', letterSpacing: '0.03em' }}>
+                {FORMAT_CLASS[template.key].funnel.map(f => FUNNEL_LABEL[f].toUpperCase()).join(' / ')}
+              </span>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: '#60a5fa', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', borderRadius: '99px', padding: '3px 9px' }}>
+                {FORMAT_CLASS[template.key].objective}
+              </span>
+            </>
+          )}
           <button onClick={onClose} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: MUTED, fontSize: '20px', cursor: 'pointer' }}>×</button>
         </div>
 

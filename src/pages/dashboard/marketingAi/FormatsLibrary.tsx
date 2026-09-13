@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
-import { CARD, MUTED, BORDER, D, inputStyle } from './shared'
+import { CARD, MUTED, BORDER, D, inputStyle, FORMAT_CLASS, FUNNEL_LABEL, type FunnelStage } from './shared'
 import { TEMPLATES, type Template, type Brand } from './formatTemplates'
 import FormatStudio from './FormatStudio'
 import FormatsGallery from './FormatsGallery'
@@ -30,6 +30,7 @@ export default function FormatsLibrary({ companyId, module }: { companyId: strin
   const [desc, setDesc] = useState('')
   const [fields, setFields] = useState('')
   const [example, setExample] = useState('')
+  const [funnelFilter, setFunnelFilter] = useState<'todos' | FunnelStage>('todos')
 
   const load = useCallback(async () => {
     const [{ data }, { data: comp }, { data: bd }] = await Promise.all([
@@ -76,15 +77,36 @@ export default function FormatsLibrary({ companyId, module }: { companyId: strin
       {/* Motor de imagem — formatos que geram a imagem real, campo a campo */}
       <div style={{ marginBottom: '22px' }}>
         <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🎨 Gerar imagem de formato</div>
-        <div style={{ fontSize: '11px', color: MUTED, marginBottom: '11px' }}>Escolha um formato, preencha (ou deixe a IA preencher) e gere a imagem real. Ela cai na Área de Testes pra aprovação.</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
-          {TEMPLATES.map(t => (
-            <button key={t.key} onClick={() => setStudio(t)} style={{ textAlign: 'left', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', padding: '13px', cursor: 'pointer', fontFamily: D }}>
-              <div style={{ fontSize: '22px', marginBottom: '6px' }}>{t.icon}</div>
-              <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>{t.label}</div>
-              <div style={{ fontSize: '9.5px', color: MUTED }}>{t.w}×{t.h} · {t.fields.length} campos</div>
+        <div style={{ fontSize: '11px', color: MUTED, marginBottom: '9px' }}>Escolha um formato, preencha (ou deixe a IA preencher) e gere a imagem real. Ela cai na Área de Testes pra aprovação. Cada um serve melhor pra uma etapa do funil — use o filtro pra achar o certo.</div>
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '11px' }}>
+          {(['todos', 'topo', 'meio', 'fundo'] as const).map(f => (
+            <button key={f} onClick={() => setFunnelFilter(f)}
+              style={{ padding: '5px 12px', borderRadius: '99px', border: `1px solid ${funnelFilter === f ? 'rgba(255,109,41,0.5)' : BORDER}`, background: funnelFilter === f ? 'rgba(255,109,41,0.12)' : 'transparent', color: funnelFilter === f ? ORANGE : MUTED, fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D, textTransform: 'capitalize' }}>
+              {f === 'todos' ? 'Todos' : FUNNEL_LABEL[f]}
             </button>
           ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
+          {TEMPLATES.filter(t => funnelFilter === 'todos' || FORMAT_CLASS[t.key]?.funnel.includes(funnelFilter)).map(t => {
+            const cls = FORMAT_CLASS[t.key]
+            return (
+              <button key={t.key} onClick={() => setStudio(t)} style={{ textAlign: 'left', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', padding: '13px', cursor: 'pointer', fontFamily: D }}>
+                <div style={{ fontSize: '22px', marginBottom: '6px' }}>{t.icon}</div>
+                <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>{t.label}</div>
+                <div style={{ fontSize: '9.5px', color: MUTED, marginBottom: cls ? '6px' : 0 }}>{t.w}×{t.h} · {t.fields.length} campos</div>
+                {cls && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '8.5px', fontWeight: 800, color: '#A78BFA', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: '99px', padding: '2px 7px', letterSpacing: '0.03em' }}>
+                      {cls.funnel.map(f => FUNNEL_LABEL[f].toUpperCase()).join(' / ')}
+                    </span>
+                    <span style={{ fontSize: '8.5px', fontWeight: 700, color: '#60a5fa', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', borderRadius: '99px', padding: '2px 7px' }}>
+                      {cls.objective}
+                    </span>
+                  </div>
+                )}
+              </button>
+            )
+          })}
         </div>
       </div>
 
