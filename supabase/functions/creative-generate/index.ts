@@ -107,16 +107,25 @@ async function generateImage(companyId: string, businessType: string | null, evo
   } catch (e) { console.error('generateImage error:', e); return null }
 }
 
-// Sistemas visuais que são CARD GRÁFICO de verdade — o app já tem o motor
-// certo pra isso (render-format, o mesmo que monta Print de Tweet/Antes-
-// Depois na aba Formatos): Tweet Print sai de graça (sem IA de imagem);
-// Antes/Depois ainda precisa de 2 fotos, geradas abaixo.
-const GRAPHIC_CARD: Record<string, 'tweet' | 'beforeafter'> = { 'Tweet Print': 'tweet', 'Antes/Depois': 'beforeafter' }
+// Modelos de imagem disponíveis pro Diretor escolher — os MESMOS templates
+// reais de "Gerar imagem de formato" (formatTemplates/render-format), não
+// uma lista solta desconectada. "simples" é a única sem motor de card: foto
+// realista comum, sem texto embutido, pro dia a dia — os outros só quando o
+// conteúdo realmente pede aquele tratamento específico (o Diretor escolhe
+// isso ANTES de qualquer geração de imagem/texto acontecer, não depois).
+// 'product' só entra na lista se a empresa já tem foto real de produto
+// cadastrada — nunca oferece uma opção que não tem como cumprir de verdade.
+const TEMPLATE_DESC = (hasProduct: boolean): Record<string, string> => ({
+  simples: 'Foto realista do negócio, sem texto embutido na imagem — a legenda conta a história. Padrão pro dia a dia.',
+  tweet: 'Card estilo "tweet"/nota com uma frase de efeito em texto nítido, sem foto. Bom pra opinião, gancho ou dado curioso forte.',
+  beforeafter: 'Duas fotos reais lado a lado, antes e depois. SÓ escolha se existir uma transformação específica de verdade pra mostrar.',
+  announcement: 'Pôster com chamada/oferta em destaque tipográfico, sem foto. Pra promoção, novidade ou data específica.',
+  ...(hasProduct ? { product: 'Produto centralizado tipo pôster (usa uma foto de produto real já cadastrada), com nome/chamada. Só quando o post é sobre esse produto específico.' } : {}),
+})
 
-// Pros sistemas visuais que SÃO fotografáveis (mas cuja descrição crua da
-// Biblioteca não é uma instrução de foto), traduz pra uma composição
-// fotográfica de verdade. 'Infográfico' fica de fora (dado real ou nada —
-// não dá pra fabricar estatística visual sem inventar número).
+// Pro template "simples", traduz o sistema visual escolhido (quando SÃO
+// fotografáveis) numa composição fotográfica de verdade — 'Infográfico'
+// fica de fora (dado real ou nada, não dá pra fabricar estatística visual).
 const PHOTO_HINT: Record<string, string> = {
   'Comparação': 'side-by-side composition clearly comparing two distinct options or states',
   'Checklist': 'flat-lay composition with the physical items/elements neatly arranged, as if laid out to check off one by one',
@@ -133,7 +142,7 @@ interface CardBrand { primary: string; name: string; accent?: string; text?: str
 // cron_secret+company_id (modo lote, sem usuário logado).
 async function renderGraphicCard(
   auth: { bearer: string; isCron: boolean; cronSecret?: string },
-  companyId: string, template: 'tweet' | 'beforeafter', fields: Record<string, string>, brand: CardBrand,
+  companyId: string, template: 'tweet' | 'beforeafter' | 'announcement' | 'product', fields: Record<string, string>, brand: CardBrand,
 ): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   if (!supabaseUrl) return null
@@ -179,7 +188,7 @@ interface GenOpts {
 // O núcleo da geração — usado tanto pelo modo interativo (1 empresa, o
 // dono clicou) quanto pelo lote diário (várias empresas, cron).
 async function generateForCompany(admin: SupaClient, anthropicKey: string, company: Company, kind: string, opts: GenOpts) {
-  const [{ data: cfgRow }, { data: insRows }, { data: libRows }, { data: visRows }, { data: fmtRows }, { data: bdRow }, { data: recentRows }] = await Promise.all([
+  const [{ data: cfgRow }, { data: insRows }, { data: libRows }, { data: visRows }, { data: fmtRows }, { data: bdRow }, { data: recentRows }, { data: productRows }] = await Promise.all([
     admin.from('marketing_ai_config').select('agent_name, brand_voice, tone, target_audience, content_pillars, marketing_goals, business_objectives').eq('company_id', company.id).maybeSingle(),
     admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(6),
     admin.from('marketing_ai_knowledge').select('kind, title, content, module').or(`company_id.is.null,company_id.eq.${company.id}`).in('module', ['core', kind]),
@@ -187,6 +196,9 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
     admin.from('marketing_ai_knowledge').select('title, content, meta').eq('company_id', company.id).eq('module', 'formato').order('created_at', { ascending: false }).limit(10),
     admin.from('brand_dna').select('colors, design_notes, kit, logo_url').eq('company_id', company.id).maybeSingle(),
     admin.from('marketing_ai_test_content').select('format, brief').eq('company_id', company.id).order('created_at', { ascending: false }).limit(5),
+    // Fotos reais de produto (aba Produtos, Estilos e Visuais) — só existe o
+    // template "Foco no Produto" pro Diretor se houver pelo menos uma.
+    admin.from('marketing_ai_knowledge').select('title, image_url').eq('company_id', company.id).eq('module', 'visual').eq('kind', 'product').order('created_at', { ascending: false }).limit(1),
   ])
   const config = (cfgRow as Config | null) ?? defaultConfig(company)
   const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
@@ -217,15 +229,19 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
     primary: kitColors?.primary?.[0] || bd?.colors?.[0] || '#FF6D29', name: company.business_name,
     accent: kitColors?.accent?.[0], text: kitColors?.text, bg: kitColors?.bg, logoUrl: bd?.logo_url ?? undefined,
   }
+  const product = ((productRows ?? [])[0] as { title: string; image_url: string | null } | undefined) ?? null
+  const templateDesc = TEMPLATE_DESC(!!product?.image_url)
+  const templateKeys = Object.keys(templateDesc)
+  const templateList = templateKeys.map(k => `"${k}"`).join('|')
 
   // Últimos formatos/sistemas visuais/frameworks já usados — sem isso o
   // Diretor converge sempre na MESMA escolha "mais lógica" pro negócio
   // (ex: sempre "Antes/Depois" + "BAB" pra um negócio sobre transformação),
   // porque o contexto da empresa não muda entre gerações. Pedir variedade
   // explícita evita repetir o mesmo formato/visual toda vez.
-  const recent = (recentRows ?? []) as { format: string | null; brief: { visual_system?: string; framework?: string } | null }[]
+  const recent = (recentRows ?? []) as { format: string | null; brief: { visual_system?: string; framework?: string; template?: string } | null }[]
   const recentUsed = recent.filter(r => r.format || r.brief?.visual_system || r.brief?.framework)
-    .map(r => `- formato "${r.format ?? '—'}", sistema visual "${r.brief?.visual_system ?? '—'}", framework "${r.brief?.framework ?? '—'}"`).join('\n')
+    .map(r => `- formato "${r.format ?? '—'}", template "${r.brief?.template ?? '—'}", sistema visual "${r.brief?.visual_system ?? '—'}", framework "${r.brief?.framework ?? '—'}"`).join('\n')
 
   // Ideia-semente vinda do Creative Agent (opcional): o dono escolheu uma
   // ideia; o Diretor constrói o brief em cima dela em vez de inventar do zero.
@@ -250,17 +266,22 @@ Boas práticas do formato ${modLabel}:\n${moduleKnow}
 ${formatsRef ? `\nFormatos disponíveis (escolha a anatomia certa e cite em "format" quando usar um):\n${formatsRef}` : ''}
 Personalidades disponíveis:\n${listByKind(lib, 'personality')}
 Frameworks de copy:\n${listByKind(lib, 'framework')}
-Sistemas visuais:\n${listByKind(lib, 'visual_system')}
+Sistemas visuais (guiam como a LEGENDA é estruturada):\n${listByKind(lib, 'visual_system')}
 Hooks de referência:\n${listByKind(lib, 'hook')}
 
-IMPORTANTE: "format" só pode ser um destes (${modLabel} não suporta os outros): ${fmtList}. Escolha o SISTEMA VISUAL com intenção — ele decide como a imagem final vai ser montada (card gráfico ou foto), não é só um rótulo.
+Modelos de imagem disponíveis pra "template" (o motor real que monta a imagem — decida ANTES de qualquer legenda/foto existir, a imagem final tem que encaixar NELE, não o contrário):
+${templateKeys.map(k => `- ${k}: ${templateDesc[k]}`).join('\n')}
+${product ? `Produto real cadastrado disponível: "${product.title}" (só use "template":"product" se o post for de fato sobre ele).` : ''}
+
+IMPORTANTE: "format" só pode ser um destes (${modLabel} não suporta os outros): ${fmtList}. "template" só pode ser um destes: ${templateList} — só é usado de verdade quando "format" for "foto" (ignore pra carrossel/reel/story). "simples" é o padrão saudável pro dia a dia; escolha outro só quando o conteúdo pedir aquele tratamento específico, e VARIE (veja "Últimos posts" acima — não deixe sempre "simples" nem sempre o mesmo especial).
 Decida o brief. Retorne APENAS um JSON:
-{"objective":"awareness|engagement|conversion","format":${fmtList},"visual_system":"<título exato da biblioteca>","personality":"<título exato da biblioteca>","framework":"<título exato da biblioteca>","hook_angle":"ângulo do gancho em 1 frase","cta":"chamada pra ação","offer":"oferta/valor em 1 frase (ou vazio)","reasoning":"por que essas escolhas, citando o insight"}`
+{"objective":"awareness|engagement|conversion","format":${fmtList},"template":${templateList},"visual_system":"<título exato da biblioteca>","personality":"<título exato da biblioteca>","framework":"<título exato da biblioteca>","hook_angle":"ângulo do gancho em 1 frase","cta":"chamada pra ação","offer":"oferta/valor em 1 frase (ou vazio)","reasoning":"por que essas escolhas, citando o insight"}`
 
   const brief = parseObj(await callClaude(anthropicKey, directorPrompt, 900))
-  // Rede de segurança: se a IA ignorar a restrição, força pro formato
-  // permitido mais próximo em vez de deixar vazar um formato não suportado.
+  // Rede de segurança: se a IA ignorar a restrição, força pro formato/
+  // template permitido mais próximo em vez de deixar vazar algo não suportado.
   if (!allowedFormats.includes(String(brief.format))) brief.format = allowedFormats[0]
+  if (!templateKeys.includes(String(brief.template))) brief.template = 'simples'
   const personality = String(brief.personality ?? 'Copywriter')
 
   // ── Passo 2: a personalidade EXECUTA, consultando a biblioteca ───────
@@ -276,9 +297,11 @@ Você agora EXECUTA como esta personalidade: ${personaContent}
 Siga fielmente o brief do Diretor Criativo:
 - Objetivo: ${brief.objective ?? '—'}
 - Formato: ${brief.format ?? 'foto'}
+- Modelo de imagem: ${brief.template ?? 'simples'} — ${templateDesc[String(brief.template ?? 'simples')] ?? ''}
 - Ângulo do hook: ${brief.hook_angle ?? '—'}
 - CTA desejado: ${brief.cta ?? '—'}
 - Oferta: ${brief.offer ?? '—'}
+${brief.template === 'product' && product ? `- Produto real desse post: "${product.title}" — a legenda precisa ser sobre ESTE produto especificamente.` : ''}
 ${frameworkContent ? `\nUse este framework de copy:\n${frameworkContent}` : ''}
 ${visualContent ? `\nConceito visual a evocar:\n${visualContent}` : ''}
 
@@ -321,44 +344,63 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
 
   let mainImage: string | null = null
   let slides: { text: string; image_prompt: string; image_url: string | null }[] | null = null
+  const evoke = () => [idea, brief.hook_angle as string | undefined, brief.offer as string | undefined, caption].filter(Boolean).join('. ').slice(0, 600) || 'foto do negócio'
+  const conceptHint = PHOTO_HINT[visualSystemTitle]
 
   if (!opts.skipImage) {
-    const graphicTemplate = fmt !== 'carrossel' ? GRAPHIC_CARD[visualSystemTitle] : undefined
-
-    if (graphicTemplate === 'tweet') {
-      // Tweet Print de verdade — card gráfico via render-format, texto nítido, sem IA de imagem.
-      const text = (caption ?? idea ?? '').slice(0, 200)
-      mainImage = await renderGraphicCard(opts, company.id, 'tweet', { text, name: company.business_name, handle: slugHandle(company.business_name) }, cardBrand)
-      if (!mainImage) mainImage = await generateImage(company.id, company.business_type, [idea, caption].filter(Boolean).join('. ').slice(0, 600), undefined, brandStyle, company.business_description ?? undefined)
-    } else if (graphicTemplate === 'beforeafter') {
-      // Antes/Depois de verdade — 2 fotos reais (uma do estado "antes", outra
-      // do "depois"), compostas no card via render-format. Só aqui vale gerar
-      // 2 imagens pro mesmo post: sem isso a comparação não existe de verdade.
-      const subject = company.business_description ?? company.business_type ?? 'the business'
-      const [beforeUrl, afterUrl] = await Promise.all([
-        generateImage(company.id, company.business_type, `BEFORE state: ${subject} — the problem, worn out or unimpressive starting point, before any improvement. ${idea ?? ''}`, undefined, brandStyle, company.business_description ?? undefined),
-        generateImage(company.id, company.business_type, `AFTER state: ${subject} — the improved, polished, impressive result after the transformation. ${idea ?? ''}`, undefined, brandStyle, company.business_description ?? undefined),
-      ])
-      mainImage = await renderGraphicCard(opts, company.id, 'beforeafter', {
-        beforeImage: beforeUrl ?? '', afterImage: afterUrl ?? '', beforeLabel: 'Antes', afterLabel: 'Depois', caption: String(brief.hook_angle ?? idea ?? ''),
-      }, cardBrand)
-      if (!mainImage) mainImage = beforeUrl ?? afterUrl
-    } else {
-      const conceptHint = PHOTO_HINT[visualSystemTitle]
+    if (fmt === 'carrossel') {
       const rawSlides = Array.isArray(post.slides) ? (post.slides as { text?: string; image?: string }[]).slice(0, 6) : []
-      if (fmt === 'carrossel' && rawSlides.length > 0) {
+      if (rawSlides.length > 0) {
         // Imagens: carrossel gera 1 imagem por slide (paralelo, até 6), cada
         // uma do conteúdo ESPECÍFICO daquele slide — a coerência entre elas
         // vem da história pedida no execPrompt, não de repetir a mesma cena.
         const urls = await Promise.all(rawSlides.map(s => generateImage(company.id, company.business_type, String(s.image ?? s.text ?? idea ?? ''), conceptHint, brandStyle, company.business_description ?? undefined)))
         slides = rawSlides.map((s, i) => ({ text: String(s.text ?? ''), image_prompt: String(s.image ?? ''), image_url: urls[i] }))
         mainImage = slides.find(s => s.image_url)?.image_url ?? null
-      } else {
-        // Uma foto só: junta a ideia + o gancho/oferta do brief — não só um
-        // resumo curto — pra imagem casar de verdade com o post específico.
-        const evoke = [idea, brief.hook_angle as string | undefined, brief.offer as string | undefined, caption].filter(Boolean).join('. ').slice(0, 600) || 'foto do negócio'
-        mainImage = await generateImage(company.id, company.business_type, evoke, conceptHint, brandStyle, company.business_description ?? undefined)
       }
+    } else if (fmt === 'foto') {
+      // O template já foi decidido pelo Diretor ANTES da legenda existir — a
+      // imagem/card agora só precisa encaixar nele, nunca o contrário.
+      const template = String(brief.template ?? 'simples')
+      if (template === 'tweet') {
+        // Tweet Print de verdade — card gráfico via render-format, texto nítido, ZERO geração de imagem.
+        const text = (caption ?? idea ?? '').slice(0, 200)
+        mainImage = await renderGraphicCard(opts, company.id, 'tweet', { text, name: company.business_name, handle: slugHandle(company.business_name) }, cardBrand)
+        if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), undefined, brandStyle, company.business_description ?? undefined)
+      } else if (template === 'announcement') {
+        // Pôster de texto — também zero geração de imagem.
+        const headline = String(idea ?? brief.hook_angle ?? 'Novidade').slice(0, 90)
+        mainImage = await renderGraphicCard(opts, company.id, 'announcement', {
+          headline, subtext: caption ? caption.slice(0, 140) : '', offer: String(brief.offer ?? ''), cta: String(post.cta ?? brief.cta ?? ''),
+        }, cardBrand)
+        if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), undefined, brandStyle, company.business_description ?? undefined)
+      } else if (template === 'product' && product?.image_url) {
+        // Produto real já cadastrado — zero geração de imagem, reusa a foto de verdade.
+        mainImage = await renderGraphicCard(opts, company.id, 'product', {
+          productImage: product.image_url, name: product.title, price: '', cta: String(post.cta ?? brief.cta ?? ''),
+        }, cardBrand)
+        if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), undefined, brandStyle, company.business_description ?? undefined)
+      } else if (template === 'beforeafter') {
+        // Antes/Depois de verdade — 2 fotos reais (uma do estado "antes", outra
+        // do "depois"), compostas no card via render-format. Só aqui vale gerar
+        // 2 imagens pro mesmo post: sem isso a comparação não existe de verdade.
+        const subject = company.business_description ?? company.business_type ?? 'the business'
+        const [beforeUrl, afterUrl] = await Promise.all([
+          generateImage(company.id, company.business_type, `BEFORE state: ${subject} — the problem, worn out or unimpressive starting point, before any improvement. ${idea ?? ''}`, undefined, brandStyle, company.business_description ?? undefined),
+          generateImage(company.id, company.business_type, `AFTER state: ${subject} — the improved, polished, impressive result after the transformation. ${idea ?? ''}`, undefined, brandStyle, company.business_description ?? undefined),
+        ])
+        mainImage = await renderGraphicCard(opts, company.id, 'beforeafter', {
+          beforeImage: beforeUrl ?? '', afterImage: afterUrl ?? '', beforeLabel: 'Antes', afterLabel: 'Depois', caption: String(brief.hook_angle ?? idea ?? ''),
+        }, cardBrand)
+        if (!mainImage) mainImage = beforeUrl ?? afterUrl
+      } else {
+        // "simples" (padrão) — foto realista comum, legenda conta a história.
+        mainImage = await generateImage(company.id, company.business_type, evoke(), conceptHint, brandStyle, company.business_description ?? undefined)
+      }
+    } else {
+      // reel/story (só existe em Campanhas) — ainda 1 imagem estática (não
+      // geramos vídeo de verdade), mesmo caminho do "simples".
+      mainImage = await generateImage(company.id, company.business_type, evoke(), conceptHint, brandStyle, company.business_description ?? undefined)
     }
   }
   await admin.from('marketing_ai_test_content').update({ image_url: mainImage, slides }).eq('id', inserted.id)
