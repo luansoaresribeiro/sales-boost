@@ -136,19 +136,14 @@ export function BriefBlock({ post }: { post: TestPost }) {
   )
 }
 
-export const CAT_LABEL: Record<string, string> = {
-  creative: 'Criativo', novelty: 'Novidade', brand: 'Marca', hook: 'Hook', cta: 'CTA',
-  visual: 'Visual', engagement: 'Engaj.', conversion: 'Conversão', readability: 'Leitura', grammar: 'Gramática',
-}
-export const CAT_ORDER = ['creative', 'novelty', 'brand', 'hook', 'cta', 'visual', 'engagement', 'conversion', 'readability']
-export const scoreColor = (n: number) => (n >= 90 ? GREEN : n >= 75 ? '#FBBF24' : '#f87171')
-// Coerência e gramática são ELIMINATÓRIAS (as únicas coisas que bloqueiam o
-// Vault) — as outras 9 dimensões acima são só consultivas, já que nenhum
-// post real batia 90+ nelas. Coerência é a checagem principal: o post faz
-// sentido como uma peça única?
-export const grammarOk = (post: TestPost) => post.scores?.grammar != null && post.scores.grammar.score === 100
-export const coherenceOk = (post: TestPost) => post.scores?.coherence != null && post.scores.coherence.score === 100
-export const canGoToVault = (post: TestPost) => grammarOk(post) && coherenceOk(post)
+// Único classificador que existe agora — os 9 antigos + a gramática
+// separada foram removidos: eram inconsistentes e travavam o Vault sem
+// necessidade real (ver content-test/scoreContent). Coerência NUNCA
+// bloqueia sozinha — é só um sinal pro dono, "Enviar pro Vault" sempre
+// existe. BAD_THRESHOLD tem que bater com o mesmo número no backend
+// (content-test's COHERENCE_BAD_THRESHOLD).
+const COHERENCE_BAD_THRESHOLD = 50
+export const coherenceIsBad = (post: TestPost) => (post.scores?.coherence?.score ?? 100) < COHERENCE_BAD_THRESHOLD
 
 export async function callContentTest(token: string, payload: Record<string, unknown>) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/content-test`, {
@@ -161,42 +156,21 @@ export async function callContentTest(token: string, payload: Record<string, unk
   return data as { id?: string; quality_score?: number; regenerated?: string; image_generated?: boolean }
 }
 
-// Banner de uma checagem eliminatória (coerência/gramática) — mesmo padrão visual pras duas.
-function GateBanner({ ok, okLabel, failLabel, comment }: { ok: boolean; okLabel: string; failLabel: string; comment: string }) {
+// Nota de coerência + comentário — único sinal de qualidade que existe agora.
+export function ScoreBreakdown({ post }: { post: TestPost }) {
+  if (post.quality_score == null || !post.scores?.coherence) return null
+  const coherence = post.scores.coherence
+  const bad = coherenceIsBad(post)
   return (
     <div style={{
-      display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '6px', padding: '6px 8px', borderRadius: '6px',
-      background: ok ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.1)',
-      border: `1px solid ${ok ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.35)'}`,
+      display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '9px 10px', borderRadius: '8px',
+      background: bad ? 'rgba(248,113,113,0.08)' : 'rgba(74,222,128,0.06)',
+      border: `1px solid ${bad ? 'rgba(248,113,113,0.3)' : 'rgba(74,222,128,0.25)'}`,
     }}>
-      <span style={{ fontSize: '11px' }}>{ok ? '✓' : '⚠️'}</span>
-      <span style={{ fontSize: '10.5px', color: ok ? GREEN : '#f87171', lineHeight: 1.4 }}>{ok ? okLabel : (comment || failLabel)}</span>
-    </div>
-  )
-}
-
-// Grade de notas do júri: nota final ponderada (consultiva) + cada dimensão
-// (comentário no hover). Coerência e gramática vêm separadas, em destaque —
-// são as únicas que bloqueiam o Vault.
-export function ScoreBreakdown({ post }: { post: TestPost }) {
-  if (post.quality_score == null || !post.scores) return null
-  const coherence = post.scores.coherence
-  const grammar = post.scores.grammar
-  return (
-    <div style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '8px', padding: '9px 10px' }}>
-      {coherence && <GateBanner ok={coherence.score === 100} okLabel="Conteúdo coerente" failLabel="Problema de coerência encontrado" comment={coherence.comment} />}
-      {grammar && <div style={{ marginBottom: '8px' }}><GateBanner ok={grammar.score === 100} okLabel="Sem erro de gramática/ortografia" failLabel="Erro de gramática/ortografia encontrado" comment={grammar.comment} /></div>}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '7px', marginBottom: '7px' }}>
-        <span style={{ fontSize: '22px', fontWeight: 800, color: scoreColor(post.quality_score), lineHeight: 1 }}>{post.quality_score}</span>
-        <span style={{ fontSize: '10px', color: MUTED }}>/100 · nota de qualidade (referência, não bloqueia)</span>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-        {CAT_ORDER.filter(c => post.scores![c]).map(c => (
-          <span key={c} title={post.scores![c].comment}
-            style={{ fontSize: '9px', fontWeight: 700, color: scoreColor(post.scores![c].score), border: `1px solid ${scoreColor(post.scores![c].score)}44`, borderRadius: '99px', padding: '2px 6px', cursor: 'help' }}>
-            {CAT_LABEL[c]} {post.scores![c].score}
-          </span>
-        ))}
+      <span style={{ fontSize: '18px', fontWeight: 800, color: bad ? '#f87171' : GREEN, lineHeight: 1, flexShrink: 0 }}>{coherence.score}</span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '2px' }}>Coerência</div>
+        <div style={{ fontSize: '10.5px', color: bad ? '#f87171' : 'rgba(255,255,255,0.75)', lineHeight: 1.4 }}>{coherence.comment || (bad ? 'Post incoerente' : 'Post coerente')}</div>
       </div>
     </div>
   )
@@ -318,7 +292,7 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
         <div style={{ maxWidth: '600px' }}>
           <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🧪 Área de Testes + Controle de Qualidade</div>
           <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55 }}>
-            Gera com o <strong>mesmo motor</strong> da automação e passa por um <strong>júri de revisores</strong>. <strong>Conteúdo coerente e sem erro de língua</strong> → vai pro Vault. As notas de criativo, hook, etc. ficam visíveis como referência, mas não bloqueiam mais o envio. Só do Vault é que você publica.
+            Gera com o <strong>mesmo motor</strong> da automação e é avaliado por um <strong>analista de coerência</strong> — só checa se o post faz sentido do início ao fim. É um sinal, não um portão: <strong>"Enviar pro Vault" sempre aparece</strong>, e "Corrigir coerência" só some/aparece quando o post estiver claramente ruim. Só do Vault é que você publica.
           </div>
         </div>
         <button onClick={generate} disabled={generating || !token}
@@ -393,16 +367,20 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
                         style={{ flex: 1, padding: '8px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${BORDER}`, borderRadius: '8px', color: 'white', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
                         {busy ? '...' : 'Avaliar'}
                       </button>
-                    ) : canGoToVault(t) ? (
-                      <button onClick={() => act(t.id, { action: 'to_vault' }, 'Enviado pro Vault ✓')} disabled={busy}
-                        style={{ flex: 1, padding: '8px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: '8px', color: GREEN, fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-                        {busy ? '...' : '⭐ Enviar pro Vault'}
-                      </button>
                     ) : (
-                      <button onClick={() => act(t.id, { action: 'regenerate' })} disabled={busy}
-                        style={{ flex: 1, padding: '8px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '8px', color: '#FBBF24', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-                        {busy ? 'Regenerando...' : coherenceOk(t) ? '🔁 Corrigir erro de língua' : '🔁 Corrigir coerência'}
-                      </button>
+                      <>
+                        {/* Enviar pro Vault sempre existe — a IA só avisa quando acha ruim, quem decide é o dono. */}
+                        <button onClick={() => act(t.id, { action: 'to_vault' }, 'Enviado pro Vault ✓')} disabled={busy}
+                          style={{ flex: 1, padding: '8px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: '8px', color: GREEN, fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
+                          {busy ? '...' : '⭐ Enviar pro Vault'}
+                        </button>
+                        {coherenceIsBad(t) && (
+                          <button onClick={() => act(t.id, { action: 'regenerate' })} disabled={busy}
+                            style={{ flex: 1, padding: '8px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '8px', color: '#FBBF24', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
+                            {busy ? 'Regenerando...' : '🔁 Corrigir coerência'}
+                          </button>
+                        )}
+                      </>
                     )}
                     <button onClick={() => discard(t.id)} disabled={busy}
                       style={{ padding: '8px 12px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '11.5px', cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
