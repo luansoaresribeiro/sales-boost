@@ -9,6 +9,7 @@ import { STANDARD_FORMATS, safePx, type FormatDef } from './formats'
 interface Size { w: number; h: number; safe: { top: number; right: number; bottom: number; left: number } }
 interface Comp { id: string; title: string; image_url: string | null }
 interface Preset { id: string; name: string; formats: { name: string; w: number; h: number }[] }
+interface ProductPhoto { id: string; title: string; image_url: string | null }
 
 const ORANGE = '#FF6D29'
 const MODS: { key: string; label: string }[] = [{ key: 'organico', label: 'Orgânico' }, { key: 'stories', label: 'Stories' }, { key: 'campanhas', label: 'Campanhas' }]
@@ -29,6 +30,7 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const isPhoto = template.key === 'photo'
+  const isProduct = template.key === 'product'
   const [bg, setBg] = useState('')          // URL do fundo (asset reusado)
   const [genBg, setGenBg] = useState(true)  // gerar fundo com IA se vazio
   const [fmtKey, setFmtKey] = useState('ig_portrait')
@@ -37,9 +39,16 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
   const [formats, setFormats] = useState<FormatDef[]>(STANDARD_FORMATS)
   const [comps, setComps] = useState<Comp[]>([])
   const [presets, setPresets] = useState<Preset[]>([])
+  const [products, setProducts] = useState<ProductPhoto[]>([])
 
   // Formatos (padrão + custom ativos), componentes e presets — só p/ o 'photo'.
+  // Fotos de produto (aba Produtos, em Estilos e Visuais) — só p/ 'product'.
   const loadExtras = useCallback(async () => {
+    if (isProduct) {
+      const { data: pp } = await supabase.from('marketing_ai_knowledge').select('id, title, image_url').eq('module', 'visual').eq('kind', 'product').order('created_at', { ascending: false })
+      setProducts((pp ?? []) as ProductPhoto[])
+      return
+    }
     if (!isPhoto) return
     const [{ data: cf }, { data: cp }, { data: pr }] = await Promise.all([
       supabase.from('marketing_ai_formats').select('*').eq('active', true),
@@ -51,7 +60,7 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
     setFormats([...STANDARD_FORMATS, ...customFmts])
     setComps((cp ?? []) as Comp[])
     setPresets((pr ?? []) as Preset[])
-  }, [isPhoto])
+  }, [isPhoto, isProduct])
   useEffect(() => { loadExtras() }, [loadExtras])
 
   const curFmt = formats.find(f => f.key === fmtKey) ?? STANDARD_FORMATS[1]
@@ -182,7 +191,20 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
               <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Sobre o que é o post? (opcional)" style={{ ...inputStyle, flex: 1 }} />
               <button onClick={fillWithAi} disabled={filling} style={{ padding: '8px 14px', background: filling ? 'rgba(255,109,41,0.4)' : ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: filling ? 'wait' : 'pointer', fontFamily: D, whiteSpace: 'nowrap' }}>{filling ? '...' : '✨ Preencher com IA'}</button>
             </div>
-            {template.fields.map(fd => (
+            {isProduct && (
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Foto do produto (da aba Produtos)</label>
+                {products.length === 0 ? (
+                  <div style={{ fontSize: '11px', color: MUTED, padding: '9px 0' }}>Nenhuma foto ainda — suba em Agente de Dados → Estilos e Visuais → Arquivo → Produtos.</div>
+                ) : (
+                  <select value={fields.productImage ?? ''} onChange={e => set('productImage', e.target.value)} style={{ ...inputStyle, width: '100%', fontFamily: D }}>
+                    <option value="">Escolha um produto…</option>
+                    {products.map(p => <option key={p.id} value={p.image_url ?? ''}>{p.title}</option>)}
+                  </select>
+                )}
+              </div>
+            )}
+            {template.fields.filter(fd => !(isProduct && fd.key === 'productImage')).map(fd => (
               <div key={fd.key}>
                 <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{fd.label}</label>
                 {fd.type === 'textarea'

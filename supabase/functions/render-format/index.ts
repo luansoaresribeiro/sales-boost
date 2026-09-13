@@ -143,27 +143,28 @@ ${capLines.length ? `<defs><linearGradient id="capg" x1="0" y1="0" x2="0" y2="1"
   return { svg, w: W, h: H }
 }
 
-// Lista educativa: 3 erros comuns do cliente ideal (icp), numerados. Puro
-// texto — sem dado fabricado, o que vem de fora é sempre real (ICP da
-// empresa + os 3 erros escritos pela IA de conteúdo, nunca um número solto).
-function svgMistakes(f: F, b: Brand): { svg: string; w: number; h: number } {
-  const W = 1080, H = 1350
-  const ink = contrastColor(b.primary)
-  const icp = f.icp || 'cliente'
-  const hl = wrap(`3 erros que todo(a) ${icp} comete`.toUpperCase(), 40, 880)
-  const items = [f.mistake1, f.mistake2, f.mistake3].filter((m): m is string => !!m)
-  const parts: string[] = [block(hl, 100, 160, 40, ink, 800, 54)]
-  let y = 160 + hl.length * 54 + 70
-  items.forEach((m, i) => {
-    const lines = wrap(m, 34, 760)
-    parts.push(`<text x="100" y="${y + 50}" font-family="Poppins" font-size="64" font-weight="800" fill="${mutedInk(ink, 0.55)}">${String(i + 1).padStart(2, '0')}</text>`)
-    parts.push(block(lines, 220, y + 44, 34, ink, 600, 44))
-    y += Math.max(lines.length * 44, 70) + 60
-    if (i < items.length - 1) parts.push(`<rect x="100" y="${y - 30}" width="880" height="2" fill="${mutedInk(ink, 0.18)}"/>`)
-  })
+// Pôster: produto centralizado, sombra de "estúdio" desfocada atrás dele,
+// nome/preço/chamada embaixo. productImg já vem como data URI (a foto real
+// sobe pela aba Produtos, em Estilos e Visuais). "meet" (não "slice") pra
+// nunca cortar o produto — a foto inteira sempre aparece.
+function svgProduct(f: F, b: Brand, productImg: string | null): { svg: string; w: number; h: number } {
+  const W = 1080, H = 1350, cx = W / 2
+  const parts: string[] = [`<defs><filter id="shadowBlur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="26"/></filter></defs>`]
+  parts.push(`<ellipse cx="${cx}" cy="800" rx="290" ry="46" fill="rgba(0,0,0,0.55)" filter="url(#shadowBlur)"/>`)
+  parts.push(productImg
+    ? `<image href="${productImg}" x="${cx - 320}" y="120" width="640" height="700" preserveAspectRatio="xMidYMid meet"/>`
+    : `<rect x="${cx - 260}" y="180" width="520" height="580" rx="24" fill="rgba(255,255,255,0.06)"/>`)
+  let y = 900
+  if (f.name) { parts.push(block([f.name], cx, y, 56, '#ffffff', 800, 0, 'middle')); y += 80 }
+  if (f.price) { parts.push(block([f.price], cx, y, 46, b.primary, 800, 0, 'middle')); y += 90 }
+  if (f.cta) {
+    const cw = f.cta.length * 24 + 130
+    parts.push(`<rect x="${cx - cw / 2}" y="${y}" width="${cw}" height="82" rx="41" fill="${b.primary}"/>`)
+    parts.push(block([f.cta], cx - cw / 2 + 40, y + 54, 34, '#000000', 800, 0))
+    parts.push(arrowGlyph(cx + cw / 2 - 48, y + 41, 13, '#000000'))
+  }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-${primaryBgDef('mg', b)}
-<rect width="${W}" height="${H}" fill="url(#mg)"/>
+<rect width="${W}" height="${H}" fill="${b.bg || '#0E0B0A'}"/>
 ${parts.join('')}
 </svg>`
   return { svg, w: W, h: H }
@@ -230,11 +231,11 @@ ${overlay}
   return { svg, w: W, h: H }
 }
 
-function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, beforeImg: string | null, afterImg: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
+function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, beforeImg: string | null, afterImg: string | null, productImg: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
   switch (template) {
     case 'tweet': return svgTweet(f, b, logo)
     case 'beforeafter': return svgBeforeAfter(f, b, beforeImg, afterImg)
-    case 'mistakes': return svgMistakes(f, b)
+    case 'product': return svgProduct(f, b, productImg)
     case 'announcement': return svgAnnouncement(f, b)
     case 'stat': return svgStat(f, b)
     case 'photo': return svgPhoto(f, b, bg, logo, sticker, W, H, safe)
@@ -301,6 +302,9 @@ Deno.serve(async (req) => {
     const [beforeImgData, afterImgData] = template === 'beforeafter'
       ? await Promise.all([fields.beforeImage ? toDataUri(fields.beforeImage) : null, fields.afterImage ? toDataUri(fields.afterImage) : null])
       : [null, null]
+    // Foco no Produto: a foto vem de fields.productImage (URL real da aba
+    // Produtos, escolhida no FormatStudio ou passada pelo Diretor Criativo).
+    const productImgData = template === 'product' && fields.productImage ? await toDataUri(fields.productImage) : null
 
     // Tamanho/safe do formato (só o 'photo' é adaptativo; os demais têm tamanho fixo).
     const W = Math.max(200, Math.min(4000, Number(body.width) || 1080))
@@ -308,7 +312,7 @@ Deno.serve(async (req) => {
     const safe = (body.safe as Safe | undefined) ?? { top: Math.round(H * 0.06), right: Math.round(W * 0.08), bottom: Math.round(H * 0.09), left: Math.round(W * 0.08) }
 
     await ensureEngine()
-    const { svg, w } = buildSvg(template, fields, brand, bgData, logoData, stickerData, beforeImgData, afterImgData, W, H, safe)
+    const { svg, w } = buildSvg(template, fields, brand, bgData, logoData, stickerData, beforeImgData, afterImgData, productImgData, W, H, safe)
     const png = renderPng(svg, w)
 
     const path = `renders/${companyId}/${crypto.randomUUID()}.png`

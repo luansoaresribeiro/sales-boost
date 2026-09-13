@@ -85,13 +85,13 @@ function extractOne(raw: string): Record<string, unknown> | null {
 // genérico). `conceptHint` é uma tradução FOTOGRÁFICA curada do sistema
 // visual escolhido (ver PHOTO_HINT) — nunca o texto cru da Biblioteca: os
 // sistemas visuais que são card gráfico/texto (Tweet Print, Antes/Depois,
-// 3 Erros Comuns, Infográfico) não são composição de foto, e mandar essa
-// descrição pro gerador de foto fazia a IA tentar desenhar um card cheio de
-// texto (garantido "no text" logo depois no mesmo prompt) — saía borrado/
+// Infográfico) não são composição de foto, e mandar essa descrição pro
+// gerador de foto fazia a IA tentar desenhar um card cheio de texto
+// (garantido "no text" logo depois no mesmo prompt) — saía borrado/
 // ilegível e às vezes virava colagem de vários "quadros" numa imagem só.
-// Tweet Print/Antes-Depois/3 Erros agora viram o card gráfico de verdade
-// via render-format (ver renderGraphicCard); Infográfico fica só na
-// legenda (não dá pra "traduzir" um dado real sem inventar número).
+// Tweet Print/Antes-Depois agora viram o card gráfico de verdade via
+// render-format (ver renderGraphicCard); Infográfico fica só na legenda
+// (não dá pra "traduzir" um dado real sem inventar número).
 async function generateImage(companyId: string, businessType: string | null, evoke: string, conceptHint?: string, brandStyle?: string, businessDescription?: string): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')
@@ -109,9 +109,9 @@ async function generateImage(companyId: string, businessType: string | null, evo
 
 // Sistemas visuais que são CARD GRÁFICO de verdade — o app já tem o motor
 // certo pra isso (render-format, o mesmo que monta Print de Tweet/Antes-
-// Depois/3 Erros na aba Formatos): texto nítido, de graça (sem IA de imagem
-// nos dois primeiros; Antes/Depois ainda precisa de 2 fotos, geradas abaixo).
-const GRAPHIC_CARD: Record<string, 'tweet' | 'beforeafter' | 'mistakes'> = { 'Tweet Print': 'tweet', 'Antes/Depois': 'beforeafter', '3 Erros Comuns': 'mistakes' }
+// Depois na aba Formatos): Tweet Print sai de graça (sem IA de imagem);
+// Antes/Depois ainda precisa de 2 fotos, geradas abaixo.
+const GRAPHIC_CARD: Record<string, 'tweet' | 'beforeafter'> = { 'Tweet Print': 'tweet', 'Antes/Depois': 'beforeafter' }
 
 // Pros sistemas visuais que SÃO fotografáveis (mas cuja descrição crua da
 // Biblioteca não é uma instrução de foto), traduz pra uma composição
@@ -133,7 +133,7 @@ interface CardBrand { primary: string; name: string; accent?: string; text?: str
 // cron_secret+company_id (modo lote, sem usuário logado).
 async function renderGraphicCard(
   auth: { bearer: string; isCron: boolean; cronSecret?: string },
-  companyId: string, template: 'tweet' | 'beforeafter' | 'mistakes', fields: Record<string, string>, brand: CardBrand,
+  companyId: string, template: 'tweet' | 'beforeafter', fields: Record<string, string>, brand: CardBrand,
 ): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   if (!supabaseUrl) return null
@@ -210,8 +210,8 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
   const brandColors = (bd?.colors ?? []).slice(0, 4).join(', ')
   const brandStyle = [brandColors ? `Brand color palette: ${brandColors}.` : '', bd?.design_notes ? `Art direction: ${bd.design_notes}.` : ''].filter(Boolean).join(' ') || undefined
   // Mesmo Kit que a Biblioteca (Estilos e Visuais) e "Gerar imagem de
-  // formato" usam — os cards gráficos (Tweet Print/Antes-Depois/3 Erros)
-  // saem com a cor/logo reais da empresa, não um laranja genérico.
+  // formato" usam — os cards gráficos (Tweet Print/Antes-Depois) saem com
+  // a cor/logo reais da empresa, não um laranja genérico.
   const kitColors = bd?.kit?.colors
   const cardBrand: CardBrand = {
     primary: kitColors?.primary?.[0] || bd?.colors?.[0] || '#FF6D29', name: company.business_name,
@@ -288,9 +288,8 @@ Escreva o post pronto pra publicar. Regras importantes:
 - "caption" é APENAS a legenda que vai no Instagram (texto pro público). NUNCA coloque nela instruções de imagem, descrição de foto nem "Slide 1/2/3".
 - Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
 - Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
-- Se o sistema visual for "3 Erros Comuns", preencha também "mistakes": um array com EXATAMENTE 3 erros reais e específicos que ${config.target_audience ?? company.ideal_customer ?? 'o cliente ideal'} desse negócio comete (frases curtas, cada uma um erro diferente). Caso contrário, deixe "mistakes" vazio.
 Retorne APENAS um JSON array:
-[{"idea":"resumo curto do post","caption":"só a legenda do Instagram, texto pro público","hashtags":"#tag1 #tag2 #tag3","cta":"chamada pra ação final","format":"${brief.format ?? 'foto'}","video_script":"","slides":[{"text":"","image":""}],"mistakes":[]}]`
+[{"idea":"resumo curto do post","caption":"só a legenda do Instagram, texto pro público","hashtags":"#tag1 #tag2 #tag3","cta":"chamada pra ação final","format":"${brief.format ?? 'foto'}","video_script":"","slides":[{"text":"","image":""}]}]`
 
   const execRaw = await callClaude(anthropicKey, execPrompt, 2000)
   let post = extractOne(execRaw)
@@ -330,13 +329,6 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
       // Tweet Print de verdade — card gráfico via render-format, texto nítido, sem IA de imagem.
       const text = (caption ?? idea ?? '').slice(0, 200)
       mainImage = await renderGraphicCard(opts, company.id, 'tweet', { text, name: company.business_name, handle: slugHandle(company.business_name) }, cardBrand)
-      if (!mainImage) mainImage = await generateImage(company.id, company.business_type, [idea, caption].filter(Boolean).join('. ').slice(0, 600), undefined, brandStyle, company.business_description ?? undefined)
-    } else if (graphicTemplate === 'mistakes') {
-      // 3 Erros Comuns — card 100% texto (ICP real + os 3 erros que o
-      // copywriter já escreveu no passo anterior), sem custo de IA de imagem.
-      const mistakesArr = Array.isArray(post.mistakes) ? (post.mistakes as unknown[]).map(String).slice(0, 3) : []
-      const icp = String(config.target_audience ?? company.ideal_customer ?? company.business_type ?? 'cliente')
-      mainImage = await renderGraphicCard(opts, company.id, 'mistakes', { icp, mistake1: mistakesArr[0] ?? '', mistake2: mistakesArr[1] ?? '', mistake3: mistakesArr[2] ?? '' }, cardBrand)
       if (!mainImage) mainImage = await generateImage(company.id, company.business_type, [idea, caption].filter(Boolean).join('. ').slice(0, 600), undefined, brandStyle, company.business_description ?? undefined)
     } else if (graphicTemplate === 'beforeafter') {
       // Antes/Depois de verdade — 2 fotos reais (uma do estado "antes", outra

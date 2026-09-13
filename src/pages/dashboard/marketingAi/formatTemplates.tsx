@@ -94,26 +94,30 @@ function beforeAfter(f: Record<string, string>, brand: Brand): JSX.Element {
   )
 }
 
-// Fundo cheio na cor primária (gradiente sutil) — padrão dos 3 cards de
-// texto puro abaixo (3 Erros, Anúncio, Estatística). Tweet Print fica fiel
-// ao tema real do X; Antes/Depois tem o fundo coberto pelas 2 fotos.
+// Fundo cheio na cor primária (gradiente sutil) — padrão dos cards de texto
+// puro abaixo (Anúncio, Estatística). Tweet Print fica fiel ao tema real do
+// X; Antes/Depois e Foco no Produto têm o fundo coberto por foto/produto.
 const primaryBg = (b: Brand) => `linear-gradient(155deg, ${b.primary}, ${shade(b.primary, -30)})`
 
-// ── 3 Erros Comuns ───────────────────────────────────────────────────────────
-function mistakes(f: Record<string, string>, brand: Brand): JSX.Element {
-  const icp = f.icp || 'cliente'
-  const items = [f.mistake1, f.mistake2, f.mistake3].filter(Boolean)
-  const ink = contrastColor(brand.primary)
-  const row = (n: number, text: string): JSX.Element => (
-    <div key={n} style={{ display: 'flex', alignItems: 'flex-start', gap: '30px', padding: '26px 0', borderTop: n > 1 ? `2px solid ${muted(ink, 0.18)}` : undefined }}>
-      <div style={{ fontSize: '64px', fontWeight: 800, color: muted(ink, 0.55), lineHeight: 1, flexShrink: 0 }}>{String(n).padStart(2, '0')}</div>
-      <div style={{ fontSize: '38px', lineHeight: 1.35, fontWeight: 600, marginTop: '8px', color: ink }}>{text}</div>
-    </div>
-  )
+// ── Foco no Produto ──────────────────────────────────────────────────────────
+// Pôster: produto centralizado, sombra de "estúdio" atrás dele, nome/preço/
+// chamada embaixo. Usa as fotos reais da aba Produtos (Estilos e Visuais).
+function product(f: Record<string, string>, brand: Brand): JSX.Element {
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: primaryBg(brand), display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '100px', boxSizing: 'border-box', fontFamily: bfont(brand), color: ink }}>
-      <div style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: ink, marginBottom: '18px' }}>3 erros que todo(a) {icp} comete</div>
-      <div>{items.length ? items.map((m, i) => row(i + 1, m!)) : [1, 2, 3].map(n => row(n, 'Erro comum aqui'))}</div>
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: brand.bg || '#0E0B0A', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 70px', boxSizing: 'border-box', fontFamily: bfont(brand), color: '#fff', textAlign: 'center' }}>
+      <div style={{ position: 'relative', width: '100%', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
+        <div style={{ position: 'absolute', bottom: '6%', width: '58%', height: '48px', borderRadius: '50%', background: 'rgba(0,0,0,0.55)', filter: 'blur(24px)' }} />
+        {f.productImage ? (
+          <img src={f.productImage} crossOrigin="anonymous" alt="" style={{ position: 'relative', maxWidth: '78%', maxHeight: '100%', objectFit: 'contain', filter: 'drop-shadow(0 30px 34px rgba(0,0,0,0.5))' }} />
+        ) : (
+          <div style={{ position: 'relative', width: '60%', height: '70%', borderRadius: '18px', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '64px' }}>📦</div>
+        )}
+      </div>
+      <div style={{ flexShrink: 0 }}>
+        {f.name && <div style={{ fontSize: '52px', fontWeight: 800 }}>{f.name}</div>}
+        {f.price && <div style={{ fontSize: '40px', fontWeight: 800, color: brand.primary, marginTop: '10px' }}>{f.price}</div>}
+        {f.cta && <div style={{ display: 'inline-block', marginTop: '22px', background: brand.primary, color: '#000', fontSize: '30px', fontWeight: 800, padding: '14px 32px', borderRadius: '999px' }}>{f.cta} →</div>}
+      </div>
       <Logo b={brand} />
     </div>
   )
@@ -201,13 +205,13 @@ export const TEMPLATES: Template[] = [
     render: beforeAfter,
   },
   {
-    key: 'mistakes', label: '3 Erros Comuns', icon: '⚠️', w: 1080, h: 1350,
+    key: 'product', label: 'Foco no Produto', icon: '📦', w: 1080, h: 1350,
     fields: [
-      { key: 'icp', label: 'Quem comete esses erros? (seu cliente ideal)' },
-      { key: 'mistake1', label: 'Erro 1' }, { key: 'mistake2', label: 'Erro 2' }, { key: 'mistake3', label: 'Erro 3' },
+      { key: 'productImage', label: 'Foto do produto' }, { key: 'name', label: 'Nome' },
+      { key: 'price', label: 'Preço' }, { key: 'cta', label: 'Chamada pra ação' },
     ],
-    sample: { icp: '', mistake1: '', mistake2: '', mistake3: '' },
-    render: mistakes,
+    sample: { productImage: '', name: '', price: '', cta: '' },
+    render: product,
   },
   {
     key: 'announcement', label: 'Anúncio / Promoção', icon: '📣', w: 1080, h: 1350,
