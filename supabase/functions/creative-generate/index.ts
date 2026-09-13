@@ -123,21 +123,21 @@ async function generateImage(companyId: string, businessType: string | null, evo
 
 // Modelos de imagem disponíveis pro Diretor escolher — os MESMOS templates
 // reais de "Gerar imagem de formato" (formatTemplates/render-format), não
-// uma lista solta desconectada. "simples" é a única sem motor de card: foto
-// realista comum, sem texto embutido, pro dia a dia — os outros só quando o
-// conteúdo realmente pede aquele tratamento específico (o Diretor escolhe
-// isso ANTES de qualquer geração de imagem/texto acontecer, não depois).
-// 'product' só entra na lista se a empresa já tem foto real de produto
-// cadastrada — nunca oferece uma opção que não tem como cumprir de verdade.
+// uma lista solta desconectada. TODOS, incluindo "livre", são escolhas
+// deliberadas com um USO específico — nenhum é "o padrão pra quando não
+// souber o que escolher". O Diretor decide isso ANTES de qualquer geração
+// de imagem/texto acontecer, nunca depois. 'product' só entra na lista se
+// a empresa já tem foto real de produto cadastrada — nunca oferece uma
+// opção que não tem como cumprir de verdade.
 const TEMPLATE_DESC = (hasProduct: boolean): Record<string, string> => ({
-  simples: 'Foto realista do negócio, sem texto embutido na imagem — a legenda conta a história. Padrão pro dia a dia.',
+  livre: 'Foto realista e ESPECÍFICA do negócio, sem texto embutido na imagem — a legenda faz o trabalho de texto. Use quando o valor do post está na FOTO em si: um momento real, um clima, um resultado visual que fala por si só (não é o "padrão" — é a escolha certa quando nenhum card de texto serviria melhor que uma foto de verdade).',
   tweet: 'Card estilo "tweet"/nota com uma frase de efeito em texto nítido, sem foto. Bom pra opinião, gancho ou dado curioso forte.',
   beforeafter: 'Duas fotos reais lado a lado, antes e depois. SÓ escolha se existir uma transformação específica de verdade pra mostrar.',
   announcement: 'Pôster com chamada/oferta em destaque tipográfico, sem foto. Pra promoção, novidade ou data específica.',
   ...(hasProduct ? { product: 'Produto centralizado tipo pôster (usa uma foto de produto real já cadastrada), com nome/chamada. Só quando o post é sobre esse produto específico.' } : {}),
 })
 
-// Pro template "simples", traduz o sistema visual escolhido (quando SÃO
+// Pro template "livre", traduz o sistema visual escolhido (quando SÃO
 // fotografáveis) numa composição fotográfica de verdade — 'Infográfico'
 // fica de fora (dado real ou nada, não dá pra fabricar estatística visual).
 const PHOTO_HINT: Record<string, string> = {
@@ -292,15 +292,15 @@ Modelos de imagem disponíveis pra "template" (o motor real que monta a imagem �
 ${templateKeys.map(k => `- ${k}: ${templateDesc[k]}`).join('\n')}
 ${product ? `Produto real cadastrado disponível: "${product.title}" (só use "template":"product" se o post for de fato sobre ele).` : ''}
 
-IMPORTANTE: "format" só pode ser um destes (${modLabel} não suporta os outros): ${fmtList}. "template" só pode ser um destes: ${templateList} — só é usado de verdade quando "format" for "foto" (ignore pra carrossel/reel/story). "simples" é o padrão saudável pro dia a dia; escolha outro só quando o conteúdo pedir aquele tratamento específico, e VARIE (veja "Últimos posts" acima — não deixe sempre "simples" nem sempre o mesmo especial).
+IMPORTANTE: "format" só pode ser um destes (${modLabel} não suporta os outros): ${fmtList}. "template" só pode ser um destes: ${templateList} — só é usado de verdade quando "format" for "foto" (ignore pra carrossel/reel/story). Passe pelas opções de verdade, uma por uma, e escolha a que MELHOR serve essa ideia específica — nenhuma delas (nem "livre") é o padrão pra quando você não souber o que escolher; TODAS exigem motivo real, que você explica em "reasoning" (cite ali por que escolheu esse template e não outro). VARIE de verdade (veja "Últimos posts" acima — não deixe o mesmo template se repetir sem um motivo estratégico real).
 Decida o brief. Retorne APENAS um JSON:
-{"objective":"awareness|engagement|conversion","format":${fmtList},"template":${templateList},"visual_system":"<título exato da biblioteca>","personality":"<título exato da biblioteca>","framework":"<título exato da biblioteca>","hook_angle":"ângulo do gancho em 1 frase","cta":"chamada pra ação","offer":"oferta/valor em 1 frase (ou vazio)","reasoning":"por que essas escolhas, citando o insight"}`
+{"objective":"awareness|engagement|conversion","format":${fmtList},"template":${templateList},"visual_system":"<título exato da biblioteca>","personality":"<título exato da biblioteca>","framework":"<título exato da biblioteca>","hook_angle":"ângulo do gancho em 1 frase","cta":"chamada pra ação","offer":"oferta/valor em 1 frase (ou vazio)","reasoning":"por que essas escolhas (incluindo o template), citando o insight"}`
 
   const brief = parseObj(await callClaude(anthropicKey, directorPrompt, 900))
   // Rede de segurança: se a IA ignorar a restrição, força pro formato/
   // template permitido mais próximo em vez de deixar vazar algo não suportado.
   if (!allowedFormats.includes(String(brief.format))) brief.format = allowedFormats[0]
-  if (!templateKeys.includes(String(brief.template))) brief.template = 'simples'
+  if (!templateKeys.includes(String(brief.template))) brief.template = 'livre'
   const personality = String(brief.personality ?? 'Copywriter')
 
   // ── Passo 2: a personalidade EXECUTA, consultando a biblioteca ───────
@@ -316,7 +316,7 @@ Você agora EXECUTA como esta personalidade: ${personaContent}
 Siga fielmente o brief do Diretor Criativo:
 - Objetivo: ${brief.objective ?? '—'}
 - Formato: ${brief.format ?? 'foto'}
-- Modelo de imagem: ${brief.template ?? 'simples'} — ${templateDesc[String(brief.template ?? 'simples')] ?? ''}
+- Modelo de imagem: ${brief.template ?? 'livre'} — ${templateDesc[String(brief.template ?? 'livre')] ?? ''}
 - Ângulo do hook: ${brief.hook_angle ?? '—'}
 - CTA desejado: ${brief.cta ?? '—'}
 - Oferta: ${brief.offer ?? '—'}
@@ -380,7 +380,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
     } else if (fmt === 'foto') {
       // O template já foi decidido pelo Diretor ANTES da legenda existir — a
       // imagem/card agora só precisa encaixar nele, nunca o contrário.
-      const template = String(brief.template ?? 'simples')
+      const template = String(brief.template ?? 'livre')
       if (template === 'tweet') {
         // Tweet Print de verdade — card gráfico via render-format, texto nítido, ZERO geração de imagem.
         const text = (caption ?? idea ?? '').slice(0, 200)
@@ -413,12 +413,12 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
         }, cardBrand)
         if (!mainImage) mainImage = beforeUrl ?? afterUrl
       } else {
-        // "simples" (padrão) — foto realista comum, legenda conta a história.
+        // "livre" — foto realista e específica, escolhida com intenção (não é fallback). Legenda conta a história.
         mainImage = await generateImage(company.id, company.business_type, evoke(), conceptHint, brandStyle, company.business_description ?? undefined)
       }
     } else {
       // reel/story (só existe em Campanhas) — ainda 1 imagem estática (não
-      // geramos vídeo de verdade), mesmo caminho do "simples".
+      // geramos vídeo de verdade), mesmo caminho do "livre".
       mainImage = await generateImage(company.id, company.business_type, evoke(), conceptHint, brandStyle, company.business_description ?? undefined)
     }
   }

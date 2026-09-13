@@ -224,7 +224,11 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
 
   const saveAuto = async (patch: { auto_daily_test?: boolean; auto_daily_test_image?: boolean; allow_carrossel?: boolean }) => {
     setAutoSaving(true)
-    await supabase.from('marketing_ai_config').update(patch).eq('company_id', companyId)
+    // upsert, não update: empresa pode ainda não ter linha em
+    // marketing_ai_config (só é criada quando algo é salvo) — um .update()
+    // simples ali daria 0 linhas afetadas, sem erro, e o toggle pareceria
+    // salvo na tela mas nunca teria efeito nenhum de verdade.
+    await supabase.from('marketing_ai_config').upsert({ company_id: companyId, ...patch }, { onConflict: 'company_id' })
     if ('auto_daily_test' in patch) setAutoDaily(!!patch.auto_daily_test)
     if ('auto_daily_test_image' in patch) setAutoDailyImage(!!patch.auto_daily_test_image)
     if ('allow_carrossel' in patch) setAllowCarrossel(!!patch.allow_carrossel)
