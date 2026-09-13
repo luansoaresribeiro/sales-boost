@@ -113,9 +113,12 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
   // render-format não avalia sozinho — sem isso o post ficava sem
   // quality_score e a Área de Testes travava no botão "Avaliar" pra sempre
   // (nunca chegava a mostrar "Enviar pro Vault"). Nunca derruba o fluxo se falhar.
-  const scoreGenerated = async (id?: string | null) => {
-    if (!id) return
-    try { await callContentTest(token, { action: 'score', test_id: id }) } catch { /* fica como "Avaliar" manual se falhar */ }
+  // Fluxo novo: classificação boa (coerência + coerência visual) já vai
+  // direto pro Vault sozinho — devolve isso pra ajustar a mensagem, senão
+  // parece que a peça sumiu sem explicação.
+  const scoreGenerated = async (id?: string | null): Promise<boolean> => {
+    if (!id) return false
+    try { const r = await callContentTest(token, { action: 'score', test_id: id }); return !!r.auto_vault } catch { return false }
   }
 
   const generate = async () => {
@@ -123,9 +126,9 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
     try {
       const r = await callRender(fields, brand, bg || undefined, isPhoto && genBg, isPhoto ? sizeOf(curFmt) : undefined)
       if (isPhoto && !bg && r.bg_url) setBg(r.bg_url) // guarda o fundo pra reusar de graça
-      await scoreGenerated(r.id)
-      track('content_generated', `Gerou imagem de formato (${template.label})`, { template: template.key })
-      setMsg('Imagem gerada! Está na Área de Testes (seção Conteúdo), esperando sua aprovação.')
+      const wentToVault = await scoreGenerated(r.id)
+      track('content_generated', `Gerou imagem de formato (${template.label})`, { template: template.key, auto_vault: wentToVault })
+      setMsg(wentToVault ? '✅ Imagem gerada com nota boa — já foi direto pro Vault!' : 'Imagem gerada! Está na Área de Testes (seção Conteúdo), esperando sua aprovação.')
       onSaved()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Erro ao gerar imagem')
@@ -145,14 +148,15 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
       if (template.key === 'tweet') jobs.unshift({ fl: { ...fields, theme: (fields.theme === 'light' ? 'dark' : 'light') }, br: brand })
       if (jobs.length === 0) { setErr('Defina cores 2ª/destaque no Kit da Marca pra gerar variações.'); setSaving(false); return }
       let useBg = bg
+      let vaulted = 0
       for (const j of jobs) {
         const r = await callRender(j.fl, j.br, useBg || undefined, isPhoto && genBg && !useBg, size)
         if (isPhoto && !useBg && r.bg_url) useBg = r.bg_url // gera 1x, reusa nas próximas
-        await scoreGenerated(r.id)
+        if (await scoreGenerated(r.id)) vaulted++
       }
       if (useBg && !bg) setBg(useBg)
-      track('content_generated', `Gerou ${jobs.length} variações (${template.label})`, { template: template.key, variations: jobs.length })
-      setMsg(`${jobs.length} variações geradas (fundo reusado) na Área de Testes.`)
+      track('content_generated', `Gerou ${jobs.length} variações (${template.label})`, { template: template.key, variations: jobs.length, auto_vault: vaulted })
+      setMsg(`${jobs.length} variações geradas (fundo reusado)${vaulted > 0 ? ` — ${vaulted} com nota boa já foram direto pro Vault` : ' na Área de Testes'}.`)
       onSaved()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Erro ao gerar variações')
@@ -168,14 +172,15 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
     setSaving(true); setErr(''); setMsg('')
     try {
       let useBg = bg
+      let vaulted = 0
       for (const fmt of preset.formats) {
         const r = await callRender(fields, brand, useBg || undefined, isPhoto && genBg && !useBg, { w: fmt.w, h: fmt.h, safe: safePx(fmt) })
         if (isPhoto && !useBg && r.bg_url) useBg = r.bg_url
-        await scoreGenerated(r.id)
+        if (await scoreGenerated(r.id)) vaulted++
       }
       if (useBg && !bg) setBg(useBg)
-      track('content_generated', `Gerou preset ${preset.name} (${preset.formats.length} formatos)`, { preset: preset.name })
-      setMsg(`${preset.formats.length} formatos gerados (fundo reusado) na Área de Testes.`)
+      track('content_generated', `Gerou preset ${preset.name} (${preset.formats.length} formatos)`, { preset: preset.name, auto_vault: vaulted })
+      setMsg(`${preset.formats.length} formatos gerados (fundo reusado)${vaulted > 0 ? ` — ${vaulted} com nota boa já foram direto pro Vault` : ' na Área de Testes'}.`)
       onSaved()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Erro ao gerar preset')

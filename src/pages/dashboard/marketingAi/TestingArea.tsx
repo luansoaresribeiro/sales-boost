@@ -161,7 +161,7 @@ export async function callContentTest(token: string, payload: Record<string, unk
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error ?? 'Erro na Área de Testes')
-  return data as { id?: string; quality_score?: number; regenerated?: string; image_generated?: boolean }
+  return data as { id?: string; quality_score?: number; regenerated?: string; image_generated?: boolean; auto_vault?: boolean }
 }
 
 function CoherenceRow({ label, score, comment, bad }: { label: string; score: number; comment: string; bad: boolean }) {
@@ -285,10 +285,14 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind, ...(templateChoice ? { template: templateChoice } : {}) }),
       })
-      const r = await res.json().catch(() => ({}))
+      const r = await res.json().catch(() => ({})) as { error?: string; auto_vault?: boolean }
       if (!res.ok) throw new Error(r.error ?? 'Erro ao gerar post de teste')
       await load()
-      track('content_generated', `Gerou conteúdo (${KIND_PT[kind] ?? kind})`, { kind })
+      // Fluxo novo: classificação boa (coerência + coerência visual) já vai
+      // direto pro Vault sozinho — some da Área de Testes na hora, então
+      // avisa pra não parecer que sumiu sem explicação.
+      if (r.auto_vault) { setOkMsg('✅ Post gerado com nota boa — já foi direto pro Vault!'); onVaultChange?.() }
+      track('content_generated', `Gerou conteúdo (${KIND_PT[kind] ?? kind})`, { kind, auto_vault: !!r.auto_vault })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao gerar post de teste')
     }

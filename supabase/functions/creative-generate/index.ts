@@ -95,15 +95,17 @@ function extractOne(raw: string): Record<string, unknown> | null {
 // Chama o mesmo controle de qualidade do botão "Avaliar" (content-test),
 // server-a-server via service role — funciona tanto no clique interativo
 // quanto no lote automático diário (nenhum usuário logado nesse caso).
-async function scoreTestContent(companyId: string, testId: string): Promise<void> {
+async function scoreTestContent(companyId: string, testId: string): Promise<boolean> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  if (!supabaseUrl || !serviceKey) return
+  if (!supabaseUrl || !serviceKey) return false
   const res = await fetch(`${supabaseUrl}/functions/v1/content-test`, {
     method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'score', test_id: testId, company_id: companyId }),
   })
   if (!res.ok) throw new Error(`content-test score falhou: ${await res.text()}`)
+  const data = await res.json().catch(() => ({})) as { auto_vault?: boolean }
+  return !!data.auto_vault
 }
 
 async function generateImage(companyId: string, businessType: string | null, evoke: string, conceptHint?: string, brandStyle?: string, businessDescription?: string): Promise<string | null> {
@@ -509,9 +511,10 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   // pro Vault" nem "Corrigir", trava em "Avaliar" pra sempre. Cobre tanto o
   // clique interativo quanto o lote automático diário (nenhum dos dois
   // chamava isso antes). Nunca derruba a geração se a avaliação falhar.
-  try { await scoreTestContent(company.id, inserted.id) } catch (e) { console.error('creative-generate: score falhou', e) }
+  let autoVault = false
+  try { autoVault = await scoreTestContent(company.id, inserted.id) } catch (e) { console.error('creative-generate: score falhou', e) }
 
-  return { id: inserted.id, image_generated: !!mainImage, slides: slides?.length ?? 0, personality, brief }
+  return { id: inserted.id, image_generated: !!mainImage, slides: slides?.length ?? 0, personality, brief, auto_vault: autoVault }
 }
 
 const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language'

@@ -187,9 +187,9 @@ Retorne APENAS um JSON: {"score":0,"comment":"1 frase curta — o que está bom,
     try {
       const img = await fetchImageBase64(post.imageUrl)
       if (img) {
-        const visPrompt = `Você é um ANALISTA VISUAL — a ÚNICA coisa que você avalia é se esta imagem está PRONTA PRA PUBLICAR de verdade: todo texto legível e COMPLETO (nada cortado na borda, nada sobrepondo outro elemento ou saindo do card), composição sem nada quebrado ou fora do lugar. NÃO avalie o conteúdo criativo, a mensagem ou a marca — só a execução visual.
+        const visPrompt = `Você é um ANALISTA VISUAL — a ÚNICA coisa que você avalia é se esta imagem está PRONTA PRA PUBLICAR de verdade: todo texto legível e COMPLETO (nada cortado na borda, nada sobrepondo outro elemento ou saindo do card), composição sem nada quebrado ou fora do lugar, e NENHUM texto/letreiro/faixa/placa dentro da própria foto saiu bugado — a geração de imagem por IA às vezes "alucina" um banner, cartaz ou etiqueta com letras que formam palavras sem sentido, nome inventado/errado, ou ortografia quebrada (ex: uma faixa de festa escrito algo que não é uma palavra real). Isso conta como defeito visual mesmo que o texto esteja nítido e não cortado. NÃO avalie o conteúdo criativo, a mensagem ou a marca — só a execução visual.
 
-Dê nota de 0 a 100. SEJA GENEROSO — a maioria das imagens deve passar fácil. Só dê nota abaixo de ${COHERENCE_BAD_THRESHOLD} em problema visual CLARO: texto cortado/sobreposto/ilegível, elemento quebrado, faltando ou fora do lugar.
+Dê nota de 0 a 100. SEJA GENEROSO — a maioria das imagens deve passar fácil. Só dê nota abaixo de ${COHERENCE_BAD_THRESHOLD} em problema visual CLARO: texto cortado/sobreposto/ilegível, elemento quebrado/faltando/fora do lugar, ou texto/faixa/placa na foto com palavras sem sentido/erradas.
 
 Retorne APENAS um JSON: {"score":0,"comment":"1 frase curta — o que está bom, ou o que especificamente está quebrado, se houver"}`
         const rawV = await callClaudeVision(anthropicKey, visPrompt, img, 300)
@@ -284,8 +284,17 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       if (!t) return json({ error: 'Post de teste não encontrado' }, 404)
       const config = await loadConfig(admin, company)
       const { scores, quality } = await scoreContent(anthropicKey, config, company, { idea: t.idea, caption: t.caption, hashtags: t.hashtags, cta: t.cta, format: t.format, imageUrl: t.image_url })
-      await admin.from('marketing_ai_test_content').update({ scores, quality_score: quality }).eq('id', testId)
-      return json({ ok: true, scores, quality_score: quality })
+      // Fluxo novo (pedido do dono): se os dois analistas (coerência de texto
+      // e coerência visual, quando há imagem) vieram BONS, o post já vai
+      // direto pro Vault sozinho — sem precisar clicar "Enviar pro Vault".
+      // Só quando algo está claramente ruim é que fica esperando na Área de
+      // Testes com o botão "Corrigir". Vale pra 3 posts/dia do trial e 1/dia
+      // do plano normal — mesma regra, sem depender de quantos posts saíram.
+      const coherenceBad = quality < COHERENCE_BAD_THRESHOLD
+      const visualBad = (scores.visual_coherence?.score ?? 100) < COHERENCE_BAD_THRESHOLD
+      const autoVault = !coherenceBad && !visualBad
+      await admin.from('marketing_ai_test_content').update({ scores, quality_score: quality, ...(autoVault ? { status: 'vault' } : {}) }).eq('id', testId)
+      return json({ ok: true, scores, quality_score: quality, auto_vault: autoVault })
     }
 
     // ── Regenerar por problema de coerência (Auto Feedback Loop) ────────
