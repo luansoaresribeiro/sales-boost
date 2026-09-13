@@ -138,7 +138,7 @@ Post:
 
 Dimensões: creative (força criativa geral), novelty (originalidade vs clichê), brand (consistência com voz/público), hook (força da primeira linha), cta (clareza/persuasão da chamada), visual (adequação do conceito visual), engagement (potencial de curtidas/comentários/salvamentos), conversion (potencial de gerar lead/venda), readability (clareza/facilidade de leitura).
 
-Além disso, revise ortografia, gramática, concordância e pontuação da legenda/hashtags/CTA com o rigor de um revisor de texto profissional — isso é ELIMINATÓRIO, então marque "ok":false para QUALQUER erro real, por menor que seja (não confunda com escolha de estilo/gíria proposital).
+Além disso, revise ortografia, gramática, concordância e pontuação da LEGENDA e do CTA com o rigor de um revisor de texto profissional — isso é ELIMINATÓRIO, então marque "ok":false para QUALQUER erro real, por menor que seja (não confunda com escolha de estilo/gíria proposital). NUNCA avalie as HASHTAGS nessa checagem — hashtag não segue regra normal de português (sem espaço, sem acento às vezes, tudo junto), então isso nunca é "erro".
 
 Retorne APENAS um JSON: {"creative":{"score":0,"comment":""},"novelty":{"score":0,"comment":""},"brand":{"score":0,"comment":""},"hook":{"score":0,"comment":""},"cta":{"score":0,"comment":""},"visual":{"score":0,"comment":""},"engagement":{"score":0,"comment":""},"conversion":{"score":0,"comment":""},"readability":{"score":0,"comment":""},"grammar":{"ok":true,"issues":""}}`
 

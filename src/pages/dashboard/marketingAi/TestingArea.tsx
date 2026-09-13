@@ -220,25 +220,31 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
   const [okMsg, setOkMsg] = useState('')
   const [autoDaily, setAutoDaily] = useState(false)
   const [autoDailyImage, setAutoDailyImage] = useState(true)
+  const [allowCarrossel, setAllowCarrossel] = useState(false)
   const [autoLoaded, setAutoLoaded] = useState(false)
   const [autoSaving, setAutoSaving] = useState(false)
 
   // Geração automática (1x/dia, 10h de Brasília, sempre no formato Orgânico —
   // ver creative-generate) — liga/desliga por empresa, não por módulo.
+  // allow_carrossel também é por empresa: desligado por padrão, então todo
+  // post vira "foto" e sempre passa pelos templates reais (nenhum deles
+  // hoje é pensado pra vários slides, então carrossel nunca usava nenhum).
   useEffect(() => {
-    supabase.from('marketing_ai_config').select('auto_daily_test, auto_daily_test_image').eq('company_id', companyId).maybeSingle()
+    supabase.from('marketing_ai_config').select('auto_daily_test, auto_daily_test_image, allow_carrossel').eq('company_id', companyId).maybeSingle()
       .then(({ data }) => {
         setAutoDaily(!!data?.auto_daily_test)
         setAutoDailyImage(data?.auto_daily_test_image !== false)
+        setAllowCarrossel(!!data?.allow_carrossel)
         setAutoLoaded(true)
       })
   }, [companyId])
 
-  const saveAuto = async (patch: { auto_daily_test?: boolean; auto_daily_test_image?: boolean }) => {
+  const saveAuto = async (patch: { auto_daily_test?: boolean; auto_daily_test_image?: boolean; allow_carrossel?: boolean }) => {
     setAutoSaving(true)
     await supabase.from('marketing_ai_config').update(patch).eq('company_id', companyId)
     if ('auto_daily_test' in patch) setAutoDaily(!!patch.auto_daily_test)
     if ('auto_daily_test_image' in patch) setAutoDailyImage(!!patch.auto_daily_test_image)
+    if ('allow_carrossel' in patch) setAllowCarrossel(!!patch.allow_carrossel)
     setAutoSaving(false)
   }
 
@@ -328,6 +334,13 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
               <div style={{ fontSize: '11.5px', color: 'white' }}>Incluir imagem</div>
             </div>
           )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+            <Switch on={allowCarrossel} disabled={!autoLoaded || autoSaving} onClick={() => saveAuto({ allow_carrossel: !allowCarrossel })} />
+            <div>
+              <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>Considerar formato Carrossel</div>
+              <div style={{ fontSize: '10px', color: MUTED }}>Desligado: todo post vira foto única, sempre usando um dos templates reais (Tweet Print, Anúncio, etc.).</div>
+            </div>
+          </div>
         </div>
       )}
 

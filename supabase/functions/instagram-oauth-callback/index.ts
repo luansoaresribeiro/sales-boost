@@ -17,6 +17,18 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// IDs do Instagram têm 17 dígitos — passam de Number.MAX_SAFE_INTEGER (16
+// dígitos). Se a resposta vier com "user_id":123... como NÚMERO json (não
+// string), o .json() nativo já arredonda o valor ao dar parse (perde o
+// último dígito) — String() depois disso só formata o número já errado.
+// Aspeia esses campos no texto cru ANTES do parse, então o precision loss
+// nunca acontece. Bug real: causou instagram_user_id salvo 1 dígito errado
+// (…30 em vez de …31), e toda publicação subsequente falhava com "Object
+// with ID … does not exist".
+function parseJsonSafeIds<T>(raw: string): T {
+  return JSON.parse(raw.replace(/"(user_id|id)":\s*(\d+)/g, '"$1":"$2"')) as T
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
 
@@ -61,9 +73,11 @@ Deno.serve(async (req) => {
       method: 'POST',
       body: form,
     })
-    if (!shortRes.ok) throw new Error(`Short token failed: ${await shortRes.text()}`)
-    const shortJson = await shortRes.json() as
+    const shortText = await shortRes.text()
+    if (!shortRes.ok) throw new Error(`Short token failed: ${shortText}`)
+    const shortJson = parseJsonSafeIds<
       { access_token?: string; user_id?: number | string; permissions?: string; data?: { access_token: string; user_id?: number | string; permissions?: string }[] }
+    >(shortText)
     // A doc oficial mostra a resposta embrulhada em "data": [...] — trata os
     // dois formatos pra não quebrar se a API devolver liso (sem o wrapper).
     const shortPayload = shortJson.data?.[0] ?? shortJson
@@ -86,7 +100,7 @@ Deno.serve(async (req) => {
     if (!igUserId) {
       const meRes = await fetch(`https://graph.instagram.com/me?` + new URLSearchParams({ fields: 'user_id,username', access_token: longToken }))
       if (meRes.ok) {
-        const me = await meRes.json() as { user_id?: string; id?: string }
+        const me = parseJsonSafeIds<{ user_id?: string; id?: string }>(await meRes.text())
         igUserId = String(me.user_id ?? me.id ?? '')
       }
     }

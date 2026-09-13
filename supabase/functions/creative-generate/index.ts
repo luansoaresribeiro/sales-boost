@@ -189,7 +189,7 @@ interface GenOpts {
 // dono clicou) quanto pelo lote diário (várias empresas, cron).
 async function generateForCompany(admin: SupaClient, anthropicKey: string, company: Company, kind: string, opts: GenOpts) {
   const [{ data: cfgRow }, { data: insRows }, { data: libRows }, { data: visRows }, { data: fmtRows }, { data: bdRow }, { data: recentRows }, { data: productRows }] = await Promise.all([
-    admin.from('marketing_ai_config').select('agent_name, brand_voice, tone, target_audience, content_pillars, marketing_goals, business_objectives').eq('company_id', company.id).maybeSingle(),
+    admin.from('marketing_ai_config').select('agent_name, brand_voice, tone, target_audience, content_pillars, marketing_goals, business_objectives, allow_carrossel').eq('company_id', company.id).maybeSingle(),
     admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(6),
     admin.from('marketing_ai_knowledge').select('kind, title, content, module').or(`company_id.is.null,company_id.eq.${company.id}`).in('module', ['core', kind]),
     admin.from('marketing_ai_knowledge').select('title, meta').or(`company_id.is.null,company_id.eq.${company.id}`).eq('module', 'visual').eq('kind', 'layout').order('created_at', { ascending: false }).limit(8),
@@ -201,6 +201,10 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
     admin.from('marketing_ai_knowledge').select('title, image_url').eq('company_id', company.id).eq('module', 'visual').eq('kind', 'product').order('created_at', { ascending: false }).limit(1),
   ])
   const config = (cfgRow as Config | null) ?? defaultConfig(company)
+  // Botão "considerar carrossel" (Área de Testes) — desligado por padrão:
+  // sem carrossel, todo post vira "foto" e sempre passa pelos templates
+  // reais (nenhum deles hoje é pensado pra vários slides).
+  const allowCarrossel = !!(cfgRow as { allow_carrossel?: boolean } | null)?.allow_carrossel
   const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
   const lib = (libRows ?? []) as Know[]
   // Referências visuais da marca (Layouts & Estilos) — só metadados, limitado (custo).
@@ -253,7 +257,8 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
 - Formato sugerido: ${seed.format ?? '—'}${seed.format ? ` — RESPEITE esse formato no seu "format" a menos que haja um motivo forte pra mudar (aí explique o motivo em "reasoning"). Nem toda ideia precisa virar carrossel: se o formato sugerido for "foto", gere UMA foto só.` : ''}\n` : ''
 
   // ── Passo 1: Diretor Criativo → BRIEF ────────────────────────────────
-  const allowedFormats = ALLOWED_FORMATS[kind] ?? ['foto', 'carrossel']
+  const baseFormats = ALLOWED_FORMATS[kind] ?? ['foto', 'carrossel']
+  const allowedFormats = allowCarrossel ? baseFormats : baseFormats.filter(f => f !== 'carrossel')
   const fmtList = allowedFormats.map(f => `"${f}"`).join('|')
 
   const directorPrompt = `${preamble(config, company)}
