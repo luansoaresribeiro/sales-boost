@@ -3,7 +3,7 @@ import { useRealtime } from '../../../lib/useRealtime'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { CARD, MUTED, BORDER, D, timeAgo } from './shared'
-import { ScoreBreakdown, BriefBlock, PostMedia, VideoScript, type TestPost } from './TestingArea'
+import { ScoreBreakdown, BriefBlock, PostMedia, VideoScript, TEMPLATE_LABEL, type TestPost } from './TestingArea'
 import AdaptModal, { type VaultPost } from './AdaptModal'
 import { proposeAgentAction } from '../../../lib/agentActions'
 
@@ -113,6 +113,7 @@ export default function ContentVault({ companyId, reloadKey }: { companyId: stri
                   <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                     <span style={{ fontSize: '9px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{KIND_LABEL[t.kind] ?? t.kind}</span>
                     {t.format && <span style={{ fontSize: '9.5px', color: MUTED }}>· {t.format}</span>}
+                    {t.format === 'foto' && t.brief?.template && <span style={{ fontSize: '9.5px', color: '#A78BFA' }}>· {TEMPLATE_LABEL[t.brief.template] ?? t.brief.template}</span>}
                     <span style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', marginLeft: 'auto' }}>{timeAgo(t.created_at)}</span>
                   </div>
                   {t.idea && <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>{t.idea}</div>}

@@ -9,7 +9,7 @@ import {
 import ModuleLibrary from './ModuleLibrary'
 import { useDemoMode } from './growthDemo'
 import DataVeil, { veilMode } from './DataVeil'
-import { BriefBlock, VideoScript, ScoreBreakdown, PostMedia, type TestPost } from './TestingArea'
+import { BriefBlock, VideoScript, ScoreBreakdown, PostMedia, TEMPLATE_LABEL, type TestPost } from './TestingArea'
 
 const FORMAT_ICON_LC: Record<string, string> = { reel: '🎬', carrossel: '🖼️', story: '⚡', foto: '📷' }
 
@@ -270,6 +270,9 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', flexWrap: 'wrap' }}>
                   <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{FORMAT_ICON_LC[vaultItem.format ?? ''] ?? '📝'} {vaultItem.idea ?? 'Post sem título'}</div>
+                  {vaultItem.format === 'foto' && vaultItem.brief?.template && (
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#A78BFA', border: '1px solid rgba(167,139,250,0.4)', borderRadius: '99px', padding: '2px 8px' }}>{TEMPLATE_LABEL[vaultItem.brief.template] ?? vaultItem.brief.template}</span>
+                  )}
                   {vaultItem.quality_score != null && <span style={{ fontSize: '9px', fontWeight: 700, color: GREEN, border: '1px solid rgba(74,222,128,0.4)', borderRadius: '99px', padding: '2px 8px' }}>nota {vaultItem.quality_score}</span>}
                 </div>
                 {vaultItem.reasoning && <div style={{ fontSize: '11px', color: MUTED, marginBottom: '14px' }}>{vaultItem.reasoning}</div>}

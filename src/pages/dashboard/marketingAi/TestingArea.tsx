@@ -6,6 +6,10 @@ import { CARD, MUTED, BORDER, D, SUPABASE_URL, timeAgo } from './shared'
 import AdaptModal, { type VaultPost } from './AdaptModal'
 
 const KIND_PT: Record<string, string> = { organico: 'Orgânico', stories: 'Stories', campanhas: 'Campanhas' }
+// Mesmas chaves do "template" escolhido pelo Diretor em creative-generate.
+export const TEMPLATE_LABEL: Record<string, string> = {
+  livre: 'Livre', tweet: 'Tweet', beforeafter: 'Antes/Depois', announcement: 'Anúncio', product: 'Produto',
+}
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -350,6 +354,12 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
                 <div style={{ padding: '13px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                     {t.format && <span style={{ fontSize: '9px', fontWeight: 700, color: ORANGE, padding: '2px 7px', borderRadius: '99px', border: `1px solid rgba(255,109,41,0.35)`, textTransform: 'uppercase' }}>{t.format}</span>}
+                    {/* Template só é usado de verdade quando format="foto" (ver creative-generate) — pra carrossel/reel/story o valor é só um placeholder sem efeito, então não mostra. */}
+                    {t.format === 'foto' && t.brief?.template && (
+                      <span style={{ fontSize: '9px', fontWeight: 700, color: '#A78BFA', padding: '2px 7px', borderRadius: '99px', border: '1px solid rgba(167,139,250,0.35)' }}>
+                        {TEMPLATE_LABEL[t.brief.template] ?? t.brief.template}
+                      </span>
+                    )}
                     <span style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', marginLeft: 'auto' }}>{timeAgo(t.created_at)}</span>
                   </div>
                   {t.idea && <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>{t.idea}</div>}
