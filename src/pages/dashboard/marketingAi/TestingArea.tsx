@@ -142,9 +142,13 @@ export const CAT_LABEL: Record<string, string> = {
 }
 export const CAT_ORDER = ['creative', 'novelty', 'brand', 'hook', 'cta', 'visual', 'engagement', 'conversion', 'readability']
 export const scoreColor = (n: number) => (n >= 90 ? GREEN : n >= 75 ? '#FBBF24' : '#f87171')
-// Gramática é ELIMINATÓRIA (única coisa que bloqueia o Vault) — as outras 9
-// dimensões acima são só consultivas, já que nenhum post real batia 90+ nelas.
+// Coerência e gramática são ELIMINATÓRIAS (as únicas coisas que bloqueiam o
+// Vault) — as outras 9 dimensões acima são só consultivas, já que nenhum
+// post real batia 90+ nelas. Coerência é a checagem principal: o post faz
+// sentido como uma peça única?
 export const grammarOk = (post: TestPost) => post.scores?.grammar != null && post.scores.grammar.score === 100
+export const coherenceOk = (post: TestPost) => post.scores?.coherence != null && post.scores.coherence.score === 100
+export const canGoToVault = (post: TestPost) => grammarOk(post) && coherenceOk(post)
 
 export async function callContentTest(token: string, payload: Record<string, unknown>) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/content-test`, {
@@ -157,26 +161,31 @@ export async function callContentTest(token: string, payload: Record<string, unk
   return data as { id?: string; quality_score?: number; regenerated?: string; image_generated?: boolean }
 }
 
+// Banner de uma checagem eliminatória (coerência/gramática) — mesmo padrão visual pras duas.
+function GateBanner({ ok, okLabel, failLabel, comment }: { ok: boolean; okLabel: string; failLabel: string; comment: string }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '6px', padding: '6px 8px', borderRadius: '6px',
+      background: ok ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.1)',
+      border: `1px solid ${ok ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.35)'}`,
+    }}>
+      <span style={{ fontSize: '11px' }}>{ok ? '✓' : '⚠️'}</span>
+      <span style={{ fontSize: '10.5px', color: ok ? GREEN : '#f87171', lineHeight: 1.4 }}>{ok ? okLabel : (comment || failLabel)}</span>
+    </div>
+  )
+}
+
 // Grade de notas do júri: nota final ponderada (consultiva) + cada dimensão
-// (comentário no hover). Gramática vem separada, em destaque — é a única que
-// bloqueia o Vault.
+// (comentário no hover). Coerência e gramática vêm separadas, em destaque —
+// são as únicas que bloqueiam o Vault.
 export function ScoreBreakdown({ post }: { post: TestPost }) {
   if (post.quality_score == null || !post.scores) return null
+  const coherence = post.scores.coherence
   const grammar = post.scores.grammar
   return (
     <div style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '8px', padding: '9px 10px' }}>
-      {grammar && (
-        <div style={{
-          display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '8px', padding: '6px 8px', borderRadius: '6px',
-          background: grammar.score === 100 ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.1)',
-          border: `1px solid ${grammar.score === 100 ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.35)'}`,
-        }}>
-          <span style={{ fontSize: '11px' }}>{grammar.score === 100 ? '✓' : '⚠️'}</span>
-          <span style={{ fontSize: '10.5px', color: grammar.score === 100 ? GREEN : '#f87171', lineHeight: 1.4 }}>
-            {grammar.score === 100 ? 'Sem erro de gramática/ortografia' : grammar.comment || 'Erro de gramática/ortografia encontrado'}
-          </span>
-        </div>
-      )}
+      {coherence && <GateBanner ok={coherence.score === 100} okLabel="Conteúdo coerente" failLabel="Problema de coerência encontrado" comment={coherence.comment} />}
+      {grammar && <div style={{ marginBottom: '8px' }}><GateBanner ok={grammar.score === 100} okLabel="Sem erro de gramática/ortografia" failLabel="Erro de gramática/ortografia encontrado" comment={grammar.comment} /></div>}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '7px', marginBottom: '7px' }}>
         <span style={{ fontSize: '22px', fontWeight: 800, color: scoreColor(post.quality_score), lineHeight: 1 }}>{post.quality_score}</span>
         <span style={{ fontSize: '10px', color: MUTED }}>/100 · nota de qualidade (referência, não bloqueia)</span>
@@ -266,7 +275,8 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
   const generate = async () => {
     setGenerating(true); setError(''); setOkMsg('')
     try {
-      // Passo 1+2: Diretor Criativo + personalidade (creative-generate)
+      // Diretor Criativo + personalidade + controle de qualidade — tudo
+      // dentro de creative-generate agora (já devolve com quality_score pronto).
       const res = await fetch(`${SUPABASE_URL}/functions/v1/creative-generate`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind }),
@@ -275,8 +285,6 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
       if (!res.ok) throw new Error(r.error ?? 'Erro ao gerar post de teste')
       await load()
       track('content_generated', `Gerou conteúdo (${KIND_PT[kind] ?? kind})`, { kind })
-      // Passo 3: controle de qualidade (content-test)
-      if (r?.id) { await callContentTest(token, { action: 'score', test_id: r.id }); await load() }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao gerar post de teste')
     }
@@ -310,7 +318,7 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
         <div style={{ maxWidth: '600px' }}>
           <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🧪 Área de Testes + Controle de Qualidade</div>
           <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55 }}>
-            Gera com o <strong>mesmo motor</strong> da automação e passa por um <strong>júri de revisores</strong>. <strong>Sem erro de gramática/ortografia</strong> → vai pro Vault. As notas de criativo, hook, etc. ficam visíveis como referência, mas não bloqueiam mais o envio. Só do Vault é que você publica.
+            Gera com o <strong>mesmo motor</strong> da automação e passa por um <strong>júri de revisores</strong>. <strong>Conteúdo coerente e sem erro de língua</strong> → vai pro Vault. As notas de criativo, hook, etc. ficam visíveis como referência, mas não bloqueiam mais o envio. Só do Vault é que você publica.
           </div>
         </div>
         <button onClick={generate} disabled={generating || !token}
@@ -385,7 +393,7 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
                         style={{ flex: 1, padding: '8px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${BORDER}`, borderRadius: '8px', color: 'white', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
                         {busy ? '...' : 'Avaliar'}
                       </button>
-                    ) : grammarOk(t) ? (
+                    ) : canGoToVault(t) ? (
                       <button onClick={() => act(t.id, { action: 'to_vault' }, 'Enviado pro Vault ✓')} disabled={busy}
                         style={{ flex: 1, padding: '8px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: '8px', color: GREEN, fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
                         {busy ? '...' : '⭐ Enviar pro Vault'}
@@ -393,7 +401,7 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
                     ) : (
                       <button onClick={() => act(t.id, { action: 'regenerate' })} disabled={busy}
                         style={{ flex: 1, padding: '8px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '8px', color: '#FBBF24', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-                        {busy ? 'Regenerando...' : '🔁 Corrigir erro de língua'}
+                        {busy ? 'Regenerando...' : coherenceOk(t) ? '🔁 Corrigir erro de língua' : '🔁 Corrigir coerência'}
                       </button>
                     )}
                     <button onClick={() => discard(t.id)} disabled={busy}

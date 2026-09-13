@@ -274,6 +274,23 @@ async function execute(admin: Supa, act: any): Promise<any> {
 // de graph.instagram.com usadas em publish-instagram). Só chamada quando o
 // executor já tem uma imagem real (nunca gera imagem nova aqui — a imagem
 // aprovada é a que sai).
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+// O Instagram processa a mídia de forma assíncrona — o container criado
+// abaixo começa "IN_PROGRESS" e só fica publicável quando vira "FINISHED".
+// Chamar media_publish cedo demais dá "Media ID is not available" (o erro
+// real que já vimos em produção). Espera até 30s (10×3s) antes de desistir.
+async function waitContainerReady(creationId: string, token: string): Promise<void> {
+  for (let i = 0; i < 10; i++) {
+    const res = await fetch(`${IG_API}/${creationId}?fields=status_code&access_token=${token}`)
+    const data = await res.json().catch(() => ({})) as { status_code?: string; error?: { message?: string } }
+    if (data.status_code === 'FINISHED') return
+    if (data.status_code === 'ERROR') throw new Error(`Instagram falhou ao processar a mídia: ${data.error?.message ?? 'erro desconhecido'}`)
+    await sleep(3000)
+  }
+  throw new Error('Instagram demorou demais pra processar a mídia (timeout).')
+}
+
 async function publishToInstagram(igUserId: string, token: string, imageUrl: string, caption: string): Promise<string> {
   const containerRes = await fetch(`${IG_API}/${igUserId}/media`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -284,6 +301,7 @@ async function publishToInstagram(igUserId: string, token: string, imageUrl: str
     throw new Error(`Falha ao preparar mídia no Instagram: ${err.error?.message ?? JSON.stringify(err)}`)
   }
   const { id: creationId } = await containerRes.json()
+  await waitContainerReady(creationId, token)
 
   const publishRes = await fetch(`${IG_API}/${igUserId}/media_publish`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

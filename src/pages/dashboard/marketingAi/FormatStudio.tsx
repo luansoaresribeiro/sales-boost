@@ -5,6 +5,7 @@ import { track } from '../../../lib/analytics'
 import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL } from './shared'
 import type { Template, Brand } from './formatTemplates'
 import { STANDARD_FORMATS, safePx, type FormatDef } from './formats'
+import { callContentTest } from './TestingArea'
 
 interface Size { w: number; h: number; safe: { top: number; right: number; bottom: number; left: number } }
 interface Comp { id: string; title: string; image_url: string | null }
@@ -106,7 +107,15 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
     })
     const r = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(r.error ?? 'Erro ao gerar imagem')
-    return r as { bg_url?: string | null }
+    return r as { bg_url?: string | null; id?: string | null }
+  }
+
+  // render-format não avalia sozinho — sem isso o post ficava sem
+  // quality_score e a Área de Testes travava no botão "Avaliar" pra sempre
+  // (nunca chegava a mostrar "Enviar pro Vault"). Nunca derruba o fluxo se falhar.
+  const scoreGenerated = async (id?: string | null) => {
+    if (!id) return
+    try { await callContentTest(token, { action: 'score', test_id: id }) } catch { /* fica como "Avaliar" manual se falhar */ }
   }
 
   const generate = async () => {
@@ -114,6 +123,7 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
     try {
       const r = await callRender(fields, brand, bg || undefined, isPhoto && genBg, isPhoto ? sizeOf(curFmt) : undefined)
       if (isPhoto && !bg && r.bg_url) setBg(r.bg_url) // guarda o fundo pra reusar de graça
+      await scoreGenerated(r.id)
       track('content_generated', `Gerou imagem de formato (${template.label})`, { template: template.key })
       setMsg('Imagem gerada! Está na Área de Testes (seção Conteúdo), esperando sua aprovação.')
       onSaved()
@@ -138,6 +148,7 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
       for (const j of jobs) {
         const r = await callRender(j.fl, j.br, useBg || undefined, isPhoto && genBg && !useBg, size)
         if (isPhoto && !useBg && r.bg_url) useBg = r.bg_url // gera 1x, reusa nas próximas
+        await scoreGenerated(r.id)
       }
       if (useBg && !bg) setBg(useBg)
       track('content_generated', `Gerou ${jobs.length} variações (${template.label})`, { template: template.key, variations: jobs.length })
@@ -160,6 +171,7 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
       for (const fmt of preset.formats) {
         const r = await callRender(fields, brand, useBg || undefined, isPhoto && genBg && !useBg, { w: fmt.w, h: fmt.h, safe: safePx(fmt) })
         if (isPhoto && !useBg && r.bg_url) useBg = r.bg_url
+        await scoreGenerated(r.id)
       }
       if (useBg && !bg) setBg(useBg)
       track('content_generated', `Gerou preset ${preset.name} (${preset.formats.length} formatos)`, { preset: preset.name })

@@ -108,9 +108,12 @@ const SCORE_WEIGHTS: Record<string, number> = {
   creative: 0.20, novelty: 0.15, brand: 0.15, hook: 0.15, cta: 0.10, visual: 0.10, engagement: 0.10, conversion: 0.05,
 }
 const SCORE_CATS = ['creative', 'novelty', 'brand', 'hook', 'cta', 'visual', 'engagement', 'conversion', 'readability']
-// `grammar` é ELIMINATÓRIA: qualquer erro de português/ortografia/concordância
-// barra o Vault, direto — identidade de marca já é garantida pelos dados reais
-// do agente de dados, então o que falta checar aqui é só "o texto saiu certo".
+// `grammar` e `coherence` são ELIMINATÓRIAS — barram o Vault direto.
+// `coherence` é a checagem PRINCIPAL: o post faz sentido como um todo
+// (ideia/hook/legenda/hashtags/CTA combinando entre si, sem contradição
+// nem partes desconectadas)? Identidade de marca já é garantida pelos
+// dados reais do agente de dados; erro de língua é secundário, mas
+// continua barrando (só não avalia hashtag, que não segue gramática normal).
 
 interface CatScore { score: number; comment: string }
 type Scores = Record<string, CatScore>
@@ -138,9 +141,11 @@ Post:
 
 Dimensões: creative (força criativa geral), novelty (originalidade vs clichê), brand (consistência com voz/público), hook (força da primeira linha), cta (clareza/persuasão da chamada), visual (adequação do conceito visual), engagement (potencial de curtidas/comentários/salvamentos), conversion (potencial de gerar lead/venda), readability (clareza/facilidade de leitura).
 
-Além disso, revise ortografia, gramática, concordância e pontuação da LEGENDA e do CTA com o rigor de um revisor de texto profissional — isso é ELIMINATÓRIO, então marque "ok":false para QUALQUER erro real, por menor que seja (não confunda com escolha de estilo/gíria proposital). NUNCA avalie as HASHTAGS nessa checagem — hashtag não segue regra normal de português (sem espaço, sem acento às vezes, tudo junto), então isso nunca é "erro".
+Além disso, duas checagens ELIMINATÓRIAS — marque "ok":false sem dó se falharem, mesmo que o resto do post esteja bom:
+1. COERÊNCIA (a mais importante): o post faz sentido como uma peça ÚNICA? A ideia bate com a legenda? O hook entrega o que promete? Legenda, hashtags e CTA combinam entre si e com o formato? Não pode ter partes desconectadas, contradição, ou prometer uma coisa no gancho e falar de outra no corpo.
+2. GRAMÁTICA: revise ortografia, gramática, concordância e pontuação da LEGENDA e do CTA com o rigor de um revisor de texto profissional — QUALQUER erro real barra, por menor que seja (não confunda com escolha de estilo/gíria proposital). NUNCA avalie HASHTAGS aqui — hashtag não segue regra normal de português (sem espaço, sem acento às vezes, tudo junto), isso nunca é "erro".
 
-Retorne APENAS um JSON: {"creative":{"score":0,"comment":""},"novelty":{"score":0,"comment":""},"brand":{"score":0,"comment":""},"hook":{"score":0,"comment":""},"cta":{"score":0,"comment":""},"visual":{"score":0,"comment":""},"engagement":{"score":0,"comment":""},"conversion":{"score":0,"comment":""},"readability":{"score":0,"comment":""},"grammar":{"ok":true,"issues":""}}`
+Retorne APENAS um JSON: {"creative":{"score":0,"comment":""},"novelty":{"score":0,"comment":""},"brand":{"score":0,"comment":""},"hook":{"score":0,"comment":""},"cta":{"score":0,"comment":""},"visual":{"score":0,"comment":""},"engagement":{"score":0,"comment":""},"conversion":{"score":0,"comment":""},"readability":{"score":0,"comment":""},"coherence":{"ok":true,"issues":""},"grammar":{"ok":true,"issues":""}}`
 
   const raw = await callClaude(anthropicKey, prompt, 1200)
   const parsed = parseJsonObject(raw) as Record<string, { score?: number; comment?: string; ok?: boolean; issues?: string }>
@@ -151,6 +156,8 @@ Retorne APENAS um JSON: {"creative":{"score":0,"comment":""},"novelty":{"score":
   }
   const grammarOk = parsed.grammar?.ok !== false
   scores.grammar = { score: grammarOk ? 100 : 0, comment: String(parsed.grammar?.issues ?? '') }
+  const coherenceOk = parsed.coherence?.ok !== false
+  scores.coherence = { score: coherenceOk ? 100 : 0, comment: String(parsed.coherence?.issues ?? '') }
   let quality = 0
   for (const [cat, w] of Object.entries(SCORE_WEIGHTS)) quality += (scores[cat]?.score ?? 0) * w
   return { scores, quality: Math.round(quality) }
@@ -168,14 +175,24 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey)
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
 
+    // Chamada server-a-server (ex: creative-generate avaliando um post logo
+    // após criar, sem usuário logado no caso do lote automático diário) usa a
+    // própria service role como bearer + manda o company_id direto no corpo.
     const bearer = req.headers.get('Authorization') ?? ''
     if (!bearer) return json({ error: 'Unauthorized' }, 401)
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
-    const { data: { user } } = await userClient.auth.getUser()
-    if (!user) return json({ error: 'Unauthorized' }, 401)
+    const isService = bearer === `Bearer ${serviceKey}`
 
-    const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal, business_description, ideal_customer, language').eq('user_id', user.id).maybeSingle()
-    const company = companyRow as Company | null
+    let company: Company | null = null
+    if (isService && body.company_id) {
+      const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal, business_description, ideal_customer, language').eq('id', String(body.company_id)).maybeSingle()
+      company = companyRow as Company | null
+    } else {
+      const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
+      const { data: { user } } = await userClient.auth.getUser()
+      if (!user) return json({ error: 'Unauthorized' }, 401)
+      const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal, business_description, ideal_customer, language').eq('user_id', user.id).maybeSingle()
+      company = companyRow as Company | null
+    }
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
 
     const action = String(body.action ?? '')
@@ -241,25 +258,30 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       if (!t) return json({ error: 'Post de teste não encontrado' }, 404)
       const config = await loadConfig(admin, company)
       const scores = t.scores ?? {}
-      // gramática é eliminatória — se falhou, tem que consertar o TEXTO, nunca
-      // a imagem, mesmo que "visual" seja a dimensão ponderada mais fraca.
+      // coerência e gramática são eliminatórias — se alguma falhou, tem que
+      // consertar o TEXTO, nunca a imagem, mesmo que "visual" seja a
+      // dimensão ponderada mais fraca. Coerência é priorizada (é o problema
+      // mais sério: post que não faz sentido como um todo).
+      const coherenceFailed = (scores.coherence?.score ?? 100) < 100
       const grammarFailed = (scores.grammar?.score ?? 100) < 100
+      const eliminatoryFailed = coherenceFailed || grammarFailed
 
       // acha a categoria PONDERADA mais fraca (só as que entram na nota final)
       let weakest = 'creative'; let min = 101
       for (const cat of Object.keys(SCORE_WEIGHTS)) { const s = scores[cat]?.score ?? 100; if (s < min) { min = s; weakest = cat } }
 
-      if (weakest === 'visual' && !grammarFailed) {
+      if (weakest === 'visual' && !eliminatoryFailed) {
         // ponto fraco é o visual → regenera SÓ a imagem, mantém o texto
         const url = await generateImage(company.id, company.business_type, t.idea ?? t.caption ?? '', company.business_description, true)
         if (url) await admin.from('marketing_ai_test_content').update({ image_url: url }).eq('id', testId)
       } else {
-        // ponto fraco é texto (ou tem erro de língua) → reescreve legenda/hook/CTA guiado pelo feedback, mantém a imagem
-        const weak = Object.entries(scores).filter(([k, v]) => k !== 'grammar' && (v as CatScore).score < 75).map(([k, v]) => `- ${k}: ${(v as CatScore).comment}`).join('\n')
+        // ponto fraco é texto (ou falhou coerência/língua) → reescreve legenda/hook/CTA guiado pelo feedback, mantém a imagem
+        const weak = Object.entries(scores).filter(([k, v]) => k !== 'grammar' && k !== 'coherence' && (v as CatScore).score < 75).map(([k, v]) => `- ${k}: ${(v as CatScore).comment}`).join('\n')
         const prompt = `${preamble(config, company)}
 
-Você é o Copywriter da agência. Reescreva/melhore o post mantendo a MESMA ideia central e formato, corrigindo especificamente estes pontos fracos apontados pelo controle de qualidade:
+Você é o Copywriter da agência. Reescreva/melhore o post mantendo o MESMO formato, corrigindo especificamente estes pontos fracos apontados pelo controle de qualidade:
 ${weak || `- ${weakest}: melhore este aspecto`}
+${coherenceFailed ? `\nIMPORTANTE — prioridade máxima: o controle de qualidade achou um problema de COERÊNCIA: "${scores.coherence?.comment ?? ''}". Repense a ideia/legenda pra ela fazer sentido como uma peça única, mesmo que precise mudar o ângulo (não é só ajustar palavra).` : ''}
 ${grammarFailed ? `\nIMPORTANTE — prioridade máxima: o controle de qualidade encontrou erro de português/ortografia/concordância: "${scores.grammar?.comment ?? ''}". Corrija isso, mesmo que precise reescrever a frase inteira.` : ''}
 
 Post atual:
@@ -281,11 +303,12 @@ Retorne APENAS um JSON: {"idea":"...","caption":"...","hashtags":"#...","cta":".
       const f = fresh as PostShape & { image_url: string | null }
       const { scores: ns, quality } = await scoreContent(anthropicKey, config, company, { idea: f.idea, caption: f.caption, hashtags: f.hashtags, cta: f.cta, format: f.format, hasImage: !!f.image_url })
       await admin.from('marketing_ai_test_content').update({ scores: ns, quality_score: quality }).eq('id', testId)
-      return json({ ok: true, regenerated: grammarFailed ? 'grammar' : weakest, scores: ns, quality_score: quality })
+      return json({ ok: true, regenerated: coherenceFailed ? 'coherence' : grammarFailed ? 'grammar' : weakest, scores: ns, quality_score: quality })
     }
 
     // ── Enviar pro Vault (aprovado pelo QC, aguardando publicação) ──────
-    // Gate ELIMINATÓRIO é só gramática/ortografia — identidade de marca já é
+    // Gate ELIMINATÓRIO: coerência (o post faz sentido como um todo? é a
+    // checagem principal) e gramática/ortografia. Identidade de marca já é
     // garantida pelos dados reais do agente de dados, então as outras 9
     // dimensões (criativo, hook, etc.) ficam só consultivas: nenhum post real
     // batia 90+ de nota ponderada, o que travava o Vault pra sempre.
@@ -295,8 +318,10 @@ Retorne APENAS um JSON: {"idea":"...","caption":"...","hashtags":"#...","cta":".
       const { data: tRow } = await admin.from('marketing_ai_test_content').select('id, scores').eq('id', testId).eq('company_id', company.id).maybeSingle()
       const t = tRow as { id: string; scores: Scores | null } | null
       if (!t) return json({ error: 'Post de teste não encontrado' }, 404)
+      const coherence = t.scores?.coherence
       const grammar = t.scores?.grammar
-      if (!grammar) return json({ error: 'Ainda não foi avaliado — clique em Avaliar antes de mandar pro Vault.' }, 400)
+      if (!coherence || !grammar) return json({ error: 'Ainda não foi avaliado — clique em Avaliar antes de mandar pro Vault.' }, 400)
+      if (coherence.score < 100) return json({ error: `Conteúdo incoerente: ${coherence.comment || 'a ideia/legenda não fecham como um todo'}` }, 400)
       if (grammar.score < 100) return json({ error: `Erro de gramática/ortografia encontrado: ${grammar.comment || 'corrija o texto'}` }, 400)
       await admin.from('marketing_ai_test_content').update({ status: 'vault' }).eq('id', testId)
       return json({ ok: true })

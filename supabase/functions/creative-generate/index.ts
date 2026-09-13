@@ -92,6 +92,20 @@ function extractOne(raw: string): Record<string, unknown> | null {
 // Tweet Print/Antes-Depois agora viram o card gráfico de verdade via
 // render-format (ver renderGraphicCard); Infográfico fica só na legenda
 // (não dá pra "traduzir" um dado real sem inventar número).
+// Chama o mesmo controle de qualidade do botão "Avaliar" (content-test),
+// server-a-server via service role — funciona tanto no clique interativo
+// quanto no lote automático diário (nenhum usuário logado nesse caso).
+async function scoreTestContent(companyId: string, testId: string): Promise<void> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!supabaseUrl || !serviceKey) return
+  const res = await fetch(`${supabaseUrl}/functions/v1/content-test`, {
+    method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'score', test_id: testId, company_id: companyId }),
+  })
+  if (!res.ok) throw new Error(`content-test score falhou: ${await res.text()}`)
+}
+
 async function generateImage(companyId: string, businessType: string | null, evoke: string, conceptHint?: string, brandStyle?: string, businessDescription?: string): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')
@@ -412,6 +426,13 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
 
   // Se veio de uma ideia do Creative Agent, marca ela como usada.
   if (opts.ideaId) await admin.from('marketing_ai_ideas').update({ status: 'used' }).eq('id', opts.ideaId).eq('company_id', company.id)
+
+  // Avalia AUTOMATICAMENTE (mesmo passo do botão "Avaliar") — sem isso o
+  // post fica sem quality_score e a Área de Testes não sabe mostrar "Enviar
+  // pro Vault" nem "Corrigir", trava em "Avaliar" pra sempre. Cobre tanto o
+  // clique interativo quanto o lote automático diário (nenhum dos dois
+  // chamava isso antes). Nunca derruba a geração se a avaliação falhar.
+  try { await scoreTestContent(company.id, inserted.id) } catch (e) { console.error('creative-generate: score falhou', e) }
 
   return { id: inserted.id, image_generated: !!mainImage, slides: slides?.length ?? 0, personality, brief }
 }
