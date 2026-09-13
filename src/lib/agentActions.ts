@@ -83,6 +83,11 @@ export const listAgentActions = (token: string, company_id: string, status?: 'pe
 export const decideAgentAction = (token: string, company_id: string, id: string, decision: 'approve' | 'reject' | 'cancel') =>
   call(token, { action: decision, company_id, id }).then(r => r.action!)
 
+// Reexecuta uma ação que falhou (mesmo payload já salvo) — só vale pra
+// execution_status === 'FAILED'.
+export const retryAgentAction = (token: string, company_id: string, id: string) =>
+  call(token, { action: 'retry', company_id, id }).then(r => r.action!)
+
 export const editAgentAction = (token: string, company_id: string, id: string, patch: Partial<Pick<AgentAction, 'title' | 'description' | 'payload' | 'reason' | 'expected_outcome' | 'agent_interpretation' | 'priority' | 'risk_level'>>) =>
   call(token, { action: 'edit', company_id, id, ...patch }).then(r => r.action!)
 

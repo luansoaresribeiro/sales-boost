@@ -7,7 +7,7 @@
  * (auto ou manual) → executor roda.
  *
  * Body: { action, company_id, ... }
- *   action = 'list' | 'propose' | 'approve' | 'reject' | 'edit' | 'cancel'
+ *   action = 'list' | 'propose' | 'approve' | 'reject' | 'edit' | 'cancel' | 'retry'
  *
  * Autenticado por JWT do dono (verifica dono da company). A escrita real é
  * feita com service role — ninguém forja aprovação/execução direto no banco.
@@ -49,6 +49,7 @@ Deno.serve(async (req) => {
       case 'reject': return await decide(admin, company_id, body.id, 'REJECTED', user.id)
       case 'cancel': return await decide(admin, company_id, body.id, 'CANCELLED', user.id)
       case 'edit': return await editAction(admin, company_id, body)
+      case 'retry': return await retryAction(admin, company_id, body.id)
       default: return json({ error: `ação inválida: ${action}` }, 400)
     }
   } catch (err) {
@@ -138,6 +139,19 @@ async function editAction(admin: Supa, companyId: string, b: any) {
   const { data, error } = await admin.from('agent_actions').update(patch).eq('id', b.id).eq('company_id', companyId).select('*').single()
   if (error) return json({ error: error.message }, 500)
   return json({ action: data })
+}
+
+// Tenta de novo uma ação que já falhou — reexecuta com o MESMO payload já
+// salvo na hora da proposta (não depende da linha original ainda existir,
+// ex: marketing_ai_test_content já foi apagada no fluxo do Vault desde a
+// 1ª tentativa). Só faz sentido pra quem já foi aprovada e falhou na hora
+// de executar (rejeitada/cancelada não pode "tentar de novo").
+async function retryAction(admin: Supa, companyId: string, id: string | undefined) {
+  if (!id) return json({ error: 'id obrigatório' }, 400)
+  const { data: current } = await admin.from('agent_actions').select('*').eq('id', id).eq('company_id', companyId).maybeSingle()
+  if (!current) return json({ error: 'Ação não encontrada' }, 404)
+  if (current.execution_status !== 'FAILED') return json({ error: 'Só dá pra tentar de novo uma ação que falhou.' }, 400)
+  return json({ action: await execute(admin, current) })
 }
 
 // ── EXECUTOR ───────────────────────────────────────────────────────────────

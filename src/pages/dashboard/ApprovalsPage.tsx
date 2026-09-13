@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { d } from '../../i18n-dash'
 import {
-  listAgentActions, decideAgentAction, editAgentAction, proposeAgentAction,
+  listAgentActions, decideAgentAction, editAgentAction, proposeAgentAction, retryAgentAction,
   APPROVAL_META, EXECUTION_META, type AgentAction,
 } from '../../lib/agentActions'
 import { useRealtime } from '../../lib/useRealtime'
@@ -113,8 +113,9 @@ function ContentCard({ item, onApprove, onDiscard, busy, lang }: {
 }
 
 // ── Linha do histórico de execução ──────────────────────────────────────────
-function HistoryRow({ a }: { a: AgentAction }) {
+function HistoryRow({ a, busy, onRetry }: { a: AgentAction; busy: boolean; onRetry: () => void }) {
   const ap = APPROVAL_META[a.approval_status], ex = EXECUTION_META[a.execution_status]
+  const failed = a.execution_status === 'FAILED'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
       <span style={{ fontSize: '14px' }}>{CHANNEL_ICON[a.channel ?? 'internal'] ?? '⚙️'}</span>
@@ -124,6 +125,12 @@ function HistoryRow({ a }: { a: AgentAction }) {
       </div>
       <span style={{ fontSize: '9px', fontWeight: 700, color: ap.color, flexShrink: 0 }}>{ap.label}</span>
       <span style={{ fontSize: '9px', fontWeight: 700, color: ex.color, flexShrink: 0 }}>{ex.label}</span>
+      {failed && (
+        <button onClick={onRetry} disabled={busy}
+          style={{ flexShrink: 0, padding: '4px 10px', background: 'transparent', border: `1px solid ${ORANGE}66`, borderRadius: '99px', color: ORANGE, fontSize: '9.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
+          {busy ? '...' : '↻ Tentar de novo'}
+        </button>
+      )}
     </div>
   )
 }
@@ -173,6 +180,12 @@ export default function ApprovalsPage() {
     setBusyId(id)
     try { await decideAgentAction(token, companyId, id, decision) } catch { /* ignore */ }
     setPending(prev => prev.filter(a => a.id !== id))
+    await load(); setBusyId(null)
+  }
+  const retry = async (id: string) => {
+    if (!companyId) return
+    setBusyId(id)
+    try { await retryAgentAction(token, companyId, id) } catch { /* ignore — segue FAILED, dono pode tentar de novo */ }
     await load(); setBusyId(null)
   }
   const edit = async (id: string, description: string) => {
@@ -269,7 +282,7 @@ export default function ApprovalsPage() {
               <section>
                 <SectionTitle label={lang === 'en' ? 'Execution history' : 'Histórico de execução'} count={history.length} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {history.map(a => <HistoryRow key={a.id} a={a} />)}
+                  {history.map(a => <HistoryRow key={a.id} a={a} busy={busyId === a.id} onRetry={() => retry(a.id)} />)}
                 </div>
               </section>
             )}
