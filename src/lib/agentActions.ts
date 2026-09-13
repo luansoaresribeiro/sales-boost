@@ -35,6 +35,7 @@ export interface AgentAction {
   execution_result: Record<string, unknown> | null
   execution_error: string | null
   external_id: string | null
+  scheduled_at: string | null
 }
 
 async function call(token: string, body: Record<string, unknown>): Promise<{ action?: AgentAction; actions?: AgentAction[]; error?: string }> {
@@ -72,6 +73,9 @@ export interface ProposeInput {
    * no Vault, "Aprovar" na Central) — propõe já aprovado, sem exigir um
    * segundo clique em outro lugar. */
   approve_now?: boolean
+  /** ISO com data/hora futura — a ação fica aprovada na hora, mas só EXECUTA
+   * (publica de verdade) quando chegar esse horário (cron de 5 em 5 min). */
+  scheduled_at?: string
 }
 
 export const proposeAgentAction = (token: string, input: ProposeInput) =>
@@ -87,6 +91,11 @@ export const decideAgentAction = (token: string, company_id: string, id: string,
 // execution_status === 'FAILED'.
 export const retryAgentAction = (token: string, company_id: string, id: string) =>
   call(token, { action: 'retry', company_id, id }).then(r => r.action!)
+
+// Cancela um agendamento pendente — volta a ficar "aprovada, sem execução
+// automática" (o dono publica manualmente quando quiser).
+export const unscheduleAgentAction = (token: string, company_id: string, id: string) =>
+  call(token, { action: 'unschedule', company_id, id }).then(r => r.action!)
 
 export const editAgentAction = (token: string, company_id: string, id: string, patch: Partial<Pick<AgentAction, 'title' | 'description' | 'payload' | 'reason' | 'expected_outcome' | 'agent_interpretation' | 'priority' | 'risk_level'>>) =>
   call(token, { action: 'edit', company_id, id, ...patch }).then(r => r.action!)

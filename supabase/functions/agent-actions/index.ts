@@ -7,7 +7,11 @@
  * (auto ou manual) → executor roda.
  *
  * Body: { action, company_id, ... }
- *   action = 'list' | 'propose' | 'approve' | 'reject' | 'edit' | 'cancel' | 'retry'
+ *   action = 'list' | 'propose' | 'approve' | 'reject' | 'edit' | 'cancel' | 'retry' | 'run_scheduled'
+ *
+ * 'run_scheduled' é a única exceção ao JWT do dono — roda via cron_secret
+ * (o cron de 5 em 5 min que executa agendamentos vencidos, ver migration
+ * 066), sem company_id (varre todas as empresas de uma vez).
  *
  * Autenticado por JWT do dono (verifica dono da company). A escrita real é
  * feita com service role — ninguém forja aprovação/execução direto no banco.
@@ -27,6 +31,16 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? anonKey
+    const cronSecretEnv = Deno.env.get('CRON_SECRET')
+    const admin = createClient(supabaseUrl, serviceKey)
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>
+
+    // Cron (agendamentos vencidos): única exceção ao JWT do dono.
+    if (body.action === 'run_scheduled') {
+      if (!cronSecretEnv || body.cron_secret !== cronSecretEnv) return json({ error: 'Unauthorized' }, 401)
+      return await runScheduled(admin)
+    }
+
     const bearer = req.headers.get('Authorization') ?? ''
     if (!bearer) return json({ error: 'Unauthorized' }, 401)
 
@@ -34,22 +48,21 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser()
     if (!user) return json({ error: 'Unauthorized' }, 401)
 
-    const body = await req.json().catch(() => ({}))
     const { action, company_id } = body as { action?: string; company_id?: string }
     if (!company_id) return json({ error: 'company_id obrigatório' }, 400)
 
-    const admin = createClient(supabaseUrl, serviceKey)
     const { data: company } = await admin.from('companies').select('id, user_id, agent_automatic_mode').eq('id', company_id).maybeSingle()
     if (!company || company.user_id !== user.id) return json({ error: 'Forbidden' }, 403)
 
     switch (action) {
-      case 'list': return await listActions(admin, company_id, body.status)
+      case 'list': return await listActions(admin, company_id, body.status as string | undefined)
       case 'propose': return await proposeAction(admin, company_id, body, !!company.agent_automatic_mode, !!body.approve_now, user.id)
-      case 'approve': return await decide(admin, company_id, body.id, 'APPROVED', user.id)
-      case 'reject': return await decide(admin, company_id, body.id, 'REJECTED', user.id)
-      case 'cancel': return await decide(admin, company_id, body.id, 'CANCELLED', user.id)
+      case 'approve': return await decide(admin, company_id, body.id as string | undefined, 'APPROVED', user.id)
+      case 'reject': return await decide(admin, company_id, body.id as string | undefined, 'REJECTED', user.id)
+      case 'cancel': return await decide(admin, company_id, body.id as string | undefined, 'CANCELLED', user.id)
       case 'edit': return await editAction(admin, company_id, body)
-      case 'retry': return await retryAction(admin, company_id, body.id)
+      case 'retry': return await retryAction(admin, company_id, body.id as string | undefined)
+      case 'unschedule': return await unscheduleAction(admin, company_id, body.id as string | undefined)
       default: return json({ error: `ação inválida: ${action}` }, 400)
     }
   } catch (err) {
@@ -57,6 +70,29 @@ Deno.serve(async (req) => {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)
   }
 })
+
+// Roda toda ação AGENDADA cujo horário já venceu — chamada pelo cron de 5 em
+// 5 min (migration 066). Uma falhando não impede as outras.
+async function runScheduled(admin: Supa) {
+  const { data: due } = await admin.from('agent_actions').select('*')
+    .eq('execution_status', 'QUEUED').not('scheduled_at', 'is', null).lte('scheduled_at', new Date().toISOString())
+  let executed = 0, failed = 0
+  for (const act of (due ?? []) as Record<string, unknown>[]) {
+    try { await execute(admin, act); executed++ } catch (e) { failed++; console.error('agent-actions run_scheduled falhou pra', act.id, e) }
+  }
+  return json({ ok: true, executed, failed })
+}
+
+// Cancela um agendamento — volta a ficar como aprovada mas sem execução
+// automática (o dono publica manualmente quando quiser).
+async function unscheduleAction(admin: Supa, companyId: string, id: string | undefined) {
+  if (!id) return json({ error: 'id obrigatório' }, 400)
+  const { data, error } = await admin.from('agent_actions').update({
+    scheduled_at: null, execution_status: 'NOT_READY', updated_at: new Date().toISOString(),
+  }).eq('id', id).eq('company_id', companyId).eq('execution_status', 'QUEUED').select('*').single()
+  if (error) return json({ error: error.message }, 500)
+  return json({ action: data })
+}
 
 async function listActions(admin: Supa, companyId: string, status?: string) {
   let q = admin.from('agent_actions').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(100)
@@ -75,6 +111,11 @@ async function proposeAction(admin: Supa, companyId: string, b: any, autoMode: b
   // dele agora (ex.: "Publicar" no Vault, "Aprovar" na Central) — propõe e
   // aprova no mesmo passo, sem exigir um segundo clique em outro lugar.
   const auto = forceApprove || (autoMode && b.automation_enabled !== false)
+  // Agendamento (ex.: "Agendar" no Vault): o dono JÁ decidiu (aprovado),
+  // só a EXECUÇÃO é adiada pro horário certo — o cron de 5 em 5 min
+  // (run_scheduled) publica quando chegar a hora. Nunca executa na hora.
+  const scheduledAt = typeof b.scheduled_at === 'string' && b.scheduled_at ? b.scheduled_at : null
+  const willExecuteNow = auto && !scheduledAt
   const row = {
     company_id: companyId,
     agent_key: b.agent_key ?? 'marketing',
@@ -95,16 +136,17 @@ async function proposeAction(admin: Supa, companyId: string, b: any, autoMode: b
     ref_type: b.ref_type ?? null,
     ref_id: b.ref_id ?? null,
     automation_enabled: auto,
+    scheduled_at: scheduledAt,
     // Engine: modo automático NÃO pula o motor — só marca AUTO_APPROVED + fila.
-    approval_status: forceApprove ? 'APPROVED' : auto ? 'AUTO_APPROVED' : 'PENDING',
-    execution_status: auto ? 'QUEUED' : 'NOT_READY',
-    approved_at: auto ? new Date().toISOString() : null,
-    approved_by: forceApprove ? userId : null,
+    approval_status: forceApprove || scheduledAt ? 'APPROVED' : auto ? 'AUTO_APPROVED' : 'PENDING',
+    execution_status: auto || scheduledAt ? 'QUEUED' : 'NOT_READY',
+    approved_at: auto || scheduledAt ? new Date().toISOString() : null,
+    approved_by: forceApprove || scheduledAt ? userId : null,
   }
   const { data, error } = await admin.from('agent_actions').insert(row).select('*').single()
   if (error) return json({ error: error.message }, 500)
-  // Auto-aprovada → executa já.
-  if (auto) return json({ action: await execute(admin, data) })
+  // Auto-aprovada (e não agendada pra depois) → executa já.
+  if (willExecuteNow) return json({ action: await execute(admin, data) })
   return json({ action: data })
 }
 
