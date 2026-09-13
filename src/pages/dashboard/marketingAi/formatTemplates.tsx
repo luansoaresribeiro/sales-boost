@@ -21,6 +21,16 @@ const FONT = "'Bricolage Grotesque', system-ui, sans-serif"
 const initials = (name: string) => (name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
 // Fonte da marca (título) quando definida no Kit, com fallback.
 const bfont = (b: Brand) => b.heading ? `'${b.heading}', ${FONT}` : FONT
+// Preto ou branco — o que tiver mais contraste contra a cor primária. Usado
+// nos cards de texto puro (fundo = cor primária cheia): nunca assume que
+// branco vai ler bem, já que a primária pode ser clara (ex: amarelo).
+function contrastColor(hex: string): string {
+  const h = (hex || '#000').replace('#', '')
+  const num = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0'), 16)
+  const r = (num >> 16) & 0xff, g = (num >> 8) & 0xff, b = num & 0xff
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#000000' : '#ffffff'
+}
+const muted = (ink: string, alpha: number) => (ink === '#000000' ? `rgba(0,0,0,${alpha})` : `rgba(255,255,255,${alpha})`)
 // Logo da marca no canto (quando existe no Kit).
 function Logo({ b, dark }: { b: Brand; dark?: boolean }) {
   if (!b.logoUrl) return null
@@ -38,7 +48,11 @@ function tweet(f: Record<string, string>, brand: Brand): JSX.Element {
     <div style={{ width: '100%', height: '100%', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: bfont(brand) }}>
       <div style={{ width: '84%', background: bg }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '30px' }}>
-          <div style={{ width: '92px', height: '92px', borderRadius: '50%', background: brand.primary, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', fontWeight: 800, flexShrink: 0 }}>{initials(f.name)}</div>
+          {brand.logoUrl ? (
+            <img src={brand.logoUrl} crossOrigin="anonymous" alt="" style={{ width: '92px', height: '92px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, background: '#fff' }} />
+          ) : (
+            <div style={{ width: '92px', height: '92px', borderRadius: '50%', background: brand.primary, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', fontWeight: 800, flexShrink: 0 }}>{initials(f.name)}</div>
+          )}
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '34px', fontWeight: 800, color: fg }}>{f.name || 'Nome'}</span>
@@ -80,19 +94,25 @@ function beforeAfter(f: Record<string, string>, brand: Brand): JSX.Element {
   )
 }
 
+// Fundo cheio na cor primária (gradiente sutil) — padrão dos 3 cards de
+// texto puro abaixo (3 Erros, Anúncio, Estatística). Tweet Print fica fiel
+// ao tema real do X; Antes/Depois tem o fundo coberto pelas 2 fotos.
+const primaryBg = (b: Brand) => `linear-gradient(155deg, ${b.primary}, ${shade(b.primary, -30)})`
+
 // ── 3 Erros Comuns ───────────────────────────────────────────────────────────
 function mistakes(f: Record<string, string>, brand: Brand): JSX.Element {
   const icp = f.icp || 'cliente'
   const items = [f.mistake1, f.mistake2, f.mistake3].filter(Boolean)
+  const ink = contrastColor(brand.primary)
   const row = (n: number, text: string): JSX.Element => (
-    <div key={n} style={{ display: 'flex', alignItems: 'flex-start', gap: '30px', padding: '26px 0', borderTop: n > 1 ? '2px solid rgba(255,255,255,0.1)' : undefined }}>
-      <div style={{ fontSize: '64px', fontWeight: 800, color: brand.primary, lineHeight: 1, flexShrink: 0 }}>{String(n).padStart(2, '0')}</div>
-      <div style={{ fontSize: '38px', lineHeight: 1.35, fontWeight: 600, marginTop: '8px' }}>{text}</div>
+    <div key={n} style={{ display: 'flex', alignItems: 'flex-start', gap: '30px', padding: '26px 0', borderTop: n > 1 ? `2px solid ${muted(ink, 0.18)}` : undefined }}>
+      <div style={{ fontSize: '64px', fontWeight: 800, color: muted(ink, 0.55), lineHeight: 1, flexShrink: 0 }}>{String(n).padStart(2, '0')}</div>
+      <div style={{ fontSize: '38px', lineHeight: 1.35, fontWeight: 600, marginTop: '8px', color: ink }}>{text}</div>
     </div>
   )
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: `linear-gradient(160deg, ${brand.bg || '#150E08'}, ${shade(brand.primary, -70)})`, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '100px', boxSizing: 'border-box', fontFamily: bfont(brand), color: brand.text || '#fff' }}>
-      <div style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: brand.primary, marginBottom: '18px' }}>3 erros que todo(a) {icp} comete</div>
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: primaryBg(brand), display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '100px', boxSizing: 'border-box', fontFamily: bfont(brand), color: ink }}>
+      <div style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: ink, marginBottom: '18px' }}>3 erros que todo(a) {icp} comete</div>
       <div>{items.length ? items.map((m, i) => row(i + 1, m!)) : [1, 2, 3].map(n => row(n, 'Erro comum aqui'))}</div>
       <Logo b={brand} />
     </div>
@@ -101,13 +121,15 @@ function mistakes(f: Record<string, string>, brand: Brand): JSX.Element {
 
 // ── Anúncio / Promoção ──────────────────────────────────────────────────────
 function announcement(f: Record<string, string>, brand: Brand): JSX.Element {
+  const ink = contrastColor(brand.primary)
+  const chipText = ink === '#000000' ? '#ffffff' : '#000000'
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: brand.bg || '#0E0B0A', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '100px', boxSizing: 'border-box', fontFamily: bfont(brand), color: brand.text || '#fff' }}>
-      {f.eyebrow && <div style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: brand.primary, marginBottom: '28px' }}>{f.eyebrow}</div>}
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: primaryBg(brand), display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '100px', boxSizing: 'border-box', fontFamily: bfont(brand), color: ink }}>
+      {f.eyebrow && <div style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: muted(ink, 0.8), marginBottom: '28px' }}>{f.eyebrow}</div>}
       <div style={{ fontSize: '92px', lineHeight: 1.05, fontWeight: 800, marginBottom: '30px' }}>{f.headline || 'Sua chamada principal'}</div>
-      {f.subtext && <div style={{ fontSize: '38px', lineHeight: 1.4, color: '#BABABA', marginBottom: '44px' }}>{f.subtext}</div>}
-      {f.offer && <div style={{ alignSelf: 'flex-start', background: brand.accent || brand.primary, color: '#000', fontSize: '46px', fontWeight: 800, padding: '18px 40px', borderRadius: '18px', marginBottom: '44px' }}>{f.offer}</div>}
-      {f.cta && <div style={{ fontSize: '34px', fontWeight: 700, color: brand.text || '#fff', border: `2px solid ${brand.primary}`, borderRadius: '999px', padding: '18px 42px', alignSelf: 'flex-start' }}>{f.cta} →</div>}
+      {f.subtext && <div style={{ fontSize: '38px', lineHeight: 1.4, color: muted(ink, 0.75), marginBottom: '44px' }}>{f.subtext}</div>}
+      {f.offer && <div style={{ alignSelf: 'flex-start', background: ink, color: chipText, fontSize: '46px', fontWeight: 800, padding: '18px 40px', borderRadius: '18px', marginBottom: '44px' }}>{f.offer}</div>}
+      {f.cta && <div style={{ fontSize: '34px', fontWeight: 700, color: ink, border: `2px solid ${ink}`, borderRadius: '999px', padding: '18px 42px', alignSelf: 'flex-start' }}>{f.cta} →</div>}
       <Logo b={brand} />
     </div>
   )
@@ -115,12 +137,13 @@ function announcement(f: Record<string, string>, brand: Brand): JSX.Element {
 
 // ── Estatística / Destaque ──────────────────────────────────────────────────
 function stat(f: Record<string, string>, brand: Brand): JSX.Element {
+  const ink = contrastColor(brand.primary)
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: brand.bg || '#150E08', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '90px', boxSizing: 'border-box', fontFamily: bfont(brand), color: brand.text || '#fff', textAlign: 'center' }}>
-      {f.label && <div style={{ fontSize: '38px', fontWeight: 700, color: '#BABABA', marginBottom: '20px' }}>{f.label}</div>}
-      <div style={{ fontSize: '230px', lineHeight: 1, fontWeight: 800, color: brand.primary }}>{f.value || '87%'}</div>
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: primaryBg(brand), display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '90px', boxSizing: 'border-box', fontFamily: bfont(brand), color: ink, textAlign: 'center' }}>
+      {f.label && <div style={{ fontSize: '38px', fontWeight: 700, color: muted(ink, 0.75), marginBottom: '20px' }}>{f.label}</div>}
+      <div style={{ fontSize: '230px', lineHeight: 1, fontWeight: 800, color: ink }}>{f.value || '87%'}</div>
       {f.context && <div style={{ fontSize: '42px', lineHeight: 1.35, marginTop: '30px', maxWidth: '80%' }}>{f.context}</div>}
-      {f.source && <div style={{ fontSize: '24px', color: '#7a7a7a', marginTop: '40px' }}>{f.source}</div>}
+      {f.source && <div style={{ fontSize: '24px', color: muted(ink, 0.6), marginTop: '40px' }}>{f.source}</div>}
       <Logo b={brand} />
     </div>
   )

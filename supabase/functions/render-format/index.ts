@@ -71,25 +71,47 @@ function block(lines: string[], x: number, y: number, size: number, fill: string
   return `<text x="${x}" y="${y}" font-family="Poppins" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}">` +
     lines.map((l, i) => `<tspan x="${x}" dy="${i === 0 ? 0 : lh}">${esc(l)}</tspan>`).join('') + `</text>`
 }
+// Seta desenhada (triângulo), não caractere "→" — a fonte Poppins carregada
+// no servidor não tem esse glifo (saía como um quadrado/tofu no CTA).
+function arrowGlyph(cx: number, cy: number, size: number, color: string): string {
+  return `<polygon points="${cx - size * 0.5},${cy - size} ${cx + size * 0.6},${cy} ${cx - size * 0.5},${cy + size}" fill="${color}"/>`
+}
 function shade(hex: string, amt: number): string {
   const h = (hex || '#000').replace('#', ''); const num = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0'), 16)
   const cl = (v: number) => Math.max(0, Math.min(255, v)); const r = cl((num >> 16) + amt), g = cl(((num >> 8) & 0xff) + amt), b = cl((num & 0xff) + amt)
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
 }
+// Preto ou branco — o que tiver mais contraste contra a cor primária. Usado
+// nos cards de texto puro (fundo = cor primária cheia): nunca assume que
+// branco vai ler bem, já que a primária pode ser clara (ex: amarelo).
+function contrastColor(hex: string): string {
+  const h = (hex || '#000').replace('#', ''); const num = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0'), 16)
+  const r = (num >> 16) & 0xff, g = (num >> 8) & 0xff, b = num & 0xff
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#000000' : '#ffffff'
+}
+const mutedInk = (ink: string, alpha: number) => (ink === '#000000' ? `rgba(0,0,0,${alpha})` : `rgba(255,255,255,${alpha})`)
+// Fundo cheio na cor primária (gradiente sutil) — padrão dos cards de texto
+// puro (stat/announcement/mistakes). Tweet fica fiel ao tema real do X;
+// beforeafter tem o fundo coberto pelas 2 fotos.
+const primaryBgDef = (id: string, b: Brand) => `<defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${b.primary}"/><stop offset="1" stop-color="${shade(b.primary, -30)}"/></linearGradient></defs>`
 
 interface Brand { primary: string; name: string; primary2?: string; accent?: string; accent2?: string; text?: string; bg?: string; logoUrl?: string }
 type F = Record<string, string>
 
 // ── SVG por template ────────────────────────────────────────────────────────
-function svgTweet(f: F, b: Brand): { svg: string; w: number; h: number } {
+function svgTweet(f: F, b: Brand, logoData: string | null): { svg: string; w: number; h: number } {
   const W = 1080, H = 1080, dark = (f.theme || 'dark') === 'dark'
   const bg = dark ? '#15202b' : '#ffffff', fg = dark ? '#e7e9ea' : '#0f1419', muted = dark ? '#8b98a5' : '#536471', line = dark ? '#38444d' : '#eff3f4'
   const tl = wrap(f.text || 'O texto do tweet aparece aqui.', 44, 900)
   const bodyY = 340, afterBody = bodyY + tl.length * 60 + 30
+  // Avatar = logo real da empresa (Estilos e Visuais → Kit da Marca), quando
+  // existe. Sem logo, cai pras iniciais na cor primária — nunca inventa foto.
+  const avatar = logoData
+    ? `<defs><clipPath id="avatarClip"><circle cx="150" cy="185" r="48"/></clipPath></defs><image href="${logoData}" x="102" y="137" width="96" height="96" clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>`
+    : `<circle cx="150" cy="185" r="48" fill="${b.primary}"/><text x="150" y="200" font-family="Poppins" font-size="38" font-weight="700" fill="#fff" text-anchor="middle">${esc(initials(f.name))}</text>`
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
 <rect width="${W}" height="${H}" fill="${bg}"/>
-<circle cx="150" cy="185" r="48" fill="${b.primary}"/>
-<text x="150" y="200" font-family="Poppins" font-size="38" font-weight="700" fill="#fff" text-anchor="middle">${esc(initials(f.name))}</text>
+${avatar}
 ${block([f.name || 'Nome'], 226, 172, 36, fg, 700, 0)}
 ${block(['@' + (f.handle || 'usuario')], 226, 214, 30, muted, 400, 0)}
 ${block(tl, 90, bodyY, 44, fg, 500, 60)}
@@ -125,21 +147,22 @@ ${capLines.length ? `<defs><linearGradient id="capg" x1="0" y1="0" x2="0" y2="1"
 // texto — sem dado fabricado, o que vem de fora é sempre real (ICP da
 // empresa + os 3 erros escritos pela IA de conteúdo, nunca um número solto).
 function svgMistakes(f: F, b: Brand): { svg: string; w: number; h: number } {
-  const W = 1080, H = 1350, text = b.text || '#ffffff'
+  const W = 1080, H = 1350
+  const ink = contrastColor(b.primary)
   const icp = f.icp || 'cliente'
   const hl = wrap(`3 erros que todo(a) ${icp} comete`.toUpperCase(), 40, 880)
   const items = [f.mistake1, f.mistake2, f.mistake3].filter((m): m is string => !!m)
-  const parts: string[] = [block(hl, 100, 160, 40, b.primary, 800, 54)]
+  const parts: string[] = [block(hl, 100, 160, 40, ink, 800, 54)]
   let y = 160 + hl.length * 54 + 70
   items.forEach((m, i) => {
     const lines = wrap(m, 34, 760)
-    parts.push(`<text x="100" y="${y + 50}" font-family="Poppins" font-size="64" font-weight="800" fill="${b.primary}">${String(i + 1).padStart(2, '0')}</text>`)
-    parts.push(block(lines, 220, y + 44, 34, text, 600, 44))
+    parts.push(`<text x="100" y="${y + 50}" font-family="Poppins" font-size="64" font-weight="800" fill="${mutedInk(ink, 0.55)}">${String(i + 1).padStart(2, '0')}</text>`)
+    parts.push(block(lines, 220, y + 44, 34, ink, 600, 44))
     y += Math.max(lines.length * 44, 70) + 60
-    if (i < items.length - 1) parts.push(`<rect x="100" y="${y - 30}" width="880" height="2" fill="rgba(255,255,255,0.12)"/>`)
+    if (i < items.length - 1) parts.push(`<rect x="100" y="${y - 30}" width="880" height="2" fill="${mutedInk(ink, 0.18)}"/>`)
   })
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-<defs><linearGradient id="mg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${b.bg || '#150E08'}"/><stop offset="1" stop-color="${shade(b.primary, -70)}"/></linearGradient></defs>
+${primaryBgDef('mg', b)}
 <rect width="${W}" height="${H}" fill="url(#mg)"/>
 ${parts.join('')}
 </svg>`
@@ -147,28 +170,30 @@ ${parts.join('')}
 }
 
 function svgAnnouncement(f: F, b: Brand): { svg: string; w: number; h: number } {
-  const W = 1080, H = 1350, text = b.text || '#ffffff', bg = b.bg || '#0E0B0A'
+  const W = 1080, H = 1350
+  const ink = contrastColor(b.primary), chipText = ink === '#000000' ? '#ffffff' : '#000000'
   const hl = wrap(f.headline || 'Sua chamada principal', 88, 880)
   let y = 470
   const parts: string[] = []
-  if (f.eyebrow) { parts.push(block([f.eyebrow.toUpperCase()], 100, y, 30, b.primary, 700, 0)); y += 56 }
-  parts.push(block(hl, 100, y + 20, 88, text, 700, 100)); y += 20 + hl.length * 100 + 20
-  if (f.subtext) { const sl = wrap(f.subtext, 38, 880); parts.push(block(sl, 100, y + 20, 38, '#BABABA', 400, 52)); y += 20 + sl.length * 52 + 20 }
-  if (f.offer) { const ow = (f.offer.length * 27) + 80; parts.push(`<rect x="100" y="${y}" width="${ow}" height="86" rx="18" fill="${b.accent || b.primary}"/>` + block([f.offer], 140, y + 58, 46, '#000', 700, 0)); y += 130 }
-  if (f.cta) { const cw = (f.cta.length * 20) + 90; parts.push(`<rect x="100" y="${y}" width="${cw}" height="76" rx="38" fill="none" stroke="${b.primary}" stroke-width="3"/>` + block([f.cta + '  →'], 140, y + 50, 34, text, 700, 0)) }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${parts.join('')}</svg>`
+  if (f.eyebrow) { parts.push(block([f.eyebrow.toUpperCase()], 100, y, 30, mutedInk(ink, 0.8), 700, 0)); y += 56 }
+  parts.push(block(hl, 100, y + 20, 88, ink, 700, 100)); y += 20 + hl.length * 100 + 20
+  if (f.subtext) { const sl = wrap(f.subtext, 38, 880); parts.push(block(sl, 100, y + 20, 38, mutedInk(ink, 0.75), 400, 52)); y += 20 + sl.length * 52 + 20 }
+  if (f.offer) { const ow = (f.offer.length * 27) + 80; parts.push(`<rect x="100" y="${y}" width="${ow}" height="86" rx="18" fill="${ink}"/>` + block([f.offer], 140, y + 58, 46, chipText, 700, 0)); y += 130 }
+  if (f.cta) { const cw = (f.cta.length * 20) + 130; parts.push(`<rect x="100" y="${y}" width="${cw}" height="76" rx="38" fill="none" stroke="${ink}" stroke-width="3"/>` + block([f.cta], 140, y + 50, 34, ink, 700, 0) + arrowGlyph(100 + cw - 55, y + 37, 14, ink)) }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${primaryBgDef('ag', b)}<rect width="${W}" height="${H}" fill="url(#ag)"/>${parts.join('')}</svg>`
   return { svg, w: W, h: H }
 }
 
 function svgStat(f: F, b: Brand): { svg: string; w: number; h: number } {
-  const W = 1080, H = 1080, text = b.text || '#ffffff', bg = b.bg || '#150E08'
+  const W = 1080, H = 1080
+  const ink = contrastColor(b.primary)
   const cl = wrap(f.context || '', 42, 820)
   const parts: string[] = []
-  if (f.label) parts.push(block([f.label], 540, 360, 38, '#BABABA', 700, 0, 'middle'))
-  parts.push(block([f.value || '87%'], 540, 620, 200, b.primary, 700, 0, 'middle'))
-  if (cl[0]) parts.push(block(cl, 540, 720, 42, text, 400, 54, 'middle'))
-  if (f.source) parts.push(block([f.source], 540, 720 + cl.length * 54 + 50, 24, '#7a7a7a', 400, 0, 'middle'))
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${parts.join('')}</svg>`
+  if (f.label) parts.push(block([f.label], 540, 360, 38, mutedInk(ink, 0.75), 700, 0, 'middle'))
+  parts.push(block([f.value || '87%'], 540, 620, 200, ink, 700, 0, 'middle'))
+  if (cl[0]) parts.push(block(cl, 540, 720, 42, ink, 400, 54, 'middle'))
+  if (f.source) parts.push(block([f.source], 540, 720 + cl.length * 54 + 50, 24, mutedInk(ink, 0.6), 400, 0, 'middle'))
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${primaryBgDef('sg', b)}<rect width="${W}" height="${H}" fill="url(#sg)"/>${parts.join('')}</svg>`
   return { svg, w: W, h: H }
 }
 
@@ -187,7 +212,7 @@ function svgPhoto(f: F, b: Brand, bg: string | null, logo: string | null, sticke
   if (f.eyebrow) blocks.push({ h: es + gap, draw: y => block([f.eyebrow.toUpperCase()], leftX, y + es, es, b.primary, 700, 0) })
   blocks.push({ h: hlLines.length * lh + gap, draw: y => block(hlLines, leftX, y + hs, hs, '#ffffff', 700, lh) })
   if (f.offer) { const oh = Math.round(86 * s), ow = Math.round(f.offer.length * ofs * 0.62 + 70 * s); blocks.push({ h: oh + gap, draw: y => `<rect x="${leftX}" y="${y}" width="${ow}" height="${oh}" rx="${Math.round(18 * s)}" fill="${b.accent || b.primary}"/>` + block([f.offer], leftX + Math.round(36 * s), y + Math.round(oh * 0.66), ofs, '#000', 700, 0) }) }
-  if (f.cta) { const ch = Math.round(72 * s), cw = Math.round(f.cta.length * cs * 0.62 + 90 * s); blocks.push({ h: ch, draw: y => `<rect x="${leftX}" y="${y}" width="${cw}" height="${ch}" rx="${Math.round(ch / 2)}" fill="#ffffff"/>` + block([f.cta + '  →'], leftX + Math.round(38 * s), y + Math.round(ch * 0.66), cs, '#000', 700, 0) }) }
+  if (f.cta) { const ch = Math.round(72 * s), cw = Math.round(f.cta.length * cs * 0.62 + 130 * s); blocks.push({ h: ch, draw: y => `<rect x="${leftX}" y="${y}" width="${cw}" height="${ch}" rx="${Math.round(ch / 2)}" fill="#ffffff"/>` + block([f.cta], leftX + Math.round(38 * s), y + Math.round(ch * 0.66), cs, '#000', 700, 0) + arrowGlyph(leftX + cw - Math.round(45 * s), y + Math.round(ch * 0.5), Math.round(12 * s), '#000') }) }
   const total = blocks.reduce((a, bl) => a + bl.h, 0)
   let y = H - safe.bottom - total
   const overlay = blocks.map(bl => { const svg = bl.draw(y); y += bl.h; return svg }).join('')
@@ -207,7 +232,7 @@ ${overlay}
 
 function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, beforeImg: string | null, afterImg: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
   switch (template) {
-    case 'tweet': return svgTweet(f, b)
+    case 'tweet': return svgTweet(f, b, logo)
     case 'beforeafter': return svgBeforeAfter(f, b, beforeImg, afterImg)
     case 'mistakes': return svgMistakes(f, b)
     case 'announcement': return svgAnnouncement(f, b)
@@ -267,7 +292,9 @@ Deno.serve(async (req) => {
       bgUrl = await generateBg(`Professional social media background photo. ${subj}. ${palette} Warm natural lighting, polished, room at the bottom for text overlay, no people, no text, no logos, no watermark.`, companyId)
     }
     const bgData = bgUrl ? await toDataUri(bgUrl) : null
-    const logoData = template === 'photo' && brand.logoUrl ? await toDataUri(brand.logoUrl) : null
+    // Avatar do Tweet Print = logo real da empresa (mesmo asset do Kit da
+    // Marca em Estilos e Visuais) — sem logo, cai pras iniciais na svgTweet.
+    const logoData = (template === 'photo' || template === 'tweet') && brand.logoUrl ? await toDataUri(brand.logoUrl) : null
     const stickerData = template === 'photo' && body.sticker ? await toDataUri(String(body.sticker)) : null
     // Antes/Depois: as 2 fotos vêm em fields.beforeImage/afterImage (URL —
     // asset real do Arquivo/Produtos, ou já geradas pela IA por quem chamou).
