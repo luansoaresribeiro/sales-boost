@@ -193,6 +193,15 @@ export function ScoreBreakdown({ post }: { post: TestPost }) {
   )
 }
 
+function Switch({ on, onClick, disabled }: { on: boolean; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button onClick={onClick} disabled={disabled}
+      style={{ width: '36px', height: '20px', borderRadius: '99px', border: 'none', background: on ? ORANGE : 'rgba(255,255,255,0.15)', position: 'relative', cursor: disabled ? 'default' : 'pointer', flexShrink: 0, opacity: disabled ? 0.6 : 1, padding: 0 }}>
+      <span style={{ position: 'absolute', top: '2px', left: on ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: 'white', transition: 'left 0.15s' }} />
+    </button>
+  )
+}
+
 // Área de Testes (QC): gera com o mesmo motor da automação, avalia com o júri
 // (nota ponderada, consultiva) e checa gramática/ortografia (eliminatória):
 // sem erro de língua → Vault; com erro → regenera o texto. Isolado da fila
@@ -209,6 +218,29 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [okMsg, setOkMsg] = useState('')
+  const [autoDaily, setAutoDaily] = useState(false)
+  const [autoDailyImage, setAutoDailyImage] = useState(true)
+  const [autoLoaded, setAutoLoaded] = useState(false)
+  const [autoSaving, setAutoSaving] = useState(false)
+
+  // Geração automática (1x/dia, 10h de Brasília, sempre no formato Orgânico —
+  // ver creative-generate) — liga/desliga por empresa, não por módulo.
+  useEffect(() => {
+    supabase.from('marketing_ai_config').select('auto_daily_test, auto_daily_test_image').eq('company_id', companyId).maybeSingle()
+      .then(({ data }) => {
+        setAutoDaily(!!data?.auto_daily_test)
+        setAutoDailyImage(data?.auto_daily_test_image !== false)
+        setAutoLoaded(true)
+      })
+  }, [companyId])
+
+  const saveAuto = async (patch: { auto_daily_test?: boolean; auto_daily_test_image?: boolean }) => {
+    setAutoSaving(true)
+    await supabase.from('marketing_ai_config').update(patch).eq('company_id', companyId)
+    if ('auto_daily_test' in patch) setAutoDaily(!!patch.auto_daily_test)
+    if ('auto_daily_test_image' in patch) setAutoDailyImage(!!patch.auto_daily_test_image)
+    setAutoSaving(false)
+  }
 
   const load = useCallback(async () => {
     const [{ data }, { data: a }] = await Promise.all([
@@ -280,6 +312,24 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
           {generating ? 'Gerando + avaliando...' : '✨ Gerar post de teste'}
         </button>
       </div>
+
+      {kind === 'organico' && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '10px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+            <Switch on={autoDaily} disabled={!autoLoaded || autoSaving} onClick={() => saveAuto({ auto_daily_test: !autoDaily })} />
+            <div>
+              <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>Gerar automaticamente todo dia às 10h</div>
+              <div style={{ fontSize: '10px', color: MUTED }}>Cria 1 post de teste (Orgânico) sozinho, esperando você avaliar no QC.</div>
+            </div>
+          </div>
+          {autoDaily && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+              <Switch on={autoDailyImage} disabled={autoSaving} onClick={() => saveAuto({ auto_daily_test_image: !autoDailyImage })} />
+              <div style={{ fontSize: '11.5px', color: 'white' }}>Incluir imagem</div>
+            </div>
+          )}
+        </div>
+      )}
 
       {generating && <ProgressBar label="Diretor Criativo criando + controle de qualidade avaliando... (pode levar ~1 min)" />}
       {error && <div style={{ color: '#f87171', fontSize: '11.5px', marginBottom: '12px' }}>{error}</div>}
