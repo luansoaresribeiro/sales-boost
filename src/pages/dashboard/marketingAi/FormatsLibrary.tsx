@@ -9,12 +9,11 @@ const ORANGE = '#FF6D29'
 
 interface Fmt { id: string; title: string; content: string | null; meta: { fields?: string[]; example?: string } | null; created_at: string }
 
-// Modelos prontos pra começar rápido — clicou, preenche o formulário.
+// Modelos prontos pra começar rápido — clicou, preenche o formulário. Print
+// de Tweet e Antes/Depois já têm motor de imagem de verdade (acima); ficam
+// só aqui os que ainda são só guia pro Diretor Criativo, sem motor próprio.
 const PRESETS: { title: string; content: string; fields: string[] }[] = [
-  { title: 'Print de Tweet', content: 'Parece um post do X/Twitter — bom pra frases de efeito e opiniões.', fields: ['@usuário', 'nome de exibição', 'avatar', 'texto do tweet', 'curtidas', 'retweets', 'data'] },
-  { title: 'Card de Citação', content: 'Uma frase forte em destaque com atribuição.', fields: ['citação', 'autor', 'cargo/negócio', 'logo', 'cor de fundo'] },
   { title: 'Infográfico', content: 'Dados/passos em blocos visuais numerados.', fields: ['título', 'itens (lista)', 'ícone por item', 'fonte do dado', 'logo'] },
-  { title: 'Antes / Depois', content: 'Comparação lado a lado do resultado.', fields: ['imagem antes', 'imagem depois', 'rótulo antes', 'rótulo depois', 'legenda do resultado'] },
   { title: 'Foco no Produto', content: 'Produto em destaque com nome e preço.', fields: ['foto do produto', 'nome', 'preço', 'chamada', 'logo'] },
 ]
 

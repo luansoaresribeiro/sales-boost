@@ -100,19 +100,48 @@ ${block([`${f.retweets || '128'} Retuites     ${f.likes || '1.204'} Curtidas`], 
   return { svg, w: W, h: H }
 }
 
-function svgQuote(f: F, b: Brand): { svg: string; w: number; h: number } {
-  const W = 1080, H = 1080
-  const ql = wrap(f.quote || 'A frase de efeito que resume a sua marca vai aqui.', 58, 860)
-  const startY = 470 - (ql.length * 74) / 2
+// Comparação lado a lado — ANTES (esquerda) / DEPOIS (direita), com legenda
+// do resultado embaixo. beforeImg/afterImg já vêm como data URI (resvg não
+// busca href remoto), pode faltar uma das duas (mostra placeholder escuro).
+function svgBeforeAfter(f: F, b: Brand, beforeImg: string | null, afterImg: string | null): { svg: string; w: number; h: number } {
+  const W = 1080, H = 1350, halfW = W / 2
+  const badge = (label: string, cx: number): string =>
+    `<rect x="${cx - 140}" y="40" width="280" height="76" rx="38" fill="${b.primary}"/>` + block([label.toUpperCase()], cx, 90, 30, '#000', 800, 0, 'middle')
+  const capLines = f.caption ? wrap(f.caption, 42, 900) : []
+  const capStartY = H - 60 - (Math.max(capLines.length, 1) - 1) * 54
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${b.primary}"/><stop offset="1" stop-color="${shade(b.primary, -30)}"/></linearGradient></defs>
-<rect width="${W}" height="${H}" fill="url(#g)"/>
-<text x="110" y="300" font-family="Poppins" font-size="200" font-weight="700" fill="#ffffff" opacity="0.3">&#8220;</text>
-${block(ql, 110, startY, 58, '#ffffff', 700, 74)}
-<circle cx="146" cy="900" r="40" fill="#ffffff" fill-opacity="0.2"/>
-<text x="146" y="913" font-family="Poppins" font-size="28" font-weight="700" fill="#fff" text-anchor="middle">${esc(initials(f.author || b.name))}</text>
-${block([f.author || b.name], 206, 892, 32, '#ffffff', 700, 0)}
-${f.role ? block([f.role], 206, 928, 24, '#ffffff', 400, 0) : ''}
+<rect width="${W}" height="${H}" fill="${b.bg || '#0E0B0A'}"/>
+${beforeImg ? `<image href="${beforeImg}" x="0" y="0" width="${halfW}" height="${H}" preserveAspectRatio="xMidYMid slice"/>` : `<rect x="0" y="0" width="${halfW}" height="${H}" fill="#1a1a1a"/>`}
+${afterImg ? `<image href="${afterImg}" x="${halfW}" y="0" width="${halfW}" height="${H}" preserveAspectRatio="xMidYMid slice"/>` : `<rect x="${halfW}" y="0" width="${halfW}" height="${H}" fill="#1a1a1a"/>`}
+<rect x="${halfW - 2}" y="0" width="4" height="${H}" fill="${b.primary}"/>
+${badge(f.beforeLabel || 'Antes', halfW / 2)}
+${badge(f.afterLabel || 'Depois', halfW + halfW / 2)}
+${capLines.length ? `<defs><linearGradient id="capg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.92"/></linearGradient></defs><rect x="0" y="${H - 280}" width="${W}" height="280" fill="url(#capg)"/>${block(capLines, W / 2, capStartY, 42, '#ffffff', 800, 54, 'middle')}` : ''}
+</svg>`
+  return { svg, w: W, h: H }
+}
+
+// Lista educativa: 3 erros comuns do cliente ideal (icp), numerados. Puro
+// texto — sem dado fabricado, o que vem de fora é sempre real (ICP da
+// empresa + os 3 erros escritos pela IA de conteúdo, nunca um número solto).
+function svgMistakes(f: F, b: Brand): { svg: string; w: number; h: number } {
+  const W = 1080, H = 1350, text = b.text || '#ffffff'
+  const icp = f.icp || 'cliente'
+  const hl = wrap(`3 erros que todo(a) ${icp} comete`.toUpperCase(), 40, 880)
+  const items = [f.mistake1, f.mistake2, f.mistake3].filter((m): m is string => !!m)
+  const parts: string[] = [block(hl, 100, 160, 40, b.primary, 800, 54)]
+  let y = 160 + hl.length * 54 + 70
+  items.forEach((m, i) => {
+    const lines = wrap(m, 34, 760)
+    parts.push(`<text x="100" y="${y + 50}" font-family="Poppins" font-size="64" font-weight="800" fill="${b.primary}">${String(i + 1).padStart(2, '0')}</text>`)
+    parts.push(block(lines, 220, y + 44, 34, text, 600, 44))
+    y += Math.max(lines.length * 44, 70) + 60
+    if (i < items.length - 1) parts.push(`<rect x="100" y="${y - 30}" width="880" height="2" fill="rgba(255,255,255,0.12)"/>`)
+  })
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+<defs><linearGradient id="mg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${b.bg || '#150E08'}"/><stop offset="1" stop-color="${shade(b.primary, -70)}"/></linearGradient></defs>
+<rect width="${W}" height="${H}" fill="url(#mg)"/>
+${parts.join('')}
 </svg>`
   return { svg, w: W, h: H }
 }
@@ -176,14 +205,15 @@ ${overlay}
   return { svg, w: W, h: H }
 }
 
-function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
+function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, beforeImg: string | null, afterImg: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
   switch (template) {
     case 'tweet': return svgTweet(f, b)
-    case 'quote': return svgQuote(f, b)
+    case 'beforeafter': return svgBeforeAfter(f, b, beforeImg, afterImg)
+    case 'mistakes': return svgMistakes(f, b)
     case 'announcement': return svgAnnouncement(f, b)
     case 'stat': return svgStat(f, b)
     case 'photo': return svgPhoto(f, b, bg, logo, sticker, W, H, safe)
-    default: return svgQuote(f, b)
+    default: return svgStat(f, b)
   }
 }
 
@@ -221,7 +251,7 @@ Deno.serve(async (req) => {
       companyId = comp.id as string
     }
 
-    const template = String(body.template ?? 'quote')
+    const template = String(body.template ?? 'stat')
     const fields = (body.fields ?? {}) as F
     const brand = { primary: '#FF6D29', name: 'Marca', ...(body.brand as Partial<Brand> ?? {}) } as Brand
     const kind = ['organico', 'stories', 'campanhas'].includes(String(body.kind)) ? String(body.kind) : 'organico'
@@ -239,6 +269,11 @@ Deno.serve(async (req) => {
     const bgData = bgUrl ? await toDataUri(bgUrl) : null
     const logoData = template === 'photo' && brand.logoUrl ? await toDataUri(brand.logoUrl) : null
     const stickerData = template === 'photo' && body.sticker ? await toDataUri(String(body.sticker)) : null
+    // Antes/Depois: as 2 fotos vêm em fields.beforeImage/afterImage (URL —
+    // asset real do Arquivo/Produtos, ou já geradas pela IA por quem chamou).
+    const [beforeImgData, afterImgData] = template === 'beforeafter'
+      ? await Promise.all([fields.beforeImage ? toDataUri(fields.beforeImage) : null, fields.afterImage ? toDataUri(fields.afterImage) : null])
+      : [null, null]
 
     // Tamanho/safe do formato (só o 'photo' é adaptativo; os demais têm tamanho fixo).
     const W = Math.max(200, Math.min(4000, Number(body.width) || 1080))
@@ -246,7 +281,7 @@ Deno.serve(async (req) => {
     const safe = (body.safe as Safe | undefined) ?? { top: Math.round(H * 0.06), right: Math.round(W * 0.08), bottom: Math.round(H * 0.09), left: Math.round(W * 0.08) }
 
     await ensureEngine()
-    const { svg, w } = buildSvg(template, fields, brand, bgData, logoData, stickerData, W, H, safe)
+    const { svg, w } = buildSvg(template, fields, brand, bgData, logoData, stickerData, beforeImgData, afterImgData, W, H, safe)
     const png = renderPng(svg, w)
 
     const path = `renders/${companyId}/${crypto.randomUUID()}.png`
