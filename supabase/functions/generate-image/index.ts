@@ -22,9 +22,11 @@ async function callOpenAI(apiKey: string, payload: Record<string, unknown>): Pro
   return data
 }
 
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
 // Gera `n` imagens (1..4) numa única chamada. gpt-image-1 devolve n imagens
 // em base64; se ele falhar, cai pro dall-e-3 (que só faz 1 por vez).
-async function openaiImages(apiKey: string, prompt: string, size: string, n: number): Promise<{ images: Uint8Array[]; model: string }> {
+async function openaiImagesOnce(apiKey: string, prompt: string, size: string, n: number): Promise<{ images: Uint8Array[]; model: string }> {
   // 1) gpt-image-1 — devolve base64.
   try {
     const d = await callOpenAI(apiKey, { model: 'gpt-image-1', prompt, size, n, quality: 'medium' })
@@ -43,6 +45,28 @@ async function openaiImages(apiKey: string, prompt: string, size: string, n: num
     const img = await fetch(url)
     return { images: [new Uint8Array(await img.arrayBuffer())], model: 'dall-e-3' }
   }
+}
+
+// O sistema roda no piloto automático (cron, sem ninguém olhando) — uma falha
+// transitória (rate limit, timeout, hiccup de rede) não pode virar "post sem
+// imagem" direto. Tenta de novo (com espera curta) antes de desistir.
+async function openaiImages(apiKey: string, prompt: string, size: string, n: number, attempts = 2): Promise<{ images: Uint8Array[]; model: string }> {
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i++) {
+    try { return await openaiImagesOnce(apiKey, prompt, size, n) }
+    catch (e) { lastErr = e; if (i < attempts - 1) await sleep(800 * (i + 1)) }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
+}
+
+async function logImageFailure(admin: SupaClient, companyId: string, error: string, fallback: boolean) {
+  try {
+    await admin.from('agent_performance').insert({
+      company_id: companyId, agent_role: 'imagem', task_key: 'image_generation',
+      task_description: fallback ? 'Geração falhou após retries — reusou última imagem da empresa' : 'Geração falhou após retries — sem imagem anterior pra reusar',
+      success: false, error_message: error.slice(0, 500), latency_ms: 0,
+    })
+  } catch { /* nunca derruba o fluxo por causa do log */ }
 }
 
 async function upload(admin: SupaClient, bytes: Uint8Array): Promise<string> {
@@ -140,22 +164,49 @@ Deno.serve(async (req) => {
     if (!apiKey) return json({ error: 'OPENAI_API_KEY não configurada' }, 200)
 
     const genStart = Date.now()
-    const { images, model } = await openaiImages(apiKey, prompt, size, n)
-    const urls = await Promise.all(images.map(b => upload(admin, b)))
+    let urls: string[]
+    let model: string
+    let usedFallback = false
+    try {
+      const gen = await openaiImages(apiKey, prompt, size, n)
+      urls = await Promise.all(gen.images.map(b => upload(admin, b)))
+      model = gen.model
+    } catch (genErr) {
+      // Piloto automático: uma falha (rate limit, OpenAI fora do ar, etc.) já
+      // tentou de novo (openaiImages faz retry) — se ainda assim não saiu,
+      // NUNCA deixa o post sem imagem nenhuma. Reusa a imagem mais recente
+      // já gerada de verdade pra essa empresa (contexto real dela) em vez de
+      // devolver vazio; só falha mesmo se a empresa nunca gerou nenhuma.
+      const msg = genErr instanceof Error ? genErr.message : String(genErr)
+      if (!companyId) { console.error('generate-image error:', genErr); return json({ error: msg }, 500) }
+      const { data: recent } = await admin.from('generated_images')
+        .select('image_url, model').eq('company_id', companyId).order('last_used_at', { ascending: false }).limit(1).maybeSingle()
+      if (!recent?.image_url) {
+        await logImageFailure(admin, companyId, msg, false)
+        console.error('generate-image error (sem fallback disponível):', genErr)
+        return json({ error: msg }, 500)
+      }
+      await logImageFailure(admin, companyId, msg, true)
+      urls = [recent.image_url]
+      model = String(recent.model ?? 'reused')
+      usedFallback = true
+    }
 
     if (companyId) {
-      await logImageCost(admin, companyId, model, Date.now() - genStart)
-      if (cacheKey) {
-        try {
-          await admin.from('generated_images').upsert(
-            { company_id: companyId, cache_key: cacheKey, prompt, image_url: urls[0], model, reused_count: 0, last_used_at: new Date().toISOString() },
-            { onConflict: 'company_id,cache_key' },
-          )
-        } catch { /* cache é bônus, nunca falha a geração */ }
+      if (!usedFallback) {
+        await logImageCost(admin, companyId, model, Date.now() - genStart)
+        if (cacheKey) {
+          try {
+            await admin.from('generated_images').upsert(
+              { company_id: companyId, cache_key: cacheKey, prompt, image_url: urls[0], model, reused_count: 0, last_used_at: new Date().toISOString() },
+              { onConflict: 'company_id,cache_key' },
+            )
+          } catch { /* cache é bônus, nunca falha a geração */ }
+        }
       }
     }
 
-    return json({ ok: true, url: urls[0], urls, model })
+    return json({ ok: true, url: urls[0], urls, model, fallback: usedFallback })
   } catch (err) {
     console.error('generate-image error:', err)
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)

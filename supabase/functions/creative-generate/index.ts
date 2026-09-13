@@ -181,6 +181,14 @@ Deno.serve(async (req) => {
 - Formato sugerido: ${seed.format ?? '—'}${seed.format ? ` — RESPEITE esse formato no seu "format" a menos que haja um motivo forte pra mudar (aí explique o motivo em "reasoning"). Nem toda ideia precisa virar carrossel: se o formato sugerido for "foto", gere UMA foto só.` : ''}\n` : ''
 
     // ── Passo 1: Diretor Criativo → BRIEF ────────────────────────────────
+    // Formatos permitidos por módulo: Orgânico faz foto ou carrossel; Stories
+    // só faz foto (reel/story hoje só geram 1 imagem estática, não vídeo de
+    // verdade — melhor não prometer um formato que a plataforma não entrega).
+    // Campanhas (mídia paga) segue livre.
+    const ALLOWED_FORMATS: Record<string, string[]> = { organico: ['foto', 'carrossel'], stories: ['foto'], campanhas: ['reel', 'carrossel', 'story', 'foto'] }
+    const allowedFormats = ALLOWED_FORMATS[kind] ?? ['foto', 'carrossel']
+    const fmtList = allowedFormats.map(f => `"${f}"`).join('|')
+
     const directorPrompt = `${preamble(config, company)}
 
 Você é o DIRETOR CRIATIVO de uma agência. Vai criar um conteúdo do tipo "${modLabel}". Decida o brief usando os insights reais e as boas práticas ESPECÍFICAS desse formato (não use regra genérica).
@@ -194,10 +202,14 @@ Frameworks de copy:\n${listByKind(lib, 'framework')}
 Sistemas visuais:\n${listByKind(lib, 'visual_system')}
 Hooks de referência:\n${listByKind(lib, 'hook')}
 
+IMPORTANTE: "format" só pode ser um destes (${modLabel} não suporta os outros): ${fmtList}.
 Decida o brief. Retorne APENAS um JSON:
-{"objective":"awareness|engagement|conversion","format":"reel|carrossel|story|foto","visual_system":"<título exato da biblioteca>","personality":"<título exato da biblioteca>","framework":"<título exato da biblioteca>","hook_angle":"ângulo do gancho em 1 frase","cta":"chamada pra ação","offer":"oferta/valor em 1 frase (ou vazio)","reasoning":"por que essas escolhas, citando o insight"}`
+{"objective":"awareness|engagement|conversion","format":${fmtList},"visual_system":"<título exato da biblioteca>","personality":"<título exato da biblioteca>","framework":"<título exato da biblioteca>","hook_angle":"ângulo do gancho em 1 frase","cta":"chamada pra ação","offer":"oferta/valor em 1 frase (ou vazio)","reasoning":"por que essas escolhas, citando o insight"}`
 
     const brief = parseObj(await callClaude(anthropicKey, directorPrompt, 900))
+    // Rede de segurança: se a IA ignorar a restrição, força pro formato
+    // permitido mais próximo em vez de deixar vazar um formato não suportado.
+    if (!allowedFormats.includes(String(brief.format))) brief.format = allowedFormats[0]
     const personality = String(brief.personality ?? 'Copywriter')
 
     // ── Passo 2: a personalidade EXECUTA, consultando a biblioteca ───────

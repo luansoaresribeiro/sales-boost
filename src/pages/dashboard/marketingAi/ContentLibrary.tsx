@@ -44,6 +44,11 @@ export const kindLabel = (k: string) => KIND_LABEL[k] ?? k.charAt(0).toUpperCase
 export default function ContentLibrary({ companyId }: { companyId: string }) {
   const [top, setTop] = useState('creative')
   const [mod, setMod] = useState<'organico' | 'stories' | 'campanhas'>('organico')
+  // Testes (QC) não cobre Campanhas — é mídia paga, fluxo de aprovação
+  // diferente (Conteúdo → Campanhas). Some da Área de Testes; some da lista
+  // de módulos ali e, se o dono estava em Campanhas, volta pra Orgânico.
+  const handleTop = (key: string) => { setTop(key); if (key === 'testes' && mod === 'campanhas') setMod('organico') }
+  const visibleModules = top === 'testes' ? MODULES.filter(m => m.key !== 'campanhas') : MODULES
 
   return (
     <div>
@@ -59,7 +64,7 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
         {TOP_TABS.map(t => {
           const active = top === t.key
           return (
-            <button key={t.key} onClick={() => setTop(t.key)}
+            <button key={t.key} onClick={() => handleTop(t.key)}
               style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '9px 15px', background: active ? 'rgba(255,109,41,0.14)' : 'transparent', border: `1px solid ${active ? 'rgba(255,109,41,0.4)' : 'transparent'}`, borderRadius: '8px', cursor: 'pointer', fontFamily: D }}>
               <span style={{ fontSize: '14px' }}>{t.icon}</span>
               <span style={{ fontSize: '12.5px', fontWeight: 800, color: active ? ORANGE : 'white' }}>{t.label}</span>
@@ -68,11 +73,11 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
         })}
       </div>
 
-      {/* Sub-abas de módulo (Orgânico/Stories/Campanhas) — aparecem em Ideias,
-          Formatos e Testes (Vault é da marca/QC como um todo, não por módulo). */}
+      {/* Sub-abas de módulo — Ideias e Formatos têm Orgânico/Stories/Campanhas;
+          Testes só Orgânico/Stories (Vault é da marca/QC como um todo, não por módulo). */}
       {(top === 'creative' || top === 'formatos' || top === 'testes') && (
         <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          {MODULES.map(m => {
+          {visibleModules.map(m => {
             const active = mod === m.key
             return (
               <button key={m.key} onClick={() => setMod(m.key)}
