@@ -63,6 +63,33 @@ function useRealCompetitors(companyId: string | undefined): CompetitorMove[] | n
   return items
 }
 
+interface ExternalInsightRow { id: string; category: string; opportunity: string; why: string | null; action: string | null; priority: string | null }
+
+// Tendências/oportunidades reais — mesma fonte que a aba Insights
+// (external_insights, coletado via Tavily em insights-collect: eventos,
+// tendências do segmento E agora também opiniões reais de clientes sobre o
+// segmento). "tendencia"/"opiniao" viram Tendências aqui; "setor"/"parceria"
+// viram Oportunidades — mesmo dado, lente de Inteligência de Mercado.
+function useRealTrendsOpportunities(companyId: string): { trends: MarketTrend[]; opportunities: MarketOpportunity[] } | null {
+  const [state, setState] = useState<{ trends: MarketTrend[]; opportunities: MarketOpportunity[] } | null>(null)
+  useEffect(() => {
+    let alive = true
+    supabase.from('external_insights').select('id, category, opportunity, why, action, priority').eq('company_id', companyId)
+      .then(({ data }) => {
+        if (!alive) return
+        const rows = (data ?? []) as ExternalInsightRow[]
+        const rel = (p: string | null): 'high' | 'medium' | 'low' => (p === 'high' || p === 'low') ? p : 'medium'
+        const trends = rows.filter(r => r.category === 'tendencia' || r.category === 'opiniao')
+          .map(r => ({ id: r.id, title: r.opportunity, description: r.why ?? r.action ?? '', relevance: rel(r.priority) }))
+        const opportunities = rows.filter(r => r.category === 'setor' || r.category === 'parceria')
+          .map(r => ({ id: r.id, title: r.opportunity, description: r.action ?? r.why ?? '', impact: rel(r.priority) }))
+        setState({ trends, opportunities })
+      })
+    return () => { alive = false }
+  }, [companyId])
+  return state
+}
+
 function CompetitorCard({ c }: { c: CompetitorMove }) {
   const m = c.moveType ? MOVE_META[c.moveType] : { icon: '🔍', color: MUTED }
   return (
@@ -113,9 +140,13 @@ export default function MarketIntelTab({ company }: { company: Pick<CompanyData,
   const competitors = hasRealCompetitors ? real : demo.competitors
   const [demoMode, setDemoMode] = useDemoMode(company.id)
   const competitorsMode = veilMode({ hasReal: hasRealCompetitors, demoMode })
-  // Tendências/oportunidades ainda não têm gerador real (é IA lendo o
-  // segmento, não plugada) — sempre demo/locked, nunca "real".
-  const trendsMode = veilMode({ hasReal: false, demoMode })
+  // Tendências/oportunidades — real assim que a coleta (Tavily, aba Insights)
+  // já tiver rodado; a mesma fonte que a aba Insights usa.
+  const realTO = useRealTrendsOpportunities(company.id)
+  const hasRealTO = !!realTO && (realTO.trends.length > 0 || realTO.opportunities.length > 0)
+  const trends = hasRealTO ? realTO!.trends : demo.trends
+  const opportunities = hasRealTO ? realTO!.opportunities : demo.opportunities
+  const trendsMode = veilMode({ hasReal: hasRealTO, demoMode })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -138,17 +169,18 @@ export default function MarketIntelTab({ company }: { company: Pick<CompanyData,
         </section>
       </DataVeil>
 
-      {/* Tendências e oportunidades — ainda sem gerador real (IA/Apify não plugados) */}
+      {/* Tendências e oportunidades — real assim que a coleta via Tavily rodar
+          (mesma fonte que a aba Insights, dentro de Agente de Dados) */}
       <DataVeil mode={trendsMode}
         title="Sem dados reais ainda"
-        message="A leitura de tendências e oportunidades do segmento ainda não tem uma fonte real plugada. Ligue o Modo demonstração pra explorar o layout com um exemplo."
+        message="A leitura de tendências, opiniões de clientes e oportunidades do segmento vem da coleta via web (aba Insights) — clique em buscar lá pra trazer dados reais. Ligue o Modo demonstração pra explorar o layout com um exemplo enquanto isso."
         cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '20px', alignItems: 'start' }}>
           {/* Tendências */}
           <section>
-            <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>📈 Conteúdos que estão performando</div>
+            <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>📈 Tendências e opiniões sobre o segmento</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
-              {demo.trends.map(t => <TrendCard key={t.id} t={t} />)}
+              {trends.map(t => <TrendCard key={t.id} t={t} />)}
             </div>
           </section>
 
@@ -156,7 +188,7 @@ export default function MarketIntelTab({ company }: { company: Pick<CompanyData,
           <section>
             <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>✨ Novas oportunidades</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
-              {demo.opportunities.map(o => <OpportunityCard key={o.id} o={o} />)}
+              {opportunities.map(o => <OpportunityCard key={o.id} o={o} />)}
             </div>
           </section>
         </div>
