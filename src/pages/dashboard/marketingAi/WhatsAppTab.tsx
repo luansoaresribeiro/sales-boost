@@ -110,25 +110,31 @@ export default function WhatsAppTab({ company }: { company: Pick<CompanyData, 'i
   // instagram-webhook a partir de DMs reais) na MESMA caixa. null =
   // carregando; [] = sem conversa real → cai no demo (design preservado).
   const [realConvs, setRealConvs] = useState<DemoWaConversation[] | null>(null)
+  // Erro de verdade da consulta — não "ainda não tem conversa" (normal).
+  const [loadError, setLoadError] = useState<string | null>(null)
   const load = useCallback(async () => {
-    const [{ data: convs }, { data: igLeads }] = await Promise.all([
+    const [{ data: convs, error: convsErr }, { data: igLeads, error: leadsErr }] = await Promise.all([
       supabase.from('whatsapp_conversations').select('id, wa_contact_id, contact_name, created_at').eq('company_id', company.id),
       supabase.from('leads').select('id, name, contact, channel, stage, value_estimate, last_contact_at, notes, created_at').eq('company_id', company.id).eq('channel', 'instagram'),
     ])
+    if (convsErr || leadsErr) { setLoadError((convsErr ?? leadsErr)!.message); return }
     let waMapped: DemoWaConversation[] = []
     if (convs && convs.length > 0) {
       const ids = convs.map((c: ConvRow) => c.id)
-      const { data: msgs } = await supabase.from('whatsapp_conversation_messages')
+      const { data: msgs, error: msgsErr } = await supabase.from('whatsapp_conversation_messages')
         .select('id, conversation_id, role, content, created_at').in('conversation_id', ids).order('created_at', { ascending: true })
+      if (msgsErr) { setLoadError(msgsErr.message); return }
       waMapped = mapConversations(convs as ConvRow[], (msgs ?? []) as ConvMsgRow[])
     }
     let igMapped: DemoWaConversation[] = []
     if (igLeads && igLeads.length > 0) {
       const leadIds = igLeads.map((l: LeadRow) => l.id)
-      const { data: lmsgs } = await supabase.from('lead_messages')
+      const { data: lmsgs, error: lmsgsErr } = await supabase.from('lead_messages')
         .select('id, lead_id, direction, content, created_at').in('lead_id', leadIds).order('created_at', { ascending: true })
+      if (lmsgsErr) { setLoadError(lmsgsErr.message); return }
       igMapped = mapLeadConversations(igLeads as LeadRow[], (lmsgs ?? []) as LeadMsgRow[])
     }
+    setLoadError(null)
     setRealConvs([...waMapped, ...igMapped])
   }, [company.id])
   useEffect(() => { void load() }, [load])
@@ -138,7 +144,7 @@ export default function WhatsAppTab({ company }: { company: Pick<CompanyData, 'i
   const isReal = !!realConvs && realConvs.length > 0
   const baseConversations = isReal ? realConvs! : demo.conversations
   const [demoMode, setDemoMode] = useDemoMode(company.id)
-  const mode = veilMode({ hasReal: isReal, demoMode })
+  const mode = veilMode({ hasReal: isReal, demoMode, error: !!loadError })
 
   // Mesma lógica do Funil: uma só caixa de atendimento, filtrada pela origem.
   const conversations = channel === 'all' ? baseConversations : baseConversations.filter(c => c.channelKey === channel)
@@ -168,8 +174,9 @@ export default function WhatsAppTab({ company }: { company: Pick<CompanyData, 'i
       )}
 
       <DataVeil mode={mode}
-        title="Sem conversas reais ainda"
-        message="Conecte o WhatsApp pra ver as conversas de verdade aqui, ao vivo. Ligue o Modo demonstração pra explorar o layout com exemplos."
+        title={loadError ? 'Erro ao carregar as conversas' : 'Sem conversas reais ainda'}
+        message={loadError ? 'A consulta ao banco falhou — veja o erro abaixo pra saber o que corrigir.' : 'Conecte o WhatsApp pra ver as conversas de verdade aqui, ao vivo. Ligue o Modo demonstração pra explorar o layout com exemplos.'}
+        errorDetail={loadError}
         cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       <ControlBar autonomy={autonomy} setAutonomy={setAutonomy} from={from} to={to} setFrom={setFrom} setTo={setTo} paused={paused} setPaused={setPaused} />

@@ -37,13 +37,13 @@ interface RealGrowth { data: GrowthDemoData; hasReal: boolean }
 // → receita/ROAS ao vivo, insights_reports → recomendações da IA) num só
 // objeto na MESMA forma que o demo usa. Nenhuma peça sem fonte real vira
 // número inventado — fica null e o KpiTile mostra "—".
-function useRealGrowth(companyId: string, token: string): { real: RealGrowth | null; loading: boolean } {
-  const [state, setState] = useState<{ real: RealGrowth | null; loading: boolean }>({ real: null, loading: true })
+function useRealGrowth(companyId: string, token: string): { real: RealGrowth | null; loading: boolean; error: string | null } {
+  const [state, setState] = useState<{ real: RealGrowth | null; loading: boolean; error: string | null }>({ real: null, loading: true, error: null })
 
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [{ data: leadRows }, { data: snapRows }, { data: reportRows }, { data: companyRow }, { data: ideaRow }, { data: trendRow }] = await Promise.all([
+      const results = await Promise.all([
         supabase.from('leads').select('stage, value_estimate, created_at').eq('company_id', companyId),
         supabase.from('instagram_performance_snapshots').select('captured_for, followers, engagement_rate').eq('company_id', companyId).order('captured_for', { ascending: false }).limit(30),
         supabase.from('insights_reports').select('tab_key, summary, suggestions, created_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(3),
@@ -51,11 +51,18 @@ function useRealGrowth(companyId: string, token: string): { real: RealGrowth | n
         supabase.from('marketing_ai_ideas').select('created_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('marketing_ai_trends').select('detected_at').eq('company_id', companyId).eq('source', 'instagram_scan').order('detected_at', { ascending: false }).limit(1).maybeSingle(),
       ])
-      let ads: { connected: boolean; totals?: { spend: number; revenue: number; roas: number } } | null = null
+      // Pedido do dono: se alguma dessas consultas falhar de verdade (não só
+      // "ainda sem linha"), o painel borrado precisa mostrar o erro real.
+      const queryErr = results.find(r => r.error)?.error
+      if (queryErr) { if (!cancelled) setState({ real: null, loading: false, error: queryErr.message }); return }
+      const [{ data: leadRows }, { data: snapRows }, { data: reportRows }, { data: companyRow }, { data: ideaRow }, { data: trendRow }] = results
+      let ads: { connected: boolean; totals?: { spend: number; revenue: number; roas: number }; error?: string } | null = null
+      let adsError: string | null = null
       if (token) {
         ads = await fetch(`${SUPABASE_URL}/functions/v1/meta-ads-insights`, {
           method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ company_id: companyId }),
-        }).then(r => r.json()).catch(() => null)
+        }).then(r => r.json()).catch(e => { adsError = e instanceof Error ? e.message : String(e); return null })
+        if (ads?.connected && ads.error) adsError = ads.error
       }
       if (cancelled) return
 
@@ -113,7 +120,9 @@ function useRealGrowth(companyId: string, token: string): { real: RealGrowth | n
         },
         connections: [], funnel, agents, insights,
       }
-      setState({ real: { data, hasReal }, loading: false })
+      // Só escala pra "erro" quando NADA real veio (senão um erro isolado do
+      // Meta Ads borraria o painel inteiro mesmo com leads/Instagram reais).
+      setState({ real: { data, hasReal }, loading: false, error: !hasReal && adsError ? adsError : null })
     }
     load()
     return () => { cancelled = true }
@@ -129,7 +138,7 @@ export default function MarketingAiHubPage() {
   const [demoMode, setDemoMode] = useDemoMode(company?.id)
 
   const demo = useMemo(() => (company ? buildGrowthDemo(company) : null), [company])
-  const { real, loading: realLoading } = useRealGrowth(company?.id ?? '', session?.access_token ?? '')
+  const { real, loading: realLoading, error: realError } = useRealGrowth(company?.id ?? '', session?.access_token ?? '')
 
   if (!company || !demo) {
     return <div style={{ padding: '48px', color: MUTED, fontSize: '14px' }}>Carregando...</div>
@@ -137,7 +146,7 @@ export default function MarketingAiHubPage() {
 
   const open = (section: string) => navigate(section === 'meta-ads' ? '/dashboard/meta-ads' : `/dashboard/marketing-ai/${section}`)
   const panelData = real?.hasReal ? real.data : demo
-  const panelMode = veilMode({ hasReal: !!real?.hasReal, demoMode, error: undefined })
+  const panelMode = veilMode({ hasReal: !!real?.hasReal, demoMode, error: !!realError })
 
   return (
     <div>
@@ -172,8 +181,9 @@ export default function MarketingAiHubPage() {
       <div style={{ margin: '24px 32px 0' }}>
         {!realLoading && (
           <DataVeil mode={panelMode}
-            title="Painel-resumo ainda sem dado real"
-            message="Receita, ROAS e funil agregados aqui em cima ainda não têm dado real — assim que houver leads, Instagram ou Meta Ads conectados, cada peça some aqui automaticamente. Ligue o Modo demonstração pra ver como fica quando tudo estiver somado."
+            title={realError ? 'Erro ao carregar o painel-resumo' : 'Painel-resumo ainda sem dado real'}
+            message={realError ? 'A consulta ao banco/Meta falhou — veja o erro abaixo pra saber o que corrigir.' : 'Receita, ROAS e funil agregados aqui em cima ainda não têm dado real — assim que houver leads, Instagram ou Meta Ads conectados, cada peça some aqui automaticamente. Ligue o Modo demonstração pra ver como fica quando tudo estiver somado.'}
+            errorDetail={realError}
             cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
             <GrowthCommandCenter data={panelData} onOpenModule={open} />
           </DataVeil>

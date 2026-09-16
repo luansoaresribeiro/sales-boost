@@ -24,22 +24,25 @@ interface SnapshotRow {
 // pelo menos uma varredura de Instagram com seguidores conhecidos. Sem
 // legenda de posts pra analisar, "move"/"moveType" ficam sem dado em vez de
 // inventados (a IA só classifica quando tem legenda real pra ler).
-function useRealCompetitors(companyId: string | undefined): CompetitorMove[] | null {
+function useRealCompetitors(companyId: string | undefined): { items: CompetitorMove[] | null; error: string | null } {
   const [items, setItems] = useState<CompetitorMove[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!companyId) return
     let alive = true
     supabase.from('competitors').select('id, name').eq('company_id', companyId)
-      .then(async ({ data: comps }) => {
+      .then(async ({ data: comps, error: compsErr }) => {
         if (!alive) return
-        if (!comps || comps.length === 0) { setItems([]); return }
-        const { data: snaps } = await supabase.from('competitor_snapshots')
+        if (compsErr) { setError(compsErr.message); return }
+        if (!comps || comps.length === 0) { setError(null); setItems([]); return }
+        const { data: snaps, error: snapsErr } = await supabase.from('competitor_snapshots')
           .select('competitor_id, instagram_followers, instagram_posting_freq_days, avg_engagement, latest_move, latest_move_type, collected_at')
           .in('competitor_id', comps.map(c => c.id))
           .not('instagram_followers', 'is', null)
-          .order('collected_at', { ascending: false }) as { data: SnapshotRow[] | null }
+          .order('collected_at', { ascending: false }) as { data: SnapshotRow[] | null; error: { message: string } | null }
         if (!alive) return
+        if (snapsErr) { setError(snapsErr.message); return }
         const latest = new Map<string, SnapshotRow>()
         for (const s of snaps ?? []) if (!latest.has(s.competitor_id)) latest.set(s.competitor_id, s)
         const mapped: CompetitorMove[] = comps
@@ -55,12 +58,13 @@ function useRealCompetitors(companyId: string | undefined): CompetitorMove[] | n
               moveType: s.latest_move_type as CompetitorMove['moveType'],
             }
           })
+        setError(null)
         setItems(mapped)
       })
     return () => { alive = false }
   }, [companyId])
 
-  return items
+  return { items, error }
 }
 
 interface ExternalInsightRow { id: string; category: string; opportunity: string; why: string | null; action: string | null; priority: string | null }
@@ -70,24 +74,27 @@ interface ExternalInsightRow { id: string; category: string; opportunity: string
 // tendências do segmento E agora também opiniões reais de clientes sobre o
 // segmento). "tendencia"/"opiniao" viram Tendências aqui; "setor"/"parceria"
 // viram Oportunidades — mesmo dado, lente de Inteligência de Mercado.
-function useRealTrendsOpportunities(companyId: string): { trends: MarketTrend[]; opportunities: MarketOpportunity[] } | null {
+function useRealTrendsOpportunities(companyId: string): { state: { trends: MarketTrend[]; opportunities: MarketOpportunity[] } | null; error: string | null } {
   const [state, setState] = useState<{ trends: MarketTrend[]; opportunities: MarketOpportunity[] } | null>(null)
+  const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
     supabase.from('external_insights').select('id, category, opportunity, why, action, priority').eq('company_id', companyId)
-      .then(({ data }) => {
+      .then(({ data, error: err }) => {
         if (!alive) return
+        if (err) { setError(err.message); return }
         const rows = (data ?? []) as ExternalInsightRow[]
         const rel = (p: string | null): 'high' | 'medium' | 'low' => (p === 'high' || p === 'low') ? p : 'medium'
         const trends = rows.filter(r => r.category === 'tendencia' || r.category === 'opiniao')
           .map(r => ({ id: r.id, title: r.opportunity, description: r.why ?? r.action ?? '', relevance: rel(r.priority) }))
         const opportunities = rows.filter(r => r.category === 'setor' || r.category === 'parceria')
           .map(r => ({ id: r.id, title: r.opportunity, description: r.action ?? r.why ?? '', impact: rel(r.priority) }))
+        setError(null)
         setState({ trends, opportunities })
       })
     return () => { alive = false }
   }, [companyId])
-  return state
+  return { state, error }
 }
 
 function CompetitorCard({ c }: { c: CompetitorMove }) {
@@ -135,25 +142,26 @@ function OpportunityCard({ o }: { o: MarketOpportunity }) {
 
 export default function MarketIntelTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city'> }) {
   const demo = useMemo(() => buildMarketDemo(company), [company])
-  const real = useRealCompetitors(company.id)
+  const { items: real, error: competitorsError } = useRealCompetitors(company.id)
   const hasRealCompetitors = !!real && real.length > 0
   const competitors = hasRealCompetitors ? real : demo.competitors
   const [demoMode, setDemoMode] = useDemoMode(company.id)
-  const competitorsMode = veilMode({ hasReal: hasRealCompetitors, demoMode })
+  const competitorsMode = veilMode({ hasReal: hasRealCompetitors, demoMode, error: !!competitorsError })
   // Tendências/oportunidades — real assim que a coleta (Tavily, aba Insights)
   // já tiver rodado; a mesma fonte que a aba Insights usa.
-  const realTO = useRealTrendsOpportunities(company.id)
+  const { state: realTO, error: trendsError } = useRealTrendsOpportunities(company.id)
   const hasRealTO = !!realTO && (realTO.trends.length > 0 || realTO.opportunities.length > 0)
   const trends = hasRealTO ? realTO!.trends : demo.trends
   const opportunities = hasRealTO ? realTO!.opportunities : demo.opportunities
-  const trendsMode = veilMode({ hasReal: hasRealTO, demoMode })
+  const trendsMode = veilMode({ hasReal: hasRealTO, demoMode, error: !!trendsError })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Movimentos dos concorrentes — real assim que houver concorrente escaneado */}
       <DataVeil mode={competitorsMode}
-        title="Sem concorrentes escaneados ainda"
-        message="O agente mapeia concorrentes e acha o Instagram deles sozinho, automaticamente. Ligue o Modo demonstração pra ver o layout com um exemplo enquanto isso roda."
+        title={competitorsError ? 'Erro ao carregar os concorrentes' : 'Sem concorrentes escaneados ainda'}
+        message={competitorsError ? 'A consulta ao banco falhou — veja o erro abaixo pra saber o que corrigir.' : 'O agente mapeia concorrentes e acha o Instagram deles sozinho, automaticamente. Ligue o Modo demonstração pra ver o layout com um exemplo enquanto isso roda.'}
+        errorDetail={competitorsError}
         cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
         <section>
           {!hasRealCompetitors && (
@@ -172,8 +180,9 @@ export default function MarketIntelTab({ company }: { company: Pick<CompanyData,
       {/* Tendências e oportunidades — real assim que a coleta via Tavily rodar
           (mesma fonte que a aba Insights, dentro de Agente de Dados) */}
       <DataVeil mode={trendsMode}
-        title="Sem dados reais ainda"
-        message="A leitura de tendências, opiniões de clientes e oportunidades do segmento vem da coleta via web (aba Insights) — clique em buscar lá pra trazer dados reais. Ligue o Modo demonstração pra explorar o layout com um exemplo enquanto isso."
+        title={trendsError ? 'Erro ao carregar tendências/oportunidades' : 'Sem dados reais ainda'}
+        message={trendsError ? 'A consulta ao banco falhou — veja o erro abaixo pra saber o que corrigir.' : 'A leitura de tendências, opiniões de clientes e oportunidades do segmento vem da coleta via web (aba Insights) — clique em buscar lá pra trazer dados reais. Ligue o Modo demonstração pra explorar o layout com um exemplo enquanto isso.'}
+        errorDetail={trendsError}
         cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '20px', alignItems: 'start' }}>
           {/* Tendências */}

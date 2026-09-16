@@ -21,10 +21,15 @@ export function veilMode(opts: { hasReal: boolean; demoMode: boolean; error?: bo
   return opts.demoMode ? 'demo' : 'locked'
 }
 
-export default function DataVeil({ mode, title, message, cta, children }: {
+export default function DataVeil({ mode, title, message, errorDetail, cta, children }: {
   mode: VeilMode
   title?: string
   message?: string
+  // Texto do erro de verdade (o que o Supabase/API devolveu) — só aparece em
+  // modo "error". Pedido do dono: quando está borrado por erro (não só por
+  // "ainda não conectou"), ele precisa VER o que quebrou pra saber o que
+  // corrigir, não só uma mensagem genérica de "tente de novo".
+  errorDetail?: string | null
   cta?: { label: string; onClick: () => void }
   children: ReactNode
 }) {
@@ -51,6 +56,11 @@ export default function DataVeil({ mode, title, message, cta, children }: {
               ? 'A conexão existe, mas a última atualização falhou. Tente de novo em instantes.'
               : 'Estes números são só um exemplo do layout. Conecte a fonte pra ver os seus dados de verdade — ou ligue o Modo demonstração pra explorar com dados fictícios.')}
           </div>
+          {isError && errorDetail && (
+            <div style={{ marginBottom: cta ? '14px' : 0, padding: '9px 11px', background: 'rgba(248,113,113,0.08)', border: `1px solid rgba(248,113,113,0.25)`, borderRadius: '8px', fontSize: '10.5px', color: '#fca5a5', fontFamily: 'ui-monospace, monospace', textAlign: 'left', wordBreak: 'break-word', maxHeight: '110px', overflowY: 'auto' }}>
+              {errorDetail}
+            </div>
+          )}
           {cta && (
             <button onClick={cta.onClick}
               style={{ padding: '9px 18px', background: isError ? 'transparent' : ORANGE, color: isError ? RED : '#000', fontWeight: 700, fontSize: '12px', borderRadius: '9px', border: isError ? `1px solid ${RED}` : 'none', cursor: 'pointer', fontFamily: D }}>
