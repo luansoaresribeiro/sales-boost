@@ -18,7 +18,7 @@ const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers
 
 // REGRA CRÍTICA (arquitetural): o gerador de imagem só desenha a CENA
 // VISUAL — o texto de verdade (headline/CTA/legenda) é sempre impresso
-// DEPOIS, pelo motor de cards (svgTweet/svgAnnouncement/etc.), nunca pela
+// DEPOIS, pelo motor de cards (svgTweet/svgProduct/svgPhoto), nunca pela
 // IA de imagem. Nunca manda copy real pro prompt de fundo — só o conceito
 // visual — e sempre reforça pra IA deixar objetos-com-texto em branco.
 const NO_TEXT_RULE = 'CRITICAL: this image must contain ONLY the visual scene — environment, people, products, objects, lighting, composition. Absolutely NO text of any kind anywhere in the image: no headlines, captions, CTAs, logos with text, signs, banners, posters, screens, labels, packaging text, watermarks, or simulated/gibberish lettering. If the scene naturally includes an object that would normally carry text (a sign, menu, screen, clipboard, label), render it completely blank — a clean empty surface. Never attempt to write, spell, or render any character.'
@@ -103,24 +103,6 @@ function block(lines: string[], x: number, y: number, size: number, fill: string
 function arrowGlyph(cx: number, cy: number, size: number, color: string): string {
   return `<polygon points="${cx - size * 0.5},${cy - size} ${cx + size * 0.6},${cy} ${cx - size * 0.5},${cy + size}" fill="${color}"/>`
 }
-function shade(hex: string, amt: number): string {
-  const h = (hex || '#000').replace('#', ''); const num = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0'), 16)
-  const cl = (v: number) => Math.max(0, Math.min(255, v)); const r = cl((num >> 16) + amt), g = cl(((num >> 8) & 0xff) + amt), b = cl((num & 0xff) + amt)
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
-}
-// Preto ou branco — o que tiver mais contraste contra a cor primária. Usado
-// nos cards de texto puro (fundo = cor primária cheia): nunca assume que
-// branco vai ler bem, já que a primária pode ser clara (ex: amarelo).
-function contrastColor(hex: string): string {
-  const h = (hex || '#000').replace('#', ''); const num = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0'), 16)
-  const r = (num >> 16) & 0xff, g = (num >> 8) & 0xff, b = num & 0xff
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#000000' : '#ffffff'
-}
-const mutedInk = (ink: string, alpha: number) => (ink === '#000000' ? `rgba(0,0,0,${alpha})` : `rgba(255,255,255,${alpha})`)
-// Fundo cheio na cor primária (gradiente sutil) — padrão dos cards de texto
-// puro (stat/announcement/mistakes). Tweet fica fiel ao tema real do X.
-const primaryBgDef = (id: string, b: Brand) => `<defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${b.primary}"/><stop offset="1" stop-color="${shade(b.primary, -30)}"/></linearGradient></defs>`
-
 interface Brand { primary: string; name: string; primary2?: string; accent?: string; accent2?: string; text?: string; bg?: string; logoUrl?: string }
 type F = Record<string, string>
 
@@ -175,34 +157,6 @@ ${parts.join('')}
   return { svg, w: W, h: H }
 }
 
-function svgAnnouncement(f: F, b: Brand): { svg: string; w: number; h: number } {
-  const W = 1080, H = 1350
-  const ink = contrastColor(b.primary), chipText = ink === '#000000' ? '#ffffff' : '#000000'
-  const hl = limitLines(wrap(f.headline || 'Sua chamada principal', 88, 880), 3)
-  let y = 470
-  const parts: string[] = []
-  if (f.eyebrow) { parts.push(block([f.eyebrow.toUpperCase()], 100, y, 30, mutedInk(ink, 0.8), 700, 0)); y += 56 }
-  parts.push(block(hl, 100, y + 20, 88, ink, 700, 100)); y += 20 + hl.length * 100 + 20
-  if (f.subtext) { const sl = limitLines(wrap(f.subtext, 38, 880), 4); parts.push(block(sl, 100, y + 20, 38, mutedInk(ink, 0.75), 400, 52)); y += 20 + sl.length * 52 + 20 }
-  if (f.offer) { const ow = (f.offer.length * 27) + 80; parts.push(`<rect x="100" y="${y}" width="${ow}" height="86" rx="18" fill="${ink}"/>` + block([f.offer], 140, y + 58, 46, chipText, 700, 0)); y += 130 }
-  if (f.cta) { const cw = (f.cta.length * 20) + 130; parts.push(`<rect x="100" y="${y}" width="${cw}" height="76" rx="38" fill="none" stroke="${ink}" stroke-width="3"/>` + block([f.cta], 140, y + 50, 34, ink, 700, 0) + arrowGlyph(100 + cw - 55, y + 37, 14, ink)) }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${primaryBgDef('ag', b)}<rect width="${W}" height="${H}" fill="url(#ag)"/>${parts.join('')}</svg>`
-  return { svg, w: W, h: H }
-}
-
-function svgStat(f: F, b: Brand): { svg: string; w: number; h: number } {
-  const W = 1080, H = 1080
-  const ink = contrastColor(b.primary)
-  const cl = limitLines(wrap(f.context || '', 42, 820), 4)
-  const parts: string[] = []
-  if (f.label) parts.push(block([f.label], 540, 360, 38, mutedInk(ink, 0.75), 700, 0, 'middle'))
-  parts.push(block([f.value || '87%'], 540, 620, 200, ink, 700, 0, 'middle'))
-  if (cl[0]) parts.push(block(cl, 540, 720, 42, ink, 400, 54, 'middle'))
-  if (f.source) parts.push(block([f.source], 540, 720 + cl.length * 54 + 50, 24, mutedInk(ink, 0.6), 400, 0, 'middle'))
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${primaryBgDef('sg', b)}<rect width="${W}" height="${H}" fill="url(#sg)"/>${parts.join('')}</svg>`
-  return { svg, w: W, h: H }
-}
-
 interface Safe { top: number; right: number; bottom: number; left: number }
 
 // Post com foto — composer ADAPTATIVO: recebe qualquer tamanho (W×H) e safe
@@ -236,14 +190,15 @@ ${overlay}
   return { svg, w: W, h: H }
 }
 
+// 'tweet'/'product'/'photo' são os únicos templates válidos hoje (ver a
+// regra em formatTemplates.tsx — TEMPLATES precisa espelhar exatamente
+// isso). Sem match, cai em 'photo' — é o mais genérico/flexível dos três.
 function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, productImg: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
   switch (template) {
     case 'tweet': return svgTweet(f, b, logo)
     case 'product': return svgProduct(f, b, productImg)
-    case 'announcement': return svgAnnouncement(f, b)
-    case 'stat': return svgStat(f, b)
     case 'photo': return svgPhoto(f, b, bg, logo, sticker, W, H, safe)
-    default: return svgStat(f, b)
+    default: return svgPhoto(f, b, bg, logo, sticker, W, H, safe)
   }
 }
 
@@ -255,7 +210,7 @@ Deno.serve(async (req) => {
     // Autoteste (sem empresa): valida que wasm + fontes + resvg funcionam aqui.
     if (body.selftest) {
       await ensureEngine()
-      const { svg, w } = svgStat({ value: 'OK', label: 'selftest', context: 'render server' }, { primary: '#FF6D29', name: 'Test' })
+      const { svg, w } = svgTweet({ text: 'selftest', name: 'Test', handle: 'test' }, { primary: '#FF6D29', name: 'Test' }, null)
       const png = renderPng(svg, w)
       return json({ ok: true, bytes: png.length })
     }
@@ -281,7 +236,7 @@ Deno.serve(async (req) => {
       companyId = comp.id as string
     }
 
-    const template = String(body.template ?? 'stat')
+    const template = String(body.template ?? 'photo')
     const fields = (body.fields ?? {}) as F
     const brand = { primary: '#FF6D29', name: 'Marca', ...(body.brand as Partial<Brand> ?? {}) } as Brand
     const kind = ['organico', 'stories', 'campanhas'].includes(String(body.kind)) ? String(body.kind) : 'organico'

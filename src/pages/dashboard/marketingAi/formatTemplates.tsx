@@ -21,16 +21,6 @@ const FONT = "'Bricolage Grotesque', system-ui, sans-serif"
 const initials = (name: string) => (name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
 // Fonte da marca (título) quando definida no Kit, com fallback.
 const bfont = (b: Brand) => b.heading ? `'${b.heading}', ${FONT}` : FONT
-// Preto ou branco — o que tiver mais contraste contra a cor primária. Usado
-// nos cards de texto puro (fundo = cor primária cheia): nunca assume que
-// branco vai ler bem, já que a primária pode ser clara (ex: amarelo).
-function contrastColor(hex: string): string {
-  const h = (hex || '#000').replace('#', '')
-  const num = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0'), 16)
-  const r = (num >> 16) & 0xff, g = (num >> 8) & 0xff, b = num & 0xff
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#000000' : '#ffffff'
-}
-const muted = (ink: string, alpha: number) => (ink === '#000000' ? `rgba(0,0,0,${alpha})` : `rgba(255,255,255,${alpha})`)
 // Logo da marca no canto (quando existe no Kit).
 function Logo({ b, dark }: { b: Brand; dark?: boolean }) {
   if (!b.logoUrl) return null
@@ -73,11 +63,6 @@ function tweet(f: Record<string, string>, brand: Brand): JSX.Element {
   )
 }
 
-// Fundo cheio na cor primária (gradiente sutil) — padrão dos cards de texto
-// puro abaixo (Anúncio, Estatística). Tweet Print fica fiel ao tema real do
-// X; Foco no Produto tem o fundo coberto pela foto do produto.
-const primaryBg = (b: Brand) => `linear-gradient(155deg, ${b.primary}, ${shade(b.primary, -30)})`
-
 // ── Foco no Produto ──────────────────────────────────────────────────────────
 // Pôster: produto centralizado, sombra de "estúdio" atrás dele, nome/preço/
 // chamada embaixo. Usa as fotos reais da aba Produtos (Estilos e Visuais).
@@ -102,36 +87,6 @@ function product(f: Record<string, string>, brand: Brand): JSX.Element {
   )
 }
 
-// ── Anúncio / Promoção ──────────────────────────────────────────────────────
-function announcement(f: Record<string, string>, brand: Brand): JSX.Element {
-  const ink = contrastColor(brand.primary)
-  const chipText = ink === '#000000' ? '#ffffff' : '#000000'
-  return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: primaryBg(brand), display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '100px', boxSizing: 'border-box', fontFamily: bfont(brand), color: ink }}>
-      {f.eyebrow && <div style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: muted(ink, 0.8), marginBottom: '28px' }}>{f.eyebrow}</div>}
-      <div style={{ fontSize: '92px', lineHeight: 1.05, fontWeight: 800, marginBottom: '30px' }}>{f.headline || 'Sua chamada principal'}</div>
-      {f.subtext && <div style={{ fontSize: '38px', lineHeight: 1.4, color: muted(ink, 0.75), marginBottom: '44px' }}>{f.subtext}</div>}
-      {f.offer && <div style={{ alignSelf: 'flex-start', background: ink, color: chipText, fontSize: '46px', fontWeight: 800, padding: '18px 40px', borderRadius: '18px', marginBottom: '44px' }}>{f.offer}</div>}
-      {f.cta && <div style={{ fontSize: '34px', fontWeight: 700, color: ink, border: `2px solid ${ink}`, borderRadius: '999px', padding: '18px 42px', alignSelf: 'flex-start' }}>{f.cta} →</div>}
-      <Logo b={brand} />
-    </div>
-  )
-}
-
-// ── Estatística / Destaque ──────────────────────────────────────────────────
-function stat(f: Record<string, string>, brand: Brand): JSX.Element {
-  const ink = contrastColor(brand.primary)
-  return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: primaryBg(brand), display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '90px', boxSizing: 'border-box', fontFamily: bfont(brand), color: ink, textAlign: 'center' }}>
-      {f.label && <div style={{ fontSize: '38px', fontWeight: 700, color: muted(ink, 0.75), marginBottom: '20px' }}>{f.label}</div>}
-      <div style={{ fontSize: '230px', lineHeight: 1, fontWeight: 800, color: ink }}>{f.value || '87%'}</div>
-      {f.context && <div style={{ fontSize: '42px', lineHeight: 1.35, marginTop: '30px', maxWidth: '80%' }}>{f.context}</div>}
-      {f.source && <div style={{ fontSize: '24px', color: muted(ink, 0.6), marginTop: '40px' }}>{f.source}</div>}
-      <Logo b={brand} />
-    </div>
-  )
-}
-
 // ── Post com Foto ───────────────────────────────────────────────────────────
 // Camadas: fundo (asset/IA) + escurecimento + marca (texto/selo/logo).
 function photo(f: Record<string, string>, brand: Brand): JSX.Element {
@@ -151,15 +106,16 @@ function photo(f: Record<string, string>, brand: Brand): JSX.Element {
   )
 }
 
-// Clareia/escurece um hex (para o gradiente do card de citação).
-function shade(hex: string, amt: number): string {
-  const h = hex.replace('#', '')
-  const num = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16)
-  const clamp = (v: number) => Math.max(0, Math.min(255, v))
-  const r = clamp((num >> 16) + amt), g = clamp(((num >> 8) & 0xff) + amt), b = clamp((num & 0xff) + amt)
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
-}
 
+// REGRA (pedido do dono, 2026-09): "Gerar imagem de formato" só deve listar
+// formato que o SELECIONADOR do gerador automático de post também conhece —
+// nunca um formato "órfão" que só existe aqui manualmente. O outro lado
+// dessa regra é creative-generate's TEMPLATE_DESC (chaves livre/tweet/
+// product hoje — "livre" é o equivalente conceitual de "photo" aqui, ver
+// FORMAT_CLASS em shared.ts). Tirando ou adicionando um formato aqui,
+// espelhar lá também (e vice-versa) — não deixar os dois divergirem de novo
+// (foi assim que "Estatística" ficou órfão por um tempo, e "Anúncio"/
+// "Antes-Depois" foram descontinuados nos dois lugares).
 export const TEMPLATES: Template[] = [
   {
     key: 'tweet', label: 'Print de Tweet', icon: '🐦', w: 1080, h: 1080,
@@ -182,15 +138,6 @@ export const TEMPLATES: Template[] = [
     render: product,
   },
   {
-    key: 'announcement', label: 'Anúncio / Promoção', icon: '📣', w: 1080, h: 1350,
-    fields: [
-      { key: 'eyebrow', label: 'Etiqueta (topo)' }, { key: 'headline', label: 'Chamada principal', type: 'textarea' },
-      { key: 'subtext', label: 'Subtexto', type: 'textarea' }, { key: 'offer', label: 'Oferta (destaque)' }, { key: 'cta', label: 'Chamada pra ação' },
-    ],
-    sample: { eyebrow: 'Novidade', headline: '', subtext: '', offer: '', cta: '' },
-    render: announcement,
-  },
-  {
     key: 'photo', label: 'Post com Foto', icon: '🖼️', w: 1080, h: 1350,
     fields: [
       { key: 'eyebrow', label: 'Etiqueta (topo)' }, { key: 'headline', label: 'Chamada principal', type: 'textarea' },
@@ -198,12 +145,6 @@ export const TEMPLATES: Template[] = [
     ],
     sample: { eyebrow: '', headline: '', offer: '', cta: '' },
     render: photo,
-  },
-  {
-    key: 'stat', label: 'Estatística / Destaque', icon: '📊', w: 1080, h: 1080,
-    fields: [{ key: 'value', label: 'Número/destaque' }, { key: 'label', label: 'Rótulo (topo)' }, { key: 'context', label: 'Contexto', type: 'textarea' }, { key: 'source', label: 'Fonte' }],
-    sample: { value: '', label: '', context: '', source: '' },
-    render: stat,
   },
 ]
 

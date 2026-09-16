@@ -140,20 +140,24 @@ async function generateImage(companyId: string, businessType: string | null, evo
 
 // Modelos de imagem disponíveis pro Diretor escolher — os MESMOS templates
 // reais de "Gerar imagem de formato" (formatTemplates/render-format), não
-// uma lista solta desconectada. TODOS, incluindo "livre", são escolhas
-// deliberadas com um USO específico — nenhum é "o padrão pra quando não
-// souber o que escolher". O Diretor decide isso ANTES de qualquer geração
-// de imagem/texto acontecer, nunca depois. 'product' só entra na lista se
-// a empresa já tem foto real de produto cadastrada — nunca oferece uma
-// opção que não tem como cumprir de verdade.
+// uma lista solta desconectada ("livre" é o equivalente conceitual de
+// "photo" lá — ver FORMAT_CLASS em shared.ts). TODOS, incluindo "livre",
+// são escolhas deliberadas com um USO específico — nenhum é "o padrão pra
+// quando não souber o que escolher". O Diretor decide isso ANTES de
+// qualquer geração de imagem/texto acontecer, nunca depois. 'product' só
+// entra na lista se a empresa já tem foto real de produto cadastrada —
+// nunca oferece uma opção que não tem como cumprir de verdade.
+// REGRA: essa lista e a de formatTemplates.tsx/TEMPLATES precisam ficar
+// sempre em sincronia — tirando/adicionando um formato aqui, espelhar lá
+// (e vice-versa). Foi assim que "Anúncio" e "Antes/Depois" saíram dos
+// dois lugares juntos, e "Estatística" nunca chegou a entrar aqui.
 const TEMPLATE_DESC = (hasProduct: boolean): Record<string, string> => ({
   livre: 'Foto realista e ESPECÍFICA do negócio, sem texto embutido na imagem — a legenda faz o trabalho de texto. Use quando o valor do post está na FOTO em si: um momento real, um clima, um resultado visual que fala por si só (não é o "padrão" — é a escolha certa quando nenhum card de texto serviria melhor que uma foto de verdade).',
   tweet: 'Card estilo "tweet"/nota com uma frase de efeito em texto nítido, sem foto. Bom pra opinião, gancho ou dado curioso forte.',
-  announcement: 'Pôster com chamada/oferta em destaque tipográfico, sem foto. Pra promoção, novidade ou data específica.',
   ...(hasProduct ? { product: 'Produto centralizado tipo pôster (usa uma foto de produto real já cadastrada), com nome/chamada. Só quando o post é sobre esse produto específico.' } : {}),
 })
 
-// Os cards gráficos (tweet/announcement/product) têm espaço FIXO e pequeno —
+// Os cards gráficos (tweet/product) têm espaço FIXO e pequeno —
 // diferente da legenda do Instagram, que é livre e longa. Cortar a legenda
 // pra caber no card (substring bruto) sempre saía cortado no meio da frase,
 // ilegível — o bug real que gerou a imagem quebrada mostrada pelo dono.
@@ -167,12 +171,10 @@ const TEMPLATE_DESC = (hasProduct: boolean): Record<string, string> => ({
 const NO_EMOJI_CARD = 'NUNCA use emoji em nenhum campo "card_*" — a fonte do card não tem esse glifo, vira um quadrado visível.'
 const CARD_FIELD_INSTRUCTIONS: Record<string, string> = {
   tweet: `- Preencha TAMBÉM "card_text": a frase de efeito que vai DENTRO do card gráfico (máx. 180 caracteres) — uma frase CURTA e COMPLETA, nunca cortada no meio. ${NO_EMOJI_CARD}`,
-  announcement: `- Preencha TAMBÉM "card_headline" (máx. 8 palavras, frase de impacto COMPLETA), "card_subtext" (máx. 18 palavras, frase COMPLETA) e "card_cta" (máx. 4 palavras, tipo "Agende agora" — NUNCA uma frase longa). São o que vai IMPRESSO na imagem do pôster: tem que caber e fazer sentido sozinho, nunca cortado. ${NO_EMOJI_CARD}`,
   product: `- Preencha TAMBÉM "card_cta" (máx. 4 palavras, tipo "Compre agora" — NUNCA uma frase longa) — vai IMPRESSO no botão da imagem do produto. ${NO_EMOJI_CARD}`,
 }
 const CARD_FIELD_JSON: Record<string, string> = {
   tweet: ',"card_text":""',
-  announcement: ',"card_headline":"","card_subtext":"","card_cta":""',
   product: ',"card_cta":""',
 }
 // Corta no limite de PALAVRA (nunca no meio de uma) e nunca finge que o
@@ -204,7 +206,7 @@ interface CardBrand { primary: string; name: string; accent?: string; text?: str
 // cron_secret+company_id (modo lote, sem usuário logado).
 async function renderGraphicCard(
   auth: { bearer: string; isCron: boolean; cronSecret?: string },
-  companyId: string, template: 'tweet' | 'announcement' | 'product', fields: Record<string, string>, brand: CardBrand,
+  companyId: string, template: 'tweet' | 'product', fields: Record<string, string>, brand: CardBrand,
 ): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   if (!supabaseUrl) return null
@@ -481,17 +483,6 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
         // meio da frase pra caber (era o bug real da imagem quebrada).
         const text = capWords(String(post.card_text ?? caption ?? idea ?? ''), 180)
         mainImage = await renderGraphicCard(opts, company.id, 'tweet', { text, name: company.business_name, handle: slugHandle(company.business_name) }, cardBrand)
-        if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), undefined, brandStyle, company.business_description ?? undefined)
-      } else if (template === 'announcement') {
-        // Pôster de texto — também zero geração de imagem. Campos "card_*"
-        // são escritos CURTOS de propósito pelo Copywriter; capWords é só
-        // uma rede de segurança (corta em palavra inteira, nunca no meio).
-        const headline = capWords(String(post.card_headline ?? idea ?? brief.hook_angle ?? 'Novidade'), 70)
-        const subtext = capWords(String(post.card_subtext ?? ''), 120)
-        const ctaText = capWords(String(post.card_cta ?? ''), 28)
-        mainImage = await renderGraphicCard(opts, company.id, 'announcement', {
-          headline, subtext, offer: String(brief.offer ?? ''), cta: ctaText,
-        }, cardBrand)
         if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), undefined, brandStyle, company.business_description ?? undefined)
       } else if (template === 'product' && product?.image_url) {
         // Produto real já cadastrado — zero geração de imagem, reusa a foto de verdade.

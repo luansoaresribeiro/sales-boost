@@ -22,9 +22,7 @@ const MODS: { key: string; label: string }[] = [{ key: 'organico', label: 'Orgâ
 // instrução prioritária toda vez que clicar em "Preencher com IA".
 const DEFAULT_INSTRUCTION: Record<string, string> = {
   tweet: 'Escreva uma frase de efeito curta e COMPLETA (até 140 caracteres), no tom da marca, sem emoji — tem que caber inteira no card, nunca cortada no meio.',
-  announcement: 'Escreva uma chamada de pôster: título de impacto (até 8 palavras), subtexto (até 18 palavras) e um CTA curto (até 4 palavras, tipo "Agende agora"). Tudo frase completa, sem emoji.',
   product: 'Escreva uma chamada de botão curta (até 4 palavras, tipo "Compre agora") pro produto em destaque. Sem emoji.',
-  stat: 'Escreva um número/estatística plausível e honesto (é peça de design, não analytics real) e o contexto em até 16 palavras. Sem emoji.',
   photo: 'Escreva uma chamada de impacto curta (até 8 palavras) pra sobrepor na foto. Sem emoji.',
 }
 

@@ -8,7 +8,7 @@ import AdaptModal, { type VaultPost } from './AdaptModal'
 const KIND_PT: Record<string, string> = { organico: 'Orgânico', stories: 'Stories', campanhas: 'Campanhas' }
 // Mesmas chaves do "template" escolhido pelo Diretor em creative-generate.
 export const TEMPLATE_LABEL: Record<string, string> = {
-  livre: 'Livre', tweet: 'Tweet', announcement: 'Anúncio', product: 'Produto',
+  livre: 'Livre', tweet: 'Tweet', product: 'Produto',
 }
 
 const ORANGE = '#FF6D29'
@@ -375,7 +375,7 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
             <Switch on={allowCarrossel} disabled={!autoLoaded || autoSaving} onClick={() => saveAuto({ allow_carrossel: !allowCarrossel })} />
             <div>
               <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>Considerar formato Carrossel</div>
-              <div style={{ fontSize: '10px', color: MUTED }}>Desligado: todo post vira foto única, sempre usando um dos templates reais (Tweet Print, Anúncio, etc.).</div>
+              <div style={{ fontSize: '10px', color: MUTED }}>Desligado: todo post vira foto única, sempre usando um dos templates reais (Tweet Print, Foco no Produto, etc.).</div>
             </div>
           </div>
         </div>

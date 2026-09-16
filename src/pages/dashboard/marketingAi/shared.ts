@@ -213,17 +213,17 @@ export const inputStyle = { padding: '8px 12px', background: 'rgba(255,255,255,0
 // Conversion/Flexible) — pra escolher o formato certo pra cada momento do
 // cliente, não só pelo visual. Uma tabela só, reusada nos dois motores de
 // template que existem: o motor manual (formatTemplates.tsx/FormatStudio —
-// chaves tweet/product/announcement/photo/stat) e o motor do Diretor
-// Criativo (creative-generate/TestingArea — chaves livre/tweet/announcement/
-// product; "livre" é o equivalente de "photo"). Antes/Depois foi
-// descontinuado (dono pediu pra tirar de vez, não usar mais em lugar nenhum).
+// chaves tweet/product/photo) e o motor do Diretor Criativo (creative-
+// generate/TestingArea — chaves livre/tweet/product; "livre" é o
+// equivalente de "photo"). Os dois motores têm que ficar sempre com o
+// MESMO conjunto de chaves — nunca um formato "órfão" só num dos lados.
+// Antes/Depois, Anúncio e Estatística foram descontinuados (dono pediu
+// pra tirar de vez, não usar mais em lugar nenhum).
 export type FunnelStage = 'topo' | 'meio' | 'fundo'
 export interface FormatClass { funnel: FunnelStage[]; objective: string }
 export const FORMAT_CLASS: Record<string, FormatClass> = {
   tweet: { funnel: ['topo'], objective: 'Awareness' },
-  stat: { funnel: ['topo', 'meio'], objective: 'Awareness' },
   product: { funnel: ['meio', 'fundo'], objective: 'Consideration' },
-  announcement: { funnel: ['fundo'], objective: 'Conversion' },
   photo: { funnel: ['topo', 'meio', 'fundo'], objective: 'Flexible' },
   livre: { funnel: ['topo', 'meio', 'fundo'], objective: 'Flexible' },
 }
