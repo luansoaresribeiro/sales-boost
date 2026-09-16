@@ -64,6 +64,25 @@ food, clínicas, academias, franquias. Não é um conjunto de ferramentas soltas
 - i18n desde o início — nunca strings hardcoded na UI.
 - Deploy: `npm run build` → `npx wrangler deploy` (manual; sem CI/CD pipeline).
 - Wrangler token salvo em `C:/Users/Lenovo/AppData/Roaming/xdg.config/.wrangler/config/default.toml`.
+- **Gerador de imagem NUNCA escreve texto** — regra arquitetural, não
+  sugestão. A IA de imagem (generate-image/OpenAI) é responsável só pela
+  CENA VISUAL (ambiente, pessoas, produtos, luz, composição); texto de
+  verdade (headline/CTA/legenda) é sempre uma camada separada, escrita
+  pelo Copywriter e impressa depois pelo motor de cards (`render-format`,
+  SVG→PNG) ou pela legenda do post — nunca desenhada pela IA de imagem.
+  Concretamente: (1) todo prompt de imagem tem que incluir a proibição
+  explícita de texto/placa/banner/tela/etiqueta/logo-com-texto, instruindo
+  a deixar objetos que normalmente teriam texto em BRANCO; (2) nunca
+  passar copy de verdade (hook/CTA/legenda) pro prompt de imagem — só o
+  conceito visual curto (`idea`), nunca `caption`/`hook_angle`/`offer`/
+  `s.text` de um slide. Isso existe por causa de um bug real (uma foto
+  gerada saiu com uma faixa de festa escrito "LIGA OF SCRADS", texto sem
+  sentido) — corrigido em 2026-09-16 em 6 edge functions que geram
+  imagem, cada uma com seu próprio prompt (sem lib compartilhada entre
+  functions, código duplicado de propósito igual o resto do projeto):
+  `creative-generate`, `content-test`, `render-format`, `marketing-ai`,
+  `generate-posts`, `content-image`. Qualquer prompt de imagem NOVO
+  precisa seguir essa mesma regra.
 
 ## Brand
 
