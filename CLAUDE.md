@@ -137,6 +137,27 @@ administra a VPS se os dois ainda são necessários ou se um virou redundante):
    `generate-posts-weekly`, `detect-opportunities-daily`, e o novo
    `generate-tab-insight-daily`), sem depender de nenhuma VPS.
 
+> ⚠️ **Armadilha real (achada em 2026-09-16, já corrigida):** toda edge
+> function chamada por `net.http_post` do pg_cron autentica via
+> `cron_secret` no CORPO da requisição, de propósito — nunca manda header
+> `Authorization` nenhum. Se a function estiver deployada com o padrão do
+> Supabase (`verify_jwt = true`), o GATEWAY da plataforma barra a chamada
+> com 401 `Missing authorization header` **antes** do código da function
+> rodar — e `cron.job_run_details` mostra `"succeeded"` mesmo assim (esse
+> status só confirma que o `net.http_post` foi enfileirado, não que a
+> chamada HTTP teve sucesso). É silencioso: nada quebra na tela, o cron
+> "roda" todo dia, só que nunca faz nada. Foi o que aconteceu com
+> `agent-actions` (publicação agendada do Vault), `creative-generate`
+> (geração diária + Calendário da Semana), `detect-opportunities`,
+> `creative-ideas`, `generate-posts`, `brand-kit-suggest`,
+> `map-competitors` e `monitor-competitor-social` — todas corrigidas
+> deployando com `supabase functions deploy <nome> --no-verify-jwt`
+> (o código interno de cada uma já validava JWT de usuário real OU
+> `cron_secret` corretamente; só o gateway estava barrando antes de
+> chegar lá). **Qualquer function nova que for chamada por cron E por
+> usuário logado precisa desse mesmo `--no-verify-jwt` no deploy** — sem
+> isso, o caminho do cron fica morto em silêncio.
+
 Cada função abaixo decide sozinha se vale a pena agir (não é "acordar e
 sempre fazer tudo de novo"):
 
