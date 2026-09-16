@@ -22,7 +22,7 @@ interface ModuleDef { section: string; title: string; desc: string; icon: string
 // realimenta o Agente de Dados — fecha o ciclo, é o último agente do fluxo).
 // Meta Ads virou item próprio no menu esquerdo, fora dessa sequência.
 const DATA_MODULE: ModuleDef = { section: 'dados', title: 'Agente de Dados', desc: 'Performance real do Instagram, inteligência de mercado, insights de oportunidades e a Saúde da Meta — o que já funcionou e o que está acontecendo agora.', icon: '📊' }
-const CONTENT_MODULE: ModuleDef = { section: 'content', title: 'Agente de Conteúdo', desc: 'Calendário, ideias, roteiros de Reels, legendas, criativos e campanhas — o Overview mostra o que já está pronto/agendado.', icon: '✍️' }
+const CONTENT_MODULE: ModuleDef = { section: 'content', title: 'Agente de Conteúdo', desc: 'Calendário da Semana (Ideias + planejamento), Overview do que já está pronto/agendado, e a Biblioteca com formatos, testes e vault.', icon: '✍️' }
 const CONVERSION_MODULE: ModuleDef = { section: 'conversao', title: 'Agente de Conversão', desc: 'Funil de vendas, atendimento e engagement (comentários/DMs) — transforma quem chegou até você em cliente.', icon: '🔀' }
 const FEEDBACK_MODULE: ModuleDef = { section: 'feedback', title: 'Feedback Loop', desc: 'Aprende seu cliente ideal (ICP) com o resultado de tudo acima e refina o Agente de Dados sozinho — fecha o ciclo.', icon: '🔁' }
 

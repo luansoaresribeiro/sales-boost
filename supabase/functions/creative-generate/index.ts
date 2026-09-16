@@ -547,41 +547,59 @@ function nextWeekDates(): { iso: string; weekday: string }[] {
 // Copywriter + imagem + controle de qualidade → Vault automático se a nota
 // for boa). Não é um motor de conteúdo separado — é só o Calendário
 // decidindo QUANDO usar o motor que já existe, um fluxo só conectado.
-async function planWeekForCompany(admin: SupaClient, anthropicKey: string, company: Company, auth: { bearer: string; isCron: boolean; cronSecret?: string }): Promise<{ planned: number; days: { date: string; kind: string; note: string }[] }> {
-  const [{ data: insRows }, { data: recentRows }] = await Promise.all([
+async function planWeekForCompany(admin: SupaClient, anthropicKey: string, company: Company, auth: { bearer: string; isCron: boolean; cronSecret?: string }): Promise<{ planned: number; days: { date: string; kind: string; note: string; idea_title?: string }[] }> {
+  const [{ data: insRows }, { data: pendingRows }, { data: ideaRows }] = await Promise.all([
     admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(8),
     admin.from('marketing_ai_test_content').select('id').eq('company_id', company.id).eq('status', 'draft').is('quality_score', null),
+    // Backlog de ideias (aba Ideias, dentro de Biblioteca E de Calendário da
+    // Semana) — o plano SEMPRE parte daqui, nunca inventa do zero: é o
+    // jeito do dono ver a mesma lista de ideias virar, de fato, o calendário.
+    admin.from('marketing_ai_ideas').select('id, title, hook, angle, format, module, rationale').eq('company_id', company.id).neq('status', 'dismissed').neq('status', 'used').in('module', ['organico', 'stories']).order('created_at', { ascending: false }).limit(20),
   ])
   const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
-  const pendingCount = (recentRows ?? []).length
+  const pendingCount = (pendingRows ?? []).length
+  const ideas = (ideaRows ?? []) as { id: string; title: string; hook: string | null; angle: string | null; format: string | null; module: string | null; rationale: string | null }[]
   const dates = nextWeekDates()
+
+  if (ideas.length === 0) return { planned: 0, days: [] }
 
   const prompt = `Você é o planejador de conteúdo semanal de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
 ${company.business_description ? `O que o negócio faz: ${company.business_description}.` : ''}
 
-Monte o plano da PRÓXIMA semana: pra cada um dos 7 dias abaixo, decida se vale gerar um POST orgânico ("organico"), um STORY ("stories"), ou nada (null). Cadência realista: normalmente 3 a 5 posts orgânicos por semana + stories mais frequentes, NUNCA as duas coisas no mesmo dia, nunca mais de 1 peça por dia. Considere que ${pendingCount} peça(s) recente(s) ainda nem foram avaliadas — se já tem bastante coisa parada, gere menos essa semana.
-${insights.length ? `\nInsights abertos (use pra decidir o QUE priorizar, não muda a contagem de dias):\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : '\n(sem insights abertos no momento)'}
+Monte o plano da PRÓXIMA semana ESCOLHENDO entre as ideias já disponíveis abaixo (nunca invente uma ideia nova aqui — se não houver ideia boa pra um dia, deixe esse dia sem nada). Pra cada dia que valer a pena, escolha a MELHOR ideia disponível pro tipo certo (post orgânico ou story) e não repita a mesma ideia em dois dias. Cadência realista: normalmente 3 a 5 posts orgânicos por semana + stories mais frequentes, nunca mais de 1 peça por dia. Considere que ${pendingCount} peça(s) recente(s) ainda nem foram avaliadas — se já tem bastante coisa parada, planeje menos essa semana.
+${insights.length ? `\nInsights abertos (ajudam a priorizar QUAL ideia usar primeiro):\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
+
+Ideias disponíveis (use o "id" exato):
+${ideas.map(i => `- id:"${i.id}" [${i.module}] "${i.title}"${i.hook ? ` — gancho: ${i.hook}` : ''}${i.rationale ? ` — ${i.rationale}` : ''}`).join('\n')}
 
 Dias (use EXATAMENTE estas datas, uma linha por dia, na mesma ordem):
 ${dates.map(d => `- ${d.iso} (${d.weekday})`).join('\n')}
 
 Retorne APENAS um JSON array, um item por dia, nesta ordem:
-[{"date":"YYYY-MM-DD","kind":"organico"|"stories"|null,"note":"por que (ou por que não) gerar algo nesse dia, 1 frase"}]`
+[{"date":"YYYY-MM-DD","idea_id":"<id de uma ideia acima, ou null se não usar esse dia>","note":"por que essa ideia pra esse dia (ou por que pular), 1 frase"}]`
 
-  const raw = await callClaude(anthropicKey, prompt, 900)
-  const parsedPlan = (parseArr(raw) as { date?: string; kind?: string; note?: string }[])
-    .filter(p => p.kind === 'organico' || p.kind === 'stories')
+  const raw = await callClaude(anthropicKey, prompt, 1100)
+  const ideaById = new Map(ideas.map(i => [i.id, i]))
+  const parsedPlan = (parseArr(raw) as { date?: string; idea_id?: string; note?: string }[])
+    .filter(p => p.idea_id && ideaById.has(p.idea_id))
     .slice(0, 6) // rede de segurança: nunca mais que 6 gerações numa rodada só (tempo/custo)
 
   let planned = 0
-  const days: { date: string; kind: string; note: string }[] = []
+  const days: { date: string; kind: string; note: string; idea_title?: string }[] = []
+  const usedIdeaIds = new Set<string>()
   for (const p of parsedPlan) {
-    const kind = p.kind as 'organico' | 'stories'
+    if (!p.idea_id || usedIdeaIds.has(p.idea_id)) continue // não deixa a IA repetir a mesma ideia em 2 dias
+    const idea = ideaById.get(p.idea_id)!
+    const kind = idea.module === 'stories' ? 'stories' : 'organico'
     const date = p.date && /^\d{4}-\d{2}-\d{2}$/.test(p.date) ? p.date : dates[0].iso
     try {
-      await generateForCompany(admin, anthropicKey, company, kind, { ...auth, plannedFor: date })
+      await generateForCompany(admin, anthropicKey, company, kind, {
+        ...auth, plannedFor: date, ideaId: idea.id,
+        seed: { title: idea.title, hook: idea.hook ?? undefined, angle: idea.angle ?? undefined, format: idea.format ?? undefined },
+      })
+      usedIdeaIds.add(p.idea_id)
       planned++
-      days.push({ date, kind, note: String(p.note ?? '') })
+      days.push({ date, kind, note: String(p.note ?? ''), idea_title: idea.title })
     } catch (e) { console.error('planWeekForCompany: falhou pra', company.id, date, e) }
   }
   return { planned, days }

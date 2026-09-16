@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import { TEMPLATE_LABEL, type TestPost } from './TestingArea'
+import CreativeAgent from './CreativeAgent'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -34,6 +35,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   const [planning, setPlanning] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
+  const [sub, setSub] = useState<'calendario' | 'ideias'>('calendario')
 
   const thisWeekStart = startOfWeek(new Date())
   const nextWeekStart = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate() + 7)
@@ -126,31 +128,48 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
       <div style={{ marginBottom: '16px' }}>
         <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🗓️ Calendário da Semana</div>
         <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55, maxWidth: '760px' }}>
-          O agente decide quais dias merecem post ou story (olhando os insights do Agente de Dados) e usa o mesmo motor de sempre pra gerar e avaliar — o que sair com nota boa já cai no Vault sozinho.
+          O agente escolhe as melhores <strong style={{ color: 'white' }}>Ideias</strong> do backlog abaixo pra cada dia (nunca inventa do zero) e usa o mesmo motor de sempre pra gerar e avaliar — o que sair com nota boa já cai no Vault sozinho.
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '14px', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '10px', marginBottom: '18px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-          <button onClick={toggleAuto} disabled={!autoLoaded}
-            style={{ width: '36px', height: '20px', borderRadius: '99px', border: 'none', background: autoOn ? ORANGE : 'rgba(255,255,255,0.15)', position: 'relative', cursor: 'pointer', flexShrink: 0, padding: 0 }}>
-            <span style={{ position: 'absolute', top: '2px', left: autoOn ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: 'white', transition: 'left 0.15s' }} />
-          </button>
-          <div>
-            <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>Planejar sozinho todo domingo às 18h</div>
-            <div style={{ fontSize: '10px', color: MUTED }}>Decide a semana seguinte e já gera tudo — sem precisar clicar em nada.</div>
-          </div>
-        </div>
-        <button onClick={planNow} disabled={planning || !token}
-          style={{ marginLeft: 'auto', padding: '9px 16px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '9px', border: 'none', cursor: planning ? 'default' : 'pointer', fontFamily: D, opacity: planning ? 0.7 : 1 }}>
-          {planning ? 'Planejando + gerando...' : '🗓️ Planejar semana agora'}
+      <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '18px' }}>
+        <button onClick={() => setSub('calendario')}
+          style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 14px', background: sub === 'calendario' ? 'rgba(255,109,41,0.12)' : 'transparent', border: `1px solid ${sub === 'calendario' ? 'rgba(255,109,41,0.35)' : 'transparent'}`, borderRadius: '8px', cursor: 'pointer', fontFamily: D }}>
+          <span style={{ fontSize: '14px' }}>🗓️</span>
+          <span style={{ fontSize: '12.5px', fontWeight: 700, color: sub === 'calendario' ? ORANGE : 'white' }}>Calendário</span>
+        </button>
+        <button onClick={() => setSub('ideias')}
+          style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 14px', background: sub === 'ideias' ? 'rgba(255,109,41,0.12)' : 'transparent', border: `1px solid ${sub === 'ideias' ? 'rgba(255,109,41,0.35)' : 'transparent'}`, borderRadius: '8px', cursor: 'pointer', fontFamily: D }}>
+          <span style={{ fontSize: '14px' }}>💡</span>
+          <span style={{ fontSize: '12.5px', fontWeight: 700, color: sub === 'ideias' ? ORANGE : 'white' }}>Ideias</span>
         </button>
       </div>
-      {err && <div style={{ color: '#f87171', fontSize: '11.5px', marginBottom: '12px' }}>{err}</div>}
-      {msg && <div style={{ color: GREEN, fontSize: '11.5px', marginBottom: '12px' }}>{msg}</div>}
 
-      <Week label="Esta semana" days={thisWeek} />
-      <Week label="Próxima semana" days={nextWeek} />
+      {sub === 'ideias' ? <CreativeAgent companyId={companyId} /> : (
+        <>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '14px', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '10px', marginBottom: '18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+              <button onClick={toggleAuto} disabled={!autoLoaded}
+                style={{ width: '36px', height: '20px', borderRadius: '99px', border: 'none', background: autoOn ? ORANGE : 'rgba(255,255,255,0.15)', position: 'relative', cursor: 'pointer', flexShrink: 0, padding: 0 }}>
+                <span style={{ position: 'absolute', top: '2px', left: autoOn ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: 'white', transition: 'left 0.15s' }} />
+              </button>
+              <div>
+                <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>Planejar sozinho todo domingo às 18h</div>
+                <div style={{ fontSize: '10px', color: MUTED }}>Escolhe entre as Ideias disponíveis e já gera tudo — sem precisar clicar em nada.</div>
+              </div>
+            </div>
+            <button onClick={planNow} disabled={planning || !token}
+              style={{ marginLeft: 'auto', padding: '9px 16px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '9px', border: 'none', cursor: planning ? 'default' : 'pointer', fontFamily: D, opacity: planning ? 0.7 : 1 }}>
+              {planning ? 'Planejando + gerando...' : '🗓️ Planejar semana agora'}
+            </button>
+          </div>
+          {err && <div style={{ color: '#f87171', fontSize: '11.5px', marginBottom: '12px' }}>{err}</div>}
+          {msg && <div style={{ color: GREEN, fontSize: '11.5px', marginBottom: '12px' }}>{msg}</div>}
+
+          <Week label="Esta semana" days={thisWeek} />
+          <Week label="Próxima semana" days={nextWeek} />
+        </>
+      )}
     </div>
   )
 }
