@@ -108,12 +108,22 @@ async function scoreTestContent(companyId: string, testId: string): Promise<bool
   return !!data.auto_vault
 }
 
+// REGRA CRÍTICA (arquitetural, não é sugestão): o gerador de imagem só
+// desenha a CENA VISUAL — nunca escreve, soletra ou desenha texto nenhum.
+// Copy de verdade (hook/CTA/legenda) NUNCA entra neste prompt — só o
+// conceito visual curto (`evoke`, feito só a partir de `idea`, nunca de
+// caption/hook_angle/offer). Isso existe porque já vimos o bug de verdade:
+// uma faixa de festa saiu com "LIGA OF SCRADS" (a IA "alucinando" texto
+// sem sentido) — pedir a foto SEM nenhuma pista de texto reduz isso na
+// raiz, em vez de só torcer pro analista visual (content-test) pegar depois.
+const NO_TEXT_RULE = 'CRITICAL: this image must contain ONLY the visual scene — environment, people, products, objects, lighting, composition. Absolutely NO text of any kind anywhere in the image: no headlines, captions, CTAs, logos with text, signs, banners, posters, screens, labels, packaging text, watermarks, or simulated/gibberish lettering. If the scene naturally includes an object that would normally carry text (a sign, menu, screen, clipboard, label), render it completely blank — a clean empty surface. Never attempt to write, spell, or render any character.'
+
 async function generateImage(companyId: string, businessType: string | null, evoke: string, conceptHint?: string, brandStyle?: string, businessDescription?: string): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')
   if (!supabaseUrl || !serviceKey) return null
   try {
-    const prompt = `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}.${conceptHint ? ` Composition: ${conceptHint}.` : ''}${brandStyle ? ` ${brandStyle}` : ''} Commercial photography, warm natural lighting, polished and inviting, no text, no logos, no watermark. The photo must clearly and specifically depict this exact post concept, not a generic stock photo: ${evoke}`
+    const prompt = `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}.${conceptHint ? ` Composition: ${conceptHint}.` : ''}${brandStyle ? ` ${brandStyle}` : ''} Commercial photography, warm natural lighting, polished and inviting. ${NO_TEXT_RULE} The photo must clearly and specifically depict this exact visual concept, not a generic stock photo: ${evoke}`
     const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
       method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
       // force_new: cada post de teste tem que ser uma imagem NOVA de verdade —
@@ -437,7 +447,10 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
 
   let mainImage: string | null = null
   let slides: { text: string; image_prompt: string; image_url: string | null }[] | null = null
-  const evoke = () => [idea, brief.hook_angle as string | undefined, brief.offer as string | undefined, caption].filter(Boolean).join('. ').slice(0, 600) || 'foto do negócio'
+  // Só `idea` (o CONCEITO visual curto) — nunca hook_angle/offer/caption:
+  // são copy de verdade, e mandar isso pro prompt de imagem é exatamente o
+  // que ensina a IA a tentar "escrever" a frase na foto (ver NO_TEXT_RULE).
+  const evoke = () => (idea ?? '').slice(0, 400) || 'foto do negócio'
   const conceptHint = PHOTO_HINT[visualSystemTitle]
 
   if (!opts.skipImage) {
@@ -447,7 +460,10 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
         // Imagens: carrossel gera 1 imagem por slide (paralelo, até 6), cada
         // uma do conteúdo ESPECÍFICO daquele slide — a coerência entre elas
         // vem da história pedida no execPrompt, não de repetir a mesma cena.
-        const urls = await Promise.all(rawSlides.map(s => generateImage(company.id, company.business_type, String(s.image ?? s.text ?? idea ?? ''), conceptHint, brandStyle, company.business_description ?? undefined)))
+        // Só `s.image` (a descrição visual do slide, escrita pro Copywriter
+        // EM INGLÊS especificamente pra isso) ou `idea` — NUNCA `s.text` (é
+        // o texto que aparece NO slide, copy de verdade, ver NO_TEXT_RULE).
+        const urls = await Promise.all(rawSlides.map(s => generateImage(company.id, company.business_type, String(s.image ?? idea ?? ''), conceptHint, brandStyle, company.business_description ?? undefined)))
         slides = rawSlides.map((s, i) => ({ text: String(s.text ?? ''), image_prompt: String(s.image ?? ''), image_url: urls[i] }))
         mainImage = slides.find(s => s.image_url)?.image_url ?? null
       }

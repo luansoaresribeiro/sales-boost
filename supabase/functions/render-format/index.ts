@@ -16,6 +16,13 @@ import { encodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 
+// REGRA CRÍTICA (arquitetural): o gerador de imagem só desenha a CENA
+// VISUAL — o texto de verdade (headline/CTA/legenda) é sempre impresso
+// DEPOIS, pelo motor de cards (svgTweet/svgAnnouncement/etc.), nunca pela
+// IA de imagem. Nunca manda copy real pro prompt de fundo — só o conceito
+// visual — e sempre reforça pra IA deixar objetos-com-texto em branco.
+const NO_TEXT_RULE = 'CRITICAL: this image must contain ONLY the visual scene — environment, people, products, objects, lighting, composition. Absolutely NO text of any kind anywhere in the image: no headlines, captions, CTAs, logos with text, signs, banners, posters, screens, labels, packaging text, watermarks, or simulated/gibberish lettering. If the scene naturally includes an object that would normally carry text (a sign, menu, screen, clipboard, label), render it completely blank — a clean empty surface. Never attempt to write, spell, or render any character.'
+
 const FONT_REG = 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/poppins/Poppins-Regular.ttf'
 const FONT_BOLD = 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/poppins/Poppins-Bold.ttf'
 
@@ -289,8 +296,11 @@ Deno.serve(async (req) => {
     let bgUrl: string | null = body.background ? String(body.background) : null
     if (template === 'photo' && !bgUrl && body.generate_bg) {
       const palette = (brand.primary ? `Brand colors ${[brand.primary, brand.primary2, brand.accent].filter(Boolean).join(', ')}.` : '')
-      const subj = String(body.bg_prompt ?? subject ?? fields.headline ?? 'the business')
-      bgUrl = await generateBg(`Professional social media background photo. ${subj}. ${palette} Warm natural lighting, polished, room at the bottom for text overlay, no people, no text, no logos, no watermark.`, companyId)
+      // Só bg_prompt/subject (conceito visual) — NUNCA fields.headline: é o
+      // texto que vai IMPRESSO no card depois (ver NO_TEXT_RULE), mandar
+      // isso pro prompt de imagem ensina a IA a tentar desenhar a frase.
+      const subj = String(body.bg_prompt ?? subject ?? 'the business')
+      bgUrl = await generateBg(`Professional social media background photo. ${subj}. ${palette} Warm natural lighting, polished, room at the bottom for text overlay, no people. ${NO_TEXT_RULE}`, companyId)
     }
     const bgData = bgUrl ? await toDataUri(bgUrl) : null
     // Avatar do Tweet Print = logo real da empresa (mesmo asset do Kit da

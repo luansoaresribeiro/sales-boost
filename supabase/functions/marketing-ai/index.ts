@@ -34,6 +34,11 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// REGRA CRÍTICA (arquitetural): o gerador de imagem só desenha a CENA
+// VISUAL — nunca escreve/soletra texto. O prompt abaixo só usa `idea.idea`
+// (conceito visual curto), nunca a legenda/copy de verdade.
+const NO_TEXT_RULE = 'CRITICAL: this image must contain ONLY the visual scene — environment, people, products, objects, lighting, composition. Absolutely NO text of any kind anywhere in the image: no headlines, captions, CTAs, logos with text, signs, banners, posters, screens, labels, packaging text, watermarks, or simulated/gibberish lettering. If the scene naturally includes an object that would normally carry text (a sign, menu, screen, clipboard, label), render it completely blank — a clean empty surface. Never attempt to write, spell, or render any character.'
+
 type SupaClient = ReturnType<typeof createClient>
 
 interface Company {
@@ -332,7 +337,7 @@ Gere 2 ideias de conteúdo alinhadas com a estratégia acima. Retorne APENAS um 
 
     if (replicateKey && row) {
       try {
-        const imgPrompt = `Professional social media photo for a Brazilian small business (${company.business_type ?? 'negócio'}). Commercial photography, warm lighting, no people, no text, no logos. Evokes: ${idea.idea}`
+        const imgPrompt = `Professional social media photo for a Brazilian small business (${company.business_type ?? 'negócio'}). Commercial photography, warm lighting, no people. ${NO_TEXT_RULE} Visual concept: ${idea.idea}`
         const repRes = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions', {
           method: 'POST', headers: { Authorization: `Bearer ${replicateKey}`, 'Content-Type': 'application/json', Prefer: 'wait' },
           body: JSON.stringify({ input: { prompt: imgPrompt, num_outputs: 1, aspect_ratio: '1:1', output_format: 'webp', output_quality: 85 } }),

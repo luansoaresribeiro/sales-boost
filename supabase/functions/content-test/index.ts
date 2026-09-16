@@ -103,6 +103,13 @@ function parseJsonArray<T>(raw: string): T[] {
   return []
 }
 
+// REGRA CRÍTICA (arquitetural): o gerador de imagem só desenha a CENA
+// VISUAL — nunca escreve/soletra texto. `idea` tem que ser o conceito
+// visual curto, NUNCA a legenda/copy de verdade (ver NO_TEXT_RULE) — mandar
+// copy pro prompt de imagem é o que ensina a IA a "alucinar" texto sem
+// sentido na foto (bug real já visto: uma faixa saiu com "LIGA OF SCRADS").
+const NO_TEXT_RULE = 'CRITICAL: this image must contain ONLY the visual scene — environment, people, products, objects, lighting, composition. Absolutely NO text of any kind anywhere in the image: no headlines, captions, CTAs, logos with text, signs, banners, posters, screens, labels, packaging text, watermarks, or simulated/gibberish lettering. If the scene naturally includes an object that would normally carry text (a sign, menu, screen, clipboard, label), render it completely blank — a clean empty surface. Never attempt to write, spell, or render any character.'
+
 // Mesma função central de imagem do resto da plataforma (OpenAI, com fallback
 // de chave no _app_config). Defensivo: sem imagem nunca quebra o teste.
 // forceNew: usado pelo "regenerate" quando o QC aponta o visual como ponto
@@ -113,7 +120,7 @@ async function generateImage(companyId: string, businessType: string | null, ide
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')
   if (!supabaseUrl || !serviceKey) return null
   try {
-    const prompt = `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}. Commercial photography, warm natural lighting, polished and inviting, no text, no logos, no watermark. The photo must clearly and specifically depict this exact post concept, not a generic stock photo: ${idea}`
+    const prompt = `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}. Commercial photography, warm natural lighting, polished and inviting. ${NO_TEXT_RULE} The photo must clearly and specifically depict this exact visual concept, not a generic stock photo: ${idea}`
     const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
       method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, size: '1024x1024', company_id: companyId, force_new: forceNew }),
@@ -320,7 +327,10 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       // trocaria o card por uma foto genérica sem querer.
       const visualBad = (visual?.score ?? 100) < COHERENCE_BAD_THRESHOLD
       if (!coherenceBad && visualBad && (template === 'livre' || !t.brief)) {
-        const url = await generateImage(company.id, company.business_type, t.idea ?? t.caption ?? '', company.business_description, true)
+        // Só `idea` (conceito visual curto) — NUNCA cai pra `caption` (a
+        // legenda de verdade): mandar copy pro prompt de imagem é como o
+        // "LIGA OF SCRADS" aconteceu (ver NO_TEXT_RULE acima).
+        const url = await generateImage(company.id, company.business_type, t.idea ?? '', company.business_description, true)
         if (url) await admin.from('marketing_ai_test_content').update({ image_url: url }).eq('id', testId)
         const { scores: ns, quality } = await scoreContent(anthropicKey, config, company, { idea: t.idea, caption: t.caption, hashtags: t.hashtags, cta: t.cta, format: t.format, imageUrl: url ?? t.image_url })
         await admin.from('marketing_ai_test_content').update({ scores: ns, quality_score: quality }).eq('id', testId)

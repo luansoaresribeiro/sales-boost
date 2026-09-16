@@ -100,7 +100,10 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
       method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         template: template.key, fields: fl, brand: br, kind: mod, caption: caption || null, subject: subject || template.label, format: template.label,
-        background: bgUrl || undefined, generate_bg: !!gen, bg_prompt: subject || fl.headline || undefined,
+        // bg_prompt é conceito VISUAL pro fundo (nunca a headline de verdade
+        // — isso é texto que já vai impresso no card depois; mandar pro
+        // gerador de imagem ensina a IA a tentar desenhar a frase).
+        background: bgUrl || undefined, generate_bg: !!gen, bg_prompt: subject || undefined,
         sticker: isPhoto && sticker ? sticker : undefined,
         width: size?.w, height: size?.h, safe: size?.safe,
       }),

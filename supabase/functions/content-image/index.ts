@@ -9,12 +9,20 @@ type SupaClient = ReturnType<typeof createClient>
 interface ContentRow { id: string; company_id: string; idea: string | null; caption: string | null; image_url: string | null }
 interface Company { id: string; user_id: string; business_type: string | null; business_description: string | null }
 
+// REGRA CRÍTICA (arquitetural): o gerador de imagem só desenha a CENA
+// VISUAL — nunca escreve/soletra texto. Por isso o prompt usa só `idea`
+// (conceito visual curto), NUNCA `caption` (a legenda de verdade) — mandar
+// copy real pro prompt de imagem é o que ensina a IA a "alucinar" texto
+// sem sentido na foto (bug real já visto: uma faixa saiu com "LIGA OF
+// SCRADS", texto sem sentido nenhum).
+const NO_TEXT_RULE = 'CRITICAL: this image must contain ONLY the visual scene — environment, people, products, objects, lighting, composition. Absolutely NO text of any kind anywhere in the image: no headlines, captions, CTAs, logos with text, signs, banners, posters, screens, labels, packaging text, watermarks, or simulated/gibberish lettering. If the scene naturally includes an object that would normally carry text (a sign, menu, screen, clipboard, label), render it completely blank — a clean empty surface. Never attempt to write, spell, or render any character.'
+
 // Monta o prompt visual a partir da ideia do post + o que o negócio
 // realmente faz (onboarding — sempre real, não depende do Marketing AI
 // estar configurado).
 function imagePrompt(content: ContentRow, businessType: string | null, businessDescription: string | null): string {
-  const evoke = [content.idea, content.caption].filter(Boolean).join('. ').slice(0, 600) || 'foto do negócio'
-  return `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}. Commercial photography, warm natural lighting, polished and inviting, no text, no logos, no watermark. The photo must clearly and specifically depict this exact post concept, not a generic stock photo: ${evoke}`
+  const evoke = (content.idea ?? '').slice(0, 400) || 'foto do negócio'
+  return `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}. Commercial photography, warm natural lighting, polished and inviting. ${NO_TEXT_RULE} The photo must clearly and specifically depict this exact visual concept, not a generic stock photo: ${evoke}`
 }
 
 // Chama a generate-image (OpenAI) com a service key. Devolve URLs.

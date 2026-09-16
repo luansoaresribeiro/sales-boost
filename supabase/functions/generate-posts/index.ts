@@ -76,7 +76,10 @@ async function generateImage(
       'Commercial photography style, high quality, warm lighting, vibrant colors, clean composition.',
       'Absolutely NO people, NO faces, NO children in the image.',
       'Focus only on objects, props, scenery, and atmosphere that evoke:', imageSuggestion,
-      'No text overlays. No logos. Square format.',
+      // REGRA CRÍTICA (arquitetural): a IA só desenha a CENA — nunca texto.
+      // `imageSuggestion` já vem só com objetos/cenário (ver prompt do
+      // Claude abaixo), nunca a legenda de verdade — não muda aqui.
+      'CRITICAL: this image must contain ONLY the visual scene. Absolutely NO text of any kind anywhere in the image: no headlines, captions, CTAs, logos with text, signs, banners, posters, screens, labels, packaging text, watermarks, or simulated/gibberish lettering. If the scene naturally includes an object that would normally carry text (a sign, menu, screen, label), render it completely blank — a clean empty surface. Never attempt to write, spell, or render any character. Square format.',
     ].join(' ')
 
     const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
