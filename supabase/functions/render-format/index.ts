@@ -74,6 +74,18 @@ function wrap(text: string, size: number, maxWidth: number): string[] {
   for (const w of words) { if ((cur + ' ' + w).trim().length > max) { if (cur) lines.push(cur); cur = w } else cur = (cur + ' ' + w).trim() }
   if (cur) lines.push(cur); return lines.length ? lines : ['']
 }
+// Rede de segurança final: wrap() já não corta no meio de uma palavra, mas
+// nada limitava quantas LINHAS cabiam no card (altura do canvas é fixa).
+// Texto longo demais — o dono digitando à mão em Formatos, ou a IA de
+// "Preencher com IA" sem limite nenhum de tamanho — empurrava o resto pra
+// fora do quadro; na prática parecia "a frase foi cortada". Cada card
+// aplica isso com o número de linhas que cabe de verdade no seu layout.
+function limitLines(lines: string[], max: number): string[] {
+  if (lines.length <= max) return lines
+  const kept = lines.slice(0, max)
+  kept[max - 1] = kept[max - 1].replace(/[.,;:!?…]*$/, '') + '…'
+  return kept
+}
 function block(lines: string[], x: number, y: number, size: number, fill: string, weight: number, lh: number, anchor = 'start'): string {
   return `<text x="${x}" y="${y}" font-family="Poppins" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}">` +
     lines.map((l, i) => `<tspan x="${x}" dy="${i === 0 ? 0 : lh}">${esc(l)}</tspan>`).join('') + `</text>`
@@ -109,7 +121,7 @@ type F = Record<string, string>
 function svgTweet(f: F, b: Brand, logoData: string | null): { svg: string; w: number; h: number } {
   const W = 1080, H = 1080, dark = (f.theme || 'dark') === 'dark'
   const bg = dark ? '#15202b' : '#ffffff', fg = dark ? '#e7e9ea' : '#0f1419', muted = dark ? '#8b98a5' : '#536471', line = dark ? '#38444d' : '#eff3f4'
-  const tl = wrap(f.text || 'O texto do tweet aparece aqui.', 44, 900)
+  const tl = limitLines(wrap(f.text || 'O texto do tweet aparece aqui.', 44, 900), 9)
   const bodyY = 340, afterBody = bodyY + tl.length * 60 + 30
   // Avatar = logo real da empresa (Estilos e Visuais → Kit da Marca), quando
   // existe. Sem logo, cai pras iniciais na cor primária — nunca inventa foto.
@@ -136,8 +148,8 @@ function svgBeforeAfter(f: F, b: Brand, beforeImg: string | null, afterImg: stri
   const W = 1080, H = 1350, halfW = W / 2
   const badge = (label: string, cx: number): string =>
     `<rect x="${cx - 140}" y="40" width="280" height="76" rx="38" fill="${b.primary}"/>` + block([label.toUpperCase()], cx, 90, 30, '#000', 800, 0, 'middle')
-  const capLines = f.caption ? wrap(f.caption, 42, 900) : []
-  const capStartY = H - 60 - (Math.max(capLines.length, 1) - 1) * 54
+  const capText = f.caption ? limitLines(wrap(f.caption, 42, 900), 4) : []
+  const capStartY = H - 60 - (Math.max(capText.length, 1) - 1) * 54
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
 <rect width="${W}" height="${H}" fill="${b.bg || '#0E0B0A'}"/>
 ${beforeImg ? `<image href="${beforeImg}" x="0" y="0" width="${halfW}" height="${H}" preserveAspectRatio="xMidYMid slice"/>` : `<rect x="0" y="0" width="${halfW}" height="${H}" fill="#1a1a1a"/>`}
@@ -145,7 +157,7 @@ ${afterImg ? `<image href="${afterImg}" x="${halfW}" y="0" width="${halfW}" heig
 <rect x="${halfW - 2}" y="0" width="4" height="${H}" fill="${b.primary}"/>
 ${badge(f.beforeLabel || 'Antes', halfW / 2)}
 ${badge(f.afterLabel || 'Depois', halfW + halfW / 2)}
-${capLines.length ? `<defs><linearGradient id="capg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.92"/></linearGradient></defs><rect x="0" y="${H - 280}" width="${W}" height="280" fill="url(#capg)"/>${block(capLines, W / 2, capStartY, 42, '#ffffff', 800, 54, 'middle')}` : ''}
+${capText.length ? `<defs><linearGradient id="capg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.92"/></linearGradient></defs><rect x="0" y="${H - 280}" width="${W}" height="280" fill="url(#capg)"/>${block(capText, W / 2, capStartY, 42, '#ffffff', 800, 54, 'middle')}` : ''}
 </svg>`
   return { svg, w: W, h: H }
 }
@@ -180,12 +192,12 @@ ${parts.join('')}
 function svgAnnouncement(f: F, b: Brand): { svg: string; w: number; h: number } {
   const W = 1080, H = 1350
   const ink = contrastColor(b.primary), chipText = ink === '#000000' ? '#ffffff' : '#000000'
-  const hl = wrap(f.headline || 'Sua chamada principal', 88, 880)
+  const hl = limitLines(wrap(f.headline || 'Sua chamada principal', 88, 880), 3)
   let y = 470
   const parts: string[] = []
   if (f.eyebrow) { parts.push(block([f.eyebrow.toUpperCase()], 100, y, 30, mutedInk(ink, 0.8), 700, 0)); y += 56 }
   parts.push(block(hl, 100, y + 20, 88, ink, 700, 100)); y += 20 + hl.length * 100 + 20
-  if (f.subtext) { const sl = wrap(f.subtext, 38, 880); parts.push(block(sl, 100, y + 20, 38, mutedInk(ink, 0.75), 400, 52)); y += 20 + sl.length * 52 + 20 }
+  if (f.subtext) { const sl = limitLines(wrap(f.subtext, 38, 880), 4); parts.push(block(sl, 100, y + 20, 38, mutedInk(ink, 0.75), 400, 52)); y += 20 + sl.length * 52 + 20 }
   if (f.offer) { const ow = (f.offer.length * 27) + 80; parts.push(`<rect x="100" y="${y}" width="${ow}" height="86" rx="18" fill="${ink}"/>` + block([f.offer], 140, y + 58, 46, chipText, 700, 0)); y += 130 }
   if (f.cta) { const cw = (f.cta.length * 20) + 130; parts.push(`<rect x="100" y="${y}" width="${cw}" height="76" rx="38" fill="none" stroke="${ink}" stroke-width="3"/>` + block([f.cta], 140, y + 50, 34, ink, 700, 0) + arrowGlyph(100 + cw - 55, y + 37, 14, ink)) }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${primaryBgDef('ag', b)}<rect width="${W}" height="${H}" fill="url(#ag)"/>${parts.join('')}</svg>`
@@ -195,7 +207,7 @@ function svgAnnouncement(f: F, b: Brand): { svg: string; w: number; h: number } 
 function svgStat(f: F, b: Brand): { svg: string; w: number; h: number } {
   const W = 1080, H = 1080
   const ink = contrastColor(b.primary)
-  const cl = wrap(f.context || '', 42, 820)
+  const cl = limitLines(wrap(f.context || '', 42, 820), 4)
   const parts: string[] = []
   if (f.label) parts.push(block([f.label], 540, 360, 38, mutedInk(ink, 0.75), 700, 0, 'middle'))
   parts.push(block([f.value || '87%'], 540, 620, 200, ink, 700, 0, 'middle'))
@@ -214,7 +226,7 @@ function svgPhoto(f: F, b: Brand, bg: string | null, logo: string | null, sticke
   const s = W / 1080
   const leftX = safe.left, maxW = W - safe.left - safe.right
   const hs = Math.round(84 * s), lh = Math.round(hs * 1.14), es = Math.round(30 * s), ofs = Math.round(46 * s), cs = Math.round(32 * s)
-  const hlLines = wrap(f.headline || 'Sua chamada principal', hs, maxW)
+  const hlLines = limitLines(wrap(f.headline || 'Sua chamada principal', hs, maxW), 3)
   const gap = Math.round(20 * s)
   const blocks: { h: number; draw: (y: number) => string }[] = []
   if (f.eyebrow) blocks.push({ h: es + gap, draw: y => block([f.eyebrow.toUpperCase()], leftX, y + es, es, b.primary, 700, 0) })
