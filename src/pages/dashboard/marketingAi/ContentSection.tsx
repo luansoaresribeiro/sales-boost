@@ -1,59 +1,42 @@
 import { useState } from 'react'
 import type { CompanyData } from '../../../contexts/CompanyContext'
 import { BORDER, MUTED, D } from './shared'
-import ContentAgentTab from './ContentAgentTab'
 import CampaignsTab from './CampaignsTab'
-import StoriesTab from './StoriesTab'
 import ContentLibrary from './ContentLibrary'
-import EngagementTab from './EngagementTab'
+import ContentOverviewTab from './ContentOverviewTab'
+import WeeklyCalendarTab from './WeeklyCalendarTab'
 
 const ORANGE = '#FF6D29'
 
-type Mode = 'conteudo' | 'biblioteca' | 'engagement'
-type Sub = 'organico' | 'campanhas' | 'stories'
+type Mode = 'overview' | 'biblioteca' | 'campanhas' | 'calendario'
 
-// Vault e Testes agora vivem dentro de Biblioteca (canônicos, não duplicados
-// aqui) — ver ContentLibrary.tsx. Performance saiu daqui — agora mora no
-// Agente de Dados (junto com Inteligência de Mercado), acima na sequência.
+// Engagement mudou pra Agente de Conversão (é conversa/atendimento de quem já
+// chegou, não criação — fica junto do Funil e do Atendimento). A antiga aba
+// "Conteúdo" (Orgânico/Stories soltos) foi removida: Biblioteca (Ideias →
+// Testes → Vault) já cobre a criação de verdade, e o Overview/Calendário
+// abaixo cobrem o que ela mostrava (o que está pronto/agendado).
+// Overview fica mais à ESQUERDA mesmo sendo, no FLUXO, o que vem depois de
+// tudo acontecer — é o resumo de chegada, faz sentido ser a 1ª coisa que se vê.
 const TABS: { key: Mode; icon: string; label: string; sub: string }[] = [
-  { key: 'conteudo', icon: '✍️', label: 'Conteúdo', sub: 'Orgânico, campanhas e stories' },
-  { key: 'biblioteca', icon: '📚', label: 'Biblioteca', sub: 'Ideias, formatos, estilos, testes e vault' },
-  { key: 'engagement', icon: '🤝', label: 'Engagement', sub: 'Automação de comentários e DMs' },
+  { key: 'overview', icon: '🏠', label: 'Overview', sub: 'Agendados, Vault e equilíbrio do funil' },
+  { key: 'biblioteca', icon: '📚', label: 'Biblioteca', sub: 'Ideias, formatos, testes e vault' },
+  { key: 'campanhas', icon: '🎯', label: 'Campanhas', sub: 'Mídia paga com funil e pixel' },
+  { key: 'calendario', icon: '🗓️', label: 'Calendário da Semana', sub: 'Posts e stories da semana' },
 ]
 
-const SUBTABS: { key: Sub; icon: string; label: string; sub: string }[] = [
-  { key: 'organico', icon: '✍️', label: 'Orgânico', sub: 'Calendário, ideias e criativos' },
-  { key: 'campanhas', icon: '🎯', label: 'Campanhas', sub: 'Mídia paga com funil (demo)' },
-  { key: 'stories', icon: '📖', label: 'Stories', sub: 'Stories + Story Ads (demo)' },
-]
-
-// Casa os módulos de conteúdo sob uma única aba "Conteúdo" (orgânico, campanhas
-// e stories como sub-opções) + Vault + Biblioteca, e a nova aba Performance
-// (centro de inteligência real do Instagram).
 export default function ContentSection({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city' | 'instagram_user_id' | 'instagram_url'> }) {
-  const [mode, setMode] = useState<Mode>('conteudo')
-  const [sub, setSub] = useState<Sub>('organico')
+  const [mode, setMode] = useState<Mode>('overview')
 
   return (
     <div>
-      {/* Abas principais */}
-      <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', marginBottom: mode === 'conteudo' ? '14px' : '22px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', marginBottom: '22px', flexWrap: 'wrap' }}>
         {TABS.map(t => <TabButton key={t.key} t={t} active={mode === t.key} onClick={() => setMode(t.key)} />)}
       </div>
 
-      {/* Sub-abas aparecem só ao clicar em "Conteúdo" */}
-      {mode === 'conteudo' && (
-        <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.15)', borderRadius: '12px', marginBottom: '22px', marginLeft: '2px', flexWrap: 'wrap' }}>
-          {SUBTABS.map(t => <TabButton key={t.key} t={t} active={sub === t.key} onClick={() => setSub(t.key)} />)}
-        </div>
-      )}
-
-      {mode === 'conteudo' ? (
-        sub === 'organico' ? <ContentAgentTab company={company} />
-          : sub === 'campanhas' ? <CampaignsTab company={company} />
-          : <StoriesTab company={company} />
-      ) : mode === 'biblioteca' ? <ContentLibrary companyId={company.id} />
-        : <EngagementTab company={company} />}
+      {mode === 'overview' ? <ContentOverviewTab companyId={company.id} onOpenVault={() => setMode('biblioteca')} />
+        : mode === 'biblioteca' ? <ContentLibrary companyId={company.id} />
+        : mode === 'campanhas' ? <CampaignsTab company={company} />
+        : <WeeklyCalendarTab companyId={company.id} />}
     </div>
   )
 }

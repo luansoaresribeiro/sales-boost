@@ -17,6 +17,7 @@ import ToolsTab from './marketingAi/ToolsTab'
 import ConnectionsTab from './marketingAi/ConnectionsTab'
 import FunnelTab from './marketingAi/FunnelTab'
 import WhatsAppTab from './marketingAi/WhatsAppTab'
+import EngagementTab from './marketingAi/EngagementTab'
 import FeedbackLoopTab from './marketingAi/FeedbackLoopTab'
 import ReviewsAgentTab from './marketingAi/ReviewsAgentTab'
 import InsightsTab from './marketingAi/InsightsTab'
@@ -30,17 +31,22 @@ const ORANGE = '#FF6D29'
 const SECTION_TITLE: Record<string, string> = {
   tracking: 'Tracking', content: 'Conteúdo', dados: 'Agente de Dados', conversao: 'Agente de Conversão', brain: 'Aprendizado',
   overview: 'Visão Geral', experiments: 'Experimentos', tools: 'Configuração', timeline: 'Central de Execução', reports: 'Relatórios',
-  conexoes: 'Conexões', feedback: 'Feedback Loop', configuracao: 'Configuração dos Agentes', avaliacoes: 'Avaliações', insights: 'Insights', context: 'Contexto do Negócio', 'saude-meta': 'Saúde da Meta',
+  conexoes: 'Conexões', feedback: 'Feedback Loop', configuracao: 'Configuração dos Agentes', avaliacoes: 'Avaliações', context: 'Contexto do Negócio',
+  // Insights e Saúde da Meta agora vivem dentro de Agente de Dados (ver
+  // DadosSection) — o link antigo continua funcionando, só cai direto na
+  // sub-aba certa em vez de ser uma página solta.
+  insights: 'Agente de Dados', 'saude-meta': 'Agente de Dados',
 }
 const SECTION_ICON: Record<string, string> = {
   tracking: '📈', content: '✍️', dados: '📊', conversao: '🔀', brain: '🧠',
   overview: '🏠', experiments: '🧪', tools: '🛠️', timeline: '🕓', reports: '📊',
-  conexoes: '🔌', feedback: '🔁', configuracao: '⚙️', avaliacoes: '⭐', insights: '💡', context: '🧠', 'saude-meta': '❤️‍🩹',
+  conexoes: '🔌', feedback: '🔁', configuracao: '⚙️', avaliacoes: '⭐', context: '🧠',
+  insights: '📊', 'saude-meta': '📊',
 }
 
 // Seções do Growth OS que funcionam em modo demonstração, sem depender da
 // ativação/config do Marketing AI feita pela equipe.
-const DEMO_SECTIONS = new Set(['overview', 'conexoes', 'dados', 'conversao', 'feedback', 'content', 'configuracao', 'avaliacoes', 'insights', 'context', 'saude-meta'])
+const DEMO_SECTIONS = new Set(['overview', 'conexoes', 'dados', 'conversao', 'feedback', 'content', 'configuracao', 'avaliacoes', 'context', 'insights', 'saude-meta'])
 
 export default function MarketingAiSectionPage() {
   const { section } = useParams<{ section: string }>()
@@ -58,7 +64,7 @@ export default function MarketingAiSectionPage() {
   // absorvidos por Agente de Dados / Agente de Conversão.
   if (section === 'meta-ads') return <Navigate to="/dashboard/meta-ads" replace />
   if (section === 'competitors') return <Navigate to="/dashboard/marketing-ai/dados" replace />
-  if (section === 'funil' || section === 'whatsapp') return <Navigate to="/dashboard/marketing-ai/conversao" replace />
+  if (section === 'funil' || section === 'whatsapp' || section === 'engagement') return <Navigate to="/dashboard/marketing-ai/conversao" replace />
   if (!section || !SECTION_TITLE[section]) return <Navigate to="/dashboard/marketing-ai" replace />
   // A configuração dos agentes (autonomia/objetivo) foi consolidada em
   // Configurações → Agentes, o lar único de config do cliente. Deep links
@@ -120,11 +126,11 @@ export default function MarketingAiSectionPage() {
       case 'avaliacoes':
         return <ReviewsAgentTab company={company} />
       case 'insights':
-        return <InsightsTab company={company} />
+        return <DadosSection company={company} initialSub="insights" />
       case 'context':
         return <BusinessContextTab company={company} />
       case 'saude-meta':
-        return <MetaHealthTab company={company} />
+        return <DadosSection company={company} initialSub="saude-meta" />
       default:
         return null
     }
@@ -219,40 +225,47 @@ function SubTabButton({ active, onClick, icon, label }: { active: boolean; onCli
 const subTabsRow: React.CSSProperties = { display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '20px' }
 
 // Agente de Dados — Performance real do Instagram + Inteligência de Mercado
-// (concorrentes/tendências) + Estilos e Visuais (identidade da marca) num
+// (concorrentes/tendências) + Estilos e Visuais (identidade da marca) +
+// Insights (oportunidades de fora) + Saúde da Meta (score do ecossistema) num
 // único lugar, upstream do Agente de Conteúdo no fluxo (Dados → Conteúdo →
-// Conversão). Estilos e Visuais mudou pra cá porque já é dado de contexto
-// que o agente consome, não algo pra "testar" ou "publicar".
-function DadosSection({ company }: { company: CompanyData }) {
+// Conversão → Feedback Loop). Insights e Saúde da Meta mudaram pra cá — são
+// leitura/inteligência que o Agente de Dados consome, não seções soltas.
+function DadosSection({ company, initialSub }: { company: CompanyData; initialSub?: 'insights' | 'saude-meta' }) {
   const navigate = useNavigate()
-  const [sub, setSub] = useState<'performance' | 'mercado' | 'visual'>('performance')
+  const [sub, setSub] = useState<'performance' | 'mercado' | 'visual' | 'insights' | 'saude-meta'>(initialSub ?? 'performance')
   return (
     <div>
       <div style={subTabsRow}>
         <SubTabButton active={sub === 'performance'} onClick={() => setSub('performance')} icon="📊" label="Performance" />
         <SubTabButton active={sub === 'mercado'} onClick={() => setSub('mercado')} icon="🧭" label="Inteligência de Mercado" />
         <SubTabButton active={sub === 'visual'} onClick={() => setSub('visual')} icon="🎨" label="Estilos e Visuais" />
+        <SubTabButton active={sub === 'insights'} onClick={() => setSub('insights')} icon="💡" label="Insights" />
+        <SubTabButton active={sub === 'saude-meta'} onClick={() => setSub('saude-meta')} icon="❤️‍🩹" label="Saúde da Meta" />
       </div>
       {sub === 'performance'
         ? <PerformanceTab company={company} onCreateContent={() => navigate('/dashboard/marketing-ai/content')} />
         : sub === 'mercado' ? <MarketIntelTab company={company} />
-        : <VisualLibrary company={company} />}
+        : sub === 'visual' ? <VisualLibrary company={company} />
+        : sub === 'insights' ? <InsightsTab company={company} />
+        : <MetaHealthTab company={company} />}
     </div>
   )
 }
 
-// Agente de Conversão — Funil de Vendas + Atendimento (WhatsApp/Instagram)
-// num único lugar, downstream do Agente de Conteúdo (Dados → Conteúdo →
-// Conversão): quem chegou vira lead, o funil e o atendimento fecham.
+// Agente de Conversão — Funil de Vendas + Atendimento (WhatsApp/Instagram) +
+// Engagement (automação de comentários e DMs) num único lugar, downstream do
+// Agente de Conteúdo (Dados → Conteúdo → Conversão → Feedback Loop): quem
+// chegou vira lead, o funil/atendimento/engagement fecham.
 function ConversaoSection({ company }: { company: CompanyData }) {
-  const [sub, setSub] = useState<'funil' | 'atendimento'>('funil')
+  const [sub, setSub] = useState<'funil' | 'atendimento' | 'engagement'>('funil')
   return (
     <div>
       <div style={subTabsRow}>
         <SubTabButton active={sub === 'funil'} onClick={() => setSub('funil')} icon="🔀" label="Funil de Vendas" />
         <SubTabButton active={sub === 'atendimento'} onClick={() => setSub('atendimento')} icon="💬" label="Atendimento" />
+        <SubTabButton active={sub === 'engagement'} onClick={() => setSub('engagement')} icon="🤝" label="Engagement" />
       </div>
-      {sub === 'funil' ? <FunnelTab company={company} /> : <WhatsAppTab company={company} />}
+      {sub === 'funil' ? <FunnelTab company={company} /> : sub === 'atendimento' ? <WhatsAppTab company={company} /> : <EngagementTab company={company} />}
     </div>
   )
 }

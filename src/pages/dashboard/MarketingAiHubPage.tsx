@@ -16,21 +16,15 @@ const CARD = '#150E08'
 interface ModuleDef { section: string; title: string; desc: string; icon: string; soon?: boolean }
 
 // O fluxo do Growth OS, de cima pra baixo: Agente de Dados (observa —
-// Performance real + Inteligência de Mercado) → Agente de Conteúdo (cria) →
-// Agente de Conversão (fecha — Funil de Vendas + Atendimento). Meta Ads virou
-// item próprio no menu esquerdo, fora dessa sequência.
-const DATA_MODULE: ModuleDef = { section: 'dados', title: 'Agente de Dados', desc: 'Performance real do Instagram e inteligência de mercado — o que já funcionou e o que está acontecendo no seu segmento.', icon: '📊' }
-const CONTENT_MODULE: ModuleDef = { section: 'content', title: 'Agente de Conteúdo', desc: 'Calendário, ideias, roteiros de Reels, legendas, criativos e automação de comentários e DMs do Instagram.', icon: '✍️' }
-const CONVERSION_MODULE: ModuleDef = { section: 'conversao', title: 'Agente de Conversão', desc: 'Funil de vendas e atendimento — transforma quem chegou até você em cliente.', icon: '🔀' }
-
-// Pilares de inteligência do hub. Conexões e Contexto do Negócio foram pra
-// Configurações (config do cliente num lugar só) — aqui ficam os que são
-// leitura/insight do agente.
-const INTEL_MODULES: ModuleDef[] = [
-  { section: 'feedback', title: 'Feedback Loop', desc: 'Aprende seu cliente ideal (ICP) e refina sozinho.', icon: '🔁' },
-  { section: 'insights', title: 'Insights', desc: 'Oportunidades de fora: eventos, datas, tendências, parcerias.', icon: '💡' },
-  { section: 'saude-meta', title: 'Saúde da Meta', desc: 'Um score de 0 a 100: quão saudável está seu ecossistema na Meta e o que melhorar primeiro.', icon: '❤️‍🩹' },
-]
+// Performance real + Inteligência de Mercado + Insights + Saúde da Meta) →
+// Agente de Conteúdo (cria) → Agente de Conversão (fecha — Funil de Vendas +
+// Atendimento + Engagement) → Feedback Loop (aprende com o resultado e
+// realimenta o Agente de Dados — fecha o ciclo, é o último agente do fluxo).
+// Meta Ads virou item próprio no menu esquerdo, fora dessa sequência.
+const DATA_MODULE: ModuleDef = { section: 'dados', title: 'Agente de Dados', desc: 'Performance real do Instagram, inteligência de mercado, insights de oportunidades e a Saúde da Meta — o que já funcionou e o que está acontecendo agora.', icon: '📊' }
+const CONTENT_MODULE: ModuleDef = { section: 'content', title: 'Agente de Conteúdo', desc: 'Calendário, ideias, roteiros de Reels, legendas, criativos e campanhas — o Overview mostra o que já está pronto/agendado.', icon: '✍️' }
+const CONVERSION_MODULE: ModuleDef = { section: 'conversao', title: 'Agente de Conversão', desc: 'Funil de vendas, atendimento e engagement (comentários/DMs) — transforma quem chegou até você em cliente.', icon: '🔀' }
+const FEEDBACK_MODULE: ModuleDef = { section: 'feedback', title: 'Feedback Loop', desc: 'Aprende seu cliente ideal (ICP) com o resultado de tudo acima e refina o Agente de Dados sozinho — fecha o ciclo.', icon: '🔁' }
 
 const STAGE_ORDER: LeadStageKey[] = ['novo', 'contato', 'qualificado', 'proposta', 'venda']
 const STAGE_LABEL: Record<LeadStageKey, string> = { novo: 'Novo Lead', contato: 'Contato realizado', qualificado: 'Qualificado', proposta: 'Proposta', venda: 'Venda realizada' }
@@ -192,37 +186,21 @@ export default function MarketingAiHubPage() {
         </div>
 
         {/* O fluxo do Growth OS: Dados observa → Conteúdo cria → Conversão
-            fecha. As setas indicam a sequência — cada agente entrega pro
-            próximo. */}
-        <div style={{ border: '1px solid rgba(255,109,41,0.18)', borderRadius: '22px', padding: '16px', background: 'rgba(255,109,41,0.035)', marginBottom: '30px' }}>
+            fecha → Feedback Loop aprende e realimenta o ciclo. As setas
+            indicam a sequência — cada agente entrega pro próximo. */}
+        <div style={{ border: '1px solid rgba(255,109,41,0.18)', borderRadius: '22px', padding: '16px', background: 'rgba(255,109,41,0.035)' }}>
           <HeroAgentCard m={DATA_MODULE} badge="1 · Observa" onClick={() => open(DATA_MODULE.section)} />
           <FlowArrow />
           <HeroAgentCard m={CONTENT_MODULE} badge="2 · Agente principal" onClick={() => open(CONTENT_MODULE.section)} />
           <FlowArrow />
           <HeroAgentCard m={CONVERSION_MODULE} badge="3 · Converte" onClick={() => open(CONVERSION_MODULE.section)} />
+          <FlowArrow />
+          <HeroAgentCard m={FEEDBACK_MODULE} badge="4 · Aprende" onClick={() => open(FEEDBACK_MODULE.section)} />
         </div>
 
-        <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>
-          Inteligência do negócio
-        </div>
-        <p style={{ fontSize: '12px', color: MUTED, lineHeight: 1.6, marginBottom: '14px', maxWidth: '680px' }}>
-          O que a IA usa pra entender seu negócio — o <strong style={{ color: 'white' }}>cliente ideal</strong> (Feedback Loop), as <strong style={{ color: 'white' }}>oportunidades de fora</strong> (Insights) e a <strong style={{ color: 'white' }}>Saúde da Meta</strong> num único score. <span style={{ color: 'rgba(255,255,255,0.5)' }}>As <strong>Conexões</strong> e o <strong>Contexto do Negócio</strong> agora ficam em Configurações.</span>
+        <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginTop: '14px', maxWidth: '680px' }}>
+          <strong style={{ color: 'rgba(255,255,255,0.6)' }}>Conexões</strong> e <strong style={{ color: 'rgba(255,255,255,0.6)' }}>Contexto do Negócio</strong> ficam em Configurações.
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '12px' }}>
-          {INTEL_MODULES.map((m, i) => (
-            <button key={m.section} onClick={() => open(m.section)}
-              style={{ textAlign: 'left', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px 17px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '7px', transition: 'border-color 0.15s' }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,109,41,0.35)' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                <span style={{ fontSize: '20px' }}>{m.icon}</span>
-                <span style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{m.title}</span>
-                <span style={{ marginLeft: 'auto', fontSize: '9.5px', fontWeight: 700, color: 'rgba(255,255,255,0.35)' }}>{i + 1}/{INTEL_MODULES.length}</span>
-              </div>
-              <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.5 }}>{m.desc}</div>
-            </button>
-          ))}
-        </div>
       </div>
     </div>
   )
