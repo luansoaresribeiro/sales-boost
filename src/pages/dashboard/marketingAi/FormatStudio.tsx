@@ -15,12 +15,29 @@ interface ProductPhoto { id: string; title: string; image_url: string | null }
 const ORANGE = '#FF6D29'
 const MODS: { key: string; label: string }[] = [{ key: 'organico', label: 'Orgânico' }, { key: 'stories', label: 'Stories' }, { key: 'campanhas', label: 'Campanhas' }]
 
+// Instrução padrão que o "Preencher com IA" já usa por baixo dos panos hoje
+// (ver format-fill) — pedido do dono: isso tem que ficar EDITÁVEL aqui, não
+// só um comportamento fixo escondido no backend. Fica salva por empresa +
+// formato (marketing_ai_knowledge, module='formato_ai') e é enviada como
+// instrução prioritária toda vez que clicar em "Preencher com IA".
+const DEFAULT_INSTRUCTION: Record<string, string> = {
+  tweet: 'Escreva uma frase de efeito curta e COMPLETA (até 140 caracteres), no tom da marca, sem emoji — tem que caber inteira no card, nunca cortada no meio.',
+  announcement: 'Escreva uma chamada de pôster: título de impacto (até 8 palavras), subtexto (até 18 palavras) e um CTA curto (até 4 palavras, tipo "Agende agora"). Tudo frase completa, sem emoji.',
+  product: 'Escreva uma chamada de botão curta (até 4 palavras, tipo "Compre agora") pro produto em destaque. Sem emoji.',
+  stat: 'Escreva um número/estatística plausível e honesto (é peça de design, não analytics real) e o contexto em até 16 palavras. Sem emoji.',
+  photo: 'Escreva uma chamada de impacto curta (até 8 palavras) pra sobrepor na foto. Sem emoji.',
+}
+
 // Studio de um formato: preenche os campos (à mão ou com IA), vê o preview ao
 // vivo e gera a imagem no SERVIDOR (render-format: SVG→PNG, sem navegador) — o
 // mesmo motor do piloto automático. O resultado cai na Área de Testes.
-export default function FormatStudio({ template, brand, initialKind, onClose, onSaved }: { template: Template; brand: Brand; initialKind?: string; onClose: () => void; onSaved: () => void }) {
+export default function FormatStudio({ template, brand, initialKind, companyId, onClose, onSaved }: { template: Template; brand: Brand; initialKind?: string; companyId: string; onClose: () => void; onSaved: () => void }) {
   const { session } = useAuth()
   const token = session?.access_token ?? ''
+  const [instruction, setInstruction] = useState(DEFAULT_INSTRUCTION[template.key] ?? 'Escreva um texto curto, completo e no tom da marca pra esse campo.')
+  const [instructionOpen, setInstructionOpen] = useState(false)
+  const [instructionRowId, setInstructionRowId] = useState<string | null>(null)
+  const [savingInstruction, setSavingInstruction] = useState(false)
   const nodeRef = useRef<HTMLDivElement>(null)
   const [fields, setFields] = useState<Record<string, string>>({ ...template.sample })
   const [subject, setSubject] = useState('')
@@ -64,6 +81,38 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
   }, [isPhoto, isProduct])
   useEffect(() => { loadExtras() }, [loadExtras])
 
+  // Instrução da IA salva antes pra esse formato — se o dono já editou,
+  // usa a dele; senão fica no padrão (ver DEFAULT_INSTRUCTION acima).
+  useEffect(() => {
+    let alive = true
+    supabase.from('marketing_ai_knowledge').select('id, content').eq('company_id', companyId).eq('module', 'formato_ai').eq('kind', template.key).maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        const row = data as { id: string; content: string | null } | null
+        setInstructionRowId(row?.id ?? null)
+        setInstruction(row?.content || DEFAULT_INSTRUCTION[template.key] || 'Escreva um texto curto, completo e no tom da marca pra esse campo.')
+      })
+    return () => { alive = false }
+  }, [companyId, template.key])
+
+  const saveInstruction = async () => {
+    setSavingInstruction(true)
+    try {
+      if (instructionRowId) {
+        await supabase.from('marketing_ai_knowledge').update({ content: instruction.trim() || null }).eq('id', instructionRowId)
+      } else {
+        const { data } = await supabase.from('marketing_ai_knowledge').insert({
+          company_id: companyId, module: 'formato_ai', kind: template.key, title: `Instrução IA — ${template.label}`, content: instruction.trim() || null,
+        }).select('id').single()
+        if (data) setInstructionRowId(data.id as string)
+      }
+      setMsg('✓ Instrução salva — vale pro próximo "Preencher com IA".')
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Erro ao salvar instrução')
+    }
+    setSavingInstruction(false)
+  }
+
   const curFmt = formats.find(f => f.key === fmtKey) ?? STANDARD_FORMATS[1]
   const sizeOf = (f: { w: number; h: number; safe?: FormatDef['safe'] }): Size => ({ w: f.w, h: f.h, safe: safePx(f) })
 
@@ -80,7 +129,7 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/format-fill`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ template: template.label, fields: template.fields.map(f => ({ key: f.key, label: f.label })), subject }),
+        body: JSON.stringify({ template: template.label, fields: template.fields.map(f => ({ key: f.key, label: f.label })), subject, instruction }),
       })
       const r = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(r.error ?? 'Erro ao preencher')
@@ -221,6 +270,16 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
               <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Sobre o que é o post? (opcional)" style={{ ...inputStyle, flex: 1 }} />
               <button onClick={fillWithAi} disabled={filling} style={{ padding: '8px 14px', background: filling ? 'rgba(255,109,41,0.4)' : ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: filling ? 'wait' : 'pointer', fontFamily: D, whiteSpace: 'nowrap' }}>{filling ? '...' : '✨ Preencher com IA'}</button>
             </div>
+            <button onClick={() => setInstructionOpen(o => !o)} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: MUTED, fontSize: '10.5px', cursor: 'pointer', padding: '2px 0', fontFamily: D, textDecoration: 'underline' }}>
+              {instructionOpen ? '▾' : '▸'} {instructionOpen ? 'ocultar' : 'editar'} instrução da IA pra esse formato
+            </button>
+            {instructionOpen && (
+              <div style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '9px' }}>
+                <div style={{ fontSize: '10px', color: MUTED, marginBottom: '6px', lineHeight: 1.5 }}>Isso é o comando que já vai pra IA todo "Preencher com IA" — edite pra mudar tom, tamanho ou regra pra esse formato específico.</div>
+                <textarea value={instruction} onChange={e => setInstruction(e.target.value)} rows={3} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: D, marginBottom: '8px' }} />
+                <button onClick={saveInstruction} disabled={savingInstruction} style={{ padding: '6px 13px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '7px', color: ORANGE, fontSize: '11px', fontWeight: 700, cursor: savingInstruction ? 'wait' : 'pointer', fontFamily: D }}>{savingInstruction ? 'Salvando...' : '💾 Salvar instrução'}</button>
+              </div>
+            )}
             {isProduct && (
               <div>
                 <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Foto do produto (da aba Produtos)</label>

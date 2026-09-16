@@ -67,10 +67,14 @@ Deno.serve(async (req) => {
     const company = companyRow as { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_dna: { brand_voice?: string; target_audience?: string } | null; instagram_url: string | null } | null
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
 
-    const body = await req.json().catch(() => ({})) as { template?: string; fields?: { key: string; label: string }[]; subject?: string }
+    const body = await req.json().catch(() => ({})) as { template?: string; fields?: { key: string; label: string }[]; subject?: string; instruction?: string }
     const template = String(body.template ?? 'formato')
     const fields = Array.isArray(body.fields) ? body.fields : []
     const subject = String(body.subject ?? '').slice(0, 500)
+    // Instrução editável (FormatStudio → "editar instrução da IA pra esse
+    // formato") — quando o dono já personalizou, ela manda; sem isso, cai
+    // só nas regras genéricas de FIELD_HINT abaixo.
+    const instruction = String(body.instruction ?? '').trim().slice(0, 600)
     if (fields.length === 0) return json({ error: 'Sem campos para preencher.' }, 400)
 
     const { data: cfgRow } = await admin.from('marketing_ai_config').select('brand_voice, tone, content_pillars, marketing_goals').eq('company_id', company.id).maybeSingle()
@@ -83,6 +87,7 @@ Handle do Instagram: ${company.instagram_url ?? '—'}.
 
 Você vai preencher os campos de um formato visual do tipo "${template}".
 ${subject ? `Assunto do post: ${subject}` : 'Escolha um assunto forte e relevante pro negócio.'}
+${instruction ? `\nInstrução específica pra esse formato (definida pelo dono — siga à risca): ${instruction}\n` : ''}
 
 Campos a preencher (retorne um valor curto e pronto pra tela em cada um, em pt-BR, no tom da marca):
 ${fields.map(f => `- ${f.key}: ${f.label}${FIELD_HINT[f.key] ? ` (${FIELD_HINT[f.key]})` : ''}`).join('\n')}

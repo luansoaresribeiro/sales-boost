@@ -8,12 +8,13 @@ const ORANGE = '#FF6D29'
 
 // Abas de topo da Biblioteca — Ideias saiu daqui (mudou pra dentro de
 // Calendário da Semana, é lá que ela orienta o planejamento agora — ver
-// WeeklyCalendarTab.tsx). Testes e Vault continuam aqui (canônicos).
+// WeeklyCalendarTab.tsx). Formatos e Testes viraram UMA aba só (pedido do
+// dono — gerar o formato e já ver ele passando pelo controle de qualidade,
+// sem trocar de aba no meio do caminho). Vault continua separado.
 // Estilos e Visuais mudou pra aba Agente de Dados — identidade visual/marca é
 // dado de contexto pro agente, não algo que se "testa" ou "publica" daqui.
 const TOP_TABS: { key: string; icon: string; label: string }[] = [
-  { key: 'formatos', icon: '🧩', label: 'Formatos' },
-  { key: 'testes', icon: '🧪', label: 'Testes' },
+  { key: 'formatos', icon: '🧩', label: 'Formatos & Testes' },
   { key: 'vault', icon: '⭐', label: 'Vault' },
 ]
 // Sub-abas de módulo — filtram Formatos e Testes por Orgânico/Stories.
@@ -68,7 +69,7 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
 
       {/* Sub-abas de módulo — Formatos e Testes têm Orgânico/Stories
           (Vault é da marca/QC como um todo, não por módulo). */}
-      {(top === 'formatos' || top === 'testes') && (
+      {top === 'formatos' && (
         <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '20px', flexWrap: 'wrap' }}>
           {MODULES.map(m => {
             const active = mod === m.key
@@ -83,9 +84,14 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
         </div>
       )}
 
-      {top === 'formatos' ? <FormatsLibrary companyId={companyId} module={mod} />
-        : top === 'testes' ? <TestingArea companyId={companyId} kind={mod} />
-        : <ContentVault companyId={companyId} />}
+      {top === 'formatos' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+          <FormatsLibrary companyId={companyId} module={mod} />
+          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: '24px' }}>
+            <TestingArea companyId={companyId} kind={mod} />
+          </div>
+        </div>
+      ) : <ContentVault companyId={companyId} />}
     </div>
   )
 }
