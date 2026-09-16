@@ -4,7 +4,7 @@ import { supabase } from '../../../lib/supabase'
 import { useRealtime } from '../../../lib/useRealtime'
 import { CARD, MUTED, BORDER, D } from './shared'
 import { buildWhatsAppDemo, WA_STATUS_META, AUTONOMY_META, TEMP_META, CHANNEL_META, type DemoWaConversation, type AutonomyLevel, type FollowUpItem } from './salesDemo'
-import { mapConversations, type ConvRow, type ConvMsgRow } from './salesReal'
+import { mapConversations, mapLeadConversations, type ConvRow, type ConvMsgRow, type LeadRow, type LeadMsgRow } from './salesReal'
 import { useDemoMode } from './growthDemo'
 import DataVeil, { veilMode } from './DataVeil'
 import ChannelFilter, { ChannelBadge, type ChannelFilterValue } from './ChannelFilter'
@@ -105,20 +105,35 @@ export default function WhatsAppTab({ company }: { company: Pick<CompanyData, 'i
   const [transferred, setTransferred] = useState<Set<string>>(new Set())
   const [channel, setChannel] = useState<ChannelFilterValue>('all')
 
-  // Conversas REAIS do WhatsApp (whatsapp_conversations + _messages). null =
+  // Conversas REAIS — WhatsApp (whatsapp_conversations + _messages) e
+  // Instagram (leads + lead_messages, channel='instagram', gravado pelo
+  // instagram-webhook a partir de DMs reais) na MESMA caixa. null =
   // carregando; [] = sem conversa real → cai no demo (design preservado).
   const [realConvs, setRealConvs] = useState<DemoWaConversation[] | null>(null)
   const load = useCallback(async () => {
-    const { data: convs } = await supabase.from('whatsapp_conversations')
-      .select('id, wa_contact_id, contact_name, created_at').eq('company_id', company.id)
-    if (!convs || convs.length === 0) { setRealConvs([]); return }
-    const ids = convs.map((c: ConvRow) => c.id)
-    const { data: msgs } = await supabase.from('whatsapp_conversation_messages')
-      .select('id, conversation_id, role, content, created_at').in('conversation_id', ids).order('created_at', { ascending: true })
-    setRealConvs(mapConversations(convs as ConvRow[], (msgs ?? []) as ConvMsgRow[]))
+    const [{ data: convs }, { data: igLeads }] = await Promise.all([
+      supabase.from('whatsapp_conversations').select('id, wa_contact_id, contact_name, created_at').eq('company_id', company.id),
+      supabase.from('leads').select('id, name, contact, channel, stage, value_estimate, last_contact_at, notes, created_at').eq('company_id', company.id).eq('channel', 'instagram'),
+    ])
+    let waMapped: DemoWaConversation[] = []
+    if (convs && convs.length > 0) {
+      const ids = convs.map((c: ConvRow) => c.id)
+      const { data: msgs } = await supabase.from('whatsapp_conversation_messages')
+        .select('id, conversation_id, role, content, created_at').in('conversation_id', ids).order('created_at', { ascending: true })
+      waMapped = mapConversations(convs as ConvRow[], (msgs ?? []) as ConvMsgRow[])
+    }
+    let igMapped: DemoWaConversation[] = []
+    if (igLeads && igLeads.length > 0) {
+      const leadIds = igLeads.map((l: LeadRow) => l.id)
+      const { data: lmsgs } = await supabase.from('lead_messages')
+        .select('id, lead_id, direction, content, created_at').in('lead_id', leadIds).order('created_at', { ascending: true })
+      igMapped = mapLeadConversations(igLeads as LeadRow[], (lmsgs ?? []) as LeadMsgRow[])
+    }
+    setRealConvs([...waMapped, ...igMapped])
   }, [company.id])
   useEffect(() => { void load() }, [load])
   useRealtime('whatsapp_conversations', company.id, load)
+  useRealtime('lead_messages', company.id, load)
 
   const isReal = !!realConvs && realConvs.length > 0
   const baseConversations = isReal ? realConvs! : demo.conversations
@@ -143,12 +158,12 @@ export default function WhatsAppTab({ company }: { company: Pick<CompanyData, 'i
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       {mode === 'real' && (
         <div style={{ padding: '12px 16px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-          🟢 <strong>Conversas reais.</strong> Estas são as conversas de verdade do seu WhatsApp, ao vivo. O agente responde, qualifica e <strong>passa pro humano quando precisa</strong>. <span style={{ color: MUTED }}>(A fila de follow-up e o painel de conhecimento abaixo ainda são exemplos — entram em seguida.)</span>
+          🟢 <strong>Conversas reais.</strong> Estas são as conversas de verdade do seu WhatsApp e/ou DM do Instagram, ao vivo. O agente responde, qualifica e <strong>passa pro humano quando precisa</strong>. <span style={{ color: MUTED }}>(A fila de follow-up e o painel de conhecimento abaixo ainda são exemplos — entram em seguida.)</span>
         </div>
       )}
       {mode === 'demo' && (
         <div style={{ padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-          🔵 <strong>Modo demonstração.</strong> Estas conversas são fictícias. Assim que o WhatsApp estiver conectado, as conversas reais aparecem aqui ao vivo (sempre esperando sua aprovação).
+          🔵 <strong>Modo demonstração.</strong> Estas conversas são fictícias. Assim que o WhatsApp ou o Instagram (DM) estiverem conectados, as conversas reais aparecem aqui ao vivo (sempre esperando sua aprovação).
         </div>
       )}
 
