@@ -1,28 +1,26 @@
 import { useState } from 'react'
 import { MUTED, BORDER, D } from './shared'
-import CreativeAgent from './CreativeAgent'
 import FormatsLibrary from './FormatsLibrary'
 import TestingArea from './TestingArea'
 import ContentVault from './ContentVault'
 
 const ORANGE = '#FF6D29'
 
-// Abas de topo da Biblioteca — Ideias (ex-Creative Agent) leva ao Trend
-// Agent + geração de ideias; Testes e Vault vivem aqui agora (canônicos,
-// não duplicados em Conteúdo/Stories/Campanhas nem soltos em Conteúdo).
+// Abas de topo da Biblioteca — Ideias saiu daqui (mudou pra dentro de
+// Calendário da Semana, é lá que ela orienta o planejamento agora — ver
+// WeeklyCalendarTab.tsx). Testes e Vault continuam aqui (canônicos).
 // Estilos e Visuais mudou pra aba Agente de Dados — identidade visual/marca é
 // dado de contexto pro agente, não algo que se "testa" ou "publica" daqui.
 const TOP_TABS: { key: string; icon: string; label: string }[] = [
-  { key: 'creative', icon: '💡', label: 'Ideias' },
   { key: 'formatos', icon: '🧩', label: 'Formatos' },
   { key: 'testes', icon: '🧪', label: 'Testes' },
   { key: 'vault', icon: '⭐', label: 'Vault' },
 ]
-// Sub-abas de módulo — filtram Ideias, Formatos e Testes por Orgânico/Stories/Campanhas.
-const MODULES: { key: 'organico' | 'stories' | 'campanhas'; icon: string; label: string }[] = [
+// Sub-abas de módulo — filtram Formatos e Testes por Orgânico/Stories.
+// Campanhas saiu (mudou pra dentro de Agente de Meta Ads).
+const MODULES: { key: 'organico' | 'stories'; icon: string; label: string }[] = [
   { key: 'organico', icon: '✍️', label: 'Orgânico' },
   { key: 'stories', icon: '📖', label: 'Stories' },
-  { key: 'campanhas', icon: '🎯', label: 'Campanhas' },
 ]
 
 // Continuam exportados — usados por ModuleLibrary.tsx e ContentVault.tsx.
@@ -38,24 +36,19 @@ export const KIND_LABEL: Record<string, string> = {
 }
 export const kindLabel = (k: string) => KIND_LABEL[k] ?? k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ')
 
-// Biblioteca: Ideias (Trend Agent + Creative Agent), Formatos (a anatomia de
-// cada imagem), Testes (QC) e Vault (aprovados) — tudo num lugar só. Estilos
-// e Visuais fica na aba Agente de Dados agora.
+// Biblioteca: Formatos (a anatomia de cada imagem), Testes (QC) e Vault
+// (aprovados) — tudo num lugar só. Ideias mudou pra Calendário da Semana;
+// Estilos e Visuais fica na aba Agente de Dados.
 export default function ContentLibrary({ companyId }: { companyId: string }) {
-  const [top, setTop] = useState('creative')
-  const [mod, setMod] = useState<'organico' | 'stories' | 'campanhas'>('organico')
-  // Testes (QC) não cobre Campanhas — é mídia paga, fluxo de aprovação
-  // diferente (Conteúdo → Campanhas). Some da Área de Testes; some da lista
-  // de módulos ali e, se o dono estava em Campanhas, volta pra Orgânico.
-  const handleTop = (key: string) => { setTop(key); if (key === 'testes' && mod === 'campanhas') setMod('organico') }
-  const visibleModules = top === 'testes' ? MODULES.filter(m => m.key !== 'campanhas') : MODULES
+  const [top, setTop] = useState('formatos')
+  const [mod, setMod] = useState<'organico' | 'stories'>('organico')
 
   return (
     <div>
       <div style={{ marginBottom: '18px' }}>
         <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>📚 Biblioteca do Agente de Conteúdo</div>
         <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55, maxWidth: '760px' }}>
-          <strong style={{ color: 'white' }}>Ideias</strong> (tendências reais + sugestões), <strong style={{ color: 'white' }}>Formatos</strong> (a anatomia de cada imagem), <strong style={{ color: 'white' }}>Testes</strong> (controle de qualidade) e <strong style={{ color: 'white' }}>Vault</strong> (aprovados, prontos pra publicar). Estilos e Visuais (Kit da marca) agora fica na aba <strong style={{ color: 'white' }}>Agente de Dados</strong>.
+          <strong style={{ color: 'white' }}>Formatos</strong> (a anatomia de cada imagem), <strong style={{ color: 'white' }}>Testes</strong> (controle de qualidade) e <strong style={{ color: 'white' }}>Vault</strong> (aprovados, prontos pra publicar). Ideias vive em <strong style={{ color: 'white' }}>Calendário da Semana</strong> agora; Estilos e Visuais (Kit da marca) fica na aba <strong style={{ color: 'white' }}>Agente de Dados</strong>.
         </div>
       </div>
 
@@ -64,7 +57,7 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
         {TOP_TABS.map(t => {
           const active = top === t.key
           return (
-            <button key={t.key} onClick={() => handleTop(t.key)}
+            <button key={t.key} onClick={() => setTop(t.key)}
               style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '9px 15px', background: active ? 'rgba(255,109,41,0.14)' : 'transparent', border: `1px solid ${active ? 'rgba(255,109,41,0.4)' : 'transparent'}`, borderRadius: '8px', cursor: 'pointer', fontFamily: D }}>
               <span style={{ fontSize: '14px' }}>{t.icon}</span>
               <span style={{ fontSize: '12.5px', fontWeight: 800, color: active ? ORANGE : 'white' }}>{t.label}</span>
@@ -73,11 +66,11 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
         })}
       </div>
 
-      {/* Sub-abas de módulo — Ideias e Formatos têm Orgânico/Stories/Campanhas;
-          Testes só Orgânico/Stories (Vault é da marca/QC como um todo, não por módulo). */}
-      {(top === 'creative' || top === 'formatos' || top === 'testes') && (
+      {/* Sub-abas de módulo — Formatos e Testes têm Orgânico/Stories
+          (Vault é da marca/QC como um todo, não por módulo). */}
+      {(top === 'formatos' || top === 'testes') && (
         <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          {visibleModules.map(m => {
+          {MODULES.map(m => {
             const active = mod === m.key
             return (
               <button key={m.key} onClick={() => setMod(m.key)}
@@ -90,8 +83,7 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
         </div>
       )}
 
-      {top === 'creative' ? <CreativeAgent companyId={companyId} module={mod} />
-        : top === 'formatos' ? <FormatsLibrary companyId={companyId} module={mod} />
+      {top === 'formatos' ? <FormatsLibrary companyId={companyId} module={mod} />
         : top === 'testes' ? <TestingArea companyId={companyId} kind={mod} />
         : <ContentVault companyId={companyId} />}
     </div>
