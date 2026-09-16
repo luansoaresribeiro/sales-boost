@@ -236,6 +236,9 @@ interface GenOpts {
   // automático (rotação estrita), 'random' = sorteia um dos templates
   // existentes, ou a chave exata de um template (força esse e força "foto").
   templateChoice?: string | null
+  // Calendário da Semana: pra qual dia (YYYY-MM-DD) este post foi planejado —
+  // ver planWeekForCompany(). Sem isso (geração avulsa normal) fica null.
+  plannedFor?: string | null
 }
 
 // O núcleo da geração — usado tanto pelo modo interativo (1 empresa, o
@@ -428,6 +431,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
     cta: post.cta ? String(post.cta) : (brief.cta as string ?? null),
     format: fmt, reasoning: brief.reasoning as string ?? null,
     video_script: post.video_script ? String(post.video_script) : null, brief, personality,
+    planned_for: opts.plannedFor ?? null,
   }).select('id').single()
   if (insErr) throw new Error(insErr.message)
 
@@ -517,6 +521,72 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   return { id: inserted.id, image_generated: !!mainImage, slides: slides?.length ?? 0, personality, brief, auto_vault: autoVault }
 }
 
+function parseArr(raw: string): unknown[] {
+  try { const v = JSON.parse(raw); if (Array.isArray(v)) return v } catch { /* */ }
+  const m = raw.match(/\[[\s\S]*\]/)
+  if (m) { try { const v = JSON.parse(m[0]); if (Array.isArray(v)) return v } catch { /* */ } }
+  return []
+}
+
+// As 7 datas da PRÓXIMA semana (segunda a domingo) — o cron só roda domingo
+// à noite, então "amanhã" já é sempre a segunda-feira seguinte.
+function nextWeekDates(): { iso: string; weekday: string }[] {
+  const WD = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
+  const now = new Date()
+  const startOffset = now.getDay() === 0 ? 1 : (8 - now.getDay())
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + startOffset + i)
+    return { iso: d.toISOString().slice(0, 10), weekday: WD[d.getDay()] }
+  })
+}
+
+// Calendário da Semana: PLANEJA a semana (quais dias merecem post orgânico,
+// quais merecem story, quais ficam vazios — olhando os insights abertos do
+// Agente de Dados e quanto já foi gerado recentemente) e, pra cada dia
+// planejado, dispara o MESMO fluxo de sempre (generateForCompany → Diretor +
+// Copywriter + imagem + controle de qualidade → Vault automático se a nota
+// for boa). Não é um motor de conteúdo separado — é só o Calendário
+// decidindo QUANDO usar o motor que já existe, um fluxo só conectado.
+async function planWeekForCompany(admin: SupaClient, anthropicKey: string, company: Company, auth: { bearer: string; isCron: boolean; cronSecret?: string }): Promise<{ planned: number; days: { date: string; kind: string; note: string }[] }> {
+  const [{ data: insRows }, { data: recentRows }] = await Promise.all([
+    admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(8),
+    admin.from('marketing_ai_test_content').select('id').eq('company_id', company.id).eq('status', 'draft').is('quality_score', null),
+  ])
+  const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
+  const pendingCount = (recentRows ?? []).length
+  const dates = nextWeekDates()
+
+  const prompt = `Você é o planejador de conteúdo semanal de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
+${company.business_description ? `O que o negócio faz: ${company.business_description}.` : ''}
+
+Monte o plano da PRÓXIMA semana: pra cada um dos 7 dias abaixo, decida se vale gerar um POST orgânico ("organico"), um STORY ("stories"), ou nada (null). Cadência realista: normalmente 3 a 5 posts orgânicos por semana + stories mais frequentes, NUNCA as duas coisas no mesmo dia, nunca mais de 1 peça por dia. Considere que ${pendingCount} peça(s) recente(s) ainda nem foram avaliadas — se já tem bastante coisa parada, gere menos essa semana.
+${insights.length ? `\nInsights abertos (use pra decidir o QUE priorizar, não muda a contagem de dias):\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : '\n(sem insights abertos no momento)'}
+
+Dias (use EXATAMENTE estas datas, uma linha por dia, na mesma ordem):
+${dates.map(d => `- ${d.iso} (${d.weekday})`).join('\n')}
+
+Retorne APENAS um JSON array, um item por dia, nesta ordem:
+[{"date":"YYYY-MM-DD","kind":"organico"|"stories"|null,"note":"por que (ou por que não) gerar algo nesse dia, 1 frase"}]`
+
+  const raw = await callClaude(anthropicKey, prompt, 900)
+  const parsedPlan = (parseArr(raw) as { date?: string; kind?: string; note?: string }[])
+    .filter(p => p.kind === 'organico' || p.kind === 'stories')
+    .slice(0, 6) // rede de segurança: nunca mais que 6 gerações numa rodada só (tempo/custo)
+
+  let planned = 0
+  const days: { date: string; kind: string; note: string }[] = []
+  for (const p of parsedPlan) {
+    const kind = p.kind as 'organico' | 'stories'
+    const date = p.date && /^\d{4}-\d{2}-\d{2}$/.test(p.date) ? p.date : dates[0].iso
+    try {
+      await generateForCompany(admin, anthropicKey, company, kind, { ...auth, plannedFor: date })
+      planned++
+      days.push({ date, kind, note: String(p.note ?? '') })
+    } catch (e) { console.error('planWeekForCompany: falhou pra', company.id, date, e) }
+  }
+  return { planned, days }
+}
+
 const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language'
 
 Deno.serve(async (req) => {
@@ -531,6 +601,23 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey)
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const cronSecretEnv = Deno.env.get('CRON_SECRET')
+
+    // ── Calendário da Semana (cron, domingo 18h BRT): planeja + gera a
+    // semana inteira pra toda empresa com auto_weekly_calendar ligado.
+    if (cronSecretEnv && body.cron_secret === cronSecretEnv && body.action === 'run_weekly_plan' && !body.company_id) {
+      const { data: configs } = await admin.from('marketing_ai_config').select('company_id').eq('auto_weekly_calendar', true)
+      let companies = 0, planned = 0, failed = 0
+      for (const cfg of (configs ?? []) as { company_id: string }[]) {
+        try {
+          const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', cfg.company_id).maybeSingle()
+          const company = companyRow as Company | null
+          if (!company) continue
+          const r = await planWeekForCompany(admin, anthropicKey, company, { bearer: '', isCron: true, cronSecret: cronSecretEnv })
+          companies++; planned += r.planned
+        } catch (e) { failed++; console.error('creative-generate weekly plan falhou pra', cfg.company_id, e) }
+      }
+      return json({ ok: true, companies, planned, failed })
+    }
 
     // ── Modo lote (cron, 10h BRT): 1 post pra toda empresa que ligou o botão
     // "gerar automaticamente" na Área de Testes. Uma empresa falhando não
@@ -559,6 +646,13 @@ Deno.serve(async (req) => {
     const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('user_id', user.id).maybeSingle()
     const company = companyRow as Company | null
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
+
+    // Botão manual "Planejar semana agora" (Calendário da Semana) — mesma
+    // lógica do cron de domingo, só que na hora, pro dono testar/adiantar.
+    if (body.action === 'plan_week') {
+      const result = await planWeekForCompany(admin, anthropicKey, company, { bearer, isCron: false })
+      return json({ ok: true, ...result })
+    }
 
     const kind = ['organico', 'stories', 'campanhas'].includes(String(body.kind)) ? String(body.kind) : 'organico'
     const seed = body.idea && typeof body.idea === 'object' ? body.idea as { title?: string; hook?: string; angle?: string; format?: string } : null
