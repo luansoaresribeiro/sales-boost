@@ -149,7 +149,6 @@ async function generateImage(companyId: string, businessType: string | null, evo
 const TEMPLATE_DESC = (hasProduct: boolean): Record<string, string> => ({
   livre: 'Foto realista e ESPECÍFICA do negócio, sem texto embutido na imagem — a legenda faz o trabalho de texto. Use quando o valor do post está na FOTO em si: um momento real, um clima, um resultado visual que fala por si só (não é o "padrão" — é a escolha certa quando nenhum card de texto serviria melhor que uma foto de verdade).',
   tweet: 'Card estilo "tweet"/nota com uma frase de efeito em texto nítido, sem foto. Bom pra opinião, gancho ou dado curioso forte.',
-  beforeafter: 'Duas fotos reais lado a lado, antes e depois. SÓ escolha se existir uma transformação específica de verdade pra mostrar.',
   announcement: 'Pôster com chamada/oferta em destaque tipográfico, sem foto. Pra promoção, novidade ou data específica.',
   ...(hasProduct ? { product: 'Produto centralizado tipo pôster (usa uma foto de produto real já cadastrada), com nome/chamada. Só quando o post é sobre esse produto específico.' } : {}),
 })
@@ -160,17 +159,21 @@ const TEMPLATE_DESC = (hasProduct: boolean): Record<string, string> => ({
 // ilegível — o bug real que gerou a imagem quebrada mostrada pelo dono.
 // A correção certa é pedir pro Copywriter escrever um texto CURTO e
 // COMPLETO específico pro card, nunca derivar truncando o texto longo.
+// SEM EMOJI em nenhum card_*: a fonte carregada no servidor pra renderizar
+// o card (Poppins) não tem glifo de emoji — sai um quadrado/tofu visível no
+// lugar (bug real visto pelo dono num Tweet Print). render-format também
+// tira qualquer emoji que passar como rede de segurança, mas o certo é
+// nunca escrever um pra começo de conversa.
+const NO_EMOJI_CARD = 'NUNCA use emoji em nenhum campo "card_*" — a fonte do card não tem esse glifo, vira um quadrado visível.'
 const CARD_FIELD_INSTRUCTIONS: Record<string, string> = {
-  tweet: '- Preencha TAMBÉM "card_text": a frase de efeito que vai DENTRO do card gráfico (máx. 180 caracteres) — uma frase CURTA e COMPLETA, nunca cortada no meio.',
-  announcement: '- Preencha TAMBÉM "card_headline" (máx. 8 palavras, frase de impacto COMPLETA), "card_subtext" (máx. 18 palavras, frase COMPLETA) e "card_cta" (máx. 4 palavras, tipo "Agende agora" — NUNCA uma frase longa). São o que vai IMPRESSO na imagem do pôster: tem que caber e fazer sentido sozinho, nunca cortado.',
-  product: '- Preencha TAMBÉM "card_cta" (máx. 4 palavras, tipo "Compre agora" — NUNCA uma frase longa) — vai IMPRESSO no botão da imagem do produto.',
-  beforeafter: '- Preencha TAMBÉM "card_caption" (máx. 12 palavras, frase COMPLETA que resume o resultado) — vai IMPRESSO embaixo da comparação antes/depois.',
+  tweet: `- Preencha TAMBÉM "card_text": a frase de efeito que vai DENTRO do card gráfico (máx. 180 caracteres) — uma frase CURTA e COMPLETA, nunca cortada no meio. ${NO_EMOJI_CARD}`,
+  announcement: `- Preencha TAMBÉM "card_headline" (máx. 8 palavras, frase de impacto COMPLETA), "card_subtext" (máx. 18 palavras, frase COMPLETA) e "card_cta" (máx. 4 palavras, tipo "Agende agora" — NUNCA uma frase longa). São o que vai IMPRESSO na imagem do pôster: tem que caber e fazer sentido sozinho, nunca cortado. ${NO_EMOJI_CARD}`,
+  product: `- Preencha TAMBÉM "card_cta" (máx. 4 palavras, tipo "Compre agora" — NUNCA uma frase longa) — vai IMPRESSO no botão da imagem do produto. ${NO_EMOJI_CARD}`,
 }
 const CARD_FIELD_JSON: Record<string, string> = {
   tweet: ',"card_text":""',
   announcement: ',"card_headline":"","card_subtext":"","card_cta":""',
   product: ',"card_cta":""',
-  beforeafter: ',"card_caption":""',
 }
 // Corta no limite de PALAVRA (nunca no meio de uma) e nunca finge que o
 // texto continua — evita repetir o bug de truncar substring bruto.
@@ -201,7 +204,7 @@ interface CardBrand { primary: string; name: string; accent?: string; text?: str
 // cron_secret+company_id (modo lote, sem usuário logado).
 async function renderGraphicCard(
   auth: { bearer: string; isCron: boolean; cronSecret?: string },
-  companyId: string, template: 'tweet' | 'beforeafter' | 'announcement' | 'product', fields: Record<string, string>, brand: CardBrand,
+  companyId: string, template: 'tweet' | 'announcement' | 'product', fields: Record<string, string>, brand: CardBrand,
 ): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   if (!supabaseUrl) return null
@@ -497,20 +500,6 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
           productImage: product.image_url, name: product.title, price: '', cta: ctaText,
         }, cardBrand)
         if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), undefined, brandStyle, company.business_description ?? undefined)
-      } else if (template === 'beforeafter') {
-        // Antes/Depois de verdade — 2 fotos reais (uma do estado "antes", outra
-        // do "depois"), compostas no card via render-format. Só aqui vale gerar
-        // 2 imagens pro mesmo post: sem isso a comparação não existe de verdade.
-        const subject = company.business_description ?? company.business_type ?? 'the business'
-        const [beforeUrl, afterUrl] = await Promise.all([
-          generateImage(company.id, company.business_type, `BEFORE state: ${subject} — the problem, worn out or unimpressive starting point, before any improvement. ${idea ?? ''}`, undefined, brandStyle, company.business_description ?? undefined),
-          generateImage(company.id, company.business_type, `AFTER state: ${subject} — the improved, polished, impressive result after the transformation. ${idea ?? ''}`, undefined, brandStyle, company.business_description ?? undefined),
-        ])
-        const bfCaption = capWords(String(post.card_caption ?? brief.hook_angle ?? idea ?? ''), 80)
-        mainImage = await renderGraphicCard(opts, company.id, 'beforeafter', {
-          beforeImage: beforeUrl ?? '', afterImage: afterUrl ?? '', beforeLabel: 'Antes', afterLabel: 'Depois', caption: bfCaption,
-        }, cardBrand)
-        if (!mainImage) mainImage = beforeUrl ?? afterUrl
       } else {
         // "livre" — foto realista e específica, escolhida com intenção (não é fallback). Legenda conta a história.
         mainImage = await generateImage(company.id, company.business_type, evoke(), conceptHint, brandStyle, company.business_description ?? undefined)

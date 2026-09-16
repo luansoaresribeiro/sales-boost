@@ -41,7 +41,7 @@ export default function ContentOverviewTab({ companyId, onOpenVault }: { company
   if (loading) return <div style={{ fontSize: '12px', color: MUTED }}>Carregando...</div>
 
   // Equilíbrio do funil: cada template classificado (ver shared.ts) conta pra
-  // uma ou mais etapas (ex: Antes/Depois é Meio+Fundo) — soma no Vault +
+  // uma ou mais etapas (ex: Foco no Produto é Meio+Fundo) — soma no Vault +
   // agendados, que é o que representa o que está prestes a ir pro ar.
   const all = [...scheduled.map(s => s.post), ...waiting]
   const tally: Record<FunnelStage, number> = { topo: 0, meio: 0, fundo: 0 }

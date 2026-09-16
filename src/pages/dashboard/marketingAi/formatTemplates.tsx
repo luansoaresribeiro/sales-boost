@@ -1,4 +1,4 @@
-import type { JSX, CSSProperties } from 'react'
+import type { JSX } from 'react'
 
 // Motor de formatos — cada template é um layout HTML/CSS real (não foto de IA).
 // O FormatStudio renderiza um destes em tamanho cheio e exporta como PNG.
@@ -73,30 +73,9 @@ function tweet(f: Record<string, string>, brand: Brand): JSX.Element {
   )
 }
 
-// ── Antes / Depois ───────────────────────────────────────────────────────────
-function beforeAfter(f: Record<string, string>, brand: Brand): JSX.Element {
-  const half: CSSProperties = { position: 'relative', width: '50%', height: '100%', overflow: 'hidden', background: '#1a1a1a' }
-  const badge = (label: string): JSX.Element => (
-    <div style={{ position: 'absolute', top: '48px', left: '50%', transform: 'translateX(-50%)', background: brand.primary, color: '#000', fontWeight: 800, fontSize: '30px', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '10px 28px', borderRadius: '999px' }}>{label}</div>
-  )
-  return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: brand.bg || '#0E0B0A', fontFamily: bfont(brand), color: '#fff' }}>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
-        <div style={half}>{f.beforeImage && <img src={f.beforeImage} crossOrigin="anonymous" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}{badge(f.beforeLabel || 'Antes')}</div>
-        <div style={{ width: '4px', background: brand.primary, flexShrink: 0 }} />
-        <div style={half}>{f.afterImage && <img src={f.afterImage} crossOrigin="anonymous" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}{badge(f.afterLabel || 'Depois')}</div>
-      </div>
-      {f.caption && (
-        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.92), transparent)', padding: '90px 70px 50px', fontSize: '42px', fontWeight: 800, lineHeight: 1.3, textAlign: 'center' }}>{f.caption}</div>
-      )}
-      <Logo b={brand} />
-    </div>
-  )
-}
-
 // Fundo cheio na cor primária (gradiente sutil) — padrão dos cards de texto
 // puro abaixo (Anúncio, Estatística). Tweet Print fica fiel ao tema real do
-// X; Antes/Depois e Foco no Produto têm o fundo coberto por foto/produto.
+// X; Foco no Produto tem o fundo coberto pela foto do produto.
 const primaryBg = (b: Brand) => `linear-gradient(155deg, ${b.primary}, ${shade(b.primary, -30)})`
 
 // ── Foco no Produto ──────────────────────────────────────────────────────────
@@ -192,17 +171,6 @@ export const TEMPLATES: Template[] = [
     ],
     sample: { name: '', handle: '', text: '', likes: '1.204', retweets: '128', time: '14:22', date: 'hoje', theme: 'dark' },
     render: tweet,
-  },
-  {
-    key: 'beforeafter', label: 'Antes / Depois', icon: '↔️', w: 1080, h: 1350,
-    fields: [
-      { key: 'beforeImage', label: 'URL da foto ANTES (cole do Arquivo/Produtos em Estilos e Visuais)' },
-      { key: 'afterImage', label: 'URL da foto DEPOIS (cole do Arquivo/Produtos em Estilos e Visuais)' },
-      { key: 'beforeLabel', label: 'Rótulo antes' }, { key: 'afterLabel', label: 'Rótulo depois' },
-      { key: 'caption', label: 'Legenda do resultado', type: 'textarea' },
-    ],
-    sample: { beforeImage: '', afterImage: '', beforeLabel: 'Antes', afterLabel: 'Depois', caption: '' },
-    render: beforeAfter,
   },
   {
     key: 'product', label: 'Foco no Produto', icon: '📦', w: 1080, h: 1350,

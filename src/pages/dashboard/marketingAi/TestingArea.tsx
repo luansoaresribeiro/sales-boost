@@ -8,7 +8,7 @@ import AdaptModal, { type VaultPost } from './AdaptModal'
 const KIND_PT: Record<string, string> = { organico: 'Orgânico', stories: 'Stories', campanhas: 'Campanhas' }
 // Mesmas chaves do "template" escolhido pelo Diretor em creative-generate.
 export const TEMPLATE_LABEL: Record<string, string> = {
-  livre: 'Livre', tweet: 'Tweet', beforeafter: 'Antes/Depois', announcement: 'Anúncio', product: 'Produto',
+  livre: 'Livre', tweet: 'Tweet', announcement: 'Anúncio', product: 'Produto',
 }
 
 const ORANGE = '#FF6D29'

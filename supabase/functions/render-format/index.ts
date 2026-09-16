@@ -65,7 +65,15 @@ async function generateBg(prompt: string, companyId: string): Promise<string | n
   } catch { return null }
 }
 
-const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+// A fonte carregada no servidor (Poppins) não tem glifo de emoji — sem isso,
+// um emoji no texto vira um quadrado/tofu visível no card (bug real visto
+// pelo dono num Tweet Print). Rede de segurança final: tira qualquer emoji
+// ANTES de virar SVG, independente de quem escreveu o texto (IA ou o dono
+// digitando à mão) ter seguido a instrução de não usar emoji.
+const stripEmoji = (s: string) => s
+  .replace(/[\u{1F1E6}-\u{1F1FF}\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{2300}-\u{23FF}\u{FE0F}\u{200D}]/gu, '')
+  .replace(/[ \t]{2,}/g, ' ').trim()
+const esc = (s: string) => stripEmoji(String(s ?? '')).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const initials = (n: string) => (n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
 // Quebra por número aproximado de caracteres por linha (Poppins ~0.55·fontSize).
 function wrap(text: string, size: number, maxWidth: number): string[] {
@@ -110,8 +118,7 @@ function contrastColor(hex: string): string {
 }
 const mutedInk = (ink: string, alpha: number) => (ink === '#000000' ? `rgba(0,0,0,${alpha})` : `rgba(255,255,255,${alpha})`)
 // Fundo cheio na cor primária (gradiente sutil) — padrão dos cards de texto
-// puro (stat/announcement/mistakes). Tweet fica fiel ao tema real do X;
-// beforeafter tem o fundo coberto pelas 2 fotos.
+// puro (stat/announcement/mistakes). Tweet fica fiel ao tema real do X.
 const primaryBgDef = (id: string, b: Brand) => `<defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${b.primary}"/><stop offset="1" stop-color="${shade(b.primary, -30)}"/></linearGradient></defs>`
 
 interface Brand { primary: string; name: string; primary2?: string; accent?: string; accent2?: string; text?: string; bg?: string; logoUrl?: string }
@@ -137,27 +144,6 @@ ${block(tl, 90, bodyY, 44, fg, 500, 60)}
 ${block([`${f.time || '14:22'} · ${f.date || 'hoje'}`], 90, afterBody, 26, muted, 400, 0)}
 <rect x="90" y="${afterBody + 26}" width="900" height="2" fill="${line}"/>
 ${block([`${f.retweets || '128'} Retuites     ${f.likes || '1.204'} Curtidas`], 90, afterBody + 78, 28, muted, 700, 0)}
-</svg>`
-  return { svg, w: W, h: H }
-}
-
-// Comparação lado a lado — ANTES (esquerda) / DEPOIS (direita), com legenda
-// do resultado embaixo. beforeImg/afterImg já vêm como data URI (resvg não
-// busca href remoto), pode faltar uma das duas (mostra placeholder escuro).
-function svgBeforeAfter(f: F, b: Brand, beforeImg: string | null, afterImg: string | null): { svg: string; w: number; h: number } {
-  const W = 1080, H = 1350, halfW = W / 2
-  const badge = (label: string, cx: number): string =>
-    `<rect x="${cx - 140}" y="40" width="280" height="76" rx="38" fill="${b.primary}"/>` + block([label.toUpperCase()], cx, 90, 30, '#000', 800, 0, 'middle')
-  const capText = f.caption ? limitLines(wrap(f.caption, 42, 900), 4) : []
-  const capStartY = H - 60 - (Math.max(capText.length, 1) - 1) * 54
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-<rect width="${W}" height="${H}" fill="${b.bg || '#0E0B0A'}"/>
-${beforeImg ? `<image href="${beforeImg}" x="0" y="0" width="${halfW}" height="${H}" preserveAspectRatio="xMidYMid slice"/>` : `<rect x="0" y="0" width="${halfW}" height="${H}" fill="#1a1a1a"/>`}
-${afterImg ? `<image href="${afterImg}" x="${halfW}" y="0" width="${halfW}" height="${H}" preserveAspectRatio="xMidYMid slice"/>` : `<rect x="${halfW}" y="0" width="${halfW}" height="${H}" fill="#1a1a1a"/>`}
-<rect x="${halfW - 2}" y="0" width="4" height="${H}" fill="${b.primary}"/>
-${badge(f.beforeLabel || 'Antes', halfW / 2)}
-${badge(f.afterLabel || 'Depois', halfW + halfW / 2)}
-${capText.length ? `<defs><linearGradient id="capg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.92"/></linearGradient></defs><rect x="0" y="${H - 280}" width="${W}" height="280" fill="url(#capg)"/>${block(capText, W / 2, capStartY, 42, '#ffffff', 800, 54, 'middle')}` : ''}
 </svg>`
   return { svg, w: W, h: H }
 }
@@ -250,10 +236,9 @@ ${overlay}
   return { svg, w: W, h: H }
 }
 
-function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, beforeImg: string | null, afterImg: string | null, productImg: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
+function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, productImg: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
   switch (template) {
     case 'tweet': return svgTweet(f, b, logo)
-    case 'beforeafter': return svgBeforeAfter(f, b, beforeImg, afterImg)
     case 'product': return svgProduct(f, b, productImg)
     case 'announcement': return svgAnnouncement(f, b)
     case 'stat': return svgStat(f, b)
@@ -319,11 +304,6 @@ Deno.serve(async (req) => {
     // Marca em Estilos e Visuais) — sem logo, cai pras iniciais na svgTweet.
     const logoData = (template === 'photo' || template === 'tweet') && brand.logoUrl ? await toDataUri(brand.logoUrl) : null
     const stickerData = template === 'photo' && body.sticker ? await toDataUri(String(body.sticker)) : null
-    // Antes/Depois: as 2 fotos vêm em fields.beforeImage/afterImage (URL —
-    // asset real do Arquivo/Produtos, ou já geradas pela IA por quem chamou).
-    const [beforeImgData, afterImgData] = template === 'beforeafter'
-      ? await Promise.all([fields.beforeImage ? toDataUri(fields.beforeImage) : null, fields.afterImage ? toDataUri(fields.afterImage) : null])
-      : [null, null]
     // Foco no Produto: a foto vem de fields.productImage (URL real da aba
     // Produtos, escolhida no FormatStudio ou passada pelo Diretor Criativo).
     const productImgData = template === 'product' && fields.productImage ? await toDataUri(fields.productImage) : null
@@ -334,7 +314,7 @@ Deno.serve(async (req) => {
     const safe = (body.safe as Safe | undefined) ?? { top: Math.round(H * 0.06), right: Math.round(W * 0.08), bottom: Math.round(H * 0.09), left: Math.round(W * 0.08) }
 
     await ensureEngine()
-    const { svg, w } = buildSvg(template, fields, brand, bgData, logoData, stickerData, beforeImgData, afterImgData, productImgData, W, H, safe)
+    const { svg, w } = buildSvg(template, fields, brand, bgData, logoData, stickerData, productImgData, W, H, safe)
     const png = renderPng(svg, w)
 
     const path = `renders/${companyId}/${crypto.randomUUID()}.png`

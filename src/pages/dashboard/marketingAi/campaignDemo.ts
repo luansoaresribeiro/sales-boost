@@ -231,7 +231,7 @@ export function buildCampaignDemo(company: { business_name?: string; business_ty
   const contentIdeas: ContentIdeaForCampaign[] = [
     { id: 'ci1', title: '"Os 3 erros que quase todo mundo comete" (carrossel educativo)', format: 'Carrossel', stage: 'awareness', why: 'Testado no orgânico com engajamento acima da média — já validado antes de gastar mídia paga nele.' },
     { id: 'ci2', title: 'Bastidor real do atendimento/produção', format: 'Reel', stage: 'awareness', why: 'Formato de bastidor converteu melhor que produto "posado" nos últimos posts do Vault.' },
-    { id: 'ci3', title: 'Antes/Depois de um resultado real recente', format: 'Antes/Depois', stage: 'consideration', why: 'Prova concreta pra quem já considera — mesma lógica do template Antes/Depois da Biblioteca.' },
+    { id: 'ci3', title: 'Depoimento de um resultado real recente', format: 'Foco no Produto', stage: 'consideration', why: 'Prova concreta pra quem já considera — mesma lógica do template Foco no Produto da Biblioteca.' },
     { id: 'ci4', title: 'Depoimento em vídeo de cliente satisfeito', format: 'Reel', stage: 'conversion', why: 'Prova social no Fundo de Funil reduz a objeção final antes da conversão.' },
   ]
 

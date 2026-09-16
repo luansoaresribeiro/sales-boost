@@ -9,7 +9,7 @@ const BORDER = 'rgba(255,255,255,0.06)'
 const D = "'Bricolage Grotesque', system-ui, sans-serif"
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 const input = { padding: '8px 11px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '8px', color: 'white', fontSize: '13px', outline: 'none', fontFamily: D } as const
-const CATEGORIES = ['Minimalista', 'Editorial', 'Luxo', 'UGC', 'Tweet Print', 'Infográfico', 'Educativo', 'Tipografia forte', 'Foco no produto', 'Antes/Depois', 'Comparação', 'Meme']
+const CATEGORIES = ['Minimalista', 'Editorial', 'Luxo', 'UGC', 'Tweet Print', 'Infográfico', 'Educativo', 'Tipografia forte', 'Foco no produto', 'Comparação', 'Meme']
 
 interface Ref { id: string; title: string; image_url: string | null; meta: { category?: string; visual_style?: string; colors?: string; path?: string } | null }
 
