@@ -23,6 +23,34 @@ interface Suggestion {
 }
 
 const IMG_RE = /\.(jpg|jpeg|png|webp)(\?|$)/i
+const IG = 'https://graph.instagram.com/v21.0'
+
+// Logo automático: se a empresa já tem Instagram conectado e ainda NÃO tem
+// nenhum logo no Kit da Marca, pega a foto de perfil real (mesma API que já
+// funciona em instagram-performance) e REHOSPEDA no nosso Storage — o link
+// que a Meta devolve é temporário, salvar ele direto quebraria em poucos
+// dias. Nunca sobrescreve um logo que já existe (manual ou já buscado antes).
+async function fetchInstagramLogo(admin: ReturnType<typeof createClient>, companyId: string): Promise<string | null> {
+  try {
+    const { data: company } = await admin.from('companies').select('instagram_access_token, instagram_user_id').eq('id', companyId).maybeSingle()
+    const token = company?.instagram_access_token as string | null, igUserId = company?.instagram_user_id as string | null
+    if (!token || !igUserId) return null
+
+    const profRes = await fetch(`${IG}/${igUserId}?fields=profile_picture_url&access_token=${token}`)
+    if (!profRes.ok) return null
+    const prof = await profRes.json().catch(() => ({})) as { profile_picture_url?: string }
+    if (!prof.profile_picture_url) return null
+
+    const imgRes = await fetch(prof.profile_picture_url)
+    if (!imgRes.ok) return null
+    const bytes = new Uint8Array(await imgRes.arrayBuffer())
+    const path = `renders/${companyId}/logo-ig-${crypto.randomUUID()}.jpg`
+    const { error } = await admin.storage.from('post-images').upload(path, bytes, { contentType: imgRes.headers.get('content-type') || 'image/jpeg', upsert: false })
+    if (error) return null
+    const { data: pub } = admin.storage.from('post-images').getPublicUrl(path)
+    return pub.publicUrl
+  } catch (e) { console.error('fetchInstagramLogo error:', e); return null }
+}
 
 async function gatherRealPhotoUrls(admin: ReturnType<typeof createClient>, companyId: string): Promise<string[]> {
   const [{ data: posts }, { data: products }] = await Promise.all([
@@ -69,29 +97,43 @@ Retorne SOMENTE um JSON:
 
 // Decide e SALVA — o dono só revisa depois, não precisa clicar em nada pra
 // o kit existir. Preserva tipografia/voz já definidas (a IA não vê isso em
-// foto); só mexe em cores + composição.
-async function generateAndSave(admin: ReturnType<typeof createClient>, anthropicKey: string, companyId: string): Promise<{ ok: boolean; based_on?: number; suggestion?: Suggestion; error?: string }> {
-  const urls = await gatherRealPhotoUrls(admin, companyId)
-  if (urls.length < 2) return { ok: false, error: 'Ainda não há fotos reais suficientes (Instagram ou Produtos) pra decidir um kit.' }
-
-  const suggestion = await askClaude(anthropicKey, urls)
-  if (!suggestion) return { ok: false, error: 'A IA não conseguiu ler as cores das fotos.' }
-
-  const { data: existing } = await admin.from('brand_dna').select('kit').eq('company_id', companyId).maybeSingle()
+// foto); mexe em cores + composição, e agora também no logo (busca sozinho
+// do Instagram conectado quando ainda não existe nenhum). Logo e cores são
+// passos INDEPENDENTES — dá pra achar um logo mesmo sem fotos suficientes
+// pra decidir cor, e vice-versa.
+async function generateAndSave(admin: ReturnType<typeof createClient>, anthropicKey: string, companyId: string): Promise<{ ok: boolean; based_on?: number; suggestion?: Suggestion; logo_set?: boolean; error?: string }> {
+  const { data: existing } = await admin.from('brand_dna').select('kit, logo_url').eq('company_id', companyId).maybeSingle()
   const prevKit = (existing?.kit as { typography?: { heading?: string; body?: string } } | null) ?? null
-  const kit = {
-    colors: suggestion.colors,
-    typography: prevKit?.typography ?? { heading: 'Bricolage Grotesque', body: 'Bricolage Grotesque' },
-    composition: suggestion.composition,
-  }
-  const flat = [...suggestion.colors.primary, ...suggestion.colors.accent].filter(Boolean)
 
-  const { error } = await admin.from('brand_dna').upsert({
-    company_id: companyId, kit, colors: flat, auto_generated: true, updated_at: new Date().toISOString(),
-  }, { onConflict: 'company_id' })
+  let logoSet = false
+  let logoUrl: string | null = null
+  if (!(existing?.logo_url as string | null)) {
+    logoUrl = await fetchInstagramLogo(admin, companyId)
+    if (logoUrl) logoSet = true
+  }
+
+  const urls = await gatherRealPhotoUrls(admin, companyId)
+  const suggestion = urls.length >= 2 ? await askClaude(anthropicKey, urls) : null
+
+  if (!suggestion && !logoSet) {
+    return { ok: false, error: urls.length < 2 ? 'Ainda não há fotos reais suficientes (Instagram ou Produtos) pra decidir um kit.' : 'A IA não conseguiu ler as cores das fotos.' }
+  }
+
+  const payload: Record<string, unknown> = { company_id: companyId, auto_generated: true, updated_at: new Date().toISOString() }
+  if (suggestion) {
+    payload.kit = {
+      colors: suggestion.colors,
+      typography: prevKit?.typography ?? { heading: 'Bricolage Grotesque', body: 'Bricolage Grotesque' },
+      composition: suggestion.composition,
+    }
+    payload.colors = [...suggestion.colors.primary, ...suggestion.colors.accent].filter(Boolean)
+  }
+  if (logoSet) payload.logo_url = logoUrl
+
+  const { error } = await admin.from('brand_dna').upsert(payload, { onConflict: 'company_id' })
   if (error) return { ok: false, error: error.message }
 
-  return { ok: true, based_on: urls.length, suggestion }
+  return { ok: true, based_on: urls.length, suggestion: suggestion ?? undefined, logo_set: logoSet }
 }
 
 Deno.serve(async (req) => {
@@ -139,7 +181,7 @@ Deno.serve(async (req) => {
 
     const result = await generateAndSave(admin, anthropicKey, company.id)
     if (!result.ok) return json({ error: result.error }, 400)
-    return json({ ok: true, suggestion: result.suggestion, based_on: result.based_on })
+    return json({ ok: true, suggestion: result.suggestion, based_on: result.based_on, logo_set: result.logo_set })
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)
   }

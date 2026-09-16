@@ -83,7 +83,11 @@ export default function BrandKit({ companyId }: { companyId: string }) {
           method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
         })
         const d = await res.json().catch(() => ({}))
-        if (res.ok && d.ok) { setAgentMsg(`✓ O agente montou o kit sozinho, a partir de ${d.based_on} fotos reais.`); await load() }
+        if (res.ok && d.ok) {
+          const base = d.based_on > 0 ? `montou o kit sozinho, a partir de ${d.based_on} fotos reais` : 'buscou o logo sozinho'
+          setAgentMsg(`✓ O agente ${base}${d.logo_set ? ' (logo puxado direto do Instagram)' : ''}.`)
+          await load()
+        }
       } catch { /* silencioso — sem fotos reais ainda, tudo bem */ }
       setAgentBusy(false)
     })
@@ -99,7 +103,7 @@ export default function BrandKit({ companyId }: { companyId: string }) {
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok || !d.ok) throw new Error(d.error ?? 'Erro ao atualizar')
-      setAgentMsg(`✓ Atualizado com base em ${d.based_on} fotos reais.`)
+      setAgentMsg(`✓ Atualizado com base em ${d.based_on} fotos reais${d.logo_set ? ' (logo puxado direto do Instagram)' : ''}.`)
       await load()
     } catch (e) {
       setAgentMsg(e instanceof Error ? e.message : 'Erro ao atualizar')
