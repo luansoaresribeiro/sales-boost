@@ -9,7 +9,7 @@ type SupaClient = ReturnType<typeof createClient>
 interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null }
 interface TavilyResult { title: string; url: string; content: string }
 
-const CATEGORIES = ['evento', 'sazonal', 'feriado', 'tendencia', 'parceria', 'influenciador', 'concorrente', 'setor']
+const CATEGORIES = ['evento', 'sazonal', 'feriado', 'tendencia', 'parceria', 'influenciador', 'concorrente', 'setor', 'opiniao']
 
 async function tavilySearch(apiKey: string, query: string): Promise<TavilyResult[]> {
   const res = await fetch('https://api.tavily.com/search', {
@@ -26,15 +26,18 @@ async function distill(anthropicKey: string, company: Company, results: TavilyRe
   const local = company.city ?? 'a região'
   const prompt = `Você é o analista de inteligência de mercado de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${local}). Objetivo do dono: ${company.goal ?? 'crescer'}.
 
-Abaixo estão resultados reais de busca na web. Extraia APENAS oportunidades externas concretas e úteis pra esse negócio nas próximas semanas (eventos locais, datas comemorativas, tendências do segmento, possíveis parcerias, movimentos relevantes). Ignore o que for irrelevante ou genérico. Se nada for útil, retorne [].
+Abaixo estão resultados reais de busca na web — parte é sobre eventos/tendências, parte é sobre o que clientes reais estão comentando/reclamando/elogiando nesse segmento. Extraia oportunidades externas concretas e úteis pra esse negócio nas próximas semanas:
+- eventos locais, datas comemorativas, tendências do segmento, possíveis parcerias, movimentos relevantes (categorias: evento/sazonal/feriado/tendencia/parceria/influenciador/concorrente/setor)
+- opiniões/sentimento real de clientes sobre esse tipo de negócio — reclamações recorrentes, elogios recorrentes, dúvidas frequentes, o que pesa na decisão de compra (categoria: "opiniao" — vira insight só quando dá pra transformar em ação real, ex: "clientes reclamam de demora no atendimento" → ação: reforçar tempo de resposta na comunicação)
+Ignore o que for irrelevante ou genérico. Se nada for útil, retorne [].
 
 Resultados:
 ${results.map((r, i) => `[${i}] ${r.title} — ${r.content.slice(0, 240)} (${r.url})`).join('\n')}
 
-Retorne APENAS um array JSON (sem markdown), no máximo 6 itens, cada um:
+Retorne APENAS um array JSON (sem markdown), no máximo 8 itens, cada um:
 { "category": um de ${JSON.stringify(CATEGORIES)}, "opportunity": "título curto e claro", "why": "por que importa pra esse negócio", "impact": "impacto estimado em 1 frase", "action": "ação concreta sugerida", "priority": "high"|"medium"|"low", "confidence": 0-100, "time_window": "quando agir (ex: próximas 2 semanas)", "source_index": índice do resultado usado (número) }
 
-Nunca invente evento/data que não esteja nos resultados. Seja honesto no confidence.`
+Nunca invente evento/data/opinião que não esteja nos resultados. Seja honesto no confidence.`
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -64,14 +67,22 @@ async function collectForCompany(admin: SupaClient, company: Company, env: Recor
   if (!env.TAVILY_API_KEY) return { inserted: 0, skipped: 'TAVILY_API_KEY não configurada' }
   if (!env.ANTHROPIC_API_KEY) return { inserted: 0, skipped: 'ANTHROPIC_API_KEY não configurada' }
 
-  const query = `${company.business_type ?? 'negócio local'} em ${company.city ?? 'Brasil'}: eventos locais, datas comemorativas, tendências do segmento e oportunidades de marketing nas próximas semanas`
-  const results = await tavilySearch(env.TAVILY_API_KEY, query)
+  // Duas buscas: eventos/tendências (já existia) + opiniões reais sobre o
+  // segmento (nova — "o que os clientes acham") — mesma fonte (Tavily), só
+  // amplia o que a IA tem pra ler antes de destilar os insights.
+  const eventsQuery = `${company.business_type ?? 'negócio local'} em ${company.city ?? 'Brasil'}: eventos locais, datas comemorativas, tendências do segmento e oportunidades de marketing nas próximas semanas`
+  const opinionsQuery = `o que clientes reais falam sobre ${company.business_type ?? 'esse tipo de negócio'}: reclamações comuns, elogios recorrentes, dúvidas frequentes, comparações com concorrentes`
+  const [eventsResults, opinionsResults] = await Promise.all([
+    tavilySearch(env.TAVILY_API_KEY, eventsQuery),
+    tavilySearch(env.TAVILY_API_KEY, opinionsQuery).catch(() => []),
+  ])
+  const results = [...eventsResults, ...opinionsResults]
   if (results.length === 0) return { inserted: 0, skipped: 'busca sem resultados' }
 
   const items = await distill(env.ANTHROPIC_API_KEY, company, results)
   if (items.length === 0) return { inserted: 0, skipped: 'nada relevante extraído' }
 
-  const rows = items.slice(0, 6).map(it => {
+  const rows = items.slice(0, 8).map(it => {
     const idx = Number(it.source_index)
     const url = Number.isInteger(idx) && results[idx] ? results[idx].url : null
     const category = CATEGORIES.includes(String(it.category)) ? String(it.category) : 'setor'

@@ -23,7 +23,20 @@ interface Company {
   created_at: string | null
   health_score: number | null
   has_company: boolean
+  trial_expires_at: string | null
+  current_period_end: string | null
+  access_source: 'paid' | 'trial' | 'manual' | 'blocked' | 'none' | null
+  access_status_label: 'Active' | 'Trial' | 'Expired' | 'Suspended' | 'Cancelled' | null
 }
+
+const ACCESS_META: Record<string, { color: string; dot: string }> = {
+  Active: { color: '#4ade80', dot: '🟢' },
+  Trial: { color: '#60a5fa', dot: '🔵' },
+  Expired: { color: '#f87171', dot: '🔴' },
+  Suspended: { color: '#f87171', dot: '🔴' },
+  Cancelled: { color: '#BABABA', dot: '⚪' },
+}
+const ACCESS_SOURCE_LABEL: Record<string, string> = { paid: 'Paid', trial: 'Trial', manual: 'Manual access', blocked: 'Blocked', none: 'No active subscription' }
 
 function scoreColor(s: number) {
   return s >= 75 ? '#4ade80' : s >= 50 ? '#FBBF24' : '#f87171'
@@ -194,20 +207,23 @@ export default function OwnerPage() {
         ) : (
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', overflow: 'hidden' }}>
             {/* Table header */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 80px 80px 100px', gap: '0', padding: '12px 24px', borderBottom: `1px solid ${BORDER}`, fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 130px 80px 80px 100px', gap: '0', padding: '12px 24px', borderBottom: `1px solid ${BORDER}`, fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               <span>Empresa</span>
               <span>Tipo</span>
               <span>Cidade</span>
+              <span>Acesso</span>
               <span>Plano</span>
               <span>Score</span>
               <span>Cadastro</span>
             </div>
 
-            {filtered.map((c, i) => (
+            {filtered.map((c, i) => {
+              const am = c.access_status_label ? ACCESS_META[c.access_status_label] : null
+              return (
               <div
                 key={c.user_id}
                 onClick={() => c.id && navigate(`/owner/company/${c.id}`)}
-                style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 80px 80px 100px', gap: '0', padding: '16px 24px', borderBottom: i < filtered.length - 1 ? `1px solid ${BORDER}` : 'none', alignItems: 'center', transition: 'background 0.15s', cursor: c.id ? 'pointer' : 'default' }}
+                style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 130px 80px 80px 100px', gap: '0', padding: '16px 24px', borderBottom: i < filtered.length - 1 ? `1px solid ${BORDER}` : 'none', alignItems: 'center', transition: 'background 0.15s', cursor: c.id ? 'pointer' : 'default' }}
                 onMouseEnter={e => { if (c.id) e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
                 onMouseLeave={e => { if (c.id) e.currentTarget.style.background = 'transparent' }}
               >
@@ -226,6 +242,14 @@ export default function OwnerPage() {
                 <div style={{ fontSize: '12px', color: MUTED }}>{c.business_type ?? '—'}</div>
                 <div style={{ fontSize: '12px', color: MUTED }}>{c.city ?? '—'}</div>
                 <div>
+                  {am ? (
+                    <div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: am.color }}>{am.dot} {c.access_status_label}</div>
+                      <div style={{ fontSize: '9.5px', color: MUTED }}>{ACCESS_SOURCE_LABEL[c.access_source ?? 'none']}</div>
+                    </div>
+                  ) : <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.2)' }}>—</span>}
+                </div>
+                <div>
                   <span style={{ fontSize: '10px', padding: '3px 8px', borderRadius: '99px', background: 'rgba(255,109,41,0.1)', color: ORANGE, fontWeight: 700, border: '1px solid rgba(255,109,41,0.2)' }}>
                     {c.plan ?? 'free'}
                   </span>
@@ -241,7 +265,8 @@ export default function OwnerPage() {
                   {c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '—'}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

@@ -10,10 +10,13 @@ const GREEN = '#4ade80'
 
 const COST_PER_1K = 0.006 // igual ao backend (ESTIMATED_COST_PER_1K_TOKENS)
 
-const AGENT_LABEL: Record<string, string> = { marketing: 'Agente Geral', hermes: 'Orquestrador', sales: 'Vendas' }
+const AGENT_LABEL: Record<string, string> = { marketing: 'Agente Geral', hermes: 'Orquestrador', sales: 'Vendas', imagem: 'Geração de Imagem' }
 const agentLabel = (r: string | null) => AGENT_LABEL[r ?? ''] ?? (r ?? 'Agente')
 
-interface PerfRow { agent_role: string | null; tokens_used: number | null; success: boolean | null; created_at: string }
+// cost_usd é custo real não-baseado em token (hoje só geração de imagem) —
+// soma direto ao custo estimado de tokens, mesma linha do tempo/agente.
+interface PerfRow { agent_role: string | null; tokens_used: number | null; cost_usd: number | null; success: boolean | null; created_at: string }
+const rowCost = (r: PerfRow) => ((Number(r.tokens_used) || 0) / 1000) * COST_PER_1K + (Number(r.cost_usd) || 0)
 
 function fmtTokens(n: number) { return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n) }
 function fmtUsd(n: number) { return `US$ ${n.toFixed(2)}` }
@@ -42,7 +45,7 @@ export default function CompanyAiUsage({ companyId, plan }: { companyId: string;
     Promise.all([
       supabase.from('plan_ai_defaults').select('mode, monthly_budget_usd, think_frequency_min').eq('plan', planKey).maybeSingle(),
       supabase.from('company_ai_settings').select('mode, monthly_budget_usd, think_frequency_min, last_cycle_at').eq('company_id', companyId).maybeSingle(),
-      supabase.from('agent_performance').select('agent_role, tokens_used, success, created_at').eq('company_id', companyId).gte('created_at', monthStart.toISOString()).order('created_at', { ascending: false }).limit(2000),
+      supabase.from('agent_performance').select('agent_role, tokens_used, cost_usd, success, created_at').eq('company_id', companyId).gte('created_at', monthStart.toISOString()).order('created_at', { ascending: false }).limit(2000),
     ]).then(([planRes, coRes, perfRes]) => {
       const pd = (planRes.data ?? {}) as { mode?: AiMode; monthly_budget_usd?: number; think_frequency_min?: number }
       const co = (coRes.data ?? null) as { mode?: AiMode | null; monthly_budget_usd?: number | null; think_frequency_min?: number | null; last_cycle_at?: string | null } | null
@@ -58,18 +61,18 @@ export default function CompanyAiUsage({ companyId, plan }: { companyId: string;
 
   const stats = useMemo(() => {
     const totalTokens = rows.reduce((s, r) => s + (Number(r.tokens_used) || 0), 0)
-    const totalCost = (totalTokens / 1000) * COST_PER_1K
+    const totalCost = rows.reduce((s, r) => s + rowCost(r), 0)
     const successes = rows.filter(r => r.success).length
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
     const todayTokens = rows.filter(r => new Date(r.created_at) >= todayStart).reduce((s, r) => s + (Number(r.tokens_used) || 0), 0)
 
-    const byAgent = new Map<string, { tokens: number; calls: number }>()
+    const byAgent = new Map<string, { cost: number; calls: number }>()
     rows.forEach(r => {
       const k = r.agent_role ?? 'outro'
-      const e = byAgent.get(k) ?? { tokens: 0, calls: 0 }
-      e.tokens += Number(r.tokens_used) || 0; e.calls += 1; byAgent.set(k, e)
+      const e = byAgent.get(k) ?? { cost: 0, calls: 0 }
+      e.cost += rowCost(r); e.calls += 1; byAgent.set(k, e)
     })
-    const agents = [...byAgent.entries()].map(([role, e]) => ({ role, cost: (e.tokens / 1000) * COST_PER_1K, calls: e.calls }))
+    const agents = [...byAgent.entries()].map(([role, e]) => ({ role, cost: e.cost, calls: e.calls }))
       .sort((a, b) => b.cost - a.cost)
 
     // Tendência dos últimos 14 dias (custo por dia).
@@ -77,8 +80,8 @@ export default function CompanyAiUsage({ companyId, plan }: { companyId: string;
     for (let i = 13; i >= 0; i--) {
       const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i)
       const next = new Date(d); next.setDate(d.getDate() + 1)
-      const tk = rows.filter(r => { const t = new Date(r.created_at); return t >= d && t < next }).reduce((s, r) => s + (Number(r.tokens_used) || 0), 0)
-      days.push({ label: `${d.getDate()}/${d.getMonth() + 1}`, cost: (tk / 1000) * COST_PER_1K })
+      const cost = rows.filter(r => { const t = new Date(r.created_at); return t >= d && t < next }).reduce((s, r) => s + rowCost(r), 0)
+      days.push({ label: `${d.getDate()}/${d.getMonth() + 1}`, cost })
     }
 
     const lastExec = rows.length ? rows[0].created_at : null

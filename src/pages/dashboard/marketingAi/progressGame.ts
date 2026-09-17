@@ -158,8 +158,8 @@ export const REWARD_CATEGORY_LABEL: Record<string, string> = {
   ai_boost: 'AI Boosts', marketing: 'Marketing', sales: 'Sales', analytics: 'Analytics',
 }
 
-const FUNIL = '/dashboard/marketing-ai/funil'
-const ATEND = '/dashboard/marketing-ai/whatsapp'
+const FUNIL = '/dashboard/marketing-ai/conversao'
+const ATEND = '/dashboard/marketing-ai/conversao'
 const POSTS = '/dashboard/marketing-ai/content'
 
 // Compõe o payload completo. `real` traz contagens reais; o resto é derivado

@@ -68,6 +68,14 @@ export interface CreativeItem { id: string; format: 'imagem' | 'reel' | 'carross
 
 export interface CampaignLearning { dimension: string; winner: string; note: string }
 
+// Ideia de conteúdo (orgânico, do Agente de Conteúdo) que serve de matéria-
+// prima pra uma campanha paga — o Estrategista de Mídia Paga sugere qual
+// ideia já testada/planejada vale a pena promover, em vez de criar do zero.
+export interface ContentIdeaForCampaign { id: string; title: string; format: string; stage: FunnelStage; why: string }
+// Story Ads interativos (Meta) — engajam com um sticker de verdade (enquete,
+// quiz, slider, contagem), não só um vídeo passivo; geram sinal de pixel rico.
+export interface StoryAdIdea { id: string; concept: string; sticker: 'enquete' | 'quiz' | 'slider' | 'contagem'; goal: string; example: string }
+
 export interface CampaignDemo {
   campaigns: Campaign[]
   recommendations: CampaignRecommendation[]
@@ -75,6 +83,8 @@ export interface CampaignDemo {
   pixelReads: PixelRead[]
   creatives: CreativeItem[]
   learnings: CampaignLearning[]
+  contentIdeas: ContentIdeaForCampaign[]
+  storyAds: StoryAdIdea[]
   overview: { active: number; drafts: number; predictedRoas: number; health: number; monthlyBudget: string }
 }
 
@@ -218,12 +228,26 @@ export function buildCampaignDemo(company: { business_name?: string; business_ty
     { dimension: 'Melhor horário', winner: '19h–21h', note: 'Menor CPM e maior taxa de conclusão.' },
   ]
 
+  const contentIdeas: ContentIdeaForCampaign[] = [
+    { id: 'ci1', title: '"Os 3 erros que quase todo mundo comete" (carrossel educativo)', format: 'Carrossel', stage: 'awareness', why: 'Testado no orgânico com engajamento acima da média — já validado antes de gastar mídia paga nele.' },
+    { id: 'ci2', title: 'Bastidor real do atendimento/produção', format: 'Reel', stage: 'awareness', why: 'Formato de bastidor converteu melhor que produto "posado" nos últimos posts do Vault.' },
+    { id: 'ci3', title: 'Depoimento de um resultado real recente', format: 'Foco no Produto', stage: 'consideration', why: 'Prova concreta pra quem já considera — mesma lógica do template Foco no Produto da Biblioteca.' },
+    { id: 'ci4', title: 'Depoimento em vídeo de cliente satisfeito', format: 'Reel', stage: 'conversion', why: 'Prova social no Fundo de Funil reduz a objeção final antes da conversão.' },
+  ]
+
+  const storyAds: StoryAdIdea[] = [
+    { id: 'sa1', concept: '"Qual desses te descreve mais?" — segmenta o público sozinho', sticker: 'enquete', goal: 'Descoberta + coleta de sinal pro pixel (quem respondeu quê)', example: '"Você já tentou resolver isso sozinho?" [Sim] [Ainda não]' },
+    { id: 'sa2', concept: 'Quiz rápido de 2 perguntas pra indicar o serviço certo', sticker: 'quiz', goal: 'Qualifica o lead antes mesmo do clique — chega mais quente', example: '"Qual seu maior desafio hoje?" com 3 alternativas' },
+    { id: 'sa3', concept: 'Slider "o quanto isso te incomoda de 0 a 10"', sticker: 'slider', goal: 'Sinal de intenção gradual — separa curioso de decidido', example: 'Slider de 0 a 10 sobre o problema que o negócio resolve' },
+    { id: 'sa4', concept: 'Contagem regressiva pra oferta por tempo limitado', sticker: 'contagem', goal: 'Urgência real (não fake) pro Fundo de Funil', example: 'Contagem até o fim do bônus, com lembrete automático de 1h antes' },
+  ]
+
   const active = campaigns.filter(c => c.status === 'active').length
   const drafts = campaigns.filter(c => c.status === 'draft').length
   const health = Math.round(campaigns.reduce((s, c) => s + c.healthScore, 0) / campaigns.length)
 
   return {
-    campaigns, recommendations, pixelJourney, pixelReads, creatives, learnings,
+    campaigns, recommendations, pixelJourney, pixelReads, creatives, learnings, contentIdeas, storyAds,
     overview: { active, drafts, predictedRoas: 3.9, health, monthlyBudget: 'R$ 1.100' },
   }
 }

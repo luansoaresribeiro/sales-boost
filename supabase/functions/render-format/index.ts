@@ -16,6 +16,13 @@ import { encodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 
+// REGRA CRÍTICA (arquitetural): o gerador de imagem só desenha a CENA
+// VISUAL — o texto de verdade (headline/CTA/legenda) é sempre impresso
+// DEPOIS, pelo motor de cards (svgTweet/svgProduct/svgPhoto), nunca pela
+// IA de imagem. Nunca manda copy real pro prompt de fundo — só o conceito
+// visual — e sempre reforça pra IA deixar objetos-com-texto em branco.
+const NO_TEXT_RULE = 'CRITICAL: this image must contain ONLY the visual scene — environment, people, products, objects, lighting, composition. Absolutely NO text of any kind anywhere in the image: no headlines, captions, CTAs, logos with text, signs, banners, posters, screens, labels, packaging text, watermarks, or simulated/gibberish lettering. If the scene naturally includes an object that would normally carry text (a sign, menu, screen, clipboard, label), render it completely blank — a clean empty surface. Never attempt to write, spell, or render any character.'
+
 const FONT_REG = 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/poppins/Poppins-Regular.ttf'
 const FONT_BOLD = 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/poppins/Poppins-Bold.ttf'
 
@@ -45,20 +52,28 @@ async function toDataUri(url: string): Promise<string | null> {
 }
 
 // Gera 1 imagem de fundo com a IA (generate-image) — só quando NÃO há asset.
-async function generateBg(prompt: string): Promise<string | null> {
+async function generateBg(prompt: string, companyId: string): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL'), key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY')
   if (!supabaseUrl || !key) return null
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
       method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, size: '1024x1024' }),
+      body: JSON.stringify({ prompt, size: '1024x1024', company_id: companyId }),
     })
     const d = await res.json().catch(() => ({})) as { url?: string }
     return res.ok && d.url ? d.url : null
   } catch { return null }
 }
 
-const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+// A fonte carregada no servidor (Poppins) não tem glifo de emoji — sem isso,
+// um emoji no texto vira um quadrado/tofu visível no card (bug real visto
+// pelo dono num Tweet Print). Rede de segurança final: tira qualquer emoji
+// ANTES de virar SVG, independente de quem escreveu o texto (IA ou o dono
+// digitando à mão) ter seguido a instrução de não usar emoji.
+const stripEmoji = (s: string) => s
+  .replace(/[\u{1F1E6}-\u{1F1FF}\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{2300}-\u{23FF}\u{FE0F}\u{200D}]/gu, '')
+  .replace(/[ \t]{2,}/g, ' ').trim()
+const esc = (s: string) => stripEmoji(String(s ?? '')).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 const initials = (n: string) => (n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
 // Quebra por número aproximado de caracteres por linha (Poppins ~0.55·fontSize).
 function wrap(text: string, size: number, maxWidth: number): string[] {
@@ -67,29 +82,44 @@ function wrap(text: string, size: number, maxWidth: number): string[] {
   for (const w of words) { if ((cur + ' ' + w).trim().length > max) { if (cur) lines.push(cur); cur = w } else cur = (cur + ' ' + w).trim() }
   if (cur) lines.push(cur); return lines.length ? lines : ['']
 }
+// Rede de segurança final: wrap() já não corta no meio de uma palavra, mas
+// nada limitava quantas LINHAS cabiam no card (altura do canvas é fixa).
+// Texto longo demais — o dono digitando à mão em Formatos, ou a IA de
+// "Preencher com IA" sem limite nenhum de tamanho — empurrava o resto pra
+// fora do quadro; na prática parecia "a frase foi cortada". Cada card
+// aplica isso com o número de linhas que cabe de verdade no seu layout.
+function limitLines(lines: string[], max: number): string[] {
+  if (lines.length <= max) return lines
+  const kept = lines.slice(0, max)
+  kept[max - 1] = kept[max - 1].replace(/[.,;:!?…]*$/, '') + '…'
+  return kept
+}
 function block(lines: string[], x: number, y: number, size: number, fill: string, weight: number, lh: number, anchor = 'start'): string {
   return `<text x="${x}" y="${y}" font-family="Poppins" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}">` +
     lines.map((l, i) => `<tspan x="${x}" dy="${i === 0 ? 0 : lh}">${esc(l)}</tspan>`).join('') + `</text>`
 }
-function shade(hex: string, amt: number): string {
-  const h = (hex || '#000').replace('#', ''); const num = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0'), 16)
-  const cl = (v: number) => Math.max(0, Math.min(255, v)); const r = cl((num >> 16) + amt), g = cl(((num >> 8) & 0xff) + amt), b = cl((num & 0xff) + amt)
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
+// Seta desenhada (triângulo), não caractere "→" — a fonte Poppins carregada
+// no servidor não tem esse glifo (saía como um quadrado/tofu no CTA).
+function arrowGlyph(cx: number, cy: number, size: number, color: string): string {
+  return `<polygon points="${cx - size * 0.5},${cy - size} ${cx + size * 0.6},${cy} ${cx - size * 0.5},${cy + size}" fill="${color}"/>`
 }
-
 interface Brand { primary: string; name: string; primary2?: string; accent?: string; accent2?: string; text?: string; bg?: string; logoUrl?: string }
 type F = Record<string, string>
 
 // ── SVG por template ────────────────────────────────────────────────────────
-function svgTweet(f: F, b: Brand): { svg: string; w: number; h: number } {
+function svgTweet(f: F, b: Brand, logoData: string | null): { svg: string; w: number; h: number } {
   const W = 1080, H = 1080, dark = (f.theme || 'dark') === 'dark'
   const bg = dark ? '#15202b' : '#ffffff', fg = dark ? '#e7e9ea' : '#0f1419', muted = dark ? '#8b98a5' : '#536471', line = dark ? '#38444d' : '#eff3f4'
-  const tl = wrap(f.text || 'O texto do tweet aparece aqui.', 44, 900)
+  const tl = limitLines(wrap(f.text || 'O texto do tweet aparece aqui.', 44, 900), 9)
   const bodyY = 340, afterBody = bodyY + tl.length * 60 + 30
+  // Avatar = logo real da empresa (Estilos e Visuais → Kit da Marca), quando
+  // existe. Sem logo, cai pras iniciais na cor primária — nunca inventa foto.
+  const avatar = logoData
+    ? `<defs><clipPath id="avatarClip"><circle cx="150" cy="185" r="48"/></clipPath></defs><image href="${logoData}" x="102" y="137" width="96" height="96" clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>`
+    : `<circle cx="150" cy="185" r="48" fill="${b.primary}"/><text x="150" y="200" font-family="Poppins" font-size="38" font-weight="700" fill="#fff" text-anchor="middle">${esc(initials(f.name))}</text>`
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
 <rect width="${W}" height="${H}" fill="${bg}"/>
-<circle cx="150" cy="185" r="48" fill="${b.primary}"/>
-<text x="150" y="200" font-family="Poppins" font-size="38" font-weight="700" fill="#fff" text-anchor="middle">${esc(initials(f.name))}</text>
+${avatar}
 ${block([f.name || 'Nome'], 226, 172, 36, fg, 700, 0)}
 ${block(['@' + (f.handle || 'usuario')], 226, 214, 30, muted, 400, 0)}
 ${block(tl, 90, bodyY, 44, fg, 500, 60)}
@@ -100,46 +130,30 @@ ${block([`${f.retweets || '128'} Retuites     ${f.likes || '1.204'} Curtidas`], 
   return { svg, w: W, h: H }
 }
 
-function svgQuote(f: F, b: Brand): { svg: string; w: number; h: number } {
-  const W = 1080, H = 1080
-  const ql = wrap(f.quote || 'A frase de efeito que resume a sua marca vai aqui.', 58, 860)
-  const startY = 470 - (ql.length * 74) / 2
+// Pôster: produto centralizado, sombra de "estúdio" desfocada atrás dele,
+// nome/preço/chamada embaixo. productImg já vem como data URI (a foto real
+// sobe pela aba Produtos, em Estilos e Visuais). "meet" (não "slice") pra
+// nunca cortar o produto — a foto inteira sempre aparece.
+function svgProduct(f: F, b: Brand, productImg: string | null): { svg: string; w: number; h: number } {
+  const W = 1080, H = 1350, cx = W / 2
+  const parts: string[] = [`<defs><filter id="shadowBlur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="26"/></filter></defs>`]
+  parts.push(`<ellipse cx="${cx}" cy="800" rx="290" ry="46" fill="rgba(0,0,0,0.55)" filter="url(#shadowBlur)"/>`)
+  parts.push(productImg
+    ? `<image href="${productImg}" x="${cx - 320}" y="120" width="640" height="700" preserveAspectRatio="xMidYMid meet"/>`
+    : `<rect x="${cx - 260}" y="180" width="520" height="580" rx="24" fill="rgba(255,255,255,0.06)"/>`)
+  let y = 900
+  if (f.name) { parts.push(block([f.name], cx, y, 56, '#ffffff', 800, 0, 'middle')); y += 80 }
+  if (f.price) { parts.push(block([f.price], cx, y, 46, b.primary, 800, 0, 'middle')); y += 90 }
+  if (f.cta) {
+    const cw = f.cta.length * 24 + 130
+    parts.push(`<rect x="${cx - cw / 2}" y="${y}" width="${cw}" height="82" rx="41" fill="${b.primary}"/>`)
+    parts.push(block([f.cta], cx - cw / 2 + 40, y + 54, 34, '#000000', 800, 0))
+    parts.push(arrowGlyph(cx + cw / 2 - 48, y + 41, 13, '#000000'))
+  }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${b.primary}"/><stop offset="1" stop-color="${shade(b.primary, -30)}"/></linearGradient></defs>
-<rect width="${W}" height="${H}" fill="url(#g)"/>
-<text x="110" y="300" font-family="Poppins" font-size="200" font-weight="700" fill="#ffffff" opacity="0.3">&#8220;</text>
-${block(ql, 110, startY, 58, '#ffffff', 700, 74)}
-<circle cx="146" cy="900" r="40" fill="#ffffff" fill-opacity="0.2"/>
-<text x="146" y="913" font-family="Poppins" font-size="28" font-weight="700" fill="#fff" text-anchor="middle">${esc(initials(f.author || b.name))}</text>
-${block([f.author || b.name], 206, 892, 32, '#ffffff', 700, 0)}
-${f.role ? block([f.role], 206, 928, 24, '#ffffff', 400, 0) : ''}
+<rect width="${W}" height="${H}" fill="${b.bg || '#0E0B0A'}"/>
+${parts.join('')}
 </svg>`
-  return { svg, w: W, h: H }
-}
-
-function svgAnnouncement(f: F, b: Brand): { svg: string; w: number; h: number } {
-  const W = 1080, H = 1350, text = b.text || '#ffffff', bg = b.bg || '#0E0B0A'
-  const hl = wrap(f.headline || 'Sua chamada principal', 88, 880)
-  let y = 470
-  const parts: string[] = []
-  if (f.eyebrow) { parts.push(block([f.eyebrow.toUpperCase()], 100, y, 30, b.primary, 700, 0)); y += 56 }
-  parts.push(block(hl, 100, y + 20, 88, text, 700, 100)); y += 20 + hl.length * 100 + 20
-  if (f.subtext) { const sl = wrap(f.subtext, 38, 880); parts.push(block(sl, 100, y + 20, 38, '#BABABA', 400, 52)); y += 20 + sl.length * 52 + 20 }
-  if (f.offer) { const ow = (f.offer.length * 27) + 80; parts.push(`<rect x="100" y="${y}" width="${ow}" height="86" rx="18" fill="${b.accent || b.primary}"/>` + block([f.offer], 140, y + 58, 46, '#000', 700, 0)); y += 130 }
-  if (f.cta) { const cw = (f.cta.length * 20) + 90; parts.push(`<rect x="100" y="${y}" width="${cw}" height="76" rx="38" fill="none" stroke="${b.primary}" stroke-width="3"/>` + block([f.cta + '  →'], 140, y + 50, 34, text, 700, 0)) }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${parts.join('')}</svg>`
-  return { svg, w: W, h: H }
-}
-
-function svgStat(f: F, b: Brand): { svg: string; w: number; h: number } {
-  const W = 1080, H = 1080, text = b.text || '#ffffff', bg = b.bg || '#150E08'
-  const cl = wrap(f.context || '', 42, 820)
-  const parts: string[] = []
-  if (f.label) parts.push(block([f.label], 540, 360, 38, '#BABABA', 700, 0, 'middle'))
-  parts.push(block([f.value || '87%'], 540, 620, 200, b.primary, 700, 0, 'middle'))
-  if (cl[0]) parts.push(block(cl, 540, 720, 42, text, 400, 54, 'middle'))
-  if (f.source) parts.push(block([f.source], 540, 720 + cl.length * 54 + 50, 24, '#7a7a7a', 400, 0, 'middle'))
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${parts.join('')}</svg>`
   return { svg, w: W, h: H }
 }
 
@@ -152,13 +166,13 @@ function svgPhoto(f: F, b: Brand, bg: string | null, logo: string | null, sticke
   const s = W / 1080
   const leftX = safe.left, maxW = W - safe.left - safe.right
   const hs = Math.round(84 * s), lh = Math.round(hs * 1.14), es = Math.round(30 * s), ofs = Math.round(46 * s), cs = Math.round(32 * s)
-  const hlLines = wrap(f.headline || 'Sua chamada principal', hs, maxW)
+  const hlLines = limitLines(wrap(f.headline || 'Sua chamada principal', hs, maxW), 3)
   const gap = Math.round(20 * s)
   const blocks: { h: number; draw: (y: number) => string }[] = []
   if (f.eyebrow) blocks.push({ h: es + gap, draw: y => block([f.eyebrow.toUpperCase()], leftX, y + es, es, b.primary, 700, 0) })
   blocks.push({ h: hlLines.length * lh + gap, draw: y => block(hlLines, leftX, y + hs, hs, '#ffffff', 700, lh) })
   if (f.offer) { const oh = Math.round(86 * s), ow = Math.round(f.offer.length * ofs * 0.62 + 70 * s); blocks.push({ h: oh + gap, draw: y => `<rect x="${leftX}" y="${y}" width="${ow}" height="${oh}" rx="${Math.round(18 * s)}" fill="${b.accent || b.primary}"/>` + block([f.offer], leftX + Math.round(36 * s), y + Math.round(oh * 0.66), ofs, '#000', 700, 0) }) }
-  if (f.cta) { const ch = Math.round(72 * s), cw = Math.round(f.cta.length * cs * 0.62 + 90 * s); blocks.push({ h: ch, draw: y => `<rect x="${leftX}" y="${y}" width="${cw}" height="${ch}" rx="${Math.round(ch / 2)}" fill="#ffffff"/>` + block([f.cta + '  →'], leftX + Math.round(38 * s), y + Math.round(ch * 0.66), cs, '#000', 700, 0) }) }
+  if (f.cta) { const ch = Math.round(72 * s), cw = Math.round(f.cta.length * cs * 0.62 + 130 * s); blocks.push({ h: ch, draw: y => `<rect x="${leftX}" y="${y}" width="${cw}" height="${ch}" rx="${Math.round(ch / 2)}" fill="#ffffff"/>` + block([f.cta], leftX + Math.round(38 * s), y + Math.round(ch * 0.66), cs, '#000', 700, 0) + arrowGlyph(leftX + cw - Math.round(45 * s), y + Math.round(ch * 0.5), Math.round(12 * s), '#000') }) }
   const total = blocks.reduce((a, bl) => a + bl.h, 0)
   let y = H - safe.bottom - total
   const overlay = blocks.map(bl => { const svg = bl.draw(y); y += bl.h; return svg }).join('')
@@ -195,9 +209,9 @@ function upRightArrow(x: number, y: number, size: number, fill: string): string 
 
 function svgProblem(f: F, b: Brand): { svg: string; w: number; h: number } {
   const W = 1080, H = 1350, text = b.text || '#ffffff', bg = b.bg || '#0E0B0A'
-  const pl = wrap(f.problem || '"Tenho muitos leads, mas poucas vendas."', 64, 880)
-  const rl = wrap(f.reframe || 'Talvez o problema não seja tráfego.', 46, 880)
-  const il = f.insight ? wrap(f.insight, 42, 880) : []
+  const pl = limitLines(wrap(f.problem || '"Tenho muitos leads, mas poucas vendas."', 64, 880), 4)
+  const rl = limitLines(wrap(f.reframe || 'Talvez o problema não seja tráfego.', 46, 880), 4)
+  const il = f.insight ? limitLines(wrap(f.insight, 42, 880), 3) : []
   let y = 360
   const parts: string[] = []
   parts.push(block([(f.eyebrow || 'Um problema comum').toUpperCase()], 100, y, 30, b.primary, 700, 0)); y += 66
@@ -211,8 +225,8 @@ function svgProblem(f: F, b: Brand): { svg: string; w: number; h: number } {
 
 function svgFaq(f: F, b: Brand): { svg: string; w: number; h: number } {
   const W = 1080, H = 1350, text = b.text || '#ffffff', bg = b.bg || '#0E0B0A'
-  const ql = wrap(f.question || '"Quanto tempo demora?"', 42, 620)
-  const al = wrap(f.answer || 'Normalmente X dias — e a gente te avisa em cada etapa.', 40, 620)
+  const ql = limitLines(wrap(f.question || '"Quanto tempo demora?"', 42, 620), 5)
+  const al = limitLines(wrap(f.answer || 'Normalmente X dias — e a gente te avisa em cada etapa.', 40, 620), 5)
   const parts: string[] = []
   parts.push(block([(f.eyebrow || 'Você perguntou').toUpperCase()], 100, 300, 30, b.primary, 700, 0))
   // Bolha do cliente (esquerda)
@@ -235,15 +249,16 @@ function svgFaq(f: F, b: Brand): { svg: string; w: number; h: number } {
 function svgTrend(f: F, b: Brand): { svg: string; w: number; h: number } {
   const W = 1080, H = 1350, text = b.text || '#ffffff', bg = b.bg || '#0E0B0A'
   const items = (f.items || 'Personalização\nAtendimento imediato\nBusca por experiência').split('\n').map(s => s.trim()).filter(Boolean).slice(0, 5)
-  const tl = wrap(f.title || 'O que está transformando o seu mercado', 58, 880)
+  const tl = limitLines(wrap(f.title || 'O que está transformando o seu mercado', 58, 880), 3)
   const parts: string[] = []
   let y = 300
   parts.push(block([(f.eyebrow || 'Tendência do setor').toUpperCase()], 100, y, 30, b.primary, 700, 0)); y += 62
   parts.push(block(tl, 100, y + 40, 58, text, 800, 70)); y += 40 + tl.length * 70 + 50
   for (let i = 0; i < items.length; i++) {
+    const il = limitLines(wrap(items[i], 40, 760), 2)
     parts.push(block([String(i + 1).padStart(2, '0')], 100, y + 42, 40, b.primary, 800, 0))
-    parts.push(block(wrap(items[i], 40, 760), 200, y + 42, 40, text, 600, 48))
-    y += Math.max(70, wrap(items[i], 40, 760).length * 48 + 26)
+    parts.push(block(il, 200, y + 42, 40, text, 600, 48))
+    y += Math.max(70, il.length * 48 + 26)
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${parts.join('')}</svg>`
   return { svg, w: W, h: H }
@@ -251,8 +266,8 @@ function svgTrend(f: F, b: Brand): { svg: string; w: number; h: number } {
 
 function svgMarketWatch(f: F, b: Brand): { svg: string; w: number; h: number } {
   const W = 1080, H = 1080, text = b.text || '#ffffff', bg = b.bg || '#150E08'
-  const hl = wrap(f.headline || 'O que está mudando no seu mercado?', 56, 880)
-  const il = wrap(f.insight || 'dos negócios do seu segmento já usam essa estratégia.', 40, 880)
+  const hl = limitLines(wrap(f.headline || 'O que está mudando no seu mercado?', 56, 880), 3)
+  const il = limitLines(wrap(f.insight || 'dos negócios do seu segmento já usam essa estratégia.', 40, 880), 3)
   const parts: string[] = []
   let y = 250
   parts.push(block([(f.eyebrow || 'Market Watch').toUpperCase()], 100, y, 30, b.primary, 700, 0)); y += 60
@@ -268,7 +283,7 @@ function svgMarketWatch(f: F, b: Brand): { svg: string; w: number; h: number } {
 function svgReview(f: F, b: Brand): { svg: string; w: number; h: number } {
   const W = 1080, H = 1080, text = b.text || '#ffffff', bg = b.bg || '#0E0B0A'
   const n = Math.max(1, Math.min(5, parseInt(f.stars || '5') || 5))
-  const tl = wrap('“' + (f.text || 'Atendimento impecável e resultado que superou a expectativa.') + '”', 50, 880)
+  const tl = limitLines(wrap('“' + (f.text || 'Atendimento impecável e resultado que superou a expectativa.') + '”', 50, 880), 5)
   const parts: string[] = []
   let y = 250
   parts.push(block([(f.eyebrow || 'O que dizem de nós').toUpperCase()], 100, y, 30, b.primary, 700, 0)); y += 50
@@ -282,19 +297,21 @@ function svgReview(f: F, b: Brand): { svg: string; w: number; h: number } {
   return { svg, w: W, h: H }
 }
 
-function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
+// 'tweet'/'product'/'photo'/'problem'/'faq'/'trend'/'market_watch'/'review'
+// são os únicos templates válidos hoje (ver a regra em formatTemplates.tsx —
+// TEMPLATES precisa espelhar exatamente isso). Sem match, cai em 'photo' —
+// é o mais genérico/flexível.
+function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, productImg: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
   switch (template) {
-    case 'tweet': return svgTweet(f, b)
-    case 'quote': return svgQuote(f, b)
-    case 'announcement': return svgAnnouncement(f, b)
-    case 'stat': return svgStat(f, b)
+    case 'tweet': return svgTweet(f, b, logo)
+    case 'product': return svgProduct(f, b, productImg)
     case 'problem': return svgProblem(f, b)
     case 'faq': return svgFaq(f, b)
     case 'trend': return svgTrend(f, b)
     case 'market_watch': return svgMarketWatch(f, b)
     case 'review': return svgReview(f, b)
     case 'photo': return svgPhoto(f, b, bg, logo, sticker, W, H, safe)
-    default: return svgQuote(f, b)
+    default: return svgPhoto(f, b, bg, logo, sticker, W, H, safe)
   }
 }
 
@@ -307,9 +324,10 @@ Deno.serve(async (req) => {
     if (body.selftest) {
       await ensureEngine()
       const brand = { primary: '#FF6D29', name: 'Test' }
+      const safe = { top: 60, right: 80, bottom: 90, left: 80 }
       const sizes: Record<string, number> = {}
-      for (const t of ['stat', 'problem', 'faq', 'trend', 'market_watch', 'review', 'quote', 'announcement', 'tweet']) {
-        const { svg, w } = buildSvg(t, { value: '42%', stars: '4', items: 'Um\nDois\nTrês' }, brand, null, null, null, 1080, 1080, { top: 60, right: 80, bottom: 90, left: 80 })
+      for (const t of ['tweet', 'product', 'photo', 'problem', 'faq', 'trend', 'market_watch', 'review']) {
+        const { svg, w } = buildSvg(t, { value: '42%', stars: '4', items: 'Um\nDois\nTrês', text: 'selftest', name: 'Test', handle: 'test' }, brand, null, null, null, null, 1080, 1080, safe)
         sizes[t] = renderPng(svg, w).length
       }
       return json({ ok: true, sizes })
@@ -336,7 +354,7 @@ Deno.serve(async (req) => {
       companyId = comp.id as string
     }
 
-    const template = String(body.template ?? 'quote')
+    const template = String(body.template ?? 'photo')
     const fields = (body.fields ?? {}) as F
     const brand = { primary: '#FF6D29', name: 'Marca', ...(body.brand as Partial<Brand> ?? {}) } as Brand
     const kind = ['organico', 'stories', 'campanhas'].includes(String(body.kind)) ? String(body.kind) : 'organico'
@@ -348,12 +366,20 @@ Deno.serve(async (req) => {
     let bgUrl: string | null = body.background ? String(body.background) : null
     if (template === 'photo' && !bgUrl && body.generate_bg) {
       const palette = (brand.primary ? `Brand colors ${[brand.primary, brand.primary2, brand.accent].filter(Boolean).join(', ')}.` : '')
-      const subj = String(body.bg_prompt ?? subject ?? fields.headline ?? 'the business')
-      bgUrl = await generateBg(`Professional social media background photo. ${subj}. ${palette} Warm natural lighting, appetizing, room at the bottom for text overlay, no people, no text, no logos, no watermark.`)
+      // Só bg_prompt/subject (conceito visual) — NUNCA fields.headline: é o
+      // texto que vai IMPRESSO no card depois (ver NO_TEXT_RULE), mandar
+      // isso pro prompt de imagem ensina a IA a tentar desenhar a frase.
+      const subj = String(body.bg_prompt ?? subject ?? 'the business')
+      bgUrl = await generateBg(`Professional social media background photo. ${subj}. ${palette} Warm natural lighting, polished, room at the bottom for text overlay, no people. ${NO_TEXT_RULE}`, companyId)
     }
     const bgData = bgUrl ? await toDataUri(bgUrl) : null
-    const logoData = template === 'photo' && brand.logoUrl ? await toDataUri(brand.logoUrl) : null
+    // Avatar do Tweet Print = logo real da empresa (mesmo asset do Kit da
+    // Marca em Estilos e Visuais) — sem logo, cai pras iniciais na svgTweet.
+    const logoData = (template === 'photo' || template === 'tweet') && brand.logoUrl ? await toDataUri(brand.logoUrl) : null
     const stickerData = template === 'photo' && body.sticker ? await toDataUri(String(body.sticker)) : null
+    // Foco no Produto: a foto vem de fields.productImage (URL real da aba
+    // Produtos, escolhida no FormatStudio ou passada pelo Diretor Criativo).
+    const productImgData = template === 'product' && fields.productImage ? await toDataUri(fields.productImage) : null
 
     // Tamanho/safe do formato (só o 'photo' é adaptativo; os demais têm tamanho fixo).
     const W = Math.max(200, Math.min(4000, Number(body.width) || 1080))
@@ -361,7 +387,7 @@ Deno.serve(async (req) => {
     const safe = (body.safe as Safe | undefined) ?? { top: Math.round(H * 0.06), right: Math.round(W * 0.08), bottom: Math.round(H * 0.09), left: Math.round(W * 0.08) }
 
     await ensureEngine()
-    const { svg, w } = buildSvg(template, fields, brand, bgData, logoData, stickerData, W, H, safe)
+    const { svg, w } = buildSvg(template, fields, brand, bgData, logoData, stickerData, productImgData, W, H, safe)
     const png = renderPng(svg, w)
 
     const path = `renders/${companyId}/${crypto.randomUUID()}.png`

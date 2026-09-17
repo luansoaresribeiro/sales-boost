@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { d } from '../../i18n-dash'
 import {
-  listAgentActions, decideAgentAction, editAgentAction,
+  listAgentActions, decideAgentAction, editAgentAction, proposeAgentAction, retryAgentAction,
   APPROVAL_META, EXECUTION_META, type AgentAction,
 } from '../../lib/agentActions'
 import { useRealtime } from '../../lib/useRealtime'
@@ -113,8 +113,9 @@ function ContentCard({ item, onApprove, onDiscard, busy, lang }: {
 }
 
 // ── Linha do histórico de execução ──────────────────────────────────────────
-function HistoryRow({ a }: { a: AgentAction }) {
+function HistoryRow({ a, busy, onRetry }: { a: AgentAction; busy: boolean; onRetry: () => void }) {
   const ap = APPROVAL_META[a.approval_status], ex = EXECUTION_META[a.execution_status]
+  const failed = a.execution_status === 'FAILED'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
       <span style={{ fontSize: '14px' }}>{CHANNEL_ICON[a.channel ?? 'internal'] ?? '⚙️'}</span>
@@ -124,6 +125,12 @@ function HistoryRow({ a }: { a: AgentAction }) {
       </div>
       <span style={{ fontSize: '9px', fontWeight: 700, color: ap.color, flexShrink: 0 }}>{ap.label}</span>
       <span style={{ fontSize: '9px', fontWeight: 700, color: ex.color, flexShrink: 0 }}>{ex.label}</span>
+      {failed && (
+        <button onClick={onRetry} disabled={busy}
+          style={{ flexShrink: 0, padding: '4px 10px', background: 'transparent', border: `1px solid ${ORANGE}66`, borderRadius: '99px', color: ORANGE, fontSize: '9.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
+          {busy ? '...' : '↻ Tentar de novo'}
+        </button>
+      )}
     </div>
   )
 }
@@ -139,6 +146,7 @@ export default function ApprovalsPage() {
   const [history, setHistory] = useState<AgentAction[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [contentMsg, setContentMsg] = useState('')
 
   const token = session?.access_token ?? ''
 
@@ -174,16 +182,43 @@ export default function ApprovalsPage() {
     setPending(prev => prev.filter(a => a.id !== id))
     await load(); setBusyId(null)
   }
+  const retry = async (id: string) => {
+    if (!companyId) return
+    setBusyId(id)
+    try { await retryAgentAction(token, companyId, id) } catch { /* ignore — segue FAILED, dono pode tentar de novo */ }
+    await load(); setBusyId(null)
+  }
   const edit = async (id: string, description: string) => {
     if (!companyId) return
     setBusyId(id)
     try { await editAgentAction(token, companyId, id, { description }) } catch { /* ignore */ }
     setBusyId(null); await load()
   }
-  const approveContent = async (id: string) => {
-    setBusyId(id)
-    await supabase.from('marketing_ai_content').update({ status: 'approved', updated_at: new Date().toISOString() }).eq('id', id)
-    setContent(prev => prev.filter(i => i.id !== id)); setBusyId(null)
+  // Aprovar aqui É a decisão do dono — propõe já aprovado (approve_now) pra
+  // passar pelo mesmo motor/auditoria da Central de Approvals, sem exigir um
+  // segundo clique em outro lugar.
+  const approveContent = async (item: AiContent) => {
+    if (!companyId) return
+    setBusyId(item.id); setContentMsg('')
+    try {
+      const action = await proposeAgentAction(token, {
+        company_id: companyId,
+        agent_key: 'content', agent_name: 'Conteúdo',
+        action_type: 'create_content', channel: 'instagram', source: 'manual',
+        ref_type: 'marketing_ai_content', ref_id: item.id,
+        title: item.idea ?? 'Conteúdo',
+        payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags },
+        approve_now: true,
+      })
+      if (action.execution_status === 'EXECUTED' && (action.execution_result as { published_to_instagram?: boolean } | null)?.published_to_instagram) {
+        setContentMsg('✓ Aprovado e publicado de verdade no Instagram.')
+      } else if (action.execution_status === 'FAILED') {
+        setContentMsg(`Aprovado, mas não publicado: ${action.execution_error ?? 'sem imagem ou Instagram desconectado'}.`)
+      } else {
+        setContentMsg('✓ Aprovado.')
+      }
+    } catch { /* ignore — item segue na lista, dono pode tentar de novo */ }
+    setContent(prev => prev.filter(i => i.id !== item.id)); setBusyId(null)
   }
   const discardContent = async (id: string) => {
     setBusyId(id)
@@ -226,10 +261,11 @@ export default function ApprovalsPage() {
             {content.length > 0 && (
               <section style={{ marginBottom: '28px' }}>
                 <SectionTitle label={lang === 'en' ? 'Content to approve' : 'Conteúdo pra aprovar'} count={content.length} />
+                {contentMsg && <div style={{ fontSize: '11.5px', color: contentMsg.startsWith('✓') ? GREEN : '#f87171', marginBottom: '10px' }}>{contentMsg}</div>}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {content.map(item => (
                     <ContentCard key={item.id} item={item} busy={busyId === item.id} lang={lang}
-                      onApprove={() => approveContent(item.id)} onDiscard={() => discardContent(item.id)} />
+                      onApprove={() => approveContent(item)} onDiscard={() => discardContent(item.id)} />
                   ))}
                 </div>
               </section>
@@ -246,7 +282,7 @@ export default function ApprovalsPage() {
               <section>
                 <SectionTitle label={lang === 'en' ? 'Execution history' : 'Histórico de execução'} count={history.length} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {history.map(a => <HistoryRow key={a.id} a={a} />)}
+                  {history.map(a => <HistoryRow key={a.id} a={a} busy={busyId === a.id} onRetry={() => retry(a.id)} />)}
                 </div>
               </section>
             )}

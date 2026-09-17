@@ -25,7 +25,11 @@ Deno.serve(async (req) => {
     const mode = url.searchParams.get('hub.mode')
     const token = url.searchParams.get('hub.verify_token')
     const challenge = url.searchParams.get('hub.challenge')
-    const expected = Deno.env.get('INSTAGRAM_WEBHOOK_VERIFY_TOKEN') ?? Deno.env.get('WHATSAPP_VERIFY_TOKEN')
+    // INSTAGRAM_VERIFY_TOKEN é o nome real do secret (cadastrado 2026-09-07) —
+    // o nome antigo abaixo nunca existiu de verdade, então a verificação do
+    // webhook na Meta sempre caía no fallback do WhatsApP_VERIFY_TOKEN, que
+    // não é o valor configurado lá. Mantido como fallback só por segurança.
+    const expected = Deno.env.get('INSTAGRAM_VERIFY_TOKEN') ?? Deno.env.get('INSTAGRAM_WEBHOOK_VERIFY_TOKEN') ?? Deno.env.get('WHATSAPP_VERIFY_TOKEN')
     if (mode === 'subscribe' && expected && token === expected && challenge) {
       return new Response(challenge, { status: 200, headers: { 'Content-Type': 'text/plain' } })
     }
@@ -40,7 +44,16 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({})) as Any
     for (const entry of body.entry ?? []) {
-      const igUserId = String(entry.id ?? '') // conta de IG que recebeu o comentário
+      const igUserId = String(entry.id ?? '') // conta de IG que recebeu o comentário/mensagem
+
+      // DM reais do Instagram (Messaging API — payload separado dos
+      // comentários: entry.messaging[], não entry.changes[]). Alimenta
+      // Atendimento (leads + lead_messages) — o Funil de Vendas já lê de
+      // `leads` automaticamente, então isso "liga" os dois de uma vez.
+      for (const m of entry.messaging ?? []) {
+        try { await handleDirectMessage(admin, igUserId, m) } catch (e) { console.error('instagram-webhook: DM falhou', e) }
+      }
+
       for (const change of entry.changes ?? []) {
         if (change.field !== 'comments') continue
         const v = change.value ?? {}
@@ -119,6 +132,57 @@ Deno.serve(async (req) => {
     return json({ ok: true }) // sempre 200 pro Meta não reenviar em loop
   }
 })
+
+// Nome de exibição do contato — o payload de Messaging só traz o IGSID
+// (id opaco), não o @usuário. Busca best-effort no Graph API; se falhar
+// (token sem permissão, rate limit etc.), cai num nome honesto com o id.
+async function fetchIgDisplayName(token: string | null, igsid: string): Promise<string> {
+  if (token) {
+    try {
+      const r = await fetch(`${FB}/${igsid}?fields=name,username&access_token=${encodeURIComponent(token)}`)
+      if (r.ok) {
+        const d = await r.json()
+        if (d.username) return `@${d.username}`
+        if (d.name) return String(d.name)
+      }
+    } catch { /* segue pro fallback */ }
+  }
+  return `Instagram · ${igsid.slice(-6)}`
+}
+
+// DM real do Instagram → vira lead (ou atualiza o existente) + mensagem em
+// lead_messages. Mesmo canal genérico que o WhatsApp/hermes-proxy já usam —
+// é por isso que o Funil de Vendas passa a enxergar esses leads sozinho.
+async function handleDirectMessage(admin: Any, igUserId: string, m: Any) {
+  if (m.message?.is_echo) return // eco da mensagem que a PRÓPRIA empresa mandou — não é um DM recebido
+  const senderId = m.sender?.id
+  const text = m.message?.text
+  const mid = m.message?.mid
+  if (!senderId || !text || !mid) return
+
+  const { data: company } = await admin.from('companies').select('id, instagram_access_token').eq('instagram_user_id', igUserId).maybeSingle()
+  if (!company) return
+
+  // Idempotência real (mid da Meta) — o webhook pode reenviar o mesmo evento.
+  const { data: dup } = await admin.from('lead_messages').select('id').eq('company_id', company.id).eq('external_id', mid).maybeSingle()
+  if (dup) return
+
+  // Acha o lead desse contato (mesmo IGSID) ou cria um novo.
+  let lead = (await admin.from('leads').select('id').eq('company_id', company.id).eq('channel', 'instagram').eq('contact', senderId).maybeSingle()).data
+  if (!lead) {
+    const name = await fetchIgDisplayName(company.instagram_access_token ?? null, senderId)
+    const created = (await admin.from('leads').insert({
+      company_id: company.id, name, contact: senderId, channel: 'instagram', source: 'instagram_dm', stage: 'new',
+    }).select('id').single()).data
+    lead = created
+  }
+  if (!lead) return
+
+  await admin.from('lead_messages').insert({
+    lead_id: lead.id, company_id: company.id, direction: 'in', channel: 'instagram', content: text, status: 'recebido', external_id: mid,
+  })
+  await admin.from('leads').update({ last_contact_at: new Date().toISOString() }).eq('id', lead.id)
+}
 
 // Detecção de intenção: palavra-chave (rápido) ou IA (interpreta o sentido).
 async function detectIntent(a: Any, text: string, anthropicKey?: string): Promise<{ hit: boolean; intent: string; interpretation: string }> {

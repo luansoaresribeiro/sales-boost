@@ -7,20 +7,30 @@ const cors = {
 type SupaClient = ReturnType<typeof createClient>
 
 interface ContentRow { id: string; company_id: string; idea: string | null; caption: string | null; image_url: string | null }
-interface Company { id: string; user_id: string; business_type: string | null }
+interface Company { id: string; user_id: string; business_type: string | null; business_description: string | null }
 
-// Monta o prompt visual a partir da ideia do post + tipo do negócio.
-function imagePrompt(content: ContentRow, businessType: string | null): string {
-  const evoke = (content.idea ?? content.caption ?? '').slice(0, 300)
-  return `Professional social media photo for a Brazilian small business (${businessType ?? 'negócio local'}). Commercial photography, warm natural lighting, appetizing and inviting, no people, no text, no logos, no watermark. Evokes: ${evoke}`
+// REGRA CRÍTICA (arquitetural): o gerador de imagem só desenha a CENA
+// VISUAL — nunca escreve/soletra texto. Por isso o prompt usa só `idea`
+// (conceito visual curto), NUNCA `caption` (a legenda de verdade) — mandar
+// copy real pro prompt de imagem é o que ensina a IA a "alucinar" texto
+// sem sentido na foto (bug real já visto: uma faixa saiu com "LIGA OF
+// SCRADS", texto sem sentido nenhum).
+const NO_TEXT_RULE = 'CRITICAL: this image must contain ONLY the visual scene — environment, people, products, objects, lighting, composition. Absolutely NO text of any kind anywhere in the image: no headlines, captions, CTAs, logos with text, signs, banners, posters, screens, labels, packaging text, watermarks, or simulated/gibberish lettering. If the scene naturally includes an object that would normally carry text (a sign, menu, screen, clipboard, label), render it completely blank — a clean empty surface. Never attempt to write, spell, or render any character.'
+
+// Monta o prompt visual a partir da ideia do post + o que o negócio
+// realmente faz (onboarding — sempre real, não depende do Marketing AI
+// estar configurado).
+function imagePrompt(content: ContentRow, businessType: string | null, businessDescription: string | null): string {
+  const evoke = (content.idea ?? '').slice(0, 400) || 'foto do negócio'
+  return `Professional social media photo for a Brazilian small business${businessDescription ? ` (${businessDescription})` : businessType ? ` (${businessType})` : ''}. Commercial photography, warm natural lighting, polished and inviting. ${NO_TEXT_RULE} The photo must clearly and specifically depict this exact visual concept, not a generic stock photo: ${evoke}`
 }
 
 // Chama a generate-image (OpenAI) com a service key. Devolve URLs.
-async function genImages(supabaseUrl: string, serviceKey: string, prompt: string, n: number): Promise<string[]> {
+async function genImages(supabaseUrl: string, serviceKey: string, prompt: string, n: number, companyId: string): Promise<string[]> {
   const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, n, size: '1024x1024' }),
+    body: JSON.stringify({ prompt, n, size: '1024x1024', company_id: companyId }),
   })
   const data = await res.json().catch(() => ({})) as { urls?: string[]; url?: string; error?: string }
   if (!res.ok || data.error) throw new Error(data.error ?? `generate-image ${res.status}`)
@@ -58,7 +68,7 @@ Deno.serve(async (req) => {
     if (!content) return json({ error: 'Conteúdo não encontrado' }, 404)
 
     // Autorização: o dono do negócio (user_id da empresa) ou um owner da plataforma.
-    const { data: companyRow } = await admin.from('companies').select('id, user_id, business_type').eq('id', content.company_id).maybeSingle()
+    const { data: companyRow } = await admin.from('companies').select('id, user_id, business_type, business_description').eq('id', content.company_id).maybeSingle()
     const company = companyRow as Company | null
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
     if (!trusted && company.user_id !== user!.id) {
@@ -73,10 +83,10 @@ Deno.serve(async (req) => {
       return json({ ok: true, image_url: url })
     }
 
-    const prompt = imagePrompt(content, company.business_type)
+    const prompt = imagePrompt(content, company.business_type, company.business_description)
 
     if (action === 'generate') {
-      const [url] = await genImages(supabaseUrl, serviceKey, prompt, 1)
+      const [url] = await genImages(supabaseUrl, serviceKey, prompt, 1, company.id)
       if (!url) return json({ error: 'Nenhuma imagem gerada' }, 502)
       await admin.from('marketing_ai_content').update({ image_url: url, updated_at: new Date().toISOString() }).eq('id', contentId)
       return json({ ok: true, image_url: url })
@@ -84,7 +94,7 @@ Deno.serve(async (req) => {
 
     if (action === 'variations') {
       const n = Math.max(2, Math.min(4, Number(body.n) || 3))
-      const urls = await genImages(supabaseUrl, serviceKey, prompt, n)
+      const urls = await genImages(supabaseUrl, serviceKey, prompt, n, company.id)
       if (urls.length === 0) return json({ error: 'Nenhuma variação gerada' }, 502)
       await admin.from('marketing_ai_content').update({ image_options: urls, updated_at: new Date().toISOString() }).eq('id', contentId)
       return json({ ok: true, options: urls })

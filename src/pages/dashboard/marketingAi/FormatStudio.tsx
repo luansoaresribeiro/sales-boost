@@ -2,23 +2,40 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { track } from '../../../lib/analytics'
-import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL } from './shared'
+import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL, FORMAT_CLASS, FUNNEL_LABEL } from './shared'
 import type { Template, Brand } from './formatTemplates'
 import { STANDARD_FORMATS, safePx, type FormatDef } from './formats'
+import { callContentTest } from './TestingArea'
 
 interface Size { w: number; h: number; safe: { top: number; right: number; bottom: number; left: number } }
 interface Comp { id: string; title: string; image_url: string | null }
 interface Preset { id: string; name: string; formats: { name: string; w: number; h: number }[] }
+interface ProductPhoto { id: string; title: string; image_url: string | null }
 
 const ORANGE = '#FF6D29'
 const MODS: { key: string; label: string }[] = [{ key: 'organico', label: 'Orgânico' }, { key: 'stories', label: 'Stories' }, { key: 'campanhas', label: 'Campanhas' }]
 
+// Instrução padrão que o "Preencher com IA" já usa por baixo dos panos hoje
+// (ver format-fill) — pedido do dono: isso tem que ficar EDITÁVEL aqui, não
+// só um comportamento fixo escondido no backend. Fica salva por empresa +
+// formato (marketing_ai_knowledge, module='formato_ai') e é enviada como
+// instrução prioritária toda vez que clicar em "Preencher com IA".
+const DEFAULT_INSTRUCTION: Record<string, string> = {
+  tweet: 'Escreva uma frase de efeito curta e COMPLETA (até 140 caracteres), no tom da marca, sem emoji — tem que caber inteira no card, nunca cortada no meio.',
+  product: 'Escreva uma chamada de botão curta (até 4 palavras, tipo "Compre agora") pro produto em destaque. Sem emoji.',
+  photo: 'Escreva uma chamada de impacto curta (até 8 palavras) pra sobrepor na foto. Sem emoji.',
+}
+
 // Studio de um formato: preenche os campos (à mão ou com IA), vê o preview ao
 // vivo e gera a imagem no SERVIDOR (render-format: SVG→PNG, sem navegador) — o
 // mesmo motor do piloto automático. O resultado cai na Área de Testes.
-export default function FormatStudio({ template, brand, initialKind, onClose, onSaved }: { template: Template; brand: Brand; initialKind?: string; onClose: () => void; onSaved: () => void }) {
+export default function FormatStudio({ template, brand, initialKind, companyId, onClose, onSaved }: { template: Template; brand: Brand; initialKind?: string; companyId: string; onClose: () => void; onSaved: () => void }) {
   const { session } = useAuth()
   const token = session?.access_token ?? ''
+  const [instruction, setInstruction] = useState(DEFAULT_INSTRUCTION[template.key] ?? 'Escreva um texto curto, completo e no tom da marca pra esse campo.')
+  const [instructionOpen, setInstructionOpen] = useState(false)
+  const [instructionRowId, setInstructionRowId] = useState<string | null>(null)
+  const [savingInstruction, setSavingInstruction] = useState(false)
   const nodeRef = useRef<HTMLDivElement>(null)
   const [fields, setFields] = useState<Record<string, string>>({ ...template.sample })
   const [subject, setSubject] = useState('')
@@ -29,6 +46,7 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const isPhoto = template.key === 'photo'
+  const isProduct = template.key === 'product'
   const [bg, setBg] = useState('')          // URL do fundo (asset reusado)
   const [genBg, setGenBg] = useState(true)  // gerar fundo com IA se vazio
   const [fmtKey, setFmtKey] = useState('ig_portrait')
@@ -37,9 +55,16 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
   const [formats, setFormats] = useState<FormatDef[]>(STANDARD_FORMATS)
   const [comps, setComps] = useState<Comp[]>([])
   const [presets, setPresets] = useState<Preset[]>([])
+  const [products, setProducts] = useState<ProductPhoto[]>([])
 
   // Formatos (padrão + custom ativos), componentes e presets — só p/ o 'photo'.
+  // Fotos de produto (aba Produtos, em Estilos e Visuais) — só p/ 'product'.
   const loadExtras = useCallback(async () => {
+    if (isProduct) {
+      const { data: pp } = await supabase.from('marketing_ai_knowledge').select('id, title, image_url').eq('module', 'visual').eq('kind', 'product').order('created_at', { ascending: false })
+      setProducts((pp ?? []) as ProductPhoto[])
+      return
+    }
     if (!isPhoto) return
     const [{ data: cf }, { data: cp }, { data: pr }] = await Promise.all([
       supabase.from('marketing_ai_formats').select('*').eq('active', true),
@@ -51,8 +76,40 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
     setFormats([...STANDARD_FORMATS, ...customFmts])
     setComps((cp ?? []) as Comp[])
     setPresets((pr ?? []) as Preset[])
-  }, [isPhoto])
+  }, [isPhoto, isProduct])
   useEffect(() => { loadExtras() }, [loadExtras])
+
+  // Instrução da IA salva antes pra esse formato — se o dono já editou,
+  // usa a dele; senão fica no padrão (ver DEFAULT_INSTRUCTION acima).
+  useEffect(() => {
+    let alive = true
+    supabase.from('marketing_ai_knowledge').select('id, content').eq('company_id', companyId).eq('module', 'formato_ai').eq('kind', template.key).maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        const row = data as { id: string; content: string | null } | null
+        setInstructionRowId(row?.id ?? null)
+        setInstruction(row?.content || DEFAULT_INSTRUCTION[template.key] || 'Escreva um texto curto, completo e no tom da marca pra esse campo.')
+      })
+    return () => { alive = false }
+  }, [companyId, template.key])
+
+  const saveInstruction = async () => {
+    setSavingInstruction(true)
+    try {
+      if (instructionRowId) {
+        await supabase.from('marketing_ai_knowledge').update({ content: instruction.trim() || null }).eq('id', instructionRowId)
+      } else {
+        const { data } = await supabase.from('marketing_ai_knowledge').insert({
+          company_id: companyId, module: 'formato_ai', kind: template.key, title: `Instrução IA — ${template.label}`, content: instruction.trim() || null,
+        }).select('id').single()
+        if (data) setInstructionRowId(data.id as string)
+      }
+      setMsg('✓ Instrução salva — vale pro próximo "Preencher com IA".')
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Erro ao salvar instrução')
+    }
+    setSavingInstruction(false)
+  }
 
   const curFmt = formats.find(f => f.key === fmtKey) ?? STANDARD_FORMATS[1]
   const sizeOf = (f: { w: number; h: number; safe?: FormatDef['safe'] }): Size => ({ w: f.w, h: f.h, safe: safePx(f) })
@@ -70,7 +127,7 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/format-fill`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ template: template.label, fields: template.fields.map(f => ({ key: f.key, label: f.label })), subject }),
+        body: JSON.stringify({ template: template.label, fields: template.fields.map(f => ({ key: f.key, label: f.label })), subject, instruction }),
       })
       const r = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(r.error ?? 'Erro ao preencher')
@@ -90,14 +147,28 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
       method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         template: template.key, fields: fl, brand: br, kind: mod, caption: caption || null, subject: subject || template.label, format: template.label,
-        background: bgUrl || undefined, generate_bg: !!gen, bg_prompt: subject || fl.headline || undefined,
+        // bg_prompt é conceito VISUAL pro fundo (nunca a headline de verdade
+        // — isso é texto que já vai impresso no card depois; mandar pro
+        // gerador de imagem ensina a IA a tentar desenhar a frase).
+        background: bgUrl || undefined, generate_bg: !!gen, bg_prompt: subject || undefined,
         sticker: isPhoto && sticker ? sticker : undefined,
         width: size?.w, height: size?.h, safe: size?.safe,
       }),
     })
     const r = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(r.error ?? 'Erro ao gerar imagem')
-    return r as { bg_url?: string | null }
+    return r as { bg_url?: string | null; id?: string | null }
+  }
+
+  // render-format não avalia sozinho — sem isso o post ficava sem
+  // quality_score e a Área de Testes travava no botão "Avaliar" pra sempre
+  // (nunca chegava a mostrar "Enviar pro Vault"). Nunca derruba o fluxo se falhar.
+  // Fluxo novo: classificação boa (coerência + coerência visual) já vai
+  // direto pro Vault sozinho — devolve isso pra ajustar a mensagem, senão
+  // parece que a peça sumiu sem explicação.
+  const scoreGenerated = async (id?: string | null): Promise<boolean> => {
+    if (!id) return false
+    try { const r = await callContentTest(token, { action: 'score', test_id: id }); return !!r.auto_vault } catch { return false }
   }
 
   const generate = async () => {
@@ -105,8 +176,9 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
     try {
       const r = await callRender(fields, brand, bg || undefined, isPhoto && genBg, isPhoto ? sizeOf(curFmt) : undefined)
       if (isPhoto && !bg && r.bg_url) setBg(r.bg_url) // guarda o fundo pra reusar de graça
-      track('content_generated', `Gerou imagem de formato (${template.label})`, { template: template.key })
-      setMsg('Imagem gerada! Está na Área de Testes (seção Conteúdo), esperando sua aprovação.')
+      const wentToVault = await scoreGenerated(r.id)
+      track('content_generated', `Gerou imagem de formato (${template.label})`, { template: template.key, auto_vault: wentToVault })
+      setMsg(wentToVault ? '✅ Imagem gerada com nota boa — já foi direto pro Vault!' : 'Imagem gerada! Está na Área de Testes (seção Conteúdo), esperando sua aprovação.')
       onSaved()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Erro ao gerar imagem')
@@ -126,13 +198,15 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
       if (template.key === 'tweet') jobs.unshift({ fl: { ...fields, theme: (fields.theme === 'light' ? 'dark' : 'light') }, br: brand })
       if (jobs.length === 0) { setErr('Defina cores 2ª/destaque no Kit da Marca pra gerar variações.'); setSaving(false); return }
       let useBg = bg
+      let vaulted = 0
       for (const j of jobs) {
         const r = await callRender(j.fl, j.br, useBg || undefined, isPhoto && genBg && !useBg, size)
         if (isPhoto && !useBg && r.bg_url) useBg = r.bg_url // gera 1x, reusa nas próximas
+        if (await scoreGenerated(r.id)) vaulted++
       }
       if (useBg && !bg) setBg(useBg)
-      track('content_generated', `Gerou ${jobs.length} variações (${template.label})`, { template: template.key, variations: jobs.length })
-      setMsg(`${jobs.length} variações geradas (fundo reusado) na Área de Testes.`)
+      track('content_generated', `Gerou ${jobs.length} variações (${template.label})`, { template: template.key, variations: jobs.length, auto_vault: vaulted })
+      setMsg(`${jobs.length} variações geradas (fundo reusado)${vaulted > 0 ? ` — ${vaulted} com nota boa já foram direto pro Vault` : ' na Área de Testes'}.`)
       onSaved()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Erro ao gerar variações')
@@ -148,13 +222,15 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
     setSaving(true); setErr(''); setMsg('')
     try {
       let useBg = bg
+      let vaulted = 0
       for (const fmt of preset.formats) {
         const r = await callRender(fields, brand, useBg || undefined, isPhoto && genBg && !useBg, { w: fmt.w, h: fmt.h, safe: safePx(fmt) })
         if (isPhoto && !useBg && r.bg_url) useBg = r.bg_url
+        if (await scoreGenerated(r.id)) vaulted++
       }
       if (useBg && !bg) setBg(useBg)
-      track('content_generated', `Gerou preset ${preset.name} (${preset.formats.length} formatos)`, { preset: preset.name })
-      setMsg(`${preset.formats.length} formatos gerados (fundo reusado) na Área de Testes.`)
+      track('content_generated', `Gerou preset ${preset.name} (${preset.formats.length} formatos)`, { preset: preset.name, auto_vault: vaulted })
+      setMsg(`${preset.formats.length} formatos gerados (fundo reusado)${vaulted > 0 ? ` — ${vaulted} com nota boa já foram direto pro Vault` : ' na Área de Testes'}.`)
       onSaved()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Erro ao gerar preset')
@@ -170,8 +246,18 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#0E0B0A', border: `1px solid ${BORDER}`, borderRadius: '16px', width: '100%', maxWidth: '860px', maxHeight: '92vh', overflow: 'auto', padding: '22px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '16px' }}>
           <div style={{ fontSize: '15px', fontWeight: 800, color: 'white' }}>{template.icon} {template.label}</div>
+          {FORMAT_CLASS[template.key] && (
+            <>
+              <span style={{ fontSize: '9px', fontWeight: 800, color: '#A78BFA', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: '99px', padding: '3px 9px', letterSpacing: '0.03em' }}>
+                {FORMAT_CLASS[template.key].funnel.map(f => FUNNEL_LABEL[f].toUpperCase()).join(' / ')}
+              </span>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: '#60a5fa', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', borderRadius: '99px', padding: '3px 9px' }}>
+                {FORMAT_CLASS[template.key].objective}
+              </span>
+            </>
+          )}
           <button onClick={onClose} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: MUTED, fontSize: '20px', cursor: 'pointer' }}>×</button>
         </div>
 
@@ -182,7 +268,30 @@ export default function FormatStudio({ template, brand, initialKind, onClose, on
               <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Sobre o que é o post? (opcional)" style={{ ...inputStyle, flex: 1 }} />
               <button onClick={fillWithAi} disabled={filling} style={{ padding: '8px 14px', background: filling ? 'rgba(255,109,41,0.4)' : ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: filling ? 'wait' : 'pointer', fontFamily: D, whiteSpace: 'nowrap' }}>{filling ? '...' : '✨ Preencher com IA'}</button>
             </div>
-            {template.fields.map(fd => (
+            <button onClick={() => setInstructionOpen(o => !o)} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: MUTED, fontSize: '10.5px', cursor: 'pointer', padding: '2px 0', fontFamily: D, textDecoration: 'underline' }}>
+              {instructionOpen ? '▾' : '▸'} {instructionOpen ? 'ocultar' : 'editar'} instrução da IA pra esse formato
+            </button>
+            {instructionOpen && (
+              <div style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '9px' }}>
+                <div style={{ fontSize: '10px', color: MUTED, marginBottom: '6px', lineHeight: 1.5 }}>Isso é o comando que já vai pra IA todo "Preencher com IA" — edite pra mudar tom, tamanho ou regra pra esse formato específico.</div>
+                <textarea value={instruction} onChange={e => setInstruction(e.target.value)} rows={3} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: D, marginBottom: '8px' }} />
+                <button onClick={saveInstruction} disabled={savingInstruction} style={{ padding: '6px 13px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '7px', color: ORANGE, fontSize: '11px', fontWeight: 700, cursor: savingInstruction ? 'wait' : 'pointer', fontFamily: D }}>{savingInstruction ? 'Salvando...' : '💾 Salvar instrução'}</button>
+              </div>
+            )}
+            {isProduct && (
+              <div>
+                <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Foto do produto (da aba Produtos)</label>
+                {products.length === 0 ? (
+                  <div style={{ fontSize: '11px', color: MUTED, padding: '9px 0' }}>Nenhuma foto ainda — suba em Agente de Dados → Estilos e Visuais → Arquivo → Produtos.</div>
+                ) : (
+                  <select value={fields.productImage ?? ''} onChange={e => set('productImage', e.target.value)} style={{ ...inputStyle, width: '100%', fontFamily: D }}>
+                    <option value="">Escolha um produto…</option>
+                    {products.map(p => <option key={p.id} value={p.image_url ?? ''}>{p.title}</option>)}
+                  </select>
+                )}
+              </div>
+            )}
+            {template.fields.filter(fd => !(isProduct && fd.key === 'productImage')).map(fd => (
               <div key={fd.key}>
                 <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{fd.label}</label>
                 {fd.type === 'textarea'

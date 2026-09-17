@@ -2,10 +2,14 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { track } from '../../../lib/analytics'
-import { CARD, MUTED, BORDER, D, SUPABASE_URL, timeAgo } from './shared'
+import { CARD, MUTED, BORDER, D, SUPABASE_URL, timeAgo, FORMAT_CLASS, FUNNEL_LABEL } from './shared'
 import AdaptModal, { type VaultPost } from './AdaptModal'
 
 const KIND_PT: Record<string, string> = { organico: 'Orgânico', stories: 'Stories', campanhas: 'Campanhas' }
+// Mesmas chaves do "template" escolhido pelo Diretor em creative-generate.
+export const TEMPLATE_LABEL: Record<string, string> = {
+  livre: 'Livre', tweet: 'Tweet', product: 'Produto',
+}
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -136,12 +140,18 @@ export function BriefBlock({ post }: { post: TestPost }) {
   )
 }
 
-export const CAT_LABEL: Record<string, string> = {
-  creative: 'Criativo', novelty: 'Novidade', brand: 'Marca', hook: 'Hook', cta: 'CTA',
-  visual: 'Visual', engagement: 'Engaj.', conversion: 'Conversão', readability: 'Leitura',
-}
-export const CAT_ORDER = ['creative', 'novelty', 'brand', 'hook', 'cta', 'visual', 'engagement', 'conversion', 'readability']
-export const scoreColor = (n: number) => (n >= 90 ? GREEN : n >= 75 ? '#FBBF24' : '#f87171')
+// Único classificador que existe agora — os 9 antigos + a gramática
+// separada foram removidos: eram inconsistentes e travavam o Vault sem
+// necessidade real (ver content-test/scoreContent). Coerência NUNCA
+// bloqueia sozinha — é só um sinal pro dono, "Enviar pro Vault" sempre
+// existe. BAD_THRESHOLD tem que bater com o mesmo número no backend
+// (content-test's COHERENCE_BAD_THRESHOLD).
+const COHERENCE_BAD_THRESHOLD = 50
+export const coherenceIsBad = (post: TestPost) => (post.scores?.coherence?.score ?? 100) < COHERENCE_BAD_THRESHOLD
+// Analista visual — olha a IMAGEM de verdade (Claude com visão), separado
+// do analista de texto: pega bug de layout (texto cortado no card) que a
+// checagem de texto não enxerga. Mesma régua: nunca bloqueia, só avisa.
+export const visualIsBad = (post: TestPost) => (post.scores?.visual_coherence?.score ?? 100) < COHERENCE_BAD_THRESHOLD
 
 export async function callContentTest(token: string, payload: Record<string, unknown>) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/content-test`, {
@@ -151,33 +161,57 @@ export async function callContentTest(token: string, payload: Record<string, unk
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error ?? 'Erro na Área de Testes')
-  return data as { id?: string; quality_score?: number; regenerated?: string; image_generated?: boolean }
+  return data as { id?: string; quality_score?: number; regenerated?: string; image_generated?: boolean; auto_vault?: boolean }
 }
 
-// Grade de notas do júri: nota final ponderada + cada dimensão (comentário no hover).
-export function ScoreBreakdown({ post }: { post: TestPost }) {
-  if (post.quality_score == null || !post.scores) return null
+function CoherenceRow({ label, score, comment, bad }: { label: string; score: number; comment: string; bad: boolean }) {
   return (
-    <div style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '8px', padding: '9px 10px' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '7px', marginBottom: '7px' }}>
-        <span style={{ fontSize: '22px', fontWeight: 800, color: scoreColor(post.quality_score), lineHeight: 1 }}>{post.quality_score}</span>
-        <span style={{ fontSize: '10px', color: MUTED }}>/100 · nota de qualidade</span>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-        {CAT_ORDER.filter(c => post.scores![c]).map(c => (
-          <span key={c} title={post.scores![c].comment}
-            style={{ fontSize: '9px', fontWeight: 700, color: scoreColor(post.scores![c].score), border: `1px solid ${scoreColor(post.scores![c].score)}44`, borderRadius: '99px', padding: '2px 6px', cursor: 'help' }}>
-            {CAT_LABEL[c]} {post.scores![c].score}
-          </span>
-        ))}
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '9px 10px', borderRadius: '8px',
+      background: bad ? 'rgba(248,113,113,0.08)' : 'rgba(74,222,128,0.06)',
+      border: `1px solid ${bad ? 'rgba(248,113,113,0.3)' : 'rgba(74,222,128,0.25)'}`,
+    }}>
+      <span style={{ fontSize: '18px', fontWeight: 800, color: bad ? '#f87171' : GREEN, lineHeight: 1, flexShrink: 0 }}>{score}</span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '2px' }}>{label}</div>
+        <div style={{ fontSize: '10.5px', color: bad ? '#f87171' : 'rgba(255,255,255,0.75)', lineHeight: 1.4 }}>{comment}</div>
       </div>
     </div>
   )
 }
 
+// Dois sinais: coerência de TEXTO (a ideia/legenda fazem sentido?) e
+// coerência VISUAL (a imagem saiu legível, sem nada cortado/quebrado?).
+// Nenhum dos dois bloqueia o Vault — são avisos, quem decide é o dono.
+export function ScoreBreakdown({ post }: { post: TestPost }) {
+  if (post.quality_score == null || !post.scores?.coherence) return null
+  const coherence = post.scores.coherence
+  const visual = post.scores.visual_coherence
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <CoherenceRow label="Coerência" score={coherence.score} bad={coherenceIsBad(post)}
+        comment={coherence.comment || (coherenceIsBad(post) ? 'Post incoerente' : 'Post coerente')} />
+      {visual && (
+        <CoherenceRow label="Coerência visual" score={visual.score} bad={visualIsBad(post)}
+          comment={visual.comment || (visualIsBad(post) ? 'Imagem com problema visual' : 'Imagem sem problema visual')} />
+      )}
+    </div>
+  )
+}
+
+function Switch({ on, onClick, disabled }: { on: boolean; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button onClick={onClick} disabled={disabled}
+      style={{ width: '36px', height: '20px', borderRadius: '99px', border: 'none', background: on ? ORANGE : 'rgba(255,255,255,0.15)', position: 'relative', cursor: disabled ? 'default' : 'pointer', flexShrink: 0, opacity: disabled ? 0.6 : 1, padding: 0 }}>
+      <span style={{ position: 'absolute', top: '2px', left: on ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: 'white', transition: 'left 0.15s' }} />
+    </button>
+  )
+}
+
 // Área de Testes (QC): gera com o mesmo motor da automação, avalia com o júri
-// (nota ponderada), e roteia: passou (>=90) → Vault; reprovou → regenera só o
-// componente fraco. Isolado da fila principal; só publica quando o dono manda.
+// (nota ponderada, consultiva) e checa gramática/ortografia (eliminatória):
+// sem erro de língua → Vault; com erro → regenera o texto. Isolado da fila
+// principal; só publica quando o dono manda.
 export default function TestingArea({ companyId, kind, onVaultChange }: { companyId: string; kind: Kind; onVaultChange?: () => void }) {
   const { session } = useAuth()
   const token = session?.access_token ?? ''
@@ -190,6 +224,42 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [okMsg, setOkMsg] = useState('')
+  const [autoDaily, setAutoDaily] = useState(false)
+  const [autoDailyImage, setAutoDailyImage] = useState(true)
+  const [allowCarrossel, setAllowCarrossel] = useState(false)
+  const [autoLoaded, setAutoLoaded] = useState(false)
+  const [autoSaving, setAutoSaving] = useState(false)
+  // '' = automático (rotaciona por todos os templates sozinho); 'random' =
+  // sorteia um; ou a chave exata de um template pra forçar aquele.
+  const [templateChoice, setTemplateChoice] = useState('')
+
+  // Geração automática (1x/dia, 10h de Brasília, sempre no formato Orgânico —
+  // ver creative-generate) — liga/desliga por empresa, não por módulo.
+  // allow_carrossel também é por empresa: desligado por padrão, então todo
+  // post vira "foto" e sempre passa pelos templates reais (nenhum deles
+  // hoje é pensado pra vários slides, então carrossel nunca usava nenhum).
+  useEffect(() => {
+    supabase.from('marketing_ai_config').select('auto_daily_test, auto_daily_test_image, allow_carrossel').eq('company_id', companyId).maybeSingle()
+      .then(({ data }) => {
+        setAutoDaily(!!data?.auto_daily_test)
+        setAutoDailyImage(data?.auto_daily_test_image !== false)
+        setAllowCarrossel(!!data?.allow_carrossel)
+        setAutoLoaded(true)
+      })
+  }, [companyId])
+
+  const saveAuto = async (patch: { auto_daily_test?: boolean; auto_daily_test_image?: boolean; allow_carrossel?: boolean }) => {
+    setAutoSaving(true)
+    // upsert, não update: empresa pode ainda não ter linha em
+    // marketing_ai_config (só é criada quando algo é salvo) — um .update()
+    // simples ali daria 0 linhas afetadas, sem erro, e o toggle pareceria
+    // salvo na tela mas nunca teria efeito nenhum de verdade.
+    await supabase.from('marketing_ai_config').upsert({ company_id: companyId, ...patch }, { onConflict: 'company_id' })
+    if ('auto_daily_test' in patch) setAutoDaily(!!patch.auto_daily_test)
+    if ('auto_daily_test_image' in patch) setAutoDailyImage(!!patch.auto_daily_test_image)
+    if ('allow_carrossel' in patch) setAllowCarrossel(!!patch.allow_carrossel)
+    setAutoSaving(false)
+  }
 
   const load = useCallback(async () => {
     const [{ data }, { data: a }] = await Promise.all([
@@ -209,17 +279,20 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
   const generate = async () => {
     setGenerating(true); setError(''); setOkMsg('')
     try {
-      // Passo 1+2: Diretor Criativo + personalidade (creative-generate)
+      // Diretor Criativo + personalidade + controle de qualidade — tudo
+      // dentro de creative-generate agora (já devolve com quality_score pronto).
       const res = await fetch(`${SUPABASE_URL}/functions/v1/creative-generate`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind }),
+        body: JSON.stringify({ kind, ...(templateChoice ? { template: templateChoice } : {}) }),
       })
-      const r = await res.json().catch(() => ({}))
+      const r = await res.json().catch(() => ({})) as { error?: string; auto_vault?: boolean }
       if (!res.ok) throw new Error(r.error ?? 'Erro ao gerar post de teste')
       await load()
-      track('content_generated', `Gerou conteúdo (${KIND_PT[kind] ?? kind})`, { kind })
-      // Passo 3: controle de qualidade (content-test)
-      if (r?.id) { await callContentTest(token, { action: 'score', test_id: r.id }); await load() }
+      // Fluxo novo: classificação boa (coerência + coerência visual) já vai
+      // direto pro Vault sozinho — some da Área de Testes na hora, então
+      // avisa pra não parecer que sumiu sem explicação.
+      if (r.auto_vault) { setOkMsg('✅ Post gerado com nota boa — já foi direto pro Vault!'); onVaultChange?.() }
+      track('content_generated', `Gerou conteúdo (${KIND_PT[kind] ?? kind})`, { kind, auto_vault: !!r.auto_vault })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao gerar post de teste')
     }
@@ -253,14 +326,60 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
         <div style={{ maxWidth: '600px' }}>
           <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🧪 Área de Testes + Controle de Qualidade</div>
           <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55 }}>
-            Gera com o <strong>mesmo motor</strong> da automação e passa por um <strong>júri de revisores</strong> que dá uma nota de qualidade. <strong>Passou (≥90)</strong> → vai pro Vault. <strong>Reprovou</strong> → regenera só o ponto fraco. Só do Vault é que você publica.
+            Gera com o <strong>mesmo motor</strong> da automação e é avaliado por dois analistas — <strong>coerência</strong> (o post faz sentido do início ao fim?) e <strong>coerência visual</strong> (a imagem saiu legível, sem nada cortado/quebrado?). São sinais, não um portão: <strong>"Enviar pro Vault" sempre aparece</strong>, e "Corrigir" só aparece quando algo estiver claramente ruim. Só do Vault é que você publica.
           </div>
         </div>
-        <button onClick={generate} disabled={generating || !token}
-          style={{ padding: '9px 16px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '9px', border: 'none', cursor: generating ? 'default' : 'pointer', fontFamily: D, flexShrink: 0, opacity: generating ? 0.7 : 1 }}>
-          {generating ? 'Gerando + avaliando...' : '✨ Gerar post de teste'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          {kind === 'organico' && (
+            <select value={templateChoice} onChange={e => setTemplateChoice(e.target.value)} disabled={generating}
+              title="Escolha o template da imagem — ou deixe automático pra ele rotacionar sozinho por todos"
+              style={{ padding: '9px 10px', background: 'rgba(255,255,255,0.04)', color: 'white', fontSize: '11.5px', borderRadius: '9px', border: `1px solid ${BORDER}`, fontFamily: D, cursor: generating ? 'default' : 'pointer' }}>
+              <option value="">🔀 Automático (rotaciona)</option>
+              <option value="random">🎲 Aleatório</option>
+              {Object.entries(TEMPLATE_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          )}
+          {kind === 'organico' && templateChoice && FORMAT_CLASS[templateChoice] && (
+            <div style={{ display: 'flex', gap: '5px' }}>
+              <span style={{ fontSize: '9px', fontWeight: 800, color: '#A78BFA', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: '99px', padding: '3px 9px', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+                {FORMAT_CLASS[templateChoice].funnel.map(f => FUNNEL_LABEL[f].toUpperCase()).join(' / ')}
+              </span>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: '#60a5fa', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', borderRadius: '99px', padding: '3px 9px', whiteSpace: 'nowrap' }}>
+                {FORMAT_CLASS[templateChoice].objective}
+              </span>
+            </div>
+          )}
+          <button onClick={generate} disabled={generating || !token}
+            style={{ padding: '9px 16px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '9px', border: 'none', cursor: generating ? 'default' : 'pointer', fontFamily: D, flexShrink: 0, opacity: generating ? 0.7 : 1 }}>
+            {generating ? 'Gerando + avaliando...' : '✨ Gerar post de teste'}
+          </button>
+        </div>
       </div>
+
+      {kind === 'organico' && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '10px', marginBottom: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+            <Switch on={autoDaily} disabled={!autoLoaded || autoSaving} onClick={() => saveAuto({ auto_daily_test: !autoDaily })} />
+            <div>
+              <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>Gerar automaticamente todo dia às 10h</div>
+              <div style={{ fontSize: '10px', color: MUTED }}>Cria 1 post de teste (Orgânico) sozinho, esperando você avaliar no QC.</div>
+            </div>
+          </div>
+          {autoDaily && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+              <Switch on={autoDailyImage} disabled={autoSaving} onClick={() => saveAuto({ auto_daily_test_image: !autoDailyImage })} />
+              <div style={{ fontSize: '11.5px', color: 'white' }}>Incluir imagem</div>
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+            <Switch on={allowCarrossel} disabled={!autoLoaded || autoSaving} onClick={() => saveAuto({ allow_carrossel: !allowCarrossel })} />
+            <div>
+              <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>Considerar formato Carrossel</div>
+              <div style={{ fontSize: '10px', color: MUTED }}>Desligado: todo post vira foto única, sempre usando um dos templates reais (Tweet Print, Foco no Produto, etc.).</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {generating && <ProgressBar label="Diretor Criativo criando + controle de qualidade avaliando... (pode levar ~1 min)" />}
       {error && <div style={{ color: '#f87171', fontSize: '11.5px', marginBottom: '12px' }}>{error}</div>}
@@ -282,6 +401,12 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
                 <div style={{ padding: '13px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                     {t.format && <span style={{ fontSize: '9px', fontWeight: 700, color: ORANGE, padding: '2px 7px', borderRadius: '99px', border: `1px solid rgba(255,109,41,0.35)`, textTransform: 'uppercase' }}>{t.format}</span>}
+                    {/* Template só é usado de verdade quando format="foto" (ver creative-generate) — pra carrossel/reel/story o valor é só um placeholder sem efeito, então não mostra. */}
+                    {t.format === 'foto' && t.brief?.template && (
+                      <span style={{ fontSize: '9px', fontWeight: 700, color: '#A78BFA', padding: '2px 7px', borderRadius: '99px', border: '1px solid rgba(167,139,250,0.35)' }}>
+                        {TEMPLATE_LABEL[t.brief.template] ?? t.brief.template}
+                      </span>
+                    )}
                     <span style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', marginLeft: 'auto' }}>{timeAgo(t.created_at)}</span>
                   </div>
                   {t.idea && <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>{t.idea}</div>}
@@ -303,16 +428,20 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
                         style={{ flex: 1, padding: '8px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${BORDER}`, borderRadius: '8px', color: 'white', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
                         {busy ? '...' : 'Avaliar'}
                       </button>
-                    ) : t.quality_score >= 90 ? (
-                      <button onClick={() => act(t.id, { action: 'to_vault' }, 'Enviado pro Vault ✓')} disabled={busy}
-                        style={{ flex: 1, padding: '8px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: '8px', color: GREEN, fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-                        {busy ? '...' : '⭐ Enviar pro Vault'}
-                      </button>
                     ) : (
-                      <button onClick={() => act(t.id, { action: 'regenerate' })} disabled={busy}
-                        style={{ flex: 1, padding: '8px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '8px', color: '#FBBF24', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-                        {busy ? 'Regenerando...' : '🔁 Regenerar fraco'}
-                      </button>
+                      <>
+                        {/* Enviar pro Vault sempre existe — a IA só avisa quando acha ruim, quem decide é o dono. */}
+                        <button onClick={() => act(t.id, { action: 'to_vault' }, 'Enviado pro Vault ✓')} disabled={busy}
+                          style={{ flex: 1, padding: '8px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: '8px', color: GREEN, fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
+                          {busy ? '...' : '⭐ Enviar pro Vault'}
+                        </button>
+                        {(coherenceIsBad(t) || visualIsBad(t)) && (
+                          <button onClick={() => act(t.id, { action: 'regenerate' })} disabled={busy}
+                            style={{ flex: 1, padding: '8px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '8px', color: '#FBBF24', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
+                            {busy ? 'Regenerando...' : coherenceIsBad(t) ? '🔁 Corrigir coerência' : '🔁 Corrigir imagem'}
+                          </button>
+                        )}
+                      </>
                     )}
                     <button onClick={() => discard(t.id)} disabled={busy}
                       style={{ padding: '8px 12px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '11.5px', cursor: busy ? 'default' : 'pointer', fontFamily: D }}>

@@ -41,14 +41,20 @@ export function seededRng(key: string): () => number {
 }
 
 // ── Tipos ────────────────────────────────────────────────────────────────
+// No modo demo todo campo vem preenchido. No painel-resumo real (Growth
+// Command Center), cada peça só é real se a fonte dela estiver conectada —
+// os campos "*Delta" exigem uma comparação histórica que hoje só existe pro
+// Instagram (igFollowersGained não é um "delta" calculado, é um fato: quanto
+// cresceu de verdade no período). Sem fonte real, o campo fica null — o
+// KpiTile mostra "—" em vez de inventar um zero que pareceria dado real.
 export interface GrowthKpis {
-  revenue: number; revenueDelta: number
-  leads: number; leadsDelta: number
-  funnelConversion: number; funnelConversionDelta: number
-  roas: number; roasDelta: number
-  adSpend: number
-  igFollowers: number; igFollowersGained: number
-  contentEngagement: number; contentEngagementDelta: number
+  revenue: number | null; revenueDelta: number | null
+  leads: number; leadsDelta: number | null
+  funnelConversion: number | null; funnelConversionDelta: number | null
+  roas: number | null; roasDelta: number | null
+  adSpend: number | null
+  igFollowers: number | null; igFollowersGained: number | null
+  contentEngagement: number | null; contentEngagementDelta: number | null
 }
 
 export type ConnectionCategory = 'meta' | 'mensageria' | 'reputacao' | 'site' | 'crm' | 'ecommerce'

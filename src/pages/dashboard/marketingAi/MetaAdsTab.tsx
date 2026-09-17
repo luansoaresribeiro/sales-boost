@@ -96,13 +96,14 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
   const demo = useMemo(() => buildMetaAdsDemo(company), [company])
   const { session } = useAuth()
   const navigate = useNavigate()
-  const [demoMode] = useDemoMode(company.id)
+  const [demoMode, setDemoMode] = useDemoMode(company.id)
   const [executed, setExecuted] = useState<Set<string>>(new Set())
   const [live, setLive] = useState<LiveAds | null>(null)
-  // connected = a conta de anúncios está de fato ligada; apiError = conectada
-  // mas a Meta falhou. Juntos definem o estado real (nunca fingir sucesso).
-  const [connected, setConnected] = useState(false)
+  // apiError = a conta está conectada mas a Meta falhou (nunca finge sucesso).
   const [apiError, setApiError] = useState(false)
+  // Texto real do erro — pedido do dono: quando fica borrado por erro, ele
+  // precisa VER a mensagem de verdade (não só saber que "algo falhou").
+  const [apiErrorDetail, setApiErrorDetail] = useState<string | null>(null)
   const execute = (id: string) => setExecuted(prev => new Set(prev).add(id))
 
   // Puxa os números REAIS da conta de anúncios (se conectada). Sem conexão ou
@@ -118,17 +119,24 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
       .then(r => r.json())
       .then(d => {
         if (!alive) return
-        // Conectada de verdade? (connected pode vir true com erro de API.)
-        setConnected(!!d?.connected)
-        if (d?.connected && d.totals && !d.error) { setLive(d as LiveAds); setApiError(false) }
-        else if (d?.connected && (d.error || d.expired)) { setApiError(true); console.error('meta-ads-insights:', d.error ?? 'token expirado') }
+        if (d?.connected && d.totals && !d.error) { setLive(d as LiveAds); setApiError(false); setApiErrorDetail(null) }
+        else if (d?.connected && (d.error || d.expired)) {
+          setApiError(true)
+          setApiErrorDetail(String(d.error ?? (d.expired ? 'Token de acesso da Meta expirou — reconecte em Conexões.' : 'Erro desconhecido')))
+          console.error('meta-ads-insights:', d.error ?? 'token expirado')
+        }
       })
-      .catch((e) => { if (alive) { /* falha de rede: trata como erro só se estava conectada */ console.error('meta-ads-insights fetch falhou:', e) } })
+      .catch((e) => {
+        if (!alive) return
+        // Falha de rede na própria chamada — mostra o erro real também.
+        setApiError(true); setApiErrorDetail(e instanceof Error ? e.message : String(e))
+        console.error('meta-ads-insights fetch falhou:', e)
+      })
     return () => { alive = false }
   }, [company.id, session])
 
   // Estado da fonte de dado → decide real / demo / borrado / erro.
-  const mode = veilMode({ hasReal: !!live, demoMode, error: connected && apiError })
+  const mode = veilMode({ hasReal: !!live, demoMode, error: apiError })
 
   // Campanhas reais no formato que a linha de campanha espera.
   const liveCampaigns: DemoAdCampaign[] | null = live
@@ -155,9 +163,10 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
       )}
 
       <DataVeil mode={mode}
-        title="Conecte o Meta Ads"
-        message="Estes números são um exemplo do layout. Conecte sua conta de anúncios pra ver investido, ROAS e campanhas de verdade — ou ligue o Modo demonstração no topo do Growth OS."
-        cta={{ label: 'Conectar Meta Ads', onClick: () => navigate('/dashboard/settings?tab=conexoes') }}>
+        title={apiError ? 'Erro ao buscar os dados da Meta' : 'Conecte o Meta Ads'}
+        message={apiError ? 'A conexão existe, mas a Meta devolveu um erro — veja abaixo pra saber o que corrigir.' : 'Estes números são um exemplo do layout. Conecte sua conta de anúncios pra ver investido, ROAS e campanhas de verdade — ou ligue o Modo demonstração no topo do Growth OS.'}
+        errorDetail={apiErrorDetail}
+        cta={{ label: apiError ? 'Ir pra Conexões' : 'Conectar Meta Ads', onClick: () => navigate('/dashboard/settings?tab=conexoes') }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '26px' }}>
       {/* KPIs agregados */}
       <section>
@@ -183,6 +192,14 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
         </div>
       </section>
 
+      {/* Públicos/criativos/recomendações — sem fonte real ainda (a Marketing
+          API não devolve essa leitura hoje); independente das KPIs/campanhas
+          acima, que já podem estar reais. */}
+      <DataVeil mode={veilMode({ hasReal: false, demoMode })}
+        title="Ainda sem essa leitura real"
+        message="Públicos, criativos e recomendações da IA ainda são a leitura do agente, não um dado direto da Marketing API. Ligue o Modo demonstração pra ver o layout com um exemplo."
+        cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '26px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '20px', alignItems: 'start' }}>
         {/* Públicos */}
         <section>
@@ -239,6 +256,8 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
           ))}
         </div>
       </section>
+      </div>
+      </DataVeil>
       </div>
       </DataVeil>
     </div>

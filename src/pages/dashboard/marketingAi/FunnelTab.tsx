@@ -67,11 +67,17 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
   const [demoLeads, setDemoLeads] = useState<DemoLead[]>(demo.leads)
   const [drafted, setDrafted] = useState<Set<string>>(new Set())
   const [channel, setChannel] = useState<ChannelFilterValue>('all')
+  // Erro de verdade da consulta (não "ainda não tem lead" — isso é normal).
+  // Pedido do dono: quando o painel fica borrado por causa de um erro, ele
+  // precisa VER a mensagem real pra saber o que corrigir.
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('leads')
+    const { data, error } = await supabase.from('leads')
       .select('id, name, contact, channel, stage, value_estimate, last_contact_at, notes, created_at')
       .eq('company_id', company.id).order('created_at', { ascending: false })
+    if (error) { setLoadError(error.message); return }
+    setLoadError(null)
     setRealLeads(((data ?? []) as LeadRow[]).map(mapLeadRow))
   }, [company.id])
   useEffect(() => { void load() }, [load])
@@ -80,7 +86,7 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
   const isReal = !!realLeads && realLeads.length > 0
   const allLeads = isReal ? realLeads! : demoLeads
   const [demoMode, setDemoMode] = useDemoMode(company.id)
-  const mode = veilMode({ hasReal: isReal, demoMode })
+  const mode = veilMode({ hasReal: isReal, demoMode, error: !!loadError })
 
   const draft = (id: string) => setDrafted(prev => new Set(prev).add(id))
   const advance = async (id: string) => {
@@ -119,8 +125,9 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
       )}
 
       <DataVeil mode={mode}
-        title="Sem leads reais ainda"
-        message="Assim que o primeiro lead chegar (Instagram, WhatsApp ou anúncios), o funil mostra os leads de verdade aqui, sozinho. Ligue o Modo demonstração pra ver o layout com exemplos."
+        title={loadError ? 'Erro ao carregar os leads' : 'Sem leads reais ainda'}
+        message={loadError ? 'A consulta ao banco falhou — veja o erro abaixo pra saber o que corrigir.' : 'Assim que o primeiro lead chegar (Instagram, WhatsApp ou anúncios), o funil mostra os leads de verdade aqui, sozinho. Ligue o Modo demonstração pra ver o layout com exemplos.'}
+        errorDetail={loadError}
         cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Filtro de canal — um único funil, filtra por origem */}
