@@ -123,6 +123,95 @@ function photo(f: Record<string, string>, brand: Brand): JSX.Element {
   )
 }
 
+// ── Problema → Reframe (tipografia grande) ──────────────────────────────────
+function problem(f: Record<string, string>, brand: Brand): JSX.Element {
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: brand.bg || '#0E0B0A', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '110px', boxSizing: 'border-box', fontFamily: bfont(brand), color: brand.text || '#fff' }}>
+      <div style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: brand.primary, marginBottom: '34px' }}>{f.eyebrow || 'Um problema comum'}</div>
+      <div style={{ fontSize: '64px', lineHeight: 1.15, fontWeight: 800, marginBottom: '38px' }}>{f.problem || '"Tenho muitos leads, mas poucas vendas."'}</div>
+      <div style={{ fontSize: '72px', lineHeight: 0.8, color: brand.primary, marginBottom: '34px' }}>↓</div>
+      <div style={{ fontSize: '46px', lineHeight: 1.3, fontWeight: 600, color: '#BABABA' }}>{f.reframe || 'Talvez o problema não seja tráfego.'}</div>
+      {f.insight && <div style={{ fontSize: '42px', lineHeight: 1.3, fontWeight: 800, marginTop: '22px' }}>{f.insight}</div>}
+      <Logo b={brand} />
+    </div>
+  )
+}
+
+// ── FAQ / Objeção (pergunta + resposta, cara de chat) ───────────────────────
+function faq(f: Record<string, string>, brand: Brand): JSX.Element {
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: brand.bg || '#0E0B0A', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '100px', boxSizing: 'border-box', fontFamily: bfont(brand), color: brand.text || '#fff' }}>
+      <div style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: brand.primary, marginBottom: '40px' }}>{f.eyebrow || 'Você perguntou'}</div>
+      <div style={{ alignSelf: 'flex-start', maxWidth: '82%', background: 'rgba(255,255,255,0.08)', borderRadius: '28px 28px 28px 6px', padding: '30px 36px', marginBottom: '26px' }}>
+        <div style={{ fontSize: '22px', fontWeight: 700, color: '#BABABA', marginBottom: '10px' }}>CLIENTE</div>
+        <div style={{ fontSize: '42px', lineHeight: 1.3, fontWeight: 700 }}>{f.question || '"Quanto tempo demora?"'}</div>
+      </div>
+      <div style={{ alignSelf: 'flex-end', maxWidth: '82%', background: brand.primary, color: '#fff', borderRadius: '28px 28px 6px 28px', padding: '30px 36px' }}>
+        <div style={{ fontSize: '22px', fontWeight: 700, opacity: 0.85, marginBottom: '10px' }}>{brand.name?.toUpperCase() || 'A GENTE'}</div>
+        <div style={{ fontSize: '40px', lineHeight: 1.3, fontWeight: 700 }}>{f.answer || 'Normalmente, X dias — e a gente te avisa em cada etapa.'}</div>
+      </div>
+      <Logo b={brand} dark />
+    </div>
+  )
+}
+
+// ── Tendência do setor (lista numerada) ─────────────────────────────────────
+function trend(f: Record<string, string>, brand: Brand): JSX.Element {
+  const items = (f.items || 'Personalização\nAtendimento imediato\nBusca por experiência').split('\n').map(s => s.trim()).filter(Boolean).slice(0, 5)
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: brand.bg || '#0E0B0A', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '100px', boxSizing: 'border-box', fontFamily: bfont(brand), color: brand.text || '#fff' }}>
+      <div style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: brand.primary, marginBottom: '18px' }}>{f.eyebrow || 'Tendência do setor'}</div>
+      <div style={{ fontSize: '58px', lineHeight: 1.1, fontWeight: 800, marginBottom: '48px' }}>{f.title || 'O que está transformando o seu mercado'}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '26px' }}>
+        {items.map((it, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '26px' }}>
+            <span style={{ fontSize: '40px', fontWeight: 800, color: brand.primary, minWidth: '64px' }}>{String(i + 1).padStart(2, '0')}</span>
+            <span style={{ fontSize: '40px', fontWeight: 600 }}>{it}</span>
+          </div>
+        ))}
+      </div>
+      <Logo b={brand} />
+    </div>
+  )
+}
+
+// ── Market Watch (inteligência de mercado) ──────────────────────────────────
+function marketWatch(f: Record<string, string>, brand: Brand): JSX.Element {
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: brand.bg || '#150E08', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '100px', boxSizing: 'border-box', fontFamily: bfont(brand), color: brand.text || '#fff' }}>
+      <div style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: brand.primary, marginBottom: '22px' }}>{f.eyebrow || 'Market Watch'}</div>
+      <div style={{ fontSize: '56px', lineHeight: 1.1, fontWeight: 800, marginBottom: '36px' }}>{f.headline || 'O que está mudando no seu mercado?'}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginBottom: '36px' }}>
+        <span style={{ fontSize: '90px', fontWeight: 800, color: brand.primary }}>↗</span>
+        <span style={{ fontSize: '140px', lineHeight: 1, fontWeight: 800, color: brand.primary }}>{f.value || '42%'}</span>
+      </div>
+      <div style={{ fontSize: '40px', lineHeight: 1.35, fontWeight: 600, color: '#BABABA' }}>{f.insight || 'dos negócios do seu segmento já usam essa estratégia.'}</div>
+      {f.source && <div style={{ fontSize: '24px', color: '#7a7a7a', marginTop: '34px' }}>{f.source}</div>}
+      <Logo b={brand} />
+    </div>
+  )
+}
+
+// ── Prova social (review com estrelas) ──────────────────────────────────────
+function review(f: Record<string, string>, brand: Brand): JSX.Element {
+  const stars = Math.max(1, Math.min(5, parseInt(f.stars || '5') || 5))
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: brand.bg || '#0E0B0A', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '100px', boxSizing: 'border-box', fontFamily: bfont(brand), color: brand.text || '#fff' }}>
+      <div style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: brand.primary, marginBottom: '26px' }}>{f.eyebrow || 'O que dizem de nós'}</div>
+      <div style={{ fontSize: '58px', color: '#FBBF24', marginBottom: '30px', letterSpacing: '6px' }}>{'★'.repeat(stars)}{'☆'.repeat(5 - stars)}</div>
+      <div style={{ fontSize: '50px', lineHeight: 1.3, fontWeight: 700, marginBottom: '40px' }}>“{f.text || 'Atendimento impecável e resultado que superou a expectativa.'}”</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+        <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: brand.primary, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', fontWeight: 800 }}>{initials(f.author || 'Cliente')}</div>
+        <div>
+          <div style={{ fontSize: '30px', fontWeight: 800 }}>{f.author || 'João, cliente'}</div>
+          {f.source && <div style={{ fontSize: '22px', color: '#BABABA' }}>{f.source}</div>}
+        </div>
+      </div>
+      <Logo b={brand} />
+    </div>
+  )
+}
+
 // Clareia/escurece um hex (para o gradiente do card de citação).
 function shade(hex: string, amt: number): string {
   const h = hex.replace('#', '')
@@ -173,6 +262,47 @@ export const TEMPLATES: Template[] = [
     fields: [{ key: 'value', label: 'Número/destaque' }, { key: 'label', label: 'Rótulo (topo)' }, { key: 'context', label: 'Contexto', type: 'textarea' }, { key: 'source', label: 'Fonte' }],
     sample: { value: '', label: '', context: '', source: '' },
     render: stat,
+  },
+  {
+    key: 'problem', label: 'Problema → Virada', icon: '🎯', w: 1080, h: 1350,
+    fields: [
+      { key: 'eyebrow', label: 'Etiqueta (topo)' }, { key: 'problem', label: 'A dor (fala do cliente)', type: 'textarea' },
+      { key: 'reframe', label: 'A virada', type: 'textarea' }, { key: 'insight', label: 'O insight', type: 'textarea' },
+    ],
+    sample: { eyebrow: 'Um problema comum', problem: '', reframe: '', insight: '' },
+    render: problem,
+  },
+  {
+    key: 'faq', label: 'FAQ / Objeção', icon: '💬', w: 1080, h: 1350,
+    fields: [
+      { key: 'eyebrow', label: 'Etiqueta (topo)' }, { key: 'question', label: 'Pergunta do cliente', type: 'textarea' }, { key: 'answer', label: 'Resposta', type: 'textarea' },
+    ],
+    sample: { eyebrow: 'Você perguntou', question: '', answer: '' },
+    render: faq,
+  },
+  {
+    key: 'trend', label: 'Tendência do setor', icon: '📈', w: 1080, h: 1350,
+    fields: [
+      { key: 'eyebrow', label: 'Etiqueta (topo)' }, { key: 'title', label: 'Título', type: 'textarea' }, { key: 'items', label: 'Itens (um por linha)', type: 'textarea' },
+    ],
+    sample: { eyebrow: 'Tendência do setor', title: '', items: '' },
+    render: trend,
+  },
+  {
+    key: 'market_watch', label: 'Market Watch', icon: '🧭', w: 1080, h: 1080,
+    fields: [
+      { key: 'eyebrow', label: 'Etiqueta (topo)' }, { key: 'headline', label: 'Chamada', type: 'textarea' }, { key: 'value', label: 'Número (ex: 42%)' }, { key: 'insight', label: 'O que significa', type: 'textarea' }, { key: 'source', label: 'Fonte' },
+    ],
+    sample: { eyebrow: 'Market Watch', headline: '', value: '', insight: '', source: '' },
+    render: marketWatch,
+  },
+  {
+    key: 'review', label: 'Prova social (avaliação)', icon: '⭐', w: 1080, h: 1080,
+    fields: [
+      { key: 'eyebrow', label: 'Etiqueta (topo)' }, { key: 'stars', label: 'Estrelas (1-5)' }, { key: 'text', label: 'Texto da avaliação', type: 'textarea' }, { key: 'author', label: 'Autor' }, { key: 'source', label: 'Fonte (ex: Google)' },
+    ],
+    sample: { eyebrow: 'O que dizem de nós', stars: '5', text: '', author: '', source: '' },
+    render: review,
   },
 ]
 

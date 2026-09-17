@@ -176,12 +176,123 @@ ${overlay}
   return { svg, w: W, h: H }
 }
 
+// ── Formas SVG (o resvg só carrega Poppins → setas/estrelas viram tofu como
+// glifo; desenhamos como shapes pra bater com o preview do cliente). ──────────
+function starShape(cx: number, cy: number, r: number, fill: string): string {
+  const pts: string[] = []
+  for (let i = 0; i < 10; i++) { const a = (Math.PI / 5) * i - Math.PI / 2; const rad = i % 2 ? r * 0.42 : r; pts.push(`${(cx + Math.cos(a) * rad).toFixed(1)},${(cy + Math.sin(a) * rad).toFixed(1)}`) }
+  return `<polygon points="${pts.join(' ')}" fill="${fill}"/>`
+}
+function starsRow(x: number, y: number, n: number, r: number, fill: string): string {
+  let s = ''; for (let i = 0; i < n; i++) s += starShape(x + r + i * (r * 2.5), y, r, fill); return s
+}
+function downArrow(cx: number, y: number, size: number, fill: string): string {
+  return `<path d="M${cx} ${y} L${cx} ${y + size} M${cx - size * 0.42} ${y + size * 0.58} L${cx} ${y + size} L${cx + size * 0.42} ${y + size * 0.58}" stroke="${fill}" stroke-width="11" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
+}
+function upRightArrow(x: number, y: number, size: number, fill: string): string {
+  return `<path d="M${x} ${y + size} L${x + size} ${y} M${x + size * 0.34} ${y} L${x + size} ${y} L${x + size} ${y + size * 0.66}" stroke="${fill}" stroke-width="13" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
+}
+
+function svgProblem(f: F, b: Brand): { svg: string; w: number; h: number } {
+  const W = 1080, H = 1350, text = b.text || '#ffffff', bg = b.bg || '#0E0B0A'
+  const pl = wrap(f.problem || '"Tenho muitos leads, mas poucas vendas."', 64, 880)
+  const rl = wrap(f.reframe || 'Talvez o problema não seja tráfego.', 46, 880)
+  const il = f.insight ? wrap(f.insight, 42, 880) : []
+  let y = 360
+  const parts: string[] = []
+  parts.push(block([(f.eyebrow || 'Um problema comum').toUpperCase()], 100, y, 30, b.primary, 700, 0)); y += 66
+  parts.push(block(pl, 100, y + 40, 64, text, 700, 78)); y += 40 + pl.length * 78 + 20
+  parts.push(downArrow(140, y + 20, 84, b.primary)); y += 130
+  parts.push(block(rl, 100, y + 40, 46, '#BABABA', 600, 60)); y += 40 + rl.length * 60
+  if (il.length) parts.push(block(il, 100, y + 44, 42, text, 800, 54))
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${parts.join('')}</svg>`
+  return { svg, w: W, h: H }
+}
+
+function svgFaq(f: F, b: Brand): { svg: string; w: number; h: number } {
+  const W = 1080, H = 1350, text = b.text || '#ffffff', bg = b.bg || '#0E0B0A'
+  const ql = wrap(f.question || '"Quanto tempo demora?"', 42, 620)
+  const al = wrap(f.answer || 'Normalmente X dias — e a gente te avisa em cada etapa.', 40, 620)
+  const parts: string[] = []
+  parts.push(block([(f.eyebrow || 'Você perguntou').toUpperCase()], 100, 300, 30, b.primary, 700, 0))
+  // Bolha do cliente (esquerda)
+  const qBoxH = 70 + ql.length * 52 + 30
+  let y = 360
+  parts.push(`<rect x="100" y="${y}" width="720" height="${qBoxH}" rx="30" fill="#ffffff" fill-opacity="0.08"/>`)
+  parts.push(block(['CLIENTE'], 140, y + 54, 22, '#BABABA', 700, 0))
+  parts.push(block(ql, 140, y + 108, 42, text, 700, 52))
+  y += qBoxH + 40
+  // Bolha da marca (direita)
+  const aBoxH = 70 + al.length * 50 + 30
+  const ax = W - 100 - 720
+  parts.push(`<rect x="${ax}" y="${y}" width="720" height="${aBoxH}" rx="30" fill="${b.primary}"/>`)
+  parts.push(block([(b.name || 'A GENTE').toUpperCase()], ax + 40, y + 54, 22, '#ffffff', 700, 0))
+  parts.push(block(al, ax + 40, y + 108, 40, '#ffffff', 700, 50))
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${parts.join('')}</svg>`
+  return { svg, w: W, h: H }
+}
+
+function svgTrend(f: F, b: Brand): { svg: string; w: number; h: number } {
+  const W = 1080, H = 1350, text = b.text || '#ffffff', bg = b.bg || '#0E0B0A'
+  const items = (f.items || 'Personalização\nAtendimento imediato\nBusca por experiência').split('\n').map(s => s.trim()).filter(Boolean).slice(0, 5)
+  const tl = wrap(f.title || 'O que está transformando o seu mercado', 58, 880)
+  const parts: string[] = []
+  let y = 300
+  parts.push(block([(f.eyebrow || 'Tendência do setor').toUpperCase()], 100, y, 30, b.primary, 700, 0)); y += 62
+  parts.push(block(tl, 100, y + 40, 58, text, 800, 70)); y += 40 + tl.length * 70 + 50
+  for (let i = 0; i < items.length; i++) {
+    parts.push(block([String(i + 1).padStart(2, '0')], 100, y + 42, 40, b.primary, 800, 0))
+    parts.push(block(wrap(items[i], 40, 760), 200, y + 42, 40, text, 600, 48))
+    y += Math.max(70, wrap(items[i], 40, 760).length * 48 + 26)
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${parts.join('')}</svg>`
+  return { svg, w: W, h: H }
+}
+
+function svgMarketWatch(f: F, b: Brand): { svg: string; w: number; h: number } {
+  const W = 1080, H = 1080, text = b.text || '#ffffff', bg = b.bg || '#150E08'
+  const hl = wrap(f.headline || 'O que está mudando no seu mercado?', 56, 880)
+  const il = wrap(f.insight || 'dos negócios do seu segmento já usam essa estratégia.', 40, 880)
+  const parts: string[] = []
+  let y = 250
+  parts.push(block([(f.eyebrow || 'Market Watch').toUpperCase()], 100, y, 30, b.primary, 700, 0)); y += 60
+  parts.push(block(hl, 100, y + 30, 56, text, 800, 68)); y += 30 + hl.length * 68 + 20
+  parts.push(upRightArrow(100, y + 10, 90, b.primary))
+  parts.push(block([f.value || '42%'], 230, y + 110, 140, b.primary, 800, 0)); y += 170
+  parts.push(block(il, 100, y + 40, 40, '#BABABA', 600, 52)); y += 40 + il.length * 52
+  if (f.source) parts.push(block([f.source], 100, y + 40, 24, '#7a7a7a', 400, 0))
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${parts.join('')}</svg>`
+  return { svg, w: W, h: H }
+}
+
+function svgReview(f: F, b: Brand): { svg: string; w: number; h: number } {
+  const W = 1080, H = 1080, text = b.text || '#ffffff', bg = b.bg || '#0E0B0A'
+  const n = Math.max(1, Math.min(5, parseInt(f.stars || '5') || 5))
+  const tl = wrap('“' + (f.text || 'Atendimento impecável e resultado que superou a expectativa.') + '”', 50, 880)
+  const parts: string[] = []
+  let y = 250
+  parts.push(block([(f.eyebrow || 'O que dizem de nós').toUpperCase()], 100, y, 30, b.primary, 700, 0)); y += 50
+  parts.push(starsRow(112, y + 40, n, 28, '#FBBF24')); y += 90
+  parts.push(block(tl, 100, y + 40, 50, text, 700, 64)); y += 40 + tl.length * 64 + 40
+  parts.push(`<circle cx="140" cy="${y + 30}" r="40" fill="${b.primary}"/>`)
+  parts.push(`<text x="140" y="${y + 43}" font-family="Poppins" font-size="26" font-weight="700" fill="#fff" text-anchor="middle">${esc(initials(f.author || 'Cliente'))}</text>`)
+  parts.push(block([f.author || 'João, cliente'], 202, y + 22, 30, text, 800, 0))
+  if (f.source) parts.push(block([f.source], 202, y + 58, 22, '#BABABA', 400, 0))
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${parts.join('')}</svg>`
+  return { svg, w: W, h: H }
+}
+
 function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
   switch (template) {
     case 'tweet': return svgTweet(f, b)
     case 'quote': return svgQuote(f, b)
     case 'announcement': return svgAnnouncement(f, b)
     case 'stat': return svgStat(f, b)
+    case 'problem': return svgProblem(f, b)
+    case 'faq': return svgFaq(f, b)
+    case 'trend': return svgTrend(f, b)
+    case 'market_watch': return svgMarketWatch(f, b)
+    case 'review': return svgReview(f, b)
     case 'photo': return svgPhoto(f, b, bg, logo, sticker, W, H, safe)
     default: return svgQuote(f, b)
   }
@@ -195,9 +306,13 @@ Deno.serve(async (req) => {
     // Autoteste (sem empresa): valida que wasm + fontes + resvg funcionam aqui.
     if (body.selftest) {
       await ensureEngine()
-      const { svg, w } = svgStat({ value: 'OK', label: 'selftest', context: 'render server' }, { primary: '#FF6D29', name: 'Test' })
-      const png = renderPng(svg, w)
-      return json({ ok: true, bytes: png.length })
+      const brand = { primary: '#FF6D29', name: 'Test' }
+      const sizes: Record<string, number> = {}
+      for (const t of ['stat', 'problem', 'faq', 'trend', 'market_watch', 'review', 'quote', 'announcement', 'tweet']) {
+        const { svg, w } = buildSvg(t, { value: '42%', stars: '4', items: 'Um\nDois\nTrês' }, brand, null, null, null, 1080, 1080, { top: 60, right: 80, bottom: 90, left: 80 })
+        sizes[t] = renderPng(svg, w).length
+      }
+      return json({ ok: true, sizes })
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -258,7 +373,8 @@ Deno.serve(async (req) => {
     if (body.save !== false) {
       // Guarda a RECEITA de render (concept) — permite re-renderizar em qualquer
       // formato depois SEM nova IA (o background já resolvido é reusado).
-      const concept = { template, fields, brand, background: bgUrl, sticker: body.sticker ? String(body.sticker) : null, format: String(body.format ?? template), width: W, height: H, safe }
+      const concept = { template, fields, brand, background: bgUrl, sticker: body.sticker ? String(body.sticker) : null, format: String(body.format ?? template), width: W, height: H, safe,
+        content_type: body.content_type ? String(body.content_type) : null, objective: body.objective ? String(body.objective) : null }
       const row: Record<string, unknown> = {
         company_id: companyId, kind, idea: subject, caption, format: String(body.format ?? template), image_url: pub.publicUrl, concept,
         source_id: body.source_id ? String(body.source_id) : null, origin: body.origin ? String(body.origin) : null,
