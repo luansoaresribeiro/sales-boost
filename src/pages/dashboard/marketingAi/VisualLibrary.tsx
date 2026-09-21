@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useRealtime } from '../../../lib/useRealtime'
+import { useCompany, type CompanyData } from '../../../contexts/CompanyContext'
 import { CARD, MUTED, BORDER, D, timeAgo } from './shared'
 import { ImageModal } from './TestingArea'
 import BrandKit from './BrandKit'
@@ -9,12 +10,45 @@ import ProductPhotos from './ProductPhotos'
 interface ArchivePost { id: string; caption: string | null; image_url: string | null; posted_at: string | null; likes_count: number | null; comments_count: number | null; media_type: string | null }
 
 const VIDEO_TYPES = new Set(['reel', 'video', 'story', 'VIDEO', 'REELS'])
+const LANGUAGES: { key: string; label: string }[] = [{ key: 'pt', label: '🇧🇷 Português' }, { key: 'en', label: '🇺🇸 English' }]
+
+// Língua em que a empresa fala com o cliente — usada por todo conteúdo
+// gerado (legenda, hooks, CTA). Fica junto de Estilos e Visuais porque é
+// outro traço da identidade da marca, igual voz/tom no Kit da Marca.
+function LanguageSelector({ company }: { company: CompanyData }) {
+  const { refreshCompany } = useCompany()
+  const [saving, setSaving] = useState(false)
+  const current = company.language ?? 'pt'
+
+  const setLanguage = async (lang: string) => {
+    if (lang === current || saving) return
+    setSaving(true)
+    await supabase.from('companies').update({ language: lang }).eq('id', company.id)
+    await refreshCompany()
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
+      <span style={{ fontSize: '11px', color: MUTED }}>🗣️ Língua da empresa (usada em todo conteúdo gerado):</span>
+      <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '9px' }}>
+        {LANGUAGES.map(l => (
+          <button key={l.key} onClick={() => setLanguage(l.key)} disabled={saving}
+            style={{ padding: '6px 12px', background: current === l.key ? 'rgba(167,139,250,0.15)' : 'transparent', border: `1px solid ${current === l.key ? 'rgba(167,139,250,0.4)' : 'transparent'}`, borderRadius: '6px', color: current === l.key ? '#A78BFA' : 'white', fontSize: '11.5px', fontWeight: 700, cursor: saving ? 'default' : 'pointer', fontFamily: D }}>
+            {l.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 // Estilos e Visuais — hub da identidade visual. Kit personaliza por cliente;
 // Arquivo mostra TODAS as mídias publicadas no Instagram (fotos, carrosséis E
 // vídeos/Reels — via `instagram_content_performance`, que a função de
 // Performance importa) + o que a própria plataforma publicou + fotos de produto.
-export default function VisualLibrary({ companyId }: { companyId: string }) {
+export default function VisualLibrary({ company }: { company: CompanyData }) {
+  const companyId = company.id
   const [tab, setTab] = useState<'kit' | 'archive'>('kit')
   const [archiveTab, setArchiveTab] = useState<'publicados' | 'produtos'>('publicados')
   const [archive, setArchive] = useState<ArchivePost[]>([])
@@ -55,6 +89,8 @@ export default function VisualLibrary({ companyId }: { companyId: string }) {
       <div style={{ padding: '12px 16px', background: 'rgba(167,139,250,0.07)', border: '1px solid rgba(167,139,250,0.25)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '16px' }}>
         🎨 <strong>Estilos e Visuais — a identidade visual da marca.</strong> <strong>Kit</strong> = logo, cores, tipografia e voz · <strong>Arquivo</strong> = tudo que você publica no Instagram (fotos, carrosséis <strong>e vídeos/Reels</strong>) + as fotos de produto que você subir. A geração filtra e monta as peças a partir daqui.
       </div>
+
+      <LanguageSelector company={company} />
 
       <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '10px', marginBottom: '18px', flexWrap: 'wrap' }}>
         {([['kit', '🎨 Kit da Marca'], ['archive', '🗂️ Arquivo']] as const).map(([k, label]) => (

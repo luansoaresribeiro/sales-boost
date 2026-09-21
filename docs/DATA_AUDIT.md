@@ -176,3 +176,85 @@ not business performance data.
     Ads silent fallback; (2) flip Demo Mode to explicit/off; (3) gate all demo tabs
     behind the toggle with proper empty/error states, using PerformanceTab as the
     template; (4) connect the already-available real competitor & content data.
+
+---
+
+## K. IMPLEMENTATION STATUS (post-implementation, updated 2026-09-10)
+
+Everything below was verified against the actual current code, not assumed.
+
+### ✅ Fully real (connected/permission present → real, never fake fallback)
+- **Meta Ads KPIs + campaigns** (`MetaAdsTab`) — `hasReal: !!live`, explicit
+  connected/error states, DataVeil blur when locked/error. Was the audit's
+  #1 priority; fully fixed.
+- **WhatsApp conversations** (`WhatsAppTab`) — real `whatsapp_conversations`,
+  realtime sync, DataVeil.
+- **Funil de Vendas** (`FunnelTab`) — real `leads`, DataVeil.
+- **Competitors** (`MarketIntelTab` → "Movimentos dos concorrentes") — real
+  `competitors`/`competitor_snapshots` (engagement %, posting frequency,
+  AI-classified move from real Instagram captions — Apify), DataVeil.
+  Backend (`map-competitors` auto-discovers each competitor's Instagram via
+  search; `monitor-competitor-social` scores engagement) was live in
+  Supabase but had fallen out of git on this branch — re-synced.
+- **Conteúdo → Calendário/Ideias** (`ContentAgentTab`) — real
+  `marketing_ai_content` when the agent has generated anything, DataVeil.
+- Everything already listed as real in section D above (Performance IG,
+  Avaliações, Oportunidades, Diagnóstico, Concorrentes page, Audiência,
+  Engagement automations, Aprovações, hub overview/tracking/brain/etc.) —
+  unchanged, still real.
+
+### 🔒 Correctly locked (no silent fake data; genuinely no real source yet)
+These now show the *same layout*, blurred, with an honest "sem dado real
+ainda" card — never a fabricated number presented as real:
+- **Growth OS command center** (aggregate revenue/ROAS/funnel on the hub) —
+  no single real source combines Meta Ads + WhatsApp + leads into one KPI
+  yet; each piece is real on its own tab.
+- **Meta Ads → Públicos/Criativos/Recomendações da IA** — the Marketing API
+  doesn't return this reading; was previously unveiled alongside the real
+  KPIs (disclosed in text, not enforced) — now independently veiled.
+- **Inteligência de Mercado → Tendências/Oportunidades** — no real
+  generator (Apify/AI not plugged for this specific read).
+- **Conteúdo → Equilíbrio do funil + roteiro/direção de arte** — those
+  specific fields (funnel stage, script, art direction) don't exist in
+  `marketing_ai_content`.
+- **Saúde da Meta** — needs Pixel/CAPI/Business-verification status from
+  the Meta Business API; not built. Genuinely different data than Instagram
+  content performance, can't be derived from what's already real.
+- **Feedback Loop (ICP)** — needs a new synthesis (e.g. Claude reading
+  reviews + leads) — a new capability, not just wiring; out of scope for a
+  data-availability pass per your own instruction not to build new
+  workflows here.
+- **Campanhas (paid)** — needs Pixel funnel steps + per-creative CTR from
+  the Marketing API; current Meta Ads integration only returns aggregate
+  spend/ROAS/campaigns, not this level of detail.
+- **Stories** — confirmed via direct query: `instagram_content_performance`
+  has 0 story rows for the connected test account. IG's `/me/media` doesn't
+  return expired stories, so this needs a different real-time capture
+  approach (webhook at publish time), not just a wiring fix.
+
+### 🟡 Different-but-compliant pattern (reviewed, not changed)
+- **Insights** — shows examples unconditionally when empty, but with an
+  honest "🧪 Exemplos" label and a working "Buscar reais" button that
+  fetches real data immediately (no integration/connection required for
+  this one — it's a web-search call). Didn't force this into DataVeil
+  since forcing Demo Mode as a gate would remove a strictly better
+  affordance (fetch real data now vs. toggle a demo flag).
+- **Engagement** — the "demo" here is a starter automation *template* the
+  owner edits into a real one (not a fabricated business metric); same
+  reasoning.
+
+### Demo Mode
+Default flipped from ON to OFF (already fixed by a prior commit,
+`useDemoMode` in `growthDemo.ts`, confirmed in code). A new production user
+never sees fabricated KPIs unless they explicitly turn it on.
+
+### Known repo hazard (not a data-policy issue, but relevant)
+This branch has had **several instances** of one session's local/stale copy
+silently reverting another session's already-deployed work when committed
+(WhatsApp real-conversations, Google integrations removal, and — found
+during this pass — the competitor-engagement backend). The Supabase-deployed
+edge functions/migrations survive independently of git, which is how this
+was recoverable each time, but the git history itself is not fully
+trustworthy as a record of "what's live." If multiple sessions are working
+this repo concurrently, worth a `supabase functions download` sanity pass
+before trusting a local file matches production.

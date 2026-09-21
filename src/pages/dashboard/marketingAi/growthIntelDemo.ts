@@ -58,7 +58,7 @@ export function buildIcpDemo(businessType?: string | null, city?: string | null)
 }
 
 // ── 2. Insights (inteligência externa) ────────────────────────────────────
-export type InsightCategory = 'evento' | 'sazonal' | 'feriado' | 'tendencia' | 'parceria' | 'influenciador' | 'concorrente' | 'setor'
+export type InsightCategory = 'evento' | 'sazonal' | 'feriado' | 'tendencia' | 'parceria' | 'influenciador' | 'concorrente' | 'setor' | 'opiniao'
 
 export const INSIGHT_CATEGORY_META: Record<InsightCategory, { label: string; icon: string }> = {
   evento: { label: 'Evento local', icon: '📍' },
@@ -69,6 +69,7 @@ export const INSIGHT_CATEGORY_META: Record<InsightCategory, { label: string; ico
   influenciador: { label: 'Influenciador', icon: '⭐' },
   concorrente: { label: 'Concorrente', icon: '🧭' },
   setor: { label: 'Setor', icon: '🏭' },
+  opiniao: { label: 'Opinião do cliente', icon: '💬' },
 }
 
 export interface InsightItem {

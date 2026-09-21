@@ -5,7 +5,6 @@ import {
   buildStoriesDemo, STICKER_META, STORY_STAGE_META, STORY_STATUS_META,
   type OrganicStory, type StoryAd, type StoryStage,
 } from './storiesDemo'
-import TestingArea from './TestingArea'
 import ModuleLibrary from './ModuleLibrary'
 import { useDemoMode } from './growthDemo'
 import DataVeil, { veilMode } from './DataVeil'
@@ -269,7 +268,6 @@ export default function StoriesTab({ company }: { company: Pick<CompanyData, 'id
     </DataVeil>
 
       <ModuleLibrary module="stories" />
-      <TestingArea companyId={company.id} kind="stories" />
     </div>
   )
 }

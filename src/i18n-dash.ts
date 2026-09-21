@@ -5,7 +5,7 @@ export const d = {
       planFree: 'Plano Free',
       signOut: 'Sair da conta',
       sections: { meetings: 'Reuniões', sales: 'Vendas', marketing: 'Agente Geral', competitors: 'Concorrentes', marketingAi: 'Marketing AI', progress: 'Progresso' },
-      nav: { overview: 'Visão Geral', activities: 'Atividades', jarvis: 'Jarvis', sales: 'Vendas', posts: 'Agente Geral', competitors: 'Concorrentes', integrations: 'Integrações', settings: 'Configurações', approvals: 'Aprovações', marketingAi: 'Marketing AI', progress: 'Business Progress' },
+      nav: { overview: 'Visão Geral', activities: 'Atividades', sales: 'Vendas', posts: 'Agente Geral', competitors: 'Concorrentes', integrations: 'Integrações', settings: 'Configurações', approvals: 'Aprovações', marketingAi: 'Marketing AI', progress: 'Business Progress' },
     },
     common: {
       loading: 'Carregando...',
@@ -248,7 +248,7 @@ export const d = {
       planFree: 'Free Plan',
       signOut: 'Sign out',
       sections: { meetings: 'Meetings', sales: 'Sales', marketing: 'General Agent', competitors: 'Competitors', marketingAi: 'Marketing AI', progress: 'Progress' },
-      nav: { overview: 'Overview', activities: 'Activity', jarvis: 'Jarvis', sales: 'Sales', posts: 'General Agent', competitors: 'Competitors', integrations: 'Integrations', settings: 'Settings', approvals: 'Approvals', marketingAi: 'Marketing AI', progress: 'Business Progress' },
+      nav: { overview: 'Overview', activities: 'Activity', sales: 'Sales', posts: 'General Agent', competitors: 'Competitors', integrations: 'Integrations', settings: 'Settings', approvals: 'Approvals', marketingAi: 'Marketing AI', progress: 'Business Progress' },
     },
     common: {
       loading: 'Loading...',

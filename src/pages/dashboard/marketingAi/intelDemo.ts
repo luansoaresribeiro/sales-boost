@@ -99,7 +99,7 @@ export const MOVE_META: Record<MoveType, { icon: string; color: string }> = {
   crescimento: { icon: '📈', color: '#4ade80' },
 }
 
-export interface CompetitorMove { name: string; followers: number; postingFreq: string; engagement: number; move: string; moveType: MoveType }
+export interface CompetitorMove { name: string; followers: number; postingFreq: string; engagement: number | null; move: string; moveType: MoveType | null }
 export interface MarketTrend { id: string; title: string; description: string; relevance: 'high' | 'medium' | 'low' }
 export interface MarketOpportunity { id: string; title: string; description: string; impact: 'high' | 'medium' | 'low' }
 export interface MarketDemo { competitors: CompetitorMove[]; trends: MarketTrend[]; opportunities: MarketOpportunity[] }

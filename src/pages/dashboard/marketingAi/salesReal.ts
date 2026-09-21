@@ -79,6 +79,36 @@ export function mapLeadRow(r: LeadRow): DemoLead {
 export interface ConvRow { id: string; wa_contact_id: string; contact_name: string | null; created_at: string }
 export interface ConvMsgRow { id: string; conversation_id: string; role: string; content: string; created_at: string }
 
+export interface LeadMsgRow { id: string; lead_id: string; direction: string; content: string; created_at: string }
+
+// Conversas reais do Instagram → mesmo cartão de Atendimento que o WhatsApp
+// usa. Vem de `leads` + `lead_messages` (channel='instagram', gravado pelo
+// instagram-webhook a partir de DMs de verdade) — não de uma tabela própria:
+// leads/lead_messages já são o "canal genérico" do produto, então o Funil
+// enxerga o mesmo lead automaticamente, sem precisar de nenhuma ponte extra.
+export function mapLeadConversations(leadsRows: LeadRow[], msgs: LeadMsgRow[]): DemoWaConversation[] {
+  const byLead = new Map<string, LeadMsgRow[]>()
+  for (const m of msgs) {
+    const arr = byLead.get(m.lead_id) ?? []
+    arr.push(m); byLead.set(m.lead_id, arr)
+  }
+  return leadsRows.map(l => {
+    const lm = (byLead.get(l.id) ?? []).sort((a, b) => a.created_at.localeCompare(b.created_at))
+    const messages: DemoWaMessage[] = lm.map(m => ({ from: m.direction === 'out' ? 'agente' : 'cliente', text: m.content, time: fmtTime(m.created_at) }))
+    const last = lm[lm.length - 1]
+    const status: WaStatus = last && last.direction !== 'out' ? 'aguardando_humano' : 'ia_respondendo'
+    return {
+      id: l.id,
+      name: l.name || l.contact || 'Lead',
+      channelKey: 'instagram' as Channel,
+      status,
+      unread: 0,
+      lastPreview: last?.content ?? '',
+      messages,
+    }
+  }).sort((a, b) => (b.messages.at(-1)?.time ?? '').localeCompare(a.messages.at(-1)?.time ?? ''))
+}
+
 // Conversas reais do WhatsApp → cartões de Atendimento. Status é derivado: se a
 // última mensagem foi do cliente, está aguardando; senão, IA respondendo.
 export function mapConversations(convs: ConvRow[], msgs: ConvMsgRow[]): DemoWaConversation[] {

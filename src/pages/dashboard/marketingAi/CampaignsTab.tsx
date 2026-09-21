@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { CompanyData } from '../../../contexts/CompanyContext'
 import { CARD, MUTED, BORDER, D } from './shared'
 import {
   buildCampaignDemo, FUNNEL_META, STATUS_META,
   type Campaign, type CampaignRecommendation, type FunnelStage,
 } from './campaignDemo'
-import TestingArea from './TestingArea'
+import { buildMetaHealthDemo, HEALTH_CLASS_META, classifyHealth } from './metaHealthDemo'
 import ModuleLibrary from './ModuleLibrary'
 import { useDemoMode } from './growthDemo'
 import DataVeil, { veilMode } from './DataVeil'
@@ -195,8 +196,14 @@ function CampaignCard({ c }: { c: Campaign }) {
 }
 
 export default function CampaignsTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city'> }) {
+  const navigate = useNavigate()
   const demo = useMemo(() => buildCampaignDemo(company), [company])
-  const { campaigns, recommendations, pixelJourney, pixelReads, creatives, learnings, overview } = demo
+  const { campaigns, recommendations, pixelJourney, pixelReads, creatives, learnings, contentIdeas, storyAds, overview } = demo
+  // Mesmo score que vive em Agente de Dados → Saúde da Meta — aparece aqui
+  // também porque quem roda campanha paga precisa ver isso sem trocar de aba
+  // (o Pixel/Business Manager são a base de tudo que acontece em Campanhas).
+  const metaHealth = useMemo(() => buildMetaHealthDemo(company), [company])
+  const healthCls = HEALTH_CLASS_META[classifyHealth(metaHealth.overall)]
 
   // Distribuição por etapa do funil (só as etapas que têm campanha).
   const stageCounts = useMemo(() => {
@@ -229,13 +236,26 @@ export default function CampaignsTab({ company }: { company: Pick<CompanyData, '
       </div>
 
       {/* Overview */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', margin: '18px 0 26px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', margin: '18px 0 14px' }}>
         <StatCard label="Campanhas ativas" value={overview.active} accent />
         <StatCard label="Rascunhos" value={overview.drafts} />
         <StatCard label="ROAS previsto" value={`${overview.predictedRoas.toFixed(1)}×`} sub="média do portfólio" />
-        <StatCard label="Saúde média" value={overview.health} sub="de 100" />
+        <StatCard label="Saúde média" value={overview.health} sub="de 100 (destas campanhas)" />
         <StatCard label="Orçamento/mês" value={overview.monthlyBudget} />
       </div>
+
+      {/* Saúde da Meta — mesmo score de Agente de Dados → Saúde da Meta,
+          repetido aqui porque quem roda campanha paga precisa dele sem sair
+          da aba (Pixel/Business Manager são a base de qualquer campanha). */}
+      <button onClick={() => navigate('/dashboard/marketing-ai/saude-meta')}
+        style={{ display: 'flex', alignItems: 'center', gap: '14px', width: '100%', textAlign: 'left', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '13px 16px', marginBottom: '26px', cursor: 'pointer', fontFamily: D }}>
+        <span style={{ fontSize: '22px' }}>❤️‍🩹</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: '12px', fontWeight: 800, color: 'white' }}>Saúde da Meta: <span style={{ color: healthCls.color }}>{metaHealth.overall}/100 · {healthCls.label}</span></div>
+          <div style={{ fontSize: '10.5px', color: MUTED, marginTop: '1px' }}>Pixel, Business Manager e verificação — a base de qualquer campanha paga. Ver detalhes em Agente de Dados →</div>
+        </div>
+        <span style={{ fontSize: '11px', color: ORANGE, fontWeight: 700, flexShrink: 0 }}>Abrir →</span>
+      </button>
 
       {/* Recomendações da IA */}
       <div style={{ marginBottom: '28px' }}>
@@ -321,6 +341,41 @@ export default function CampaignsTab({ company }: { company: Pick<CompanyData, '
         </div>
       </div>
 
+      {/* Melhores ideias de conteúdo pra promover */}
+      <div style={{ marginBottom: '28px' }}>
+        {sectionTitle('✍️ Melhores ideias de conteúdo pra campanha', 'O Estrategista de Mídia Paga olha o que já funcionou no orgânico (Agente de Conteúdo) antes de sugerir promover algo do zero.')}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
+          {contentIdeas.map(ci => {
+            const m = FUNNEL_META[ci.stage]
+            return (
+              <div key={ci.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '13px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '7px' }}>
+                  <span style={{ fontSize: '9px', fontWeight: 700, color: m.color, background: `${m.color}18`, border: `1px solid ${m.color}40`, borderRadius: '99px', padding: '2px 8px' }}>{m.icon} {m.short}</span>
+                  <span style={{ fontSize: '9px', fontWeight: 700, color: MUTED }}>{ci.format}</span>
+                </div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: 'white', marginBottom: '5px', lineHeight: 1.4 }}>{ci.title}</div>
+                <div style={{ fontSize: '10.5px', color: MUTED, lineHeight: 1.5 }}>{ci.why}</div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Stories Ads interativos */}
+      <div style={{ marginBottom: '28px' }}>
+        {sectionTitle('📱 Stories Ads interativos', 'Story ad com sticker de verdade (enquete, quiz, slider, contagem) — engaja e ainda manda sinal rico pro pixel, diferente de um vídeo passivo.')}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
+          {storyAds.map(sa => (
+            <div key={sa.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '13px 14px' }}>
+              <div style={{ fontSize: '9px', fontWeight: 700, color: '#f472b6', background: 'rgba(244,114,182,0.1)', border: '1px solid rgba(244,114,182,0.3)', borderRadius: '99px', padding: '2px 8px', display: 'inline-block', textTransform: 'uppercase', marginBottom: '7px' }}>{sa.sticker}</div>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'white', marginBottom: '5px', lineHeight: 1.4 }}>{sa.concept}</div>
+              <div style={{ fontSize: '10.5px', color: MUTED, lineHeight: 1.5, marginBottom: '6px' }}>{sa.goal}</div>
+              <div style={{ fontSize: '10.5px', color: ORANGE, fontStyle: 'italic' }}>ex: {sa.example}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Biblioteca de criativos */}
       <div style={{ marginBottom: '28px' }}>
         {sectionTitle('🎨 Biblioteca de criativos', 'Peças geradas pela IA — legenda, ângulo e desempenho.')}
@@ -365,7 +420,6 @@ export default function CampaignsTab({ company }: { company: Pick<CompanyData, '
     </DataVeil>
 
       <ModuleLibrary module="campanhas" />
-      <TestingArea companyId={company.id} kind="campanhas" />
     </div>
   )
 }

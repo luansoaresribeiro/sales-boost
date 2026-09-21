@@ -63,6 +63,7 @@ const FILTERS: { key: InsightCategory | 'all'; label: string }[] = [
   { key: 'feriado', label: '🎉 Datas' },
   { key: 'sazonal', label: '🗓️ Sazonal' },
   { key: 'tendencia', label: '📈 Tendências' },
+  { key: 'opiniao', label: '💬 Opiniões' },
   { key: 'parceria', label: '🤝 Parcerias' },
   { key: 'influenciador', label: '⭐ Influenciadores' },
   { key: 'concorrente', label: '🧭 Concorrentes' },

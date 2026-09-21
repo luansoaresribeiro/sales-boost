@@ -38,7 +38,11 @@ function tweet(f: Record<string, string>, brand: Brand): JSX.Element {
     <div style={{ width: '100%', height: '100%', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: bfont(brand) }}>
       <div style={{ width: '84%', background: bg }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '30px' }}>
-          <div style={{ width: '92px', height: '92px', borderRadius: '50%', background: brand.primary, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', fontWeight: 800, flexShrink: 0 }}>{initials(f.name)}</div>
+          {brand.logoUrl ? (
+            <img src={brand.logoUrl} crossOrigin="anonymous" alt="" style={{ width: '92px', height: '92px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, background: '#fff' }} />
+          ) : (
+            <div style={{ width: '92px', height: '92px', borderRadius: '50%', background: brand.primary, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', fontWeight: 800, flexShrink: 0 }}>{initials(f.name)}</div>
+          )}
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '34px', fontWeight: 800, color: fg }}>{f.name || 'Nome'}</span>
@@ -59,46 +63,25 @@ function tweet(f: Record<string, string>, brand: Brand): JSX.Element {
   )
 }
 
-// ── Card de Citação ─────────────────────────────────────────────────────────
-function quote(f: Record<string, string>, brand: Brand): JSX.Element {
+// ── Foco no Produto ──────────────────────────────────────────────────────────
+// Pôster: produto centralizado, sombra de "estúdio" atrás dele, nome/preço/
+// chamada embaixo. Usa as fotos reais da aba Produtos (Estilos e Visuais).
+function product(f: Record<string, string>, brand: Brand): JSX.Element {
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: `linear-gradient(155deg, ${brand.primary}, ${shade(brand.primary, -30)})`, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '110px', boxSizing: 'border-box', fontFamily: bfont(brand), color: '#fff' }}>
-      <div style={{ fontSize: '150px', lineHeight: 0.6, fontWeight: 800, opacity: 0.35 }}>“</div>
-      <div style={{ fontSize: '58px', lineHeight: 1.3, fontWeight: 800, margin: '20px 0 44px' }}>{f.quote || 'A frase de efeito que resume a sua marca vai aqui.'}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-        <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 800 }}>{initials(f.author || brand.name)}</div>
-        <div>
-          <div style={{ fontSize: '32px', fontWeight: 800 }}>{f.author || brand.name}</div>
-          {f.role && <div style={{ fontSize: '24px', opacity: 0.85 }}>{f.role}</div>}
-        </div>
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: brand.bg || '#0E0B0A', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 70px', boxSizing: 'border-box', fontFamily: bfont(brand), color: '#fff', textAlign: 'center' }}>
+      <div style={{ position: 'relative', width: '100%', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
+        <div style={{ position: 'absolute', bottom: '6%', width: '58%', height: '48px', borderRadius: '50%', background: 'rgba(0,0,0,0.55)', filter: 'blur(24px)' }} />
+        {f.productImage ? (
+          <img src={f.productImage} crossOrigin="anonymous" alt="" style={{ position: 'relative', maxWidth: '78%', maxHeight: '100%', objectFit: 'contain', filter: 'drop-shadow(0 30px 34px rgba(0,0,0,0.5))' }} />
+        ) : (
+          <div style={{ position: 'relative', width: '60%', height: '70%', borderRadius: '18px', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '64px' }}>📦</div>
+        )}
       </div>
-      <Logo b={brand} />
-    </div>
-  )
-}
-
-// ── Anúncio / Promoção ──────────────────────────────────────────────────────
-function announcement(f: Record<string, string>, brand: Brand): JSX.Element {
-  return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: brand.bg || '#0E0B0A', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '100px', boxSizing: 'border-box', fontFamily: bfont(brand), color: brand.text || '#fff' }}>
-      {f.eyebrow && <div style={{ fontSize: '30px', fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: brand.primary, marginBottom: '28px' }}>{f.eyebrow}</div>}
-      <div style={{ fontSize: '92px', lineHeight: 1.05, fontWeight: 800, marginBottom: '30px' }}>{f.headline || 'Sua chamada principal'}</div>
-      {f.subtext && <div style={{ fontSize: '38px', lineHeight: 1.4, color: '#BABABA', marginBottom: '44px' }}>{f.subtext}</div>}
-      {f.offer && <div style={{ alignSelf: 'flex-start', background: brand.accent || brand.primary, color: '#000', fontSize: '46px', fontWeight: 800, padding: '18px 40px', borderRadius: '18px', marginBottom: '44px' }}>{f.offer}</div>}
-      {f.cta && <div style={{ fontSize: '34px', fontWeight: 700, color: brand.text || '#fff', border: `2px solid ${brand.primary}`, borderRadius: '999px', padding: '18px 42px', alignSelf: 'flex-start' }}>{f.cta} →</div>}
-      <Logo b={brand} />
-    </div>
-  )
-}
-
-// ── Estatística / Destaque ──────────────────────────────────────────────────
-function stat(f: Record<string, string>, brand: Brand): JSX.Element {
-  return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: brand.bg || '#150E08', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '90px', boxSizing: 'border-box', fontFamily: bfont(brand), color: brand.text || '#fff', textAlign: 'center' }}>
-      {f.label && <div style={{ fontSize: '38px', fontWeight: 700, color: '#BABABA', marginBottom: '20px' }}>{f.label}</div>}
-      <div style={{ fontSize: '230px', lineHeight: 1, fontWeight: 800, color: brand.primary }}>{f.value || '87%'}</div>
-      {f.context && <div style={{ fontSize: '42px', lineHeight: 1.35, marginTop: '30px', maxWidth: '80%' }}>{f.context}</div>}
-      {f.source && <div style={{ fontSize: '24px', color: '#7a7a7a', marginTop: '40px' }}>{f.source}</div>}
+      <div style={{ flexShrink: 0 }}>
+        {f.name && <div style={{ fontSize: '52px', fontWeight: 800 }}>{f.name}</div>}
+        {f.price && <div style={{ fontSize: '40px', fontWeight: 800, color: brand.primary, marginTop: '10px' }}>{f.price}</div>}
+        {f.cta && <div style={{ display: 'inline-block', marginTop: '22px', background: brand.primary, color: '#000', fontSize: '30px', fontWeight: 800, padding: '14px 32px', borderRadius: '999px' }}>{f.cta} →</div>}
+      </div>
       <Logo b={brand} />
     </div>
   )
@@ -212,15 +195,15 @@ function review(f: Record<string, string>, brand: Brand): JSX.Element {
   )
 }
 
-// Clareia/escurece um hex (para o gradiente do card de citação).
-function shade(hex: string, amt: number): string {
-  const h = hex.replace('#', '')
-  const num = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16)
-  const clamp = (v: number) => Math.max(0, Math.min(255, v))
-  const r = clamp((num >> 16) + amt), g = clamp(((num >> 8) & 0xff) + amt), b = clamp((num & 0xff) + amt)
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
-}
-
+// REGRA (pedido do dono, 2026-09): "Gerar imagem de formato" só deve listar
+// formato que o SELECIONADOR do gerador automático de post também conhece —
+// nunca um formato "órfão" que só existe aqui manualmente. O outro lado
+// dessa regra é creative-generate's TEMPLATE_DESC (chaves livre/tweet/
+// product hoje — "livre" é o equivalente conceitual de "photo" aqui, ver
+// FORMAT_CLASS em shared.ts). Tirando ou adicionando um formato aqui,
+// espelhar lá também (e vice-versa) — não deixar os dois divergirem de novo
+// (foi assim que "Estatística" ficou órfão por um tempo, e "Anúncio"/
+// "Antes-Depois" foram descontinuados nos dois lugares).
 export const TEMPLATES: Template[] = [
   {
     key: 'tweet', label: 'Print de Tweet', icon: '🐦', w: 1080, h: 1080,
@@ -234,19 +217,13 @@ export const TEMPLATES: Template[] = [
     render: tweet,
   },
   {
-    key: 'quote', label: 'Card de Citação', icon: '❝', w: 1080, h: 1080,
-    fields: [{ key: 'quote', label: 'Citação', type: 'textarea' }, { key: 'author', label: 'Autor' }, { key: 'role', label: 'Cargo / negócio' }],
-    sample: { quote: '', author: '', role: '' },
-    render: quote,
-  },
-  {
-    key: 'announcement', label: 'Anúncio / Promoção', icon: '📣', w: 1080, h: 1350,
+    key: 'product', label: 'Foco no Produto', icon: '📦', w: 1080, h: 1350,
     fields: [
-      { key: 'eyebrow', label: 'Etiqueta (topo)' }, { key: 'headline', label: 'Chamada principal', type: 'textarea' },
-      { key: 'subtext', label: 'Subtexto', type: 'textarea' }, { key: 'offer', label: 'Oferta (destaque)' }, { key: 'cta', label: 'Chamada pra ação' },
+      { key: 'productImage', label: 'Foto do produto' }, { key: 'name', label: 'Nome' },
+      { key: 'price', label: 'Preço' }, { key: 'cta', label: 'Chamada pra ação' },
     ],
-    sample: { eyebrow: 'Novidade', headline: '', subtext: '', offer: '', cta: '' },
-    render: announcement,
+    sample: { productImage: '', name: '', price: '', cta: '' },
+    render: product,
   },
   {
     key: 'photo', label: 'Post com Foto', icon: '🖼️', w: 1080, h: 1350,
@@ -256,12 +233,6 @@ export const TEMPLATES: Template[] = [
     ],
     sample: { eyebrow: '', headline: '', offer: '', cta: '' },
     render: photo,
-  },
-  {
-    key: 'stat', label: 'Estatística / Destaque', icon: '📊', w: 1080, h: 1080,
-    fields: [{ key: 'value', label: 'Número/destaque' }, { key: 'label', label: 'Rótulo (topo)' }, { key: 'context', label: 'Contexto', type: 'textarea' }, { key: 'source', label: 'Fonte' }],
-    sample: { value: '', label: '', context: '', source: '' },
-    render: stat,
   },
   {
     key: 'problem', label: 'Problema → Virada', icon: '🎯', w: 1080, h: 1350,
