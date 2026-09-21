@@ -205,6 +205,7 @@ const OPENAI_TOOLS = [
   { type: 'function', function: { name: 'get_latest_diagnostic', description: 'Diagnostico mais recente do site.', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'list_competitors', description: 'Concorrentes mapeados.', parameters: { type: 'object', properties: { limit: { type: 'number' } } } } },
   { type: 'function', function: { name: 'get_tab_insight', description: 'Le o relatorio de IA mais recente (resumo + sugestoes) ja gerado para uma aba do dashboard. Mais rapido e barato do que reprocessar os dados brutos daquela aba do zero — sempre prefira consultar aqui antes de decidir uma acao relacionada aquela area.', parameters: { type: 'object', properties: { tab_key: { type: 'string', enum: ['avaliacoes', 'opinioes', 'concorrentes', 'crescimento', 'performance', 'audiencia', 'diagnostico'] } }, required: ['tab_key'] } } },
+  { type: 'function', function: { name: 'get_data_agent_signals', description: 'Consulta o Data Agent — a camada de inteligencia que ja cruza os dados brutos e devolve SINAIS prontos (com evidencia, confianca e relevancia) por dominio: competition (gaps vs. concorrentes), content (sem postar, rascunhos parados, formato que mais engaja) e history (o que ja foi tentado ou ja falhou, pra nao repetir). Prefira SEMPRE isto antes de ler tabela por tabela: kind "state" da o retrato atual, kind "delta" da so o que mudou. Tambem informa quais canais (Google, Instagram, LinkedIn) estao conectados.', parameters: { type: 'object', properties: { kind: { type: 'string', enum: ['state', 'delta'] }, domain: { type: 'string', enum: ['competition', 'content', 'history'] } }, required: ['kind'] } } },
   { type: 'function', function: { name: 'save_memory', description: 'Salva informacao na memoria do agente.', parameters: { type: 'object', properties: { key: { type: 'string' }, value: { type: 'string' }, type: { type: 'string', enum: ['preference', 'fact', 'rule'] } }, required: ['key', 'value', 'type'] } } },
   { type: 'function', function: { name: 'load_memory', description: 'Carrega uma memoria pelo nome da chave.', parameters: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } } },
   { type: 'function', function: { name: 'list_memories', description: 'Lista memorias do agente.', parameters: { type: 'object', properties: { type: { type: 'string' } } } } },
@@ -310,6 +311,7 @@ O QUE VOCÊ ENXERGA — o painel inteiro do negócio, não só posts:
 - Performance: velocidade e SEO técnico do site.
 - Audiência: seguidores, engajamento e alcance em cada rede.
 Cada uma dessas áreas já tem um resumo pronto, gerado por IA (ferramenta get_tab_insight) — consulte ele antes de agir sempre que a decisão depender daquela área; é mais rápido e mais barato do que reprocessar dado bruto do zero toda vez.
+Para o quadro estratégico cruzado, use get_data_agent_signals: ele devolve SINAIS prontos (com evidência, confiança e relevância) sobre concorrência, conteúdo e histórico — inclusive o que já foi tentado ou já falhou, pra você não repetir — e diz quais canais (Google, Instagram, LinkedIn) estão conectados. Prefira esses sinais a ficar lendo tabela por tabela.
 
 MENTE REATIVA E PROATIVA — as duas ao mesmo tempo:
 - Reativa: quando o dono pedir algo específico, execute com precisão, sem burocracia e sem pedir confirmação de algo óbvio.
@@ -458,6 +460,28 @@ async function runTool(tu: { name: string; id: string; input: unknown }, company
   if (tu.name === 'get_tab_insight') {
     const { data } = await admin.from('insights_reports').select('summary,suggestions,created_at').eq('company_id', companyId).eq('tab_key', inp.tab_key as string).maybeSingle()
     return { result: data ? JSON.stringify(data) : 'Nenhum relatorio gerado ainda para essa aba.', posts: 0, actions: 0 }
+  }
+
+  if (tu.name === 'get_data_agent_signals') {
+    // Le SINAIS ja normalizados atraves do Data Agent (funcao data-agent) em vez
+    // de reprocessar as tabelas brutas aqui. Chamada interna via CRON_SECRET,
+    // sempre escopada ao company_id que o runTool ja recebeu — vale tanto no
+    // chat interativo quanto no ciclo automatico (nenhum dos dois depende de
+    // um JWT de usuario neste ponto).
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const cronSecret = Deno.env.get('CRON_SECRET') ?? ''
+    const kind = inp.kind === 'delta' ? 'delta' : 'state'
+    const reqBody: Record<string, unknown> = { cron_secret: cronSecret, company_id: companyId, kind }
+    if (inp.domain) reqBody.domain = inp.domain
+    try {
+      const res = await fetch(`${supabaseUrl}/functions/v1/data-agent`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(reqBody),
+      })
+      const data = await res.json().catch(() => ({}))
+      return { result: JSON.stringify(data), posts: 0, actions: 0 }
+    } catch (e) {
+      return { result: `Erro ao consultar o Data Agent: ${String(e)}`, posts: 0, actions: 0 }
+    }
   }
 
   if (tu.name === 'save_memory') {
@@ -658,6 +682,7 @@ const ORCHESTRATOR_TOOLS = [
   { type: 'function', function: { name: 'get_latest_diagnostic', description: 'Diagnostico mais recente do site: performance, SEO, acessibilidade.', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'list_competitors', description: 'Concorrentes mapeados: nota, numero de reviews, distancia, preco.', parameters: { type: 'object', properties: { limit: { type: 'number' } } } } },
   { type: 'function', function: { name: 'get_tab_insight', description: 'Le o relatorio de IA mais recente (resumo + sugestoes) de uma aba do dashboard — mais rapido do que reprocessar dado bruto.', parameters: { type: 'object', properties: { tab_key: { type: 'string', enum: ['avaliacoes', 'opinioes', 'concorrentes', 'crescimento', 'performance', 'audiencia', 'diagnostico'] } }, required: ['tab_key'] } } },
+  { type: 'function', function: { name: 'get_data_agent_signals', description: 'Consulta o Data Agent: SINAIS prontos (com evidencia, confianca e relevancia) por dominio — competition, content, history — mais quais canais (Google, Instagram, LinkedIn) estao conectados. Comece por aqui (kind "delta" pra ver so o que mudou desde a ultima decisao) antes de ler tabela por tabela.', parameters: { type: 'object', properties: { kind: { type: 'string', enum: ['state', 'delta'] }, domain: { type: 'string', enum: ['competition', 'content', 'history'] } }, required: ['kind'] } } },
   {
     type: 'function', function: {
       name: 'report_decision',
@@ -686,7 +711,7 @@ async function decideRolesToRun(hermesUrl: string, hermesApiKey: string, company
 Você é o Hermes, orquestrador central de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
 Sua única função aqui é decidir se o Agente Geral precisa agir agora — você NUNCA cria posts, leads ou mensagens você mesmo nesta etapa, só decide.
 
-Olhe o negócio inteiro antes de decidir, não só uma parte: conteúdo (posts pendentes e publicados), reputação (avaliações sem resposta), concorrência (o que os concorrentes estão fazendo), diagnóstico do site (performance/SEO) e atendimento (leads e oportunidades parados). Use quantas ferramentas de leitura forem necessárias para ter o quadro completo antes de decidir.
+Comece SEMPRE por get_data_agent_signals com kind "delta" — ele já cruza os dados e te entrega os sinais que mudaram desde a última vez (rascunhos parados, dias sem postar, gap de reputação vs. concorrentes, o que já foi tentado), com evidência e confiança. Só depois, se precisar de mais detalhe de uma área específica, use as outras ferramentas de leitura. Olhe o negócio inteiro antes de decidir, não só uma parte: conteúdo, reputação, concorrência, diagnóstico do site e atendimento.
 ${routineNotes.length ? '\n' + routineNotes.map(n => `- ${n}`).join('\n') + '\n' : ''}
 Ao terminar de investigar, você DEVE chamar report_decision — é a única forma de encerrar.`
 
