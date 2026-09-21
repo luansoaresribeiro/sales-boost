@@ -25,6 +25,30 @@ interface AiContent {
   reasoning: string | null; status: string; created_at: string
 }
 
+// ── Classificação do tipo de execução (Orgânico / Responder cliente /
+// Campanha) — não existe coluna pra isso no banco, então classificamos aqui
+// a partir de action_type/channel/ref_type. Conteúdo (marketing_ai_content)
+// é sempre orgânico (posts do Instagram); ações universais (agent_actions)
+// são classificadas por palavra-chave no action_type/channel.
+type ExecKind = 'organico' | 'cliente' | 'campanha'
+const EXEC_META: Record<ExecKind, { label: string; icon: string; color: string }> = {
+  organico: { label: 'Orgânico', icon: '✍️', color: '#4ade80' },
+  cliente: { label: 'Responder cliente', icon: '💬', color: '#60a5fa' },
+  campanha: { label: 'Campanha', icon: '🎯', color: '#FBBF24' },
+}
+function classifyAction(a: AgentAction): ExecKind {
+  const s = `${a.action_type} ${a.channel ?? ''} ${a.ref_type ?? ''}`.toLowerCase()
+  if (/dm|lead|reply|review|followup|qualif|answer|whatsapp|message/.test(s)) return 'cliente'
+  if (/campaign|campanha|ads|anuncio|budget/.test(s)) return 'campanha'
+  return 'organico'
+}
+function ExecBadge({ kind }: { kind: ExecKind }) {
+  const m = EXEC_META[kind]
+  return (
+    <span style={{ fontSize: '9.5px', fontWeight: 700, color: m.color, padding: '2px 8px', border: `1px solid ${m.color}44`, borderRadius: '99px', flexShrink: 0, whiteSpace: 'nowrap' }}>{m.icon} {m.label}</span>
+  )
+}
+
 // ── Card universal de AÇÃO (qualquer agente) ────────────────────────────────
 function ActionCard({ a, busy, onDecide, onEdit, lang }: {
   a: AgentAction; busy: boolean; onDecide: (d: 'approve' | 'reject') => void; onEdit: (desc: string) => void; lang: 'pt' | 'en'
@@ -39,7 +63,10 @@ function ActionCard({ a, busy, onDecide, onEdit, lang }: {
         <div style={{ fontSize: '14px', fontWeight: 800, color: 'white' }}>
           {CHANNEL_ICON[a.channel ?? 'internal'] ?? '⚙️'} {a.title}
         </div>
-        <span style={{ fontSize: '9.5px', fontWeight: 700, color: ap.color, padding: '2px 8px', border: `1px solid ${ap.color}44`, borderRadius: '99px', flexShrink: 0 }}>{ap.label}</span>
+        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+          <ExecBadge kind={classifyAction(a)} />
+          <span style={{ fontSize: '9.5px', fontWeight: 700, color: ap.color, padding: '2px 8px', border: `1px solid ${ap.color}44`, borderRadius: '99px' }}>{ap.label}</span>
+        </div>
       </div>
       {/* WHO / WHERE / WHEN */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', fontSize: '10.5px', color: MUTED, marginBottom: '8px' }}>
@@ -98,7 +125,10 @@ function ContentCard({ item, onApprove, onDiscard, busy, lang }: {
       <div style={{ display: 'flex', gap: '14px' }}>
         {item.image_url && <img src={item.image_url} alt="" style={{ width: '72px', height: '72px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0, border: `1px solid ${BORDER}` }} />}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>{icon} {item.idea ?? (lang === 'en' ? 'Content idea' : 'Ideia de conteúdo')}</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
+            <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{icon} {item.idea ?? (lang === 'en' ? 'Content idea' : 'Ideia de conteúdo')}</div>
+            <ExecBadge kind="organico" />
+          </div>
           {item.caption && <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.82)', lineHeight: 1.55, marginBottom: '6px', whiteSpace: 'pre-wrap' }}>{item.caption}</div>}
           {item.hashtags && <div style={{ fontSize: '11.5px', color: '#60a5fa', marginBottom: '6px' }}>{item.hashtags}</div>}
           {item.reasoning && <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>💡 {item.reasoning}</div>}
@@ -209,28 +239,25 @@ export default function ApprovalsPage() {
           <div style={{ textAlign: 'center', padding: '60px', color: MUTED }}>{d[lang].common.loading}</div>
         ) : (
           <>
-            {/* Ações universais dos agentes */}
-            {pending.length > 0 && (
+            {/* Lista única — ações universais dos agentes + conteúdo orgânico,
+                combinados por data, cada card já classificado (Orgânico /
+                Responder cliente / Campanha) via ExecBadge. */}
+            {(pending.length > 0 || content.length > 0) && (
               <section style={{ marginBottom: '28px' }}>
-                <SectionTitle label={lang === 'en' ? 'Actions to approve' : 'Ações pra aprovar'} count={pending.length} />
+                <SectionTitle label={lang === 'en' ? 'To approve' : 'Pra aprovar'} count={pending.length + content.length} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {pending.map(a => (
-                    <ActionCard key={a.id} a={a} busy={busyId === a.id} lang={lang}
-                      onDecide={d => decide(a.id, d)} onEdit={desc => edit(a.id, desc)} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Conteúdo (fluxo atual) */}
-            {content.length > 0 && (
-              <section style={{ marginBottom: '28px' }}>
-                <SectionTitle label={lang === 'en' ? 'Content to approve' : 'Conteúdo pra aprovar'} count={content.length} />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {content.map(item => (
-                    <ContentCard key={item.id} item={item} busy={busyId === item.id} lang={lang}
-                      onApprove={() => approveContent(item.id)} onDiscard={() => discardContent(item.id)} />
-                  ))}
+                  {[
+                    ...pending.map(a => ({ key: `a-${a.id}`, created_at: a.created_at, node: (
+                      <ActionCard key={`a-${a.id}`} a={a} busy={busyId === a.id} lang={lang}
+                        onDecide={d => decide(a.id, d)} onEdit={desc => edit(a.id, desc)} />
+                    ) })),
+                    ...content.map(item => ({ key: `c-${item.id}`, created_at: item.created_at, node: (
+                      <ContentCard key={`c-${item.id}`} item={item} busy={busyId === item.id} lang={lang}
+                        onApprove={() => approveContent(item.id)} onDiscard={() => discardContent(item.id)} />
+                    ) })),
+                  ]
+                    .sort((x, y) => y.created_at.localeCompare(x.created_at))
+                    .map(u => u.node)}
                 </div>
               </section>
             )}

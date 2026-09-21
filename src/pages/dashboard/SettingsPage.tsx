@@ -134,16 +134,15 @@ export default function SettingsPage() {
   const { lang } = useLang()
   const T = d[lang].settings
 
-  const tabFromParam = (p: string | null): 'info' | 'integrations' | 'agentes' | 'conexoes' | 'contexto' =>
-    p === 'integracoes' ? 'integrations' : p === 'agentes' ? 'agentes' : p === 'conexoes' ? 'conexoes' : p === 'contexto' ? 'contexto' : 'info'
-  const [tab, setTab] = useState<'info' | 'integrations' | 'agentes' | 'conexoes' | 'contexto'>(tabFromParam(searchParams.get('tab')))
+  const tabFromParam = (p: string | null): 'info' | 'integrations' | 'agentes' | 'conexoes' =>
+    p === 'integracoes' ? 'integrations' : p === 'agentes' ? 'agentes' : p === 'conexoes' ? 'conexoes' : 'info'
+  const [tab, setTab] = useState<'info' | 'integrations' | 'agentes' | 'conexoes'>(tabFromParam(searchParams.get('tab')))
 
   useEffect(() => {
     const p = searchParams.get('tab')
     if (p === 'integracoes') setTab('integrations')
     if (p === 'agentes') setTab('agentes')
     if (p === 'conexoes') setTab('conexoes')
-    if (p === 'contexto') setTab('contexto')
     const section = searchParams.get('section')
     if (!section) return
     setTimeout(() => document.getElementById(`section-${section}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
@@ -346,11 +345,11 @@ export default function SettingsPage() {
         <p style={{ color: MUTED, fontSize: '13px' }}>{T.subtitle}</p>
       </div>
 
-      <div style={{ padding: '28px 32px', maxWidth: tab === 'conexoes' || tab === 'contexto' ? '960px' : '680px' }}>
+      <div style={{ padding: '28px 32px', maxWidth: tab === 'conexoes' || tab === 'info' ? '960px' : '680px' }}>
 
         {/* Tab switcher */}
         <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '5px', marginBottom: '24px', width: 'fit-content', flexWrap: 'wrap' }}>
-          {([['info', 'Informações da empresa'], ['agentes', 'Agentes'], ['conexoes', 'Conexões'], ['contexto', 'Contexto do Negócio'], ['integrations', 'Notificações']] as const).map(([key, label]) => (
+          {([['info', 'Informações da empresa'], ['agentes', 'Agentes'], ['conexoes', 'Conexões'], ['integrations', 'Notificações']] as const).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
               style={{ padding: '9px 18px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, background: tab === key ? ORANGE : 'transparent', color: tab === key ? '#000' : MUTED, transition: 'all 0.15s' }}>
               {label}
@@ -386,16 +385,6 @@ export default function SettingsPage() {
           )
         )}
 
-        {tab === 'contexto' && (
-          companyId ? (
-            <BusinessContextTab company={{ id: companyId }} />
-          ) : (
-            <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '22px', fontSize: '13px', color: MUTED, lineHeight: 1.6 }}>
-              Crie o perfil do seu negócio primeiro (aba <strong style={{ color: 'white' }}>Informações da empresa</strong>) pra ensinar o contexto à IA.
-            </div>
-          )
-        )}
-
         {tab === 'info' && (
         <>
 
@@ -411,6 +400,12 @@ export default function SettingsPage() {
         </SectionCard>
 
         {companyId && <BusinessUnderstandingCard companyId={companyId} />}
+
+        {companyId && (
+          <SectionCard title="Contexto do Negócio">
+            <BusinessContextTab company={{ id: companyId }} />
+          </SectionCard>
+        )}
 
         <SectionCard id="section-salvar" title="Salvar">
           {saveError && (
