@@ -14,6 +14,10 @@ interface ModuleDef { section: string; title: string; desc: string; icon: string
 // Os agentes de crescimento — o coração do Growth OS. O Agente de Conteúdo é o
 // agente principal (hero); os demais trabalham conectados a ele.
 const CONTENT_MODULE: ModuleDef = { section: 'content', title: 'Agente de Conteúdo', desc: 'Calendário, ideias, roteiros de Reels, legendas, criativos e automação de comentários e DMs do Instagram.', icon: '✍️' }
+// Agente de Estratégia — lê o negócio e o dado real, define objetivo, metas,
+// orçamento e prazo, e direciona o Agente de Conteúdo. Ponte entre Dados e
+// Conteúdo, por isso mora logo abaixo dele, ainda em destaque (hero).
+const STRATEGY_MODULE: ModuleDef = { section: 'estrategia', title: 'Agente de Estratégia', desc: 'Lê o negócio e o dado real, define objetivo, metas, orçamento e prazo — e direciona o Agente de Conteúdo.', icon: '🧭' }
 
 const GROWTH_MODULES: ModuleDef[] = [
   { section: 'competitors', title: 'Inteligência de Mercado', desc: 'Concorrentes, tendências e oportunidades do seu segmento.', icon: '🧭' },
@@ -84,6 +88,8 @@ export default function MarketingAiHubPage() {
             demais agentes ficam conectados logo abaixo, como um time só. */}
         <div style={{ border: '1px solid rgba(255,109,41,0.18)', borderRadius: '22px', padding: '16px', background: 'rgba(255,109,41,0.035)', marginBottom: '30px' }}>
           <HeroAgentCard m={CONTENT_MODULE} onClick={() => open(CONTENT_MODULE.section)} />
+          <div style={{ height: '10px' }} />
+          <HeroAgentCard m={STRATEGY_MODULE} onClick={() => open(STRATEGY_MODULE.section)} badge="Direciona" />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '18px 4px 12px' }}>
             <span style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -138,7 +144,7 @@ export default function MarketingAiHubPage() {
 // Card principal (hero) do Agente de Conteúdo — maior e em destaque, no topo
 // do painel da equipe. Sinaliza que é o agente central sem se desconectar dos
 // outros (que ficam logo abaixo, dentro do mesmo painel).
-function HeroAgentCard({ m, onClick }: { m: ModuleDef; onClick: () => void }) {
+function HeroAgentCard({ m, onClick, badge = 'Agente principal' }: { m: ModuleDef; onClick: () => void; badge?: string }) {
   const [hover, setHover] = useState(false)
   return (
     <button onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
@@ -159,7 +165,7 @@ function HeroAgentCard({ m, onClick }: { m: ModuleDef; onClick: () => void }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '20px', fontWeight: 800, color: 'white', letterSpacing: '-0.02em' }}>{m.title}</span>
           <span style={{ fontSize: '9.5px', fontWeight: 800, padding: '3px 9px', borderRadius: '99px', background: 'rgba(255,109,41,0.16)', border: '1px solid rgba(255,109,41,0.35)', color: ORANGE, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            Agente principal
+            {badge}
           </span>
         </div>
         <p style={{ fontSize: '13px', color: MUTED, margin: 0, lineHeight: 1.55, maxWidth: '560px' }}>{m.desc}</p>

@@ -1,22 +1,21 @@
 // Círculo flutuante do Feedback Loop — substitui o antigo card fixo
 // (FeedbackLoopTab.tsx, 100% demo) por um resumo REAL e contextual do que a
 // IA está observando no agente que está aberto no momento. Aparece em
-// qualquer uma das 4 seções de agente (Dados/Estratégia/Orgânico e
-// Campanha/Conversão), nunca inventa aprendizado pra preencher espaço — sem
-// sinal real, mostra que ainda não há sinal.
+// qualquer uma das seções de agente, nunca inventa aprendizado pra preencher
+// espaço — sem sinal real, mostra que ainda não há sinal.
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { CARD, MUTED, BORDER, D, ORANGE, PILLAR_ICON, timeAgo, type Insight } from './shared'
 import type { LogRow } from './strategyTypes'
 
-type Section = 'dados' | 'estrategia' | 'content' | 'conversao'
+type Section = 'content' | 'competitors' | 'meta-ads' | 'funil' | 'whatsapp' | 'estrategia'
 
 const SECTION_LABEL: Record<Section, string> = {
-  dados: 'no Agente de Dados', estrategia: 'no Agente de Estratégia',
-  content: 'no Agente Orgânico e Campanha', conversao: 'no Agente de Conversão',
+  content: 'no Agente de Conteúdo', competitors: 'na Inteligência de Mercado', 'meta-ads': 'no Agente de Meta Ads',
+  funil: 'no Funil de Vendas', whatsapp: 'no Atendimento', estrategia: 'no Agente de Estratégia',
 }
 const SECTION_PILLARS: Record<Section, Insight['pillar'][]> = {
-  dados: ['tracking', 'competitor'], estrategia: ['strategy'], content: ['content'], conversao: [],
+  content: ['content'], competitors: ['competitor'], 'meta-ads': [], funil: [], whatsapp: [], estrategia: ['strategy'],
 }
 
 export default function FeedbackWidget({ companyId, section, insights }: { companyId: string; section: Section; insights: Insight[] }) {

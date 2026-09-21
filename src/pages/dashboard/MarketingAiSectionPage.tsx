@@ -20,24 +20,29 @@ import ReviewsAgentTab from './marketingAi/ReviewsAgentTab'
 import InsightsTab from './marketingAi/InsightsTab'
 import BusinessContextTab from './marketingAi/BusinessContextTab'
 import MetaHealthTab from './marketingAi/MetaHealthTab'
+import StrategySection from './marketingAi/StrategySection'
+import FeedbackWidget from './marketingAi/FeedbackWidget'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
 
 const ORANGE = '#FF6D29'
 
 const SECTION_TITLE: Record<string, string> = {
-  tracking: 'Tracking', content: 'Conteúdo', competitors: 'Inteligência de Mercado', brain: 'Aprendizado',
+  tracking: 'Tracking', content: 'Conteúdo', competitors: 'Inteligência de Mercado', brain: 'Aprendizado', estrategia: 'Agente de Estratégia',
   overview: 'Visão Geral', experiments: 'Experimentos', tools: 'Configuração', timeline: 'Central de Execução', reports: 'Relatórios',
   conexoes: 'Conexões', 'meta-ads': 'Agente de Meta Ads', funil: 'Funil de Vendas', whatsapp: 'Atendimento', feedback: 'Feedback Loop', configuracao: 'Configuração dos Agentes', avaliacoes: 'Avaliações', insights: 'Insights', context: 'Contexto do Negócio', 'saude-meta': 'Saúde da Meta',
 }
 const SECTION_ICON: Record<string, string> = {
-  tracking: '📈', content: '✍️', competitors: '🧭', brain: '🧠',
+  tracking: '📈', content: '✍️', competitors: '🧭', brain: '🧠', estrategia: '🧭',
   overview: '🏠', experiments: '🧪', tools: '🛠️', timeline: '🕓', reports: '📊',
   conexoes: '🔌', 'meta-ads': '🎯', funil: '🔀', whatsapp: '💬', feedback: '🔁', configuracao: '⚙️', avaliacoes: '⭐', insights: '💡', context: '🧠', 'saude-meta': '❤️‍🩹',
 }
 
 // Seções do Growth OS que funcionam em modo demonstração, sem depender da
 // ativação/config do Marketing AI feita pela equipe.
-const DEMO_SECTIONS = new Set(['overview', 'conexoes', 'meta-ads', 'funil', 'whatsapp', 'feedback', 'content', 'competitors', 'configuracao', 'avaliacoes', 'insights', 'context', 'saude-meta'])
+const DEMO_SECTIONS = new Set(['overview', 'conexoes', 'meta-ads', 'funil', 'whatsapp', 'feedback', 'content', 'competitors', 'configuracao', 'avaliacoes', 'insights', 'context', 'saude-meta', 'estrategia'])
+// Seções que representam um "agente" de verdade — o círculo do Feedback Loop
+// (FeedbackWidget) só aparece nelas, contextual à seção aberta no momento.
+const AGENT_SECTIONS = new Set(['content', 'competitors', 'meta-ads', 'funil', 'whatsapp', 'estrategia'])
 
 export default function MarketingAiSectionPage() {
   const { section } = useParams<{ section: string }>()
@@ -90,6 +95,8 @@ export default function MarketingAiSectionPage() {
         return <TrackingTab accessToken={accessToken} snapshots={data.snapshots} insights={data.insights.filter(i => i.pillar === 'tracking')} hasInstagram={!!company.instagram_url} onRefresh={data.refresh} />
       case 'content':
         return <ContentSection company={company} />
+      case 'estrategia':
+        return <StrategySection company={company} />
       case 'competitors':
         return <MarketIntelTab company={company} />
       case 'brain':
@@ -139,6 +146,9 @@ export default function MarketingAiSectionPage() {
       <div style={{ padding: section === 'overview' ? 0 : '28px 32px' }}>
         {render()}
       </div>
+      {AGENT_SECTIONS.has(section) && (
+        <FeedbackWidget companyId={company.id} section={section as 'content' | 'competitors' | 'meta-ads' | 'funil' | 'whatsapp' | 'estrategia'} insights={data.insights} />
+      )}
     </div>
   )
 }
