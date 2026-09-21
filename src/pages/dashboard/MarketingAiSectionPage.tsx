@@ -18,35 +18,39 @@ import ConnectionsTab from './marketingAi/ConnectionsTab'
 import FunnelTab from './marketingAi/FunnelTab'
 import WhatsAppTab from './marketingAi/WhatsAppTab'
 import EngagementTab from './marketingAi/EngagementTab'
-import FeedbackLoopTab from './marketingAi/FeedbackLoopTab'
 import ReviewsAgentTab from './marketingAi/ReviewsAgentTab'
 import InsightsTab from './marketingAi/InsightsTab'
 import BusinessContextTab from './marketingAi/BusinessContextTab'
 import MetaHealthTab from './marketingAi/MetaHealthTab'
 import VisualLibrary from './marketingAi/VisualLibrary'
+import StrategySection from './marketingAi/StrategySection'
+import FeedbackWidget from './marketingAi/FeedbackWidget'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
 
 const ORANGE = '#FF6D29'
 
 const SECTION_TITLE: Record<string, string> = {
-  tracking: 'Tracking', content: 'Conteúdo', dados: 'Agente de Dados', conversao: 'Agente de Conversão', brain: 'Aprendizado',
+  tracking: 'Tracking', content: 'Conteúdo', dados: 'Agente de Dados', estrategia: 'Agente de Estratégia', conversao: 'Agente de Conversão', brain: 'Aprendizado',
   overview: 'Visão Geral', experiments: 'Experimentos', tools: 'Configuração', timeline: 'Central de Execução', reports: 'Relatórios',
-  conexoes: 'Conexões', feedback: 'Feedback Loop', configuracao: 'Configuração dos Agentes', avaliacoes: 'Avaliações', context: 'Contexto do Negócio',
+  conexoes: 'Conexões', configuracao: 'Configuração dos Agentes', avaliacoes: 'Avaliações', context: 'Contexto do Negócio',
   // Insights e Saúde da Meta agora vivem dentro de Agente de Dados (ver
   // DadosSection) — o link antigo continua funcionando, só cai direto na
   // sub-aba certa em vez de ser uma página solta.
   insights: 'Agente de Dados', 'saude-meta': 'Agente de Dados',
 }
 const SECTION_ICON: Record<string, string> = {
-  tracking: '📈', content: '✍️', dados: '📊', conversao: '🔀', brain: '🧠',
+  tracking: '📈', content: '✍️', dados: '📊', estrategia: '🧭', conversao: '🔀', brain: '🧠',
   overview: '🏠', experiments: '🧪', tools: '🛠️', timeline: '🕓', reports: '📊',
-  conexoes: '🔌', feedback: '🔁', configuracao: '⚙️', avaliacoes: '⭐', context: '🧠',
+  conexoes: '🔌', configuracao: '⚙️', avaliacoes: '⭐', context: '🧠',
   insights: '📊', 'saude-meta': '📊',
 }
 
 // Seções do Growth OS que funcionam em modo demonstração, sem depender da
 // ativação/config do Marketing AI feita pela equipe.
-const DEMO_SECTIONS = new Set(['overview', 'conexoes', 'dados', 'conversao', 'feedback', 'content', 'configuracao', 'avaliacoes', 'context', 'insights', 'saude-meta'])
+const DEMO_SECTIONS = new Set(['overview', 'conexoes', 'dados', 'estrategia', 'conversao', 'content', 'configuracao', 'avaliacoes', 'context', 'insights', 'saude-meta'])
+// Seções que representam um "agente" de verdade do fluxo — o círculo do
+// Feedback Loop (FeedbackWidget) só aparece nelas, contextual à seção aberta.
+const AGENT_SECTIONS = new Set(['dados', 'estrategia', 'content', 'conversao'])
 
 export default function MarketingAiSectionPage() {
   const { section } = useParams<{ section: string }>()
@@ -61,10 +65,12 @@ export default function MarketingAiSectionPage() {
 
   // Links antigos: Meta Ads virou item próprio no menu esquerdo (fora do
   // Marketing AI); Inteligência de Mercado, Funil e Atendimento foram
-  // absorvidos por Agente de Dados / Agente de Conversão.
+  // absorvidos por Agente de Dados / Agente de Conversão. Feedback Loop não
+  // é mais uma seção própria — virou o círculo flutuante (FeedbackWidget).
   if (section === 'meta-ads') return <Navigate to="/dashboard/meta-ads" replace />
   if (section === 'competitors') return <Navigate to="/dashboard/marketing-ai/dados" replace />
   if (section === 'funil' || section === 'whatsapp' || section === 'engagement') return <Navigate to="/dashboard/marketing-ai/conversao" replace />
+  if (section === 'feedback') return <Navigate to="/dashboard/marketing-ai/dados" replace />
   if (!section || !SECTION_TITLE[section]) return <Navigate to="/dashboard/marketing-ai" replace />
   // A configuração dos agentes (autonomia/objetivo) foi consolidada em
   // Configurações → Agentes, o lar único de config do cliente. Deep links
@@ -107,6 +113,8 @@ export default function MarketingAiSectionPage() {
         return <ContentSection company={company} />
       case 'dados':
         return <DadosSection company={company} />
+      case 'estrategia':
+        return <StrategySection company={company} />
       case 'conversao':
         return <ConversaoSection company={company} />
       case 'brain':
@@ -121,8 +129,6 @@ export default function MarketingAiSectionPage() {
         return <ReportsTab accessToken={accessToken} insights={data.insights} strategyLog={data.strategyLog} reports={data.reports} onRefresh={data.refresh} />
       case 'conexoes':
         return <ConnectionsTab connections={buildGrowthDemo(company).connections} />
-      case 'feedback':
-        return <FeedbackLoopTab company={company} />
       case 'avaliacoes':
         return <ReviewsAgentTab company={company} />
       case 'insights':
@@ -150,6 +156,9 @@ export default function MarketingAiSectionPage() {
       <div style={{ padding: section === 'overview' ? 0 : '28px 32px' }}>
         {render()}
       </div>
+      {AGENT_SECTIONS.has(section) && (
+        <FeedbackWidget companyId={company.id} section={section as 'dados' | 'estrategia' | 'content' | 'conversao'} insights={data.insights} />
+      )}
     </div>
   )
 }

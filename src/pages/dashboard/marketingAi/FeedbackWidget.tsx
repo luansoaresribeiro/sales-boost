@@ -8,14 +8,14 @@ import { supabase } from '../../../lib/supabase'
 import { CARD, MUTED, BORDER, D, ORANGE, PILLAR_ICON, timeAgo, type Insight } from './shared'
 import type { LogRow } from './strategyTypes'
 
-type Section = 'content' | 'competitors' | 'meta-ads' | 'funil' | 'whatsapp' | 'estrategia'
+type Section = 'dados' | 'estrategia' | 'content' | 'conversao'
 
 const SECTION_LABEL: Record<Section, string> = {
-  content: 'no Agente de Conteúdo', competitors: 'na Inteligência de Mercado', 'meta-ads': 'no Agente de Meta Ads',
-  funil: 'no Funil de Vendas', whatsapp: 'no Atendimento', estrategia: 'no Agente de Estratégia',
+  dados: 'no Agente de Dados', estrategia: 'no Agente de Estratégia',
+  content: 'no Agente de Conteúdo', conversao: 'no Agente de Conversão',
 }
 const SECTION_PILLARS: Record<Section, Insight['pillar'][]> = {
-  content: ['content'], competitors: ['competitor'], 'meta-ads': [], funil: [], whatsapp: [], estrategia: ['strategy'],
+  dados: ['tracking', 'competitor'], estrategia: ['strategy'], content: ['content'], conversao: [],
 }
 
 export default function FeedbackWidget({ companyId, section, insights }: { companyId: string; section: Section; insights: Insight[] }) {

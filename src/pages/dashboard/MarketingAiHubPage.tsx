@@ -9,6 +9,7 @@ import { mapStage, type LeadRow } from './marketingAi/salesReal'
 import type { LeadStageKey } from './marketingAi/salesDemo'
 import DataVeil, { veilMode } from './marketingAi/DataVeil'
 import { MUTED, BORDER, D, SUPABASE_URL } from './marketingAi/shared'
+import { useStrategySummary } from './marketingAi/useStrategySummary'
 
 const ORANGE = '#FF6D29'
 const CARD = '#150E08'
@@ -17,14 +18,19 @@ interface ModuleDef { section: string; title: string; desc: string; icon: string
 
 // O fluxo do Growth OS, de cima pra baixo: Agente de Dados (observa —
 // Performance real + Inteligência de Mercado + Insights + Saúde da Meta) →
-// Agente de Conteúdo (cria) → Agente de Conversão (fecha — Funil de Vendas +
-// Atendimento + Engagement) → Feedback Loop (aprende com o resultado e
-// realimenta o Agente de Dados — fecha o ciclo, é o último agente do fluxo).
-// Meta Ads virou item próprio no menu esquerdo, fora dessa sequência.
+// Agente de Estratégia (direciona — lê o negócio e o dado real, define
+// objetivo/orçamento/metas e manda o direcionamento pro Conteúdo) → Agente
+// de Conteúdo (cria) → Agente de Conversão (fecha — Funil de Vendas +
+// Atendimento + Engagement). O Feedback Loop não é mais um card do fluxo —
+// virou um círculo flutuante (FeedbackWidget.tsx) que aparece dentro de
+// cada uma dessas seções com o sinal real daquele agente.
 const DATA_MODULE: ModuleDef = { section: 'dados', title: 'Agente de Dados', desc: 'Performance real do Instagram, inteligência de mercado, insights de oportunidades e a Saúde da Meta — o que já funcionou e o que está acontecendo agora.', icon: '📊' }
+const STRATEGY_MODULE: ModuleDef = { section: 'estrategia', title: 'Agente de Estratégia', desc: 'Lê o negócio e o dado real, define objetivo, metas, orçamento e prazo — e direciona o Agente de Conteúdo.', icon: '🧭' }
 const CONTENT_MODULE: ModuleDef = { section: 'content', title: 'Agente de Conteúdo', desc: 'Calendário da Semana (Ideias + planejamento), Overview do que já está pronto/agendado, e a Biblioteca com formatos, testes e vault.', icon: '✍️' }
 const CONVERSION_MODULE: ModuleDef = { section: 'conversao', title: 'Agente de Conversão', desc: 'Funil de vendas, atendimento e engagement (comentários/DMs) — transforma quem chegou até você em cliente.', icon: '🔀' }
-const FEEDBACK_MODULE: ModuleDef = { section: 'feedback', title: 'Feedback Loop', desc: 'Aprende seu cliente ideal (ICP) com o resultado de tudo acima e refina o Agente de Dados sozinho — fecha o ciclo.', icon: '🔁' }
+
+const STRATEGY_STATUS_LABEL: Record<string, string> = { draft: 'Rascunho', active: 'Ativa', paused: 'Pausada', completed: 'Concluída', needs_review: 'Precisa revisão' }
+const STRATEGY_STATUS_COLOR: Record<string, string> = { draft: MUTED, active: '#4ade80', paused: '#FBBF24', completed: '#60a5fa', needs_review: '#f87171' }
 
 const STAGE_ORDER: LeadStageKey[] = ['novo', 'contato', 'qualificado', 'proposta', 'venda']
 const STAGE_LABEL: Record<LeadStageKey, string> = { novo: 'Novo Lead', contato: 'Contato realizado', qualificado: 'Qualificado', proposta: 'Proposta', venda: 'Venda realizada' }
@@ -139,6 +145,7 @@ export default function MarketingAiHubPage() {
 
   const demo = useMemo(() => (company ? buildGrowthDemo(company) : null), [company])
   const { real, loading: realLoading, error: realError } = useRealGrowth(company?.id ?? '', session?.access_token ?? '')
+  const { summary: strategySummary } = useStrategySummary(company?.id)
 
   if (!company || !demo) {
     return <div style={{ padding: '48px', color: MUTED, fontSize: '14px' }}>Carregando...</div>
@@ -195,17 +202,27 @@ export default function MarketingAiHubPage() {
           Sua equipe de agentes
         </div>
 
-        {/* O fluxo do Growth OS: Dados observa → Conteúdo cria → Conversão
-            fecha → Feedback Loop aprende e realimenta o ciclo. As setas
-            indicam a sequência — cada agente entrega pro próximo. */}
+        {/* O fluxo do Growth OS: Dados observa → Estratégia direciona →
+            Conteúdo cria → Conversão fecha. As setas indicam a sequência —
+            cada agente entrega pro próximo. O Feedback Loop aparece dentro
+            de cada card (círculo flutuante), não é mais uma etapa separada. */}
         <div style={{ border: '1px solid rgba(255,109,41,0.18)', borderRadius: '22px', padding: '16px', background: 'rgba(255,109,41,0.035)' }}>
           <HeroAgentCard m={DATA_MODULE} badge="1 · Observa" onClick={() => open(DATA_MODULE.section)} />
           <FlowArrow />
-          <HeroAgentCard m={CONTENT_MODULE} badge="2 · Agente principal" onClick={() => open(CONTENT_MODULE.section)} />
+          <HeroAgentCard m={STRATEGY_MODULE} badge="2 · Direciona" onClick={() => open(STRATEGY_MODULE.section)} compact
+            summary={strategySummary ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '9.5px', fontWeight: 800, color: STRATEGY_STATUS_COLOR[strategySummary.status] ?? MUTED }}>● {STRATEGY_STATUS_LABEL[strategySummary.status] ?? strategySummary.status}</span>
+                <span style={{ fontSize: '12px', color: 'white', fontWeight: 700 }}>{strategySummary.primary_business_objective || strategySummary.name}</span>
+                {strategySummary.topGoal && <span style={{ fontSize: '11px', color: MUTED }}>· {strategySummary.topGoal.name}{strategySummary.topGoal.target_value != null ? `: ${strategySummary.topGoal.current_progress ?? 0}/${strategySummary.topGoal.target_value}` : ''}</span>}
+              </div>
+            ) : (
+              <span style={{ fontSize: '12px', color: MUTED }}>Nenhuma estratégia ativa ainda — clique pra criar uma.</span>
+            )} />
           <FlowArrow />
-          <HeroAgentCard m={CONVERSION_MODULE} badge="3 · Converte" onClick={() => open(CONVERSION_MODULE.section)} />
+          <HeroAgentCard m={CONTENT_MODULE} badge="3 · Agente principal" onClick={() => open(CONTENT_MODULE.section)} />
           <FlowArrow />
-          <HeroAgentCard m={FEEDBACK_MODULE} badge="4 · Aprende" onClick={() => open(FEEDBACK_MODULE.section)} />
+          <HeroAgentCard m={CONVERSION_MODULE} badge="4 · Converte" onClick={() => open(CONVERSION_MODULE.section)} />
         </div>
 
         <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginTop: '14px', maxWidth: '680px' }}>
@@ -228,33 +245,40 @@ function FlowArrow() {
 
 // Card hero — usado 3x (Dados, Conteúdo, Conversão), sempre no mesmo tamanho
 // e estilo, formando o fluxo vertical do Growth OS.
-function HeroAgentCard({ m, badge, onClick }: { m: ModuleDef; badge: string; onClick: () => void }) {
+// `compact`/`summary` são usados só pelo Agente de Estratégia: card um
+// pouco menor (ícone/padding reduzidos) com um resumo ao vivo no lugar da
+// descrição estática, pra comunicar que ele é a ponte entre Dados e
+// Conteúdo — sem perder função nenhuma, é só o tamanho do card de entrada.
+function HeroAgentCard({ m, badge, onClick, compact, summary }: { m: ModuleDef; badge: string; onClick: () => void; compact?: boolean; summary?: React.ReactNode }) {
   const [hover, setHover] = useState(false)
+  const iconSize = compact ? 44 : 58
   return (
     <button onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       style={{
         width: '100%', boxSizing: 'border-box', textAlign: 'left', cursor: 'pointer', fontFamily: D,
-        display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap',
+        display: 'flex', alignItems: 'center', gap: compact ? '16px' : '20px', flexWrap: 'wrap',
         background: 'linear-gradient(135deg, rgba(255,109,41,0.12), rgba(255,109,41,0.04))',
         border: `1px solid ${hover ? 'rgba(255,109,41,0.6)' : 'rgba(255,109,41,0.3)'}`,
-        borderRadius: '18px', padding: '24px 26px',
+        borderRadius: compact ? '14px' : '18px', padding: compact ? '16px 20px' : '24px 26px',
         transition: 'border-color 0.18s, box-shadow 0.18s, transform 0.18s',
         transform: hover ? 'translateY(-2px)' : 'none',
         boxShadow: hover ? '0 12px 34px rgba(255,109,41,0.18)' : '0 4px 18px rgba(255,109,41,0.08)',
       }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '58px', height: '58px', flexShrink: 0, borderRadius: '16px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.25)', fontSize: '30px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: `${iconSize}px`, height: `${iconSize}px`, flexShrink: 0, borderRadius: compact ? '12px' : '16px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.25)', fontSize: compact ? '22px' : '30px' }}>
         {m.icon}
       </div>
       <div style={{ flex: 1, minWidth: '220px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '20px', fontWeight: 800, color: 'white', letterSpacing: '-0.02em' }}>{m.title}</span>
+          <span style={{ fontSize: compact ? '16px' : '20px', fontWeight: 800, color: 'white', letterSpacing: '-0.02em' }}>{m.title}</span>
           <span style={{ fontSize: '9.5px', fontWeight: 800, padding: '3px 9px', borderRadius: '99px', background: 'rgba(255,109,41,0.16)', border: '1px solid rgba(255,109,41,0.35)', color: ORANGE, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
             {badge}
           </span>
         </div>
-        <p style={{ fontSize: '13px', color: MUTED, margin: 0, lineHeight: 1.55, maxWidth: '560px' }}>{m.desc}</p>
+        {compact && summary
+          ? summary
+          : <p style={{ fontSize: '13px', color: MUTED, margin: 0, lineHeight: 1.55, maxWidth: '560px' }}>{m.desc}</p>}
       </div>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexShrink: 0, padding: '11px 20px', borderRadius: '11px', background: hover ? ORANGE : 'rgba(255,109,41,0.14)', border: `1px solid ${hover ? ORANGE : 'rgba(255,109,41,0.35)'}`, color: hover ? '#0E0B0A' : ORANGE, fontSize: '13px', fontWeight: 800, transition: 'background 0.18s, color 0.18s' }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexShrink: 0, padding: compact ? '9px 16px' : '11px 20px', borderRadius: '11px', background: hover ? ORANGE : 'rgba(255,109,41,0.14)', border: `1px solid ${hover ? ORANGE : 'rgba(255,109,41,0.35)'}`, color: hover ? '#0E0B0A' : ORANGE, fontSize: '13px', fontWeight: 800, transition: 'background 0.18s, color 0.18s' }}>
         Abrir <span style={{ transition: 'transform 0.18s', transform: hover ? 'translateX(3px)' : 'none' }}>→</span>
       </div>
     </button>
