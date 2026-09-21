@@ -242,7 +242,7 @@ export const DOMAINS: Record<DomainKey, DomainDef> = {
       { key: 'funnel_conversion', label: 'Conversão ponta-a-ponta do funil', source: '—', available: false },
     ],
     history: 'diagnostics.created_at (histórico de diagnósticos) + tracking_snapshots.collected_at (série de métricas).',
-    gaps: ['Funil instrumentado ponta-a-ponta (tráfego→lead→cliente→receita)', 'Tracking de conversão real', 'Dados de e-mail/WhatsApp'],
+    gaps: ['Funil instrumentado ponta-a-ponta (tráfego→lead→cliente→receita)', 'Tracking de conversão real', 'Dados de e-mail/WhatsApp', 'LinkedIn ainda não integrado (sem tabela/coluna/coletor) — o data-agent expõe o slot como connected:false'],
     signals: [
       { key: 'site_regression', label: 'Regressão no site', description: 'Queda de PageSpeed ou review técnico piorou.', derivedFrom: ['diagnostics'], emits: ['old_value', 'new_value', 'observed_at', 'evidence'] },
       { key: 'broken_channel', label: 'Canal quebrado', description: 'Link/canal fora do ar (perda de aquisição).', derivedFrom: ['check-links-health'], emits: ['subject_id', 'event_type', 'business_relevance'] },
