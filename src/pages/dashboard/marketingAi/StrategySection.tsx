@@ -4,6 +4,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
 import { CARD, MUTED, BORDER, D, ORANGE, SUPABASE_URL, timeAgo } from './shared'
 import { BudgetPanel, FunnelPanel, EstimatesPanel, InitiativesPanel, MonitoringPanel } from './StrategyPanels'
+import IntelligenceDomainsPanel from './IntelligenceDomainsPanel'
 import {
   type Strategy, type Goal, type LogRow, type Budget,
   GOAL_TYPE_LABEL, STATUS_LABEL, STATUS_COLOR, EMPTY_BUDGET,
@@ -188,6 +189,7 @@ export default function StrategySection({ company }: { company: CompanyData }) {
       {active && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
           <StrategyBlock title="🧭 Visão Geral"><OverviewPanel strategy={active} /></StrategyBlock>
+          <StrategyBlock title="🧠 Inteligência do Negócio (9 domínios)"><IntelligenceDomainsPanel companyId={company.id} /></StrategyBlock>
           <StrategyBlock title="🎯 Metas"><GoalsPanel goals={goals} onUpdate={updateGoal} /></StrategyBlock>
           <StrategyBlock title="💰 Orçamento"><BudgetPanel budget={localBudget} onChange={setLocalBudget} onSave={saveBudget} saving={savingBudget} /></StrategyBlock>
           <StrategyBlock title="🔀 Conteúdo & Campanha"><FunnelPanel strategy={active} /></StrategyBlock>

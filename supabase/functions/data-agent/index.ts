@@ -11,10 +11,19 @@
  *   { kind: 'delta',    since, domain? }   → what changed since a timestamp
  *   { kind: 'evidence', signalKey }        → the raw rows that justify a signal
  *
- * Contract mirrors shared/data-agent/domains.ts (the canonical schema). This
- * first version implements the 3 "rich" domains that need no new data —
- * COMPETITION, CONTENT, HISTORY — plus the Google / Instagram / LinkedIn
- * channel readers. Everything else is reported as an honest gap, never faked.
+ * Contract mirrors shared/data-agent/domains.ts (the canonical schema) — kept
+ * as a separate, self-contained copy here on purpose: this function runs on
+ * Deno and is bundled/deployed in isolation, so it never imports across the
+ * frontend/edge-function boundary (same "duplicated on purpose" convention
+ * already used elsewhere in this project for image-prompt rules etc).
+ *
+ * All 9 domains are implemented now. BUSINESS/CUSTOMER/MARKET/DIGITAL/
+ * RESOURCES/PERFORMANCE only emit the signals that real data already
+ * supports (see domains.ts's own `gaps` field for what's honestly missing —
+ * things like structured pricing/margins or transactional LTV/CAC still
+ * aren't collected anywhere in the product, so those specific signals stay
+ * absent rather than fabricated) — same discipline the original 3 domains
+ * (COMPETITION, CONTENT, HISTORY) already followed.
  *
  * Auth: an owner/client JWT (scoped to their own company) OR an internal call
  * carrying CRON_SECRET (Hermes / autonomous cycle), which may pass company_id.
@@ -28,9 +37,9 @@ const cors = {
 type SupaClient = ReturnType<typeof createClient>
 type Confidence = 'high' | 'medium' | 'low'
 type Relevance = 'high' | 'medium' | 'low'
-type DomainKey = 'competition' | 'content' | 'history'
+type DomainKey = 'business' | 'customer' | 'market' | 'competition' | 'digital' | 'content' | 'history' | 'resources' | 'performance'
 
-const IMPLEMENTED: DomainKey[] = ['competition', 'content', 'history']
+const IMPLEMENTED: DomainKey[] = ['business', 'customer', 'market', 'competition', 'digital', 'content', 'history', 'resources', 'performance']
 
 /** Canonical signal record — richer than a table row (see domains.ts). */
 interface SignalRecord {
@@ -91,19 +100,34 @@ async function readGoogle(admin: SupaClient, company: CompanyRow): Promise<Chann
   }
 }
 
-function readInstagram(company: CompanyRow): ChannelRead {
+// Conectado de verdade = tem instagram_access_token + instagram_user_id
+// (mesmo critério que a edge function instagram-performance usa). O
+// histórico real fica em instagram_performance_snapshots (NÃO
+// marketing_ai_tracking_snapshots — tabela parecida de nome mas vazia/não
+// usada; era aí que o bug original estava). company.social_data.instagram
+// (cache do apify-sync) só entra como complemento quando existir.
+async function readInstagram(admin: SupaClient, company: CompanyRow): Promise<ChannelRead> {
+  const connected = !!company.instagram_access_token && !!company.instagram_user_id
+  if (!connected) {
+    return {
+      connected: false,
+      note: 'Instagram não conectado — conecte em Configurações → Conexões.',
+      data: { instagram_url: company.instagram_url ?? null },
+    }
+  }
+  const { data: snap } = await admin.from('instagram_performance_snapshots')
+    .select('followers, reach, impressions, engagement, engagement_rate, captured_for')
+    .eq('company_id', company.id).order('captured_for', { ascending: false }).limit(1).maybeSingle()
   const ig = (company.social_data ?? {})['instagram'] as Record<string, unknown> | undefined
-  const connected = !!company.instagram_url && !!ig
   return {
-    connected,
-    note: connected ? undefined : 'Instagram não sincronizado — rode apify-sync.',
-    data: connected ? {
-      username: ig!.username, followers: ig!.followers,
-      avg_likes: ig!.avg_likes, avg_comments: ig!.avg_comments,
-      engagement_rate: ig!.engagement_rate,
-      recent_posts: (ig!.recent_posts as unknown[] | undefined)?.length ?? 0,
-      synced_at: ig!.synced_at,
-    } : { instagram_url: company.instagram_url ?? null },
+    connected: true,
+    note: snap ? undefined : 'Conectado, mas ainda sem snapshot de performance coletado.',
+    data: {
+      followers: snap?.followers ?? ig?.followers ?? null,
+      reach: snap?.reach ?? null, impressions: snap?.impressions ?? null,
+      engagement: snap?.engagement ?? null, engagement_rate: snap?.engagement_rate ?? ig?.engagement_rate ?? null,
+      synced_at: snap?.captured_for ?? ig?.synced_at ?? null,
+    },
   }
 }
 
@@ -116,7 +140,7 @@ function readLinkedIn(_company: CompanyRow): ChannelRead {
 async function readChannels(admin: SupaClient, company: CompanyRow) {
   return {
     google: await readGoogle(admin, company),
-    instagram: readInstagram(company),
+    instagram: await readInstagram(admin, company),
     linkedin: readLinkedIn(company),
   }
 }
@@ -296,9 +320,239 @@ async function gatherHistory(admin: SupaClient, company: CompanyRow): Promise<Do
   }
 }
 
+// BUSINESS — "O que essa empresa é e como ela ganha dinheiro?" Dado
+// estruturado de preço/margem/economia unitária ainda não existe em lugar
+// nenhum do produto — fica de fora do lugar de inventar.
+async function gatherBusiness(_admin: SupaClient, company: CompanyRow): Promise<DomainState> {
+  const filled = [company.business_description, company.ideal_customer, company.business_dna].filter(Boolean).length
+  const signals: SignalRecord[] = []
+  if (company.business_description && company.ideal_customer) {
+    signals.push(sig({
+      key: 'positioning_defined', domain: 'business', event_type: 'profile_complete',
+      new_value: { has_description: true, has_ideal_customer: true },
+      evidence: [company.business_description!.slice(0, 140)],
+      confidence: 'high', business_relevance: 'medium',
+    }))
+  }
+  return {
+    domain: 'business',
+    summary: filled >= 2
+      ? `Perfil do negócio preenchido (${filled}/3 campos-chave).`
+      : 'Perfil do negócio ainda incompleto — falta descrição e/ou cliente ideal.',
+    metrics: {
+      profile_completeness: filled, business_stage: company.business_stage, main_challenges: company.main_challenges,
+      margin_headroom: null,
+    },
+    signals,
+    sources: ['companies.business_dna', 'companies.business_description', 'companies.ideal_customer'],
+  }
+}
+
+// CUSTOMER — "Quem gera valor, e por que compra?"
+async function gatherCustomer(admin: SupaClient, company: CompanyRow): Promise<DomainState> {
+  const [{ data: revRows }, { data: leadRows }] = await Promise.all([
+    admin.from('reviews').select('id, sentiment, themes, rating, review_date').eq('company_id', company.id).order('review_date', { ascending: false }).limit(200),
+    admin.from('leads').select('id, stage, status, last_contact_at, created_at').eq('company_id', company.id).order('created_at', { ascending: false }).limit(200),
+  ])
+  const reviews = revRows ?? []
+  const leads = leadRows ?? []
+  const signals: SignalRecord[] = []
+
+  const themeCount = (sentiment: string) => {
+    const counts = new Map<string, number>()
+    for (const r of reviews) {
+      if (r.sentiment !== sentiment) continue
+      for (const t of (r.themes as string[] | null) ?? []) counts.set(t, (counts.get(t) ?? 0) + 1)
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])
+  }
+  const negTop = themeCount('negative')
+  if (negTop.length && negTop[0][1] >= 2) {
+    signals.push(sig({
+      key: 'recurring_objection', domain: 'customer', event_type: 'repeated_negative_theme',
+      new_value: negTop[0][0],
+      evidence: [`"${negTop[0][0]}" aparece em ${negTop[0][1]} reviews negativos`],
+      confidence: 'high', business_relevance: 'high',
+    }))
+  }
+  const posTop = themeCount('positive')
+  if (posTop.length && posTop[0][1] >= 2) {
+    signals.push(sig({
+      key: 'praise_theme', domain: 'customer', event_type: 'repeated_positive_theme',
+      new_value: posTop[0][0],
+      evidence: [`"${posTop[0][0]}" aparece em ${posTop[0][1]} reviews positivos`],
+      confidence: 'high', business_relevance: 'medium',
+    }))
+  }
+  const unanswered = leads.filter(l => l.status !== 'closed' && (!l.last_contact_at || new Date(l.last_contact_at) < daysAgo(2)))
+  if (unanswered.length) {
+    signals.push(sig({
+      key: 'unanswered_leads', domain: 'customer', event_type: 'stale_lead',
+      new_value: unanswered.length,
+      evidence: unanswered.slice(0, 5).map(l => `lead ${l.id} — estágio ${l.stage}`),
+      confidence: 'high', business_relevance: unanswered.length >= 5 ? 'high' : 'medium',
+    }))
+  }
+
+  return {
+    domain: 'customer',
+    summary: `${reviews.length} review(s), ${leads.length} lead(s). ${signals.length} sinal(is).`,
+    metrics: { review_count: reviews.length, lead_count: leads.length, unanswered_leads: unanswered.length, ltv: null, aov: null },
+    signals,
+    sources: ['reviews', 'leads', 'lead_messages'],
+  }
+}
+
+// MARKET — "O que está acontecendo no ambiente externo?"
+async function gatherMarket(admin: SupaClient, company: CompanyRow): Promise<DomainState> {
+  const { data: trendRows } = await admin.from('marketing_ai_trends')
+    .select('id, title, category, relevance, detected_at').eq('company_id', company.id)
+    .order('detected_at', { ascending: false }).limit(50)
+  const trends = trendRows ?? []
+  const signals: SignalRecord[] = []
+  const highRelevance = trends.filter(t => t.relevance === 'high' && new Date(t.detected_at) >= daysAgo(30))
+  for (const t of highRelevance.slice(0, 3)) {
+    signals.push(sig({
+      key: 'emerging_trend', domain: 'market', event_type: 'high_relevance_trend',
+      subject_id: t.id, observed_at: t.detected_at,
+      new_value: t.title,
+      evidence: [`[${t.category ?? 'geral'}] ${t.title}`],
+      confidence: 'medium', business_relevance: 'medium',
+    }))
+  }
+  return {
+    domain: 'market',
+    summary: trends.length ? `${trends.length} tendência(s) detectada(s), ${highRelevance.length} de alta relevância nos últimos 30 dias.` : 'Nenhuma tendência detectada ainda.',
+    metrics: { active_trends: highRelevance.length, market_size: null },
+    signals,
+    sources: ['marketing_ai_trends'],
+  }
+}
+
+// DIGITAL — "Como a empresa existe digitalmente, e como converte?"
+async function gatherDigital(admin: SupaClient, company: CompanyRow): Promise<DomainState> {
+  const [{ data: diagRows }, { data: snapRows }] = await Promise.all([
+    admin.from('diagnostics').select('id, pagespeed_mobile, pagespeed_desktop, created_at').eq('company_id', company.id).order('created_at', { ascending: false }).limit(5),
+    admin.from('instagram_performance_snapshots').select('reach, captured_for').eq('company_id', company.id).order('captured_for', { ascending: false }).limit(10),
+  ])
+  const diagnostics = diagRows ?? []
+  const snaps = snapRows ?? []
+  const signals: SignalRecord[] = []
+
+  if (diagnostics.length >= 2) {
+    const [latest, prev] = diagnostics
+    const drop = (prev.pagespeed_mobile ?? 0) - (latest.pagespeed_mobile ?? 0)
+    if (drop >= 10) {
+      signals.push(sig({
+        key: 'site_regression', domain: 'digital', event_type: 'pagespeed_drop',
+        old_value: prev.pagespeed_mobile, new_value: latest.pagespeed_mobile, observed_at: latest.created_at,
+        evidence: [`PageSpeed mobile caiu de ${prev.pagespeed_mobile} pra ${latest.pagespeed_mobile}`],
+        confidence: 'high', business_relevance: 'medium',
+      }))
+    }
+  }
+  if (snaps.length >= 2) {
+    const latest = snaps[0].reach ?? 0
+    const older = snaps[snaps.length - 1].reach ?? 0
+    if (older > 0) {
+      const deltaPct = ((latest - older) / older) * 100
+      if (Math.abs(deltaPct) >= 15) {
+        signals.push(sig({
+          key: 'reach_trend', domain: 'digital', event_type: deltaPct > 0 ? 'reach_up' : 'reach_down',
+          old_value: older, new_value: latest,
+          evidence: [`Alcance foi de ${Math.round(older)} pra ${Math.round(latest)} (${deltaPct.toFixed(0)}%)`],
+          confidence: 'medium', business_relevance: deltaPct < 0 ? 'high' : 'medium',
+        }))
+      }
+    }
+  }
+  return {
+    domain: 'digital',
+    summary: `${diagnostics.length} diagnóstico(s) de site, ${snaps.length} snapshot(s) de alcance. ${signals.length} sinal(is).`,
+    metrics: { site_health: diagnostics[0]?.pagespeed_mobile ?? null, reach_latest: snaps[0]?.reach ?? null, funnel_conversion: null },
+    signals,
+    sources: ['diagnostics', 'instagram_performance_snapshots', 'check-links-health'],
+  }
+}
+
+// RESOURCES — "O que dá pra usar pra executar?"
+async function gatherResources(admin: SupaClient, company: CompanyRow): Promise<DomainState> {
+  const [{ data: cfg }, { data: toolRows }, { data: proofRevs }] = await Promise.all([
+    admin.from('marketing_ai_config').select('brand_assets').eq('company_id', company.id).maybeSingle(),
+    admin.from('marketing_ai_tool_config').select('tool_id, enabled, health').eq('company_id', company.id),
+    admin.from('reviews').select('id').eq('company_id', company.id).gte('rating', 4).not('text', 'is', null).limit(5),
+  ])
+  const tools = toolRows ?? []
+  const brandAssets = (cfg?.brand_assets ?? {}) as Record<string, unknown>
+  const hasProof = (proofRevs ?? []).length > 0 || Object.keys(brandAssets).length > 0
+  const signals: SignalRecord[] = []
+  if (hasProof) {
+    signals.push(sig({
+      key: 'has_proof_assets', domain: 'resources', event_type: 'proof_available',
+      new_value: { reviews_with_text: (proofRevs ?? []).length, brand_assets: Object.keys(brandAssets).length },
+      evidence: ['Reviews positivos com texto e/ou brand_assets disponíveis pra usar em campanha'],
+      confidence: 'medium', business_relevance: 'medium',
+    }))
+  }
+  const disconnected = tools.filter(t => t.enabled && t.health && t.health !== 'ok')
+  if (disconnected.length) {
+    signals.push(sig({
+      key: 'tool_disconnected', domain: 'resources', event_type: 'tool_unhealthy',
+      new_value: disconnected.length,
+      evidence: disconnected.map(t => `${t.tool_id}: ${t.health}`),
+      confidence: 'high', business_relevance: 'high',
+    }))
+  }
+  return {
+    domain: 'resources',
+    summary: `${tools.filter(t => t.enabled).length} ferramenta(s) ativa(s), ${disconnected.length} com problema. ${hasProof ? 'Tem prova social disponível.' : 'Sem prova social/criativos catalogados ainda.'}`,
+    metrics: { connected_tools: tools.filter(t => t.enabled && t.health === 'ok').length, creative_inventory: null },
+    signals,
+    sources: ['marketing_ai_config.brand_assets', 'marketing_ai_tool_config', 'reviews'],
+  }
+}
+
+// PERFORMANCE — "Que resultado de negócio está sendo produzido AGORA?"
+// KPI comercial real (receita/CAC/ROAS/LTV) ainda não é coletado em lugar
+// nenhum — fica como gap honesto, igual o próprio domains.ts já documenta.
+async function gatherPerformance(admin: SupaClient, company: CompanyRow): Promise<DomainState> {
+  const { data: snapRows } = await admin.from('instagram_performance_snapshots')
+    .select('engagement_rate, captured_for').eq('company_id', company.id).order('captured_for', { ascending: false }).limit(10)
+  const snaps = snapRows ?? []
+  const signals: SignalRecord[] = []
+  if (snaps.length >= 2) {
+    const latest = snaps[0].engagement_rate ?? 0
+    const older = snaps[snaps.length - 1].engagement_rate ?? 0
+    if (older > 0) {
+      const deltaPct = ((latest - older) / older) * 100
+      if (deltaPct <= -15) {
+        signals.push(sig({
+          key: 'engagement_drop', domain: 'performance', event_type: 'engagement_down',
+          old_value: older, new_value: latest,
+          evidence: [`Engajamento caiu de ${older.toFixed(2)}% pra ${latest.toFixed(2)}%`],
+          confidence: 'high', business_relevance: 'high',
+        }))
+      }
+    }
+  }
+  return {
+    domain: 'performance',
+    summary: snaps.length ? `Engajamento atual: ${(snaps[0].engagement_rate ?? 0).toFixed(2)}%.` : 'Sem dado de engajamento ainda.',
+    metrics: { engagement_now: snaps[0]?.engagement_rate ?? null, revenue: null, cac: null, roas: null },
+    signals,
+    sources: ['instagram_performance_snapshots', 'marketing_ai_campaigns', 'marketing_ai_reports'],
+  }
+}
+
 async function gatherDomain(admin: SupaClient, company: CompanyRow, d: DomainKey): Promise<DomainState> {
+  if (d === 'business') return gatherBusiness(admin, company)
+  if (d === 'customer') return gatherCustomer(admin, company)
+  if (d === 'market') return gatherMarket(admin, company)
   if (d === 'competition') return gatherCompetition(admin, company)
+  if (d === 'digital') return gatherDigital(admin, company)
   if (d === 'content') return gatherContent(admin, company)
+  if (d === 'resources') return gatherResources(admin, company)
+  if (d === 'performance') return gatherPerformance(admin, company)
   return gatherHistory(admin, company)
 }
 
@@ -307,9 +561,12 @@ interface CompanyRow {
   id: string; business_name: string; business_type: string | null
   google_rating: number | null; google_review_count: number | null
   google_maps_url: string | null; instagram_url: string | null
+  instagram_user_id: string | null; instagram_access_token: string | null
   social_data: Record<string, unknown> | null
+  business_dna: Record<string, unknown> | null; business_description: string | null
+  ideal_customer: string | null; business_stage: string | null; main_challenges: string | null
 }
-const COMPANY_FIELDS = 'id, business_name, business_type, google_rating, google_review_count, google_maps_url, instagram_url, social_data'
+const COMPANY_FIELDS = 'id, business_name, business_type, google_rating, google_review_count, google_maps_url, instagram_url, instagram_user_id, instagram_access_token, social_data, business_dna, business_description, ideal_customer, business_stage, main_challenges'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
