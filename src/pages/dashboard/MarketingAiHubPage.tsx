@@ -26,7 +26,7 @@ interface ModuleDef { section: string; title: string; desc: string; icon: string
 // cada uma dessas seções com o sinal real daquele agente.
 const DATA_MODULE: ModuleDef = { section: 'dados', title: 'Agente de Dados', desc: 'Performance real do Instagram, inteligência de mercado, insights de oportunidades e a Saúde da Meta — o que já funcionou e o que está acontecendo agora.', icon: '📊' }
 const STRATEGY_MODULE: ModuleDef = { section: 'estrategia', title: 'Agente de Estratégia', desc: 'Lê o negócio e o dado real, define objetivo, metas, orçamento e prazo — e direciona o Agente de Conteúdo.', icon: '🧭' }
-const CONTENT_MODULE: ModuleDef = { section: 'content', title: 'Agente de Conteúdo', desc: 'Calendário da Semana (Ideias + planejamento), Overview do que já está pronto/agendado, e a Biblioteca com formatos, testes e vault.', icon: '✍️' }
+const CONTENT_MODULE: ModuleDef = { section: 'content', title: 'Agente de Conteúdo e Campanha', desc: 'Calendário da Semana, Overview, Biblioteca (formatos/testes/vault) e Campanha — o Agente de Meta Ads (performance real + campanhas) mora aqui dentro agora.', icon: '✍️' }
 const CONVERSION_MODULE: ModuleDef = { section: 'conversao', title: 'Agente de Conversão', desc: 'Funil de vendas, atendimento e engagement (comentários/DMs) — transforma quem chegou até você em cliente.', icon: '🔀' }
 
 const STRATEGY_STATUS_LABEL: Record<string, string> = { draft: 'Rascunho', active: 'Ativa', paused: 'Pausada', completed: 'Concluída', needs_review: 'Precisa revisão' }
@@ -151,7 +151,7 @@ export default function MarketingAiHubPage() {
     return <div style={{ padding: '48px', color: MUTED, fontSize: '14px' }}>Carregando...</div>
   }
 
-  const open = (section: string) => navigate(section === 'meta-ads' ? '/dashboard/meta-ads' : `/dashboard/marketing-ai/${section}`)
+  const open = (section: string) => navigate(`/dashboard/marketing-ai/${section}`)
   const panelData = real?.hasReal ? real.data : demo
   const panelMode = veilMode({ hasReal: !!real?.hasReal, demoMode, error: !!realError })
 

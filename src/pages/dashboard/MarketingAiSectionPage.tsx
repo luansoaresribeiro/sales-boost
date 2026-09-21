@@ -30,7 +30,7 @@ import { buildGrowthDemo } from './marketingAi/growthDemo'
 const ORANGE = '#FF6D29'
 
 const SECTION_TITLE: Record<string, string> = {
-  tracking: 'Tracking', content: 'Conteúdo', dados: 'Agente de Dados', estrategia: 'Agente de Estratégia', conversao: 'Agente de Conversão', brain: 'Aprendizado',
+  tracking: 'Tracking', content: 'Agente de Conteúdo e Campanha', dados: 'Agente de Dados', estrategia: 'Agente de Estratégia', conversao: 'Agente de Conversão', brain: 'Aprendizado',
   overview: 'Visão Geral', experiments: 'Experimentos', tools: 'Configuração', timeline: 'Central de Execução', reports: 'Relatórios',
   conexoes: 'Conexões', configuracao: 'Configuração dos Agentes', avaliacoes: 'Avaliações', context: 'Contexto do Negócio',
   // Insights e Saúde da Meta agora vivem dentro de Agente de Dados (ver
@@ -67,7 +67,7 @@ export default function MarketingAiSectionPage() {
   // Marketing AI); Inteligência de Mercado, Funil e Atendimento foram
   // absorvidos por Agente de Dados / Agente de Conversão. Feedback Loop não
   // é mais uma seção própria — virou o círculo flutuante (FeedbackWidget).
-  if (section === 'meta-ads') return <Navigate to="/dashboard/meta-ads" replace />
+  if (section === 'meta-ads') return <Navigate to="/dashboard/marketing-ai/content?tab=campanha" replace />
   if (section === 'competitors') return <Navigate to="/dashboard/marketing-ai/dados" replace />
   if (section === 'funil' || section === 'whatsapp' || section === 'engagement') return <Navigate to="/dashboard/marketing-ai/conversao" replace />
   if (section === 'feedback') return <Navigate to="/dashboard/marketing-ai/dados" replace />

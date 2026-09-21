@@ -98,18 +98,6 @@ export default function OwnerPage() {
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <button
-            onClick={() => navigate('/owner/hermes')}
-            style={{ padding: '7px 16px', background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '8px', color: ORANGE, fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-          >
-            🧠 Hermes
-          </button>
-          <button
-            onClick={() => navigate('/owner/agentes')}
-            style={{ padding: '7px 16px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '12px', cursor: 'pointer' }}
-          >
-            🤖 Agentes
-          </button>
-          <button
             onClick={() => navigate('/owner/prospects')}
             style={{ padding: '7px 16px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '12px', cursor: 'pointer' }}
           >

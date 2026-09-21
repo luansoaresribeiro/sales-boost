@@ -19,7 +19,6 @@ import InsightsPage from './pages/dashboard/InsightsPage.tsx'
 import SettingsPage from './pages/dashboard/SettingsPage.tsx'
 import OpportunitiesPage from './pages/dashboard/OpportunitiesPage.tsx'
 import MarketingAiHubPage from './pages/dashboard/MarketingAiHubPage.tsx'
-import MetaAdsPage from './pages/dashboard/MetaAdsPage.tsx'
 import BusinessProgressPage from './pages/dashboard/BusinessProgressPage.tsx'
 import TrialSummaryPage from './pages/dashboard/TrialSummaryPage.tsx'
 import AccessBlockedPage from './pages/dashboard/AccessBlockedPage.tsx'
@@ -30,9 +29,6 @@ import OwnerPage from './pages/owner/OwnerPage.tsx'
 import CompanyDetailPage from './pages/owner/CompanyDetailPage.tsx'
 import ProspectsPage from './pages/owner/ProspectsPage.tsx'
 import LeadDiscoverySettingsPage from './pages/owner/LeadDiscoverySettingsPage.tsx'
-import HermesControlCenterPage from './pages/owner/HermesControlCenterPage.tsx'
-import HermesStrategyPage from './pages/owner/HermesStrategyPage.tsx'
-import AgentsControlCenterPage from './pages/owner/AgentsControlCenterPage.tsx'
 import OwnerSettingsPage from './pages/owner/OwnerSettingsPage.tsx'
 import PlatformHealthPage from './pages/owner/PlatformHealthPage.tsx'
 import OnboardingPage from './pages/onboarding/OnboardingPage.tsx'
@@ -102,9 +98,6 @@ function RouterRoot() {
       <Route path="/owner/company/:id" element={<OwnerRoute><CompanyDetailPage /></OwnerRoute>} />
       <Route path="/owner/prospects" element={<OwnerRoute><ProspectsPage /></OwnerRoute>} />
       <Route path="/owner/prospects/settings" element={<OwnerRoute><LeadDiscoverySettingsPage /></OwnerRoute>} />
-      <Route path="/owner/hermes" element={<OwnerRoute><HermesControlCenterPage /></OwnerRoute>} />
-      <Route path="/owner/hermes/estrategia" element={<OwnerRoute><HermesStrategyPage /></OwnerRoute>} />
-      <Route path="/owner/agentes" element={<OwnerRoute><AgentsControlCenterPage /></OwnerRoute>} />
       <Route path="/owner/settings" element={<OwnerRoute><OwnerSettingsPage /></OwnerRoute>} />
       <Route path="/owner/health" element={<OwnerRoute><PlatformHealthPage /></OwnerRoute>} />
 
@@ -127,7 +120,7 @@ function RouterRoot() {
         <Route path="agente" element={<Navigate to="/dashboard/marketing-ai" replace />} />
         <Route path="marketing-ai" element={<MarketingAiHubPage />} />
         <Route path="marketing-ai/:section" element={<MarketingAiSectionPage />} />
-        <Route path="meta-ads" element={<MetaAdsPage />} />
+        <Route path="meta-ads" element={<Navigate to="/dashboard/marketing-ai/content?tab=campanha" replace />} />
         <Route path="progresso" element={<BusinessProgressPage />} />
         <Route path="trial" element={<TrialSummaryPage />} />
         <Route path="access-blocked" element={<AccessBlockedPage />} />
