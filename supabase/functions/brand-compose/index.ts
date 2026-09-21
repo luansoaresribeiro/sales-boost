@@ -7,7 +7,7 @@ const cors = {
 }
 type SupaClient = ReturnType<typeof createClient>
 
-const W = 1080, H = 1350 // formato retrato do Instagram
+const W = 1080, H = 1350
 const FONT_URL = 'https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Bold.ttf'
 
 let wasmReady = false
@@ -19,7 +19,6 @@ async function ensureWasm() {
 
 function esc(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
 
-// Quebra o título em linhas que cabem na largura (aprox. por nº de caracteres).
 function wrap(text: string, maxChars: number, maxLines: number): string[] {
   const words = text.split(/\s+/)
   const lines: string[] = []
@@ -102,7 +101,6 @@ Deno.serve(async (req) => {
     const companyId = body.company_id ? String(body.company_id) : null
     if (!headline) return json({ error: 'headline obrigatório' }, 400)
 
-    // DNA da marca: cor primária + logo (se o dono preencheu).
     let primary = '#FF6D29', logoUrl: string | null = null
     if (companyId) {
       const { data: dna } = await admin.from('brand_dna').select('colors, logo_url').eq('company_id', companyId).maybeSingle()

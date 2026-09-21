@@ -29,7 +29,6 @@ Deno.serve(async (req) => {
 
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Verify user owns this company
     const { data: company } = await serviceClient
       .from('companies')
       .select('id, website_url')
@@ -38,7 +37,6 @@ Deno.serve(async (req) => {
       .single()
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
 
-    // Get integration
     const { data: integration } = await serviceClient
       .from('company_integrations')
       .select('*')
@@ -48,7 +46,6 @@ Deno.serve(async (req) => {
 
     if (!integration) return json({ error: 'Google Search Console não conectado' }, 404)
 
-    // Refresh token if expired
     let accessToken = integration.access_token
     const expiresAt = new Date(integration.token_expires_at ?? 0)
     if (expiresAt <= new Date(Date.now() + 60_000) && integration.refresh_token && clientId && clientSecret) {
@@ -73,29 +70,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Determine site URL for GSC
     const siteUrl = integration.domain ?? `sc-domain:${new URL(company.website_url).hostname}`
 
-    // Date range: last 28 days
     const endDate = new Date()
     endDate.setDate(endDate.getDate() - 1)
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - 28)
     const fmt = (d: Date) => d.toISOString().split('T')[0]
 
-    // Fetch top queries
     const [queriesRes, pagesRes, summaryRes] = await Promise.all([
       fetch(
         `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            startDate: fmt(startDate),
-            endDate: fmt(endDate),
-            dimensions: ['query'],
-            rowLimit: 10,
-          }),
+          body: JSON.stringify({ startDate: fmt(startDate), endDate: fmt(endDate), dimensions: ['query'], rowLimit: 10 }),
         }
       ),
       fetch(
@@ -103,12 +92,7 @@ Deno.serve(async (req) => {
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            startDate: fmt(startDate),
-            endDate: fmt(endDate),
-            dimensions: ['page'],
-            rowLimit: 5,
-          }),
+          body: JSON.stringify({ startDate: fmt(startDate), endDate: fmt(endDate), dimensions: ['page'], rowLimit: 5 }),
         }
       ),
       fetch(
@@ -116,10 +100,7 @@ Deno.serve(async (req) => {
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            startDate: fmt(startDate),
-            endDate: fmt(endDate),
-          }),
+          body: JSON.stringify({ startDate: fmt(startDate), endDate: fmt(endDate) }),
         }
       ),
     ])

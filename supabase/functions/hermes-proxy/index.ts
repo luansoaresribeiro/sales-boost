@@ -15,46 +15,11 @@ interface Company {
   google_rating?: number | null; google_review_count?: string | null
   agent_messages_used?: number; agent_messages_reset_at?: string
   telegram_chat_id?: number | null; notification_prefs?: Record<string, boolean> | null
-  // Memória estratégica que o dono ensina (tabela business_context) — o Hermes
-  // recebe isto pra conhecer o negócio na hora de raciocinar.
-  businessContext?: string
 }
 
 const PLAN_LIMITS: Record<string, number> = { free: 30, basic: 150, pro: Infinity }
 
-// Lê o que o dono ensinou (business_context) e formata pro prompt do Hermes.
-// Só notas ativas e vigentes hoje, importantes primeiro, limitado a 15.
-async function loadBusinessContext(admin: SupaClient, companyId: string): Promise<string> {
-  const today = new Date().toISOString().slice(0, 10)
-  const [notesRes, dnaRes] = await Promise.all([
-    admin.from('business_context').select('text, category, importance, effective_date, expiration_date').eq('company_id', companyId).eq('archived', false).order('created_at', { ascending: false }).limit(30),
-    admin.from('brand_dna').select('voice, tone, avoid, colors, fonts, design_notes').eq('company_id', companyId).maybeSingle(),
-  ])
-  const parts: string[] = []
-
-  const d = dnaRes.data as { voice?: string; tone?: string; avoid?: string; colors?: string[]; fonts?: string; design_notes?: string } | null
-  if (d) {
-    const dna: string[] = []
-    if (d.voice) dna.push(`Voz: ${d.voice}`)
-    if (d.tone) dna.push(`Tom: ${d.tone}`)
-    if (d.avoid) dna.push(`Nunca faz/diz: ${d.avoid}`)
-    if (d.colors?.length) dna.push(`Cores da marca: ${d.colors.join(', ')}`)
-    if (d.fonts) dna.push(`Fontes: ${d.fonts}`)
-    if (d.design_notes) dna.push(`Direção de arte: ${d.design_notes}`)
-    if (dna.length) parts.push(`DNA da marca (respeite em toda peça):\n${dna.map(x => `- ${x}`).join('\n')}`)
-  }
-
-  const order: Record<string, number> = { high: 0, medium: 1, low: 2 }
-  const active = (notesRes.data as { text: string; category: string; importance: string; effective_date: string | null; expiration_date: string | null }[] | null ?? [])
-    .filter(n => (!n.effective_date || n.effective_date <= today) && (!n.expiration_date || n.expiration_date >= today))
-    .sort((a, b) => (order[a.importance] ?? 1) - (order[b.importance] ?? 1))
-    .slice(0, 15)
-  if (active.length) parts.push(active.map(n => `- [${n.category}${n.importance === 'high' ? ' · prioridade alta' : ''}] ${n.text}`).join('\n'))
-
-  return parts.join('\n\n')
-}
-
-// ── Hermes Control Center ────────────────────────────────────────────────
+// ── Hermes Control Center ──────────────────────────────────────
 // O "cérebro" do Hermes não fica mais fixo no código — é configuração que o
 // owner edita em /owner/hermes, sem precisar de deploy. Ver migration
 // 023_hermes_control_center.sql pro schema completo e as notas de segurança
@@ -254,7 +219,7 @@ const ALL_TOOL_NAMES = OPENAI_TOOLS.map(t => t.function.name)
 const CREATION_TOOL_NAMES = new Set(['create_post', 'create_multiple_posts', 'create_lead', 'draft_followup'])
 const MEMORY_TOOL_NAMES = new Set(['save_memory', 'load_memory', 'list_memories'])
 
-// ── Capability Registry ──────────────────────────────────────────────────
+// ── Capability Registry ─────────────────────────────────────────
 // Capacidades reais que já existiam no ecossistema (em outras edge functions)
 // mas eram invisíveis pro Hermes — achado da auditoria do Executor. A tabela
 // capability_registry (migration 024) é só METADADO: nome, descrição, se
@@ -352,7 +317,7 @@ MENTE REATIVA E PROATIVA — as duas ao mesmo tempo:
 - Reativa: quando o dono pedir algo específico, execute com precisão, sem burocracia e sem pedir confirmação de algo óbvio.
 - Proativa: no ciclo automático (ninguém pediu nada), é sua obrigação notar sozinho o que está errado ou parado — reputação caindo, concorrente mexendo no preço, muitos dias sem postar, review negativa sem resposta, canal fora do ar — e agir ou avisar. Silêncio só é aceitável quando você de fato checou e está tudo bem.
 
-VOCABULÁRIO TÉCNICO que você domina (raciocine com precisão nesses termos, mas explique em português simples quando for falar com o dono):
+VOCABULÁRIO TÉCNICO que você domina (raciocíne com precisão nesses termos, mas explique em português simples quando for falar com o dono):
 - SEO/Performance: Core Web Vitals — LCP (velocidade até o maior elemento carregar), FCP (primeira coisa a aparecer na tela), CLS (o quanto o layout "pula" enquanto carrega); score de Performance/SEO do PageSpeed vai de 0 a 100.
 - Redes sociais: taxa de engajamento (curtidas+comentários ÷ seguidores), alcance, frequência de postagem, o que "viralizar" significa de verdade pro segmento dele.
 - Reputação: sentimento (positivo/neutro/negativo) de cada avaliação, tema recorrente, taxa de resposta a reviews.
@@ -371,10 +336,7 @@ Regra permanente, que nenhuma configuração pode desligar: nunca publique, envi
 Responda em texto corrido, sem markdown. Sem **, ##, tabelas ou listas com marcadores. Frases naturais e diretas.`
 
 function buildSystemPrompt(role: AgentRole, company: Company, config: HermesConfig, roleSettings: AgentRoleSettings, integrations?: Record<string, boolean>): string {
-  const ctx = company.businessContext
-    ? `\n\n---\n\nO que o dono ensinou sobre o negócio (respeite SEMPRE ao decidir ou responder):\n${company.businessContext}`
-    : ''
-  return `${composeHermesPreamble(config, roleSettings.approvals, integrations)}\n\n---\n\n${AGENT_ROLES[role].buildPrompt(company)}${ctx}${SHARED_RULES}`
+  return `${composeHermesPreamble(config, roleSettings.approvals, integrations)}\n\n---\n\n${AGENT_ROLES[role].buildPrompt(company)}${SHARED_RULES}`
 }
 
 async function notifyMarketing(chatId: number | null | undefined, companyId: string, event: string, data?: Record<string, unknown>) {
@@ -635,7 +597,7 @@ async function runConversation(
   return { reply, postsCreated, actionsCount, tokensUsed }
 }
 
-// ── Autonomous mode ──────────────────────────────────────────────────────
+// ── Autonomous mode ───────────────────────────────────────────
 // Replaces run-agents' fixed "always create 5 posts" schedule with an actual
 // decision: Hermes looks at what's really going on for this company (pending
 // drafts, open opportunities, recent activity) and decides whether there's
@@ -701,7 +663,7 @@ async function runAutonomousCycle(admin: SupaClient, hermesUrl: string, hermesAp
   }
 }
 
-// ── Orchestrator ──────────────────────────────────────────────────────────
+// ── Orchestrator ─────────────────────────────────────────────
 // The layer above the Agente Geral: before it runs at all, Hermes looks at
 // the company's real state and decides whether it actually needs to act
 // right now. It only reads (never create_post, draft_followup, etc.) and
@@ -826,36 +788,6 @@ async function getTodayUsage(admin: SupaClient, role?: AgentRole): Promise<{ cal
   return { calls: count ?? 0, estimatedCostUsd: (totalTokens / 1000) * ESTIMATED_COST_PER_1K_TOKENS }
 }
 
-// ── Controle de custo da IA por empresa (herda do plano) ─────────────────
-// Resolve as settings efetivas: company_ai_settings (override) ?? plano ?? modo.
-// O ciclo automático respeita isto — pausa, frequência e orçamento por empresa.
-const MODE_FREQ_MIN: Record<string, number> = { economy: 360, balanced: 120, performance: 30, unlimited: 15 }
-interface ResolvedAiSettings { paused: boolean; monthlyBudget: number; dailyBudget: number; frequencyMin: number; lastCycleAt: string | null }
-
-async function resolveAiSettings(admin: SupaClient, company: Company): Promise<ResolvedAiSettings> {
-  const plan = (company.plan ?? 'free').toLowerCase()
-  const [planRes, coRes] = await Promise.all([
-    admin.from('plan_ai_defaults').select('mode, monthly_budget_usd, daily_budget_usd, think_frequency_min').eq('plan', plan).maybeSingle(),
-    admin.from('company_ai_settings').select('mode, monthly_budget_usd, daily_budget_usd, think_frequency_min, paused, last_cycle_at').eq('company_id', company.id).maybeSingle(),
-  ])
-  const pd = (planRes.data ?? {}) as { mode?: string; monthly_budget_usd?: number; daily_budget_usd?: number; think_frequency_min?: number }
-  const co = (coRes.data ?? null) as { mode?: string | null; monthly_budget_usd?: number | null; daily_budget_usd?: number | null; think_frequency_min?: number | null; paused?: boolean; last_cycle_at?: string | null } | null
-  const mode = co?.mode ?? pd.mode ?? 'balanced'
-  return {
-    paused: co?.paused ?? false,
-    monthlyBudget: Number(co?.monthly_budget_usd ?? pd.monthly_budget_usd ?? 0) || 0,
-    dailyBudget: Number(co?.daily_budget_usd ?? pd.daily_budget_usd ?? 0) || 0,
-    frequencyMin: Number(co?.think_frequency_min ?? pd.think_frequency_min ?? MODE_FREQ_MIN[mode] ?? 120),
-    lastCycleAt: co?.last_cycle_at ?? null,
-  }
-}
-
-async function getCompanyCostSince(admin: SupaClient, companyId: string, sinceIso: string): Promise<number> {
-  const { data } = await admin.from('agent_performance').select('tokens_used').eq('company_id', companyId).gte('created_at', sinceIso)
-  const tokens = (data ?? []).reduce((s: number, r: { tokens_used: number | null }) => s + (Number(r.tokens_used) || 0), 0)
-  return (tokens / 1000) * ESTIMATED_COST_PER_1K_TOKENS
-}
-
 // ── Shared chat turn (used by both the interactive/JWT path and Telegram) ──
 // Quota check + reset, run the conversation, persist everything. The two
 // callers only differ in how they found `company` and what they do with the
@@ -947,7 +879,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const isCron = cronSecretEnv && body.cron_secret === cronSecretEnv
 
-    // ── Modo autônomo (substitui run-agents) ──────────────────────────
+    // ── Modo autônomo (substitui run-agents) ──────────────────────
     if (isCron) {
       const config = await getHermesConfig(admin)
       // Rotinas/limites são por agente agora — hoje só existe o Agente Geral
@@ -971,7 +903,7 @@ Deno.serve(async (req) => {
 
       const { data: companies } = await admin
         .from('companies')
-        .select('id, business_name, business_type, city, goal, plan, social_data, telegram_chat_id, notification_prefs')
+        .select('id, business_name, business_type, city, goal, social_data, telegram_chat_id, notification_prefs')
         .eq('active', true)
 
       const activeRoles = await getActiveAgentRoles(admin)
@@ -979,43 +911,12 @@ Deno.serve(async (req) => {
       const results: { company_id: string; role: AgentRole | null; skipped: boolean; posts_created: number; error?: string; reasoning?: string }[] = []
       for (const company of (companies ?? []) as Company[]) {
         // Reconfere o limite a cada empresa — mais simples e confiável do que
-        // ir somando token a mão, e o custo de mais uma query é desprezível
+        // ir somando token a mão, e o custo de mais uma query é desprizível
         // perto do tanto de chamadas de IA que cada ciclo já faz.
         usage = await getTodayUsage(admin, 'marketing')
         if (usage.calls >= marketingSettings.max_claude_calls_daily || usage.estimatedCostUsd >= marketingSettings.max_daily_cost_usd) {
           results.push({ company_id: company.id, role: null, skipped: true, posts_created: 0, reasoning: 'Limite diário do Agente Geral atingido durante o ciclo.' })
           continue
-        }
-
-        company.businessContext = await loadBusinessContext(admin, company.id)
-
-        // Controle de custo por empresa (herda do plano). Pausa, respeita a
-        // frequência de raciocínio e o orçamento mensal/diário — o gasto para
-        // sozinho quando estoura, sem nunca virar decisão inventada.
-        const aiSettings = await resolveAiSettings(admin, company)
-        if (aiSettings.paused) {
-          results.push({ company_id: company.id, role: null, skipped: true, posts_created: 0, reasoning: 'IA pausada pra esta empresa no painel de custo.' })
-          continue
-        }
-        if (aiSettings.lastCycleAt && (Date.now() - new Date(aiSettings.lastCycleAt).getTime()) < aiSettings.frequencyMin * 60000) {
-          results.push({ company_id: company.id, role: null, skipped: true, posts_created: 0, reasoning: `Ainda dentro do intervalo de raciocínio (${aiSettings.frequencyMin}min).` })
-          continue
-        }
-        if (aiSettings.monthlyBudget > 0) {
-          const ms = new Date(); ms.setUTCDate(1); ms.setUTCHours(0, 0, 0, 0)
-          const monthCost = await getCompanyCostSince(admin, company.id, ms.toISOString())
-          if (monthCost >= aiSettings.monthlyBudget) {
-            results.push({ company_id: company.id, role: null, skipped: true, posts_created: 0, reasoning: `Orçamento mensal de IA atingido ($${monthCost.toFixed(2)}/$${aiSettings.monthlyBudget}).` })
-            continue
-          }
-        }
-        if (aiSettings.dailyBudget > 0) {
-          const ds = new Date(); ds.setUTCHours(0, 0, 0, 0)
-          const dayCost = await getCompanyCostSince(admin, company.id, ds.toISOString())
-          if (dayCost >= aiSettings.dailyBudget) {
-            results.push({ company_id: company.id, role: null, skipped: true, posts_created: 0, reasoning: `Orçamento diário de IA atingido ($${dayCost.toFixed(2)}/$${aiSettings.dailyBudget}).` })
-            continue
-          }
         }
 
         let decision: OrchestratorDecision
@@ -1034,10 +935,6 @@ Deno.serve(async (req) => {
           company_id: company.id, agent_role: 'hermes', task_key: 'orchestrator_decision',
           task_description: decision.reasoning.slice(0, 200), latency_ms: 0, tokens_used: decision.tokensUsed, success: true,
         }).catch(() => { /* non-fatal */ })
-
-        // Marca que a empresa "pensou" agora — a próxima rodada respeita a
-        // frequência configurada (não roda de novo antes do intervalo).
-        await admin.from('company_ai_settings').upsert({ company_id: company.id, last_cycle_at: new Date().toISOString() }, { onConflict: 'company_id' }).catch(() => { /* non-fatal */ })
 
         // max_active_agents limita quantos agentes rodam por ciclo — hoje só
         // existe o Agente Geral, mas isso já deixa pronto pro dia que existir
@@ -1060,7 +957,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, cron: true, processed: companies?.length ?? 0, total_posts_created: totalPosts, skipped, results })
     }
 
-    // ── Modo Telegram ────────────────────────────────────────────────
+    // ── Modo Telegram ───────────────────────────────────────
     // Same brain as the dashboard chat, just authenticated with the shared
     // webhook secret (like telegram-chat/telegram-connect) instead of a user
     // JWT, since Telegram has no Supabase session — the company is found by
@@ -1100,7 +997,7 @@ Deno.serve(async (req) => {
       return json({ ok: true })
     }
 
-    // ── Modo interativo (chat/voz) ─────────────────────────────────────
+    // ── Modo interativo (chat/voz) ────────────────────────────
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) return json({ error: 'Unauthorized' }, 401)
 
@@ -1122,7 +1019,6 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (!company) return json({ error: 'Empresa nao encontrada. Complete o onboarding primeiro.' }, 404)
-    ;(company as Company).businessContext = await loadBusinessContext(admin, company.id)
 
     const config = await getHermesConfig(admin)
     let result: ChatTurnResult

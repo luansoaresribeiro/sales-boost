@@ -79,7 +79,7 @@ async function anthropicTracked(admin: SupaClient): Promise<Usage> {
   return { label: 'Gasto estimado no mês', used: usd, limit: null, unit: 'USD', pct: null }
 }
 
-async function keyFor(admin: SupaClient, secretName: string, cfg: Record<string, string>): Promise<string | null> {
+async function keyFor(_admin: SupaClient, secretName: string, cfg: Record<string, string>): Promise<string | null> {
   const fromEnv = Deno.env.get(secretName)
   if (fromEnv) return fromEnv
   return cfg[secretName.toLowerCase()] ?? null

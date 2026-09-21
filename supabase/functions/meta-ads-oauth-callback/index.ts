@@ -1,6 +1,6 @@
 /**
  * meta-ads-oauth-callback — recebe o code do Facebook, troca por token,
- * lista as contas de anúncios e salva a principal na empresa.
+ * lista as contas de anuncios e salva a principal na empresa.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -18,27 +18,25 @@ Deno.serve(async (req) => {
   const state = url.searchParams.get('state')
   const errorMsg = url.searchParams.get('error_description') || url.searchParams.get('error')
 
-  if (errorMsg) return htmlRedirect(`/dashboard/settings?tab=conexoes?error=${encodeURIComponent(errorMsg)}`)
-  if (!code || !state) return htmlRedirect('/dashboard/settings?tab=conexoes?error=missing_params')
+  if (errorMsg) return htmlRedirect(`/dashboard/settings?tab=conexoes&error=${encodeURIComponent(errorMsg)}`)
+  if (!code || !state) return htmlRedirect('/dashboard/settings?tab=conexoes&error=missing_params')
 
-  let companyId: string
-  try { companyId = JSON.parse(atob(state)).company_id } catch { return htmlRedirect('/dashboard/settings?tab=conexoes?error=invalid_state') }
+  let companyId
+  try { companyId = JSON.parse(atob(state)).company_id } catch { return htmlRedirect('/dashboard/settings?tab=conexoes&error=invalid_state') }
 
-  const appId = Deno.env.get('META_APP_ID')!
-  const appSecret = Deno.env.get('META_APP_SECRET')!
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const appId = Deno.env.get('META_APP_ID')
+  const appSecret = Deno.env.get('META_APP_SECRET')
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const redirectUri = `${supabaseUrl}/functions/v1/meta-ads-oauth-callback`
 
   try {
-    // 1. code → short-lived token
     const tokenRes = await fetch(`${META_API}/oauth/access_token?` + new URLSearchParams({
       client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code,
     }))
     if (!tokenRes.ok) throw new Error(`Token exchange failed: ${await tokenRes.text()}`)
     const { access_token: shortToken } = await tokenRes.json()
 
-    // 2. short → long-lived (60 dias)
     const llRes = await fetch(`${META_API}/oauth/access_token?` + new URLSearchParams({
       grant_type: 'fb_exchange_token', client_id: appId, client_secret: appSecret, fb_exchange_token: shortToken,
     }))
@@ -47,13 +45,12 @@ Deno.serve(async (req) => {
     const expiresIn = llJson.expires_in ?? 5184000
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString()
 
-    // 3. lista contas de anúncios; escolhe a primeira ATIVA (senão a primeira)
     const acctRes = await fetch(`${META_API}/me/adaccounts?` + new URLSearchParams({
       fields: 'account_id,name,account_status', access_token: longToken,
     }))
     if (!acctRes.ok) throw new Error(`Failed to list ad accounts: ${await acctRes.text()}`)
-    const accts = (await acctRes.json()).data as { account_id: string; name: string; account_status: number }[] ?? []
-    if (accts.length === 0) throw new Error('Nenhuma conta de anúncios encontrada nesta conta da Meta.')
+    const accts = (await acctRes.json()).data ?? []
+    if (accts.length === 0) throw new Error('Nenhuma conta de anuncios encontrada nesta conta da Meta.')
     const chosen = accts.find(a => a.account_status === 1) ?? accts[0]
 
     const admin = createClient(supabaseUrl, serviceKey)
@@ -65,14 +62,14 @@ Deno.serve(async (req) => {
     }).eq('id', companyId)
     if (updateErr) throw new Error(updateErr.message)
 
-    return htmlRedirect('/dashboard/settings?tab=conexoes?meta_ads=connected')
+    return htmlRedirect('/dashboard/settings?tab=conexoes&meta_ads=connected')
   } catch (err) {
     console.error('meta-ads OAuth error:', err)
-    return htmlRedirect(`/dashboard/settings?tab=conexoes?error=${encodeURIComponent(String(err))}`)
+    return htmlRedirect(`/dashboard/settings?tab=conexoes&error=${encodeURIComponent(String(err))}`)
   }
 })
 
-function htmlRedirect(path: string) {
+function htmlRedirect(path) {
   const appUrl = Deno.env.get('APP_URL') ?? 'https://sales-boost-restaurants.luancontasecundaria22.workers.dev'
   return Response.redirect(`${appUrl}${path}`, 302)
 }

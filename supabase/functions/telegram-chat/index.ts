@@ -8,10 +8,6 @@ const cors = {
 const MAX_HISTORY = 10
 type SupaClient = ReturnType<typeof createClient>
 
-// Same tools agent-chat (the dashboard chat) offers — so Telegram can report
-// real data (posts, oportunidades, avaliações, diagnóstico, concorrentes) and
-// create rascunhos, not just chat blind. Uses Claude directly, same stable
-// path as before — no dependency on the Hermes VPS.
 const TOOLS = [
   { name: 'create_post', description: 'Cria um rascunho de post para aprovação. NUNCA publica diretamente.', input_schema: { type: 'object', properties: { content: { type: 'string' }, platform: { type: 'string', enum: ['instagram', 'whatsapp', 'email'] }, image_suggestion: { type: 'string' }, best_time: { type: 'string' } }, required: ['content', 'platform'] } },
   { name: 'create_multiple_posts', description: 'Cria vários rascunhos de uma vez. Use para semana de conteúdo.', input_schema: { type: 'object', properties: { posts: { type: 'array', items: { type: 'object', properties: { content: { type: 'string' }, platform: { type: 'string', enum: ['instagram', 'whatsapp', 'email'] }, image_suggestion: { type: 'string' }, best_time: { type: 'string' } }, required: ['content', 'platform'] } } }, required: ['posts'] } },
@@ -24,8 +20,6 @@ const TOOLS = [
   { name: 'list_leads', description: 'Lista leads do CRM de vendas.', input_schema: { type: 'object', properties: { stage: { type: 'string' }, limit: { type: 'number' } } } },
 ]
 
-// Mapa nome-da-tool → id no capability_registry (used_by 'telegram'). O owner
-// liga/desliga cada uma no Agents Control Center; a função respeita na hora.
 const TOOL_CAP: Record<string, string> = {
   create_post: 'tg_content', create_multiple_posts: 'tg_content',
   get_business_overview: 'tg_overview', list_posts: 'tg_posts',
@@ -46,9 +40,6 @@ interface TgConfig {
   outside_hours_reply: string
 }
 
-// Config ao vivo do agente do Telegram: personalidade, tools desligadas,
-// handoff (pausa) e horário de atendimento. Lido a cada mensagem — mudar no
-// Control Center vale na hora.
 async function getTelegramConfig(admin: SupaClient): Promise<TgConfig> {
   const [{ data: cfg }, { data: caps }] = await Promise.all([
     admin.from('telegram_agent_config').select('personality, ai_paused, paused_reply, active_hours_enabled, active_start, active_end, timezone, outside_hours_reply').eq('id', true).maybeSingle(),
@@ -70,7 +61,6 @@ async function getTelegramConfig(admin: SupaClient): Promise<TgConfig> {
   }
 }
 
-// Hora atual (0-23) no fuso configurado. Cai pro UTC se o fuso for inválido.
 function currentHourInTz(tz: string): number {
   try {
     const s = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date())
@@ -78,8 +68,6 @@ function currentHourInTz(tz: string): number {
   } catch { return new Date().getUTCHours() }
 }
 
-// Está fora do horário de atendimento? Cobre janelas normais (8→20) e que
-// viram a meia-noite (22→6).
 function isOutsideActiveHours(cfg: TgConfig): boolean {
   const h = currentHourInTz(cfg.timezone)
   const inside = cfg.active_start <= cfg.active_end
@@ -91,8 +79,6 @@ function isOutsideActiveHours(cfg: TgConfig): boolean {
 async function runTool(tu: { name: string; id: string; input: unknown }, companyId: string, admin: SupaClient, disabled: Set<string>): Promise<{ result: string; posts: number }> {
   const inp = tu.input as Record<string, unknown>
 
-  // Defesa em profundidade: mesmo filtrando as tools oferecidas, nunca confie
-  // que o modelo só pediu o permitido.
   if (TOOL_CAP[tu.name] && disabled.has(TOOL_CAP[tu.name])) {
     return { result: 'Essa ação foi desativada pelo administrador no Agents Control Center.', posts: 0 }
   }
@@ -179,7 +165,6 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
 
   try {
-    // Validação de secret é opcional - se definido, deve corresponder
     const secret = req.headers.get('x-webhook-secret')
     const envSecret = Deno.env.get('TELEGRAM_WEBHOOK_SECRET')
     if (envSecret && secret !== envSecret) return json({ error: 'Unauthorized' }, 401)
@@ -192,19 +177,16 @@ Deno.serve(async (req) => {
 
     const body = await req.json() as Record<string, unknown>
 
-    // Parse webhook do Telegram
     let chat_id: number | undefined
     let message: string | undefined
     let bot_type = 'marketing'
 
     if (body.message && typeof body.message === 'object') {
-      // Webhook format from Telegram
       const telegramMessage = body.message as Record<string, unknown>
       const chat = telegramMessage.chat as Record<string, unknown> | undefined
       chat_id = chat?.id as number | undefined
       message = telegramMessage.text as string | undefined
     } else if (typeof body === 'object' && 'chat_id' in body) {
-      // Direct API format (backwards compatibility)
       chat_id = body.chat_id as number | undefined
       message = body.message as string | undefined
       bot_type = (body.bot_type as string) ?? 'marketing'
@@ -212,7 +194,6 @@ Deno.serve(async (req) => {
 
     if (!chat_id || !message) return json({ error: 'chat_id e message são obrigatórios' }, 400)
 
-    // Find company by telegram_chat_id
     const { data: company } = await admin.from('companies')
       .select('id, business_name, business_type, city, goal, ai_profile')
       .eq('telegram_chat_id', chat_id)
@@ -222,7 +203,6 @@ Deno.serve(async (req) => {
       return json({ reply: 'Para usar o chat, primeiro conecte sua conta com /conectar CÓDIGO.\nGere seu código em: https://sales-boost-restaurants.luancontasecundaria22.workers.dev/dashboard/configuracoes' })
     }
 
-    // Get or create conversation
     let { data: conv } = await admin.from('telegram_conversations')
       .select('id')
       .eq('telegram_chat_id', String(chat_id))
@@ -240,7 +220,6 @@ Deno.serve(async (req) => {
       conv = newConv
     }
 
-    // Load recent history
     const { data: history } = await admin.from('telegram_messages')
       .select('role, content')
       .eq('conversation_id', conv!.id)
@@ -249,7 +228,6 @@ Deno.serve(async (req) => {
 
     const historyMessages = (history ?? []).reverse().map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 
-    // Build system prompt based on bot_type
     const baseContext = [
       `Você é um assistente do Sales Boost.`,
       company.business_type ? `Tipo de negócio: ${company.business_type}` : '',
@@ -262,16 +240,8 @@ Deno.serve(async (req) => {
       ? 'Você é um assistente de vendas. Ajude com dúvidas sobre planos, preços, cases de sucesso e funcionalidades da plataforma. Seja amigável, direto e persuasivo.'
       : 'Você é um assistente de marketing. Ajude com estratégias de conteúdo, análise de avaliações, concorrentes, posts e crescimento de negócio.'
 
-    const toolsNote = `
+    const toolsNote = `\n\nVocê tem acesso a dados reais da plataforma — NUNCA diga que não tem acesso a informações em tempo real, e NUNCA invente ou estime um número. Antes de responder QUALQUER pergunta sobre posts, oportunidades, avaliações, diagnóstico do site, concorrentes ou leads — mesmo que ache que já sabe a resposta pelo histórico da conversa — use PRIMEIRO a ferramenta correspondente:\nget_business_overview, list_posts, list_opportunities, list_reviews, get_latest_diagnostic, list_competitors, list_leads.\n\nRegra de contagem: para responder "quantos/quantas X", use o campo total_matching que a ferramenta retorna — NUNCA conte os itens da lista "items" você mesmo, porque ela pode vir cortada (só uma amostra) e o total_matching é sempre o número exato e completo. Se o total_matching não existir (como em get_business_overview), use o campo de contagem já pronto ali (posts.total, openOpportunities, reviews.total).\n\nPara criar conteúdo de verdade (não só descrever), use create_post ou create_multiple_posts — nunca publica sozinho, tudo vira rascunho pra aprovação.`
 
-Você tem acesso a dados reais da plataforma — NUNCA diga que não tem acesso a informações em tempo real, e NUNCA invente ou estime um número. Antes de responder QUALQUER pergunta sobre posts, oportunidades, avaliações, diagnóstico do site, concorrentes ou leads — mesmo que ache que já sabe a resposta pelo histórico da conversa — use PRIMEIRO a ferramenta correspondente:
-get_business_overview, list_posts, list_opportunities, list_reviews, get_latest_diagnostic, list_competitors, list_leads.
-
-Regra de contagem: para responder "quantos/quantas X", use o campo total_matching que a ferramenta retorna — NUNCA conte os itens da lista "items" você mesmo, porque ela pode vir cortada (só uma amostra) e o total_matching é sempre o número exato e completo. Se o total_matching não existir (como em get_business_overview), use o campo de contagem já pronto ali (posts.total, openOpportunities, reviews.total).
-
-Para criar conteúdo de verdade (não só descrever), use create_post ou create_multiple_posts — nunca publica sozinho, tudo vira rascunho pra aprovação.`
-
-    // Config ao vivo do Control Center: personalidade, tools, handoff, horário.
     const cfg = await getTelegramConfig(admin)
     const disabled = cfg.disabled
     const activeTools = TOOLS.filter(t => !(TOOL_CAP[t.name] && disabled.has(TOOL_CAP[t.name])))
@@ -283,22 +253,18 @@ Para criar conteúdo de verdade (não só descrever), use create_post ou create_
     let reply = ''
     let postsCreated = 0
 
-    // Human handoff: IA pausada → responde com a mensagem de atendente humano,
-    // sem acionar a IA. Fora do horário de atendimento → auto-resposta.
+    // Human handoff: IA pausada → responde com a mensagem de atendente humano.
+    // Fora do horário de atendimento → auto-resposta.
     if (cfg.ai_paused) {
       reply = cfg.paused_reply
     } else if (cfg.active_hours_enabled && isOutsideActiveHours(cfg)) {
       reply = cfg.outside_hours_reply
     }
 
-    // ── Agentic loop (max 5 turns) — só roda se não houve handoff/auto-resposta.
     if (!reply) for (let i = 0; i < 5; i++) {
       const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
-        // Sonnet em vez de Haiku aqui — segue instrução de "sempre chamar a
-        // ferramenta antes de responder" de forma bem mais confiável, e isso
-        // importa mais que custo quando o pedido é precisão de números.
         body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, system: systemPrompt, tools: activeTools, messages: convo }),
       })
 
@@ -329,7 +295,6 @@ Para criar conteúdo de verdade (não só descrever), use create_post ou create_
 
     if (!reply) reply = postsCreated > 0 ? `Criei ${postsCreated} rascunho(s). Disponíveis na aba Posts para aprovação.` : 'Não consegui gerar uma resposta.'
 
-    // Save messages to DB
     if (conv) {
       await admin.from('telegram_messages').insert([
         { conversation_id: conv.id, role: 'user', content: message },
@@ -337,14 +302,10 @@ Para criar conteúdo de verdade (não só descrever), use create_post ou create_
       ])
     }
 
-    // Send reply back to Telegram
     const sendMessageRes = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chat_id,
-        text: reply,
-      }),
+      body: JSON.stringify({ chat_id: chat_id, text: reply }),
     })
 
     if (!sendMessageRes.ok) {

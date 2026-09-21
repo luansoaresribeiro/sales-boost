@@ -179,8 +179,11 @@ Deno.serve(async (req) => {
       const kind = body.kind === 'initiative' ? 'initiative' : 'main'
       const parentId = body.parent_strategy_id ? String(body.parent_strategy_id) : null
       if (kind === 'initiative' && !parentId) return json({ error: 'Falta a estratégia principal pra vincular essa iniciativa.' }, 400)
-      // Várias estratégias principais podem coexistir ativas em paralelo — o
-      // dono pediu pra criar uma nova nunca pausar as outras (2026-09-20).
+      if (kind === 'main') {
+        // Só 1 main ativa por vez — pausa a anterior (não apaga, guarda histórico).
+        await admin.from('marketing_ai_strategies').update({ status: 'paused', updated_at: new Date().toISOString() })
+          .eq('company_id', company.id).eq('kind', 'main').eq('status', 'active')
+      }
       const { parsed, goals, baselineFound } = await generateStrategy(admin, anthropicKey, company, kind, parentId)
 
       const { data: inserted, error: insErr } = await admin.from('marketing_ai_strategies').insert({

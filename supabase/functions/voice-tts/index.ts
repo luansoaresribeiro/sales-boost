@@ -22,7 +22,6 @@ Deno.serve(async (req) => {
 
     const elevenlabsKey = Deno.env.get('ELEVENLABS_API_KEY')
     if (!elevenlabsKey) {
-      // Graceful degradation: client falls back to text-only mode
       return json({ ok: true, audio: null, reason: 'ELEVENLABS_API_KEY not configured' })
     }
 
@@ -30,10 +29,9 @@ Deno.serve(async (req) => {
     const text = (body.text as string | undefined)?.trim()
     if (!text) return json({ error: 'text is required' }, 400)
 
-    // Allow per-request voice override, else use env var, else default to a multilingual voice
     const voiceId = (body.voice_id as string | undefined)
       ?? Deno.env.get('ELEVENLABS_VOICE_ID')
-      ?? 'pNInz6obpgDQGcFmaJgB'  // Adam — multilingual, configure via ELEVENLABS_VOICE_ID
+      ?? 'pNInz6obpgDQGcFmaJgB'
 
     const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',

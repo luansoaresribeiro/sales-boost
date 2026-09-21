@@ -3,11 +3,14 @@
  *
  * Diferente dos outros logins (Instagram, Meta Business), esse não é um
  * redirect — o front chama FB.login() com um config_id (janela popup) e
- * recebe um "code" + o waba_id/phone_number_id escolhidos. Esta função
- * troca o code por um token, inscreve o app no WABA (pra receber webhook
- * das mensagens desse número específico) e salva tudo na empresa.
+ * recebe um "code". O popup TAMBÉM manda um postMessage com o
+ * waba_id/phone_number_id escolhidos, mas isso se mostrou pouco confiável
+ * na prática (bloqueadores de terceiros, timing do popup) — então
+ * waba_id/phone_number_id agora são OPCIONAIS no body: se não vierem, esta
+ * função descobre sozinha via /debug_token (granular_scopes) e
+ * /{waba_id}/phone_numbers, usando só o access_token real da API.
  *
- * POST autenticado (JWT do próprio cliente) — body: { code, waba_id, phone_number_id }
+ * POST autenticado (JWT do próprio cliente) — body: { code, waba_id?, phone_number_id? }
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -16,6 +19,32 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 const FB_VERSION = 'v21.0'
+
+// Sem waba_id/phone_number_id vindos do postMessage do popup — descobre pelo
+// próprio token: debug_token devolve os WABAs que o usuário autorizou nesse
+// login (o mais recente vem primeiro), depois lista os números daquele WABA.
+async function discoverWabaAndPhone(
+  accessToken: string, appId: string, appSecret: string,
+): Promise<{ wabaId: string | null; phoneNumberId: string | null }> {
+  const debugRes = await fetch(`https://graph.facebook.com/${FB_VERSION}/debug_token?` + new URLSearchParams({
+    input_token: accessToken, access_token: `${appId}|${appSecret}`,
+  }))
+  if (!debugRes.ok) return { wabaId: null, phoneNumberId: null }
+  const debugJson = await debugRes.json() as {
+    data?: { granular_scopes?: { scope: string; target_ids?: string[] }[] }
+  }
+  const wabaScope = debugJson.data?.granular_scopes?.find(s => s.scope === 'whatsapp_business_management')
+  const wabaId = wabaScope?.target_ids?.[0] ?? null
+  if (!wabaId) return { wabaId: null, phoneNumberId: null }
+
+  const phonesRes = await fetch(`https://graph.facebook.com/${FB_VERSION}/${wabaId}/phone_numbers?` + new URLSearchParams({
+    access_token: accessToken,
+  }))
+  if (!phonesRes.ok) return { wabaId, phoneNumberId: null }
+  const phonesJson = await phonesRes.json() as { data?: { id: string }[] }
+  const phoneNumberId = phonesJson.data?.[0]?.id ?? null
+  return { wabaId, phoneNumberId }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -36,8 +65,10 @@ Deno.serve(async (req) => {
     if (userErr || !user) return json({ error: 'Unauthorized' }, 401)
 
     const body = await req.json() as { code?: string; waba_id?: string; phone_number_id?: string }
-    const { code, waba_id: wabaId, phone_number_id: phoneNumberId } = body
-    if (!code || !wabaId || !phoneNumberId) return json({ error: 'code, waba_id e phone_number_id são obrigatórios' }, 400)
+    const { code } = body
+    let wabaId = body.waba_id ?? null
+    let phoneNumberId = body.phone_number_id ?? null
+    if (!code) return json({ error: 'code é obrigatório' }, 400)
 
     const admin = createClient(supabaseUrl, serviceKey)
     const { data: company } = await admin.from('companies').select('id').eq('user_id', user.id).maybeSingle()
@@ -51,6 +82,17 @@ Deno.serve(async (req) => {
     const tokenJson = await tokenRes.json() as { access_token?: string }
     const accessToken = tokenJson.access_token
     if (!accessToken) return json({ error: 'Resposta sem access_token' }, 502)
+
+    // O popup nem sempre manda o postMessage com waba_id/phone_number_id a
+    // tempo — descobre pelo token quando faltar.
+    if (!wabaId || !phoneNumberId) {
+      const discovered = await discoverWabaAndPhone(accessToken, appId, appSecret)
+      wabaId = wabaId ?? discovered.wabaId
+      phoneNumberId = phoneNumberId ?? discovered.phoneNumberId
+    }
+    if (!wabaId || !phoneNumberId) {
+      return json({ error: 'Não achamos o WhatsApp Business Account ou o número escolhido — confirma se concluiu a etapa do número na janela do Meta e tenta de novo.' }, 400)
+    }
 
     // 2. inscreve o app no WABA — sem isso, as mensagens desse número não chegam no webhook
     const subRes = await fetch(`https://graph.facebook.com/${FB_VERSION}/${wabaId}/subscribed_apps`, {

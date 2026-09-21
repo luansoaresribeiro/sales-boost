@@ -3,6 +3,12 @@ import Stripe from 'https://esm.sh/stripe@14?target=deno'
 
 const PLAN_PRICE_IDS: Record<string, string> = {}
 
+const toIso = (unixSeconds: number | null | undefined) => (unixSeconds ? new Date(unixSeconds * 1000).toISOString() : null)
+
+async function logAccessEvent(admin: ReturnType<typeof createClient>, companyId: string, event: string, detail: string) {
+  try { await admin.from('access_audit_log').insert({ company_id: companyId, event, actor: 'stripe', detail }) } catch { /* nunca derruba o webhook por causa do log */ }
+}
+
 function planFromPriceId(priceId: string): string {
   const basic = Deno.env.get('STRIPE_PRICE_BASIC')
   const pro = Deno.env.get('STRIPE_PRICE_PRO')
@@ -50,7 +56,12 @@ Deno.serve(async (req) => {
           plan,
           stripe_customer_id: session.customer as string,
           stripe_subscription_id: subscription.id,
+          subscription_status: subscription.status,
+          current_period_start: toIso(subscription.current_period_start),
+          current_period_end: toIso(subscription.current_period_end),
+          subscription_cancelled_at: null,
         }).eq('id', companyId)
+        await logAccessEvent(admin, companyId, 'payment_confirmed', `Assinatura ${plan} confirmada via Stripe — acesso liberado automaticamente.`)
         break
       }
 
@@ -60,19 +71,32 @@ Deno.serve(async (req) => {
         const plan = planFromPriceId(priceId)
         const status = sub.status
 
-        // Only keep plan active if subscription is active/trialing
+        // Só mantém o plano pago se a assinatura estiver active/trialing;
+        // caso contrário volta pra 'free' — subscription_status é a fonte
+        // de verdade do estado real (past_due, unpaid, canceled etc), plan
+        // só reflete o que o cliente pode usar.
         const activePlan = ['active', 'trialing'].includes(status) ? plan : 'free'
 
-        await admin.from('companies').update({ plan: activePlan })
+        const { data: company } = await admin.from('companies')
+          .update({
+            plan: activePlan,
+            subscription_status: status,
+            current_period_start: toIso(sub.current_period_start),
+            current_period_end: toIso(sub.current_period_end),
+          })
           .eq('stripe_subscription_id', sub.id)
+          .select('id').maybeSingle()
+        if (company) await logAccessEvent(admin, company.id, 'subscription_updated', `Status da assinatura no Stripe: ${status}.`)
         break
       }
 
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription
-        await admin.from('companies')
-          .update({ plan: 'free', stripe_subscription_id: null })
+        const { data: company } = await admin.from('companies')
+          .update({ plan: 'free', stripe_subscription_id: null, subscription_status: 'canceled', subscription_cancelled_at: new Date().toISOString() })
           .eq('stripe_subscription_id', sub.id)
+          .select('id').maybeSingle()
+        if (company) await logAccessEvent(admin, company.id, 'subscription_cancelled', 'Assinatura cancelada no Stripe.')
         break
       }
     }

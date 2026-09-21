@@ -19,7 +19,7 @@ Regras:
 - Máximo 4 frases
 - Comece agradecendo pelo feedback, mesmo que negativo
 - Se a nota for baixa (1-2): reconheça o problema, peça desculpas e convide para nova visita
-- Se a nota for alta (4-5): reforce o que fizeram bem e convide para voltar
+- Se a nota for alta (4-5): reforçe o que fizeram bem e convide para voltar
 - Tom profissional mas humano, em português brasileiro
 - Não use emojis excessivos
 - Assine como "Equipe ${company.business_name}"
@@ -41,8 +41,6 @@ async function callClaude(anthropicKey: string, prompt: string): Promise<string>
 type SupaClient = ReturnType<typeof createClient>
 
 async function notifyMarketing(chatId: number | null | undefined, companyId: string, event: string, data?: Record<string, unknown>) {
-  // Sempre grava na aba Atividades, mesmo sem Telegram conectado — o envio
-  // ao Telegram (dentro de log-bot-event) é só um bônus quando existe chatId.
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const secret = Deno.env.get('BOT_WEBHOOK_SECRET')
   if (!supabaseUrl) return
@@ -55,7 +53,6 @@ async function notifyMarketing(chatId: number | null | undefined, companyId: str
 
 // Publica uma resposta direto no Google Business Profile (mesmo caminho do
 // reply-google-review, mas por service-role, para o modo automático do cron).
-// Retorna true se publicou. Nunca lança — falha vira "não publicou".
 async function publishReplyToGBP(admin: SupaClient, companyId: string, reviewId: string, googleReviewId: string, replyText: string, clientId?: string, clientSecret?: string): Promise<boolean> {
   try {
     const { data: integration } = await admin.from('company_integrations')
@@ -115,7 +112,6 @@ async function draftPendingReviewReplies(admin: SupaClient, anthropicKey: string
       if (opp.type === 'negative_review') negative++
       else if (opp.type === 'unanswered_review') stale++
 
-      // Modo automático: publica direto no Google e fecha a oportunidade.
       if (autoReply && review.google_review_id) {
         const ok = await publishReplyToGBP(admin, companyId, opp.ref_id as string, review.google_review_id as string, draft, clientId, clientSecret)
         if (ok) {
@@ -184,7 +180,6 @@ Deno.serve(async (req) => {
     const { opportunity_id } = bodyForCron as { opportunity_id?: string }
     if (!opportunity_id) return json({ error: 'opportunity_id é obrigatório' }, 400)
 
-    // Get company
     const { data: company } = await admin
       .from('companies')
       .select('id, business_name, business_type, city')
@@ -193,7 +188,6 @@ Deno.serve(async (req) => {
 
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
 
-    // Get opportunity
     const { data: opp } = await admin
       .from('opportunities')
       .select('*')
@@ -203,7 +197,6 @@ Deno.serve(async (req) => {
 
     if (!opp) return json({ error: 'Oportunidade não encontrada.' }, 404)
 
-    // If draft already exists, return it
     if (opp.ai_draft) return json({ ok: true, draft: opp.ai_draft })
 
     let prompt = ''
@@ -239,7 +232,6 @@ Seja direto e prático. Máximo 3 frases. Em português brasileiro.`
       return json({ error: String(e) }, 502)
     }
 
-    // Save draft to opportunity
     await admin.from('opportunities').update({ ai_draft: draft }).eq('id', opportunity_id)
 
     return json({ ok: true, draft })

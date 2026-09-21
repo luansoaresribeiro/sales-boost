@@ -6,9 +6,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const PLAN_PRICE_IDS: Record<string, string | undefined> = {
+const PLAN_PRICE_IDS_BRL: Record<string, string | undefined> = {
   basic: Deno.env.get('STRIPE_PRICE_BASIC'),
-  pro: Deno.env.get('STRIPE_PRICE_PRO'),
+  pro:   Deno.env.get('STRIPE_PRICE_PRO'),
+  ultra: Deno.env.get('STRIPE_PRICE_ULTRA'),
+}
+
+const PLAN_PRICE_IDS_USD: Record<string, string | undefined> = {
+  basic: Deno.env.get('STRIPE_PRICE_BASIC_USD'),
+  pro:   Deno.env.get('STRIPE_PRICE_PRO_USD'),
+  ultra: Deno.env.get('STRIPE_PRICE_ULTRA_USD'),
 }
 
 Deno.serve(async (req) => {
@@ -31,10 +38,11 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userErr } = await userClient.auth.getUser()
     if (userErr || !user) return json({ error: 'Unauthorized' }, 401)
 
-    const { plan, success_url, cancel_url } = await req.json()
-    if (!plan || !PLAN_PRICE_IDS[plan]) return json({ error: 'Plano inválido.' }, 400)
+    const { plan, region, success_url, cancel_url } = await req.json()
+    const priceMap = (region === 'us' && PLAN_PRICE_IDS_USD[plan]) ? PLAN_PRICE_IDS_USD : PLAN_PRICE_IDS_BRL
+    if (!plan || !priceMap[plan]) return json({ error: 'Plano inválido.' }, 400)
 
-    const priceId = PLAN_PRICE_IDS[plan]!
+    const priceId = priceMap[plan]!
     const admin = createClient(supabaseUrl, serviceKey)
     const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' })
 
@@ -63,8 +71,8 @@ Deno.serve(async (req) => {
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
       client_reference_id: company.id,
-      success_url: success_url ?? 'https://salesboost.app/dashboard/settings?upgrade=success',
-      cancel_url: cancel_url ?? 'https://salesboost.app/dashboard/settings',
+      success_url: success_url ?? `${Deno.env.get('SITE_URL') ?? 'https://sales-boost-restaurants.luancontasecundaria22.workers.dev'}/planos?upgrade=success`,
+      cancel_url: cancel_url ?? `${Deno.env.get('SITE_URL') ?? 'https://sales-boost-restaurants.luancontasecundaria22.workers.dev'}/planos`,
       subscription_data: {
         metadata: { company_id: company.id, plan },
       },

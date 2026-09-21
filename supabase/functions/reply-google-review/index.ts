@@ -29,7 +29,6 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey)
 
-    // Get company for this user
     const { data: company } = await admin
       .from('companies')
       .select('id')
@@ -37,7 +36,6 @@ Deno.serve(async (req) => {
       .single()
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
 
-    // Get review
     const { data: review } = await admin
       .from('reviews')
       .select('google_review_id')
@@ -47,7 +45,6 @@ Deno.serve(async (req) => {
     if (!review) return json({ error: 'Avaliação não encontrada' }, 404)
     if (!review.google_review_id) return json({ error: 'Esta avaliação não tem ID do Google para resposta direta' }, 400)
 
-    // Get GBP integration
     const { data: integration } = await admin
       .from('company_integrations')
       .select('access_token, refresh_token, token_expires_at, metadata')
@@ -61,7 +58,6 @@ Deno.serve(async (req) => {
       return json({ error: 'account_id ou location_id não encontrados. Reconecte o Google Business Profile.' }, 400)
     }
 
-    // Refresh token if needed
     let accessToken = integration.access_token
     const expiresAt = integration.token_expires_at ? new Date(integration.token_expires_at) : new Date(0)
     if (expiresAt < new Date(Date.now() + 60_000) && integration.refresh_token && clientId && clientSecret) {
@@ -85,7 +81,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Post reply to GBP
     const reviewName = `accounts/${meta.account_id}/locations/${meta.location_id}/reviews/${review.google_review_id}`
     const replyRes = await fetch(
       `https://mybusiness.googleapis.com/v4/${reviewName}/reply`,
@@ -104,7 +99,6 @@ Deno.serve(async (req) => {
       return json({ error: `Erro da API Google: ${errBody}` }, 500)
     }
 
-    // Update review in DB
     await admin.from('reviews').update({
       owner_reply: reply_text.trim(),
       responded_at: new Date().toISOString(),

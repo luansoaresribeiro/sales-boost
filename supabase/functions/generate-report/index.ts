@@ -124,7 +124,7 @@ async function generatePdf(html: string, apiKey: string): Promise<string | null>
 
 async function notifyMarketing(chatId: number | null | undefined, companyId: string, event: string, data?: Record<string, unknown>) {
   // Sempre grava na aba Atividades, mesmo sem Telegram conectado — o envio
-  // ao Telegram (dentro de log-bot-event) é só um bônus quando existe chatId.
+  // ao Telegram (dentro de log-bot-event) e so um bonus quando existe chatId.
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const secret = Deno.env.get('BOT_WEBHOOK_SECRET')
   if (!supabaseUrl) return

@@ -1,9 +1,6 @@
 /**
- * meta-ads-insights — puxa os números REAIS da conta de anúncios da Meta
- * (últimos 30 dias) e devolve no mesmo formato que o painel demo usa, pra
- * trocar os números falsos pelos reais sem mudar o design.
- *
- * Body: { company_id }. Se não conectado, devolve { connected: false }.
+ * meta-ads-insights — puxa os numeros REAIS da conta de anuncios (30 dias).
+ * Body: { company_id }. Se nao conectado, devolve { connected: false }.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -14,18 +11,17 @@ const cors = {
 const META_API = 'https://graph.facebook.com/v21.0'
 const CONV_TYPES = ['purchase', 'offsite_conversion.fb_pixel_purchase', 'onsite_conversion.purchase', 'lead', 'offsite_conversion.fb_pixel_lead']
 
-// deno-lint-ignore no-explicit-any
-function sumAction(list: any[] | undefined, types: string[]): number {
+function sumAction(list, types) {
   if (!list) return 0
   return list.filter(a => types.includes(a.action_type)).reduce((s, a) => s + Number(a.value ?? 0), 0)
 }
-const n = (v: unknown) => Number(v ?? 0)
-const round = (v: number, d = 2) => Math.round(v * 10 ** d) / 10 ** d
+const n = (v) => Number(v ?? 0)
+const round = (v, d = 2) => Math.round(v * 10 ** d) / 10 ** d
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!, anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+    const supabaseUrl = Deno.env.get('SUPABASE_URL'), anonKey = Deno.env.get('SUPABASE_ANON_KEY')
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? anonKey
     const bearer = req.headers.get('Authorization') ?? ''
     if (!bearer) return json({ error: 'Unauthorized' }, 401)
@@ -34,7 +30,7 @@ Deno.serve(async (req) => {
     if (!user) return json({ error: 'Unauthorized' }, 401)
 
     const { company_id } = await req.json().catch(() => ({}))
-    if (!company_id) return json({ error: 'company_id obrigatório' }, 400)
+    if (!company_id) return json({ error: 'company_id obrigatorio' }, 400)
 
     const admin = createClient(supabaseUrl, serviceKey)
     const { data: company } = await admin.from('companies')
@@ -49,7 +45,6 @@ Deno.serve(async (req) => {
     const acct = company.meta_ads_account_id.startsWith('act_') ? company.meta_ads_account_id : `act_${company.meta_ads_account_id}`
     const token = company.meta_ads_access_token
 
-    // Totais da conta (últimos 30 dias)
     const accRes = await fetch(`${META_API}/${acct}/insights?` + new URLSearchParams({
       fields: 'spend,impressions,clicks,ctr,cpc,reach,actions,action_values,purchase_roas',
       date_preset: 'last_30d', access_token: token,
@@ -67,13 +62,11 @@ Deno.serve(async (req) => {
       conversions: Math.round(conversions),
     }
 
-    // Campanhas (últimos 30 dias)
     const campRes = await fetch(`${META_API}/${acct}/campaigns?` + new URLSearchParams({
       fields: 'name,status,objective,insights.date_preset(last_30d){spend,ctr,cpc,actions,action_values,purchase_roas}',
       limit: '25', access_token: token,
     }))
-    // deno-lint-ignore no-explicit-any
-    const campData = campRes.ok ? ((await campRes.json()).data as any[] ?? []) : []
+    const campData = campRes.ok ? ((await campRes.json()).data ?? []) : []
     const campaigns = campData.map((c, i) => {
       const ins = c.insights?.data?.[0] ?? {}
       const cSpend = n(ins.spend)
@@ -96,6 +89,6 @@ Deno.serve(async (req) => {
   }
 })
 
-function json(data: unknown, status = 200) {
+function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 }

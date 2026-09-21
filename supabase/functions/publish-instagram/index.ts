@@ -1,16 +1,7 @@
 /**
- * publish-instagram
- * Generates content + image, then publishes directly to Instagram.
- * Can be called manually (by owner) or by run-agents (autonomously).
- *
- * Body: { company_id, caption?, image_prompt?, auto_generate? }
- * - caption: use provided text (skip AI generation)
- * - image_prompt: use provided prompt for image generation
- * - auto_generate: true = let agent generate caption + image prompt autonomously
- *
- * Publica via Instagram Business Login (API with Instagram Login): o token é da
- * própria conta do Instagram, então as chamadas de mídia vão para
- * graph.instagram.com (não graph.facebook.com / Página).
+ * publish-instagram — publica no Instagram via Instagram Business Login.
+ * O token e da propria conta do Instagram, entao as chamadas de midia vao para
+ * graph.instagram.com (nao graph.facebook.com / Pagina).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -33,7 +24,6 @@ Deno.serve(async (req) => {
     const { company_id, caption: providedCaption, image_prompt: providedPrompt, auto_generate } = body
     if (!company_id) return json({ error: 'company_id is required' }, 400)
 
-    // Fetch company
     const { data: company, error: compErr } = await admin
       .from('companies')
       .select('id, business_name, business_type, city, goal, instagram_user_id, instagram_access_token, instagram_token_expires_at, instagram_auto_post, instagram_post_style')
@@ -45,7 +35,6 @@ Deno.serve(async (req) => {
       return json({ error: 'Instagram not connected. Go to Integrations to connect.' }, 400)
     }
 
-    // Check token expiry
     if (company.instagram_token_expires_at) {
       const expiresAt = new Date(company.instagram_token_expires_at)
       const daysLeft = (expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
@@ -53,7 +42,6 @@ Deno.serve(async (req) => {
       if (daysLeft < 7) await refreshToken(company.id, company.instagram_access_token, admin)
     }
 
-    // Generate caption + image prompt if needed
     let caption = providedCaption
     let imagePrompt = providedPrompt
 
@@ -67,19 +55,16 @@ Deno.serve(async (req) => {
           company_id: company.id,
           role: 'assistant',
           agent_role: 'cmo',
-          content: `[Agente de Marketing • Raciocínio] ${generated.reasoning}`,
+          content: `[Agente de Marketing - Raciocinio] ${generated.reasoning}`,
         })
       }
     }
 
-    // Get image URL
     const imageUrl = await getImageUrl(imagePrompt ?? `${company.business_type ?? 'business'} ${company.business_name}`)
 
-    // Publish to Instagram
     const mediaId = await createMediaContainer(company.instagram_user_id, company.instagram_access_token, imageUrl, caption)
     await publishMedia(company.instagram_user_id, company.instagram_access_token, mediaId)
 
-    // Log in instagram_posts table
     await admin.from('instagram_posts').insert({
       company_id: company.id,
       instagram_media_id: mediaId,
@@ -89,7 +74,6 @@ Deno.serve(async (req) => {
       posted_at: new Date().toISOString(),
     })
 
-    // Log in agent_messages
     await admin.from('agent_messages').insert({
       company_id: company.id,
       role: 'assistant',
@@ -104,14 +88,13 @@ Deno.serve(async (req) => {
   }
 })
 
-// ── Autonomous content generation ──────────────────────────────────────────
-async function generateContent(company: Record<string, unknown>, admin: ReturnType<typeof createClient>) {
+async function generateContent(company, admin) {
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!
-  const companyId = company.id as string
-  const name = company.business_name as string
-  const type = (company.business_type as string | null) ?? 'negócio'
-  const city = (company.city as string | null) ?? 'Brasil'
-  const goal = (company.goal as string | null) ?? 'crescer'
+  const companyId = company.id
+  const name = company.business_name
+  const type = company.business_type ?? 'negocio'
+  const city = company.city ?? 'Brasil'
+  const goal = company.goal ?? 'crescer'
 
   const [reviewsRes, postsRes, messagesRes] = await Promise.all([
     admin.from('reviews').select('rating, text, review_date, sentiment').eq('company_id', companyId).order('review_date', { ascending: false }).limit(8),
@@ -127,68 +110,39 @@ async function generateContent(company: Record<string, unknown>, admin: ReturnTy
   const dateStr = today.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
   const month = today.getMonth() + 1
 
-  const seasonHints: Record<number, string> = {
-    1: 'Janeiro: Réveillon acabou, época de verão, festas de início de ano',
-    2: 'Fevereiro: Carnaval se aproxima, calor intenso, festas temáticas',
-    3: 'Março: Pós-Carnaval, início do outono, Dia Internacional da Mulher (8/3)',
-    4: 'Abril: Páscoa, Tiradentes, início de temporada mais fria',
-    5: 'Maio: Dia das Mães (segunda sexta), Dia do Trabalho (1/5)',
-    6: 'Junho: Festas Juninas, São João, comidas típicas, inverno',
-    7: 'Julho: Férias escolares, inverno, festas de inverno, viagens',
-    8: 'Agosto: Dia dos Pais (segunda), Festa do Peão de Barretos',
-    9: 'Setembro: Independência (7/9), início de primavera',
-    10: 'Outubro: Outubro Rosa, Halloween, Dia das Crianças (12/10)',
-    11: 'Novembro: Black Friday, Dia de Finados, Proclamação da República (15/11)',
-    12: 'Dezembro: Natal, Réveillon, festas de fim de ano, alta temporada',
+  const seasonHints = {
+    1: 'Janeiro: verao, festas de inicio de ano',
+    2: 'Fevereiro: Carnaval, calor',
+    3: 'Marco: pos-Carnaval, outono, Dia da Mulher (8/3)',
+    4: 'Abril: Pascoa, Tiradentes',
+    5: 'Maio: Dia das Maes, Dia do Trabalho (1/5)',
+    6: 'Junho: Festas Juninas, Sao Joao, inverno',
+    7: 'Julho: ferias escolares, inverno',
+    8: 'Agosto: Dia dos Pais',
+    9: 'Setembro: Independencia (7/9), primavera',
+    10: 'Outubro: Outubro Rosa, Halloween, Dia das Criancas (12/10)',
+    11: 'Novembro: Black Friday, Finados',
+    12: 'Dezembro: Natal, Reveillon, alta temporada',
   }
 
   const reviewSummary = reviews.length > 0
-    ? reviews.map(r => `[${r.rating}★] "${r.text?.slice(0, 100) ?? ''}"`).join('\n')
-    : 'Nenhuma avaliação recente disponível.'
+    ? reviews.map(r => `[${r.rating}] "${r.text?.slice(0, 100) ?? ''}"`).join('\n')
+    : 'Nenhuma avaliacao recente.'
 
   const postHistory = pastPosts.length > 0
-    ? pastPosts.map(p => `- "${p.caption?.slice(0, 80) ?? ''}" (${p.posted_at?.split('T')[0] ?? ''}${p.likes_count ? `, ${p.likes_count} curtidas` : ''})`).join('\n')
-    : 'Nenhum post anterior registrado.'
+    ? pastPosts.map(p => `- "${p.caption?.slice(0, 80) ?? ''}" (${p.posted_at?.split('T')[0] ?? ''})`).join('\n')
+    : 'Nenhum post anterior.'
 
-  const previousReasoning = pastReasoning.length > 0
-    ? pastReasoning.map(m => m.content).join('\n').slice(0, 400)
-    : ''
+  const previousReasoning = pastReasoning.length > 0 ? pastReasoning.map(m => m.content).join('\n').slice(0, 400) : ''
 
-  const systemPrompt = `Você é o Agente de Marketing autônomo e estratégico do ${name} (${type} em ${city}).
-Seu objetivo: ${goal}.
+  const systemPrompt = `Voce e o Agente de Marketing autonomo do ${name} (${type} em ${city}). Objetivo: ${goal}. Voce analisa o contexto real antes de criar conteudo.`
 
-Você trabalha 24/7 de forma autônoma. Antes de criar qualquer conteúdo, você ANALISA o contexto real do negócio e toma decisões estratégicas.`
-
-  const userPrompt = `# Contexto do dia: ${dateStr}
-${seasonHints[month] ?? ''}
-
-# Avaliações recentes dos clientes:
-${reviewSummary}
-
-# Últimos posts publicados:
-${postHistory}
-
-${previousReasoning ? `# Raciocínio anterior do Agente de Marketing:\n${previousReasoning}\n` : ''}
-
-# Sua tarefa:
-Analise tudo acima e decida o post mais estratégico para publicar HOJE no Instagram.
-
-Responda em JSON válido:
-{
-  "reasoning": "Seu raciocínio em 2-3 frases: o que você observou nos dados e por que escolheu esse tema",
-  "caption": "Legenda completa do post com emojis e hashtags (max 2200 chars)",
-  "image_prompt": "Descrição em inglês detalhada para gerar imagem fotorrealista e profissional"
-}`
+  const userPrompt = `# Dia: ${dateStr}\n${seasonHints[month] ?? ''}\n\n# Avaliacoes:\n${reviewSummary}\n\n# Ultimos posts:\n${postHistory}\n\n${previousReasoning ? `# Raciocinio anterior:\n${previousReasoning}\n` : ''}\n# Tarefa: decida o post mais estrategico para HOJE.\nResponda em JSON valido:\n{\n  "reasoning": "2-3 frases",\n  "caption": "legenda com emojis e hashtags (max 2200)",\n  "image_prompt": "descricao em ingles para imagem fotorrealista"\n}`
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1200,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1200, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
   })
 
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
@@ -197,15 +151,10 @@ Responda em JSON válido:
   const match = text.match(/\{[\s\S]*\}/)
   const parsed = JSON.parse(match ? match[0] : text)
 
-  return {
-    caption: parsed.caption ?? '',
-    imagePrompt: parsed.image_prompt ?? type,
-    reasoning: parsed.reasoning ?? '',
-  }
+  return { caption: parsed.caption ?? '', imagePrompt: parsed.image_prompt ?? type, reasoning: parsed.reasoning ?? '' }
 }
 
-// ── Get image URL (DALL-E or Unsplash fallback) ─────────────────────────────
-async function getImageUrl(prompt: string): Promise<string> {
+async function getImageUrl(prompt) {
   const openaiKey = Deno.env.get('OPENAI_API_KEY')
   if (openaiKey) {
     try {
@@ -214,10 +163,7 @@ async function getImageUrl(prompt: string): Promise<string> {
         headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'dall-e-3', prompt, n: 1, size: '1024x1024', quality: 'standard' }),
       })
-      if (res.ok) {
-        const d = await res.json()
-        return d.data[0].url
-      }
+      if (res.ok) { const d = await res.json(); return d.data[0].url }
     } catch { /* fall through */ }
   }
 
@@ -227,17 +173,13 @@ async function getImageUrl(prompt: string): Promise<string> {
     const res = await fetch(`https://api.unsplash.com/photos/random?query=${query}&orientation=squarish&content_filter=high`, {
       headers: { Authorization: `Client-ID ${unsplashKey}` },
     })
-    if (res.ok) {
-      const d = await res.json()
-      return d.urls.regular
-    }
+    if (res.ok) { const d = await res.json(); return d.urls.regular }
   }
 
-  throw new Error('No image source configured. Add OPENAI_API_KEY or UNSPLASH_ACCESS_KEY to Supabase secrets.')
+  throw new Error('No image source configured. Add OPENAI_API_KEY or UNSPLASH_ACCESS_KEY.')
 }
 
-// ── Instagram Graph API helpers (graph.instagram.com — Instagram Login) ──────
-async function createMediaContainer(igUserId: string, token: string, imageUrl: string, caption: string): Promise<string> {
+async function createMediaContainer(igUserId, token, imageUrl, caption) {
   const res = await fetch(`${IG_API}/${igUserId}/media`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -251,7 +193,7 @@ async function createMediaContainer(igUserId: string, token: string, imageUrl: s
   return d.id
 }
 
-async function publishMedia(igUserId: string, token: string, creationId: string): Promise<void> {
+async function publishMedia(igUserId, token, creationId) {
   const res = await fetch(`${IG_API}/${igUserId}/media_publish`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -263,7 +205,7 @@ async function publishMedia(igUserId: string, token: string, creationId: string)
   }
 }
 
-async function refreshToken(companyId: string, currentToken: string, admin: ReturnType<typeof createClient>) {
+async function refreshToken(companyId, currentToken, admin) {
   try {
     const res = await fetch(`https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${currentToken}`)
     if (!res.ok) return
@@ -273,6 +215,6 @@ async function refreshToken(companyId: string, currentToken: string, admin: Retu
   } catch { /* silent */ }
 }
 
-function json(data: unknown, status = 200) {
+function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 }

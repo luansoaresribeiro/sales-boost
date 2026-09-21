@@ -1,17 +1,12 @@
 /**
- * meta-ads-oauth-start — conecta a conta de anúncios da Meta (Marketing API).
- *
- * Usa Facebook Login (as contas de anúncios vivem no Business do Facebook),
- * com o App ID do Facebook (META_APP_ID). Pede leitura de anúncios.
- *
- * Query: ?company_id=...
+ * meta-ads-oauth-start — conecta a conta de anuncios da Meta (Marketing API).
+ * Usa Facebook Login com META_APP_ID. Pede leitura de anuncios.
  */
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// ads_read = ler campanhas/insights; business_management = achar as contas.
 const SCOPES = ['ads_read', 'business_management']
 
 Deno.serve(async (req) => {
@@ -37,6 +32,6 @@ Deno.serve(async (req) => {
   return Response.redirect(authUrl.toString(), 302)
 })
 
-function json(data: unknown, status = 200) {
+function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 }

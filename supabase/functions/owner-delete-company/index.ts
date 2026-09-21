@@ -30,8 +30,6 @@ Deno.serve(async (req) => {
     const { data: company } = await admin.from('companies').select('id, business_name').eq('id', company_id).maybeSingle()
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
 
-    // Confere no servidor que o nome digitado bate — não é só uma checagem
-    // visual no frontend, senão dava pra pular a confirmação via chamada direta.
     const expected = (company.business_name ?? '').trim().toLowerCase()
     if (confirm_name.trim().toLowerCase() !== expected) {
       return json({ error: 'Nome não confere. Digite exatamente o nome do negócio pra confirmar.' }, 400)

@@ -30,6 +30,23 @@ function parseObj(raw: string): Record<string, unknown> {
   return {}
 }
 
+// Cada card gráfico tem espaço FIXO (render-format desenha num canvas de
+// tamanho fixo, sem rolagem) — texto longo demais empurrava o resto pra
+// fora do quadro, parecendo "cortado no meio da frase". render-format já
+// tem uma rede de segurança (corta linha inteira, nunca no meio), mas o
+// texto sai melhor quando a IA já escreve do tamanho certo, em vez de
+// contar com o corte de emergência.
+const FIELD_HINT: Record<string, string> = {
+  text: 'máx. 140 caracteres — frase curta e COMPLETA, nunca cortada no meio',
+  headline: 'máx. 8 palavras — frase de impacto COMPLETA',
+  subtext: 'máx. 18 palavras',
+  context: 'máx. 16 palavras',
+  caption: 'máx. 12 palavras',
+  cta: 'máx. 4 palavras (ex: "Agende agora")',
+  offer: 'máx. 6 palavras',
+  eyebrow: 'máx. 4 palavras',
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
@@ -50,10 +67,14 @@ Deno.serve(async (req) => {
     const company = companyRow as { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_dna: { brand_voice?: string; target_audience?: string } | null; instagram_url: string | null } | null
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
 
-    const body = await req.json().catch(() => ({})) as { template?: string; fields?: { key: string; label: string }[]; subject?: string }
+    const body = await req.json().catch(() => ({})) as { template?: string; fields?: { key: string; label: string }[]; subject?: string; instruction?: string }
     const template = String(body.template ?? 'formato')
     const fields = Array.isArray(body.fields) ? body.fields : []
     const subject = String(body.subject ?? '').slice(0, 500)
+    // Instrução editável (FormatStudio → "editar instrução da IA pra esse
+    // formato") — quando o dono já personalizou, ela manda; sem isso, cai
+    // só nas regras genéricas de FIELD_HINT abaixo.
+    const instruction = String(body.instruction ?? '').trim().slice(0, 600)
     if (fields.length === 0) return json({ error: 'Sem campos para preencher.' }, 400)
 
     const { data: cfgRow } = await admin.from('marketing_ai_config').select('brand_voice, tone, content_pillars, marketing_goals').eq('company_id', company.id).maybeSingle()
@@ -66,12 +87,14 @@ Handle do Instagram: ${company.instagram_url ?? '—'}.
 
 Você vai preencher os campos de um formato visual do tipo "${template}".
 ${subject ? `Assunto do post: ${subject}` : 'Escolha um assunto forte e relevante pro negócio.'}
+${instruction ? `\nInstrução específica pra esse formato (definida pelo dono — siga à risca): ${instruction}\n` : ''}
 
 Campos a preencher (retorne um valor curto e pronto pra tela em cada um, em pt-BR, no tom da marca):
-${fields.map(f => `- ${f.key}: ${f.label}`).join('\n')}
+${fields.map(f => `- ${f.key}: ${f.label}${FIELD_HINT[f.key] ? ` (${FIELD_HINT[f.key]})` : ''}`).join('\n')}
 
 Regras:
 - Texto pronto pra aparecer na imagem, sem aspas extras, sem markdown.
+- CADA CAMPO TEM ESPAÇO FIXO no card — respeite o limite indicado entre parênteses à risca. Nunca escreva um parágrafo onde só cabe uma frase curta; é melhor uma frase completa e curta do que uma longa que fica cortada.
 - Se um campo for número de curtidas/retuítes/estatística, use um número plausível e honesto (é uma peça de design, não um dado real de analytics) — curto.
 - Se um campo for "tema", responda "dark" ou "light".
 Retorne APENAS um JSON com uma chave por campo: {${fields.map(f => `"${f.key}":"..."`).join(',')}}`

@@ -30,7 +30,6 @@ Deno.serve(async (req) => {
     const { code, company_id } = await req.json()
     if (!code || !company_id) return json({ error: 'code and company_id required' }, 400)
 
-    // Exchange code for tokens
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -51,7 +50,6 @@ Deno.serve(async (req) => {
     const tokens = await tokenRes.json()
     const expiresAt = new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000).toISOString()
 
-    // Get the list of GSC sites to determine the domain
     const sitesRes = await fetch('https://www.googleapis.com/webmasters/v3/sites', {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     })
@@ -61,7 +59,6 @@ Deno.serve(async (req) => {
       domain = sites.siteEntry?.[0]?.siteUrl ?? null
     }
 
-    // Store integration in DB
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey)
     const { error: upsertErr } = await serviceClient
       .from('company_integrations')

@@ -36,7 +36,11 @@ Deno.serve(async (req) => {
   const appId = Deno.env.get('INSTAGRAM_APP_ID')
   if (!appId) return json({ error: 'INSTAGRAM_APP_ID not configured' }, 500)
 
-  const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/instagram-oauth-callback`
+  const redirectUri = Deno.env.get('INSTAGRAM_REDIRECT_URI')
+
+if (!redirectUri) {
+  return json({ error: 'INSTAGRAM_REDIRECT_URI not configured' }, 500)
+}
   const state = btoa(JSON.stringify({ company_id: companyId, ts: Date.now() }))
 
   const authUrl = new URL('https://www.instagram.com/oauth/authorize')

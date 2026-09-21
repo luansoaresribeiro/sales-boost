@@ -29,6 +29,45 @@ async function safeGet(url: string): Promise<any | null> {
     return await r.json()
   } catch { return null }
 }
+
+// A Meta assina media_url/thumbnail_url com validade curta (poucos dias) —
+// confirmado direto no parâmetro "oe" (timestamp de expiração) de URLs reais
+// já guardadas: seguem quebrando o "cover" no Arquivo depois de expirar.
+// Baixa a imagem uma vez e hospeda no nosso próprio storage (permanente) —
+// mesmo padrão já usado pra logo/fotos de produto.
+async function rehostCover(
+  admin: ReturnType<typeof createClient>, companyId: string, mediaId: string, sourceUrl: string | null,
+): Promise<string | null> {
+  if (!sourceUrl) return null
+  try {
+    const res = await fetch(sourceUrl)
+    if (!res.ok) return null
+    const contentType = res.headers.get('content-type') ?? 'image/jpeg'
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    const path = `renders/${companyId}/ig-cover-${mediaId}.jpg`
+    const { error } = await admin.storage.from('post-images').upload(path, bytes, { contentType, upsert: true })
+    if (error) return null
+    const { data } = admin.storage.from('post-images').getPublicUrl(path)
+    return data.publicUrl
+  } catch {
+    return null
+  }
+}
+// Fase 1 do plano de arquitetura de sincronização — grava saúde/freshness
+// central (integration_sync_status), reutilizada pela UI e futuramente pelos
+// agentes. last_success_at só é tocado quando ok=true, preservando a última
+// sincronização boa mesmo quando esta rodada falhou.
+async function logSync(admin: ReturnType<typeof createClient>, companyId: string, result: { ok: boolean; status: 'healthy' | 'error' | 'disconnected'; error?: string | null; recordsSynced?: number }) {
+  const now = new Date().toISOString()
+  const row: Record<string, unknown> = {
+    company_id: companyId, integration: 'instagram',
+    last_synced_at: now, status: result.status, last_error: result.error ?? null,
+    records_synced: result.recordsSynced ?? null, updated_at: now,
+  }
+  if (result.ok) row.last_success_at = now
+  try { await admin.from('integration_sync_status').upsert(row, { onConflict: 'company_id,integration' }) } catch { /* nunca derruba a sync por causa do log */ }
+}
+
 // deno-lint-ignore no-explicit-any
 function igMetric(insights: any, name: string): number | null {
   const row = insights?.data?.find((d: any) => d.name === name)
@@ -59,6 +98,7 @@ Deno.serve(async (req) => {
     if (!company || company.user_id !== user.id) return json({ error: 'Forbidden' }, 403)
     if (!company.instagram_user_id || !company.instagram_access_token) return json({ connected: false })
     if (company.instagram_token_expires_at && new Date(company.instagram_token_expires_at) < new Date()) {
+      await logSync(admin, company_id, { ok: false, status: 'disconnected', error: 'Token expirado' })
       return json({ connected: false, expired: true })
     }
 
@@ -67,7 +107,11 @@ Deno.serve(async (req) => {
 
     // 1. Perfil
     const profile = await safeGet(`${IG}/me?fields=user_id,username,account_type,media_count,followers_count,follows_count,profile_picture_url&access_token=${token}`)
-    if (!profile || profile.error) return json({ connected: true, error: profile?.error?.message ?? 'Falha ao ler o perfil' })
+    if (!profile || profile.error) {
+      const errMsg = profile?.error?.message ?? 'Falha ao ler o perfil'
+      await logSync(admin, company_id, { ok: false, status: 'error', error: errMsg })
+      return json({ connected: true, error: errMsg })
+    }
     const followers = num(profile.followers_count)
 
     // 2. Insights da conta (best-effort — depende de permissão/tamanho da conta)
@@ -77,7 +121,11 @@ Deno.serve(async (req) => {
     const websiteClicks = igMetric(accIns, 'website_clicks')
 
     // 3. Mídias recentes + insights por mídia
-    const mediaRes = await safeGet(`${IG}/me/media?fields=id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,like_count,comments_count&limit=25&access_token=${token}`)
+    const mediaRes = await safeGet(`${IG}/me/media?fields=id,caption,media_type,media_product_type,timestamp,permalink,media_url,thumbnail_url,like_count,comments_count&limit=25&access_token=${token}`)
+    // null = a chamada falhou de verdade (rede/permissão/rate limit) — bem
+    // diferente de "a conta tem zero posts". Nunca pode virar um dia de
+    // engajamento zero gravado pra sempre no histórico (bug corrigido).
+    const mediaFetchFailed = mediaRes === null
     const media = (mediaRes?.data ?? []) as any[]
     const content: any[] = []
     for (const m of media) {
@@ -92,9 +140,12 @@ Deno.serve(async (req) => {
       const likes = num(m.like_count) ?? 0
       const comments = num(m.comments_count) ?? 0
       const total = likes + comments + (shares ?? 0) + (saves ?? 0)
+      // Cover pro Arquivo: sempre a nossa cópia permanente (thumbnail pra
+      // reel/vídeo, a própria foto quando não há thumbnail dedicado).
+      const rehosted = await rehostCover(admin, company_id, m.id, m.thumbnail_url ?? m.media_url ?? null)
       content.push({
         id: m.id, type, date: m.timestamp, caption: (m.caption ?? '').slice(0, 90) || 'Sem legenda',
-        thumb: m.thumbnail_url ?? null, permalink: m.permalink ?? null,
+        thumb: rehosted ?? m.thumbnail_url ?? null, mediaUrl: m.media_url ?? null, permalink: m.permalink ?? null,
         reach, impressions: null, likes, comments, shares, saves,
         engagementRate: reach ? round1((total / reach) * 100) : 0,
         followersGained: null, pillar: pillarOf(m.caption ?? ''), funnel: funnelOf(type),
@@ -128,24 +179,42 @@ Deno.serve(async (req) => {
     const scoreLabel = total >= 80 ? 'Desempenho forte' : total >= 60 ? 'Desempenho bom' : total >= 40 ? 'Precisa de atenção' : 'Desempenho crítico'
     const health = total >= 80 ? 'excellent' : total >= 60 ? 'good' : total >= 40 ? 'attention' : 'critical'
 
-    // 7. Persiste snapshots (upsert, idempotente por dia) — só service role escreve
-    await admin.from('instagram_performance_snapshots').upsert({
-      company_id, captured_for: today, followers, reach: reach30, impressions: null,
-      profile_visits: profileVisits, website_clicks: websiteClicks, engagement: engSum,
-      engagement_rate: engRate, published: publishedCount,
-      raw: { followers_count: followers, media_count: profile.media_count },
-    }, { onConflict: 'company_id,captured_for' })
-    await admin.from('instagram_performance_scores').upsert({
-      company_id, captured_for: today, total,
-      growth: growthComp, reach: reachComp, engagement: engComp, content: contentComp, consistency: consistencyComp,
-    }, { onConflict: 'company_id,captured_for' })
+    // 7. Persiste snapshots (upsert, idempotente por dia) — só service role escreve.
+    // Se a busca de mídia falhou de verdade, NÃO grava o dia de hoje — melhor
+    // faltar um dia no histórico do que gravar um "zero" que nunca aconteceu.
+    if (!mediaFetchFailed) {
+      await admin.from('instagram_performance_snapshots').upsert({
+        company_id, captured_for: today, followers, reach: reach30, impressions: null,
+        profile_visits: profileVisits, website_clicks: websiteClicks, engagement: engSum,
+        engagement_rate: engRate, published: publishedCount,
+        raw: { followers_count: followers, media_count: profile.media_count },
+      }, { onConflict: 'company_id,captured_for' })
+      await admin.from('instagram_performance_scores').upsert({
+        company_id, captured_for: today, total,
+        growth: growthComp, reach: reachComp, engagement: engComp, content: contentComp, consistency: consistencyComp,
+      }, { onConflict: 'company_id,captured_for' })
+      await logSync(admin, company_id, { ok: true, status: 'healthy', recordsSynced: content.length })
+    } else {
+      await logSync(admin, company_id, { ok: false, status: 'error', error: 'Falha ao buscar mídias do Instagram' })
+    }
     if (content.length) {
       await admin.from('instagram_content_performance').upsert(content.map(c => ({
-        company_id, media_id: c.id, media_type: c.type, caption: c.caption, thumbnail_url: c.thumb,
+        company_id, media_id: c.id, media_type: c.type, caption: c.caption, thumbnail_url: c.thumb, media_url: c.mediaUrl,
         permalink: c.permalink, posted_at: c.date, reach: c.reach, likes: c.likes, comments: c.comments,
         shares: c.shares, saves: c.saves, engagement_rate: c.engagementRate, pillar: c.pillar, funnel_stage: c.funnel,
         updated_at: new Date().toISOString(),
       })), { onConflict: 'company_id,media_id' })
+
+      // Casa cada post real com o registro interno que o publicou (quando a
+      // Central de Approvals publicou por aqui e guardou o media_id em
+      // posts.instagram_media_id) — assim dá pra saber depois qual ideia/post
+      // interno gerou qual resultado real.
+      const { data: ownPosts } = await admin.from('posts').select('id, instagram_media_id').eq('company_id', company_id).not('instagram_media_id', 'is', null)
+      const byMediaId = new Map((ownPosts ?? []).map(p => [p.instagram_media_id as string, p.id as string]))
+      for (const c of content) {
+        const postId = byMediaId.get(c.id)
+        if (postId) await admin.from('instagram_content_performance').update({ source_post_id: postId }).eq('company_id', company_id).eq('media_id', c.id)
+      }
     }
 
     // 8. Monta o trend a partir do histórico real (dias que já temos)
@@ -202,7 +271,7 @@ Deno.serve(async (req) => {
       competitor: { hasData: false, rows: [], you: { postsPerWeek: recentPerWeek(content), engagement: engRate } },
       recommendations: buildRecs(content),
       game: buildGame(followers, prevSnap, reach30, total, recentPerWeek(content)),
-      sync: { status: 'connected', lastSync: new Date().toISOString(), error: null },
+      sync: { status: 'connected', lastSync: new Date().toISOString(), error: mediaFetchFailed ? 'Falha ao buscar mídias do Instagram — dados de hoje não foram salvos, mostrando o último dado real disponível.' : null },
     }
     return json(payload)
   } catch (err) {

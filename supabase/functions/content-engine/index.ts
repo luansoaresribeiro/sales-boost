@@ -23,17 +23,22 @@ type DataSource = 'none' | 'engagement' | 'competitors' | 'reviews'
 
 interface ContentType { key: string; label: string; objective: Objective; template: string; dataSource: DataSource; usesImage: boolean; guide: string }
 
+// REGRA (mesma de formatTemplates.tsx/render-format's buildSvg): todo
+// `template` abaixo precisa ser uma das chaves reais que render-format sabe
+// desenhar hoje (tweet/product/photo/problem/faq/trend/market_watch/review)
+// — nunca um formato descontinuado (announcement/stat/quote não existem
+// mais). Removendo/renomeando um template em render-format, espelhar aqui.
 // Registro dos 10 tipos (1 renderizador cada — fase 1).
 const TYPES: ContentType[] = [
-  { key: 'educational', label: 'Educacional', objective: 'educate', template: 'announcement', dataSource: 'none', usesImage: false, guide: 'Ensine 1 coisa útil e específica do segmento. eyebrow curto ("APRENDA"), headline = a lição em 1 frase, subtext = como aplicar em 1-2 linhas, cta.' },
+  { key: 'educational', label: 'Educacional', objective: 'educate', template: 'photo', dataSource: 'none', usesImage: false, guide: 'Ensine 1 coisa útil e específica do segmento. eyebrow curto ("APRENDA"), headline = a lição em 1 frase clara, cta = próximo passo curto.' },
   { key: 'faq', label: 'FAQ / Objeção', objective: 'educate', template: 'faq', dataSource: 'none', usesImage: false, guide: 'Uma dúvida/objeção real do cliente e a resposta que quebra a objeção. eyebrow = "VOCÊ PERGUNTOU", question = a pergunta entre aspas, answer = resposta curta e direta.' },
-  { key: 'data_insight', label: 'Dado / Insight', objective: 'educate', template: 'stat', dataSource: 'engagement', usesImage: false, guide: 'Contextualize o número real. label = rótulo curto do número, context = o que ele significa pro dono em 1 frase. NÃO invente o número (ele é passado pronto).' },
+  { key: 'data_insight', label: 'Dado / Insight', objective: 'educate', template: 'market_watch', dataSource: 'engagement', usesImage: false, guide: 'Contextualize o número real. eyebrow = "DADO REAL", headline = pergunta ou contexto curto, insight = o que o número significa pro dono em 1 frase. NÃO invente o número (o campo "value" é passado pronto).' },
   { key: 'problem', label: 'Problema → Virada', objective: 'attract', template: 'problem', dataSource: 'none', usesImage: false, guide: 'Uma dor comum do público (fala do cliente entre aspas em "problem"), a virada de perspectiva em "reframe", e o insight em "insight". eyebrow = "UM PROBLEMA COMUM".' },
-  { key: 'trend', label: 'Tendência do setor', objective: 'attract', template: 'trend', dataSource: 'none', usesImage: false, guide: 'eyebrow = "TENDÊNCIA DO SETOR", title = o tema, items = 3 mudanças/itens curtos separados por QUEBRA DE LINHA (\\n).' },
+  { key: 'trend', label: 'Tendência do setor', objective: 'attract', template: 'trend', dataSource: 'none', usesImage: false, guide: 'eyebrow = "TENDÊNCIA DO SETOR", title = o tema, items = 3 mudanças/itens curtos separados por QUEBRA DE LINHA (\n).' },
   { key: 'market_intel', label: 'Inteligência de mercado', objective: 'attract', template: 'market_watch', dataSource: 'competitors', usesImage: false, guide: 'eyebrow = "MARKET WATCH", headline = pergunta sobre o mercado, insight = o que o número real significa. NÃO invente o número (passado pronto).' },
-  { key: 'opinion', label: 'Opinião', objective: 'attract', template: 'quote', dataSource: 'none', usesImage: false, guide: 'Uma opinião forte e memorável da marca sobre o segmento em "quote" (1-2 frases). author = nome da empresa; role = o segmento.' },
+  { key: 'opinion', label: 'Opinião', objective: 'attract', template: 'tweet', dataSource: 'none', usesImage: false, guide: 'Uma opinião forte e memorável da marca sobre o segmento, no campo "text" (1-2 frases, estilo tweet). name = nome da empresa; handle = @ curto (sem espaço).' },
   { key: 'social_proof', label: 'Prova social', objective: 'build_trust', template: 'review', dataSource: 'reviews', usesImage: false, guide: 'eyebrow = "O QUE DIZEM DE NÓS". Os campos text/author/stars/source são passados prontos do review real — só ajuste eyebrow.' },
-  { key: 'product', label: 'Produto / Solução', objective: 'build_trust', template: 'announcement', dataSource: 'none', usesImage: false, guide: 'Apresente o produto/serviço resolvendo uma dor. eyebrow curto, headline = a promessa, subtext = o que inclui, offer = valor/benefício curto, cta.' },
+  { key: 'product', label: 'Produto / Solução', objective: 'build_trust', template: 'photo', dataSource: 'none', usesImage: false, guide: 'Apresente o produto/serviço resolvendo uma dor. eyebrow curto, headline = a promessa clara, offer = valor/benefício curto (opcional), cta.' },
   { key: 'attraction', label: 'Atração', objective: 'attract', template: 'photo', dataSource: 'none', usesImage: true, guide: 'Post de alcance/identificação. eyebrow curto, headline = frase de forte identificação (1 linha), cta opcional.' },
 ]
 const OBJECTIVES: Objective[] = ['attract', 'educate', 'build_trust']
@@ -148,7 +153,7 @@ async function runForCompany(ctx: Ctx, companyId: string): Promise<Record<string
 
   // Renderiza (render-format grava o rascunho na Área de Testes). Imagem de IA só
   // no tipo "livre" (Attraction) — os demais são montagem, custo 0.
-  const tall = ['announcement', 'problem', 'faq', 'trend', 'photo'].includes(chosen.template)
+  const tall = ['problem', 'faq', 'trend', 'photo'].includes(chosen.template)
   const renderBody: Record<string, unknown> = {
     cron_secret: cronSecret, company_id: companyId,
     template: chosen.template, fields, brand, kind: 'organico',
@@ -165,7 +170,7 @@ async function runForCompany(ctx: Ctx, companyId: string): Promise<Record<string
   return { ok: true, content_type: chosen.key, objective: chosen.objective, template: chosen.template, id: rd.id, url: rd.url }
 }
 
-// ── Dado real por fonte (retorna null quando não há → o tipo é pulado) ────────
+// ── Dado real por fonte (retorna null quando não há → o tipo é pulado) ───────────
 async function fetchData(admin: Supa, companyId: string, source: DataSource): Promise<Record<string, string> | null> {
   if (source === 'none') return {}
   if (source === 'engagement') {
