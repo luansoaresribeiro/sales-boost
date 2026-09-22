@@ -182,13 +182,14 @@ Retorne APENAS um JSON:
   // verdade em vez de gravar lixo silenciosamente (bug real encontrado
   // 2026-09-22: uma linha ficou "ativa" com tudo null, e o auto-criar nunca
   // tentava de novo porque já via uma estratégia "existente").
-  let raw = await callClaude(anthropicKey, prompt)
+  let raw = await callClaude(anthropicKey, prompt, 4500)
   let parsed = parseObj(raw)
   if (!parsed.name || !parsed.thesis) {
-    raw = await callClaude(anthropicKey, prompt)
+    raw = await callClaude(anthropicKey, prompt, 4500)
     parsed = parseObj(raw)
   }
   if (!parsed.name || !parsed.thesis) {
+    console.error('strategy-generate: resposta não parseável mesmo após retry. Últimos 800 chars:', raw.slice(-800))
     throw new Error('A IA não conseguiu gerar uma estratégia completa — tente de novo em instantes.')
   }
 
