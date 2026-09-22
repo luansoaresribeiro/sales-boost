@@ -623,7 +623,7 @@ function ShowcaseSection({ lang }: { lang: Lang }) {
 /* ══════════════════════════════════════════════════
    STATEMENT  — card from below + blob parallax
 ══════════════════════════════════════════════════ */
-function StatementSection({ lang }: { lang: Lang }) {
+function StatementSection({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => void }) {
   const tx = t[lang].statement
   const sectionRef = useRef<HTMLElement>(null)
 
@@ -659,7 +659,7 @@ function StatementSection({ lang }: { lang: Lang }) {
           </h2>
           <p className="mb-10 leading-relaxed" style={{ fontSize: '15px', color: MUTED }}>{tx.sub}</p>
           <div className="flex items-center gap-4">
-            <button className="flex items-center gap-2 font-bold text-sm px-7 py-3.5 rounded-xl transition-all" style={{ background: ORANGE, color: '#000', boxShadow: '0 8px 24px rgba(255,109,41,0.3)' }}>
+            <button onClick={onTrialClick} className="flex items-center gap-2 font-bold text-sm px-7 py-3.5 rounded-xl transition-all" style={{ background: ORANGE, color: '#000', boxShadow: '0 8px 24px rgba(255,109,41,0.3)' }}>
               {tx.cta} <span>→</span>
             </button>
             <div className="ml-auto w-10 h-10 rounded-full flex items-center justify-center" style={{ border: '1px solid rgba(255,109,41,0.35)', color: ORANGE, fontSize: '18px' }}>⊙</div>
@@ -673,7 +673,7 @@ function StatementSection({ lang }: { lang: Lang }) {
 /* ══════════════════════════════════════════════════
    ICP  — "is this for you?" card, replaces pricing
 ══════════════════════════════════════════════════ */
-function IcpSection({ lang }: { lang: Lang }) {
+function IcpSection({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => void }) {
   const tx = t[lang].icp
   const sectionRef = useRef<HTMLElement>(null)
   const checkColor = ORANGE
@@ -724,7 +724,7 @@ function IcpSection({ lang }: { lang: Lang }) {
                 <h4 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: MUTED }}>{tx.secondaryLabel}</h4>
                 <p className="text-sm leading-relaxed" style={{ color: MUTED }}>{tx.secondaryText}</p>
               </div>
-              <button className="w-full py-3.5 rounded-xl font-bold text-sm transition-all" style={{ background: ORANGE, color: '#000', boxShadow: '0 8px 24px rgba(255,109,41,0.25)' }}>
+              <button onClick={onTrialClick} className="w-full py-3.5 rounded-xl font-bold text-sm transition-all" style={{ background: ORANGE, color: '#000', boxShadow: '0 8px 24px rgba(255,109,41,0.25)' }}>
                 {tx.cta}
               </button>
             </div>
@@ -812,8 +812,8 @@ export default function App() {
       <FeaturesSection lang={lang} />
       <HowItWorksSection lang={lang} />
       <ShowcaseSection lang={lang} />
-      <StatementSection lang={lang} />
-      <IcpSection lang={lang} />
+      <StatementSection lang={lang} onTrialClick={() => setTrialOpen(true)} />
+      <IcpSection lang={lang} onTrialClick={() => setTrialOpen(true)} />
       <SiteFooter lang={lang} onTrialClick={() => setTrialOpen(true)} />
       <TrialModal lang={lang} open={trialOpen} onClose={() => setTrialOpen(false)} />
     </div>
