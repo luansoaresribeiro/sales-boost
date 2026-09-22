@@ -4,6 +4,7 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
 import { t, type Lang } from './i18n'
+import logo from './assets/logo.png'
 
 gsap.registerPlugin(ScrollTrigger, ScrollToPlugin)
 
@@ -121,8 +122,8 @@ function Navbar({ lang, setLang, onTrialClick }: { lang: Lang; setLang: (l: Lang
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', backdropFilter: 'blur(16px)', background: 'rgba(14,11,10,0.85)' }}>
       <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: ORANGE }}>
-          <span className="text-black font-black text-sm">SB</span>
+        <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0">
+          <img src={logo} alt="Sales Boost" className="w-full h-full object-cover" />
         </div>
         <span className="font-bold text-white text-lg tracking-tight">SalesBoost</span>
       </div>
@@ -540,7 +541,9 @@ function ShowcaseSection({ lang }: { lang: Lang }) {
               <div style={{ borderRadius: '7px', overflow: 'hidden', height: '500px', display: 'flex', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.5)' }}>
                 <div style={{ width: '200px', flexShrink: 0, background: '#0D0D0F', borderRight: '1px solid rgba(255,255,255,0.05)', padding: '22px 14px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '26px' }}>
-                    <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: ORANGE, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '10px', color: '#000', flexShrink: 0 }}>SB</div>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+                      <img src={logo} alt="Sales Boost" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
                     <span style={{ fontWeight: 700, color: 'white', fontSize: '12px' }}>SalesBoost</span>
                   </div>
                   {['Dashboard', 'Reviews', 'Concorrentes', 'Relatório', 'Config'].map((item, i) => (
@@ -786,7 +789,9 @@ function SiteFooter({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => vo
         <div className="grid md:grid-cols-3 gap-10 mb-12">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm text-black" style={{ background: ORANGE }}>SB</div>
+              <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0">
+                <img src={logo} alt="Sales Boost" className="w-full h-full object-cover" />
+              </div>
               <span className="font-bold text-white text-lg tracking-tight">SalesBoost</span>
             </div>
             <p className="text-sm leading-relaxed" style={{ color: MUTED, maxWidth: '260px' }}>{tx.tagline}</p>
