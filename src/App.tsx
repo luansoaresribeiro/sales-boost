@@ -671,105 +671,64 @@ function StatementSection({ lang }: { lang: Lang }) {
 }
 
 /* ══════════════════════════════════════════════════
-   PRICING  — cards stagger right → left
+   ICP  — "is this for you?" card, replaces pricing
 ══════════════════════════════════════════════════ */
-function PricingSection({ lang }: { lang: Lang }) {
-  const [region, setRegion] = useState<'br' | 'us'>(lang === 'pt' ? 'br' : 'us')
-  const tx = t[lang].pricing
-  const plans = tx.regions[region].plans
+function IcpSection({ lang }: { lang: Lang }) {
+  const tx = t[lang].icp
   const sectionRef = useRef<HTMLElement>(null)
+  const checkColor = ORANGE
 
   useEffect(() => {
     const ctx = gsap.context(() => {
-      gsap.from('.pricing-heading', {
+      gsap.from('.icp-heading', {
         y: 40, opacity: 0, duration: 0.8, ease: 'power2.out',
-        scrollTrigger: { trigger: '.pricing-heading', start: 'top 86%', once: true },
+        scrollTrigger: { trigger: '.icp-heading', start: 'top 86%', once: true },
       })
+      gsap.fromTo('.icp-card',
+        { x: 60, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.65, ease: 'power3.out',
+          scrollTrigger: { trigger: '.icp-card', start: 'top 86%', once: true } }
+      )
     }, sectionRef)
     return () => ctx.revert()
   }, [])
-
-  useEffect(() => {
-    gsap.fromTo('.pricing-card',
-      { x: 60, opacity: 0 },
-      { x: 0, opacity: 1, duration: 0.65, stagger: 0.18, ease: 'power3.out' }
-    )
-  }, [region])
 
   return (
     <section ref={sectionRef} id="pricing" className="relative overflow-hidden py-32 px-6" style={{ background: '#100C0A' }}>
       <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg,transparent,rgba(255,109,41,0.1),transparent)' }} />
       <Glow w={600} h={400} opacity={0.1} top="50%" left="50%" />
       <div className="relative z-10 max-w-5xl mx-auto">
-        <div className="pricing-heading text-center mb-12">
+        <div className="icp-heading text-center mb-12">
           <Badge text={tx.badge} />
           <SectionHeading white={tx.title1} accent={tx.title2} />
-          <div className="inline-flex items-center gap-1 mt-6 p-1 rounded-xl" style={{ background: CARD, border: '1px solid rgba(255,255,255,0.06)' }}>
-            {(['br', 'us'] as const).map((r) => (
-              <button key={r} onClick={() => setRegion(r)} className="px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200" style={{ background: region === r ? ORANGE : 'transparent', color: region === r ? '#000' : MUTED }}>
-                {tx.regions[r].label}
-              </button>
-            ))}
-          </div>
         </div>
         <div className="grid grid-cols-1 gap-5 max-w-md mx-auto">
-          {plans.map((plan, i) => {
-            const isUltra = plan.name === 'Ultra'
-            const cardBg   = plan.popular ? '#1E1008' : isUltra ? '#1A0C04' : CARD
-            const cardBorder = plan.popular
-              ? '2px solid rgba(255,109,41,0.45)'
-              : isUltra
-              ? '2px solid rgba(255,109,41,0.6)'
-              : '1px solid rgba(255,255,255,0.05)'
-            const cardShadow = plan.popular
-              ? '0 0 40px rgba(255,109,41,0.1)'
-              : isUltra
-              ? '0 0 40px rgba(255,109,41,0.15)'
-              : 'none'
-            const checkColor = ORANGE
-            const btnStyle = plan.popular
-              ? { background: ORANGE, color: '#000', boxShadow: '0 8px 24px rgba(255,109,41,0.25)' } as React.CSSProperties
-              : isUltra
-              ? { background: ORANGE, color: '#000', boxShadow: '0 8px 24px rgba(255,109,41,0.3)' } as React.CSSProperties
-              : { background: 'rgba(255,255,255,0.06)', color: 'white', border: '1px solid rgba(255,255,255,0.1)' } as React.CSSProperties
-            return (
-            <div key={i} className="pricing-card relative rounded-2xl p-8" style={{ background: cardBg, border: cardBorder, boxShadow: cardShadow }}>
-              {plan.popular && (
-                <>
-                  <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ background: 'rgba(255,109,41,0.04)' }} />
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                    <div className="text-xs font-black px-4 py-1.5 rounded-full tracking-wide whitespace-nowrap text-black" style={{ background: ORANGE }}>{tx.popular}</div>
-                  </div>
-                </>
-              )}
-              {isUltra && (
-                <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ background: 'rgba(255,109,41,0.04)' }} />
-              )}
-              <div className="relative">
-                <div className="mb-7">
-                  <h3 className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: isUltra ? ORANGE : MUTED }}>{plan.name}</h3>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-white leading-none" style={{ fontFamily: D, fontSize: '3.2rem', fontWeight: 900 }}>{plan.price}</span>
-                    <span className="text-sm ml-1" style={{ color: MUTED }}>{plan.period}</span>
-                  </div>
-                </div>
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map((feature, j) => (
-                    <li key={j} className="flex items-center gap-3">
-                      <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: `${checkColor}22`, border: `1px solid ${checkColor}55` }}>
-                        <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none" stroke={checkColor} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" /></svg>
-                      </div>
-                      <span className="text-sm text-white">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button className="w-full py-3.5 rounded-xl font-bold text-sm transition-all" style={btnStyle}>
-                  {tx.cta}
-                </button>
-              </div>
+          <div className="icp-card relative rounded-2xl p-8" style={{ background: '#1E1008', border: '2px solid rgba(255,109,41,0.45)', boxShadow: '0 0 40px rgba(255,109,41,0.1)' }}>
+            <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ background: 'rgba(255,109,41,0.04)' }} />
+            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+              <div className="text-xs font-black px-4 py-1.5 rounded-full tracking-wide whitespace-nowrap text-black" style={{ background: ORANGE }}>{tx.ribbon}</div>
             </div>
-            )
-          })}
+            <div className="relative">
+              <h3 className="text-xs font-bold uppercase tracking-widest mb-7" style={{ color: MUTED }}>{tx.cardLabel}</h3>
+              <ul className="space-y-3 mb-8">
+                {tx.criteria.map((criterion, j) => (
+                  <li key={j} className="flex items-center gap-3">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: `${checkColor}22`, border: `1px solid ${checkColor}55` }}>
+                      <svg viewBox="0 0 12 12" className="w-3 h-3" fill="none" stroke={checkColor} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" /></svg>
+                    </div>
+                    <span className="text-sm text-white">{criterion}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mb-7 pt-6" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <h4 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: MUTED }}>{tx.secondaryLabel}</h4>
+                <p className="text-sm leading-relaxed" style={{ color: MUTED }}>{tx.secondaryText}</p>
+              </div>
+              <button className="w-full py-3.5 rounded-xl font-bold text-sm transition-all" style={{ background: ORANGE, color: '#000', boxShadow: '0 8px 24px rgba(255,109,41,0.25)' }}>
+                {tx.cta}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -854,7 +813,7 @@ export default function App() {
       <HowItWorksSection lang={lang} />
       <ShowcaseSection lang={lang} />
       <StatementSection lang={lang} />
-      <PricingSection lang={lang} />
+      <IcpSection lang={lang} />
       <SiteFooter lang={lang} onTrialClick={() => setTrialOpen(true)} />
       <TrialModal lang={lang} open={trialOpen} onClose={() => setTrialOpen(false)} />
     </div>

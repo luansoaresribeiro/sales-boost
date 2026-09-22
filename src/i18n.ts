@@ -5,7 +5,7 @@ export const t = {
     nav: {
       features: 'Funcionalidades',
       how: 'Como funciona',
-      pricing: 'Preços',
+      pricing: 'Pra quem é',
       cta: '3 dias grátis',
     },
     trialModal: {
@@ -20,12 +20,12 @@ export const t = {
     },
     hero: {
       meta: [
-        { label: 'Produto', value: 'Plataforma SaaS' },
-        { label: 'Segmento', value: 'Qualquer negócio' },
+        { label: 'Produto', value: 'Aquisição de clientes' },
+        { label: 'Segmento', value: 'Marcas & e-commerce' },
         { label: 'Resultado em', value: '24 horas' },
       ],
-      headline: ['A IA que cresce', 'o seu negócio.', 'Você só aprova.'],
-      sub: 'Suas redes sociais, campanhas e atendimento num ciclo só: atrai, converte e vende — no piloto automático, sempre esperando o seu OK.',
+      headline: ['Você cuida', 'do negócio.', 'A gente, do digital.'],
+      sub: 'Criamos demanda nas redes sociais e cuidamos de toda a aquisição — do primeiro contato até a venda fechada. Você define o objetivo, a IA executa, e nada vai ao ar sem sua aprovação.',
       project: ['SalesBoost', 'Plataforma'],
       typeLabel: 'Modelo:',
       typeValue: 'Automatizado',
@@ -45,7 +45,7 @@ export const t = {
     },
     stats: {
       badge: 'Resultados comprovados',
-      intro: 'Somos a plataforma que junta redes sociais, campanhas e atendimento num ciclo só — transformando sua presença digital em mais vendas, no piloto automático e sempre com a sua aprovação.',
+      intro: 'Somos o sistema de aquisição de clientes com IA que cria demanda nas redes sociais e cuida de cada etapa — da atração à venda — sempre em busca de mais resultados, no piloto automático e com a sua aprovação.',
       items: [
         { value: '38%', label: 'Mais faturamento' },
         { value: '2.4×', label: 'Mais clientes atendidos' },
@@ -110,46 +110,30 @@ export const t = {
     },
     statement: {
       eyebrow: 'O produto',
-      line1: 'Não é só presença.',
-      line2: 'É presença que vende.',
-      sub: 'Redes sociais, campanhas e atendimento num ciclo só — pra transformar seguidores em clientes e clientes em receita, mês após mês.',
+      line1: 'Você define o objetivo.',
+      line2: 'A gente traz o cliente.',
+      sub: 'Criamos demanda nas redes sociais e tocamos toda a aquisição — da primeira mensagem até a venda fechada. Você aprova cada passo.',
       cta: 'Ver relatório demo',
     },
-    pricing: {
-      badge: 'Preços simples',
-      title1: 'Planos para',
-      title2: 'todo tamanho',
-      popular: 'Mais popular',
+    icp: {
+      badge: 'Pra quem é',
+      title1: 'Isso é',
+      title2: 'pra você?',
+      ribbon: 'Feito pra donos como você',
+      cardLabel: 'Perfil ideal',
+      criteria: [
+        'Marca própria ou e-commerce que vende pelas redes sociais',
+        'Negócio pequeno ou médio, tocado pelo dono ou por quem cuida do marketing',
+        'Instagram ativo e um produto com potencial de crescer',
+        'Cansado de conteúdo inconsistente e marketing manual',
+        'Quer gerar mais demanda e vender mais sem virar especialista em marketing',
+      ],
+      secondaryLabel: 'Também atendemos',
+      secondaryText: 'Escritórios de advocacia, contabilidade e outros serviços tocados pelo dono que precisam de um fluxo constante de novos clientes vindo das redes sociais.',
       cta: 'Começar agora',
-      regions: {
-        br: {
-          label: '🇧🇷 Brasil',
-          plans: [
-            {
-              name: 'SalesBoost',
-              price: 'R$14,49',
-              period: '/mês',
-              popular: true,
-              features: ['Posts com imagem por IA', 'Campanhas de conteúdo', 'Revenue Opportunities', 'Atendimento automático a leads', 'Automação 24/7', 'Relatórios mensais em PDF', 'Diagnóstico de site', 'Suporte'],
-            },
-          ],
-        },
-        us: {
-          label: '🇺🇸 USA',
-          plans: [
-            {
-              name: 'SalesBoost',
-              price: '$2.99',
-              period: '/mo',
-              popular: true,
-              features: ['AI-image posts', 'Content campaigns', 'Revenue Opportunities', 'Automatic lead replies', '24/7 automation', 'Monthly PDF reports', 'Website diagnosis', 'Support'],
-            },
-          ],
-        },
-      },
     },
     footer: {
-      tagline: 'Seu gerente de crescimento com IA — marketing e vendas no piloto automático.',
+      tagline: 'Seu sistema de aquisição de clientes com IA — cria demanda e cuida da venda, no piloto automático.',
       copy: '© 2026 SalesBoost. Todos os direitos reservados.',
     },
   },
@@ -157,7 +141,7 @@ export const t = {
     nav: {
       features: 'Features',
       how: 'How it works',
-      pricing: 'Pricing',
+      pricing: 'Who it’s for',
       cta: '3 free days',
     },
     trialModal: {
@@ -172,12 +156,12 @@ export const t = {
     },
     hero: {
       meta: [
-        { label: 'Product', value: 'SaaS Platform' },
-        { label: 'Segment', value: 'Any business' },
+        { label: 'Product', value: 'Customer acquisition' },
+        { label: 'Segment', value: 'Brands & e-commerce' },
         { label: 'Results in', value: '24 hours' },
       ],
-      headline: ['The AI that grows', 'your business.', 'You just approve.'],
-      sub: 'Your social media, campaigns, and customer service in one cycle: attract, convert, and sell — on autopilot, always waiting for your OK.',
+      headline: ['You run', 'the business.', 'We run the digital.'],
+      sub: 'We create demand on social media and manage the full acquisition process — from first contact to closed sale. You set the goal, the AI executes, and nothing goes live without your approval.',
       project: ['SalesBoost', 'Platform'],
       typeLabel: 'Model:',
       typeValue: 'Automated',
@@ -197,7 +181,7 @@ export const t = {
     },
     stats: {
       badge: 'Proven results',
-      intro: 'We are the platform that brings social media, campaigns, and customer service into one cycle — turning your digital presence into more sales, on autopilot and always with your approval.',
+      intro: 'We are the AI-powered customer acquisition system that creates demand on social media and manages every step — from attraction to sale — always chasing more results, on autopilot and with your approval.',
       items: [
         { value: '38%', label: 'Revenue growth' },
         { value: '2.4×', label: 'More customers served' },
@@ -262,46 +246,30 @@ export const t = {
     },
     statement: {
       eyebrow: 'The product',
-      line1: "It's not just presence.",
-      line2: "It's presence that sells.",
-      sub: 'Social media, campaigns, and customer service in one cycle — to turn followers into customers and customers into revenue, month after month.',
+      line1: 'You set the goal.',
+      line2: 'We bring the customer.',
+      sub: 'We create demand on social media and handle the full acquisition process — from the first message to the closed sale. You approve every step.',
       cta: 'See demo report',
     },
-    pricing: {
-      badge: 'Simple pricing',
-      title1: 'Plans for',
-      title2: 'every size',
-      popular: 'Most popular',
+    icp: {
+      badge: "Who it's for",
+      title1: 'Is this',
+      title2: 'for you?',
+      ribbon: 'Built for owners like you',
+      cardLabel: 'Ideal profile',
+      criteria: [
+        'Owner-led product brand or e-commerce that sells through social media',
+        'Small or medium-sized business, run by the owner or a marketing manager',
+        'Active Instagram and a product with real growth potential',
+        'Tired of inconsistent content and manual marketing work',
+        'Wants more demand and more sales without becoming a marketing expert',
+      ],
+      secondaryLabel: 'We also work with',
+      secondaryText: 'Owner-led professional service businesses — like law and accounting firms — that need a steady flow of new clients from social media.',
       cta: 'Start now',
-      regions: {
-        br: {
-          label: '🇧🇷 Brasil',
-          plans: [
-            {
-              name: 'SalesBoost',
-              price: 'R$14,49',
-              period: '/mês',
-              popular: true,
-              features: ['AI-image posts', 'Content campaigns', 'Revenue Opportunities', 'Automatic lead replies', '24/7 automation', 'Monthly PDF reports', 'Website diagnosis', 'Support'],
-            },
-          ],
-        },
-        us: {
-          label: '🇺🇸 USA',
-          plans: [
-            {
-              name: 'SalesBoost',
-              price: '$2.99',
-              period: '/mo',
-              popular: true,
-              features: ['AI-image posts', 'Content campaigns', 'Revenue Opportunities', 'Automatic lead replies', '24/7 automation', 'Monthly PDF reports', 'Website diagnosis', 'Support'],
-            },
-          ],
-        },
-      },
     },
     footer: {
-      tagline: 'Your AI growth manager — marketing and sales on autopilot.',
+      tagline: 'Your AI-powered customer acquisition system — creates demand and handles the sale, on autopilot.',
       copy: '© 2026 SalesBoost. All rights reserved.',
     },
   },
