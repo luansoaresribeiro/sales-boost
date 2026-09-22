@@ -179,6 +179,7 @@ export default function OnboardingPage() {
   const [loadingMsg, setLoadingMsg] = useState(LOADING_MSGS[0])
   const [error, setError] = useState('')
   const [businessTypes, setBusinessTypes] = useState<string[]>([])
+  const [diagnosticId, setDiagnosticId] = useState<string | null>(null)
 
   useEffect(() => { fetchBusinessTypes().then(setBusinessTypes) }, [])
 
@@ -222,7 +223,8 @@ export default function OnboardingPage() {
       const result = await res.json()
       if (!res.ok) throw new Error(result.error ?? 'Erro ao processar diagnóstico')
       clearInterval(interval)
-      navigate(`/diagnostico/${result.id}`)
+      setDiagnosticId(result.id)
+      setSubmitting(false)
     } catch (e) {
       clearInterval(interval)
       setError(e instanceof Error ? e.message : String(e))
@@ -239,6 +241,43 @@ export default function OnboardingPage() {
         </div>
         <div style={{ fontFamily: D, fontSize: '1.4rem', fontWeight: 800, color: 'white', marginBottom: '12px', textAlign: 'center' }}>Analisando seu negócio</div>
         <div style={{ fontSize: '14px', color: MUTED, textAlign: 'center', transition: 'opacity 0.5s' }}>{loadingMsg}</div>
+      </div>
+    )
+  }
+
+  // Tela final "negócio entendido" — confirma o que foi captado antes de
+  // levar pro diagnóstico, em vez de pular direto pra lá. Deixa claro que é
+  // o PERFIL INICIAL que está pronto, não que a IA já entendeu tudo — o
+  // resto (Instagram, WhatsApp, site, CRM) continua sendo aprendido depois
+  // por conexões reais, feitas em Configurações.
+  if (diagnosticId) {
+    return (
+      <div style={{ minHeight: '100vh', background: BG, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+        <div style={{ width: '100%', maxWidth: '480px', textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '20px' }}>✨</div>
+          <h1 style={{ fontFamily: D, fontSize: '1.7rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '10px' }}>
+            Seu negócio foi entendido.<br />Vamos te ajudar a crescer.
+          </h1>
+          <p style={{ color: MUTED, fontSize: '14px', lineHeight: 1.6, marginBottom: '28px' }}>
+            Coletamos as informações iniciais do seu negócio. A partir daqui, o Sales Boost aprende cada vez mais conforme você conecta seus canais — Instagram, WhatsApp, site — pra encontrar oportunidades de verdade.
+          </p>
+          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px', padding: '20px 22px', marginBottom: '24px', textAlign: 'left' }}>
+            {[
+              'Perfil do negócio criado',
+              'Objetivos registrados',
+              'Pronto pra conectar seus dados',
+            ].map((t, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 0' }}>
+                <span style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80', fontSize: '11px', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✓</span>
+                <span style={{ fontSize: '13.5px', color: 'white' }}>{t}</span>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => navigate(`/diagnostico/${diagnosticId}`)}
+            style={{ width: '100%', padding: '14px 24px', background: ORANGE, color: '#000', fontWeight: 800, fontSize: '15px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontFamily: D, letterSpacing: '-0.01em', boxShadow: '0 8px 20px rgba(255,109,41,0.3)' }}>
+            Entrar no Sales Boost →
+          </button>
+        </div>
       </div>
     )
   }
@@ -297,6 +336,7 @@ export default function OnboardingPage() {
                 <MultiSelect label="Canais atuais" values={data.current_channels} options={CHANNELS} onToggle={toggleChannel} />
                 <Field label="Site" value={data.website_url} onChange={set('website_url')} type="url" placeholder="https://seunegocio.com.br" required hint={data.website_url.trim() && !isValidUrl(data.website_url) ? '⚠️ URL inválida — use: https://seunegocio.com.br' : 'Analisamos performance, SEO e experiência do site (diagnóstico grátis).'} />
                 <Field label="Instagram (opcional)" value={data.instagram_url} onChange={set('instagram_url')} placeholder="https://instagram.com/seuperfil" />
+                <Field label="Facebook (opcional)" value={data.facebook_url} onChange={set('facebook_url')} placeholder="https://facebook.com/suapagina" />
               </>
             )}
             {step === 4 && (
@@ -308,6 +348,7 @@ export default function OnboardingPage() {
                 <Field label="Nome do negócio" value={data.business_name} onChange={set('business_name')} placeholder="Ex: Studio Beleza Carioca" required />
                 <Field label="Cidade / UF" value={data.city} onChange={set('city')} placeholder="Ex: Rio de Janeiro, RJ" required />
                 <Field label="Seu e-mail" value={data.contact_email} onChange={set('contact_email')} type="email" placeholder="voce@seunegocio.com.br" required hint="Usado pra acessar seu painel e receber alertas." />
+                <Field label="Telefone / WhatsApp (opcional)" value={data.phone} onChange={set('phone')} placeholder="(21) 99999-9999" />
                 {error && <div style={{ padding: '12px 16px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '10px', fontSize: '13px', color: '#f87171', marginBottom: '16px', lineHeight: 1.5 }}>{error}</div>}
               </>
             )}
