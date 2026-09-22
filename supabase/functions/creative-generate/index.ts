@@ -27,7 +27,23 @@ const cors = {
 }
 type SupaClient = ReturnType<typeof createClient>
 
-interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null; language: string | null }
+interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null; language: string | null; telegram_chat_id: string | null }
+
+// Mesmo padrão de generate-posts/index.ts — avisa em tempo real quando o
+// cron cria post(s) novo(s) esperando aprovação. Antes, quem cobria isso
+// pro Calendário da Semana e pro teste diário era só o resumo geral do
+// daily-briefing (removido — o dono pediu só aviso de post pra aprovar ou
+// acontecimento importante, sem relatório diário).
+async function notifyMarketing(chatId: string | null | undefined, companyId: string, event: string, data?: Record<string, unknown>) {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const secret = Deno.env.get('BOT_WEBHOOK_SECRET')
+  if (!supabaseUrl) return
+  fetch(`${supabaseUrl}/functions/v1/log-bot-event`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ secret: secret ?? '', bot_name: 'marketing', event_type: event, company_id: companyId, telegram_chat_id: chatId ? Number(chatId) : null, data }),
+  }).catch(() => {})
+}
 interface Config { agent_name: string; brand_voice: string | null; tone: string | null; target_audience: string | null; content_pillars: string[]; marketing_goals: string | null; business_objectives: string | null }
 interface Know { kind: string; title: string; content: string; module?: string }
 
@@ -699,7 +715,7 @@ Retorne APENAS um JSON array, um item por dia, nesta ordem (sempre os 7 dias):
   return { planned, days }
 }
 
-const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language'
+const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language, telegram_chat_id'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -726,6 +742,11 @@ Deno.serve(async (req) => {
           if (!company) continue
           const r = await planWeekForCompany(admin, anthropicKey, company, { bearer: '', isCron: true, cronSecret: cronSecretEnv })
           companies++; planned += r.planned
+          if (r.planned > 0) {
+            notifyMarketing(company.telegram_chat_id, company.id, 'AGENT_ACTION', {
+              action: 'posts_created', count: r.planned, reason: 'Calendário da semana planejado',
+            })
+          }
         } catch (e) { failed++; console.error('creative-generate weekly plan falhou pra', cfg.company_id, e) }
       }
       return json({ ok: true, companies, planned, failed })
@@ -744,6 +765,9 @@ Deno.serve(async (req) => {
           if (!company) continue
           await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret: cronSecretEnv, skipImage: cfg.auto_daily_test_image === false })
           generated++
+          notifyMarketing(company.telegram_chat_id, company.id, 'AGENT_ACTION', {
+            action: 'posts_created', count: 1, reason: 'Post de teste diário gerado',
+          })
         } catch (e) { failed++; console.error('creative-generate cron falhou pra', cfg.company_id, e) }
       }
       return json({ ok: true, generated, failed })

@@ -9,7 +9,6 @@ import NotificationsCard from './settings/NotificationsCard'
 import BusinessUnderstandingCard from './settings/BusinessUnderstandingCard'
 import AgentConfigTab from './marketingAi/AgentConfigTab'
 import ConnectionsTab from './marketingAi/ConnectionsTab'
-import BusinessContextTab from './marketingAi/BusinessContextTab'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
 import { fetchBusinessTypes, OTHER_BUSINESS_TYPE } from '../../lib/businessTypes'
 import { getTrialInfo, formatExpiresAt } from '../../lib/trialState'
@@ -345,7 +344,7 @@ export default function SettingsPage() {
         <p style={{ color: MUTED, fontSize: '13px' }}>{T.subtitle}</p>
       </div>
 
-      <div style={{ padding: '28px 32px', maxWidth: tab === 'conexoes' || tab === 'info' ? '960px' : '680px' }}>
+      <div style={{ padding: '28px 32px', maxWidth: tab === 'conexoes' ? '960px' : '680px' }}>
 
         {/* Tab switcher */}
         <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '5px', marginBottom: '24px', width: 'fit-content', flexWrap: 'wrap' }}>
@@ -400,12 +399,6 @@ export default function SettingsPage() {
         </SectionCard>
 
         {companyId && <BusinessUnderstandingCard companyId={companyId} />}
-
-        {companyId && (
-          <SectionCard title="Contexto do Negócio">
-            <BusinessContextTab company={{ id: companyId }} />
-          </SectionCard>
-        )}
 
         <SectionCard id="section-salvar" title="Salvar">
           {saveError && (

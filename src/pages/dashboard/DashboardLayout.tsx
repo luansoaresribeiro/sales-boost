@@ -6,6 +6,7 @@ import { d } from '../../i18n-dash'
 import ProgressPopup from './marketingAi/ProgressPopup'
 import TrialStartModal from './TrialStartModal'
 import TrialStatusWidget from './TrialStatusWidget'
+import BusinessContextButton from './BusinessContextButton'
 
 const ORANGE = '#FF6D29'
 const SIDEBAR_BG = '#0D0A07'
@@ -153,17 +154,19 @@ function SidebarInner() {
 }
 
 export default function DashboardLayout() {
+  const { company } = useCompany()
   return (
     <LanguageProvider>
       <div style={{ display: 'flex', minHeight: '100vh', background: '#0E0B0A' }}>
         <SidebarInner />
-        <main style={{ flex: 1, marginLeft: '240px', display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <main style={{ flex: 1, marginLeft: '240px', display: 'flex', flexDirection: 'column', minHeight: '100vh', minWidth: 0, overflowX: 'hidden' }}>
           <TrialStatusWidget />
           <Outlet />
         </main>
       </div>
       <TrialStartModal />
       <ProgressPopup />
+      {company && <BusinessContextButton companyId={company.id} />}
     </LanguageProvider>
   )
 }

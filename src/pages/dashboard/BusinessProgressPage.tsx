@@ -11,9 +11,106 @@ import {
   JourneyTrack, LeagueLadder,
 } from './marketingAi/progressParts'
 import { fetchDiscoveries, DiscoveriesSection, type Discovery } from './marketingAi/Discoveries'
+import { type Goal, type Strategy, GOAL_TYPE_LABEL } from './marketingAi/strategyTypes'
 
+const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
 const LS_VISIT = 'sb_progress_last_visit'
+
+const tabRow: React.CSSProperties = { display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px' }
+function TabButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button onClick={onClick}
+      style={{ padding: '8px 16px', background: active ? 'rgba(255,109,41,0.12)' : 'transparent', border: `1px solid ${active ? 'rgba(255,109,41,0.35)' : 'transparent'}`, borderRadius: '8px', cursor: 'pointer', fontFamily: D, fontSize: '12.5px', fontWeight: 700, color: active ? ORANGE : 'white' }}>
+      {label}
+    </button>
+  )
+}
+
+// Objetivos = leitura das metas do Agente de Estratégia (marketing_ai_strategy_goals
+// da estratégia principal ativa). Só leitura aqui de propósito — editar
+// mora no Agente de Estratégia, pra não ter dois lugares mexendo na mesma
+// meta de jeitos diferentes.
+function ObjetivosTab({ companyId, onOpenStrategy }: { companyId: string; onOpenStrategy: () => void }) {
+  const [strategy, setStrategy] = useState<Strategy | null>(null)
+  const [goals, setGoals] = useState<Goal[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const { data: strat } = await supabase.from('marketing_ai_strategies').select('*')
+        .eq('company_id', companyId).eq('kind', 'main').eq('status', 'active')
+        .order('updated_at', { ascending: false }).limit(1).maybeSingle()
+      if (!alive) return
+      setStrategy((strat as Strategy | null) ?? null)
+      if (strat) {
+        const { data: g } = await supabase.from('marketing_ai_strategy_goals').select('*').eq('strategy_id', strat.id).order('priority', { ascending: true })
+        if (alive) setGoals((g ?? []) as Goal[])
+      }
+      if (alive) setLoading(false)
+    })()
+    return () => { alive = false }
+  }, [companyId])
+
+  if (loading) return <div style={{ color: MUTED, fontSize: '13px' }}>Carregando objetivos…</div>
+
+  if (!strategy) {
+    return (
+      <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px', padding: '28px', textAlign: 'center' }}>
+        <div style={{ fontSize: '28px', marginBottom: '10px' }}>🧭</div>
+        <div style={{ fontSize: '14px', fontWeight: 700, color: 'white', marginBottom: '6px' }}>Nenhuma estratégia ativa ainda</div>
+        <p style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6, marginBottom: '16px' }}>Os objetivos aparecem aqui assim que o Agente de Estratégia criar a estratégia principal.</p>
+        <button onClick={onOpenStrategy} style={{ padding: '10px 18px', background: ORANGE, color: '#000', fontWeight: 800, fontSize: '13px', border: 'none', borderRadius: '10px', cursor: 'pointer', fontFamily: D }}>Abrir Agente de Estratégia →</button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+        <div>
+          <div style={{ fontSize: '15px', fontWeight: 800, color: 'white' }}>{strategy.name}</div>
+          {strategy.thesis && <div style={{ fontSize: '12px', color: MUTED, marginTop: '3px', maxWidth: '600px', lineHeight: 1.5 }}>{strategy.thesis}</div>}
+        </div>
+        <button onClick={onOpenStrategy} style={{ padding: '9px 14px', background: 'transparent', border: `1px solid ${BORDER}`, color: ORANGE, fontWeight: 700, fontSize: '12px', borderRadius: '9px', cursor: 'pointer', fontFamily: D, flexShrink: 0 }}>Ver e editar →</button>
+      </div>
+      {goals.length === 0 ? (
+        <div style={{ fontSize: '12.5px', color: MUTED }}>Nenhuma meta registrada nessa estratégia ainda.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {goals.map(g => (
+            <div key={g.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '14px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{g.name}</div>
+                  <div style={{ fontSize: '10.5px', color: MUTED }}>{GOAL_TYPE_LABEL[g.goal_type] ?? g.goal_type}{g.period ? ` · ${g.period}` : ''}</div>
+                </div>
+                <span style={{ fontSize: '9px', fontWeight: 800, color: g.priority === 'high' ? '#f87171' : g.priority === 'low' ? MUTED : '#FBBF24', flexShrink: 0 }}>{g.priority.toUpperCase()}</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px' }}>
+                <div>
+                  <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>Base</div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: g.baseline_verified ? 'white' : MUTED, fontStyle: g.baseline_verified ? 'normal' : 'italic' }}>
+                    {g.baseline_verified && g.baseline_value != null ? g.baseline_value : 'desconhecido'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>Meta</div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{g.target_value ?? '—'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>Progresso</div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: ORANGE }}>{g.current_progress ?? '—'}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 async function headCount(q: { count: number | null } | PromiseLike<{ count: number | null }>): Promise<number> {
   const { count } = await q
@@ -29,6 +126,7 @@ export default function BusinessProgressPage() {
   const [activating, setActivating] = useState<string | null>(null)
   const [toast, setToast] = useState<string>('')
   const [disc, setDisc] = useState<{ pending: Discovery[]; revealed: Discovery[] }>({ pending: [], revealed: [] })
+  const [tab, setTab] = useState<'progresso' | 'objetivos'>('progresso')
 
   const companyId = company?.id
   const businessName = company?.business_name ?? 'seu negócio'
@@ -116,7 +214,7 @@ export default function BusinessProgressPage() {
   if (loading || !data) return <div style={{ padding: '40px', color: MUTED, fontFamily: D }}>Calculando seu progresso…</div>
 
   return (
-    <div style={{ maxWidth: '1120px', margin: '0 auto', fontFamily: D, display: 'flex', flexDirection: 'column', gap: '26px' }}>
+    <div style={{ maxWidth: '1120px', width: '100%', boxSizing: 'border-box', margin: '0 auto', padding: '28px 32px', fontFamily: D, display: 'flex', flexDirection: 'column', gap: '26px' }}>
       {/* Boas-vindas */}
       <div>
         <div style={{ fontSize: 'clamp(1.6rem, 3vw, 2.2rem)', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.1 }}>🚀 Seu negócio avançou</div>
@@ -125,6 +223,15 @@ export default function BusinessProgressPage() {
         </div>
       </div>
 
+      <div style={tabRow}>
+        <TabButton active={tab === 'progresso'} onClick={() => setTab('progresso')} label="🚀 Progresso" />
+        <TabButton active={tab === 'objetivos'} onClick={() => setTab('objetivos')} label="🎯 Objetivos" />
+      </div>
+
+      {tab === 'objetivos' ? (
+        companyId && <ObjetivosTab companyId={companyId} onOpenStrategy={() => navigate('/dashboard/marketing-ai/estrategia')} />
+      ) : (
+      <>
       {/* Modo demonstração (honestidade) */}
       <div style={{ padding: '11px 15px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
         🧪 <strong>Progresso combinado.</strong> Já usa seus dados reais (conteúdo, oportunidades, avaliações, campanhas). Leads, conversas e conversões entram como projeção até o Funil e o Atendimento reais (WhatsApp/Instagram) serem ligados — aí tudo vira 100% real, sem mudar a tela.
@@ -178,6 +285,8 @@ export default function BusinessProgressPage() {
       <PinsGrid pins={data.pins} onActivate={activate} activating={activating} />
       <RewardsGrid rewards={data.rewards} />
       <Timeline d={data} />
+      </>
+      )}
 
       {toast && (
         <div style={{ position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)', background: '#150E08', border: `1px solid ${GREEN}55`, borderRadius: '12px', padding: '13px 20px', fontSize: '13px', fontWeight: 700, color: 'white', zIndex: 50, boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>

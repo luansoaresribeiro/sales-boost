@@ -41,7 +41,7 @@ export default function FeedbackWidget({ companyId, section, insights }: { compa
       )}
       {open && (
         <div style={{
-          position: 'fixed', right: '24px', bottom: '88px', zIndex: 50, width: '340px', maxHeight: '60vh', overflowY: 'auto',
+          position: 'fixed', right: '24px', bottom: '156px', zIndex: 50, width: '340px', maxHeight: '60vh', overflowY: 'auto',
           background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px', boxShadow: '0 16px 44px rgba(0,0,0,0.45)',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '12px' }}>
@@ -80,7 +80,7 @@ export default function FeedbackWidget({ companyId, section, insights }: { compa
 
       <button onClick={() => setOpen(v => !v)} title="Feedback Loop"
         style={{
-          position: 'fixed', right: '24px', bottom: '24px', zIndex: 50, width: '52px', height: '52px', borderRadius: '50%',
+          position: 'fixed', right: '24px', bottom: '92px', zIndex: 50, width: '52px', height: '52px', borderRadius: '50%',
           background: ORANGE, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: '22px', boxShadow: '0 8px 24px rgba(255,109,41,0.4)',
         }}>

@@ -97,11 +97,13 @@ Deno.serve(async (req) => {
         task_description: `Varredura diária: ${[hasReviews && 'reviews', hasLeads && 'leads'].filter(Boolean).join(', ')}`,
       })
 
+      // Só avisa quando tem post de verdade pra aprovar — nunca manda "tudo
+      // concluído" quando não houve nada (pedido do dono: nada de relatório
+      // diário só pra avisar que rodou, só post pra aprovar ou acontecimento
+      // importante).
       let notified = false
-      if (botToken && company.telegram_chat_id) {
-        const msg = postsCreated > 0
-          ? `\u{1F916} Bom dia! Fiz a varredura diária e preparei ${postsCreated} rascunho(s). Acesse o dashboard para aprovar.`
-          : `\u{1F916} Varredura diária concluída. Pendências identificadas — acesse o dashboard.`
+      if (botToken && company.telegram_chat_id && postsCreated > 0) {
+        const msg = `\u{1F916} O agente fez a varredura e preparou ${postsCreated} rascunho(s). Acesse o dashboard para aprovar.`
         await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
