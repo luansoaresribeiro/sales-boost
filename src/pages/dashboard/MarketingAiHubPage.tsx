@@ -192,7 +192,7 @@ export default function MarketingAiHubPage() {
             message={realError ? 'A consulta ao banco/Meta falhou — veja o erro abaixo pra saber o que corrigir.' : 'Receita, ROAS e funil agregados aqui em cima ainda não têm dado real — assim que houver leads, Instagram ou Meta Ads conectados, cada peça some aqui automaticamente. Ligue o Modo demonstração pra ver como fica quando tudo estiver somado.'}
             errorDetail={realError}
             cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
-            <GrowthCommandCenter data={panelData} onOpenModule={open} />
+            <GrowthCommandCenter data={panelData} />
           </DataVeil>
         )}
       </div>
