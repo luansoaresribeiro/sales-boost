@@ -177,8 +177,20 @@ Retorne APENAS um JSON:
   "campaign_draft": {"name":"","goal":""}
 }`
 
-  const raw = await callClaude(anthropicKey, prompt)
-  const parsed = parseObj(raw)
+  // Nunca salva uma estratégia vazia por causa de uma resposta que falhou em
+  // parsear — 1 retry, e se continuar sem o essencial (nome+tese), erro de
+  // verdade em vez de gravar lixo silenciosamente (bug real encontrado
+  // 2026-09-22: uma linha ficou "ativa" com tudo null, e o auto-criar nunca
+  // tentava de novo porque já via uma estratégia "existente").
+  let raw = await callClaude(anthropicKey, prompt)
+  let parsed = parseObj(raw)
+  if (!parsed.name || !parsed.thesis) {
+    raw = await callClaude(anthropicKey, prompt)
+    parsed = parseObj(raw)
+  }
+  if (!parsed.name || !parsed.thesis) {
+    throw new Error('A IA não conseguiu gerar uma estratégia completa — tente de novo em instantes.')
+  }
 
   // Baseline real só entra se bater com um goal_type que temos dado de verdade.
   const goals = (Array.isArray(parsed.goals) ? parsed.goals : []) as Record<string, unknown>[]
@@ -236,6 +248,9 @@ Deno.serve(async (req) => {
       const kind = body.kind === 'initiative' ? 'initiative' : 'main'
       const parentId = body.parent_strategy_id ? String(body.parent_strategy_id) : null
       if (kind === 'initiative' && !parentId) return json({ error: 'Falta a estratégia principal pra vincular essa iniciativa.' }, 400)
+      // Gera ANTES de pausar a antiga — se a geração falhar, a estratégia
+      // atual continua ativa em vez de a empresa ficar sem nenhuma.
+      const { parsed, goals, baselineFound } = await generateStrategy(admin, supabaseUrl, cronSecret, anthropicKey, company, kind, parentId)
       if (kind === 'main') {
         // Hermes mantém UMA tese estratégica principal ativa por vez — criar
         // uma nova é um pivô consciente (a anterior vira histórico, nunca
@@ -243,7 +258,6 @@ Deno.serve(async (req) => {
         await admin.from('marketing_ai_strategies').update({ status: 'paused', updated_at: new Date().toISOString() })
           .eq('company_id', company.id).eq('kind', 'main').eq('status', 'active')
       }
-      const { parsed, goals, baselineFound } = await generateStrategy(admin, supabaseUrl, cronSecret, anthropicKey, company, kind, parentId)
 
       const activeComponents = (Array.isArray(parsed.active_components) ? parsed.active_components : []).filter((c: unknown) => COMPONENTS.includes(String(c)))
       const { data: inserted, error: insErr } = await admin.from('marketing_ai_strategies').insert({
