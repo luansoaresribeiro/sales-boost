@@ -7,7 +7,7 @@ import { BudgetPanel, FunnelPanel, EstimatesPanel, InitiativesPanel, MonitoringP
 import IntelligenceDomainsPanel from './IntelligenceDomainsPanel'
 import {
   type Strategy, type Goal, type LogRow, type Budget,
-  GOAL_TYPE_LABEL, STATUS_LABEL, STATUS_COLOR, EMPTY_BUDGET,
+  GOAL_TYPE_LABEL, STATUS_LABEL, STATUS_COLOR, EMPTY_BUDGET, COMPONENT_LABEL,
 } from './strategyTypes'
 
 async function callStrategy(token: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -22,20 +22,22 @@ async function callStrategy(token: string, body: Record<string, unknown>): Promi
 const ghostBtn: React.CSSProperties = { padding: '9px 14px', background: 'transparent', border: `1px solid ${BORDER}`, color: ORANGE, fontWeight: 700, fontSize: '11.5px', borderRadius: '9px', cursor: 'pointer', fontFamily: D }
 const primaryBtn: React.CSSProperties = { padding: '9px 16px', background: ORANGE, color: '#000', fontWeight: 800, fontSize: '12.5px', border: 'none', borderRadius: '9px', cursor: 'pointer', fontFamily: D }
 
-// Agente de Estratégia — ponte entre Agente de Dados e Agente de Conteúdo.
-// Várias estratégias PRINCIPAIS podem ficar ativas em paralelo (o dono
-// pediu — criar uma nova nunca pausa as outras) + N iniciativas por
-// principal. A primeira estratégia é criada pela IA sozinha, sem exigir
-// clique; o botão "+ Criar estratégia" fica sempre visível pra criar mais.
-// Tudo (metas/orçamento/funil/estimativas/iniciativas/acompanhamento) vive
-// numa tela única, sem sub-abas — pedido do dono 2026-09-20. Nada aqui
-// inventa métrica: baseline vem de dado real coletado (ver strategy-
-// generate/fetchRealBaseline) ou fica explicitamente "desconhecido".
+// Agente de Estratégia (Hermes) — ponte entre Agente de Dados e Agente de
+// Conteúdo. Mantém UMA tese estratégica principal ativa por vez (nunca
+// duas em paralelo — pedido do dono 2026-09-21, adaptado do framework
+// Hermes colado por ele). Criar uma estratégia nova enquanto existe uma
+// ativa é um PIVÔ consciente: a antiga vira histórico (status:'paused'),
+// nunca some — o dono confirma antes. Iniciativas (kind='initiative')
+// continuam podendo ser várias dentro da principal. A primeira estratégia
+// é criada pela IA sozinha, sem exigir clique. Tudo (metas/orçamento/
+// funil/estimativas/iniciativas/acompanhamento) vive numa tela única, sem
+// sub-abas — pedido do dono 2026-09-20. Nada aqui inventa métrica: baseline
+// vem de dado real coletado (ver strategy-generate/fetchRealBaseline) ou
+// fica explicitamente "desconhecido".
 export default function StrategySection({ company }: { company: CompanyData }) {
   const { session } = useAuth()
   const token = session?.access_token ?? ''
-  const [mains, setMains] = useState<Strategy[]>([])
-  const [selectedMainId, setSelectedMainId] = useState<string | null>(null)
+  const [main, setMain] = useState<Strategy | null>(null)
   const [viewingId, setViewingId] = useState<string | null>(null) // quando != null, olhando uma iniciativa
   const [viewing, setViewing] = useState<Strategy | null>(null)
   const [initiatives, setInitiatives] = useState<Strategy[]>([])
@@ -49,15 +51,13 @@ export default function StrategySection({ company }: { company: CompanyData }) {
   const [error, setError] = useState('')
   const autoTried = useRef(false)
 
-  const main = mains.find(m => m.id === selectedMainId) ?? mains[0] ?? null
   const active = viewing ?? main
 
-  const loadMains = useCallback(async () => {
+  const loadMain = useCallback(async () => {
     const { data } = await supabase.from('marketing_ai_strategies').select('*')
-      .eq('company_id', company.id).eq('kind', 'main').order('updated_at', { ascending: false })
-    const list = (data ?? []) as Strategy[]
-    setMains(list)
-    setSelectedMainId(prev => (prev && list.some(m => m.id === prev)) ? prev : (list[0]?.id ?? null))
+      .eq('company_id', company.id).eq('kind', 'main').eq('status', 'active')
+      .order('updated_at', { ascending: false }).limit(1).maybeSingle()
+    setMain((data as Strategy | null) ?? null)
     setLoading(false)
   }, [company.id])
 
@@ -66,25 +66,28 @@ export default function StrategySection({ company }: { company: CompanyData }) {
     setLog((data ?? []) as LogRow[])
   }, [company.id])
 
-  useEffect(() => { loadMains(); loadLog() }, [loadMains, loadLog])
+  useEffect(() => { loadMain(); loadLog() }, [loadMain, loadLog])
 
   const createStrategy = useCallback(async (kind: 'main' | 'initiative') => {
+    if (kind === 'main' && main) {
+      const ok = window.confirm('Isso substitui sua estratégia principal atual por uma nova (é um pivô de direção) — a atual fica guardada no histórico, não some. Quer continuar?')
+      if (!ok) return
+    }
     setCreating(true); setError('')
     try {
-      const res = await callStrategy(token, { action: 'generate', kind, parent_strategy_id: kind === 'initiative' ? main?.id : undefined })
+      await callStrategy(token, { action: 'generate', kind, parent_strategy_id: kind === 'initiative' ? main?.id : undefined })
       setViewingId(null)
-      await loadMains()
-      if (kind === 'main' && res.strategy_id) setSelectedMainId(String(res.strategy_id))
+      await loadMain()
     } catch (e) { setError(e instanceof Error ? e.message : 'Erro ao criar estratégia') }
     setCreating(false)
-  }, [token, main?.id, loadMains])
+  }, [token, main, loadMain])
 
   // Primeira estratégia: a IA cria sozinha, sem exigir clique do dono.
   useEffect(() => {
-    if (loading || autoTried.current || mains.length > 0) return
+    if (loading || autoTried.current || main) return
     autoTried.current = true
     void createStrategy('main')
-  }, [loading, mains.length, createStrategy])
+  }, [loading, main, createStrategy])
 
   useEffect(() => {
     if (!main) { setInitiatives([]); return }
@@ -119,7 +122,7 @@ export default function StrategySection({ company }: { company: CompanyData }) {
     setSavingBudget(true); setError('')
     try {
       await callStrategy(token, { action: 'update_strategy', strategy_id: active.id, patch: { budget: localBudget } })
-      await loadMains()
+      await loadMain()
     } catch (e) { setError(e instanceof Error ? e.message : 'Erro ao salvar orçamento') }
     setSavingBudget(false)
   }
@@ -135,21 +138,12 @@ export default function StrategySection({ company }: { company: CompanyData }) {
   return (
     <div>
       {/* Cabeçalho: sempre visível, com "+ Criar estratégia" fixo no canto
-          superior direito — vazio ou não, e mesmo com várias em paralelo. */}
+          superior direito — criar uma nova enquanto existe uma ativa é um
+          pivô consciente (confirmado antes de chamar a API). */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap', marginBottom: '18px' }}>
         <div>
           {viewing && (
             <button onClick={() => setViewingId(null)} style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '11.5px', cursor: 'pointer', padding: 0, marginBottom: '6px', display: 'block' }}>← Voltar pra estratégia principal</button>
-          )}
-          {mains.length > 1 && !viewing && (
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
-              {mains.map(m => (
-                <button key={m.id} onClick={() => setSelectedMainId(m.id)}
-                  style={{ padding: '5px 12px', borderRadius: '99px', border: `1px solid ${m.id === selectedMainId ? 'rgba(255,109,41,0.5)' : BORDER}`, background: m.id === selectedMainId ? 'rgba(255,109,41,0.12)' : 'transparent', color: m.id === selectedMainId ? ORANGE : MUTED, fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>
-                  {m.name}
-                </button>
-              ))}
-            </div>
           )}
           {active ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -167,7 +161,7 @@ export default function StrategySection({ company }: { company: CompanyData }) {
             <button onClick={reanalyze} disabled={reanalyzing} style={ghostBtn}>{reanalyzing ? 'Reavaliando...' : '↻ Reavaliar'}</button>
           )}
           <button onClick={() => createStrategy('main')} disabled={creating} style={{ ...primaryBtn, opacity: creating ? 0.7 : 1, cursor: creating ? 'default' : 'pointer' }}>
-            {creating ? 'Criando...' : '+ Criar estratégia'}
+            {creating ? 'Criando...' : main ? '↻ Pivotar estratégia' : '+ Criar estratégia'}
           </button>
         </div>
       </div>
@@ -221,10 +215,28 @@ function OverviewPanel({ strategy }: { strategy: Strategy }) {
   const box: React.CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '14px 16px', marginBottom: '12px' }
   return (
     <div style={{ maxWidth: '740px' }}>
+      {strategy.thesis && (
+        <div style={{ ...box, background: 'rgba(255,109,41,0.06)', borderColor: 'rgba(255,109,41,0.2)', borderLeft: `3px solid ${ORANGE}` }}>
+          <div style={{ fontSize: '9.5px', fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Tese estratégica</div>
+          <div style={{ fontSize: '14px', color: 'white', lineHeight: 1.65, fontStyle: 'italic' }}>"{strategy.thesis}"</div>
+        </div>
+      )}
       {strategy.reasoning && (
-        <div style={{ ...box, background: 'rgba(255,109,41,0.05)', borderColor: 'rgba(255,109,41,0.15)' }}>
-          <div style={{ fontSize: '9.5px', fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Por que essa estratégia</div>
+        <div style={box}>
+          <div style={{ fontSize: '9.5px', fontWeight: 800, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Por que essa estratégia</div>
           <div style={{ fontSize: '13px', color: 'white', lineHeight: 1.6 }}>{strategy.reasoning}</div>
+        </div>
+      )}
+      {(strategy.primary_constraint || strategy.strategic_opportunity) && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '10px', marginBottom: '12px' }}>
+          <div style={{ ...box, marginBottom: 0, borderColor: 'rgba(248,113,113,0.25)' }}>
+            <div style={{ fontSize: '9.5px', fontWeight: 700, color: '#f87171', textTransform: 'uppercase', marginBottom: '5px' }}>Restrição principal</div>
+            <div style={{ fontSize: '12.5px', color: 'white', lineHeight: 1.55 }}>{strategy.primary_constraint || '—'}</div>
+          </div>
+          <div style={{ ...box, marginBottom: 0, borderColor: 'rgba(74,222,128,0.25)' }}>
+            <div style={{ fontSize: '9.5px', fontWeight: 700, color: '#4ade80', textTransform: 'uppercase', marginBottom: '5px' }}>Oportunidade estratégica</div>
+            <div style={{ fontSize: '12.5px', color: 'white', lineHeight: 1.55 }}>{strategy.strategic_opportunity || '—'}</div>
+          </div>
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px', marginBottom: '12px' }}>
@@ -232,7 +244,40 @@ function OverviewPanel({ strategy }: { strategy: Strategy }) {
         <div style={box}><div style={{ fontSize: '9.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: '5px' }}>Objetivo de marketing</div><div style={{ fontSize: '13px', color: 'white' }}>{strategy.primary_marketing_objective || '—'}</div></div>
         <div style={box}><div style={{ fontSize: '9.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: '5px' }}>Foco estratégico</div><div style={{ fontSize: '13px', color: 'white' }}>{strategy.strategic_focus || '—'}</div></div>
         <div style={box}><div style={{ fontSize: '9.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: '5px' }}>Horizonte</div><div style={{ fontSize: '13px', color: 'white' }}>{strategy.horizon || '—'}</div></div>
+        <div style={box}><div style={{ fontSize: '9.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: '5px' }}>Cadência de revisão</div><div style={{ fontSize: '13px', color: 'white' }}>{strategy.review_cadence || '—'}</div></div>
       </div>
+      {strategy.active_components.length > 0 && (
+        <div style={box}>
+          <div style={{ fontSize: '9.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: '8px' }}>Componentes ativos</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {strategy.active_components.map(c => (
+              <span key={c} style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '99px', padding: '4px 10px' }}>{COMPONENT_LABEL[c] ?? c}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {strategy.exclusions.length > 0 && (
+        <div style={box}>
+          <div style={{ fontSize: '9.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: '7px' }}>O que NÃO vamos fazer agora</div>
+          <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: 'white', lineHeight: 1.7 }}>{strategy.exclusions.map((c, i) => <li key={i}>{c}</li>)}</ul>
+        </div>
+      )}
+      {(strategy.success_conditions || strategy.failure_conditions) && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '10px', marginBottom: '12px' }}>
+          {strategy.success_conditions && (
+            <div style={{ ...box, marginBottom: 0 }}>
+              <div style={{ fontSize: '9.5px', fontWeight: 700, color: '#4ade80', textTransform: 'uppercase', marginBottom: '5px' }}>Sinais de que está funcionando</div>
+              <div style={{ fontSize: '12px', color: 'white', lineHeight: 1.55 }}>{strategy.success_conditions}</div>
+            </div>
+          )}
+          {strategy.failure_conditions && (
+            <div style={{ ...box, marginBottom: 0 }}>
+              <div style={{ fontSize: '9.5px', fontWeight: 700, color: '#f87171', textTransform: 'uppercase', marginBottom: '5px' }}>Sinais de que não está funcionando</div>
+              <div style={{ fontSize: '12px', color: 'white', lineHeight: 1.55 }}>{strategy.failure_conditions}</div>
+            </div>
+          )}
+        </div>
+      )}
       {strategy.assumptions.length > 0 && (
         <div style={box}>
           <div style={{ fontSize: '9.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: '7px' }}>Suposições</div>

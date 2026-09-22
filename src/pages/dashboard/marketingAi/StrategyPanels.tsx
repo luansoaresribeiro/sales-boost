@@ -2,6 +2,7 @@ import { CARD, MUTED, BORDER, D, ORANGE, timeAgo } from './shared'
 import {
   type Strategy, type LogRow, type Budget,
   FUNNEL_STAGE_LABEL, FEASIBILITY_LABEL, FEASIBILITY_COLOR, STATUS_LABEL, STATUS_COLOR,
+  DECISION_TYPE_LABEL, DECISION_TYPE_COLOR,
 } from './strategyTypes'
 
 const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '9px 12px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '9px', color: 'white', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }
@@ -142,9 +143,16 @@ export function MonitoringPanel({ log, onReanalyze, reanalyzing }: { log: LogRow
           {log.map(l => (
             <div key={l.id} style={cardBox}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
-                <span style={{ fontSize: '9.5px', fontWeight: 800, color: l.status === 'proposed' ? '#FBBF24' : l.status === 'implemented' ? '#4ade80' : MUTED }}>
-                  {{ proposed: 'PROPOSTO', approved: 'APROVADO', dismissed: 'DISPENSADO', implemented: 'IMPLEMENTADO' }[l.status] ?? l.status}
-                </span>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  {l.decision_type && (
+                    <span style={{ fontSize: '9px', fontWeight: 800, color: DECISION_TYPE_COLOR[l.decision_type], border: `1px solid ${DECISION_TYPE_COLOR[l.decision_type]}55`, borderRadius: '99px', padding: '2px 8px' }}>
+                      {DECISION_TYPE_LABEL[l.decision_type]?.toUpperCase()}
+                    </span>
+                  )}
+                  <span style={{ fontSize: '9.5px', fontWeight: 800, color: l.status === 'proposed' ? '#FBBF24' : l.status === 'implemented' ? '#4ade80' : MUTED }}>
+                    {{ proposed: 'PROPOSTO', approved: 'APROVADO', dismissed: 'DISPENSADO', implemented: 'IMPLEMENTADO' }[l.status] ?? l.status}
+                  </span>
+                </div>
                 <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)' }}>{timeAgo(l.created_at)}</span>
               </div>
               <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>{l.recommendation}</div>

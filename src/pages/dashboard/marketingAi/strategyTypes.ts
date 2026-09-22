@@ -23,12 +23,20 @@ export interface Strategy {
   parent_strategy_id: string | null
   name: string
   status: 'draft' | 'active' | 'paused' | 'completed' | 'needs_review'
+  thesis: string | null
+  primary_constraint: string | null
+  strategic_opportunity: string | null
   primary_business_objective: string | null
   primary_marketing_objective: string | null
   strategic_focus: string | null
   horizon: string | null
+  review_cadence: string | null
   assumptions: string[]
   constraints: string[]
+  exclusions: string[]
+  active_components: string[]
+  success_conditions: string | null
+  failure_conditions: string | null
   reasoning: string | null
   funnel_plan: FunnelStep[]
   budget: Budget
@@ -56,6 +64,7 @@ export interface Goal {
 export interface LogRow {
   id: string; company_id: string; strategy_id: string | null
   recommendation: string; reasoning: string; status: 'proposed' | 'approved' | 'dismissed' | 'implemented'; created_at: string
+  decision_type: 'refine' | 'pivot' | 'terminate' | null
 }
 
 export const GOAL_TYPE_LABEL: Record<string, string> = {
@@ -71,6 +80,13 @@ export const FEASIBILITY_LABEL: Record<string, string> = {
 }
 export const FEASIBILITY_COLOR: Record<string, string> = { supports_plan: '#4ade80', needs_more_data: '#60a5fa', needs_adjustment: '#FBBF24', significant_constraints: '#f87171' }
 export const FUNNEL_STAGE_LABEL: Record<string, string> = { awareness: 'Topo (Reconhecimento)', consideration: 'Meio (Consideração)', conversion: 'Fundo (Conversão)', retention: 'Retenção' }
+export const DECISION_TYPE_LABEL: Record<string, string> = { refine: 'Ajustar', pivot: 'Mudar de direção', terminate: 'Encerrar' }
+export const DECISION_TYPE_COLOR: Record<string, string> = { refine: '#FBBF24', pivot: '#FF6D29', terminate: '#f87171' }
+export const COMPONENT_LABEL: Record<string, string> = {
+  positioning: 'Posicionamento', offer: 'Oferta', acquisition: 'Aquisição', content: 'Conteúdo', conversion: 'Conversão',
+  customer_service: 'Atendimento', retention: 'Retenção', reactivation: 'Reativação', reputation: 'Reputação',
+  competitive_response: 'Resposta à concorrência', digital_infrastructure: 'Infraestrutura digital',
+}
 
 export const EMPTY_BUDGET: Budget = { total: null, currency: 'BRL', period: 'monthly', paid_ads: null, organic: null, creative: null, other: null, is_flexible: true, allocation: [] }
 export const EMPTY_ESTIMATES: Estimates = { time_to_signals: '', time_to_progress: '', time_to_target: '', confidence: 'medium', risks: '', feasibility_status: 'needs_more_data', feasibility_reasoning: '' }

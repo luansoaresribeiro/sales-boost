@@ -1,16 +1,27 @@
 /**
- * strategy-generate — Agente de Estratégia: lê o negócio + dado real
- * disponível e propõe uma estratégia (principal ou iniciativa), com metas,
- * orçamento, plano de funil e estimativa de prazo/viabilidade. Nunca inventa
- * métrica — baseline só é preenchido quando bate com um dado real coletado
- * (marketing_ai_tracking_snapshots/marketing_ai_competitors/reviews); sem
- * isso fica null ("desconhecido"), nunca 0.
+ * strategy-generate — Agente de Estratégia / Hermes: lê o estado dos 9
+ * domínios do Data Agent e decide a UMA tese estratégica principal da
+ * empresa (nunca duas ao mesmo tempo — criar uma nova enquanto existe uma
+ * ativa é um PIVÔ consciente, a antiga vira histórico via status:'paused').
+ * Adaptado do framework "Hermes — Strategic Intelligence, Planning &
+ * Decision Engine" (colado pelo dono 2026-09-21): diagnostica constraint +
+ * oportunidade cruzando os domínios, escreve a tese no formato "porque
+ * [evidência], acreditamos [hipótese]. por isso vamos [abordagem] por
+ * [horizonte] pra alcançar [objetivo]", só ativa os componentes
+ * necessários, define exclusões e condições de sucesso/fracasso.
  *
- * `reanalyze` é o botão "Reavaliar" (monitoramento manual, pedido do dono
- * 2026-09: sem cron automático nesta fase) — relê dado real, compara com as
- * metas, e só GRAVA UMA RECOMENDAÇÃO em marketing_ai_strategy_log (reaproveita
- * a tabela que o Aprendizado/BrainTab já lê) quando algo precisa de ajuste.
- * Nunca aplica a mudança sozinho — sempre fica 'proposed' até o dono aprovar.
+ * Fonte de verdade: a edge function `data-agent` (chamada aqui internamente
+ * via cron_secret, nunca as tabelas brutas direto) — mesmo padrão que
+ * hermes-proxy já usa pra consultar o Data Agent.
+ *
+ * `reanalyze` é o Strategy Health Check + Review (botão "Reavaliar",
+ * monitoramento manual — sem cron automático nesta fase, pedido do dono):
+ * relê o DELTA do Data Agent desde a última atualização da estratégia e
+ * decide CONTINUE (não grava nada) ou REFINE/PIVOT/TERMINATE (grava UMA
+ * recomendação em marketing_ai_strategy_log com decision_type). Regra do
+ * produto (human-in-the-loop) sobrepõe o "Hermes decide" do framework
+ * colado: aqui Hermes sempre só RECOMENDA — status fica 'proposed' até o
+ * dono aprovar, nunca aplica sozinho.
  *
  * Interativo só: JWT do dono.
  */
@@ -30,19 +41,47 @@ function round1(n: number): string { return (Math.round(n * 10) / 10).toLocaleSt
 function fmtNum(n: number): string { return Math.round(n).toLocaleString('pt-BR') }
 
 // Mesmo padrão de creative-generate's fetchRealStat — nunca inventa número.
+// Continua existindo pra alimentar o baseline_verified das metas (o Data
+// Agent não devolve esse detalhe granular por goal_type).
 async function fetchRealBaseline(admin: SupaClient, companyId: string): Promise<{ engagementPct: number | null; reach: number | null; followers: number | null; label: string } | null> {
-  const { data } = await admin.from('marketing_ai_tracking_snapshots').select('followers, engagement_rate, avg_reach').eq('company_id', companyId).order('collected_at', { ascending: false }).limit(1).maybeSingle()
-  const d = data as { followers: number | null; engagement_rate: number | null; avg_reach: number | null } | null
+  const { data } = await admin.from('instagram_performance_snapshots').select('followers, engagement_rate, reach').eq('company_id', companyId).order('captured_for', { ascending: false }).limit(1).maybeSingle()
+  const d = data as { followers: number | null; engagement_rate: number | null; reach: number | null } | null
   if (!d) return null
   const parts: string[] = []
   if (d.engagement_rate != null && d.engagement_rate > 0) parts.push(`engajamento ${round1(d.engagement_rate)}%`)
-  if (d.avg_reach != null && d.avg_reach > 0) parts.push(`alcance médio ${fmtNum(d.avg_reach)}`)
+  if (d.reach != null && d.reach > 0) parts.push(`alcance ${fmtNum(d.reach)}`)
   if (d.followers != null && d.followers > 0) parts.push(`${fmtNum(d.followers)} seguidores`)
   if (!parts.length) return null
-  return { engagementPct: d.engagement_rate, reach: d.avg_reach, followers: d.followers, label: parts.join(', ') }
+  return { engagementPct: d.engagement_rate, reach: d.reach, followers: d.followers, label: parts.join(', ') }
 }
 
-async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1800): Promise<string> {
+// Chama a função data-agent internamente (cron_secret, mesmo padrão que
+// hermes-proxy já usa) — é a fonte de verdade dos 9 domínios, nunca
+// re-consultamos as tabelas brutas aqui.
+async function fetchDataAgentState(
+  supabaseUrl: string, cronSecret: string, companyId: string, kind: 'state' | 'delta', since?: string,
+): Promise<{ domains: Array<{ domain: string; summary: string; metrics: Record<string, unknown>; signals: unknown[] }> } | null> {
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/data-agent`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, cron_secret: cronSecret, company_id: companyId, ...(since ? { since } : {}) }),
+    })
+    const data = await res.json()
+    if (!res.ok || data.error) return null
+    return data
+  } catch { return null }
+}
+
+function formatDomains(state: { domains: Array<{ domain: string; summary: string; signals: unknown[] }> } | null): string {
+  if (!state || !state.domains.length) return 'Data Agent ainda sem dado suficiente em nenhum domínio.'
+  return state.domains.map(d => {
+    const sigs = (d.signals as Array<{ key: string; evidence: string[]; business_relevance: string }>) ?? []
+    const sigLines = sigs.length ? sigs.map(s => `    · [${s.business_relevance}] ${s.key}: ${s.evidence.join('; ')}`).join('\n') : '    (sem sinal real ainda)'
+    return `- ${d.domain.toUpperCase()}: ${d.summary}\n${sigLines}`
+  }).join('\n')
+}
+
+async function callClaude(anthropicKey: string, prompt: string, maxTokens = 2400): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST', headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
@@ -58,6 +97,7 @@ function parseObj(raw: string): Record<string, unknown> {
 }
 
 const GOAL_TYPES = ['lead_gen', 'sales', 'acquisition', 'awareness', 'instagram_growth', 'engagement', 'website_conversions', 'whatsapp', 'bookings', 'retention', 'other']
+const COMPONENTS = ['positioning', 'offer', 'acquisition', 'content', 'conversion', 'customer_service', 'retention', 'reactivation', 'reputation', 'competitive_response', 'digital_infrastructure']
 
 function businessPreamble(company: Company, cfg: { brand_voice?: string; target_audience?: string; content_pillars?: string[]; marketing_goals?: string }): string {
   return `Negócio: "${company.business_name}" (${company.business_type ?? 'tipo não informado'}) em ${company.city ?? 'Brasil'}.
@@ -71,49 +111,65 @@ Orçamento de marketing mensal informado pelo dono: ${company.marketing_monthly_
 ${company.website_summary ? `Resumo real do site (lido pela IA): ${company.website_summary}` : 'Site ainda não foi lido/resumido.'}`
 }
 
-async function generateStrategy(admin: SupaClient, anthropicKey: string, company: Company, kind: 'main' | 'initiative', parentStrategyId: string | null): Promise<Record<string, unknown>> {
-  const [{ data: cfgRow }, { data: insRows }, { data: extRows }, baseline] = await Promise.all([
+async function generateStrategy(
+  admin: SupaClient, supabaseUrl: string, cronSecret: string, anthropicKey: string,
+  company: Company, kind: 'main' | 'initiative', parentStrategyId: string | null,
+): Promise<Record<string, unknown>> {
+  const [{ data: cfgRow }, dataAgentState, baseline] = await Promise.all([
     admin.from('marketing_ai_config').select('brand_voice, target_audience, content_pillars, marketing_goals').eq('company_id', company.id).maybeSingle(),
-    admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(8),
-    admin.from('external_insights').select('category, opportunity, why, action').eq('company_id', company.id).order('created_at', { ascending: false }).limit(8),
+    fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'state'),
     fetchRealBaseline(admin, company.id),
   ])
   const cfg = (cfgRow ?? {}) as { brand_voice?: string; target_audience?: string; content_pillars?: string[]; marketing_goals?: string }
-  const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
-  const extInsights = (extRows ?? []) as { category: string; opportunity: string; why: string | null; action: string | null }[]
 
   let parentContext = ''
   if (kind === 'initiative' && parentStrategyId) {
-    const { data: parent } = await admin.from('marketing_ai_strategies').select('name, primary_business_objective, strategic_focus').eq('id', parentStrategyId).maybeSingle()
-    if (parent) parentContext = `\nEssa é uma INICIATIVA dentro da estratégia principal "${parent.name}" (objetivo: ${parent.primary_business_objective ?? '—'}, foco: ${parent.strategic_focus ?? '—'}) — a iniciativa precisa servir esse objetivo maior, não competir com ele.`
+    const { data: parent } = await admin.from('marketing_ai_strategies').select('name, primary_business_objective, strategic_focus, thesis').eq('id', parentStrategyId).maybeSingle()
+    if (parent) parentContext = `\nEssa é uma INICIATIVA dentro da estratégia principal "${parent.name}" (tese: ${parent.thesis ?? parent.strategic_focus ?? '—'}) — a iniciativa precisa servir essa tese, não competir com ela.`
   }
 
-  const prompt = `Você é o Agente de Estratégia do Sales Boost — um consultor de crescimento pra pequenos negócios. Sua função é ler o negócio e o dado real disponível e propor uma estratégia ${kind === 'main' ? 'PRINCIPAL (direção geral do período)' : 'de INICIATIVA (ação específica dentro da estratégia principal)'}.
+  const prompt = `Você é Hermes, o motor de inteligência estratégica e decisão do Sales Boost — não um gerador de conteúdo, não um gestor de anúncios: você decide em QUE o negócio deve focar agora, por quê, por quanto tempo, e o que NÃO fazer.
+
+Sua fonte de verdade são os 9 domínios do Data Agent (Business/Customer/Market/Competition/Digital/Content/History/Resources/Performance). Não analise os domínios isolados — procure relações entre eles antes de decidir (ex: concorrente compete por preço + cliente reclama de preço + negócio tem margem melhor em serviço premium + histórico mostra que desconto atraiu cliente ruim + performance mostra que cliente premium tem LTV maior ⇒ a resposta não é baixar preço, é reposicionar por valor).
 
 ${businessPreamble(company, cfg)}
 ${parentContext}
-${insights.length ? `\nInsights internos abertos:\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
-${extInsights.length ? `\nOportunidades externas coletadas (web):\n${extInsights.map(i => `- [${i.category}] ${i.opportunity}${i.action ? ` — ação sugerida: ${i.action}` : ''}`).join('\n')}` : ''}
-${baseline ? `\nDADO REAL de performance atual (NÃO invente outro número — use exatamente este como baseline quando relevante): ${baseline.label}.` : '\nAinda não há dado real de performance coletado (sem tracking de Instagram ainda) — trate qualquer número de baseline como DESCONHECIDO, nunca assuma 0 nem invente um valor.'}
+
+ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
+${formatDomains(dataAgentState)}
+${baseline ? `\nDADO REAL de performance atual (NÃO invente outro número — use exatamente este quando relevante): ${baseline.label}.` : '\nAinda não há dado real de performance coletado — trate qualquer número de baseline como DESCONHECIDO, nunca assuma 0 nem invente um valor.'}
 
 REGRAS CRÍTICAS:
-- NUNCA invente taxa de conversão, CPC, CPM, CAC, ROAS ou qualquer métrica histórica que não foi te dada acima. Se precisar de uma suposição de planejamento, marque claramente como suposição (não como dado).
+- NUNCA invente taxa de conversão, CPC, CPM, CAC, ROAS ou qualquer métrica histórica que não foi te dada acima. Quando precisar supor algo, rotule dentro do texto (reasoning/assumptions) com um destes níveis de confiança: VERIFICADO (veio de dado real acima), INFORMADO_PELO_DONO, OBSERVADO (sinal do Data Agent), ESTIMADO, INFERIDO, ou DESCONHECIDO — nunca apresente estimativa como fato.
 - NUNCA garanta um resultado. Use faixas/estimativas com a incerteza explícita.
-- Metas: proponha no máximo 3, com "goal_type" sendo um destes: ${GOAL_TYPES.join('|')}. NÃO preencha baseline — isso é calculado à parte com dado real.
-- Orçamento: só proponha valores de orçamento SE o dono já informou um orçamento mensal acima; caso contrário, deixe os campos de valor null e explique em "budget_reasoning" que o dono precisa informar um orçamento antes de alocar.
-- Plano de funil: 2 a 4 etapas relevantes (não precisa cobrir as 4 sempre).
+- Diagnostique a RESTRIÇÃO PRINCIPAL primeiro (o que está travando o crescimento agora — não assuma automaticamente que é "falta de conteúdo" ou "falta de anúncio"; pode ser posicionamento fraco, oferta fraca, conversão fraca, retenção fraca, etc.) e a OPORTUNIDADE ESTRATÉGICA (a coisa de maior impacto que o Sales Boost consegue realmente influenciar agora).
+- A TESE precisa seguir o formato: "Porque [evidência], acreditamos [hipótese]. Por isso, vamos [abordagem] por [horizonte] pra alcançar [objetivo]." — baseada em evidência real acima, nunca genérica.
+- Só ative os COMPONENTES necessários pra essa tese (não ative os 11 automaticamente): ${COMPONENTS.join(', ')}.
+- Defina EXCLUSÕES explícitas — o que o Sales Boost NÃO vai fazer agora e por quê (evita diluição estratégica).
+- Metas: no máximo 3, "goal_type" sendo um destes: ${GOAL_TYPES.join('|')}. NÃO preencha baseline — isso é calculado à parte com dado real.
+- Orçamento: só proponha valores SE o dono já informou orçamento mensal acima; caso contrário, campos null e explique em "budget_reasoning" que falta essa informação.
+- Cadência de revisão: campanha/tática rápida = "semanal"; estratégia ampla = "2-4 semanas".
+- Horizonte: normalmente 1-6 meses — escolha com base no tipo de negócio/ciclo de venda, nunca um número fixo padrão; justifique.
 - Seja específico ao negócio — nunca genérico ("poste mais", "use hashtags") sem conectar ao que foi dito sobre esse negócio específico.
 
 Retorne APENAS um JSON:
 {
   "name": "nome curto da estratégia",
+  "thesis": "Porque [evidência], acreditamos [hipótese]. Por isso, vamos [abordagem] por [horizonte] pra alcançar [objetivo].",
+  "primary_constraint": "a restrição principal que trava o crescimento agora, com a evidência",
+  "strategic_opportunity": "a oportunidade de maior impacto que dá pra perseguir agora",
   "primary_business_objective": "",
   "primary_marketing_objective": "",
   "strategic_focus": "1 frase",
   "horizon": "ex: 90 dias",
+  "review_cadence": "semanal|2-4 semanas",
   "reasoning": "por que essa estratégia, 2-4 frases, linguagem simples pra dono não-especialista",
   "assumptions": ["...", "..."],
   "constraints": ["...", "..."],
+  "exclusions": ["o que não vamos fazer agora, e por quê", "..."],
+  "active_components": ["só os necessários, escolha dentre: ${COMPONENTS.join('|')}"],
+  "success_conditions": "que evidência mostraria que está funcionando",
+  "failure_conditions": "que evidência mostraria que não está funcionando",
   "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
   "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}],
   "budget": {"total":null,"currency":"BRL","period":"monthly","paid_ads":null,"organic":null,"creative":null,"other":null,"is_flexible":true,"allocation":[{"channel":"","amount":null,"reason":""}],"budget_reasoning":""},
@@ -157,6 +213,7 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? anonKey
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
+    const cronSecret = Deno.env.get('CRON_SECRET') ?? ''
     if (!anthropicKey) return json({ error: 'ANTHROPIC_API_KEY não configurada.' }, 503)
 
     const bearer = req.headers.get('Authorization') ?? ''
@@ -179,25 +236,39 @@ Deno.serve(async (req) => {
       const kind = body.kind === 'initiative' ? 'initiative' : 'main'
       const parentId = body.parent_strategy_id ? String(body.parent_strategy_id) : null
       if (kind === 'initiative' && !parentId) return json({ error: 'Falta a estratégia principal pra vincular essa iniciativa.' }, 400)
-      // Várias estratégias principais podem coexistir ativas em paralelo — o
-      // dono pediu pra criar uma nova nunca pausar as outras (2026-09-20).
-      const { parsed, goals, baselineFound } = await generateStrategy(admin, anthropicKey, company, kind, parentId)
+      if (kind === 'main') {
+        // Hermes mantém UMA tese estratégica principal ativa por vez — criar
+        // uma nova é um pivô consciente (a anterior vira histórico, nunca
+        // some). O frontend já confirma isso com o dono antes de chamar aqui.
+        await admin.from('marketing_ai_strategies').update({ status: 'paused', updated_at: new Date().toISOString() })
+          .eq('company_id', company.id).eq('kind', 'main').eq('status', 'active')
+      }
+      const { parsed, goals, baselineFound } = await generateStrategy(admin, supabaseUrl, cronSecret, anthropicKey, company, kind, parentId)
 
+      const activeComponents = (Array.isArray(parsed.active_components) ? parsed.active_components : []).filter((c: unknown) => COMPONENTS.includes(String(c)))
       const { data: inserted, error: insErr } = await admin.from('marketing_ai_strategies').insert({
         company_id: company.id, kind, parent_strategy_id: parentId,
         name: String(parsed.name ?? (kind === 'main' ? 'Estratégia principal' : 'Nova iniciativa')),
         status: 'active', created_by: 'ai',
+        thesis: parsed.thesis ? String(parsed.thesis) : null,
+        primary_constraint: parsed.primary_constraint ? String(parsed.primary_constraint) : null,
+        strategic_opportunity: parsed.strategic_opportunity ? String(parsed.strategic_opportunity) : null,
         primary_business_objective: parsed.primary_business_objective ? String(parsed.primary_business_objective) : null,
         primary_marketing_objective: parsed.primary_marketing_objective ? String(parsed.primary_marketing_objective) : null,
         strategic_focus: parsed.strategic_focus ? String(parsed.strategic_focus) : null,
         horizon: parsed.horizon ? String(parsed.horizon) : null,
+        review_cadence: parsed.review_cadence ? String(parsed.review_cadence) : null,
         reasoning: parsed.reasoning ? String(parsed.reasoning) : null,
         assumptions: Array.isArray(parsed.assumptions) ? parsed.assumptions : [],
         constraints: Array.isArray(parsed.constraints) ? parsed.constraints : [],
+        exclusions: Array.isArray(parsed.exclusions) ? parsed.exclusions : [],
+        active_components: activeComponents,
+        success_conditions: parsed.success_conditions ? String(parsed.success_conditions) : null,
+        failure_conditions: parsed.failure_conditions ? String(parsed.failure_conditions) : null,
         funnel_plan: Array.isArray(parsed.funnel_plan) ? parsed.funnel_plan : [],
         budget: parsed.budget && typeof parsed.budget === 'object' ? parsed.budget : {},
         estimates: parsed.estimates && typeof parsed.estimates === 'object' ? parsed.estimates : {},
-        data_provenance: { baseline_source: baselineFound ? 'marketing_ai_tracking_snapshots' : 'nenhum dado real ainda — metas sem baseline verificado' },
+        data_provenance: { baseline_source: baselineFound ? 'instagram_performance_snapshots' : 'nenhum dado real ainda — metas sem baseline verificado', source: 'data-agent' },
       }).select('id').single()
       if (insErr) throw new Error(insErr.message)
 
@@ -223,28 +294,43 @@ Deno.serve(async (req) => {
       const { data: strategy } = await admin.from('marketing_ai_strategies').select('*').eq('id', strategyId).eq('company_id', company.id).maybeSingle()
       if (!strategy) return json({ error: 'Estratégia não encontrada.' }, 404)
       const { data: goalRows } = await admin.from('marketing_ai_strategy_goals').select('*').eq('strategy_id', strategyId)
-      const baseline = await fetchRealBaseline(admin, company.id)
+      const [delta, baseline] = await Promise.all([
+        fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'delta', String(strategy.updated_at)),
+        fetchRealBaseline(admin, company.id),
+      ])
 
-      const prompt = `Você é o Agente de Estratégia reavaliando uma estratégia já ativa, com dado atualizado.
+      const prompt = `Você é Hermes fazendo o Strategy Health Check de uma tese já ativa — decida se ela continua sustentada pela evidência ou se precisa de ajuste. Novidade não muda a estratégia automaticamente: só muda se a evidência realmente invalidar a tese.
 
-Estratégia: "${strategy.name}" — objetivo: ${strategy.primary_business_objective ?? '—'}, foco: ${strategy.strategic_focus ?? '—'}, horizonte: ${strategy.horizon ?? '—'}.
+Estratégia ativa: "${strategy.name}"
+Tese: ${strategy.thesis ?? strategy.strategic_focus ?? '—'}
+Restrição principal identificada: ${strategy.primary_constraint ?? '—'}
+Oportunidade perseguida: ${strategy.strategic_opportunity ?? '—'}
+Condições de sucesso: ${strategy.success_conditions ?? '—'}
+Condições de fracasso: ${strategy.failure_conditions ?? '—'}
 Metas atuais: ${JSON.stringify((goalRows ?? []).map((g: Record<string, unknown>) => ({ name: g.name, goal_type: g.goal_type, target: g.target_value, baseline: g.baseline_value, progress: g.current_progress })))}
 ${baseline ? `Dado real ATUAL: ${baseline.label}.` : 'Ainda sem dado real de performance coletado.'}
 
-Decida: os dados atuais sugerem manter a estratégia como está, ou existe um ajuste concreto que vale recomendar (orçamento, conteúdo, prioridade, prazo)? NÃO invente número que não foi dado acima. Se não houver dado suficiente pra avaliar de verdade, diga isso.
+O QUE MUDOU nos 9 domínios desde a última atualização (Data Agent, delta):
+${formatDomains(delta)}
 
-Retorne APENAS um JSON: {"needs_adjustment": true|false, "recommendation": "1-2 frases, o que mudar (vazio se needs_adjustment=false)", "reasoning": "por que, citando o dado real ou a falta dele"}`
+Decida:
+1. STRATEGY_STATUS: ON_TRACK | NEEDS_ADJUSTMENT | UNDERPERFORMING | AT_RISK | INVALIDATED
+2. DECISION: CONTINUE | REFINE | PIVOT | TERMINATE (só REFINE/PIVOT/TERMINATE geram recomendação pro dono — CONTINUE significa "sem sinal forte o bastante pra mudar nada agora")
+Não conclua que a estratégia toda falhou por causa de 1 sinal fraco isolado — considere volume de evidência, não ruído de curto prazo.
 
-      const raw = await callClaude(anthropicKey, prompt, 700)
+Retorne APENAS um JSON: {"status": "ON_TRACK|NEEDS_ADJUSTMENT|UNDERPERFORMING|AT_RISK|INVALIDATED", "decision": "continue|refine|pivot|terminate", "recommendation": "1-3 frases, o que mudar (vazio se decision=continue)", "reasoning": "por que, citando os sinais reais ou a falta deles"}`
+
+      const raw = await callClaude(anthropicKey, prompt, 900)
       const parsed = parseObj(raw)
-      if (parsed.needs_adjustment && parsed.recommendation) {
+      const decision = String(parsed.decision ?? 'continue')
+      if (decision !== 'continue' && parsed.recommendation) {
         await admin.from('marketing_ai_strategy_log').insert({
-          company_id: company.id, strategy_id: strategyId,
+          company_id: company.id, strategy_id: strategyId, decision_type: decision,
           recommendation: String(parsed.recommendation), reasoning: String(parsed.reasoning ?? ''), status: 'proposed',
         })
-        return json({ ok: true, needs_adjustment: true })
+        return json({ ok: true, needs_adjustment: true, status: parsed.status, decision })
       }
-      return json({ ok: true, needs_adjustment: false, reasoning: parsed.reasoning ? String(parsed.reasoning) : null })
+      return json({ ok: true, needs_adjustment: false, status: parsed.status ?? null, reasoning: parsed.reasoning ? String(parsed.reasoning) : null })
     }
 
     if (action === 'update_goal') {
@@ -265,7 +351,12 @@ Retorne APENAS um JSON: {"needs_adjustment": true|false, "recommendation": "1-2 
     if (action === 'update_strategy') {
       const strategyId = String(body.strategy_id ?? '')
       const patch = body.patch as Record<string, unknown>
-      const allowed = ['name', 'status', 'primary_business_objective', 'primary_marketing_objective', 'strategic_focus', 'horizon', 'assumptions', 'constraints', 'funnel_plan', 'budget']
+      const allowed = [
+        'name', 'status', 'thesis', 'primary_constraint', 'strategic_opportunity',
+        'primary_business_objective', 'primary_marketing_objective', 'strategic_focus', 'horizon', 'review_cadence',
+        'assumptions', 'constraints', 'exclusions', 'active_components', 'success_conditions', 'failure_conditions',
+        'funnel_plan', 'budget',
+      ]
       const safePatch: Record<string, unknown> = { updated_at: new Date().toISOString() }
       for (const k of allowed) if (k in (patch ?? {})) safePatch[k] = patch[k]
       const { error } = await admin.from('marketing_ai_strategies').update(safePatch).eq('id', strategyId).eq('company_id', company.id)
