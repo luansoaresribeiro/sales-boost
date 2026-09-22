@@ -2,7 +2,7 @@
 // Leads (ProspectsPage) e a página de configuração (LeadDiscoverySettingsPage)
 // — evita duplicar a definição de dados que as duas telas usam.
 
-export const BUSINESS_TYPES = ['Restaurante / Food', 'Varejo / E-commerce', 'Serviços', 'Beleza & Estética', 'Barbearia', 'Saúde & Bem-estar']
+export const BUSINESS_TYPES = ['Moda & Vestuário', 'Beleza & Cosméticos', 'Acessórios', 'Produtos de Consumo', 'Alimentos & Bebidas', 'E-commerce', 'Serviços Profissionais']
 
 export const STATUS_LABELS: Record<string, string> = { new: 'Novo', contacted: 'Contatado', qualified: 'Qualificado', discarded: 'Descartado', converted: 'Convertido' }
 export const STATUS_COLORS: Record<string, string> = { new: '#FF6D29', contacted: '#60a5fa', qualified: '#4ade80', discarded: '#BABABA', converted: '#4ade80' }

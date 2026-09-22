@@ -299,7 +299,7 @@ export default function LeadDiscoverySettingsPage() {
                 Instrução extra pra IA (opcional)
               </label>
               <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.45)', marginBottom: '8px', lineHeight: 1.6 }}>
-                Soma às regras acima — não substitui nada. Ex: "priorize barbearias e salões de bairros nobres do Rio" ou "não considere negócios com menos de 2 anos de Instagram".
+                Soma às regras acima — não substitui nada. Ex: "priorize marcas de moda e beleza de bairros nobres do Rio" ou "não considere negócios com menos de 2 anos de Instagram".
               </div>
               <textarea value={customInstructions} onChange={e => setCustomInstructions(e.target.value)}
                 placeholder="Escreva em texto livre o que a IA deve priorizar ao pontuar os leads..."

@@ -11,7 +11,7 @@ type SupaClient = ReturnType<typeof createClient>
 // verdade vêm de prospect_search_keywords (configurável, sem precisar mexer
 // aqui pra adicionar uma nova). Usado só como fallback "busca tudo" quando o
 // dono não restringiu nenhuma categoria em Configurações.
-const ALL_BUSINESS_TYPES = ['Restaurante / Food', 'Varejo / E-commerce', 'Serviços', 'Beleza & Estética', 'Barbearia', 'Saúde & Bem-estar']
+const ALL_BUSINESS_TYPES = ['Moda & Vestuário', 'Beleza & Cosméticos', 'Acessórios', 'Produtos de Consumo', 'Alimentos & Bebidas', 'E-commerce', 'Serviços Profissionais']
 
 interface IcpConfig {
   minRating: number
@@ -130,7 +130,7 @@ async function scanWebsite(websiteUrl: string): Promise<SiteSignals> {
     const igMatch = html.match(/https?:\/\/(?:www\.)?instagram\.com\/[a-zA-Z0-9_.]+/)
     const fbMatch = html.match(/https?:\/\/(?:www\.)?facebook\.com\/[a-zA-Z0-9_.]+/)
     const hasWhatsapp = /wa\.me\/|api\.whatsapp\.com/.test(html)
-    const hasOnlineOrdering = /ifood\.com\.br|rappi\.com|ubereats\.com|goomer\.app|anota\.ai|cardápio digital|pedido online|peça (?:agora|já)/i.test(html)
+    const hasOnlineOrdering = /ifood\.com\.br|rappi\.com|ubereats\.com|goomer\.app|anota\.ai|cardápio digital|pedido online|peça (?:agora|já)|adicionar ao carrinho|comprar agora|loja virtual|nuvemshop|lojaintegrada|tray\.com\.br|vtex|woocommerce|shopify/i.test(html)
     return { instagram_url: igMatch?.[0] ?? null, facebook_url: fbMatch?.[0] ?? null, has_whatsapp: hasWhatsapp, has_online_ordering: hasOnlineOrdering }
   } catch {
     return empty
@@ -200,7 +200,7 @@ Tem Instagram: ${input.hasInstagram ? 'sim' : 'não'}${input.igFollowers != null
 Tem Facebook: ${input.hasFacebook ? 'sim' : 'não'}
 Tem WhatsApp visível no site: ${input.hasWhatsapp ? 'sim' : 'não'}
 
-O Sales Boost vende exatamente para negócios com reputação real (boas notas/reviews) mas presença digital fraca ou mal aproveitada — esse é o perfil ideal de cliente. O produto NÃO serve bem redes/franquias grandes (elas já têm marketing centralizado) — o ideal é um negócio independente, de dono único ou poucas unidades.
+O Sales Boost é um sistema de aquisição de clientes com IA: cria demanda nas redes sociais e cuida de toda a jornada, da atração até a venda. O cliente ideal (ICP principal) é uma marca própria ou e-commerce tocado pelo dono — moda, beleza, acessórios, produtos de consumo ou alimentos & bebidas — pequeno ou médio porte, decisão rápida do dono/fundador, com Instagram ativo e um produto com potencial real de crescimento, mas com conteúdo inconsistente, marketing manual e sem um sistema de aquisição integrado. ICP secundário: serviços profissionais tocados pelo dono (escritórios de advocacia, contabilidade) que precisam de geração de demanda pelas redes e um fluxo constante de clientes novos. O produto NÃO serve bem redes/franquias grandes nem negócios sem dono/decisor acessível — o ideal é um negócio independente, de dono único ou poucas unidades.
 ${input.customInstructions ? `\nInstrução adicional do dono do Sales Boost sobre o que priorizar ao pontuar leads:\n"${input.customInstructions}"\n` : ''}
 Responda com um JSON válido, sem markdown, com exatamente estes campos:
 - "icp_confidence" (0-100): o quanto você tem certeza de que esse lugar É DE VERDADE um "${input.targetBusinessType}" (use as categorias do Google e o nome pra decidir — a busca por palavra-chave às vezes traz resultado errado, tipo uma loja de produtos de barbearia aparecendo numa busca por "barbearia"). 100 = com certeza é. 0 = quase certeza que não é.
