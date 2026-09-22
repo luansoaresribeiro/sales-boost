@@ -7,6 +7,7 @@ import ProgressPopup from './marketingAi/ProgressPopup'
 import TrialStartModal from './TrialStartModal'
 import TrialStatusWidget from './TrialStatusWidget'
 import BusinessContextButton from './BusinessContextButton'
+import logo from '../../assets/logo.png'
 
 const ORANGE = '#FF6D29'
 const SIDEBAR_BG = '#0D0A07'
@@ -109,8 +110,8 @@ function SidebarInner() {
     <aside style={{ width: '240px', flexShrink: 0, background: SIDEBAR_BG, borderRight: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 40 }}>
       <div style={{ padding: '20px 20px 16px', borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: ORANGE, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <span style={{ color: '#000', fontWeight: 900, fontSize: '11px' }}>SB</span>
+          <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+            <img src={logo} alt="Sales Boost" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ color: 'white', fontWeight: 700, fontSize: '14px', lineHeight: 1.2 }}>SalesBoost</div>
