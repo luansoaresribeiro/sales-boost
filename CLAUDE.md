@@ -164,6 +164,39 @@ pré-configurado pelo dono). **Quando esse rascunho de resposta por IA for
 construído (Fase 5 do sistema de fichas de setor), ele já nasce lendo a
 ficha** — decisão registrada aqui pra não esquecer.
 
+### Fase 2 — onboarding lê a ficha (2026-09-29)
+
+- `src/lib/verticalPlaybook.ts` — módulo compartilhado (frontend) com os
+  tipos (`Bilingual { pt; en? }`, `PlaybookQuestion`), busca
+  (`fetchVerticalKey`, `fetchOnboardingQuestions`) e validação
+  (`sanitizePlaybookAnswers` — só aceita chave que existe na ficha, respeita
+  tipo e `max`, corta texto em 200 caracteres). `claim-diagnostic/index.ts`
+  tem sua própria cópia Deno da mesma validação (convenção do projeto: sem
+  lib compartilhada entre edge function e frontend).
+- **Onboarding** (`OnboardingPage.tsx`): quando o tipo de negócio escolhido
+  tem `vertical_key ≠ 'generico'`, aparece "Perguntas específicas do seu
+  setor" dentro do próprio passo 0 (não é um passo novo — states de
+  step numbering ficam intocados pra `generico`). Trocar de tipo limpa as
+  respostas do setor anterior. Tudo opcional.
+- **Configurações → Entendimento do negócio**
+  (`BusinessUnderstandingCard.tsx`): mesmas perguntas, editáveis depois.
+  Recarrega a ficha certa a cada save (relendo `companies.vertical_key` na
+  hora), caso o tipo tenha mudado noutra parte da tela desde que o card
+  carregou.
+- **Onde as respostas são validadas de verdade:** `claim-diagnostic` (é
+  aqui que a empresa é criada pra valer — nunca confia no que o onboarding
+  mandou sem checar contra a ficha real antes de gravar
+  `companies.playbook_answers`). `vertical_key` continua vindo só do
+  trigger (`business_type` no INSERT), nunca setado à mão.
+- **RLS corrigida junto (bug real, não relacionado a fichas):**
+  `business_types_read` estava restrita a `authenticated`, sem incluir
+  `anon` — o onboarding roda ANTES de existir conta/sessão, então um
+  visitante real sempre recebia `[]` do banco e caía no fallback hardcoded
+  de 6 tipos em `src/lib/businessTypes.ts` (que não inclui "Imobiliária /
+  Corretor" nem "Software"). Corrigida pra incluir `anon`; `enabled=true`
+  agora é enforced no próprio banco (RLS), não só no filtro do app, nos
+  dois casos (`business_types` e `vertical_playbooks`).
+
 ### Geração de estratégia em 2 execuções (`strategy-generate`)
 
 O projeto está no **plano Free do Supabase**: 150s de wall-clock por

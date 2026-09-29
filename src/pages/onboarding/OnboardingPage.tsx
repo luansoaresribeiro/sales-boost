@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { fetchBusinessTypes, OTHER_BUSINESS_TYPE } from '../../lib/businessTypes'
+import { fetchVerticalKey, fetchOnboardingQuestions, bi, type PlaybookQuestion } from '../../lib/verticalPlaybook'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -28,6 +29,7 @@ interface OnboardingData {
   business_stage: string
   main_challenges: string
   current_channels: string[]
+  playbook_answers: Record<string, unknown>
 }
 
 const GOALS = [
@@ -124,6 +126,71 @@ function MultiSelect({ label, values, options, onToggle, hint }: {
   )
 }
 
+// Campo "digite e vira pílula" — usado pelas perguntas tipo 'multi_text' da
+// ficha de setor (ex: bairros que o corretor atende). Sem opções fixas,
+// limitado a `max` itens.
+function TagInput({ label, values, onChange, max, placeholder, hint }: {
+  label: string; values: string[]; onChange: (v: string[]) => void; max: number; placeholder?: string; hint?: string
+}) {
+  const [draft, setDraft] = useState('')
+  const add = () => {
+    const v = draft.trim()
+    if (!v || values.includes(v) || values.length >= max) return
+    onChange([...values, v]); setDraft('')
+  }
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>{label}</label>
+      {values.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '7px', marginBottom: '9px' }}>
+          {values.map(v => (
+            <span key={v} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: '99px', fontSize: '12.5px', fontWeight: 600, background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.5)', color: ORANGE }}>
+              {v}
+              <button type="button" onClick={() => onChange(values.filter(x => x !== v))} style={{ background: 'none', border: 'none', color: ORANGE, cursor: 'pointer', padding: 0, fontSize: '13px', lineHeight: 1 }}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      {values.length < max && (
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input value={draft} onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+            placeholder={placeholder} style={{ flex: 1, padding: '12px 16px', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '12px', color: 'white', fontSize: '15px', outline: 'none', fontFamily: 'inherit' }} />
+          <button type="button" onClick={add} style={{ padding: '0 18px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.5)', borderRadius: '12px', color: ORANGE, fontWeight: 700, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit' }}>+ Adicionar</button>
+        </div>
+      )}
+      {hint && <div style={{ fontSize: '11px', color: MUTED, marginTop: '7px', lineHeight: 1.5 }}>{hint}</div>}
+    </div>
+  )
+}
+
+// Perguntas extras da ficha de setor (config.onboarding_questions) — só
+// aparece quando o tipo de negócio escolhido tem uma ficha de verdade
+// (vertical_key ≠ 'generico'). Todas opcionais, sem afetar o "próximo"
+// deste passo. Renderiza pelo tipo de cada pergunta, nunca hardcoded pra
+// um setor específico.
+function PlaybookQuestionsSection({ fichaName, questions, answers, onChange }: {
+  fichaName: string; questions: PlaybookQuestion[]; answers: Record<string, unknown>; onChange: (k: string, v: unknown) => void
+}) {
+  if (!questions.length) return null
+  return (
+    <div style={{ marginTop: '22px', paddingTop: '20px', borderTop: `1px solid ${BORDER}` }}>
+      <div style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '4px' }}>Perguntas específicas do seu setor</div>
+      <p style={{ fontSize: '12px', color: MUTED, marginBottom: '16px', lineHeight: 1.5 }}>{fichaName ? `Ajuda o Sales Boost a falar a língua de quem trabalha com ${fichaName.toLowerCase()}. Tudo aqui é opcional.` : 'Tudo aqui é opcional.'}</p>
+      {questions.map(q => {
+        const label = bi(q.label)
+        if (q.type === 'select') {
+          return <SelectField key={q.key} label={label} value={String(answers[q.key] ?? '')} onChange={v => onChange(q.key, v)} options={(q.options ?? []).map(o => bi(o))} />
+        }
+        if (q.type === 'multi_text') {
+          return <TagInput key={q.key} label={label} values={(answers[q.key] as string[] | undefined) ?? []} onChange={v => onChange(q.key, v)} max={q.max ?? 5} placeholder="Digite e aperte Enter" />
+        }
+        return <Field key={q.key} label={label} value={String(answers[q.key] ?? '')} onChange={v => onChange(q.key, v)} />
+      })}
+    </div>
+  )
+}
+
 function BusinessTypeSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
   const [otherMode, setOtherMode] = useState(false)
   const known = options.includes(value)
@@ -162,6 +229,7 @@ function buildContext(d: OnboardingData) {
     current_channels: chan,
     onboarding_summary: summary,
     agent_business_interpretation: interpretation,
+    playbook_answers: d.playbook_answers,
   }
 }
 
@@ -174,14 +242,35 @@ export default function OnboardingPage() {
     business_name: '', business_type: '', city: '', website_url: '', instagram_url: '', facebook_url: '',
     tiktok_url: '', google_maps_url: '', phone: '', contact_email: '', goal: '',
     business_description: '', ideal_customer: '', business_stage: '', main_challenges: '', current_channels: [],
+    playbook_answers: {},
   })
   const [submitting, setSubmitting] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState(LOADING_MSGS[0])
   const [error, setError] = useState('')
   const [businessTypes, setBusinessTypes] = useState<string[]>([])
   const [diagnosticId, setDiagnosticId] = useState<string | null>(null)
+  const [fichaName, setFichaName] = useState('')
+  const [fichaQuestions, setFichaQuestions] = useState<PlaybookQuestion[]>([])
 
   useEffect(() => { fetchBusinessTypes().then(setBusinessTypes) }, [])
+
+  // Quando o tipo de negócio muda, busca a ficha do setor (se tiver) e
+  // limpa as respostas anteriores — elas eram de outro setor, não fazem
+  // mais sentido (ex: "bairros que atende" some se trocar de corretor pra
+  // loja de roupas).
+  useEffect(() => {
+    let alive = true
+    setData(d => ({ ...d, playbook_answers: {} }))
+    if (!data.business_type.trim()) { setFichaName(''); setFichaQuestions([]); return }
+    fetchVerticalKey(data.business_type).then(async vk => {
+      const { name, questions } = await fetchOnboardingQuestions(vk)
+      if (alive) { setFichaName(name); setFichaQuestions(questions) }
+    })
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.business_type])
+
+  const setPlaybookAnswer = (k: string, v: unknown) => setData(d => ({ ...d, playbook_answers: { ...d.playbook_answers, [k]: v } }))
 
   const set = (k: keyof OnboardingData) => (v: string) => setData(d => ({ ...d, [k]: v }))
   const toggleChannel = (v: string) => setData(d => ({ ...d, current_channels: d.current_channels.includes(v) ? d.current_channels.filter(x => x !== v) : [...d.current_channels, v] }))
@@ -314,6 +403,7 @@ export default function OnboardingPage() {
                 <H t="Vamos começar pelo seu negócio" s="Conte com suas palavras — assim o SalesBoost entende quem você é antes de qualquer coisa." />
                 <TextArea label="O que seu negócio faz?" value={data.business_description} onChange={set('business_description')} placeholder="Ex: Sou um estúdio de beleza que faz cabelo, unha e maquiagem para eventos..." hint="Pode escrever livre. Quanto mais claro, melhores as recomendações." />
                 <BusinessTypeSelect value={data.business_type} onChange={set('business_type')} options={businessTypes} />
+                <PlaybookQuestionsSection fichaName={fichaName} questions={fichaQuestions} answers={data.playbook_answers} onChange={setPlaybookAnswer} />
               </>
             )}
             {step === 1 && (

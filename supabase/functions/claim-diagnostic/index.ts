@@ -5,6 +5,58 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+type SupaClient = ReturnType<typeof createClient>
+
+interface Bilingual { pt: string; en?: string }
+interface PlaybookQuestion { key: string; label: Bilingual; type: 'select' | 'multi_text' | 'text'; options?: Bilingual[]; max?: number }
+const MAX_TEXT_LEN = 200
+
+// Mesmo lookup que o trigger sync_company_vertical_key faz no banco — usado
+// aqui só pra saber QUAL ficha validar as respostas contra, antes do
+// insert (o trigger continua sendo a fonte de verdade de vertical_key na
+// hora de gravar).
+async function resolveVerticalKey(admin: SupaClient, businessType: string | null): Promise<string> {
+  if (!businessType) return 'generico'
+  const { data } = await admin.from('business_types').select('vertical_key').eq('label', businessType).maybeSingle()
+  return (data?.vertical_key as string | undefined) ?? 'generico'
+}
+
+async function fetchOnboardingQuestions(admin: SupaClient, verticalKey: string): Promise<PlaybookQuestion[]> {
+  if (verticalKey === 'generico') return []
+  const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
+  const questions = (data?.config as { onboarding_questions?: unknown } | undefined)?.onboarding_questions
+  return Array.isArray(questions) ? questions as PlaybookQuestion[] : []
+}
+
+// Só aceita chave que existe na ficha, respeita o tipo e o max, corta texto
+// grande — isso vai pro prompt da IA (fetchPlaybookBlock nas 6 functions
+// que já leem a ficha), não pode entrar lixo nem texto enorme. Cópia da
+// mesma lógica de src/lib/verticalPlaybook.ts (convenção do projeto: sem
+// lib compartilhada entre edge function e frontend).
+function sanitizePlaybookAnswers(raw: unknown, questions: PlaybookQuestion[]): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object') return {}
+  const byKey = new Map(questions.map(q => [q.key, q]))
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const q = byKey.get(key)
+    if (!q) continue
+    if (q.type === 'text') {
+      const s = String(value ?? '').trim().slice(0, MAX_TEXT_LEN)
+      if (s) out[key] = s
+    } else if (q.type === 'select') {
+      const s = String(value ?? '').trim()
+      const allowed = (q.options ?? []).map(o => o.pt)
+      if (s && allowed.includes(s)) out[key] = s
+    } else if (q.type === 'multi_text') {
+      if (!Array.isArray(value)) continue
+      const max = q.max ?? 10
+      const items = value.map(v => String(v ?? '').trim().slice(0, MAX_TEXT_LEN)).filter(Boolean).slice(0, max)
+      if (items.length) out[key] = items
+    }
+  }
+  return out
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -59,6 +111,12 @@ Deno.serve(async (req) => {
       // Business Context que os agentes leem.
       const oc = (diag.onboarding_context ?? {}) as Record<string, unknown>
 
+      // Ficha de setor: valida as respostas contra a ficha de verdade antes
+      // de gravar — nunca confia no que o onboarding mandou sem checar.
+      const verticalKey = await resolveVerticalKey(serviceClient, diag.business_type as string | null)
+      const fichaQuestions = await fetchOnboardingQuestions(serviceClient, verticalKey)
+      const playbookAnswers = sanitizePlaybookAnswers(oc.playbook_answers, fichaQuestions)
+
       // Create companies record from diagnostic data
       const { data: company, error: companyErr } = await serviceClient
         .from('companies')
@@ -83,6 +141,7 @@ Deno.serve(async (req) => {
           current_channels: oc.current_channels ?? null,
           onboarding_summary: oc.onboarding_summary ?? null,
           agent_business_interpretation: oc.agent_business_interpretation ?? null,
+          playbook_answers: playbookAnswers,
           plan: 'free',
           trial_started_at: trialStartedAt.toISOString(),
           trial_expires_at: trialExpiresAt.toISOString(),
