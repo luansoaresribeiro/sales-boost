@@ -361,17 +361,32 @@ Custo de API por cliente: ~$0,20–$0,80/mês (Claude Sonnet) + ~$0,10–$0,30/m
   **`voice-tts`** (ElevenLabs TTS para o Jarvis).
   - **`agent-chat` está deprecada** — nenhuma tela chama mais, substituída
     pelo `hermes-proxy`. Ainda não foi apagada.
-  - **Existem funções rodando em produção sem arquivo local neste projeto**
-    (achadas direto via `list_edge_functions`/pg_cron em 2026-07-14, nunca
-    puxadas pra cá): `enzo-daily-report`, `hermes-daily-scan`,
-    `daily-briefing`, `monthly-report`. Investigar/puxar antes de mexer em
-    qualquer coisa relacionada a relatórios ou briefings diários.
+  - **`publish-instagram` está deprecada** (confirmado em 2026-09-29): zero
+    chamadores no código (nenhuma tela, nenhuma outra function, nenhum job
+    do pg_cron) e a tabela que ela grava (`instagram_posts`) tem 0 linhas —
+    nunca terminou de rodar em produção. O publicador real e ativo hoje é o
+    `publishToInstagram` dentro de `agent-actions` (fluxo de aprovação) —
+    mas **esse não grava em `instagram_posts`**, então as telas que leem
+    dessa tabela (`VisualLibrary.tsx`, `AgentTabExtras.tsx`,
+    `detect-opportunities`, `generate-tab-insight`, `business-progress`,
+    `enzo-daily-report`) estão lendo uma tabela sempre vazia — corrigir isso
+    faz parte da Fase 4 do sistema de fichas de setor (ver seção "Fichas de
+    setor" abaixo), junto com suporte a carrossel/Reels. `publish-instagram`
+    ainda não foi apagada.
+  - **Funções "sem arquivo local" (achadas em 2026-07-14) já foram
+    resolvidas** — confirmado em 2026-09-29 que as 88 functions deployadas
+    batem 100% com as 88 pastas locais em `supabase/functions/`, incluindo
+    `enzo-daily-report`, `hermes-daily-scan`, `daily-briefing` e
+    `monthly-report` (todas têm pasta local hoje).
 - Supabase migrations em `supabase/migrations/` — **atenção:** há bastante
   deriva entre esses arquivos e o schema real de produção (muita coisa foi
   aplicada direto via SQL editor/MCP ao longo do tempo, sem migration local
-  correspondente). Não confiar cegamente que os arquivos aqui refletem 100%
-  do banco real — conferir com `list_tables`/`list_migrations` antes de
-  assumir estrutura.
+  correspondente). Confirmado em 2026-09-29 que pelo menos 5 tabelas usadas
+  hoje não têm NENHUM arquivo de criação local: `posts`, `leads`,
+  `lead_messages`, `agent_memory`, `business_types` — foram criadas direto
+  em produção. Não confiar cegamente que os arquivos aqui refletem 100% do
+  banco real — sempre conferir o schema real via `supabase db query
+  --linked` antes de assumir estrutura.
 - i18n via `src/i18n.ts` (dashboard usa `src/i18n-dash.ts`) — seguido de forma
   inconsistente em componentes mais novos (strings em pt-BR hardcoded já
   existem em várias páginas do dashboard).
