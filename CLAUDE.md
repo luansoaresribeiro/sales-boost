@@ -208,6 +208,16 @@ presente) — repetição da chamada é ignorada sem erro.
 `reanalyze` (Strategy Health Check) não precisou dessa divisão — resposta
 pequena (900 tokens), nunca chegou perto do limite.
 
+**Gatilho pra dividir em 3 execuções:** a parte 2 (`max_tokens:4500`) foi
+medida em ~69-84s nos 2 testes reais feitos em 2026-09-29 — folga boa
+dentro dos 150s. **Se os logs de timing (`TIMING strategy-generate
+step2[...]: parte 2 concluída`) mostrarem essa etapa passando de ~110s em
+uso real**, é sinal de que a margem ficou curta demais (perto do limite
+de 150s da execução) — nesse caso, dividir a parte 2 em 2 (ex.: "metas +
+funil" e "orçamento + estimativas + campanha"), cada uma como sua própria
+execução `'continue'` encadeada, do mesmo jeito que a parte 1→2 já
+funciona hoje.
+
 ## Jarvis — Arquitetura de voz e agentes
 
 ### Loop de voz (atual)
