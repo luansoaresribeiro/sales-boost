@@ -22,7 +22,7 @@ export interface Strategy {
   kind: 'main' | 'initiative'
   parent_strategy_id: string | null
   name: string
-  status: 'draft' | 'active' | 'paused' | 'completed' | 'needs_review'
+  status: 'draft' | 'active' | 'paused' | 'completed' | 'needs_review' | 'generating' | 'failed'
   thesis: string | null
   primary_constraint: string | null
   strategic_opportunity: string | null
@@ -72,8 +72,8 @@ export const GOAL_TYPE_LABEL: Record<string, string> = {
   instagram_growth: 'Crescimento no Instagram', engagement: 'Engajamento', website_conversions: 'Conversões no site',
   whatsapp: 'Conversas no WhatsApp', bookings: 'Agendamentos', retention: 'Retenção de clientes', other: 'Outro',
 }
-export const STATUS_LABEL: Record<string, string> = { draft: 'Rascunho', active: 'Ativa', paused: 'Pausada', completed: 'Concluída', needs_review: 'Precisa revisão' }
-export const STATUS_COLOR: Record<string, string> = { draft: '#BABABA', active: '#4ade80', paused: '#FBBF24', completed: '#60a5fa', needs_review: '#f87171' }
+export const STATUS_LABEL: Record<string, string> = { draft: 'Rascunho', active: 'Ativa', paused: 'Pausada', completed: 'Concluída', needs_review: 'Precisa revisão', generating: 'Gerando...', failed: 'Falhou' }
+export const STATUS_COLOR: Record<string, string> = { draft: '#BABABA', active: '#4ade80', paused: '#FBBF24', completed: '#60a5fa', needs_review: '#f87171', generating: '#FF6D29', failed: '#f87171' }
 export const FEASIBILITY_LABEL: Record<string, string> = {
   supports_plan: 'As condições atuais sustentam o plano', needs_more_data: 'Precisa de mais dado pra ter certeza',
   needs_adjustment: 'O plano precisa de ajustes', significant_constraints: 'Há restrições importantes hoje',

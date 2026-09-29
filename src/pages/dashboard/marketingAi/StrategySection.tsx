@@ -19,6 +19,14 @@ async function callStrategy(token: string, body: Record<string, unknown>): Promi
   return data
 }
 
+// A geração agora é assíncrona (2 execuções separadas em segundo plano —
+// ver strategy-generate/index.ts): o backend devolve o id na hora com
+// status:'generating', e esta tela faz o polling até virar 'active' (pronta)
+// ou 'failed'. Nunca fica esperando pra sempre: 10 min sem resolver = trata
+// como falha aqui também, mesmo sem nova resposta do backend.
+const GENERATING_TIMEOUT_MS = 10 * 60 * 1000
+const POLL_INTERVAL_MS = 3000
+
 const ghostBtn: React.CSSProperties = { padding: '9px 14px', background: 'transparent', border: `1px solid ${BORDER}`, color: ORANGE, fontWeight: 700, fontSize: '11.5px', borderRadius: '9px', cursor: 'pointer', fontFamily: D }
 const primaryBtn: React.CSSProperties = { padding: '9px 16px', background: ORANGE, color: '#000', fontWeight: 800, fontSize: '12.5px', border: 'none', borderRadius: '9px', cursor: 'pointer', fontFamily: D }
 
@@ -45,6 +53,8 @@ export default function StrategySection({ company }: { company: CompanyData }) {
   const [log, setLog] = useState<LogRow[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [generating, setGenerating] = useState<{ id: string; kind: 'main' | 'initiative' } | null>(null)
+  const [genError, setGenError] = useState('')
   const [reanalyzing, setReanalyzing] = useState(false)
   const [savingBudget, setSavingBudget] = useState(false)
   const [localBudget, setLocalBudget] = useState<Budget>(EMPTY_BUDGET)
@@ -73,14 +83,55 @@ export default function StrategySection({ company }: { company: CompanyData }) {
       const ok = window.confirm('Isso substitui sua estratégia principal atual por uma nova (é um pivô de direção) — a atual fica guardada no histórico, não some. Quer continuar?')
       if (!ok) return
     }
-    setCreating(true); setError('')
+    setCreating(true); setError(''); setGenError('')
     try {
-      await callStrategy(token, { action: 'generate', kind, parent_strategy_id: kind === 'initiative' ? main?.id : undefined })
-      setViewingId(null)
-      await loadMain()
+      const res = await callStrategy(token, { action: 'generate', kind, parent_strategy_id: kind === 'initiative' ? main?.id : undefined })
+      const strategyId = res.strategy_id ? String(res.strategy_id) : ''
+      if (strategyId && res.status === 'generating') {
+        setGenerating({ id: strategyId, kind })
+        setViewingId(null)
+        if (kind === 'initiative') {
+          setInitiatives(prev => [{ id: strategyId, name: 'Gerando estratégia...', status: 'generating', strategic_focus: '' } as Strategy, ...prev])
+        }
+      }
     } catch (e) { setError(e instanceof Error ? e.message : 'Erro ao criar estratégia') }
     setCreating(false)
-  }, [token, main, loadMain])
+  }, [token, main])
+
+  // Polling da geração em segundo plano (2 execuções separadas no backend —
+  // ver nota no topo do strategy-generate/index.ts). Trata >10min parado
+  // como falha aqui também, mesmo sem o backend ter marcado 'failed'.
+  useEffect(() => {
+    if (!generating) return
+    const startedAt = Date.now()
+    const tick = async () => {
+      if (Date.now() - startedAt > GENERATING_TIMEOUT_MS) {
+        setGenError('Demorou demais e não terminou — tente gerar de novo.')
+        setGenerating(null)
+        return
+      }
+      const { data } = await supabase.from('marketing_ai_strategies').select('id, status, reasoning').eq('id', generating.id).maybeSingle()
+      if (!data) return
+      if (data.status === 'active') {
+        setGenerating(null)
+        if (generating.kind === 'main') {
+          await loadMain()
+        } else if (main) {
+          const { data: inits } = await supabase.from('marketing_ai_strategies').select('*').eq('parent_strategy_id', main.id).order('created_at', { ascending: false })
+          setInitiatives((inits ?? []) as Strategy[])
+        }
+      } else if (data.status === 'failed') {
+        setGenError((data.reasoning as string | null) || 'Não consegui gerar — tente de novo.')
+        setGenerating(null)
+        if (generating.kind === 'initiative' && main) {
+          const { data: inits } = await supabase.from('marketing_ai_strategies').select('*').eq('parent_strategy_id', main.id).order('created_at', { ascending: false })
+          setInitiatives((inits ?? []) as Strategy[])
+        }
+      }
+    }
+    const interval = setInterval(tick, POLL_INTERVAL_MS)
+    return () => clearInterval(interval)
+  }, [generating, main, loadMain])
 
   // Primeira estratégia: a IA cria sozinha, sem exigir clique do dono.
   useEffect(() => {
@@ -157,11 +208,11 @@ export default function StrategySection({ company }: { company: CompanyData }) {
           {active && <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>Atualizada {timeAgo(active.updated_at)}</div>}
         </div>
         <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-          {active && !viewing && (
+          {active && !viewing && active.status !== 'generating' && active.status !== 'failed' && (
             <button onClick={reanalyze} disabled={reanalyzing} style={ghostBtn}>{reanalyzing ? 'Reavaliando...' : '↻ Reavaliar'}</button>
           )}
-          <button onClick={() => createStrategy('main')} disabled={creating} style={{ ...primaryBtn, opacity: creating ? 0.7 : 1, cursor: creating ? 'default' : 'pointer' }}>
-            {creating ? 'Criando...' : main ? '↻ Pivotar estratégia' : '+ Criar estratégia'}
+          <button onClick={() => createStrategy('main')} disabled={creating || !!generating} style={{ ...primaryBtn, opacity: (creating || !!generating) ? 0.7 : 1, cursor: (creating || !!generating) ? 'default' : 'pointer' }}>
+            {creating || generating?.kind === 'main' ? 'Gerando...' : main ? '↻ Pivotar estratégia' : '+ Criar estratégia'}
           </button>
         </div>
       </div>
@@ -170,17 +221,32 @@ export default function StrategySection({ company }: { company: CompanyData }) {
 
       {!active && (
         <div style={{ maxWidth: '560px', padding: '40px 32px', textAlign: 'center', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px' }}>
-          <div style={{ fontSize: '32px', marginBottom: '12px' }}>🧭</div>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>{genError ? '⚠️' : '🧭'}</div>
           <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '8px' }}>
-            {creating ? 'Criando sua primeira estratégia...' : 'Nenhuma estratégia ainda'}
+            {creating ? 'Criando sua primeira estratégia...' : generating ? 'Gerando sua estratégia...' : genError ? 'Não consegui gerar a estratégia' : 'Nenhuma estratégia ainda'}
           </div>
           <p style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>
-            A IA lê o que já sabemos do seu negócio e o dado real disponível, e propõe objetivo, metas, orçamento e prazo — você revisa e edita tudo depois.
+            {genError || 'A IA lê o que já sabemos do seu negócio e o dado real disponível, e propõe objetivo, metas, orçamento e prazo — você revisa e edita tudo depois.'}
           </p>
+          {genError && (
+            <button onClick={() => createStrategy('main')} disabled={creating} style={{ ...primaryBtn, marginTop: '14px' }}>Tentar de novo</button>
+          )}
         </div>
       )}
 
-      {active && (
+      {active && (active.status === 'generating' || active.status === 'failed') && (
+        <div style={{ maxWidth: '560px', padding: '40px 32px', textAlign: 'center', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px' }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>{active.status === 'failed' ? '⚠️' : '🧭'}</div>
+          <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '8px' }}>
+            {active.status === 'failed' ? 'Essa iniciativa não terminou de gerar' : 'Gerando essa iniciativa...'}
+          </div>
+          {active.status === 'failed' && active.reasoning && (
+            <p style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>{active.reasoning}</p>
+          )}
+        </div>
+      )}
+
+      {active && active.status !== 'generating' && active.status !== 'failed' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
           <StrategyBlock title="🧭 Visão Geral"><OverviewPanel strategy={active} /></StrategyBlock>
           <StrategyBlock title="🧠 Inteligência do Negócio (9 domínios)"><IntelligenceDomainsPanel companyId={company.id} /></StrategyBlock>

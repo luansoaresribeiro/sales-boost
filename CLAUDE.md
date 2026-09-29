@@ -131,7 +131,17 @@ derruba a geração por causa disso.
 Criativo, execução da personalidade, e o planejador semanal de cadência),
 `content-engine`, `content-intelligence` (tendências e campanhas),
 `generate-posts`, `hermes-proxy` (chat interativo, Telegram, orquestrador
-do ciclo autônomo e a execução do ciclo autônomo).
+do ciclo autônomo e a execução do ciclo autônomo). Validado com dado real
+de produção pras 2 ficha (`generico`/`imoveis_rio`) em `strategy-generate`
+(prompt) e `creative-generate` (post gerado de verdade citando bairros/CTA
+da ficha). **`hermes-proxy` especificamente**: só o teste de montagem do
+prompt foi feito (mesma lógica, rodada fora do Hermes, confirmando bloco
+vazio pra `generico` e bloco completo pra `imoveis_rio`) — o teste ponta a
+ponta (mensagem de chat de verdade) ainda está pendente porque o "Agente
+Geral" está desativado no Agents Control Center desde 2026-07-28 (estado
+anterior a este trabalho, não mexemos nesse toggle de propósito por ser
+global — afeta todas as empresas, não só a de teste). Fazer esse teste
+ponta a ponta antes de religar o Agente Geral pra valer.
 
 **Ainda não lê a ficha** (fora do escopo desta rodada — não é setor-
 específico hoje, ou o dono decidiu deixar pra depois):
@@ -153,6 +163,50 @@ IA pra comentário/DM (só classifica intenção — o texto enviado já vem
 pré-configurado pelo dono). **Quando esse rascunho de resposta por IA for
 construído (Fase 5 do sistema de fichas de setor), ele já nasce lendo a
 ficha** — decisão registrada aqui pra não esquecer.
+
+### Geração de estratégia em 2 execuções (`strategy-generate`)
+
+O projeto está no **plano Free do Supabase**: 150s de wall-clock por
+execução, e isso vale também pra trabalho em segundo plano via
+`EdgeRuntime.waitUntil` (medido em 2026-09-29: uma chamada única de 4500
+tokens à Claude já levava ~92s sozinha, e mesmo assim saía cortada —
+2 tentativas nunca caberiam em 150s). A geração de estratégia
+(`action:'generate'`) virou **2 passos, cada um sua própria execução
+HTTP** (seu próprio relógio de 150s):
+
+1. `action:'generate'` cria a linha (`status:'generating'`, nome
+   provisório "Gerando estratégia..."), devolve o `strategy_id` **na
+   hora**, e dispara `runStep1` em segundo plano — só a tese/diagnóstico
+   (menor, cabe com folga mesmo com 1 retry; medido: ~41-46s).
+2. Ao terminar, `runStep1` grava esse pedaço (ainda `'generating'`) e
+   dispara o **próprio `strategy-generate`** (`action:'continue'`) — uma
+   execução nova, com relógio zerado (ver a armadilha do `verify_jwt`
+   acima: essa chamada precisa do header `Authorization: Bearer
+   <SUPABASE_SERVICE_ROLE_KEY>`, não só do `cron_secret` no corpo).
+3. `action:'continue'` roda `runStep2` — funil/metas/orçamento/
+   estimativas/campanha (a parte mais pesada; medido: ~69-84s com
+   `max_tokens:4500`). Só aí grava `status:'active'` e pausa a estratégia
+   principal antiga.
+
+**Tratamento de resposta cortada (`stop_reason`):** se a Claude cortar a
+resposta por `max_tokens`, repetir a MESMA chamada só cortaria de novo —
+`callClaudeStep` nunca faz isso. A parte 1 (menor) tenta de novo 1x com
+mais tokens se cortar; a parte 2 (mais pesada, `allowRetry:false`) nunca
+tenta de novo — falha na hora com motivo claro, pro dono clicar "tentar de
+novo" em vez de arriscar estourar os 150s daquela execução com um retry.
+JSON malformado que NÃO foi corte (formatação, não tamanho) é tratado
+diferente — aí sim vale repetir do mesmo tamanho (só na parte 1).
+
+**Nunca fica "gerando" pra sempre:** se uma linha ficar `'generating'` por
+mais de 10 minutos, tanto o backend (próxima chamada de `generate` pra
+aquela empresa+kind) quanto o frontend (`StrategySection.tsx`, polling de
+3s) tratam como `'failed'`. Clique duplo devolve a geração já em
+andamento em vez de duplicar. `action:'continue'` só processa se a linha
+ainda estiver `'generating'` E a parte 1 já tiver gravado (`thesis`
+presente) — repetição da chamada é ignorada sem erro.
+
+`reanalyze` (Strategy Health Check) não precisou dessa divisão — resposta
+pequena (900 tokens), nunca chegou perto do limite.
 
 ## Jarvis — Arquitetura de voz e agentes
 
@@ -237,6 +291,21 @@ administra a VPS se os dois ainda são necessários ou se um virou redundante):
 > chegar lá). **Qualquer function nova que for chamada por cron E por
 > usuário logado precisa desse mesmo `--no-verify-jwt` no deploy** — sem
 > isso, o caminho do cron fica morto em silêncio.
+
+> ⚠️ **Variante da armadilha acima, achada em 2026-09-29 no
+> `strategy-generate`:** essa function é uma das poucas com
+> `verify_jwt=true` de propósito (só JWT de dono real chama as ações
+> interativas). Quando uma function assim precisa **chamar a si mesma**
+> internamente (ver "Geração de estratégia em 2 execuções" abaixo — o passo
+> 1 dispara o passo 2 via `fetch` pro próprio `strategy-generate`), o
+> `cron_secret` no corpo sozinho NÃO basta: o gateway barra antes do código
+> rodar, do mesmo jeito silencioso do caso do pg_cron. A chamada interna
+> precisa mandar `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>` (a
+> function já tem esse valor no próprio ambiente, via
+> `Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')` — não precisa de segredo
+> novo) **além** do `cron_secret` no corpo, que continua sendo quem decide
+> se aceita a ação como uma chamada interna de verdade (não um usuário
+> comum tentando chamar `action:'continue'` direto).
 
 Cada função abaixo decide sozinha se vale a pena agir (não é "acordar e
 sempre fazer tudo de novo"):
