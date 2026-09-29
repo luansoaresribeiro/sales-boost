@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
@@ -78,9 +79,24 @@ function LangToggle() {
   )
 }
 
-function NavItemLink({ item }: { item: NavItem }) {
+// Breakpoint da sidebar: abaixo disso ela vira "gaveta" (off-canvas), já
+// que é toda em inline style (convenção do projeto) — sem media query CSS,
+// então o mobile é detectado em JS via largura da janela.
+const MOBILE_BREAKPOINT = 900
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT)
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return isMobile
+}
+
+function NavItemLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   return (
-    <NavLink to={item.to} end={item.end}
+    <NavLink to={item.to} end={item.end} onClick={onNavigate}
       style={({ isActive }) => ({
         display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', borderRadius: '9px', marginBottom: '2px',
         textDecoration: 'none', fontSize: '13.5px', fontWeight: isActive ? 600 : 400,
@@ -91,7 +107,7 @@ function NavItemLink({ item }: { item: NavItem }) {
   )
 }
 
-function SidebarInner() {
+function SidebarInner({ isMobile, open, onNavigate, onClose }: { isMobile: boolean; open: boolean; onNavigate: () => void; onClose: () => void }) {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const { lang } = useLang()
@@ -107,7 +123,12 @@ function SidebarInner() {
   const userInitial = userEmail[0]?.toUpperCase() ?? 'U'
 
   return (
-    <aside style={{ width: '240px', flexShrink: 0, background: SIDEBAR_BG, borderRight: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 40 }}>
+    <aside style={{
+      width: '240px', flexShrink: 0, background: SIDEBAR_BG, borderRight: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column',
+      position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 40,
+      transform: isMobile ? (open ? 'translateX(0)' : 'translateX(-100%)') : 'translateX(0)',
+      transition: 'transform 0.25s ease', boxShadow: isMobile && open ? '0 0 28px rgba(0,0,0,0.55)' : 'none',
+    }}>
       <div style={{ padding: '20px 20px 16px', borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
@@ -118,6 +139,12 @@ function SidebarInner() {
             <div style={{ color: MUTED, fontSize: '10px', marginTop: '1px' }}>{T.layout.subtitle}</div>
           </div>
           <LangToggle />
+          {isMobile && (
+            <button onClick={onClose} aria-label="Fechar menu"
+              style={{ width: '30px', height: '30px', flexShrink: 0, background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED_BRIGHT, fontSize: '15px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              ×
+            </button>
+          )}
         </div>
       </div>
       <nav style={{ flex: 1, padding: '12px 10px', overflowY: 'auto' }}>
@@ -128,11 +155,11 @@ function SidebarInner() {
                 {sec.section}
               </div>
             )}
-            {sec.items.map(item => <NavItemLink key={item.to} item={item} />)}
+            {sec.items.map(item => <NavItemLink key={item.to} item={item} onNavigate={onNavigate} />)}
           </div>
         ))}
         <div style={{ height: '1px', background: BORDER, margin: '8px 0 12px' }} />
-        {bottomItems.map(item => <NavItemLink key={item.to} item={item} />)}
+        {bottomItems.map(item => <NavItemLink key={item.to} item={item} onNavigate={onNavigate} />)}
       </nav>
       <div style={{ padding: '12px 10px', borderTop: `1px solid ${BORDER}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '9px', marginBottom: '4px' }}>
@@ -156,11 +183,24 @@ function SidebarInner() {
 
 export default function DashboardLayout() {
   const { company } = useCompany()
+  const isMobile = useIsMobile()
+  const [mobileOpen, setMobileOpen] = useState(false)
+  useEffect(() => { if (!isMobile) setMobileOpen(false) }, [isMobile])
+
   return (
     <LanguageProvider>
       <div style={{ display: 'flex', minHeight: '100vh', background: '#0E0B0A' }}>
-        <SidebarInner />
-        <main style={{ flex: 1, marginLeft: '240px', display: 'flex', flexDirection: 'column', minHeight: '100vh', minWidth: 0, overflowX: 'hidden' }}>
+        {isMobile && mobileOpen && (
+          <div onClick={() => setMobileOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 39 }} />
+        )}
+        <SidebarInner isMobile={isMobile} open={!isMobile || mobileOpen} onNavigate={() => setMobileOpen(false)} onClose={() => setMobileOpen(false)} />
+        <main style={{ flex: 1, marginLeft: isMobile ? 0 : '240px', display: 'flex', flexDirection: 'column', minHeight: '100vh', minWidth: 0, overflowX: 'hidden' }}>
+          {isMobile && (
+            <button onClick={() => setMobileOpen(true)} aria-label="Abrir menu"
+              style={{ position: 'sticky', top: 0, zIndex: 30, alignSelf: 'flex-start', margin: '12px 0 0 14px', width: '38px', height: '38px', background: SIDEBAR_BG, border: `1px solid ${BORDER}`, borderRadius: '9px', color: 'white', fontSize: '17px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              ☰
+            </button>
+          )}
           <TrialStatusWidget />
           <Outlet />
         </main>
