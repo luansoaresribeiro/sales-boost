@@ -34,7 +34,42 @@ interface Company {
   id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null
   business_description: string | null; ideal_customer: string | null; business_stage: string | null
   main_challenges: string | null; website_summary: string | null; marketing_monthly_budget: number | null
-  avg_ticket: number | null
+  avg_ticket: number | null; vertical_key: string | null; playbook_answers: Record<string, unknown> | null
+}
+
+// Ficha de setor (vertical_playbooks) + respostas do onboarding da empresa,
+// mescladas num bloco de texto pra injetar no prompt. Ficha vazia (caso
+// 'generico', ou qualquer setor sem ficha configurada) + sem respostas =
+// devolve '' = prompt fica idêntico ao de antes desta função existir. Nunca
+// derruba a geração por causa de erro no banco de fichas (try/catch).
+async function fetchPlaybookBlock(admin: SupaClient, verticalKey: string, playbookAnswers: Record<string, unknown> | null): Promise<string> {
+  try {
+    const { data } = await admin.from('vertical_playbooks').select('name, config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
+    const c = (data?.config ?? {}) as Record<string, unknown>
+    const parts: string[] = []
+    if (typeof c.tone === 'string' && c.tone) parts.push(`Tom de voz do setor: ${c.tone}`)
+    if (Array.isArray(c.rules) && c.rules.length) parts.push(`Regras obrigatórias do setor:\n${(c.rules as string[]).map(r => `- ${r}`).join('\n')}`)
+    if (c.pillars && typeof c.pillars === 'object' && Object.keys(c.pillars).length) {
+      parts.push(`Pilares de conteúdo e peso sugerido: ${Object.entries(c.pillars as Record<string, number>).map(([k, v]) => `${k} ${v}%`).join(', ')}`)
+    }
+    if (c.hooks_by_pillar && typeof c.hooks_by_pillar === 'object' && Object.keys(c.hooks_by_pillar).length) {
+      parts.push(`Ganchos de referência por pilar:\n${Object.entries(c.hooks_by_pillar as Record<string, string[]>).map(([k, arr]) => `${k}: ${arr.join('; ')}`).join('\n')}`)
+    }
+    if (c.ctas && typeof c.ctas === 'object' && Object.keys(c.ctas).length) {
+      parts.push(`CTAs recomendados: ${Object.entries(c.ctas as Record<string, string>).map(([k, v]) => `${k} → "${v}"`).join(', ')}`)
+    }
+    if (c.vocabulary && typeof c.vocabulary === 'object' && Object.keys(c.vocabulary).length) {
+      parts.push(`Vocabulário do setor: ${Object.entries(c.vocabulary as Record<string, string>).map(([k, v]) => `${k}=${v}`).join(', ')}`)
+    }
+    const answers = playbookAnswers && typeof playbookAnswers === 'object'
+      ? Object.entries(playbookAnswers).filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0))
+      : []
+    if (answers.length) {
+      parts.push(`Respostas do cadastro desta empresa (preferência real, sobrepõe qualquer padrão genérico do setor):\n${answers.map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')}`)
+    }
+    if (!parts.length) return ''
+    return `\n\nFICHA DE SETOR — "${String(data?.name ?? verticalKey)}":\n${parts.join('\n\n')}`
+  } catch { return '' }
 }
 
 function round1(n: number): string { return (Math.round(n * 10) / 10).toLocaleString('pt-BR') }
@@ -115,10 +150,11 @@ async function generateStrategy(
   admin: SupaClient, supabaseUrl: string, cronSecret: string, anthropicKey: string,
   company: Company, kind: 'main' | 'initiative', parentStrategyId: string | null,
 ): Promise<Record<string, unknown>> {
-  const [{ data: cfgRow }, dataAgentState, baseline] = await Promise.all([
+  const [{ data: cfgRow }, dataAgentState, baseline, playbookBlock] = await Promise.all([
     admin.from('marketing_ai_config').select('brand_voice, target_audience, content_pillars, marketing_goals').eq('company_id', company.id).maybeSingle(),
     fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'state'),
     fetchRealBaseline(admin, company.id),
+    fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
   ])
   const cfg = (cfgRow ?? {}) as { brand_voice?: string; target_audience?: string; content_pillars?: string[]; marketing_goals?: string }
 
@@ -132,7 +168,7 @@ async function generateStrategy(
 
 Sua fonte de verdade são os 9 domínios do Data Agent (Business/Customer/Market/Competition/Digital/Content/History/Resources/Performance). Não analise os domínios isolados — procure relações entre eles antes de decidir (ex: concorrente compete por preço + cliente reclama de preço + negócio tem margem melhor em serviço premium + histórico mostra que desconto atraiu cliente ruim + performance mostra que cliente premium tem LTV maior ⇒ a resposta não é baixar preço, é reposicionar por valor).
 
-${businessPreamble(company, cfg)}
+${businessPreamble(company, cfg)}${playbookBlock}
 ${parentContext}
 
 ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
@@ -237,7 +273,7 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey)
     const { data: companyRow } = await admin.from('companies')
-      .select('id, business_name, business_type, city, goal, business_description, ideal_customer, business_stage, main_challenges, website_summary, marketing_monthly_budget, avg_ticket')
+      .select('id, business_name, business_type, city, goal, business_description, ideal_customer, business_stage, main_challenges, website_summary, marketing_monthly_budget, avg_ticket, vertical_key, playbook_answers')
       .eq('user_id', user.id).maybeSingle()
     const company = companyRow as Company | null
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
@@ -309,9 +345,10 @@ Deno.serve(async (req) => {
       const { data: strategy } = await admin.from('marketing_ai_strategies').select('*').eq('id', strategyId).eq('company_id', company.id).maybeSingle()
       if (!strategy) return json({ error: 'Estratégia não encontrada.' }, 404)
       const { data: goalRows } = await admin.from('marketing_ai_strategy_goals').select('*').eq('strategy_id', strategyId)
-      const [delta, baseline] = await Promise.all([
+      const [delta, baseline, playbookBlock] = await Promise.all([
         fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'delta', String(strategy.updated_at)),
         fetchRealBaseline(admin, company.id),
+        fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
       ])
 
       const prompt = `Você é Hermes fazendo o Strategy Health Check de uma tese já ativa — decida se ela continua sustentada pela evidência ou se precisa de ajuste. Novidade não muda a estratégia automaticamente: só muda se a evidência realmente invalidar a tese.
@@ -327,6 +364,7 @@ ${baseline ? `Dado real ATUAL: ${baseline.label}.` : 'Ainda sem dado real de per
 
 O QUE MUDOU nos 9 domínios desde a última atualização (Data Agent, delta):
 ${formatDomains(delta)}
+${playbookBlock}
 
 Decida:
 1. STRATEGY_STATUS: ON_TRACK | NEEDS_ADJUSTMENT | UNDERPERFORMING | AT_RISK | INVALIDATED

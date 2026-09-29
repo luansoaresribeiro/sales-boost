@@ -27,7 +27,42 @@ const cors = {
 }
 type SupaClient = ReturnType<typeof createClient>
 
-interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null; language: string | null; telegram_chat_id: string | null }
+interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null; language: string | null; telegram_chat_id: string | null; vertical_key: string | null; playbook_answers: Record<string, unknown> | null }
+
+// Ficha de setor (vertical_playbooks) + respostas do onboarding, mescladas
+// num bloco de texto pra injetar no prompt. Ficha vazia (caso 'generico', ou
+// qualquer setor sem ficha configurada) + sem respostas = devolve '' = o
+// prompt fica idêntico ao de antes desta função existir. Nunca derruba a
+// geração por causa de erro no banco de fichas (try/catch).
+async function fetchPlaybookBlock(admin: SupaClient, verticalKey: string, playbookAnswers: Record<string, unknown> | null): Promise<string> {
+  try {
+    const { data } = await admin.from('vertical_playbooks').select('name, config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
+    const c = (data?.config ?? {}) as Record<string, unknown>
+    const parts: string[] = []
+    if (typeof c.tone === 'string' && c.tone) parts.push(`Tom de voz do setor: ${c.tone}`)
+    if (Array.isArray(c.rules) && c.rules.length) parts.push(`Regras obrigatórias do setor:\n${(c.rules as string[]).map(r => `- ${r}`).join('\n')}`)
+    if (c.pillars && typeof c.pillars === 'object' && Object.keys(c.pillars).length) {
+      parts.push(`Pilares de conteúdo e peso sugerido: ${Object.entries(c.pillars as Record<string, number>).map(([k, v]) => `${k} ${v}%`).join(', ')}`)
+    }
+    if (c.hooks_by_pillar && typeof c.hooks_by_pillar === 'object' && Object.keys(c.hooks_by_pillar).length) {
+      parts.push(`Ganchos de referência por pilar:\n${Object.entries(c.hooks_by_pillar as Record<string, string[]>).map(([k, arr]) => `${k}: ${arr.join('; ')}`).join('\n')}`)
+    }
+    if (c.ctas && typeof c.ctas === 'object' && Object.keys(c.ctas).length) {
+      parts.push(`CTAs recomendados: ${Object.entries(c.ctas as Record<string, string>).map(([k, v]) => `${k} → "${v}"`).join(', ')}`)
+    }
+    if (c.vocabulary && typeof c.vocabulary === 'object' && Object.keys(c.vocabulary).length) {
+      parts.push(`Vocabulário do setor: ${Object.entries(c.vocabulary as Record<string, string>).map(([k, v]) => `${k}=${v}`).join(', ')}`)
+    }
+    const answers = playbookAnswers && typeof playbookAnswers === 'object'
+      ? Object.entries(playbookAnswers).filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0))
+      : []
+    if (answers.length) {
+      parts.push(`Respostas do cadastro desta empresa (preferência real, sobrepõe qualquer padrão genérico do setor):\n${answers.map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')}`)
+    }
+    if (!parts.length) return ''
+    return `\n\nFICHA DE SETOR — "${String(data?.name ?? verticalKey)}":\n${parts.join('\n\n')}`
+  } catch { return '' }
+}
 
 // Mesmo padrão de generate-posts/index.ts — avisa em tempo real quando o
 // cron cria post(s) novo(s) esperando aprovação. Antes, quem cobria isso
@@ -52,7 +87,7 @@ interface Know { kind: string; title: string; content: string; module?: string }
 // configurado (marketing_ai_config fica vazio até o dono/equipe preencher).
 // Sem isso, o agente cai no nome+tipo genérico e inventa um posicionamento
 // que não bate com o negócio de verdade.
-function preamble(config: Config, company: Company): string {
+function preamble(config: Config, company: Company, playbookBlock = ''): string {
   const name = config.agent_name?.trim() || 'Agente de Marketing'
   return `Você é ${name}, o agente de marketing de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
 ${company.business_description ? `O que o negócio faz de verdade: ${company.business_description}.` : ''}
@@ -60,7 +95,7 @@ Voz da marca: ${config.brand_voice ?? 'não definida'}. Tom: ${config.tone ?? 'n
 Público-alvo: ${config.target_audience ?? company.ideal_customer ?? 'não definido'}.
 Pilares: ${config.content_pillars.join(', ') || 'não definidos'}.
 Objetivos: ${config.marketing_goals ?? config.business_objectives ?? 'crescer e engajar'}.
-${company.language === 'en' ? 'IMPORTANTE: escreva TODO o conteúdo (legenda, hook, CTA, hashtags) em inglês — este negócio atende clientes que falam inglês.' : ''}`
+${company.language === 'en' ? 'IMPORTANTE: escreva TODO o conteúdo (legenda, hook, CTA, hashtags) em inglês — este negócio atende clientes que falam inglês.' : ''}${playbookBlock}`
 }
 
 function defaultConfig(company: Company): Config {
@@ -323,7 +358,7 @@ interface GenOpts {
 // O núcleo da geração — usado tanto pelo modo interativo (1 empresa, o
 // dono clicou) quanto pelo lote diário (várias empresas, cron).
 async function generateForCompany(admin: SupaClient, anthropicKey: string, company: Company, kind: string, opts: GenOpts) {
-  const [{ data: cfgRow }, { data: insRows }, { data: libRows }, { data: visRows }, { data: fmtRows }, { data: bdRow }, { data: recentRows }, { data: productRows }, realReview, realStat] = await Promise.all([
+  const [{ data: cfgRow }, { data: insRows }, { data: libRows }, { data: visRows }, { data: fmtRows }, { data: bdRow }, { data: recentRows }, { data: productRows }, realReview, realStat, playbookBlock] = await Promise.all([
     admin.from('marketing_ai_config').select('agent_name, brand_voice, tone, target_audience, content_pillars, marketing_goals, business_objectives, allow_carrossel').eq('company_id', company.id).maybeSingle(),
     admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(6),
     admin.from('marketing_ai_knowledge').select('kind, title, content, module').or(`company_id.is.null,company_id.eq.${company.id}`).in('module', ['core', kind]),
@@ -338,6 +373,7 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
     // avaliação/número real — ver fetchRealReview/fetchRealStat.
     fetchRealReview(admin, company.id),
     fetchRealStat(admin, company.id),
+    fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
   ])
   const config = (cfgRow as Config | null) ?? defaultConfig(company)
   // Botão "considerar carrossel" (Área de Testes) — desligado por padrão:
@@ -415,7 +451,7 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
     ? templateKeys[Math.floor(Math.random() * templateKeys.length)]
     : (templateChoiceInput && templateKeys.includes(templateChoiceInput) ? templateChoiceInput : null)
 
-  const directorPrompt = `${preamble(config, company)}
+  const directorPrompt = `${preamble(config, company, playbookBlock)}
 
 Você é o DIRETOR CRIATIVO de uma agência. Vai criar um conteúdo do tipo "${modLabel}". Decida o brief usando os insights reais e as boas práticas ESPECÍFICAS desse formato (não use regra genérica).
 ${seedBlock}${insights.length ? `\nInsights abertos:\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
@@ -466,7 +502,7 @@ Decida o brief. Retorne APENAS um JSON:
   const visualContent = findContent(lib, 'visual_system', brief.visual_system as string | undefined)
   const visualSystemTitle = String(brief.visual_system ?? '')
 
-  const execPrompt = `${preamble(config, company)}
+  const execPrompt = `${preamble(config, company, playbookBlock)}
 
 Você agora EXECUTA como esta personalidade: ${personaContent}
 
@@ -496,7 +532,7 @@ Retorne APENAS um JSON array:
   let post = extractOne(execRaw)
   if (!post) {
     // Fallback: uma tentativa direta e simples, garante que o dono sempre recebe um post.
-    const fbRaw = await callClaude(anthropicKey, `${preamble(config, company)}
+    const fbRaw = await callClaude(anthropicKey, `${preamble(config, company, playbookBlock)}
 
 Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brief.format ?? 'foto'}). Responda SOMENTE com um JSON array, sem nenhum texto antes ou depois:
 [{"idea":"resumo curto","caption":"legenda completa","hashtags":"#a #b #c","cta":"chamada pra ação","format":"${brief.format ?? 'foto'}"}]`, 1500)
@@ -674,16 +710,17 @@ function nextWeekDates(): { iso: string; weekday: string }[] {
 // aba Ideias aqui, reviver o idea_id/seed que já existiam antes (ver
 // histórico do arquivo).
 async function planWeekForCompany(admin: SupaClient, anthropicKey: string, company: Company, auth: { bearer: string; isCron: boolean; cronSecret?: string }): Promise<{ planned: number; days: { date: string; posts: number; note: string }[] }> {
-  const [{ data: insRows }, { data: pendingRows }] = await Promise.all([
+  const [{ data: insRows }, { data: pendingRows }, playbookBlock] = await Promise.all([
     admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(8),
     admin.from('marketing_ai_test_content').select('id').eq('company_id', company.id).eq('status', 'draft').is('quality_score', null),
+    fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
   ])
   const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
   const pendingCount = (pendingRows ?? []).length
   const dates = nextWeekDates()
 
   const prompt = `Você é o planejador de conteúdo semanal de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
-${company.business_description ? `O que o negócio faz: ${company.business_description}.` : ''}
+${company.business_description ? `O que o negócio faz: ${company.business_description}.` : ''}${playbookBlock}
 
 Monte a CADÊNCIA da PRÓXIMA semana inteira: pra CADA um dos 7 dias, decida entre 1 ou 2 posts orgânicos (nunca 0 — todo dia tem pelo menos 1; nunca mais que 2). Não escolha o tema/ideia aqui — só a cadência (isso é decidido depois, peça por peça, pelo Diretor Criativo). Considere que ${pendingCount} peça(s) recente(s) ainda nem foram avaliadas — se já tem bastante coisa parada, prefira 1 post nos dias mais fracos em vez de 2.
 ${insights.length ? `\nInsights abertos (ajudam a priorizar QUAIS dias merecem 2 posts):\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
@@ -715,7 +752,7 @@ Retorne APENAS um JSON array, um item por dia, nesta ordem (sempre os 7 dias):
   return { planned, days }
 }
 
-const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language, telegram_chat_id'
+const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language, telegram_chat_id, vertical_key, playbook_answers'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })

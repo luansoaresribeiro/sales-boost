@@ -54,13 +54,49 @@ function parseJson<T>(raw: string): T | null {
   return null
 }
 
-async function generateTrends(profile: string, anthropicKey: string): Promise<TrendsData> {
+// Ficha de setor (vertical_playbooks) + respostas do onboarding, mescladas
+// num bloco de texto pra injetar no prompt. Ficha vazia (caso 'generico', ou
+// qualquer setor sem ficha configurada) + sem respostas = devolve '' = o
+// prompt fica idêntico ao de antes desta função existir. Nunca derruba a
+// geração por causa de erro no banco de fichas (try/catch).
+async function fetchPlaybookBlock(db: ReturnType<typeof createClient>, verticalKey: string, playbookAnswers: Record<string, unknown> | null): Promise<string> {
+  try {
+    const { data } = await db.from('vertical_playbooks').select('name, config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
+    const c = (data?.config ?? {}) as Record<string, unknown>
+    const parts: string[] = []
+    if (typeof c.tone === 'string' && c.tone) parts.push(`Tom de voz do setor: ${c.tone}`)
+    if (Array.isArray(c.rules) && c.rules.length) parts.push(`Regras obrigatórias do setor:\n${(c.rules as string[]).map(r => `- ${r}`).join('\n')}`)
+    if (c.pillars && typeof c.pillars === 'object' && Object.keys(c.pillars).length) {
+      parts.push(`Pilares de conteúdo e peso sugerido: ${Object.entries(c.pillars as Record<string, number>).map(([k, v]) => `${k} ${v}%`).join(', ')}`)
+    }
+    if (c.hooks_by_pillar && typeof c.hooks_by_pillar === 'object' && Object.keys(c.hooks_by_pillar).length) {
+      parts.push(`Ganchos de referência por pilar:\n${Object.entries(c.hooks_by_pillar as Record<string, string[]>).map(([k, arr]) => `${k}: ${arr.join('; ')}`).join('\n')}`)
+    }
+    if (c.ctas && typeof c.ctas === 'object' && Object.keys(c.ctas).length) {
+      parts.push(`CTAs recomendados: ${Object.entries(c.ctas as Record<string, string>).map(([k, v]) => `${k} → "${v}"`).join(', ')}`)
+    }
+    if (c.vocabulary && typeof c.vocabulary === 'object' && Object.keys(c.vocabulary).length) {
+      parts.push(`Vocabulário do setor: ${Object.entries(c.vocabulary as Record<string, string>).map(([k, v]) => `${k}=${v}`).join(', ')}`)
+    }
+    const answers = playbookAnswers && typeof playbookAnswers === 'object'
+      ? Object.entries(playbookAnswers).filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0))
+      : []
+    if (answers.length) {
+      parts.push(`Respostas do cadastro desta empresa (preferência real, sobrepõe qualquer padrão genérico do setor):\n${answers.map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')}`)
+    }
+    if (!parts.length) return ''
+    return `\n\nFICHA DE SETOR — "${String(data?.name ?? verticalKey)}":\n${parts.join('\n\n')}`
+  } catch { return '' }
+}
+
+async function generateTrends(profile: string, anthropicKey: string, playbookBlock = ''): Promise<TrendsData> {
   const prompt = `Você é o Agente de Marketing especialista em conteúdo viral para pequenos negócios brasileiros.
 
 Perfil da empresa:
 ---
 ${profile}
 ---
+${playbookBlock}
 
 Identifique 4 tendências atuais (formatos, temas ou desafios que estão bombando agora no Instagram/WhatsApp) que fazem sentido para este negócio especificamente.
 
@@ -80,7 +116,7 @@ Retorne APENAS um JSON válido, sem markdown:
 }
 
 async function generateCampaignPlan(
-  profile: string, name: string, goal: string, durationDays: number, channels: string[], anthropicKey: string, trendContext?: string
+  profile: string, name: string, goal: string, durationDays: number, channels: string[], anthropicKey: string, trendContext?: string, playbookBlock = ''
 ): Promise<CampaignPlan> {
   const postCount = Math.max(3, Math.min(10, Math.round(durationDays / 2)))
   const prompt = `Você é o Agente de Marketing especialista em campanhas para pequenos negócios brasileiros.
@@ -89,6 +125,7 @@ Perfil da empresa:
 ---
 ${profile}
 ---
+${playbookBlock}
 ${trendContext ? `\nTendência do momento a usar como base da campanha:\n${trendContext}\n` : ''}
 Crie um calendário de campanha chamada "${name}", com objetivo "${goal}", duração de ${durationDays} dias, usando os canais: ${channels.join(', ')}.
 
@@ -165,7 +202,7 @@ Deno.serve(async (req) => {
     if (isCron) {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
       const { data: companies } = await db.from('companies')
-        .select('id, ai_profile, telegram_chat_id, notification_prefs')
+        .select('id, ai_profile, telegram_chat_id, notification_prefs, vertical_key, playbook_answers')
         .not('ai_profile', 'is', null)
 
       let created = 0, skipped = 0
@@ -180,10 +217,11 @@ Deno.serve(async (req) => {
             .select('type').eq('company_id', c.id).eq('status', 'open').eq('type', 'stale_draft')
           if ((openOpps ?? []).length > 0) { skipped++; continue }
 
-          const trends = await generateTrends(c.ai_profile as string, anthropicKey)
+          const playbookBlock = await fetchPlaybookBlock(db, (c.vertical_key as string | null) ?? 'generico', c.playbook_answers as Record<string, unknown> | null)
+          const trends = await generateTrends(c.ai_profile as string, anthropicKey, playbookBlock)
           const top = trends.trends[0]
           const trendContext = `${top.topic} — ${top.reason} (formato sugerido: ${top.format})`
-          const plan = await generateCampaignPlan(c.ai_profile as string, `Tendência: ${top.topic}`, 'Aproveitar a tendência do momento', 7, ['Instagram', 'WhatsApp'], anthropicKey, trendContext)
+          const plan = await generateCampaignPlan(c.ai_profile as string, `Tendência: ${top.topic}`, 'Aproveitar a tendência do momento', 7, ['Instagram', 'WhatsApp'], anthropicKey, trendContext, playbookBlock)
           const count = await persistCampaign(db, c.id as string, `Tendência: ${top.topic}`, 'Aproveitar a tendência do momento', plan, 'auto_trend')
           created += count
 
@@ -207,14 +245,15 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authErr } = await userClient.auth.getUser()
     if (authErr || !user) return json({ error: 'Não autorizado' }, 401)
 
-    const { data: company } = await db.from('companies').select('id, ai_profile').eq('user_id', user.id).maybeSingle()
+    const { data: company } = await db.from('companies').select('id, ai_profile, vertical_key, playbook_answers').eq('user_id', user.id).maybeSingle()
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
     if (!company.ai_profile) return json({ error: 'Perfil incompleto. Preencha as Configurações primeiro.' }, 400)
+    const playbookBlock = await fetchPlaybookBlock(db, (company.vertical_key as string | null) ?? 'generico', company.playbook_answers as Record<string, unknown> | null)
 
     const type = body.type as string
 
     if (type === 'trends') {
-      const trends = await generateTrends(company.ai_profile as string, anthropicKey)
+      const trends = await generateTrends(company.ai_profile as string, anthropicKey, playbookBlock)
       return json(trends)
     }
 
@@ -225,7 +264,7 @@ Deno.serve(async (req) => {
       const channels = Array.isArray(body.channels) ? body.channels as string[] : ['Instagram', 'WhatsApp']
       if (!name || !goal) return json({ error: 'Nome e objetivo são obrigatórios.' }, 400)
 
-      const plan = await generateCampaignPlan(company.ai_profile as string, name, goal, durationDays, channels, anthropicKey)
+      const plan = await generateCampaignPlan(company.ai_profile as string, name, goal, durationDays, channels, anthropicKey, undefined, playbookBlock)
       await persistCampaign(db, company.id as string, name, goal, plan, 'manual')
       return json(plan)
     }

@@ -93,6 +93,67 @@ food, clínicas, academias, franquias. Não é um conjunto de ferramentas soltas
 - **Font:** `'Bricolage Grotesque', system-ui, sans-serif`
 - Design dark, técnico, premium. Sem gradientes genéricos. Animações sutis.
 
+## Fichas de setor (vertical playbooks)
+
+Sistema pra especializar o produto por segmento **sem criar tabela/tela/
+código específico de setor** — tudo vive como dado (jsonb) na tabela
+`vertical_playbooks`, e o código só lê. Primeira ficha piloto:
+**Imóveis · Rio de Janeiro** (`imoveis_rio`).
+
+- `vertical_playbooks` (key, name, version, config jsonb, enabled) — leitura
+  livre, escrita só owner (mesma regra de `business_types`).
+- `business_types.vertical_key` — qual ficha aquele tipo de negócio aponta
+  por padrão. Um **trigger** (`trg_sync_company_vertical_key`,
+  `sync_company_vertical_key()`) preenche `companies.vertical_key`
+  automaticamente sempre que `business_type` é definido/alterado, buscando
+  o `vertical_key` correspondente em `business_types` (ou `'generico'` se
+  não achar). Dispara em todo INSERT e em UPDATE só quando `business_type`
+  muda — não em qualquer update da empresa.
+- `companies.playbook_answers` (jsonb) — respostas das perguntas extras da
+  ficha (`config.onboarding_questions`), preenchidas no onboarding.
+  Sobrepõem os padrões genéricos da ficha quando presentes.
+- **Ficha `generico`** representa o comportamento de sempre — todo campo do
+  `config` vazio de propósito. Qualquer empresa sem ficha configurada (ou
+  com ficha mas sem conteúdo em nenhum campo) tem que se comportar **byte a
+  byte igual** a antes desse sistema existir — é a garantia central do
+  design, verificada function por function (ver abaixo).
+
+**Helper `fetchPlaybookBlock` (duplicado em cada function, convenção do
+projeto — sem lib compartilhada):** busca a ficha + `playbook_answers`,
+monta um bloco de texto só com o que tiver conteúdo real (tom, regras,
+pilares, ganchos por pilar, CTAs, vocabulário, respostas do cadastro).
+Ficha vazia + sem respostas → devolve `''` → prompt fica idêntico ao de
+antes. Erro no banco de fichas → também devolve `''` (try/catch) — nunca
+derruba a geração por causa disso.
+
+**Já lê a ficha (injetada no prompt, 2026-09-29):**
+`strategy-generate` (geração e reavaliação), `creative-generate` (Diretor
+Criativo, execução da personalidade, e o planejador semanal de cadência),
+`content-engine`, `content-intelligence` (tendências e campanhas),
+`generate-posts`, `hermes-proxy` (chat interativo, Telegram, orquestrador
+do ciclo autônomo e a execução do ciclo autônomo).
+
+**Ainda não lê a ficha** (fora do escopo desta rodada — não é setor-
+específico hoje, ou o dono decidiu deixar pra depois):
+`adapt-plan`, `analyze-reviews`, `brand-kit-suggest`, `content-test`,
+`creative-ideas` (gera só cards de ideia pro dashboard, não chega a virar
+post — entra numa próxima rodada se fizer sentido), `draft-reply`,
+`enzo-daily-report`, `find-sales-leads`, `generate-tab-insight`,
+`hermes-strategy`, `insights-collect`, `format-fill`, `generate-report`,
+`map-competitors`, `marketing-ai`, `monitor-competitor-social`,
+`monthly-report`, `periodic-report`, `partnership-opportunities`,
+`platform-monitor`, `website-summary`, `site-diagnosis`, `telegram-chat`,
+`whatsapp-webhook`. `agent-chat` e `publish-instagram` não entram porque já
+estão deprecadas (ver acima).
+
+**`data-agent` e `instagram-webhook` ficam de fora de propósito:**
+`data-agent` não chama IA nenhuma (100% coleta via SQL, sem prompt pra
+injetar nada); `instagram-webhook` hoje não gera rascunho de resposta por
+IA pra comentário/DM (só classifica intenção — o texto enviado já vem
+pré-configurado pelo dono). **Quando esse rascunho de resposta por IA for
+construído (Fase 5 do sistema de fichas de setor), ele já nasce lendo a
+ficha** — decisão registrada aqui pra não esquecer.
+
 ## Jarvis — Arquitetura de voz e agentes
 
 ### Loop de voz (atual)

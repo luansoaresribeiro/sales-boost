@@ -15,9 +15,45 @@ interface Company {
   google_rating?: number | null; google_review_count?: string | null
   agent_messages_used?: number; agent_messages_reset_at?: string
   telegram_chat_id?: number | null; notification_prefs?: Record<string, boolean> | null
+  vertical_key?: string | null; playbook_answers?: Record<string, unknown> | null
 }
 
 const PLAN_LIMITS: Record<string, number> = { free: 30, basic: 150, pro: Infinity }
+
+// Ficha de setor (vertical_playbooks) + respostas do onboarding, mescladas
+// num bloco de texto pra injetar no system prompt. Ficha vazia (caso
+// 'generico', ou qualquer setor sem ficha configurada) + sem respostas =
+// devolve '' = o prompt fica idêntico ao de antes desta função existir.
+// Nunca derruba a conversa por causa de erro no banco de fichas (try/catch).
+async function fetchPlaybookBlock(admin: SupaClient, verticalKey: string | null | undefined, playbookAnswers: Record<string, unknown> | null | undefined): Promise<string> {
+  try {
+    const { data } = await admin.from('vertical_playbooks').select('name, config').eq('key', verticalKey ?? 'generico').eq('enabled', true).maybeSingle()
+    const c = (data?.config ?? {}) as Record<string, unknown>
+    const parts: string[] = []
+    if (typeof c.tone === 'string' && c.tone) parts.push(`Tom de voz do setor: ${c.tone}`)
+    if (Array.isArray(c.rules) && c.rules.length) parts.push(`Regras obrigatórias do setor:\n${(c.rules as string[]).map(r => `- ${r}`).join('\n')}`)
+    if (c.pillars && typeof c.pillars === 'object' && Object.keys(c.pillars).length) {
+      parts.push(`Pilares de conteúdo e peso sugerido: ${Object.entries(c.pillars as Record<string, number>).map(([k, v]) => `${k} ${v}%`).join(', ')}`)
+    }
+    if (c.hooks_by_pillar && typeof c.hooks_by_pillar === 'object' && Object.keys(c.hooks_by_pillar).length) {
+      parts.push(`Ganchos de referência por pilar:\n${Object.entries(c.hooks_by_pillar as Record<string, string[]>).map(([k, arr]) => `${k}: ${arr.join('; ')}`).join('\n')}`)
+    }
+    if (c.ctas && typeof c.ctas === 'object' && Object.keys(c.ctas).length) {
+      parts.push(`CTAs recomendados: ${Object.entries(c.ctas as Record<string, string>).map(([k, v]) => `${k} → "${v}"`).join(', ')}`)
+    }
+    if (c.vocabulary && typeof c.vocabulary === 'object' && Object.keys(c.vocabulary).length) {
+      parts.push(`Vocabulário do setor: ${Object.entries(c.vocabulary as Record<string, string>).map(([k, v]) => `${k}=${v}`).join(', ')}`)
+    }
+    const answers = playbookAnswers && typeof playbookAnswers === 'object'
+      ? Object.entries(playbookAnswers).filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0))
+      : []
+    if (answers.length) {
+      parts.push(`Respostas do cadastro desta empresa (preferência real, sobrepõe qualquer padrão genérico do setor):\n${answers.map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')}`)
+    }
+    if (!parts.length) return ''
+    return `\n\nFICHA DE SETOR — "${String(data?.name ?? verticalKey ?? 'generico')}":\n${parts.join('\n\n')}`
+  } catch { return '' }
+}
 
 // ── Hermes Control Center ──────────────────────────────────────
 // O "cérebro" do Hermes não fica mais fixo no código — é configuração que o
@@ -335,8 +371,8 @@ const SHARED_RULES = `
 Regra permanente, que nenhuma configuração pode desligar: nunca publique, envie mensagem ou responda review sozinho — tudo vira rascunho até o dono aprovar explicitamente.
 Responda em texto corrido, sem markdown. Sem **, ##, tabelas ou listas com marcadores. Frases naturais e diretas.`
 
-function buildSystemPrompt(role: AgentRole, company: Company, config: HermesConfig, roleSettings: AgentRoleSettings, integrations?: Record<string, boolean>): string {
-  return `${composeHermesPreamble(config, roleSettings.approvals, integrations)}\n\n---\n\n${AGENT_ROLES[role].buildPrompt(company)}${SHARED_RULES}`
+function buildSystemPrompt(role: AgentRole, company: Company, config: HermesConfig, roleSettings: AgentRoleSettings, integrations?: Record<string, boolean>, playbookBlock = ''): string {
+  return `${composeHermesPreamble(config, roleSettings.approvals, integrations)}\n\n---\n\n${AGENT_ROLES[role].buildPrompt(company)}${playbookBlock}${SHARED_RULES}`
 }
 
 async function notifyMarketing(chatId: number | null | undefined, companyId: string, event: string, data?: Record<string, unknown>) {
@@ -626,9 +662,12 @@ async function runAutonomousCycle(admin: SupaClient, hermesUrl: string, hermesAp
     : 'Use list_opportunities e list_leads para ver o que está parado. Para cada oportunidade ou lead que realmente precisa de ação (valor estimado > 0, ou parado há dias), use draft_followup ou create_lead. Se não houver nada que precise de ação agora, não faça nada e explique o motivo em uma frase.'
 
   try {
-    const integrations = await getConnectedIntegrations(admin, company.id)
+    const [integrations, playbookBlock] = await Promise.all([
+      getConnectedIntegrations(admin, company.id),
+      fetchPlaybookBlock(admin, company.vertical_key, company.playbook_answers),
+    ])
     const messages = [
-      { role: 'system', content: buildSystemPrompt(agentRole, company, config, roleSettings, integrations) },
+      { role: 'system', content: buildSystemPrompt(agentRole, company, config, roleSettings, integrations, playbookBlock) },
       { role: 'user', content: task },
     ]
     const { reply, postsCreated, actionsCount, tokensUsed } = await runConversation(hermesUrl, hermesApiKey, agentRole, company, admin, messages, roleSettings)
@@ -705,14 +744,17 @@ async function decideRolesToRun(hermesUrl: string, hermesApiKey: string, company
   if (roleSettings.routines.find_opportunities !== false) routineNotes.push('Procure ativamente oportunidades novas de receita, não só problemas existentes.')
   if (roleSettings.routines.review_agent_work !== false) routineNotes.push('Revise o que os agentes já fizeram recentemente (get_business_overview, list_posts) antes de decidir — evite mandar fazer de novo o que já foi feito.')
 
-  const integrations = await getConnectedIntegrations(admin, company.id)
+  const [integrations, playbookBlock] = await Promise.all([
+    getConnectedIntegrations(admin, company.id),
+    fetchPlaybookBlock(admin, company.vertical_key, company.playbook_answers),
+  ])
   const systemPrompt = `${composeHermesPreamble(config, roleSettings.approvals, integrations)}
 
 Você é o Hermes, orquestrador central de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
 Sua única função aqui é decidir se o Agente Geral precisa agir agora — você NUNCA cria posts, leads ou mensagens você mesmo nesta etapa, só decide.
 
 Comece SEMPRE por get_data_agent_signals com kind "delta" — ele já cruza os dados e te entrega os sinais que mudaram desde a última vez (rascunhos parados, dias sem postar, gap de reputação vs. concorrentes, o que já foi tentado), com evidência e confiança. Só depois, se precisar de mais detalhe de uma área específica, use as outras ferramentas de leitura. Olhe o negócio inteiro antes de decidir, não só uma parte: conteúdo, reputação, concorrência, diagnóstico do site e atendimento.
-${routineNotes.length ? '\n' + routineNotes.map(n => `- ${n}`).join('\n') + '\n' : ''}
+${routineNotes.length ? '\n' + routineNotes.map(n => `- ${n}`).join('\n') + '\n' : ''}${playbookBlock}
 Ao terminar de investigar, você DEVE chamar report_decision — é a única forma de encerrar.`
 
   const messages: unknown[] = [
@@ -815,9 +857,12 @@ async function runChatTurn(
     return { reply: '', postsCreated: 0, rateLimited: true, plan, limit, usedThisMonth }
   }
 
-  const integrations = await getConnectedIntegrations(admin, company.id)
-  const roleSettings = await getAgentRoleSettings(admin, agentRole)
-  const systemPrompt = buildSystemPrompt(agentRole, company, config, roleSettings, integrations) + (lang === 'en' ? '\n\nLANGUAGE: The user communicates in English. Respond in English only.' : '')
+  const [integrations, roleSettings, playbookBlock] = await Promise.all([
+    getConnectedIntegrations(admin, company.id),
+    getAgentRoleSettings(admin, agentRole),
+    fetchPlaybookBlock(admin, company.vertical_key, company.playbook_answers),
+  ])
+  const systemPrompt = buildSystemPrompt(agentRole, company, config, roleSettings, integrations, playbookBlock) + (lang === 'en' ? '\n\nLANGUAGE: The user communicates in English. Respond in English only.' : '')
   const historyMessages = history.map(m => ({ role: m.role, content: m.content }))
   const messages: unknown[] = [
     { role: 'system', content: systemPrompt },
@@ -903,7 +948,7 @@ Deno.serve(async (req) => {
 
       const { data: companies } = await admin
         .from('companies')
-        .select('id, business_name, business_type, city, goal, social_data, telegram_chat_id, notification_prefs')
+        .select('id, business_name, business_type, city, goal, social_data, telegram_chat_id, notification_prefs, vertical_key, playbook_answers')
         .eq('active', true)
 
       const activeRoles = await getActiveAgentRoles(admin)
@@ -973,7 +1018,7 @@ Deno.serve(async (req) => {
 
       const { data: company } = await admin
         .from('companies')
-        .select('id, business_name, business_type, city, instagram_url, goal, plan, social_data, google_rating, google_review_count, agent_messages_used, agent_messages_reset_at')
+        .select('id, business_name, business_type, city, instagram_url, goal, plan, social_data, google_rating, google_review_count, agent_messages_used, agent_messages_reset_at, vertical_key, playbook_answers')
         .eq('telegram_chat_id', chatId)
         .maybeSingle()
 
@@ -1014,7 +1059,7 @@ Deno.serve(async (req) => {
 
     const { data: company } = await admin
       .from('companies')
-      .select('id, business_name, business_type, city, instagram_url, goal, plan, social_data, google_rating, google_review_count, agent_messages_used, agent_messages_reset_at')
+      .select('id, business_name, business_type, city, instagram_url, goal, plan, social_data, google_rating, google_review_count, agent_messages_used, agent_messages_reset_at, vertical_key, playbook_answers')
       .eq('user_id', user.id)
       .maybeSingle()
 

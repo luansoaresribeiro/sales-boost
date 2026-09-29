@@ -102,12 +102,13 @@ async function runForCompany(ctx: Ctx, companyId: string): Promise<Record<string
 
   // Contexto: empresa, config (voz/tom) e marca (brand_dna → Brand do render).
   const [{ data: companyRow }, { data: cfgRow }, { data: bdRow }] = await Promise.all([
-    admin.from('companies').select('id, business_name, business_type, city, goal, instagram_url').eq('id', companyId).maybeSingle(),
+    admin.from('companies').select('id, business_name, business_type, city, goal, instagram_url, vertical_key, playbook_answers').eq('id', companyId).maybeSingle(),
     admin.from('marketing_ai_config').select('brand_voice, tone, target_audience, content_pillars, marketing_goals').eq('company_id', companyId).maybeSingle(),
     admin.from('brand_dna').select('kit, logo_url').eq('company_id', companyId).maybeSingle(),
   ])
-  const company = companyRow as { business_name: string; business_type: string | null; city: string | null; goal: string | null; instagram_url: string | null } | null
+  const company = companyRow as { business_name: string; business_type: string | null; city: string | null; goal: string | null; instagram_url: string | null; vertical_key: string | null; playbook_answers: Record<string, unknown> | null } | null
   if (!company) return { ok: false, error: 'Empresa não encontrada.' }
+  const playbookBlock = await fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers)
   const cfg = (cfgRow ?? {}) as { brand_voice?: string; tone?: string; target_audience?: string; content_pillars?: string[]; marketing_goals?: string }
   const kit = (bdRow?.kit as { colors?: { primary?: string[]; accent?: string[]; text?: string; bg?: string }; typography?: { heading?: string; body?: string } } | null) ?? null
   const c = kit?.colors ?? {}
@@ -142,7 +143,7 @@ async function runForCompany(ctx: Ctx, companyId: string): Promise<Record<string
     for (const t of pool) {
       const data = await fetchData(admin, companyId, t.dataSource)
       if (t.dataSource !== 'none' && !data) continue // sem dado real → pula (nunca inventa)
-      const gen = await generateFields(anthropicKey, t, company, cfg, data)
+      const gen = await generateFields(anthropicKey, t, company, cfg, data, playbookBlock)
       if (!gen) continue
       chosen = t; fields = gen.fields; subject = gen.subject
       break
@@ -200,9 +201,44 @@ async function fetchData(admin: Supa, companyId: string, source: DataSource): Pr
   return null
 }
 
+// Ficha de setor (vertical_playbooks) + respostas do onboarding, mescladas
+// num bloco de texto pra injetar no prompt. Ficha vazia (caso 'generico', ou
+// qualquer setor sem ficha configurada) + sem respostas = devolve '' = o
+// prompt fica idêntico ao de antes desta função existir. Nunca derruba a
+// geração por causa de erro no banco de fichas (try/catch).
+async function fetchPlaybookBlock(admin: Supa, verticalKey: string, playbookAnswers: Record<string, unknown> | null): Promise<string> {
+  try {
+    const { data } = await admin.from('vertical_playbooks').select('name, config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
+    const c = (data?.config ?? {}) as Record<string, unknown>
+    const parts: string[] = []
+    if (typeof c.tone === 'string' && c.tone) parts.push(`Tom de voz do setor: ${c.tone}`)
+    if (Array.isArray(c.rules) && c.rules.length) parts.push(`Regras obrigatórias do setor:\n${(c.rules as string[]).map(r => `- ${r}`).join('\n')}`)
+    if (c.pillars && typeof c.pillars === 'object' && Object.keys(c.pillars).length) {
+      parts.push(`Pilares de conteúdo e peso sugerido: ${Object.entries(c.pillars as Record<string, number>).map(([k, v]) => `${k} ${v}%`).join(', ')}`)
+    }
+    if (c.hooks_by_pillar && typeof c.hooks_by_pillar === 'object' && Object.keys(c.hooks_by_pillar).length) {
+      parts.push(`Ganchos de referência por pilar:\n${Object.entries(c.hooks_by_pillar as Record<string, string[]>).map(([k, arr]) => `${k}: ${arr.join('; ')}`).join('\n')}`)
+    }
+    if (c.ctas && typeof c.ctas === 'object' && Object.keys(c.ctas).length) {
+      parts.push(`CTAs recomendados: ${Object.entries(c.ctas as Record<string, string>).map(([k, v]) => `${k} → "${v}"`).join(', ')}`)
+    }
+    if (c.vocabulary && typeof c.vocabulary === 'object' && Object.keys(c.vocabulary).length) {
+      parts.push(`Vocabulário do setor: ${Object.entries(c.vocabulary as Record<string, string>).map(([k, v]) => `${k}=${v}`).join(', ')}`)
+    }
+    const answers = playbookAnswers && typeof playbookAnswers === 'object'
+      ? Object.entries(playbookAnswers).filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0))
+      : []
+    if (answers.length) {
+      parts.push(`Respostas do cadastro desta empresa (preferência real, sobrepõe qualquer padrão genérico do setor):\n${answers.map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')}`)
+    }
+    if (!parts.length) return ''
+    return `\n\nFICHA DE SETOR — "${String(data?.name ?? verticalKey)}":\n${parts.join('\n\n')}`
+  } catch { return '' }
+}
+
 // ── Gera os campos do template (dado real + copy da IA; nunca inventa número) ──
-async function generateFields(key: string, t: ContentType, company: { business_name: string; business_type: string | null; city: string | null; goal: string | null }, cfg: { brand_voice?: string; tone?: string; target_audience?: string; marketing_goals?: string }, data: Record<string, string> | null): Promise<{ fields: Fields; subject: string } | null> {
-  const preamble = `Negócio: "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}). Voz: ${cfg.brand_voice ?? 'natural'}. Tom: ${cfg.tone ?? 'próximo'}. Público: ${cfg.target_audience ?? 'clientes locais'}. Objetivo: ${cfg.marketing_goals ?? company.goal ?? 'crescer'}.`
+async function generateFields(key: string, t: ContentType, company: { business_name: string; business_type: string | null; city: string | null; goal: string | null }, cfg: { brand_voice?: string; tone?: string; target_audience?: string; marketing_goals?: string }, data: Record<string, string> | null, playbookBlock = ''): Promise<{ fields: Fields; subject: string } | null> {
+  const preamble = `Negócio: "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}). Voz: ${cfg.brand_voice ?? 'natural'}. Tom: ${cfg.tone ?? 'próximo'}. Público: ${cfg.target_audience ?? 'clientes locais'}. Objetivo: ${cfg.marketing_goals ?? company.goal ?? 'crescer'}.${playbookBlock}`
   const dataBlock = data && Object.keys(data).length ? `\nDADO REAL a usar (NÃO altere números): ${JSON.stringify(data)}` : ''
   const prompt = `${preamble}
 Você monta um post do tipo "${t.label}". ${t.guide}${dataBlock}

@@ -23,6 +23,41 @@ interface ImageResult {
   url: string | null
 }
 
+// Ficha de setor (vertical_playbooks) + respostas do onboarding, mescladas
+// num bloco de texto pra injetar no prompt. Ficha vazia (caso 'generico', ou
+// qualquer setor sem ficha configurada) + sem respostas = devolve '' = o
+// prompt fica idêntico ao de antes desta função existir. Nunca derruba a
+// geração por causa de erro no banco de fichas (try/catch).
+async function fetchPlaybookBlock(db: ReturnType<typeof createClient>, verticalKey: string, playbookAnswers: Record<string, unknown> | null): Promise<string> {
+  try {
+    const { data } = await db.from('vertical_playbooks').select('name, config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
+    const c = (data?.config ?? {}) as Record<string, unknown>
+    const parts: string[] = []
+    if (typeof c.tone === 'string' && c.tone) parts.push(`Tom de voz do setor: ${c.tone}`)
+    if (Array.isArray(c.rules) && c.rules.length) parts.push(`Regras obrigatórias do setor:\n${(c.rules as string[]).map(r => `- ${r}`).join('\n')}`)
+    if (c.pillars && typeof c.pillars === 'object' && Object.keys(c.pillars).length) {
+      parts.push(`Pilares de conteúdo e peso sugerido: ${Object.entries(c.pillars as Record<string, number>).map(([k, v]) => `${k} ${v}%`).join(', ')}`)
+    }
+    if (c.hooks_by_pillar && typeof c.hooks_by_pillar === 'object' && Object.keys(c.hooks_by_pillar).length) {
+      parts.push(`Ganchos de referência por pilar:\n${Object.entries(c.hooks_by_pillar as Record<string, string[]>).map(([k, arr]) => `${k}: ${arr.join('; ')}`).join('\n')}`)
+    }
+    if (c.ctas && typeof c.ctas === 'object' && Object.keys(c.ctas).length) {
+      parts.push(`CTAs recomendados: ${Object.entries(c.ctas as Record<string, string>).map(([k, v]) => `${k} → "${v}"`).join(', ')}`)
+    }
+    if (c.vocabulary && typeof c.vocabulary === 'object' && Object.keys(c.vocabulary).length) {
+      parts.push(`Vocabulário do setor: ${Object.entries(c.vocabulary as Record<string, string>).map(([k, v]) => `${k}=${v}`).join(', ')}`)
+    }
+    const answers = playbookAnswers && typeof playbookAnswers === 'object'
+      ? Object.entries(playbookAnswers).filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0))
+      : []
+    if (answers.length) {
+      parts.push(`Respostas do cadastro desta empresa (preferência real, sobrepõe qualquer padrão genérico do setor):\n${answers.map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')}`)
+    }
+    if (!parts.length) return ''
+    return `\n\nFICHA DE SETOR — "${String(data?.name ?? verticalKey)}":\n${parts.join('\n\n')}`
+  } catch { return '' }
+}
+
 async function notifyMarketing(chatId: number | null | undefined, companyId: string, event: string, data?: Record<string, unknown>) {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const secret = Deno.env.get('BOT_WEBHOOK_SECRET')
@@ -120,8 +155,9 @@ async function runForCompany(
   replicateKey: string | null,
   unlimited = false
 ): Promise<{ generated: number; quota_reached: boolean; monthly_count: number; limit: number; image_results?: ImageResult[]; sample?: string | null; pileup_blocked?: boolean }> {
-  const { data: co } = await db.from('companies').select('ai_profile, plan').eq('id', companyId).single()
+  const { data: co } = await db.from('companies').select('ai_profile, plan, vertical_key, playbook_answers').eq('id', companyId).single()
   if (!co?.ai_profile) throw new Error('Perfil vazio')
+  const playbookBlock = await fetchPlaybookBlock(db, (co.vertical_key as string | null) ?? 'generico', co.playbook_answers as Record<string, unknown> | null)
 
   const plan = (co.plan ?? 'free') as string
   const limit = unlimited ? Infinity : (PLAN_LIMITS[plan] ?? PLAN_LIMITS.free)
@@ -144,6 +180,7 @@ Abaixo está o perfil completo da empresa. Use TODOS os dados disponíveis para 
 ---
 ${co.ai_profile}
 ---
+${playbookBlock}
 
 Crie exatamente ${toGenerate} post${toGenerate > 1 ? 's' : ''} para Instagram com legendas completas e prontas para copiar e publicar.
 
