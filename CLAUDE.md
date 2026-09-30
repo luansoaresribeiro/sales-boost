@@ -26,6 +26,124 @@ food, clínicas, academias, franquias. Não é um conjunto de ferramentas soltas
 **Princípio central:** o Sales Boost gera receita no piloto automático, mas
 **nada vai ao público sem aprovação do dono** (human-in-the-loop).
 
+## Arquitetura do ciclo de crescimento (referência oficial)
+
+Fluxo de ponta a ponta que todo trabalho de crescimento passa (ou devia
+passar) — da coleta de dado até resultado realimentando a próxima decisão.
+**Esta seção é a referência oficial** desse fluxo; qualquer descrição antiga
+em outra parte deste arquivo que conflitar com o veredito abaixo, vale o
+veredito abaixo. Auditado contra o **código real** em 2026-09-30 (não contra
+comentário/documentação antiga) — várias etapas aqui marcadas "parcial" têm
+código de verdade cobrindo só um pedaço da ideia completa.
+
+Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente · ❌ não existe ainda.
+
+1. **Data Agent** (catálogo com fotos reais + negócio/onboarding +
+   concorrentes/mercado + resultados, tudo num lugar) — 🟡 parcial.
+   `supabase/functions/data-agent/index.ts` + `shared/data-agent/domains.ts`.
+   Cobre 9 domínios reais (`business, customer, market, competition,
+   digital, content, history, resources, performance`), lendo tabelas de
+   verdade (`competitors`, `reviews`, `leads`, `posts`, `diagnostics` etc.).
+   **Não existe** domínio de "catálogo com fotos reais" — é exatamente o
+   catálogo que a Fase 3 do sistema de fichas de setor (ver seção acima)
+   ainda vai construir.
+
+2. **Hermes/Estratégia** (mensal, lê ficha do setor + memória estratégica)
+   — 🟡 parcial.
+   `supabase/functions/strategy-generate/index.ts`.
+   Já lê a ficha do setor (`fetchPlaybookBlock`) e uma memória estratégica
+   real (via `data-agent` → domínio `history`, que lê
+   `marketing_ai_brain_nodes`, `marketing_ai_strategy_log`,
+   `marketing_ai_experiments`). **Não é mensal**: geração e reavaliação
+   (`reanalyze`) são só por clique do dono ("Reavaliar") — decisão
+   deliberada do produto, documentada no próprio código, sem cron.
+   Automatizar essa cadência é trabalho novo.
+
+3. **Calendário semanal 80/20** — 🟡 parcial.
+   `supabase/functions/creative-generate/index.ts` (`planWeekForCompany`),
+   `supabase/migrations/067_weekly_calendar.sql`.
+   O cron semanal existe de verdade (`weekly-calendar-plan-sun-18h-brt`,
+   domingo 18h BRT) e decide 1-2 posts por dia. **Não existe regra 80/20**
+   nem nenhuma proporção fixa pilar-comprovado vs. experimental — a IA
+   decide quantidade, não a mistura de tipo de conteúdo.
+
+4. **Content Agent** (roteiro de cada peça) — 🟡 parcial.
+   `creative-generate` (campo `video_script`), `content-engine`,
+   `content-intelligence`, `generate-posts`.
+   Só o `creative-generate` produz algo parecido com roteiro — e é um
+   texto livre único ("como gravar"), não uma quebra estruturada
+   cena-a-cena/plano-a-plano. As outras 3 functions geram só
+   legenda/copy pra template estático, sem campo de roteiro nenhum.
+
+5. **Motor de mídia com roteador** (foto real + render-format; clipes
+   fal/Runway; avatar HeyGen com fundo do imóvel; imagem IA só pra
+   bairro/marca, nunca o item) — 🟡 parcial.
+   `supabase/functions/render-format/index.ts` (cards SVG→PNG, custo de
+   crédito = 0, confirmado), `supabase/functions/generate-video/index.ts`
+   (fal.ai real — `fal-ai/ltx-video/image-to-video` — mas **sem nenhum
+   chamador em todo o repo**, function órfã hoje, deployada mas não
+   plugada em botão nenhum). **Runway e HeyGen não existem em lugar
+   nenhum do código** (zero menção, confirmado por busca no repo
+   inteiro). A regra "imagem IA nunca desenha o item de verdade, só
+   cena de bairro/marca" também não está codificada em lugar nenhum
+   hoje — só a regra geral de "nunca escrever texto" (ver seção Stack)
+   existe de verdade.
+
+6. **Montagem** (juntar imagem/vídeo/avatar + camada de texto no formato
+   final) — ❌ não existe como etapa própria, salvo pra cards estáticos.
+   `render-format` já faz montagem real (fundo + texto em SVG) mas só
+   pra card estático. Não existe montagem equivalente pra vídeo (juntar
+   `video_url` do `generate-video` com legenda/texto) nem pra avatar
+   (que nem existe ainda).
+
+7. **Aprovação do dono** (obrigatória) — ✅ existe.
+   `supabase/functions/agent-actions/index.ts`.
+   `agent_actions.approval_status`
+   (`PENDING/APPROVED/AUTO_APPROVED/REJECTED/EDITED`) trava
+   `execution_status` em `NOT_READY` até decisão humana explícita
+   (`decide()`, grava `approved_by`); o fluxo de `posts`
+   (`rascunho→aprovado→publicado`) segue a mesma trava. Sólido em toda
+   a base.
+
+8. **Distribuição Instagram** — ✅ existe (só imagem única).
+   `agent-actions` → `publishToInstagram` (linha ~350).
+   Publica 1 imagem por vez — sem carrossel (`children`/`media_type:
+   CAROUSEL` não existem na function). Depois de publicar grava em
+   `posts` ou `marketing_ai_content`, **nunca em `instagram_posts`**
+   (tabela sempre vazia, já documentado acima). Carrossel é exatamente
+   o item 3 do plano Fase 3+4 (ver seção Fichas de setor).
+
+9. **Conversão** (comentário-palavra-chave/DM → lead, resposta como
+   rascunho aprovado) — 🟡 parcial.
+   `supabase/functions/instagram-webhook/index.ts`.
+   Detecta palavra-chave/intenção (IA classifica sim/não) e cria
+   `leads` + `agent_actions` pendente de aprovação — isso já funciona.
+   **A resposta não é escrita pela IA** — é um texto fixo configurado
+   antecipadamente pelo dono (`engagement_automations.message`); a IA só
+   decide *se* responde, não *o que* responde. Rascunhar a resposta de
+   verdade é trabalho futuro (já registrado acima, na seção Fichas de
+   setor, como parte da Fase 5).
+
+10. **Resultados → memória estratégica → volta pro 1 e 2** — 🟡 parcial.
+    `supabase/functions/instagram-performance/index.ts` (grava
+    `instagram_performance_snapshots`), `data-agent` (domínios
+    `performance`/`history` leem de volta), `strategy-generate` (lê via
+    `fetchDataAgentState` a cada rodada).
+    O loop é real pra engajamento/alcance/leads — cada geração de
+    estratégia realmente lê o que aconteceu antes, não começa do zero.
+    **Não fecha pra receita**: `gatherPerformance` deixa `revenue`,
+    `cac`, `roas` explicitamente nulos, com comentário no próprio
+    código admitindo que não existe fonte de dado comercial ainda ("gap
+    honesto"). Mesmo gap que o Modelo de cobrança (seção abaixo)
+    também esbarra.
+
+**Como isso se relaciona com "Ciclo autônomo"** (seção Jarvis, abaixo): não
+conflita — são camadas diferentes. "Ciclo autônomo" descreve QUANDO cada
+function tática roda sozinha (cron, decisão de "vale a pena agir agora");
+esta seção descreve AS 10 ETAPAS do fluxo de ponta a ponta que essas
+functions táticas implementam pedaços de. Nenhum cron encontrado nesta
+auditoria contradiz o que "Ciclo autônomo" já documentava.
+
 ## Stack
 
 - **Frontend:** React + Vite, TypeScript, Tailwind CSS, deploy via Cloudflare Workers.
