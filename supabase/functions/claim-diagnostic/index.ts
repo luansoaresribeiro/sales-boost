@@ -155,6 +155,23 @@ Deno.serve(async (req) => {
       await serviceClient.from('progress_events').insert({
         company_id: companyId, event_type: 'trial_started', gp: 10, source: 'trial', dedupe_key: `trial_started:${companyId}`,
       })
+
+      // Hermes independente: empresa nova ganha a 1a estrategia sozinha,
+      // sem precisar abrir o painel e clicar em nada. Em segundo plano
+      // (EdgeRuntime.waitUntil) pra nao atrasar a resposta desta funcao --
+      // strategy-generate ja se auto-gerencia (2 execucoes, nunca trava).
+      // Respeita companies.auto_strategy (default true, ja aplicado no
+      // insert acima via o default da coluna).
+      const cronSecret = Deno.env.get('CRON_SECRET')
+      if (cronSecret) {
+        // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
+        EdgeRuntime.waitUntil(
+          fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'generate', company_id: companyId, cron_secret: cronSecret }),
+          }).catch(e => console.error('claim-diagnostic: falha ao disparar 1a estrategia:', e))
+        )
+      }
     }
 
     // Link diagnostic to company and user

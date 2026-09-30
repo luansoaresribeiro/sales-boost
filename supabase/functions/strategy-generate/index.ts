@@ -68,6 +68,23 @@ interface Company {
   business_description: string | null; ideal_customer: string | null; business_stage: string | null
   main_challenges: string | null; website_summary: string | null; marketing_monthly_budget: number | null
   avg_ticket: number | null; vertical_key: string | null; playbook_answers: Record<string, unknown> | null
+  telegram_chat_id: number | null; notification_prefs: Record<string, boolean> | null
+}
+
+const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, business_stage, main_challenges, website_summary, marketing_monthly_budget, avg_ticket, vertical_key, playbook_answers, telegram_chat_id, notification_prefs'
+
+// Mesmo padrao de generate-posts/creative-generate -- avisa o dono (Telegram +
+// aba Atividades, via log-bot-event) quando o Hermes decide algo sozinho que
+// merece atencao. So chamado em PIVOT/TERMINATE (estrategia nova) -- REFINE/
+// refresh de rotina sao silenciosos de proposito (ver ajuste do dono).
+async function notifyStrategy(supabaseUrl: string, chatId: number | null, companyId: string, event: string, data?: Record<string, unknown>) {
+  const secret = Deno.env.get('BOT_WEBHOOK_SECRET')
+  try {
+    await fetch(`${supabaseUrl}/functions/v1/log-bot-event`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ secret: secret ?? '', bot_name: 'marketing', event_type: event, company_id: companyId, telegram_chat_id: chatId, data }),
+    })
+  } catch { /* nunca derruba o fluxo por causa de notificacao */ }
 }
 
 // Ficha de setor (vertical_playbooks) + respostas do onboarding da empresa,
@@ -261,7 +278,7 @@ function goalsWithBaselineFrom(rawGoals: unknown, baseline: { engagementPct: num
 // 'generating') e dispara o PRÓPRIO strategy-generate (action='continue')
 // como uma execução nova, com relógio de 150s zerado, pro passo 2.
 async function runStep1(
-  admin: SupaClient, supabaseUrl: string, cronSecret: string, anthropicKey: string, serviceKey: string,
+  admin: SupaClient, supabaseUrl: string, cronSecret: string, anthropicKey: string,
   company: Company, kind: 'main' | 'initiative', parentStrategyId: string | null, strategyId: string,
 ): Promise<void> {
   const markFailed = async (reason: string) => {
@@ -363,11 +380,11 @@ Retorne APENAS um JSON:
 
     let fired = false
     try {
+      // Function deployada com --no-verify-jwt (ver CLAUDE.md) -- so o
+      // cron_secret no corpo ja basta, sem precisar de Bearer nenhum.
       const res = await fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
         method: 'POST',
-        // Bearer de service role OBRIGATÓRIO aqui — ver nota da armadilha
-        // verify_jwt no topo do arquivo.
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'continue', strategy_id: strategyId, cron_secret: cronSecret }),
       })
       fired = res.ok
@@ -398,7 +415,7 @@ async function runStep2(admin: SupaClient, supabaseUrl: string, cronSecret: stri
     const lap = (label: string) => console.log(`TIMING strategy-generate step2[${strategyId}]: ${label} = ${Date.now() - t0}ms`)
 
     const { data: companyRow } = await admin.from('companies')
-      .select('id, business_name, business_type, city, goal, business_description, ideal_customer, business_stage, main_challenges, website_summary, marketing_monthly_budget, avg_ticket, vertical_key, playbook_answers')
+      .select(COMPANY_SELECT)
       .eq('id', companyId).maybeSingle()
     const company = companyRow as Company | null
     if (!company) { await markFailed('Empresa não encontrada na 2ª etapa.'); return }
@@ -505,34 +522,103 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const action = String(body.action ?? 'generate')
 
-    // ── 'continue' — 2ª execução da geração (ver nota da arquitetura no
-    // topo do arquivo). NÃO passa pelo fluxo de JWT/empresa abaixo: quem
-    // chama é o próprio strategy-generate (passo 1), autenticado por
-    // cron_secret no corpo + Bearer de service role no header.
+    // Deploy com --no-verify-jwt (ver CLAUDE.md, armadilha do gateway) --
+    // o codigo valida por conta propria: cron_secret no corpo (chamada
+    // automatica, interna ou do pg_cron) OU JWT real do dono (chamada
+    // interativa). NUNCA aceita company_id vindo do corpo quando quem
+    // chama e um JWT de dono -- a empresa e sempre resolvida por
+    // user_id=auth.uid(), nunca pelo que o corpo pediu (evita um dono
+    // pedir dado de outra empresa so trocando o company_id no payload).
+    const isCron = !!cronSecret && String(body.cron_secret ?? '') === cronSecret
+
+    // ── 'continue' — 2a execucao da geracao (ver nota da arquitetura no
+    // topo do arquivo). So cron_secret, sem JWT nenhum -- e o proprio
+    // strategy-generate (passo 1) se rechamando.
     if (action === 'continue') {
-      if (!cronSecret || String(body.cron_secret ?? '') !== cronSecret) return json({ error: 'Unauthorized' }, 401)
+      if (!isCron) return json({ error: 'Unauthorized' }, 401)
       const strategyId = String(body.strategy_id ?? '')
       const { data: row } = await admin.from('marketing_ai_strategies').select('*').eq('id', strategyId).maybeSingle()
-      // À prova de repetição (ponto 4): só segue se ainda 'generating' E a
-      // parte 1 já gravou (thesis presente) — senão, já foi processada,
-      // falhou, ou a parte 1 ainda não terminou; ignora sem erro.
+      // A prova de repeticao (ponto 4): so segue se ainda 'generating' E a
+      // parte 1 ja gravou (thesis presente) -- senao, ja foi processada,
+      // falhou, ou a parte 1 ainda nao terminou; ignora sem erro.
       if (!row || row.status !== 'generating' || !row.thesis) return json({ ok: true, skipped: true })
       // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
       EdgeRuntime.waitUntil(runStep2(admin, supabaseUrl, cronSecret, anthropicKey, row as Record<string, unknown>))
       return json({ ok: true })
     }
 
-    // ── Todo o resto exige JWT do dono ──
-    const bearer = req.headers.get('Authorization') ?? ''
-    if (!bearer) return json({ error: 'Unauthorized' }, 401)
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
-    const { data: { user } } = await userClient.auth.getUser()
-    if (!user) return json({ error: 'Unauthorized' }, 401)
+    // ── 'cron_dispatch' — o despachante do Hermes independente: acha ate
+    // ROUND_LIMIT empresas elegiveis (auto_strategy=true) por rodada e
+    // dispara 1 chamada por empresa (generate se nao tem estrategia ativa,
+    // reanalyze se ja passou 1 semana desde o ultimo check-up, refresh se
+    // ja passou 1 mes desde o ultimo refresh) -- espera cada chamada ser
+    // aceita (2xx) antes de seguir pra proxima, registra as que falharem.
+    if (action === 'cron_dispatch') {
+      if (!isCron) return json({ error: 'Unauthorized' }, 401)
+      const ROUND_LIMIT = Number(body.round_limit ?? 5)
+      const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+      const MONTH_MS = 30 * 24 * 60 * 60 * 1000
+      const now = Date.now()
 
-    const { data: companyRow } = await admin.from('companies')
-      .select('id, business_name, business_type, city, goal, business_description, ideal_customer, business_stage, main_challenges, website_summary, marketing_monthly_budget, avg_ticket, vertical_key, playbook_answers')
-      .eq('user_id', user.id).maybeSingle()
-    const company = companyRow as Company | null
+      const { data: companies } = await admin.from('companies').select('id, business_name').eq('auto_strategy', true)
+      const results: { company_id: string; business_name: string; action: string; ok: boolean; error?: string }[] = []
+      let dispatched = 0
+
+      for (const c of (companies ?? [])) {
+        if (dispatched >= ROUND_LIMIT) break
+        const { data: activeStrategy } = await admin.from('marketing_ai_strategies')
+          .select('id, last_reanalyzed_at, last_refreshed_at')
+          .eq('company_id', c.id).eq('kind', 'main').eq('status', 'active').maybeSingle()
+
+        let targetAction: string | null = null
+        let extra: Record<string, unknown> = {}
+
+        if (!activeStrategy) {
+          const { data: generating } = await admin.from('marketing_ai_strategies')
+            .select('id, created_at').eq('company_id', c.id).eq('kind', 'main').eq('status', 'generating')
+            .order('created_at', { ascending: false }).limit(1).maybeSingle()
+          if (generating && (now - new Date(generating.created_at as string).getTime()) < STALE_GENERATING_MS) continue
+          targetAction = 'generate'
+        } else {
+          const lastReanalyzed = activeStrategy.last_reanalyzed_at ? new Date(activeStrategy.last_reanalyzed_at as string).getTime() : 0
+          const lastRefreshed = activeStrategy.last_refreshed_at ? new Date(activeStrategy.last_refreshed_at as string).getTime() : 0
+          if (now - lastReanalyzed >= WEEK_MS) { targetAction = 'reanalyze'; extra = { strategy_id: activeStrategy.id } }
+          else if (now - lastRefreshed >= MONTH_MS) { targetAction = 'refresh'; extra = { strategy_id: activeStrategy.id } }
+        }
+        if (!targetAction) continue
+
+        dispatched++
+        try {
+          const res = await fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: targetAction, company_id: c.id, cron_secret: cronSecret, ...extra }),
+          })
+          results.push({ company_id: c.id, business_name: String(c.business_name), action: targetAction, ok: res.ok, error: res.ok ? undefined : await res.text() })
+        } catch (e) {
+          results.push({ company_id: c.id, business_name: String(c.business_name), action: targetAction, ok: false, error: e instanceof Error ? e.message : String(e) })
+        }
+      }
+      return json({ ok: true, dispatched, results })
+    }
+
+    // ── Todo o resto (generate/reanalyze/refresh/update_*) resolve a
+    // empresa por cron (company_id no corpo) OU por JWT real do dono
+    // (nunca confia em company_id do corpo nesse caminho) ──
+    let company: Company | null = null
+    if (isCron) {
+      const cronCompanyId = String(body.company_id ?? '')
+      if (!cronCompanyId) return json({ error: 'company_id obrigatório no modo cron.' }, 400)
+      const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', cronCompanyId).maybeSingle()
+      company = companyRow as Company | null
+    } else {
+      const bearer = req.headers.get('Authorization') ?? ''
+      if (!bearer) return json({ error: 'Unauthorized' }, 401)
+      const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
+      const { data: { user } } = await userClient.auth.getUser()
+      if (!user) return json({ error: 'Unauthorized' }, 401)
+      const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('user_id', user.id).maybeSingle()
+      company = companyRow as Company | null
+    }
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
 
     if (action === 'generate') {
@@ -562,12 +648,19 @@ Deno.serve(async (req) => {
       if (insErr) throw new Error(insErr.message)
 
       // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
-      EdgeRuntime.waitUntil(runStep1(admin, supabaseUrl, cronSecret, anthropicKey, serviceKey, company, kind, parentId, inserted.id as string))
+      EdgeRuntime.waitUntil(runStep1(admin, supabaseUrl, cronSecret, anthropicKey, company, kind, parentId, inserted.id as string))
       return json({ ok: true, strategy_id: inserted.id, status: 'generating' })
     }
 
     if (action === 'reanalyze') {
-      const strategyId = String(body.strategy_id ?? '')
+      // Modo cron pode nao mandar strategy_id -- resolve a principal ativa
+      // da propria empresa (o dispatcher ja manda, mas o cron_dispatch
+      // tambem cobre esse caso caso mude no futuro).
+      let strategyId = String(body.strategy_id ?? '')
+      if (!strategyId) {
+        const { data: activeMain } = await admin.from('marketing_ai_strategies').select('id').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').maybeSingle()
+        strategyId = activeMain?.id ? String(activeMain.id) : ''
+      }
       const { data: strategy } = await admin.from('marketing_ai_strategies').select('*').eq('id', strategyId).eq('company_id', company.id).maybeSingle()
       if (!strategy) return json({ error: 'Estratégia não encontrada.' }, 404)
       const { data: goalRows } = await admin.from('marketing_ai_strategy_goals').select('*').eq('strategy_id', strategyId)
@@ -602,14 +695,127 @@ Retorne APENAS um JSON: {"status": "ON_TRACK|NEEDS_ADJUSTMENT|UNDERPERFORMING|AT
       const raw = await callClaude(anthropicKey, prompt, 900)
       const parsed = parseObj(raw)
       const decision = String(parsed.decision ?? 'continue')
+      // Marca sempre que o check-up rodou -- e o que o cron_dispatch usa
+      // pra saber quando a proxima semana comeca (independente da decisao).
+      await admin.from('marketing_ai_strategies').update({ last_reanalyzed_at: new Date().toISOString() }).eq('id', strategyId)
+
       if (decision !== 'continue' && parsed.recommendation) {
         await admin.from('marketing_ai_strategy_log').insert({
           company_id: company.id, strategy_id: strategyId, decision_type: decision,
           recommendation: String(parsed.recommendation), reasoning: String(parsed.reasoning ?? ''), status: 'proposed',
         })
+
+        if (decision === 'refine') {
+          // Ajuste do dono: check-up que pede ajuste ATUALIZA a estrategia
+          // ativa em vez de so propor -- silencioso (nao avisa), mesmo
+          // caminho do refresh mensal de rotina. Disparado em segundo
+          // plano (nao trava a resposta do reanalyze/do despachante).
+          fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'refresh', company_id: company.id, strategy_id: strategyId, cron_secret: cronSecret }),
+          }).catch(e => console.error(`reanalyze[${strategyId}]: falha ao disparar refresh:`, e))
+        } else if (decision === 'pivot' || decision === 'terminate') {
+          // So aqui (mudanca de rumo de verdade) gera estrategia NOVA e
+          // avisa o dono com o motivo -- check-up que so refina fica quieto.
+          fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'generate', company_id: company.id, cron_secret: cronSecret }),
+          }).catch(e => console.error(`reanalyze[${strategyId}]: falha ao disparar generate:`, e))
+
+          const prefs = company.notification_prefs ?? {}
+          if (prefs.strategy !== false) {
+            notifyStrategy(supabaseUrl, company.telegram_chat_id, company.id, 'STRATEGY_PIVOT', {
+              decision, reason: String(parsed.recommendation), reasoning: String(parsed.reasoning ?? ''),
+            })
+          }
+        }
+
         return json({ ok: true, needs_adjustment: true, status: parsed.status, decision })
       }
       return json({ ok: true, needs_adjustment: false, status: parsed.status ?? null, reasoning: parsed.reasoning ? String(parsed.reasoning) : null })
+    }
+
+    // 'refresh' -- ATUALIZA a estrategia ativa no lugar (metas, funil,
+    // orcamento, prioridades) com dado novo + o que ja funcionou -- a TESE
+    // principal nunca muda aqui (isso so acontece via 'generate', e so
+    // quando o reanalyze decidiu PIVOT/TERMINATE). Disparado: (a) pelo
+    // cron_dispatch, 1x por mes por empresa; (b) pelo proprio reanalyze
+    // quando a decisao foi REFINE (fora do calendario mensal). Silencioso
+    // de proposito -- nao avisa o dono (so PIVOT/TERMINATE avisam).
+    if (action === 'refresh') {
+      let strategyId = String(body.strategy_id ?? '')
+      if (!strategyId) {
+        const { data: activeMain } = await admin.from('marketing_ai_strategies').select('id').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').maybeSingle()
+        strategyId = activeMain?.id ? String(activeMain.id) : ''
+      }
+      const { data: strategy } = await admin.from('marketing_ai_strategies').select('*').eq('id', strategyId).eq('company_id', company.id).maybeSingle()
+      if (!strategy) return json({ error: 'Estratégia não encontrada.' }, 404)
+
+      const { data: goalRows } = await admin.from('marketing_ai_strategy_goals').select('*').eq('strategy_id', strategyId)
+      const { data: pastLog } = await admin.from('marketing_ai_strategy_log').select('decision_type, recommendation, status, created_at').eq('strategy_id', strategyId).order('created_at', { ascending: false }).limit(5)
+      const [dataAgentState, baseline, playbookBlock] = await Promise.all([
+        fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'state'),
+        fetchRealBaseline(admin, company.id),
+        fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
+      ])
+
+      const prompt = `Você é Hermes, ATUALIZANDO uma estratégia ativa (refresh de rotina mensal, ou porque o check-up semanal pediu ajuste) — a TESE principal já está decidida e NÃO deve mudar aqui, só o plano tático (funil/metas/orçamento/prioridades) precisa refletir o que já funcionou até agora + os dados mais recentes.
+
+${businessPreamble(company, {})}${playbookBlock}
+
+TESE ATIVA (não mude, só use como base):
+Nome: ${strategy.name}
+Tese: ${strategy.thesis ?? strategy.strategic_focus ?? '—'}
+Restrição principal: ${strategy.primary_constraint ?? '—'}
+Componentes ativos: ${Array.isArray(strategy.active_components) ? (strategy.active_components as string[]).join(', ') : '—'}
+
+PLANO TÁTICO ATUAL:
+Funil: ${JSON.stringify(strategy.funnel_plan ?? [])}
+Metas: ${JSON.stringify((goalRows ?? []).map((g: Record<string, unknown>) => ({ name: g.name, goal_type: g.goal_type, target: g.target_value, progress: g.current_progress })))}
+Orçamento: ${JSON.stringify(strategy.budget ?? {})}
+
+DECISÕES/RECOMENDAÇÕES PASSADAS (memória — o que já foi tentado/sugerido, pra não repetir o que não funcionou nem descartar o que já provou valor):
+${(pastLog ?? []).length ? (pastLog ?? []).map((l: Record<string, unknown>) => `- [${l.decision_type}/${l.status}] ${l.recommendation}`).join('\n') : 'Nenhuma recomendação anterior ainda.'}
+
+${baseline ? `Dado real ATUAL: ${baseline.label}.` : 'Ainda sem dado real de performance coletado.'}
+
+ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
+${formatDomains(dataAgentState)}
+
+REGRAS: mantenha a tese intacta; priorize (regra 80/20) manter e reforçar o que os sinais reais mostram que já funciona, reservando só uma fatia menor pra testar algo novo; NUNCA invente métrica que não foi te dada acima; metas no máximo 3 (goal_type: ${GOAL_TYPES.join('|')}), NÃO preencha baseline.
+
+Retorne APENAS um JSON:
+{
+  "what_changed": "2-4 frases: o que mudou no plano tático e por quê, citando os sinais reais que motivaram",
+  "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
+  "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}],
+  "budget": {"total":null,"currency":"BRL","period":"monthly","paid_ads":null,"organic":null,"creative":null,"other":null,"is_flexible":true,"allocation":[{"channel":"","amount":null,"reason":""}],"budget_reasoning":""}
+}`
+
+      const r = await callClaudeStep(anthropicKey, prompt, 4500, { allowRetry: false }, 'Refresh (atualização mensal)')
+      if (!r.ok) return json({ error: r.reason }, 500)
+      const parsed = r.parsed
+      const goals = goalsWithBaselineFrom(parsed.goals, baseline)
+
+      await admin.from('marketing_ai_strategies').update({
+        funnel_plan: Array.isArray(parsed.funnel_plan) ? parsed.funnel_plan : strategy.funnel_plan,
+        budget: parsed.budget && typeof parsed.budget === 'object' ? parsed.budget : strategy.budget,
+        last_refreshed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', strategyId)
+
+      if (goals.length) {
+        await admin.from('marketing_ai_strategy_goals').delete().eq('strategy_id', strategyId)
+        await admin.from('marketing_ai_strategy_goals').insert(goals.map(g => ({ ...g, strategy_id: strategyId })))
+      }
+
+      await admin.from('marketing_ai_strategy_log').insert({
+        company_id: company.id, strategy_id: strategyId, decision_type: 'update',
+        recommendation: String(parsed.what_changed ?? 'Plano tático atualizado com dados novos.'),
+        reasoning: String(parsed.what_changed ?? ''), status: 'implemented',
+      })
+
+      return json({ ok: true, strategy_id: strategyId, what_changed: parsed.what_changed ?? null })
     }
 
     if (action === 'update_goal') {
