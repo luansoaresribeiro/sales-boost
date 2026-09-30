@@ -96,13 +96,15 @@ Deno.serve(async (req) => {
     const expiresIn = llJson.expires_in ?? 5184000 // 60 dias padrão
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString()
 
-    // 3. (fallback) garante o user id via /me se não veio no passo 1
-    if (!igUserId) {
-      const meRes = await fetch(`https://graph.instagram.com/me?` + new URLSearchParams({ fields: 'user_id,username', access_token: longToken }))
-      if (meRes.ok) {
-        const me = parseJsonSafeIds<{ user_id?: string; id?: string }>(await meRes.text())
-        igUserId = String(me.user_id ?? me.id ?? '')
-      }
+    // 3. Sempre busca /me — garante o user id (se não veio no passo 1) e o
+    // @usuario (pra saber, olhando a tela, QUAL conta real está conectada
+    // em cada empresa — antes só se guardava o número do user_id).
+    let igUsername: string | null = null
+    const meRes = await fetch(`https://graph.instagram.com/me?` + new URLSearchParams({ fields: 'user_id,username', access_token: longToken }))
+    if (meRes.ok) {
+      const me = parseJsonSafeIds<{ user_id?: string; id?: string; username?: string }>(await meRes.text())
+      if (!igUserId) igUserId = String(me.user_id ?? me.id ?? '')
+      igUsername = me.username ?? null
     }
     if (!igUserId) throw new Error('Não foi possível obter o ID da conta do Instagram.')
 
@@ -111,6 +113,7 @@ Deno.serve(async (req) => {
       .from('companies')
       .update({
         instagram_user_id: igUserId,
+        instagram_username: igUsername,
         instagram_access_token: longToken,
         instagram_token_expires_at: expiresAt,
       })

@@ -7,7 +7,8 @@
   // está na conta). É o que faz a Meta aceitar o login do WhatsApp — ela
   // recusava o endereço .workers.dev por ser compartilhado.
   "routes": [
-    { "pattern": "getsaleboost.com", "custom_domain": true }
+    { "pattern": "getsaleboost.com", "custom_domain": true },
+    { "pattern": "www.getsaleboost.com", "custom_domain": true }
   ],
   "assets": {
     "directory": "./dist",

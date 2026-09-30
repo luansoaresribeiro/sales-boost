@@ -65,6 +65,7 @@ export default function IntegrationsTab() {
   const [metricsError, setMetricsError] = useState('')
   // Instagram auto-post state
   const [igConnected, setIgConnected] = useState(false)
+  const [igUsername, setIgUsername] = useState<string | null>(null)
   const [igAutoPost, setIgAutoPost] = useState(false)
   const [igFrequency, setIgFrequency] = useState('daily')
   const [igTogglingAuto, setIgTogglingAuto] = useState(false)
@@ -108,13 +109,14 @@ export default function IntegrationsTab() {
     setLoading(true)
     const { data: company } = await supabase
       .from('companies')
-      .select('id, instagram_user_id, instagram_auto_post, instagram_post_frequency, whatsapp_number, whatsapp_connected_at, whatsapp_phone_number_id, meta_business_name, meta_business_connected_at, meta_ads_account_id, meta_ads_account_name')
+      .select('id, instagram_user_id, instagram_username, instagram_auto_post, instagram_post_frequency, whatsapp_number, whatsapp_connected_at, whatsapp_phone_number_id, meta_business_name, meta_business_connected_at, meta_ads_account_id, meta_ads_account_name')
       .eq('user_id', user!.id)
       .single()
 
     if (!company) { setLoading(false); return }
     setCompanyId(company.id)
     setIgConnected(!!company.instagram_user_id)
+    setIgUsername(company.instagram_username ?? null)
     setIgAutoPost(company.instagram_auto_post ?? false)
     setIgFrequency(company.instagram_post_frequency ?? 'daily')
     setWaNumber(company.whatsapp_number ?? '')
@@ -204,8 +206,15 @@ export default function IntegrationsTab() {
 
   const handleDisconnectIgOauth = async () => {
     if (!companyId) return
-    await supabase.from('companies').update({ instagram_user_id: null, instagram_auto_post: false }).eq('id', companyId)
+    // Zera os 4 campos de verdade — antes só limpava instagram_user_id e
+    // deixava o token de acesso vivo no banco (bug real: a UI mostrava
+    // "desconectado", mas o token continuava válido e guardado).
+    await supabase.from('companies').update({
+      instagram_user_id: null, instagram_username: null, instagram_access_token: null,
+      instagram_token_expires_at: null, instagram_auto_post: false,
+    }).eq('id', companyId)
     setIgConnected(false)
+    setIgUsername(null)
     setIgAutoPost(false)
   }
 
@@ -494,7 +503,7 @@ export default function IntegrationsTab() {
               </div>
               <div style={{ fontSize: '12px', color: igConnected ? '#4ade80' : MUTED }}>
                 {igConnected
-                  ? `✓ Conectado${igAutoPost ? ' · publicando automaticamente' : ' · auto-post pausado'}`
+                  ? `✓ Conectado${igUsername ? ` como @${igUsername}` : ''}${igAutoPost ? ' · publicando automaticamente' : ' · auto-post pausado'}`
                   : 'Conecte para o Agente de Marketing publicar sozinho 24/7'}
               </div>
             </div>
