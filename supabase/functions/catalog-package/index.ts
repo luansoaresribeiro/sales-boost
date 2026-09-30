@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser()
     if (!user) return json({ error: 'Unauthorized' }, 401)
 
-    const { item_id } = await req.json()
+    const { item_id, only_recipe } = await req.json()
     if (!item_id) return json({ error: 'item_id obrigatório' }, 400)
 
     const { data: company } = await admin.from('companies').select('id, vertical_key').eq('user_id', user.id).maybeSingle()
@@ -213,6 +213,7 @@ Deno.serve(async (req) => {
       const weight = ficha.pillars[pillarKey] ?? 10
 
       for (const recipe of etapaA.recipes) {
+        if (only_recipe && recipe !== only_recipe) continue
         if (etapaA.fonte_midia === 'material_e_autorizacao_cliente') {
           skipped.push({ recipe, reason: 'Precisa de material real e autorização do cliente/corretor — o "Gerar pacote" não preenche isso sozinho.' })
           continue

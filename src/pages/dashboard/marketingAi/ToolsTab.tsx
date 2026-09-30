@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { ORANGE, CARD, MUTED, BORDER, timeAgo, type ToolRegistryRow, type ToolConfigRow } from './shared'
 
@@ -26,9 +26,55 @@ const TOOL_SETTINGS_SCHEMA: Record<string, SettingField[]> = {
   configuration_tool: [],
 }
 
+// Ferramentas de criação (category='criacao') vêm da ficha de setor — não
+// são liga/desliga como as ferramentas globais (Instagram sync, insights
+// etc.), são ações. A que já funciona de verdade (status='live') se usa
+// dentro de cada item do catálogo ("O que criar com este imóvel" em
+// CatalogItems.tsx); aqui é só a visão geral + interesse nas que ainda não
+// existem ("Quero quando lançar").
+function CreationToolsPanel({ tools, companyId }: { tools: ToolRegistryRow[]; companyId: string }) {
+  const [interested, setInterested] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    supabase.from('marketing_ai_tool_interest').select('tool_id').eq('company_id', companyId)
+      .then(({ data }) => setInterested(new Set((data ?? []).map(r => r.tool_id as string))))
+  }, [companyId])
+  const registerInterest = async (toolId: string) => {
+    await supabase.from('marketing_ai_tool_interest').upsert({ tool_id: toolId, company_id: companyId }, { onConflict: 'tool_id,company_id' })
+    setInterested(s => new Set(s).add(toolId))
+  }
+  return (
+    <div style={{ marginBottom: '22px' }}>
+      <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>✨ Ferramentas de criação do seu setor</div>
+      <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '12px', lineHeight: 1.5 }}>As prontas se usam dentro de cada item do seu catálogo. As "Em breve" você pode pedir pra avisar quando lançar.</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        {tools.map(t => (
+          <div key={t.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '14px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '6px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{t.name}</div>
+              <span style={{ fontSize: '9.5px', fontWeight: 700, color: STATUS_COLOR[t.status], padding: '1px 7px', borderRadius: '99px', border: `1px solid ${STATUS_COLOR[t.status]}44`, flexShrink: 0 }}>{STATUS_LABEL[t.status]}</span>
+            </div>
+            <div style={{ fontSize: '11px', color: MUTED, marginBottom: '10px', lineHeight: 1.5 }}>{t.description}</div>
+            {t.status === 'planned' && (
+              interested.has(t.id) ? (
+                <span style={{ fontSize: '11px', color: '#4ade80', fontWeight: 700 }}>✓ Você será avisado quando lançar</span>
+              ) : (
+                <button onClick={() => registerInterest(t.id)} style={{ padding: '6px 12px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '8px', color: ORANGE, fontWeight: 700, fontSize: '11px', cursor: 'pointer' }}>
+                  Quero quando lançar
+                </button>
+              )
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function ToolsTab({ companyId, tools, configs, onRefresh }: { companyId: string; tools: ToolRegistryRow[]; configs: ToolConfigRow[]; onRefresh: () => Promise<void> }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const configByTool = Object.fromEntries(configs.map(c => [c.tool_id, c]))
+  const creationTools = tools.filter(t => t.category === 'criacao')
+  const otherTools = tools.filter(t => t.category !== 'criacao')
 
   const toggleEnabled = async (toolId: string, enabled: boolean) => {
     await supabase.from('marketing_ai_tool_config').upsert({ company_id: companyId, tool_id: toolId, enabled, updated_at: new Date().toISOString() }, { onConflict: 'company_id,tool_id' })
@@ -45,12 +91,14 @@ export default function ToolsTab({ companyId, tools, configs, onRefresh }: { com
 
   return (
     <div>
+      {creationTools.length > 0 && <CreationToolsPanel tools={creationTools} companyId={companyId} />}
+
       <div style={{ fontSize: '12.5px', color: MUTED, marginBottom: '18px', lineHeight: 1.6 }}>
         Tudo que o Marketing AI sabe (ou vai saber) fazer. As marcadas como "Planejada" dependem de acesso a APIs que a Sales Boost ainda não tem (Meta Business API pra DMs/comentários/Insights oficial) — a configuração já existe, só a integração real que falta.
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-        {tools.map(t => {
+        {otherTools.map(t => {
           const cfg = configByTool[t.id]
           const fields = TOOL_SETTINGS_SCHEMA[t.id] ?? []
           const isOpen = expanded === t.id

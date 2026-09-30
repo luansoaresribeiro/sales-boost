@@ -118,7 +118,7 @@ export default function VisualLibrary({ company }: { company: CompanyData }) {
             ))}
           </div>
 
-          {archiveTab === 'catalogo' && catalogSchema ? <CatalogItems companyId={companyId} schema={catalogSchema} /> : archiveTab === 'produtos' ? <ProductPhotos companyId={companyId} /> : (
+          {archiveTab === 'catalogo' && catalogSchema ? <CatalogItems companyId={companyId} schema={catalogSchema} verticalKey={company.vertical_key ?? 'generico'} /> : archiveTab === 'produtos' ? <ProductPhotos companyId={companyId} /> : (
             loading ? <div style={{ fontSize: '12px', color: MUTED }}>Carregando...</div> : archive.length === 0 ? (
               <div style={{ padding: '28px', textAlign: 'center', color: MUTED, fontSize: '12.5px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>
                 Arquivo vazio. Ele enche automaticamente com seus posts e <strong>vídeos/Reels</strong> quando o <strong>Instagram</strong> estiver conectado e a aba <strong>Performance</strong> sincronizar (é ela que importa as mídias).

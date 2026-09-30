@@ -119,6 +119,7 @@ export interface ToolRegistryRow {
   requires_integration: string | null
   status: 'live' | 'partial' | 'planned'
   notes: string | null
+  vertical_key: string | null
 }
 
 export interface ToolConfigRow {

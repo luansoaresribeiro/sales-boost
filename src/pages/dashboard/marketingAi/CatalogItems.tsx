@@ -44,19 +44,73 @@ function FieldInput({ field, value, onChange }: { field: CatalogField; value: un
 // múltiplas + campos estruturados vindos da ficha do setor (catalog_fields).
 // Quem não tem ficha com catálogo nunca vê essa tela (fica só "Produtos").
 interface PackageResult { generated: { recipe: string; pillar: string; planned_for: string }[]; skipped: { recipe: string; reason: string }[] }
+interface ToolRow { id: string; name: string; description: string; status: 'live' | 'partial' | 'planned' }
+// Só a ferramenta "Tour virtual" já gera de verdade hoje (carrossel de
+// fotos reais) — mapeia pro mesmo motor do "Gerar pacote", só que 1 receita
+// isolada em vez do pacote inteiro. Ferramentas novas que também virarem
+// "live" no futuro entram aqui.
+const TOOL_RECIPE: Record<string, string> = { tour_virtual_tool: 'carrossel_tour' }
 
-export default function CatalogItems({ companyId, schema }: { companyId: string; schema: CatalogSchema }) {
+// "O que criar com este {item}" — ferramentas de criação da ficha, dentro
+// de CADA item (ação, diferente da visão geral em Configuração → Ferramentas,
+// que é só informativa). Ready = botão que gera de verdade; planned = "Em
+// breve" + "Quero quando lançar" (mesma tabela de interesse do ToolsTab).
+function ItemCreationTools({ itemId, companyId, verticalKey, itemLabel, onGenerate, busy }: {
+  itemId: string; companyId: string; verticalKey: string; itemLabel: string; onGenerate: (itemId: string, recipe: string) => void; busy: string | null
+}) {
+  const [tools, setTools] = useState<ToolRow[]>([])
+  const [interested, setInterested] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    supabase.from('marketing_ai_tool_registry').select('id, name, description, status').eq('vertical_key', verticalKey).eq('category', 'criacao')
+      .then(({ data }) => setTools((data ?? []) as ToolRow[]))
+  }, [verticalKey])
+  useEffect(() => {
+    supabase.from('marketing_ai_tool_interest').select('tool_id').eq('company_id', companyId)
+      .then(({ data }) => setInterested(new Set((data ?? []).map(r => r.tool_id as string))))
+  }, [companyId])
+  const registerInterest = async (toolId: string) => {
+    await supabase.from('marketing_ai_tool_interest').upsert({ tool_id: toolId, company_id: companyId }, { onConflict: 'tool_id,company_id' })
+    setInterested(s => new Set(s).add(toolId))
+  }
+  if (!tools.length) return null
+  return (
+    <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${BORDER}` }}>
+      <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>O que criar com este {itemLabel.toLowerCase()}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        {tools.map(t => (
+          <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+            <span style={{ fontSize: '10.5px', color: 'white' }}>{t.name}</span>
+            {t.status === 'live' && TOOL_RECIPE[t.id] ? (
+              <button onClick={() => onGenerate(itemId, TOOL_RECIPE[t.id])} disabled={busy === itemId}
+                style={{ padding: '4px 9px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '6px', color: ORANGE, fontWeight: 700, fontSize: '10px', cursor: busy === itemId ? 'default' : 'pointer' }}>
+                {busy === itemId ? '...' : 'Criar'}
+              </button>
+            ) : interested.has(t.id) ? (
+              <span style={{ fontSize: '9.5px', color: '#4ade80' }}>✓ Avisar quando lançar</span>
+            ) : (
+              <button onClick={() => registerInterest(t.id)} style={{ padding: '4px 9px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '6px', color: MUTED, fontSize: '9.5px', cursor: 'pointer' }}>
+                Em breve — avisar
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export default function CatalogItems({ companyId, schema, verticalKey }: { companyId: string; schema: CatalogSchema; verticalKey: string }) {
   const { session } = useAuth()
   const [packageBusyId, setPackageBusyId] = useState<string | null>(null)
   const [packageResult, setPackageResult] = useState<{ itemId: string; result: PackageResult | { error: string } } | null>(null)
 
-  const generatePackage = async (itemId: string) => {
+  const generatePackage = async (itemId: string, onlyRecipe?: string) => {
     if (!session) return
     setPackageBusyId(itemId); setPackageResult(null)
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/catalog-package`, {
         method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ item_id: itemId }),
+        body: JSON.stringify({ item_id: itemId, ...(onlyRecipe ? { only_recipe: onlyRecipe } : {}) }),
       })
       const data = await res.json().catch(() => ({}))
       setPackageResult({ itemId, result: res.ok ? data : { error: data.error ?? 'Erro ao gerar pacote' } })
@@ -222,6 +276,7 @@ export default function CatalogItems({ companyId, schema }: { companyId: string;
                       )}
                     </div>
                   )}
+                  <ItemCreationTools itemId={item.id} companyId={companyId} verticalKey={verticalKey} itemLabel={schema.itemLabel} onGenerate={generatePackage} busy={packageBusyId} />
                 </div>
               </div>
             )

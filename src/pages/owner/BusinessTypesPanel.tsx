@@ -8,6 +8,7 @@ const BORDER = 'rgba(255,255,255,0.06)'
 const D = "'Bricolage Grotesque', system-ui, sans-serif"
 
 interface BizType { id: string; label: string; sort: number; enabled: boolean }
+interface ToolInterest { tool_id: string; tool_name: string; count: number }
 
 export default function BusinessTypesPanel() {
   const [types, setTypes] = useState<BizType[]>([])
@@ -15,6 +16,7 @@ export default function BusinessTypesPanel() {
   const [newLabel, setNewLabel] = useState('')
   const [adding, setAdding] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [interest, setInterest] = useState<ToolInterest[]>([])
 
   const load = async () => {
     const { data } = await supabase.from('business_types').select('id, label, sort, enabled').order('sort')
@@ -22,6 +24,22 @@ export default function BusinessTypesPanel() {
     setLoading(false)
   }
   useEffect(() => { load() }, [])
+
+  // "Quero quando lançar" — quantas empresas já pediram cada ferramenta
+  // ainda planejada (ver marketing_ai_tool_registry.status='planned' de um
+  // setor). Ajuda a priorizar o que construir primeiro.
+  useEffect(() => {
+    supabase.from('marketing_ai_tool_interest').select('tool_id, marketing_ai_tool_registry(name)').then(({ data }) => {
+      const counts = new Map<string, { name: string; count: number }>()
+      for (const row of (data ?? []) as { tool_id: string; marketing_ai_tool_registry: { name: string }[] | null }[]) {
+        const name = row.marketing_ai_tool_registry?.[0]?.name ?? row.tool_id
+        const cur = counts.get(row.tool_id) ?? { name, count: 0 }
+        cur.count += 1
+        counts.set(row.tool_id, cur)
+      }
+      setInterest(Array.from(counts.entries()).map(([tool_id, v]) => ({ tool_id, tool_name: v.name, count: v.count })).sort((a, b) => b.count - a.count))
+    })
+  }, [])
 
   const add = async () => {
     const label = newLabel.trim()
@@ -94,6 +112,21 @@ export default function BusinessTypesPanel() {
         </button>
       </div>
       {err && <div style={{ marginTop: '10px', fontSize: '12px', color: '#f87171' }}>{err}</div>}
+
+      {interest.length > 0 && (
+        <div style={{ marginTop: '28px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '8px' }}>🙋 Interesse em ferramentas ainda planejadas</div>
+          <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '10px' }}>Quantas empresas já clicaram "Quero quando lançar" — ajuda a priorizar o que construir primeiro.</div>
+          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', overflow: 'hidden' }}>
+            {interest.map((t, i) => (
+              <div key={t.tool_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', borderBottom: i < interest.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
+                <span style={{ fontSize: '13px', color: 'white' }}>{t.tool_name}</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: ORANGE }}>{t.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

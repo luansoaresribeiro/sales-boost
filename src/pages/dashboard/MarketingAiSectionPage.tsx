@@ -122,7 +122,7 @@ export default function MarketingAiSectionPage() {
       case 'experiments':
         return <ExperimentsTab accessToken={accessToken} experiments={data.experiments} onRefresh={data.refresh} />
       case 'tools':
-        return <ToolsTab companyId={company.id} tools={data.toolRegistry} configs={data.toolConfigs} onRefresh={data.refresh} />
+        return <ToolsTab companyId={company.id} tools={data.toolRegistry.filter(t => !t.vertical_key || t.vertical_key === company.vertical_key)} configs={data.toolConfigs} onRefresh={data.refresh} />
       case 'timeline':
         return <TimelineTab activity={data.activity} />
       case 'reports':
