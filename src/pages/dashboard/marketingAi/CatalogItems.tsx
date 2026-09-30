@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { useAuth } from '../../../contexts/AuthContext'
 import { processImageTo4x5 } from '../../../lib/imageProcessing'
 import { bi, sanitizeCatalogValues, type CatalogSchema, type CatalogField } from '../../../lib/verticalPlaybook'
-import { CARD, MUTED, BORDER, D, inputStyle } from './shared'
+import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL } from './shared'
 import { ImageModal } from './TestingArea'
 
 const ORANGE = '#FF6D29'
@@ -42,7 +43,29 @@ function FieldInput({ field, value, onChange }: { field: CatalogField; value: un
 // Catálogo genérico — mesma tabela/kind que "Produtos", só que com fotos
 // múltiplas + campos estruturados vindos da ficha do setor (catalog_fields).
 // Quem não tem ficha com catálogo nunca vê essa tela (fica só "Produtos").
+interface PackageResult { generated: { recipe: string; pillar: string; planned_for: string }[]; skipped: { recipe: string; reason: string }[] }
+
 export default function CatalogItems({ companyId, schema }: { companyId: string; schema: CatalogSchema }) {
+  const { session } = useAuth()
+  const [packageBusyId, setPackageBusyId] = useState<string | null>(null)
+  const [packageResult, setPackageResult] = useState<{ itemId: string; result: PackageResult | { error: string } } | null>(null)
+
+  const generatePackage = async (itemId: string) => {
+    if (!session) return
+    setPackageBusyId(itemId); setPackageResult(null)
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/catalog-package`, {
+        method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      setPackageResult({ itemId, result: res.ok ? data : { error: data.error ?? 'Erro ao gerar pacote' } })
+    } catch (e) {
+      setPackageResult({ itemId, result: { error: e instanceof Error ? e.message : 'Erro ao gerar pacote' } })
+    }
+    setPackageBusyId(null)
+  }
+
   const photosField = [...schema.required, ...schema.optional].find(f => f.type === 'photos')
   const minPhotos = photosField?.min ?? 5
   const formFields = [...schema.required, ...schema.optional].filter(f => f.type !== 'photos')
@@ -169,9 +192,36 @@ export default function CatalogItems({ companyId, schema }: { companyId: string;
                     <span style={{ fontSize: '12px', fontWeight: 700, color: 'white', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</span>
                     <button onClick={() => remove(item)} title="Remover" style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '12px', cursor: 'pointer' }}>🗑</button>
                   </div>
-                  <div style={{ fontSize: '10.5px', color: MUTED }}>
+                  <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '8px' }}>
                     {photoCount} foto{photoCount === 1 ? '' : 's'}{f.preco ? ` · R$ ${f.preco}` : ''}{f.quartos ? ` · ${f.quartos}q` : ''}
                   </div>
+                  <button onClick={() => generatePackage(item.id)} disabled={packageBusyId === item.id}
+                    style={{ width: '100%', padding: '7px 10px', background: packageBusyId === item.id ? 'rgba(255,255,255,0.06)' : 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '7px', color: ORANGE, fontWeight: 700, fontSize: '11px', cursor: packageBusyId === item.id ? 'default' : 'pointer', fontFamily: D }}>
+                    {packageBusyId === item.id ? 'Gerando...' : '✨ Gerar pacote'}
+                  </button>
+                  {packageResult?.itemId === item.id && (
+                    <div style={{ marginTop: '8px', fontSize: '10.5px', lineHeight: 1.5 }}>
+                      {'error' in packageResult.result ? (
+                        <div style={{ color: '#f87171' }}>{packageResult.result.error}</div>
+                      ) : (
+                        <>
+                          {packageResult.result.generated.length > 0 && (
+                            <div style={{ color: '#4ade80', marginBottom: '4px' }}>
+                              {packageResult.result.generated.length} peça{packageResult.result.generated.length === 1 ? '' : 's'} em rascunho, esperando aprovação:
+                              <ul style={{ margin: '4px 0 0', paddingLeft: '16px' }}>
+                                {packageResult.result.generated.map((g, i) => <li key={i}>{g.recipe} — {g.planned_for}</li>)}
+                              </ul>
+                            </div>
+                          )}
+                          {packageResult.result.skipped.length > 0 && (
+                            <div style={{ color: MUTED }}>
+                              {packageResult.result.skipped.map((s, i) => <div key={i}>⏸ {s.recipe}: {s.reason}</div>)}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )

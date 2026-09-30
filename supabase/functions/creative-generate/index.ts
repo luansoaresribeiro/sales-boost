@@ -64,6 +64,19 @@ async function fetchPlaybookBlock(admin: SupaClient, verticalKey: string, playbo
   } catch { return '' }
 }
 
+// Só os pesos dos pilares da ficha (config.pillars) — usado pra saber em
+// quais chaves de pilar vale a pena checar ocupação na semana (ver
+// fetchWeekPillarOccupancy). 'generico' ou ficha sem pilares → {} (nunca
+// muda o comportamento de quem não tem ficha).
+async function fetchPillarWeights(admin: SupaClient, verticalKey: string): Promise<Record<string, number>> {
+  if (verticalKey === 'generico') return {}
+  try {
+    const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
+    const c = (data?.config ?? {}) as Record<string, unknown>
+    return (c.pillars && typeof c.pillars === 'object') ? c.pillars as Record<string, number> : {}
+  } catch { return {} }
+}
+
 // Mesmo padrão de generate-posts/index.ts — avisa em tempo real quando o
 // cron cria post(s) novo(s) esperando aprovação. Antes, quem cobria isso
 // pro Calendário da Semana e pro teste diário era só o resumo geral do
@@ -709,18 +722,36 @@ function nextWeekDates(): { iso: string; weekday: string }[] {
 // possíveis, não entre ideias de um backlog. Se um dia voltarmos a usar a
 // aba Ideias aqui, reviver o idea_id/seed que já existiam antes (ver
 // histórico do arquivo).
+// Ocupação por pilar/dia que o catalog-package já reservou pra essa semana
+// (ex: pacote de conteúdo de um imóvel novo) — lido aqui só como AVISO pro
+// planejador orgânico (ele não tem como escrever um pilar específico nas
+// próprias peças, então não dá pra travar automaticamente; o prompt recebe
+// o aviso e evita empilhar tema em cima do que já está cheio). Mesma lógica
+// de agendamento que catalog-package usa pra ESCREVER (duplicada de
+// propósito — convenção do projeto, sem lib compartilhada entre functions).
+async function fetchWeekPillarOccupancy(admin: SupaClient, companyId: string, dates: string[], pillars: Record<string, number>): Promise<string> {
+  if (!Object.keys(pillars).length) return ''
+  const { data } = await admin.from('marketing_ai_test_content').select('planned_for, pillar').eq('company_id', companyId).in('planned_for', dates).not('pillar', 'is', null)
+  const perPillar: Record<string, number> = {}
+  for (const row of (data ?? []) as { pillar: string | null }[]) { if (row.pillar) perPillar[row.pillar] = (perPillar[row.pillar] ?? 0) + 1 }
+  const busy = Object.entries(perPillar).filter(([, n]) => n > 0)
+  if (!busy.length) return ''
+  return `\nJá existe conteúdo de pacote (ex: imóvel específico) agendado essa semana nestes pilares: ${busy.map(([p, n]) => `${p} (${n})`).join(', ')} — evite empilhar mais conteúdo no mesmo tema, dê espaço pros outros pilares.`
+}
+
 async function planWeekForCompany(admin: SupaClient, anthropicKey: string, company: Company, auth: { bearer: string; isCron: boolean; cronSecret?: string }): Promise<{ planned: number; days: { date: string; posts: number; note: string }[] }> {
-  const [{ data: insRows }, { data: pendingRows }, playbookBlock] = await Promise.all([
+  const dates = nextWeekDates()
+  const [{ data: insRows }, { data: pendingRows }, playbookBlock, pillarOccupancyNote] = await Promise.all([
     admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(8),
     admin.from('marketing_ai_test_content').select('id').eq('company_id', company.id).eq('status', 'draft').is('quality_score', null),
     fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
+    fetchWeekPillarOccupancy(admin, company.id, dates.map(d => d.iso), await fetchPillarWeights(admin, company.vertical_key ?? 'generico')),
   ])
   const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
   const pendingCount = (pendingRows ?? []).length
-  const dates = nextWeekDates()
 
   const prompt = `Você é o planejador de conteúdo semanal de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
-${company.business_description ? `O que o negócio faz: ${company.business_description}.` : ''}${playbookBlock}
+${company.business_description ? `O que o negócio faz: ${company.business_description}.` : ''}${playbookBlock}${pillarOccupancyNote}
 
 Monte a CADÊNCIA da PRÓXIMA semana inteira: pra CADA um dos 7 dias, decida entre 1 ou 2 posts orgânicos (nunca 0 — todo dia tem pelo menos 1; nunca mais que 2). Não escolha o tema/ideia aqui — só a cadência (isso é decidido depois, peça por peça, pelo Diretor Criativo). Considere que ${pendingCount} peça(s) recente(s) ainda nem foram avaliadas — se já tem bastante coisa parada, prefira 1 post nos dias mais fracos em vez de 2.
 ${insights.length ? `\nInsights abertos (ajudam a priorizar QUAIS dias merecem 2 posts):\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
