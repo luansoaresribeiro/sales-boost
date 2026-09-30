@@ -35,6 +35,7 @@ interface CompanyDetail {
   business_dna: BusinessDna | null
   agent_enabled: boolean
   marketing_ai_enabled: boolean
+  auto_strategy: boolean
   created_at: string
   trial_started_at: string | null
   trial_expires_at: string | null
@@ -121,6 +122,7 @@ export default function CompanyDetailPage() {
   const [form, setForm] = useState({ business_name: '', business_type: '', city: '', goal: '', plan: '' })
   const [dna, setDna] = useState<BusinessDna>({})
   const [marketingAiEnabled, setMarketingAiEnabled] = useState(true)
+  const [autoStrategy, setAutoStrategy] = useState(true)
   const [togglingFeature, setTogglingFeature] = useState(false)
   const [newValue, setNewValue] = useState('')
   const [saving, setSaving] = useState(false)
@@ -185,6 +187,7 @@ export default function CompanyDetailPage() {
         })
         setDna(data.company.business_dna ?? {})
         setMarketingAiEnabled(data.company.marketing_ai_enabled ?? true)
+        setAutoStrategy(data.company.auto_strategy ?? true)
 
         const ma = data.marketing_ai
         setMaExists(!!ma)
@@ -231,9 +234,10 @@ export default function CompanyDetailPage() {
     setAccessBusy(false)
   }
 
-  const toggleFeature = async (feature: 'marketing_ai_enabled', value: boolean) => {
+  const toggleFeature = async (feature: 'marketing_ai_enabled' | 'auto_strategy', value: boolean) => {
     setTogglingFeature(true)
-    setMarketingAiEnabled(value)
+    if (feature === 'marketing_ai_enabled') setMarketingAiEnabled(value)
+    else setAutoStrategy(value)
     await fetch(`${SUPABASE_URL}/functions/v1/owner-company-activity`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${session!.access_token}`, 'Content-Type': 'application/json' },
@@ -596,6 +600,20 @@ export default function CompanyDetailPage() {
               </div>
             </label>
           </div>
+        </div>
+
+        <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '22px', marginBottom: '20px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>🧭 Estratégia automática</div>
+          <div style={{ fontSize: '11px', color: MUTED, marginBottom: '16px', lineHeight: 1.5 }}>
+            Ligado: o Hermes gera a 1ª estratégia sozinho no cadastro, reavalia toda semana e atualiza o plano tático sozinho (mensal, ou quando o check-up pedir ajuste). Só cria estratégia NOVA e avisa o dono quando decide um pivô de verdade. Desligado: nada disso roda sozinho pra essa empresa — só por clique manual.
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 14px', borderRadius: '9px', border: `1px solid ${autoStrategy ? 'rgba(255,109,41,0.3)' : BORDER}`, background: autoStrategy ? 'rgba(255,109,41,0.05)' : 'rgba(255,255,255,0.02)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={autoStrategy} disabled={togglingFeature} onChange={e => toggleFeature('auto_strategy', e.target.checked)} style={{ width: '16px', height: '16px', accentColor: ORANGE }} />
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'white' }}>Estratégia automática (Hermes independente)</div>
+              <div style={{ fontSize: '10.5px', color: MUTED }}>{autoStrategy ? 'Ligada — essa empresa entra no despachante diário.' : 'Desligada — nada roda sozinho pra essa empresa.'}</div>
+            </div>
+          </label>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '20px' }}>

@@ -73,6 +73,36 @@ interface Company {
 
 const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, business_stage, main_challenges, website_summary, marketing_monthly_budget, avg_ticket, vertical_key, playbook_answers, telegram_chat_id, notification_prefs'
 
+// Custo estimado por tipo de chamada (mesmo padrao de "estimativa clara" ja
+// usado em generate-image, ESTIMATED_COST_PER_IMAGE_USD) -- Claude Sonnet
+// nao cobra por chamada fixa, isso e so uma media aproximada pro painel
+// Owner ter noção de gasto, ajustavel aqui se a fatura real mostrar outro
+// valor. 'generate' cobre as 2 execucoes (step1+step2) somadas.
+const ESTIMATED_COST_USD: Record<string, number> = { generate: 0.15, reanalyze: 0.02, refresh: 0.08 }
+
+async function logStrategyCost(admin: SupaClient, companyId: string, kind: 'generate' | 'reanalyze' | 'refresh', success: boolean, errorMessage?: string, latencyMs = 0) {
+  try {
+    await admin.from('agent_performance').insert({
+      company_id: companyId, agent_role: 'estrategia', task_key: `strategy_${kind}`,
+      task_description: kind === 'generate' ? 'Geração de estratégia (Hermes)' : kind === 'reanalyze' ? 'Check-up semanal (Hermes)' : 'Atualização mensal do plano tático (Hermes)',
+      success, error_message: errorMessage ? errorMessage.slice(0, 500) : null,
+      cost_usd: ESTIMATED_COST_USD[kind] ?? 0.05, latency_ms: Math.round(latencyMs),
+    })
+  } catch { /* nunca derruba o fluxo por causa do log de custo */ }
+}
+
+// Teto de custo (ajuste 4): quantas chamadas automaticas (cron) essa
+// empresa ja teve no MES corrente -- cron_dispatch nao dispara mais se
+// passar disso, protege contra reprocessamento em excesso/loop de erro.
+// Nao se aplica a clique manual do dono (so ao caminho automatico).
+const MAX_AUTO_CALLS_PER_MONTH = 10
+async function autoCallsThisMonth(admin: SupaClient, companyId: string): Promise<number> {
+  const monthStart = new Date(); monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0)
+  const { count } = await admin.from('agent_performance').select('id', { count: 'exact', head: true })
+    .eq('company_id', companyId).eq('agent_role', 'estrategia').gte('created_at', monthStart.toISOString())
+  return count ?? 0
+}
+
 // Mesmo padrao de generate-posts/creative-generate -- avisa o dono (Telegram +
 // aba Atividades, via log-bot-event) quando o Hermes decide algo sozinho que
 // merece atencao. So chamado em PIVOT/TERMINATE (estrategia nova) -- REFINE/
@@ -284,6 +314,7 @@ async function runStep1(
   const markFailed = async (reason: string) => {
     console.error(`strategy-generate step1[${strategyId}]: FALHOU — ${reason}`)
     await admin.from('marketing_ai_strategies').update({ status: 'failed', reasoning: reason, updated_at: new Date().toISOString() }).eq('id', strategyId)
+    await logStrategyCost(admin, company.id, 'generate', false, reason)
   }
   try {
     const t0 = Date.now()
@@ -409,6 +440,7 @@ async function runStep2(admin: SupaClient, supabaseUrl: string, cronSecret: stri
   const markFailed = async (reason: string) => {
     console.error(`strategy-generate step2[${strategyId}]: FALHOU — ${reason}`)
     await admin.from('marketing_ai_strategies').update({ status: 'failed', reasoning: reason, updated_at: new Date().toISOString() }).eq('id', strategyId)
+    await logStrategyCost(admin, companyId, 'generate', false, reason)
   }
   try {
     const t0 = Date.now()
@@ -490,6 +522,7 @@ Retorne APENAS um JSON:
       updated_at: new Date().toISOString(),
     }).eq('id', strategyId)
     lap('parte 2 gravada, status=active')
+    await logStrategyCost(admin, companyId, 'generate', true)
 
     if (goals.length) {
       await admin.from('marketing_ai_strategy_goals').insert(goals.map(g => ({ ...g, strategy_id: strategyId })))
@@ -555,6 +588,10 @@ Deno.serve(async (req) => {
     // aceita (2xx) antes de seguir pra proxima, registra as que falharem.
     if (action === 'cron_dispatch') {
       if (!isCron) return json({ error: 'Unauthorized' }, 401)
+      // Interruptor GERAL (painel Owner) -- desligado mata tudo, mesmo que
+      // alguma empresa individual esteja com auto_strategy=true.
+      const { data: hermesCfg } = await admin.from('hermes_config').select('auto_strategy_enabled').eq('id', true).maybeSingle()
+      if (hermesCfg && hermesCfg.auto_strategy_enabled === false) return json({ ok: true, dispatched: 0, results: [], skipped_reason: 'auto_strategy_enabled=false no painel Owner' })
       const ROUND_LIMIT = Number(body.round_limit ?? 5)
       const WEEK_MS = 7 * 24 * 60 * 60 * 1000
       const MONTH_MS = 30 * 24 * 60 * 60 * 1000
@@ -586,6 +623,14 @@ Deno.serve(async (req) => {
           else if (now - lastRefreshed >= MONTH_MS) { targetAction = 'refresh'; extra = { strategy_id: activeStrategy.id } }
         }
         if (!targetAction) continue
+
+        // Teto de custo (ajuste 4) -- ja bateu no limite mensal de chamadas
+        // automaticas pra essa empresa? Pula, nao conta na rodada.
+        const callsSoFar = await autoCallsThisMonth(admin, c.id as string)
+        if (callsSoFar >= MAX_AUTO_CALLS_PER_MONTH) {
+          results.push({ company_id: c.id as string, business_name: String(c.business_name), action: targetAction, ok: false, error: `Teto mensal de ${MAX_AUTO_CALLS_PER_MONTH} chamadas automáticas atingido.` })
+          continue
+        }
 
         dispatched++
         try {
@@ -698,6 +743,7 @@ Retorne APENAS um JSON: {"status": "ON_TRACK|NEEDS_ADJUSTMENT|UNDERPERFORMING|AT
       // Marca sempre que o check-up rodou -- e o que o cron_dispatch usa
       // pra saber quando a proxima semana comeca (independente da decisao).
       await admin.from('marketing_ai_strategies').update({ last_reanalyzed_at: new Date().toISOString() }).eq('id', strategyId)
+      await logStrategyCost(admin, company.id, 'reanalyze', true)
 
       if (decision !== 'continue' && parsed.recommendation) {
         await admin.from('marketing_ai_strategy_log').insert({
@@ -793,7 +839,7 @@ Retorne APENAS um JSON:
 }`
 
       const r = await callClaudeStep(anthropicKey, prompt, 4500, { allowRetry: false }, 'Refresh (atualização mensal)')
-      if (!r.ok) return json({ error: r.reason }, 500)
+      if (!r.ok) { await logStrategyCost(admin, company.id, 'refresh', false, r.reason); return json({ error: r.reason }, 500) }
       const parsed = r.parsed
       const goals = goalsWithBaselineFrom(parsed.goals, baseline)
 
@@ -814,6 +860,7 @@ Retorne APENAS um JSON:
         recommendation: String(parsed.what_changed ?? 'Plano tático atualizado com dados novos.'),
         reasoning: String(parsed.what_changed ?? ''), status: 'implemented',
       })
+      await logStrategyCost(admin, company.id, 'refresh', true)
 
       return json({ ok: true, strategy_id: strategyId, what_changed: parsed.what_changed ?? null })
     }

@@ -10,7 +10,7 @@ const GREEN = '#4ade80'
 
 const COST_PER_1K = 0.006 // igual ao backend (ESTIMATED_COST_PER_1K_TOKENS)
 
-const AGENT_LABEL: Record<string, string> = { marketing: 'Agente Geral', hermes: 'Orquestrador', sales: 'Vendas', imagem: 'Geração de Imagem' }
+const AGENT_LABEL: Record<string, string> = { marketing: 'Agente Geral', hermes: 'Orquestrador', sales: 'Vendas', imagem: 'Geração de Imagem', estrategia: 'Estratégia (Hermes)' }
 const agentLabel = (r: string | null) => AGENT_LABEL[r ?? ''] ?? (r ?? 'Agente')
 
 // cost_usd é custo real não-baseado em token (hoje só geração de imagem) —

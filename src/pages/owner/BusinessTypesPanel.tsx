@@ -10,6 +10,38 @@ const D = "'Bricolage Grotesque', system-ui, sans-serif"
 interface BizType { id: string; label: string; sort: number; enabled: boolean }
 interface ToolInterest { tool_id: string; tool_name: string; count: number }
 
+// Interruptor GERAL da estrategia automatica (Hermes independente) --
+// desligado, nenhuma empresa dispara nada sozinha, mesmo com o interruptor
+// individual (em cada empresa, na pagina de detalhe) ligado.
+function AutoStrategyGlobalToggle() {
+  const [enabled, setEnabled] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    supabase.from('hermes_config').select('auto_strategy_enabled').eq('id', true).maybeSingle()
+      .then(({ data }) => { setEnabled((data?.auto_strategy_enabled as boolean | undefined) ?? true); setLoading(false) })
+  }, [])
+
+  const toggle = async (value: boolean) => {
+    setSaving(true); setEnabled(value)
+    await supabase.from('hermes_config').update({ auto_strategy_enabled: value }).eq('id', true)
+    setSaving(false)
+  }
+
+  if (loading) return null
+  return (
+    <div style={{ marginBottom: '28px' }}>
+      <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>🧭 Estratégia automática (Hermes independente)</div>
+      <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '10px' }}>Interruptor GERAL — desligado, nenhuma empresa dispara nada sozinha (mesmo as com o interruptor individual ligado). O ajuste por empresa fica na página de detalhe dela.</div>
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', padding: '11px 14px', borderRadius: '9px', border: `1px solid ${enabled ? 'rgba(255,109,41,0.3)' : BORDER}`, background: enabled ? 'rgba(255,109,41,0.05)' : 'rgba(255,255,255,0.02)', cursor: 'pointer' }}>
+        <input type="checkbox" checked={enabled} disabled={saving} onChange={e => toggle(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: ORANGE }} />
+        <span style={{ fontSize: '13px', fontWeight: 600, color: 'white' }}>{enabled ? 'Ligado — despachante diário ativo' : 'Desligado — nada roda sozinho, pra empresa nenhuma'}</span>
+      </label>
+    </div>
+  )
+}
+
 export default function BusinessTypesPanel() {
   const [types, setTypes] = useState<BizType[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,6 +103,8 @@ export default function BusinessTypesPanel() {
 
   return (
     <div>
+      <AutoStrategyGlobalToggle />
+
       <div style={{ padding: '12px 16px', background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.18)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '18px' }}>
         🏷️ Os tipos de estabelecimento que aparecem no cadastro do cliente e no onboarding. O que você definir aqui vale pra todos. O cliente sempre tem um <strong>"Outro (especifique)"</strong> de escape — então adicione aqui os ramos mais comuns, sem precisar prever todos.
       </div>

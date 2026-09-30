@@ -163,7 +163,9 @@ Deno.serve(async (req) => {
       // Respeita companies.auto_strategy (default true, ja aplicado no
       // insert acima via o default da coluna).
       const cronSecret = Deno.env.get('CRON_SECRET')
-      if (cronSecret) {
+      const { data: hermesCfg } = await serviceClient.from('hermes_config').select('auto_strategy_enabled').eq('id', true).maybeSingle()
+      const globalAutoStrategyOn = !hermesCfg || hermesCfg.auto_strategy_enabled !== false
+      if (cronSecret && globalAutoStrategyOn) {
         // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
         EdgeRuntime.waitUntil(
           fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {

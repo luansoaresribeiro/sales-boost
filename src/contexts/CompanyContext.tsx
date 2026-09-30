@@ -27,6 +27,7 @@ export interface CompanyData {
   access_blocked_reason: string | null
   language: string | null
   vertical_key: string | null
+  playbook_answers: Record<string, unknown> | null
 }
 
 export type AccessSource = 'paid' | 'trial' | 'manual' | 'blocked' | 'none'
@@ -57,7 +58,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     if (!user) { setCompany(null); setAccess(null); setLoading(false); resetAnalytics(); return }
     const { data } = await supabase
       .from('companies')
-      .select('id, business_name, business_type, city, phone, website_url, instagram_url, facebook_url, google_place_id, google_rating, google_review_count, instagram_user_id, plan, agent_enabled, marketing_ai_enabled, trial_started_at, trial_expires_at, trial_cancelled_at, trial_intro_seen_at, stripe_subscription_id, access_blocked_reason, language, vertical_key')
+      .select('id, business_name, business_type, city, phone, website_url, instagram_url, facebook_url, google_place_id, google_rating, google_review_count, instagram_user_id, plan, agent_enabled, marketing_ai_enabled, trial_started_at, trial_expires_at, trial_cancelled_at, trial_intro_seen_at, stripe_subscription_id, access_blocked_reason, language, vertical_key, playbook_answers')
       .eq('user_id', user.id)
       .maybeSingle()
     const c = data as CompanyData | null
