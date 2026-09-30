@@ -49,6 +49,68 @@ export async function fetchOnboardingQuestions(verticalKey: string): Promise<{ n
   } catch { return { name: '', questions: [] } }
 }
 
+export type CatalogFieldType = 'text' | 'number' | 'select' | 'url' | 'photos'
+
+export interface CatalogField {
+  key: string
+  type: CatalogFieldType
+  label: Bilingual
+  options?: Bilingual[] // só pra 'select'
+  min?: number // só pra 'photos' (mínimo de fotos)
+}
+
+export interface CatalogSchema {
+  itemLabel: string // vocabulary.item, ex: "Imóvel" — singular, pro título de cada card
+  catalogLabel: string // vocabulary.catalog, ex: "Meus imóveis" — nome da aba/menu
+  required: CatalogField[]
+  optional: CatalogField[]
+}
+
+// Busca o schema do catálogo (campos + nomes) da ficha do setor. 'generico'
+// ou ficha sem catalog_fields → null (esconde a tela de catálogo — o setor
+// continua vendo só "Produtos", como sempre foi).
+export async function fetchCatalogSchema(verticalKey: string): Promise<CatalogSchema | null> {
+  if (verticalKey === 'generico') return null
+  try {
+    const { data } = await supabase.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
+    const config = (data?.config ?? {}) as { catalog_fields?: { required?: CatalogField[]; optional?: CatalogField[] }; vocabulary?: { item?: string; catalog?: string } }
+    const required = config.catalog_fields?.required ?? []
+    const optional = config.catalog_fields?.optional ?? []
+    if (required.length === 0 && optional.length === 0) return null
+    return {
+      itemLabel: config.vocabulary?.item ?? 'Item',
+      catalogLabel: config.vocabulary?.catalog ?? 'Catálogo',
+      required, optional,
+    }
+  } catch { return null }
+}
+
+// Limpa os valores de campo do catálogo contra o schema real antes de
+// gravar — mesma lógica de sanitizePlaybookAnswers, mas pros campos do
+// catálogo (tipos diferentes: number/url/photos além de text/select).
+export function sanitizeCatalogValues(raw: unknown, schema: CatalogSchema): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object') return {}
+  const all = [...schema.required, ...schema.optional].filter(f => f.type !== 'photos')
+  const byKey = new Map(all.map(f => [f.key, f]))
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const f = byKey.get(key)
+    if (!f) continue
+    if (f.type === 'number') {
+      const n = Number(value)
+      if (Number.isFinite(n)) out[key] = n
+    } else if (f.type === 'select') {
+      const s = String(value ?? '').trim()
+      const allowed = (f.options ?? []).map(o => o.pt)
+      if (s && allowed.includes(s)) out[key] = s
+    } else {
+      const s = String(value ?? '').trim().slice(0, MAX_TEXT_LEN)
+      if (s) out[key] = s
+    }
+  }
+  return out
+}
+
 // Limpa as respostas contra o schema real da ficha antes de gravar — só
 // aceita chave que existe na ficha, respeita o tipo e o `max`, corta texto
 // grande. Isso vai pro prompt da IA (fetchPlaybookBlock nas 6 functions),

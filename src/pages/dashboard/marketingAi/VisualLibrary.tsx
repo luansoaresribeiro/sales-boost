@@ -6,6 +6,8 @@ import { CARD, MUTED, BORDER, D, timeAgo } from './shared'
 import { ImageModal } from './TestingArea'
 import BrandKit from './BrandKit'
 import ProductPhotos from './ProductPhotos'
+import CatalogItems from './CatalogItems'
+import { fetchCatalogSchema, type CatalogSchema } from '../../../lib/verticalPlaybook'
 
 interface ArchivePost { id: string; caption: string | null; image_url: string | null; posted_at: string | null; likes_count: number | null; comments_count: number | null; media_type: string | null }
 
@@ -50,10 +52,20 @@ function LanguageSelector({ company }: { company: CompanyData }) {
 export default function VisualLibrary({ company }: { company: CompanyData }) {
   const companyId = company.id
   const [tab, setTab] = useState<'kit' | 'archive'>('kit')
-  const [archiveTab, setArchiveTab] = useState<'publicados' | 'produtos'>('publicados')
+  const [archiveTab, setArchiveTab] = useState<'publicados' | 'produtos' | 'catalogo'>('publicados')
   const [archive, setArchive] = useState<ArchivePost[]>([])
   const [loading, setLoading] = useState(true)
   const [zoom, setZoom] = useState<string | null>(null)
+  const [catalogSchema, setCatalogSchema] = useState<CatalogSchema | null>(null)
+
+  // Catálogo só existe pra quem tem ficha de setor com catalog_fields
+  // definido (ex: imoveis_rio). Sem ficha ou ficha vazia → aba nem aparece,
+  // continua só "Produtos" como sempre foi.
+  useEffect(() => {
+    let alive = true
+    fetchCatalogSchema(company.vertical_key ?? 'generico').then(s => { if (alive) setCatalogSchema(s) })
+    return () => { alive = false }
+  }, [company.vertical_key])
 
   const load = useCallback(async () => {
     // Fonte 1: mídia REAL do Instagram (inclui vídeos/Reels, com thumbnail).
@@ -101,12 +113,12 @@ export default function VisualLibrary({ company }: { company: CompanyData }) {
       {tab === 'kit' ? <BrandKit companyId={companyId} /> : (
         <>
           <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '10px', marginBottom: '18px', flexWrap: 'wrap' }}>
-            {([['publicados', '📷 Publicados'], ['produtos', '📦 Produtos']] as const).map(([k, label]) => (
+            {([['publicados', '📷 Publicados'], ['produtos', '📦 Produtos'], ...(catalogSchema ? [['catalogo', `📋 ${catalogSchema.catalogLabel}`] as const] : [])] as const).map(([k, label]) => (
               <button key={k} onClick={() => setArchiveTab(k)} style={{ padding: '6px 12px', background: archiveTab === k ? 'rgba(255,109,41,0.14)' : 'transparent', border: `1px solid ${archiveTab === k ? 'rgba(255,109,41,0.4)' : 'transparent'}`, borderRadius: '7px', color: archiveTab === k ? '#FF6D29' : 'white', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>{label}</button>
             ))}
           </div>
 
-          {archiveTab === 'produtos' ? <ProductPhotos companyId={companyId} /> : (
+          {archiveTab === 'catalogo' && catalogSchema ? <CatalogItems companyId={companyId} schema={catalogSchema} /> : archiveTab === 'produtos' ? <ProductPhotos companyId={companyId} /> : (
             loading ? <div style={{ fontSize: '12px', color: MUTED }}>Carregando...</div> : archive.length === 0 ? (
               <div style={{ padding: '28px', textAlign: 'center', color: MUTED, fontSize: '12.5px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>
                 Arquivo vazio. Ele enche automaticamente com seus posts e <strong>vídeos/Reels</strong> quando o <strong>Instagram</strong> estiver conectado e a aba <strong>Performance</strong> sincronizar (é ela que importa as mídias).
