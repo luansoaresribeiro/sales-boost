@@ -40,7 +40,16 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente · ❌ 
 
 1. **Data Agent** (catálogo com fotos reais + negócio/onboarding +
    concorrentes/mercado + resultados, tudo num lugar) — 🟡 parcial.
-   `supabase/functions/data-agent/index.ts` + `shared/data-agent/domains.ts`.
+   `supabase/functions/data-agent/index.ts` (a function de verdade, chamada
+   por `strategy-generate`/pelo frontend) + `shared/data-agent/domains.ts`
+   (schema estático — títulos, perguntas, `gaps` por domínio). **Correção
+   registrada em 2026-09-30:** `data-agent/index.ts` NÃO importa
+   `domains.ts` — o campo `gaps` nunca sai na resposta real da function.
+   Quem lê `domains.ts` (incluindo `gaps`) é só o FRONTEND, direto
+   (`IntelligenceDomainsPanel.tsx` e `HermesGapsPanel.tsx`, ver seção
+   "Fichas de setor" → Frente 2 abaixo) — funciona porque o Vite bundla
+   `shared/` normalmente, mas é bom saber que são duas fontes diferentes
+   (uma ao vivo via HTTP, outra estática via import direto), não uma só.
    Cobre 9 domínios reais (`business, customer, market, competition,
    digital, content, history, resources, performance`), lendo tabelas de
    verdade (`competitors`, `reviews`, `leads`, `posts`, `diagnostics` etc.).
@@ -49,15 +58,41 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente · ❌ 
    ainda vai construir.
 
 2. **Hermes/Estratégia** (mensal, lê ficha do setor + memória estratégica)
-   — 🟡 parcial.
+   — ✅ existe (atualizado em 2026-09-30 — "Hermes independente").
    `supabase/functions/strategy-generate/index.ts`.
    Já lê a ficha do setor (`fetchPlaybookBlock`) e uma memória estratégica
    real (via `data-agent` → domínio `history`, que lê
    `marketing_ai_brain_nodes`, `marketing_ai_strategy_log`,
-   `marketing_ai_experiments`). **Não é mensal**: geração e reavaliação
-   (`reanalyze`) são só por clique do dono ("Reavaliar") — decisão
-   deliberada do produto, documentada no próprio código, sem cron.
-   Automatizar essa cadência é trabalho novo.
+   `marketing_ai_experiments`). **Agora é automático**: `claim-diagnostic`
+   dispara a 1ª estratégia sozinha logo após o cadastro; um despachante
+   novo (`action:'cron_dispatch'`, pg_cron diário) reavalia semanalmente
+   (`reanalyze`) e atualiza o plano tático mensalmente OU quando o
+   check-up pede ajuste (`action:'refresh'` — mantém a tese, só refaz
+   funil/metas/orçamento, silencioso). Estratégia NOVA (`generate`) só
+   quando o check-up decide PIVOT/TERMINATE — só nesse caso avisa o dono
+   (Telegram + Atividades). Interruptor de segurança em 2 níveis: geral
+   (`hermes_config.auto_strategy_enabled`, painel Owner → Configurações →
+   Tipos de negócio) e por empresa (`companies.auto_strategy`, painel
+   Owner → detalhe da empresa) — Liga dos Sonhos fica desligada até o
+   dono decidir. Teto de custo: até 5 empresas por rodada do
+   despachante, até 10 chamadas automáticas/mês por empresa; custo de
+   cada chamada (`agent_role:'estrategia'`) registrado em
+   `agent_performance` e visível no painel "Uso de IA" que já existia na
+   página de detalhe da empresa (nenhuma tela nova precisou ser criada
+   pra isso). Autenticação: function deployada com `--no-verify-jwt`
+   (mesmo padrão de outras functions chamadas por cron, ver armadilha
+   abaixo) — código valida `cron_secret` OU JWT real do dono; caminho
+   cron usa `company_id` do corpo, caminho JWT NUNCA aceita `company_id`
+   do corpo (sempre resolve pela própria empresa do usuário logado).
+   Testado de ponta a ponta: os 3 casos de auth (sem nada = 401,
+   cron_secret certo = 200, errado = 401), bootstrap real via cadastro,
+   reanalyze semanal, refresh mensal (com regra 80/20 real no
+   raciocínio da IA). **Não testado ao vivo**: o cenário PIVOT/TERMINATE
+   (a IA sempre decidiu continuar/ajustar com dado real nos testes) — o
+   caminho de código existe e foi revisado, mas uma tentativa de forçar
+   o cenário via gancho de teste foi bloqueada pelo classificador de
+   segurança do ambiente (change flagged como enfraquecimento de auth)
+   e não foi contornada.
 
 3. **Calendário semanal 80/20** — 🟡 parcial.
    `supabase/functions/creative-generate/index.ts` (`planWeekForCompany`),
@@ -397,7 +432,7 @@ compartilham contexto da empresa (`companies`) e memória (`agent_messages`,
 
 | Agente | Especialidade | Status |
 |--------|--------------|-------|
-| Geral | Posts, conteúdo, reputação, concorrência, diagnóstico do site, atendimento (leads/follow-up) | **Ativo** — único papel hoje. Chave interna continua `marketing` em `hermes-proxy` (não renomeada no banco pra não quebrar histórico de `agent_messages`/`agent_performance`); só o nome exibido virou "Agente Geral". Liga/desliga em `/owner/agentes` (Agents Control Center → "Agentes Ativos"). |
+| Geral | Posts, conteúdo, reputação, concorrência, diagnóstico do site, atendimento (leads/follow-up) | **Ativo** — único papel hoje. Chave interna continua `marketing` em `hermes-proxy` (não renomeada no banco pra não quebrar histórico de `agent_messages`/`agent_performance`); só o nome exibido virou "Agente Geral". Liga/desliga em `/owner/company/:id` (checkbox "Marketing AI" — o "Agents Control Center" em `/owner/agentes` citado antes aqui não existe como rota real; corrigido em 2026-09-30). |
 | Dev (Claude) | Executa código — sou eu | Ativo |
 
 **Agente de Vendas foi excluído em 2026-07-25** (decisão do dono) — antes
