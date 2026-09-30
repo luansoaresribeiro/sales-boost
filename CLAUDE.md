@@ -87,12 +87,21 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente · ❌ 
    Testado de ponta a ponta: os 3 casos de auth (sem nada = 401,
    cron_secret certo = 200, errado = 401), bootstrap real via cadastro,
    reanalyze semanal, refresh mensal (com regra 80/20 real no
-   raciocínio da IA). **Não testado ao vivo**: o cenário PIVOT/TERMINATE
-   (a IA sempre decidiu continuar/ajustar com dado real nos testes) — o
-   caminho de código existe e foi revisado, mas uma tentativa de forçar
-   o cenário via gancho de teste foi bloqueada pelo classificador de
-   segurança do ambiente (change flagged como enfraquecimento de auth)
-   e não foi contornada.
+   raciocínio da IA). **PIVOT testado de ponta a ponta em 2026-09-30** —
+   não mais forçando o cenário automático (aquela tentativa de gancho de
+   teste continua bloqueada pelo classificador de segurança do ambiente,
+   nunca contornada), e sim pelo caminho real e legítimo: o botão do
+   dono **"Pedir nova estratégia"** (`StrategySection.tsx`, aparece
+   quando já existe uma principal ativa — pede confirmação + o "por quê"
+   via `window.prompt`) usa exatamente o MESMO código do PIVOT automático
+   (`action:'generate'` com `reason` no corpo) — gera estratégia nova,
+   pausa a antiga (`status:'paused'`), grava `marketing_ai_strategy_log`
+   (`decision_type:'pivot'`, `status:'implemented'` — já é decisão
+   tomada, não proposta esperando aprovação) e chama `notifyStrategy`
+   na hora. Testado ao vivo numa empresa de teste: log gravado com o
+   motivo exato digitado + evento `STRATEGY_PIVOT` real em
+   `bot_notifications` (Atividades) — confirma que o caminho de
+   PIVOT/aviso funciona de ponta a ponta sem precisar burlar nada.
    **Correção de confiabilidade (2026-09-30):** `reanalyze` e `refresh`
    rodavam a chamada IA de forma SÍNCRONA dentro da própria resposta
    HTTP — com o despachante (`cron_dispatch`) esperando cada empresa em

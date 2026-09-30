@@ -844,6 +844,27 @@ Deno.serve(async (req) => {
         await admin.from('marketing_ai_strategies').update({ status: 'failed', reasoning: 'Demorou demais e não terminou — tente gerar de novo.', updated_at: new Date().toISOString() }).eq('id', existing.id)
       }
 
+      // "Pedir nova estratégia" (dono, manual) usa o MESMO caminho do PIVOT
+      // automático (reanalyze decidindo pivot/terminate): loga a decisão
+      // presa à estratégia ANTIGA com o motivo que o dono deu, e avisa
+      // Telegram/Atividades na hora — o dono já decidiu, não é uma
+      // recomendação esperando aprovação (por isso status:'implemented',
+      // não 'proposed').
+      const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+      if (kind === 'main' && reason) {
+        const { data: oldActive } = await admin.from('marketing_ai_strategies').select('id').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').maybeSingle()
+        if (oldActive) {
+          await admin.from('marketing_ai_strategy_log').insert({
+            company_id: company.id, strategy_id: oldActive.id, decision_type: 'pivot',
+            recommendation: reason, reasoning: 'Pivô pedido manualmente pelo dono.', status: 'implemented',
+          })
+          const prefs = company.notification_prefs ?? {}
+          if (prefs.strategy !== false) {
+            await notifyStrategy(supabaseUrl, company.telegram_chat_id, company.id, 'STRATEGY_PIVOT', { decision: 'pivot', reason, reasoning: 'Pedido manual do dono.' })
+          }
+        }
+      }
+
       // Ponto 6 — a linha nasce com as colunas obrigatórias preenchidas
       // (name não é null-able) com um valor provisório.
       const { data: inserted, error: insErr } = await admin.from('marketing_ai_strategies').insert({

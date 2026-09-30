@@ -79,14 +79,19 @@ export default function StrategySection({ company }: { company: CompanyData }) {
 
   useEffect(() => { loadMain(); loadLog() }, [loadMain, loadLog])
 
+  // "Pedir nova estratégia" (dono) usa o MESMO caminho do PIVOT automático
+  // (reanalyze decidindo PIVOT/TERMINATE) — gera nova, pausa a antiga, avisa
+  // Telegram/Atividades com o motivo. Pede confirmação + o "por quê" antes.
   const createStrategy = useCallback(async (kind: 'main' | 'initiative') => {
+    let reason = ''
     if (kind === 'main' && main) {
-      const ok = window.confirm('Isso substitui sua estratégia principal atual por uma nova (é um pivô de direção) — a atual fica guardada no histórico, não some. Quer continuar?')
-      if (!ok) return
+      const input = window.prompt('Isso substitui sua estratégia principal atual por uma nova (é um pivô de direção) — a atual fica guardada no histórico, não some.\n\nPor quê? (aparece no aviso do Telegram/Atividades)', '')
+      if (input === null) return // cancelou
+      reason = input.trim()
     }
     setCreating(true); setError(''); setGenError('')
     try {
-      const res = await callStrategy(token, { action: 'generate', kind, parent_strategy_id: kind === 'initiative' ? main?.id : undefined })
+      const res = await callStrategy(token, { action: 'generate', kind, parent_strategy_id: kind === 'initiative' ? main?.id : undefined, reason: reason || undefined })
       const strategyId = res.strategy_id ? String(res.strategy_id) : ''
       if (strategyId && res.status === 'generating') {
         setGenerating({ id: strategyId, kind })
@@ -223,7 +228,7 @@ export default function StrategySection({ company }: { company: CompanyData }) {
             <button onClick={reanalyze} disabled={reanalyzing} style={ghostBtn}>{reanalyzing ? 'Reavaliando...' : '↻ Reavaliar'}</button>
           )}
           <button onClick={() => createStrategy('main')} disabled={creating || !!generating} style={{ ...primaryBtn, opacity: (creating || !!generating) ? 0.7 : 1, cursor: (creating || !!generating) ? 'default' : 'pointer' }}>
-            {creating || generating?.kind === 'main' ? 'Gerando...' : main ? '↻ Pivotar estratégia' : '+ Criar estratégia'}
+            {creating || generating?.kind === 'main' ? 'Gerando...' : main ? '↻ Pedir nova estratégia' : '+ Criar estratégia'}
           </button>
         </div>
       </div>
