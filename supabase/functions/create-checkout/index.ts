@@ -71,8 +71,8 @@ Deno.serve(async (req) => {
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
       client_reference_id: company.id,
-      success_url: success_url ?? `${Deno.env.get('SITE_URL') ?? 'https://sales-boost-restaurants.luancontasecundaria22.workers.dev'}/planos?upgrade=success`,
-      cancel_url: cancel_url ?? `${Deno.env.get('SITE_URL') ?? 'https://sales-boost-restaurants.luancontasecundaria22.workers.dev'}/planos`,
+      success_url: success_url ?? `${Deno.env.get('SITE_URL') ?? 'https://getsaleboost.com'}/planos?upgrade=success`,
+      cancel_url: cancel_url ?? `${Deno.env.get('SITE_URL') ?? 'https://getsaleboost.com'}/planos`,
       subscription_data: {
         metadata: { company_id: company.id, plan },
       },

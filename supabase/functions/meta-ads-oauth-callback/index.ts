@@ -70,6 +70,6 @@ Deno.serve(async (req) => {
 })
 
 function htmlRedirect(path) {
-  const appUrl = Deno.env.get('APP_URL') ?? 'https://sales-boost-restaurants.luancontasecundaria22.workers.dev'
+  const appUrl = Deno.env.get('APP_URL') ?? 'https://getsaleboost.com'
   return Response.redirect(`${appUrl}${path}`, 302)
 }

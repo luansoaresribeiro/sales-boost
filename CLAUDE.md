@@ -629,8 +629,21 @@ Custo de API por cliente: ~$0,20–$0,80/mês (Claude Sonnet) + ~$0,10–$0,30/m
 
 ## Estado atual do código
 
-- Site publicado: https://sales-boost-restaurants.luancontasecundaria22.workers.dev/
-- **Jarvis ao vivo:** https://sales-boost-restaurants.luancontasecundaria22.workers.dev/jarvis
+- **Site publicado (domínio próprio):** https://getsaleboost.com/ — o endereço
+  antigo `sales-boost-restaurants.luancontasecundaria22.workers.dev` não
+  responde mais (Cloudflare recusa rota `.workers.dev` depois da migração
+  pro domínio próprio, ver `wrangler.jsonc`). **Todo lugar que ainda
+  referenciar essa URL antiga é bug** — achado e corrigido em massa em
+  2026-09-30: secret `APP_URL` (usado por 5 edge functions de OAuth —
+  Instagram/GBP/GSC/Meta Ads/Meta Business — pra redirecionar de volta
+  depois de conectar), o **Site URL e Redirect URLs do Supabase Auth**
+  (afeta e-mail de confirmação de cadastro e "esqueci minha senha" —
+  estava apontando pra uma URL da Vercel ainda mais antiga, nem era o
+  workers.dev), fallback hardcoded em `create-checkout` (Stripe
+  success/cancel — na prática nunca usado, o frontend sempre manda a URL
+  explícita) e um link quebrado que `telegram-chat` mandava de verdade pro
+  usuário quando pedia pra conectar a conta.
+- **Jarvis ao vivo:** https://getsaleboost.com/jarvis
 - Landing page completa com hero, diagnóstico gratuito, pricing.
 - Auth com roles `owner`/`client`: `/login`, `/owner`, `/dashboard` + proteção de rota.
 - Dashboard com sidebar: Visão Geral, Diagnóstico, Insights, Integrações, Posts,

@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
       .single()
 
     if (!company) {
-      return json({ reply: 'Para usar o chat, primeiro conecte sua conta com /conectar CÓDIGO.\nGere seu código em: https://sales-boost-restaurants.luancontasecundaria22.workers.dev/dashboard/configuracoes' })
+      return json({ reply: 'Para usar o chat, primeiro conecte sua conta com /conectar CÓDIGO.\nGere seu código em: https://getsaleboost.com/dashboard/settings' })
     }
 
     let { data: conv } = await admin.from('telegram_conversations')
