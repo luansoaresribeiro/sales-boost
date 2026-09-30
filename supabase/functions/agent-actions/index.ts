@@ -236,6 +236,7 @@ async function execute(admin: Supa, act: any): Promise<any> {
         published_at: mediaId ? new Date().toISOString() : null,
       }).eq('id', act.ref_id).eq('company_id', act.company_id)
       if (error) return await fail(error.message)
+      if (mediaId) await recordInstagramPost(admin, act.company_id, mediaId, caption, String(content?.image_url ?? ''))
 
       if (publishError) return await fail(publishError)
       return await done({ approved: 'marketing_ai_content', id: act.ref_id, published_to_instagram: !!mediaId }, act.ref_id)
@@ -254,11 +255,19 @@ async function execute(admin: Supa, act: any): Promise<any> {
       const caption = [p.caption, p.cta, p.hashtags].map(x => (x ? String(x) : '').trim()).filter(Boolean).join('\n\n')
       const { data: company } = await admin.from('companies').select('instagram_user_id, instagram_access_token').eq('id', act.company_id).maybeSingle()
 
+      // Carrossel real (2-10 fotos) quando a peca tem media[] com mais de 1
+      // item (ex: recipe 'carrossel_tour' do catalog-package) -- 1 item
+      // continua publicando como foto unica, igual sempre foi.
+      const mediaItems = Array.isArray(p.media) ? (p.media as { url?: string }[]).map(m => String(m?.url ?? '')).filter(Boolean) : []
+      const coverUrl = mediaItems[0] ?? (p.image_url ? String(p.image_url) : '')
+
       let mediaId: string | null = null
       let publishError: string | null = null
-      if (company?.instagram_user_id && company?.instagram_access_token && p.image_url) {
+      if (company?.instagram_user_id && company?.instagram_access_token && coverUrl) {
         try {
-          mediaId = await publishToInstagram(String(company.instagram_user_id), String(company.instagram_access_token), String(p.image_url), caption)
+          mediaId = mediaItems.length > 1
+            ? await publishCarouselToInstagram(String(company.instagram_user_id), String(company.instagram_access_token), mediaItems, caption)
+            : await publishToInstagram(String(company.instagram_user_id), String(company.instagram_access_token), coverUrl, caption)
         } catch (e) {
           publishError = e instanceof Error ? e.message : String(e)
         }
@@ -267,13 +276,14 @@ async function execute(admin: Supa, act: any): Promise<any> {
       }
 
       const { data: postRow, error } = await admin.from('posts').insert({
-        company_id: act.company_id, content: caption, image_url: p.image_url ?? null, image_suggestion: p.idea ?? null,
+        company_id: act.company_id, content: caption, image_url: coverUrl || null, image_suggestion: p.idea ?? null,
         agent_notes: act.agent_interpretation ?? act.reason ?? null, platform: 'instagram',
         status: mediaId ? 'publicado' : 'aprovado',
         instagram_media_id: mediaId, published_at: mediaId ? new Date().toISOString() : null,
       }).select('id').single()
       if (error) return await fail(error.message)
       await admin.from('marketing_ai_test_content').delete().eq('id', act.ref_id).eq('company_id', act.company_id)
+      if (mediaId) await recordInstagramPost(admin, act.company_id, mediaId, caption, coverUrl)
 
       if (publishError) return await fail(publishError)
       return await done({ created: 'post', id: postRow?.id, published_to_instagram: !!mediaId }, postRow?.id ?? mediaId ?? undefined)
@@ -347,18 +357,20 @@ async function waitContainerReady(creationId: string, token: string): Promise<vo
   throw new Error('Instagram demorou demais pra processar a mídia (timeout).')
 }
 
-async function publishToInstagram(igUserId: string, token: string, imageUrl: string, caption: string): Promise<string> {
-  const containerRes = await fetch(`${IG_API}/${igUserId}/media`, {
+async function createMediaContainer(igUserId: string, token: string, body: Record<string, unknown>): Promise<string> {
+  const res = await fetch(`${IG_API}/${igUserId}/media`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image_url: imageUrl, caption, access_token: token }),
+    body: JSON.stringify({ ...body, access_token: token }),
   })
-  if (!containerRes.ok) {
-    const err = await containerRes.json().catch(() => ({}))
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
     throw new Error(`Falha ao preparar mídia no Instagram: ${err.error?.message ?? JSON.stringify(err)}`)
   }
-  const { id: creationId } = await containerRes.json()
-  await waitContainerReady(creationId, token)
+  const { id } = await res.json()
+  return id
+}
 
+async function mediaPublish(igUserId: string, token: string, creationId: string): Promise<string> {
   const publishRes = await fetch(`${IG_API}/${igUserId}/media_publish`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ creation_id: creationId, access_token: token }),
@@ -369,6 +381,45 @@ async function publishToInstagram(igUserId: string, token: string, imageUrl: str
   }
   const { id: mediaId } = await publishRes.json()
   return mediaId
+}
+
+async function publishToInstagram(igUserId: string, token: string, imageUrl: string, caption: string): Promise<string> {
+  const creationId = await createMediaContainer(igUserId, token, { image_url: imageUrl, caption })
+  await waitContainerReady(creationId, token)
+  return await mediaPublish(igUserId, token, creationId)
+}
+
+// Carrossel real (2-10 fotos, fluxo oficial: containers filhos +
+// container CAROUSEL + media_publish). Os containers filhos sao criados E
+// esperados em PARALELO (Promise.all), nao em fila -- o waitContainerReady
+// de cada um pode levar ate 30s, e em fila 10 fotos estourariam os 150s do
+// plano Free do Supabase; em paralelo o pior caso fica perto de 30s (so
+// mais o container-pai depois). Todas as fotos precisam ja estar na mesma
+// proporcao (o pipeline de upload do catalogo garante isso, ver
+// imageProcessing.ts) -- o Instagram corta pra bater com a primeira senao.
+async function publishCarouselToInstagram(igUserId: string, token: string, mediaUrls: string[], caption: string): Promise<string> {
+  const urls = mediaUrls.slice(0, 10)
+  if (urls.length < 2) throw new Error('Carrossel precisa de pelo menos 2 fotos.')
+
+  const childIds = await Promise.all(urls.map(url => createMediaContainer(igUserId, token, { image_url: url, is_carousel_item: true })))
+  await Promise.all(childIds.map(id => waitContainerReady(id, token)))
+
+  const parentId = await createMediaContainer(igUserId, token, { media_type: 'CAROUSEL', children: childIds, caption })
+  await waitContainerReady(parentId, token)
+
+  return await mediaPublish(igUserId, token, parentId)
+}
+
+// Bug antigo (ate 2026-09-30): o publicador real (aqui) nunca gravava em
+// instagram_posts -- so a function deprecada publish-instagram gravava, e
+// ela nunca chegou a rodar em produção (0 chamadores). Isso deixava
+// VisualLibrary/AgentTabExtras/detect-opportunities/generate-tab-insight/
+// business-progress/enzo-daily-report lendo uma tabela sempre vazia.
+async function recordInstagramPost(admin: Supa, companyId: string, mediaId: string, caption: string, imageUrl: string) {
+  await admin.from('instagram_posts').insert({
+    company_id: companyId, instagram_media_id: mediaId, caption, image_url: imageUrl || null,
+    status: 'published', posted_at: new Date().toISOString(),
+  })
 }
 
 async function finish(admin: Supa, id: string, status: 'EXECUTED' | 'FAILED', extra: Record<string, unknown>) {

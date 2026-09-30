@@ -93,6 +93,26 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente · ❌ 
    o cenário via gancho de teste foi bloqueada pelo classificador de
    segurança do ambiente (change flagged como enfraquecimento de auth)
    e não foi contornada.
+   **Correção de confiabilidade (2026-09-30):** `reanalyze` e `refresh`
+   rodavam a chamada IA de forma SÍNCRONA dentro da própria resposta
+   HTTP — com o despachante (`cron_dispatch`) esperando cada empresa em
+   sequência (`await`), 2-3 `refresh` (4500 tokens, ~70-90s cada) na
+   mesma rodada estourava os 150s do plano Free e as empresas seguintes
+   ficavam sem processar. As duas ações agora respondem na hora (testado
+   ao vivo: `reanalyze` em ~1.6s, `refresh` em ~0.3s — antes bloqueavam
+   a resposta inteira) e fazem o raciocínio de verdade em segundo plano
+   via `EdgeRuntime.waitUntil` (`runReanalyze`/`runRefresh`), mesmo
+   padrão já usado por `generate`/`continue`. Dentro do `reanalyze`, as
+   chamadas de auto-disparo pra `refresh` (decisão REFINE) e `generate`
+   (PIVOT/TERMINATE) eram fire-and-forget (`fetch(...).catch(...)` sem
+   `await` nem `waitUntil` — podiam nunca sair antes da função
+   terminar); agora são `await`adas dentro do próprio `waitUntil` (já
+   em segundo plano, então não trava resposta nenhuma) e registram erro
+   no log se o aceite (2xx) não vier. Reverificado ao vivo depois da
+   correção: `last_reanalyzed_at`/`last_refreshed_at` e o custo em
+   `agent_performance` aparecem corretos alguns segundos/minutos depois
+   da resposta rápida, confirmando que o trabalho de fundo completa de
+   verdade.
 
 3. **Calendário semanal 80/20** — 🟡 parcial.
    `supabase/functions/creative-generate/index.ts` (`planWeekForCompany`),
@@ -140,13 +160,28 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente · ❌ 
    (`rascunho→aprovado→publicado`) segue a mesma trava. Sólido em toda
    a base.
 
-8. **Distribuição Instagram** — ✅ existe (só imagem única).
-   `agent-actions` → `publishToInstagram` (linha ~350).
-   Publica 1 imagem por vez — sem carrossel (`children`/`media_type:
-   CAROUSEL` não existem na function). Depois de publicar grava em
-   `posts` ou `marketing_ai_content`, **nunca em `instagram_posts`**
-   (tabela sempre vazia, já documentado acima). Carrossel é exatamente
-   o item 3 do plano Fase 3+4 (ver seção Fichas de setor).
+8. **Distribuição Instagram** — ✅ existe (imagem única e carrossel).
+   `agent-actions` → `publishToInstagram` (foto única) e
+   `publishCarouselToInstagram` (2-10 fotos, adicionada em 2026-09-30):
+   fluxo oficial (containers filhos `is_carousel_item` + container
+   `media_type:'CAROUSEL'` + `media_publish`). Os containers filhos são
+   criados e esperados em PARALELO (`Promise.all`), não em fila — cada
+   `waitContainerReady` pode levar até 30s, e em fila 10 fotos
+   estourariam os 150s do plano Free; em paralelo o pior caso fica perto
+   de 30-60s. Disparado quando a peça de `marketing_ai_test_content` tem
+   `media` com 2+ itens (ex: recipe `carrossel_tour` do
+   `catalog-package`) — 1 item continua publicando como foto única.
+   Depois de publicar grava em `posts` (com `instagram_media_id`) E agora
+   também em `instagram_posts` (`recordInstagramPost` — bug antigo
+   corrigido: essa tabela nunca era escrita pelo publicador real, só pela
+   `publish-instagram` deprecada que nunca rodou; `VisualLibrary.tsx`,
+   `AgentTabExtras.tsx`, `detect-opportunities`, `generate-tab-insight`,
+   `business-progress`, `enzo-daily-report` liam uma tabela sempre
+   vazia). **Ainda não testado com uma publicação real** — precisa de
+   uma conta de teste do Instagram conectada — a empresa QA Catalogo
+   Imoveis está sem Instagram conectado desde 2026-09-30 (a conta que
+   tinha ligado por acidente era a oficial do próprio Sales Boost,
+   @getsaleboost, não uma conta de teste — foi desconectada).
 
 9. **Conversão** (comentário-palavra-chave/DM → lead, resposta como
    rascunho aprovado) — 🟡 parcial.
@@ -702,16 +737,18 @@ Custo de API por cliente: ~$0,20–$0,80/mês (Claude Sonnet) + ~$0,10–$0,30/m
     pelo `hermes-proxy`. Ainda não foi apagada.
   - **`publish-instagram` está deprecada** (confirmado em 2026-09-29): zero
     chamadores no código (nenhuma tela, nenhuma outra function, nenhum job
-    do pg_cron) e a tabela que ela grava (`instagram_posts`) tem 0 linhas —
-    nunca terminou de rodar em produção. O publicador real e ativo hoje é o
-    `publishToInstagram` dentro de `agent-actions` (fluxo de aprovação) —
-    mas **esse não grava em `instagram_posts`**, então as telas que leem
-    dessa tabela (`VisualLibrary.tsx`, `AgentTabExtras.tsx`,
+    do pg_cron) — nunca terminou de rodar em produção. Ainda não foi
+    apagada. **Corrigido em 2026-09-30:** o publicador real e ativo
+    (`agent-actions` → `publishToInstagram`/`publishCarouselToInstagram`)
+    agora grava em `instagram_posts` também (`recordInstagramPost`) — as
+    telas que leem essa tabela (`VisualLibrary.tsx`, `AgentTabExtras.tsx`,
     `detect-opportunities`, `generate-tab-insight`, `business-progress`,
-    `enzo-daily-report`) estão lendo uma tabela sempre vazia — corrigir isso
-    faz parte da Fase 4 do sistema de fichas de setor (ver seção "Fichas de
-    setor" abaixo), junto com suporte a carrossel/Reels. `publish-instagram`
-    ainda não foi apagada.
+    `enzo-daily-report`) deixam de ler sempre vazio a partir da próxima
+    publicação real feita por esse caminho (posts publicados antes dessa
+    correção continuam sem linha ali — não houve backfill). Carrossel
+    (2-10 fotos) também já existe, ver item 8 do "Ciclo de crescimento"
+    acima — falta só o teste com uma publicação real (precisa de conta
+    de teste do Instagram conectada).
   - **Funções "sem arquivo local" (achadas em 2026-07-14) já foram
     resolvidas** — confirmado em 2026-09-29 que as 88 functions deployadas
     batem 100% com as 88 pastas locais em `supabase/functions/`, incluindo

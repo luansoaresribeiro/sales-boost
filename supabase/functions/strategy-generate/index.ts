@@ -541,6 +541,166 @@ Retorne APENAS um JSON:
   }
 }
 
+async function runReanalyze(admin: SupaClient, supabaseUrl: string, cronSecret: string, anthropicKey: string, company: Company, strategyId: string): Promise<void> {
+  try {
+    const { data: strategy } = await admin.from('marketing_ai_strategies').select('*').eq('id', strategyId).eq('company_id', company.id).maybeSingle()
+    if (!strategy) return
+    const { data: goalRows } = await admin.from('marketing_ai_strategy_goals').select('*').eq('strategy_id', strategyId)
+    const [delta, baseline, playbookBlock] = await Promise.all([
+      fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'delta', String(strategy.updated_at)),
+      fetchRealBaseline(admin, company.id),
+      fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
+    ])
+
+    const prompt = `Você é Hermes fazendo o Strategy Health Check de uma tese já ativa — decida se ela continua sustentada pela evidência ou se precisa de ajuste. Novidade não muda a estratégia automaticamente: só muda se a evidência realmente invalidar a tese.
+
+Estratégia ativa: "${strategy.name}"
+Tese: ${strategy.thesis ?? strategy.strategic_focus ?? '—'}
+Restrição principal identificada: ${strategy.primary_constraint ?? '—'}
+Oportunidade perseguida: ${strategy.strategic_opportunity ?? '—'}
+Condições de sucesso: ${strategy.success_conditions ?? '—'}
+Condições de fracasso: ${strategy.failure_conditions ?? '—'}
+Metas atuais: ${JSON.stringify((goalRows ?? []).map((g: Record<string, unknown>) => ({ name: g.name, goal_type: g.goal_type, target: g.target_value, baseline: g.baseline_value, progress: g.current_progress })))}
+${baseline ? `Dado real ATUAL: ${baseline.label}.` : 'Ainda sem dado real de performance coletado.'}
+
+O QUE MUDOU nos 9 domínios desde a última atualização (Data Agent, delta):
+${formatDomains(delta)}
+${playbookBlock}
+
+Decida:
+1. STRATEGY_STATUS: ON_TRACK | NEEDS_ADJUSTMENT | UNDERPERFORMING | AT_RISK | INVALIDATED
+2. DECISION: CONTINUE | REFINE | PIVOT | TERMINATE (só REFINE/PIVOT/TERMINATE geram recomendação pro dono — CONTINUE significa "sem sinal forte o bastante pra mudar nada agora")
+Não conclua que a estratégia toda falhou por causa de 1 sinal fraco isolado — considere volume de evidência, não ruído de curto prazo.
+
+Retorne APENAS um JSON: {"status": "ON_TRACK|NEEDS_ADJUSTMENT|UNDERPERFORMING|AT_RISK|INVALIDATED", "decision": "continue|refine|pivot|terminate", "recommendation": "1-3 frases, o que mudar (vazio se decision=continue)", "reasoning": "por que, citando os sinais reais ou a falta deles"}`
+
+    const raw = await callClaude(anthropicKey, prompt, 900)
+    const parsed = parseObj(raw)
+    const decision = String(parsed.decision ?? 'continue')
+    // Marca sempre que o check-up rodou -- e o que o cron_dispatch usa
+    // pra saber quando a proxima semana comeca (independente da decisao).
+    await admin.from('marketing_ai_strategies').update({ last_reanalyzed_at: new Date().toISOString() }).eq('id', strategyId)
+    await logStrategyCost(admin, company.id, 'reanalyze', true)
+
+    if (decision !== 'continue' && parsed.recommendation) {
+      await admin.from('marketing_ai_strategy_log').insert({
+        company_id: company.id, strategy_id: strategyId, decision_type: decision,
+        recommendation: String(parsed.recommendation), reasoning: String(parsed.reasoning ?? ''), status: 'proposed',
+      })
+
+      if (decision === 'refine') {
+        // Ajuste do dono: check-up que pede ajuste ATUALIZA a estrategia
+        // ativa em vez de so propor -- silencioso (nao avisa), mesmo
+        // caminho do refresh mensal de rotina. Ja estamos em segundo
+        // plano (waitUntil) -- espera o aceite (2xx) antes de seguir,
+        // registra se nao sair.
+        try {
+          const res = await fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'refresh', company_id: company.id, strategy_id: strategyId, cron_secret: cronSecret }),
+          })
+          if (!res.ok) console.error(`reanalyze[${strategyId}]: refresh recusado (${res.status}): ${await res.text()}`)
+        } catch (e) { console.error(`reanalyze[${strategyId}]: falha ao disparar refresh:`, e) }
+      } else if (decision === 'pivot' || decision === 'terminate') {
+        // So aqui (mudanca de rumo de verdade) gera estrategia NOVA e
+        // avisa o dono com o motivo -- check-up que so refina fica quieto.
+        try {
+          const res = await fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'generate', company_id: company.id, cron_secret: cronSecret }),
+          })
+          if (!res.ok) console.error(`reanalyze[${strategyId}]: generate recusado (${res.status}): ${await res.text()}`)
+        } catch (e) { console.error(`reanalyze[${strategyId}]: falha ao disparar generate:`, e) }
+
+        const prefs = company.notification_prefs ?? {}
+        if (prefs.strategy !== false) {
+          await notifyStrategy(supabaseUrl, company.telegram_chat_id, company.id, 'STRATEGY_PIVOT', {
+            decision, reason: String(parsed.recommendation), reasoning: String(parsed.reasoning ?? ''),
+          })
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`runReanalyze[${strategyId}]:`, err)
+    await logStrategyCost(admin, company.id, 'reanalyze', false, err instanceof Error ? err.message : String(err))
+  }
+}
+
+async function runRefresh(admin: SupaClient, supabaseUrl: string, cronSecret: string, anthropicKey: string, company: Company, strategyId: string): Promise<void> {
+  try {
+    const { data: strategy } = await admin.from('marketing_ai_strategies').select('*').eq('id', strategyId).eq('company_id', company.id).maybeSingle()
+    if (!strategy) return
+
+    const { data: goalRows } = await admin.from('marketing_ai_strategy_goals').select('*').eq('strategy_id', strategyId)
+    const { data: pastLog } = await admin.from('marketing_ai_strategy_log').select('decision_type, recommendation, status, created_at').eq('strategy_id', strategyId).order('created_at', { ascending: false }).limit(5)
+    const [dataAgentState, baseline, playbookBlock] = await Promise.all([
+      fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'state'),
+      fetchRealBaseline(admin, company.id),
+      fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
+    ])
+
+    const prompt = `Você é Hermes, ATUALIZANDO uma estratégia ativa (refresh de rotina mensal, ou porque o check-up semanal pediu ajuste) — a TESE principal já está decidida e NÃO deve mudar aqui, só o plano tático (funil/metas/orçamento/prioridades) precisa refletir o que já funcionou até agora + os dados mais recentes.
+
+${businessPreamble(company, {})}${playbookBlock}
+
+TESE ATIVA (não mude, só use como base):
+Nome: ${strategy.name}
+Tese: ${strategy.thesis ?? strategy.strategic_focus ?? '—'}
+Restrição principal: ${strategy.primary_constraint ?? '—'}
+Componentes ativos: ${Array.isArray(strategy.active_components) ? (strategy.active_components as string[]).join(', ') : '—'}
+
+PLANO TÁTICO ATUAL:
+Funil: ${JSON.stringify(strategy.funnel_plan ?? [])}
+Metas: ${JSON.stringify((goalRows ?? []).map((g: Record<string, unknown>) => ({ name: g.name, goal_type: g.goal_type, target: g.target_value, progress: g.current_progress })))}
+Orçamento: ${JSON.stringify(strategy.budget ?? {})}
+
+DECISÕES/RECOMENDAÇÕES PASSADAS (memória — o que já foi tentado/sugerido, pra não repetir o que não funcionou nem descartar o que já provou valor):
+${(pastLog ?? []).length ? (pastLog ?? []).map((l: Record<string, unknown>) => `- [${l.decision_type}/${l.status}] ${l.recommendation}`).join('\n') : 'Nenhuma recomendação anterior ainda.'}
+
+${baseline ? `Dado real ATUAL: ${baseline.label}.` : 'Ainda sem dado real de performance coletado.'}
+
+ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
+${formatDomains(dataAgentState)}
+
+REGRAS: mantenha a tese intacta; priorize (regra 80/20) manter e reforçar o que os sinais reais mostram que já funciona, reservando só uma fatia menor pra testar algo novo; NUNCA invente métrica que não foi te dada acima; metas no máximo 3 (goal_type: ${GOAL_TYPES.join('|')}), NÃO preencha baseline.
+
+Retorne APENAS um JSON:
+{
+  "what_changed": "2-4 frases: o que mudou no plano tático e por quê, citando os sinais reais que motivaram",
+  "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
+  "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}],
+  "budget": {"total":null,"currency":"BRL","period":"monthly","paid_ads":null,"organic":null,"creative":null,"other":null,"is_flexible":true,"allocation":[{"channel":"","amount":null,"reason":""}],"budget_reasoning":""}
+}`
+
+    const r = await callClaudeStep(anthropicKey, prompt, 4500, { allowRetry: false }, 'Refresh (atualização mensal)')
+    if (!r.ok) { await logStrategyCost(admin, company.id, 'refresh', false, r.reason); return }
+    const parsed = r.parsed
+    const goals = goalsWithBaselineFrom(parsed.goals, baseline)
+
+    await admin.from('marketing_ai_strategies').update({
+      funnel_plan: Array.isArray(parsed.funnel_plan) ? parsed.funnel_plan : strategy.funnel_plan,
+      budget: parsed.budget && typeof parsed.budget === 'object' ? parsed.budget : strategy.budget,
+      last_refreshed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('id', strategyId)
+
+    if (goals.length) {
+      await admin.from('marketing_ai_strategy_goals').delete().eq('strategy_id', strategyId)
+      await admin.from('marketing_ai_strategy_goals').insert(goals.map(g => ({ ...g, strategy_id: strategyId })))
+    }
+
+    await admin.from('marketing_ai_strategy_log').insert({
+      company_id: company.id, strategy_id: strategyId, decision_type: 'update',
+      recommendation: String(parsed.what_changed ?? 'Plano tático atualizado com dados novos.'),
+      reasoning: String(parsed.what_changed ?? ''), status: 'implemented',
+    })
+    await logStrategyCost(admin, company.id, 'refresh', true)
+  } catch (err) {
+    console.error(`runRefresh[${strategyId}]:`, err)
+    await logStrategyCost(admin, company.id, 'refresh', false, err instanceof Error ? err.message : String(err))
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
@@ -706,79 +866,15 @@ Deno.serve(async (req) => {
         const { data: activeMain } = await admin.from('marketing_ai_strategies').select('id').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').maybeSingle()
         strategyId = activeMain?.id ? String(activeMain.id) : ''
       }
-      const { data: strategy } = await admin.from('marketing_ai_strategies').select('*').eq('id', strategyId).eq('company_id', company.id).maybeSingle()
-      if (!strategy) return json({ error: 'Estratégia não encontrada.' }, 404)
-      const { data: goalRows } = await admin.from('marketing_ai_strategy_goals').select('*').eq('strategy_id', strategyId)
-      const [delta, baseline, playbookBlock] = await Promise.all([
-        fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'delta', String(strategy.updated_at)),
-        fetchRealBaseline(admin, company.id),
-        fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
-      ])
+      const { data: strategyExists } = await admin.from('marketing_ai_strategies').select('id').eq('id', strategyId).eq('company_id', company.id).maybeSingle()
+      if (!strategyExists) return json({ error: 'Estratégia não encontrada.' }, 404)
 
-      const prompt = `Você é Hermes fazendo o Strategy Health Check de uma tese já ativa — decida se ela continua sustentada pela evidência ou se precisa de ajuste. Novidade não muda a estratégia automaticamente: só muda se a evidência realmente invalidar a tese.
-
-Estratégia ativa: "${strategy.name}"
-Tese: ${strategy.thesis ?? strategy.strategic_focus ?? '—'}
-Restrição principal identificada: ${strategy.primary_constraint ?? '—'}
-Oportunidade perseguida: ${strategy.strategic_opportunity ?? '—'}
-Condições de sucesso: ${strategy.success_conditions ?? '—'}
-Condições de fracasso: ${strategy.failure_conditions ?? '—'}
-Metas atuais: ${JSON.stringify((goalRows ?? []).map((g: Record<string, unknown>) => ({ name: g.name, goal_type: g.goal_type, target: g.target_value, baseline: g.baseline_value, progress: g.current_progress })))}
-${baseline ? `Dado real ATUAL: ${baseline.label}.` : 'Ainda sem dado real de performance coletado.'}
-
-O QUE MUDOU nos 9 domínios desde a última atualização (Data Agent, delta):
-${formatDomains(delta)}
-${playbookBlock}
-
-Decida:
-1. STRATEGY_STATUS: ON_TRACK | NEEDS_ADJUSTMENT | UNDERPERFORMING | AT_RISK | INVALIDATED
-2. DECISION: CONTINUE | REFINE | PIVOT | TERMINATE (só REFINE/PIVOT/TERMINATE geram recomendação pro dono — CONTINUE significa "sem sinal forte o bastante pra mudar nada agora")
-Não conclua que a estratégia toda falhou por causa de 1 sinal fraco isolado — considere volume de evidência, não ruído de curto prazo.
-
-Retorne APENAS um JSON: {"status": "ON_TRACK|NEEDS_ADJUSTMENT|UNDERPERFORMING|AT_RISK|INVALIDATED", "decision": "continue|refine|pivot|terminate", "recommendation": "1-3 frases, o que mudar (vazio se decision=continue)", "reasoning": "por que, citando os sinais reais ou a falta deles"}`
-
-      const raw = await callClaude(anthropicKey, prompt, 900)
-      const parsed = parseObj(raw)
-      const decision = String(parsed.decision ?? 'continue')
-      // Marca sempre que o check-up rodou -- e o que o cron_dispatch usa
-      // pra saber quando a proxima semana comeca (independente da decisao).
-      await admin.from('marketing_ai_strategies').update({ last_reanalyzed_at: new Date().toISOString() }).eq('id', strategyId)
-      await logStrategyCost(admin, company.id, 'reanalyze', true)
-
-      if (decision !== 'continue' && parsed.recommendation) {
-        await admin.from('marketing_ai_strategy_log').insert({
-          company_id: company.id, strategy_id: strategyId, decision_type: decision,
-          recommendation: String(parsed.recommendation), reasoning: String(parsed.reasoning ?? ''), status: 'proposed',
-        })
-
-        if (decision === 'refine') {
-          // Ajuste do dono: check-up que pede ajuste ATUALIZA a estrategia
-          // ativa em vez de so propor -- silencioso (nao avisa), mesmo
-          // caminho do refresh mensal de rotina. Disparado em segundo
-          // plano (nao trava a resposta do reanalyze/do despachante).
-          fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'refresh', company_id: company.id, strategy_id: strategyId, cron_secret: cronSecret }),
-          }).catch(e => console.error(`reanalyze[${strategyId}]: falha ao disparar refresh:`, e))
-        } else if (decision === 'pivot' || decision === 'terminate') {
-          // So aqui (mudanca de rumo de verdade) gera estrategia NOVA e
-          // avisa o dono com o motivo -- check-up que so refina fica quieto.
-          fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'generate', company_id: company.id, cron_secret: cronSecret }),
-          }).catch(e => console.error(`reanalyze[${strategyId}]: falha ao disparar generate:`, e))
-
-          const prefs = company.notification_prefs ?? {}
-          if (prefs.strategy !== false) {
-            notifyStrategy(supabaseUrl, company.telegram_chat_id, company.id, 'STRATEGY_PIVOT', {
-              decision, reason: String(parsed.recommendation), reasoning: String(parsed.reasoning ?? ''),
-            })
-          }
-        }
-
-        return json({ ok: true, needs_adjustment: true, status: parsed.status, decision })
-      }
-      return json({ ok: true, needs_adjustment: false, status: parsed.status ?? null, reasoning: parsed.reasoning ? String(parsed.reasoning) : null })
+      // Responde na hora (o despachante espera so o aceite 2xx pra seguir
+      // pra proxima empresa) -- o raciocinio de verdade roda em segundo
+      // plano, mesmo padrao do 'generate' (runStep1/runStep2).
+      // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
+      EdgeRuntime.waitUntil(runReanalyze(admin, supabaseUrl, cronSecret, anthropicKey, company, strategyId))
+      return json({ ok: true, strategy_id: strategyId, deferred: true })
     }
 
     // 'refresh' -- ATUALIZA a estrategia ativa no lugar (metas, funil,
@@ -794,75 +890,15 @@ Retorne APENAS um JSON: {"status": "ON_TRACK|NEEDS_ADJUSTMENT|UNDERPERFORMING|AT
         const { data: activeMain } = await admin.from('marketing_ai_strategies').select('id').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').maybeSingle()
         strategyId = activeMain?.id ? String(activeMain.id) : ''
       }
-      const { data: strategy } = await admin.from('marketing_ai_strategies').select('*').eq('id', strategyId).eq('company_id', company.id).maybeSingle()
-      if (!strategy) return json({ error: 'Estratégia não encontrada.' }, 404)
+      const { data: strategyExists } = await admin.from('marketing_ai_strategies').select('id').eq('id', strategyId).eq('company_id', company.id).maybeSingle()
+      if (!strategyExists) return json({ error: 'Estratégia não encontrada.' }, 404)
 
-      const { data: goalRows } = await admin.from('marketing_ai_strategy_goals').select('*').eq('strategy_id', strategyId)
-      const { data: pastLog } = await admin.from('marketing_ai_strategy_log').select('decision_type, recommendation, status, created_at').eq('strategy_id', strategyId).order('created_at', { ascending: false }).limit(5)
-      const [dataAgentState, baseline, playbookBlock] = await Promise.all([
-        fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'state'),
-        fetchRealBaseline(admin, company.id),
-        fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
-      ])
-
-      const prompt = `Você é Hermes, ATUALIZANDO uma estratégia ativa (refresh de rotina mensal, ou porque o check-up semanal pediu ajuste) — a TESE principal já está decidida e NÃO deve mudar aqui, só o plano tático (funil/metas/orçamento/prioridades) precisa refletir o que já funcionou até agora + os dados mais recentes.
-
-${businessPreamble(company, {})}${playbookBlock}
-
-TESE ATIVA (não mude, só use como base):
-Nome: ${strategy.name}
-Tese: ${strategy.thesis ?? strategy.strategic_focus ?? '—'}
-Restrição principal: ${strategy.primary_constraint ?? '—'}
-Componentes ativos: ${Array.isArray(strategy.active_components) ? (strategy.active_components as string[]).join(', ') : '—'}
-
-PLANO TÁTICO ATUAL:
-Funil: ${JSON.stringify(strategy.funnel_plan ?? [])}
-Metas: ${JSON.stringify((goalRows ?? []).map((g: Record<string, unknown>) => ({ name: g.name, goal_type: g.goal_type, target: g.target_value, progress: g.current_progress })))}
-Orçamento: ${JSON.stringify(strategy.budget ?? {})}
-
-DECISÕES/RECOMENDAÇÕES PASSADAS (memória — o que já foi tentado/sugerido, pra não repetir o que não funcionou nem descartar o que já provou valor):
-${(pastLog ?? []).length ? (pastLog ?? []).map((l: Record<string, unknown>) => `- [${l.decision_type}/${l.status}] ${l.recommendation}`).join('\n') : 'Nenhuma recomendação anterior ainda.'}
-
-${baseline ? `Dado real ATUAL: ${baseline.label}.` : 'Ainda sem dado real de performance coletado.'}
-
-ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
-${formatDomains(dataAgentState)}
-
-REGRAS: mantenha a tese intacta; priorize (regra 80/20) manter e reforçar o que os sinais reais mostram que já funciona, reservando só uma fatia menor pra testar algo novo; NUNCA invente métrica que não foi te dada acima; metas no máximo 3 (goal_type: ${GOAL_TYPES.join('|')}), NÃO preencha baseline.
-
-Retorne APENAS um JSON:
-{
-  "what_changed": "2-4 frases: o que mudou no plano tático e por quê, citando os sinais reais que motivaram",
-  "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
-  "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}],
-  "budget": {"total":null,"currency":"BRL","period":"monthly","paid_ads":null,"organic":null,"creative":null,"other":null,"is_flexible":true,"allocation":[{"channel":"","amount":null,"reason":""}],"budget_reasoning":""}
-}`
-
-      const r = await callClaudeStep(anthropicKey, prompt, 4500, { allowRetry: false }, 'Refresh (atualização mensal)')
-      if (!r.ok) { await logStrategyCost(admin, company.id, 'refresh', false, r.reason); return json({ error: r.reason }, 500) }
-      const parsed = r.parsed
-      const goals = goalsWithBaselineFrom(parsed.goals, baseline)
-
-      await admin.from('marketing_ai_strategies').update({
-        funnel_plan: Array.isArray(parsed.funnel_plan) ? parsed.funnel_plan : strategy.funnel_plan,
-        budget: parsed.budget && typeof parsed.budget === 'object' ? parsed.budget : strategy.budget,
-        last_refreshed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('id', strategyId)
-
-      if (goals.length) {
-        await admin.from('marketing_ai_strategy_goals').delete().eq('strategy_id', strategyId)
-        await admin.from('marketing_ai_strategy_goals').insert(goals.map(g => ({ ...g, strategy_id: strategyId })))
-      }
-
-      await admin.from('marketing_ai_strategy_log').insert({
-        company_id: company.id, strategy_id: strategyId, decision_type: 'update',
-        recommendation: String(parsed.what_changed ?? 'Plano tático atualizado com dados novos.'),
-        reasoning: String(parsed.what_changed ?? ''), status: 'implemented',
-      })
-      await logStrategyCost(admin, company.id, 'refresh', true)
-
-      return json({ ok: true, strategy_id: strategyId, what_changed: parsed.what_changed ?? null })
+      // Responde na hora (quem chama -- cron_dispatch ou o proprio
+      // reanalyze -- so precisa do aceite 2xx) -- o refresh de verdade
+      // (chamada IA de ~70-90s) roda em segundo plano.
+      // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
+      EdgeRuntime.waitUntil(runRefresh(admin, supabaseUrl, cronSecret, anthropicKey, company, strategyId))
+      return json({ ok: true, strategy_id: strategyId, deferred: true })
     }
 
     if (action === 'update_goal') {

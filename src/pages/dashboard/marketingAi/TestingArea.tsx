@@ -25,6 +25,7 @@ export interface TestPost {
   cta: string | null
   format: string | null
   image_url: string | null
+  media: { url: string; type?: string }[] | null
   video_url: string | null
   video_script: string | null
   slides: { text?: string; image_prompt?: string; image_url?: string | null }[] | null
@@ -93,7 +94,8 @@ export function PostMedia({ post, height = 150 }: { post: TestPost; height?: num
   if (post.video_url) return <video src={post.video_url} controls style={{ width: '100%', height, objectFit: 'cover', background: '#000' }} />
 
   const slideImgs = (post.slides ?? []).filter(s => s?.image_url).map(s => ({ url: s.image_url as string, text: s.text }))
-  const images: MediaItem[] = slideImgs.length > 0 ? slideImgs : (post.image_url ? [{ url: post.image_url }] : [])
+  const carouselImgs = (post.media ?? []).map(m => ({ url: m.url }))
+  const images: MediaItem[] = slideImgs.length > 0 ? slideImgs : carouselImgs.length > 0 ? carouselImgs : (post.image_url ? [{ url: post.image_url }] : [])
   if (images.length === 0) return <div style={{ width: '100%', height, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.03)', color: MUTED, fontSize: '11px' }}>sem imagem</div>
 
   return (

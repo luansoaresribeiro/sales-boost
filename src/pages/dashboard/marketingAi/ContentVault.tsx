@@ -65,7 +65,7 @@ export default function ContentVault({ companyId, reloadKey }: { companyId: stri
         ref_type: 'marketing_ai_test_content', ref_id: item.id,
         title: item.idea ?? 'Post do Vault',
         agent_interpretation: `Aprovado pelo controle de qualidade (nota ${item.quality_score ?? '—'}), publicado direto do Vault.`,
-        payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags, cta: item.cta, image_url: item.image_url },
+        payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags, cta: item.cta, image_url: item.image_url, media: item.media },
         approve_now: true,
       })
       if (action.execution_status === 'EXECUTED' && (action.execution_result as { published_to_instagram?: boolean } | null)?.published_to_instagram) {
@@ -98,7 +98,7 @@ export default function ContentVault({ companyId, reloadKey }: { companyId: stri
         ref_type: 'marketing_ai_test_content', ref_id: item.id,
         title: item.idea ?? 'Post do Vault',
         agent_interpretation: `Aprovado pelo controle de qualidade (nota ${item.quality_score ?? '—'}), agendado pro Vault.`,
-        payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags, cta: item.cta, image_url: item.image_url },
+        payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags, cta: item.cta, image_url: item.image_url, media: item.media },
         scheduled_at: iso,
       })
       setOkMsg(`Agendado pra ${fmtScheduled(iso)} ✓`)

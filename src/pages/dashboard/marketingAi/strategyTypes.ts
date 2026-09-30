@@ -44,6 +44,8 @@ export interface Strategy {
   created_by: 'ai' | 'user'
   created_at: string
   updated_at: string
+  last_reanalyzed_at: string | null
+  last_refreshed_at: string | null
 }
 export interface Goal {
   id: string

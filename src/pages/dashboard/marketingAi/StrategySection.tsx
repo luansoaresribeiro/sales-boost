@@ -159,12 +159,22 @@ export default function StrategySection({ company }: { company: CompanyData }) {
       .then(({ data }) => setGoals((data ?? []) as Goal[]))
   }, [active])
 
+  // O check-up agora roda em segundo plano (backend responde na hora e faz
+  // o raciocínio via EdgeRuntime.waitUntil, pro despachante não ficar
+  // travado esperando) — faz polling curto em last_reanalyzed_at até ver
+  // que rodou de verdade, em vez de confiar na resposta síncrona antiga.
   const reanalyze = async () => {
     if (!active) return
+    const startedAt = active.last_reanalyzed_at
     setReanalyzing(true); setError('')
     try {
       await callStrategy(token, { action: 'reanalyze', strategy_id: active.id })
-      await loadLog()
+      for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, POLL_INTERVAL_MS))
+        const { data } = await supabase.from('marketing_ai_strategies').select('last_reanalyzed_at').eq('id', active.id).maybeSingle()
+        if (data?.last_reanalyzed_at && data.last_reanalyzed_at !== startedAt) break
+      }
+      await Promise.all([loadLog(), loadMain()])
     } catch (e) { setError(e instanceof Error ? e.message : 'Erro ao reavaliar') }
     setReanalyzing(false)
   }
