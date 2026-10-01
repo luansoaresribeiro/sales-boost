@@ -1,0 +1,69 @@
+# Sales Boost — Instagram: conexão e publicação
+
+## Autenticação
+
+**API with Instagram Login** (sem Página do Facebook necessária).
+`supabase/functions/instagram-oauth-callback/index.ts`.
+
+Permissões: `instagram_business_basic`, `instagram_business_content_publish`,
+`instagram_business_manage_comments`, `instagram_business_manage_insights`,
+`instagram_business_manage_messages`.
+
+**Enquanto o app não passar no App Review da Meta**, só contas
+TESTADORAS conseguem conectar (Meta → Funções do app → Testadores do
+Instagram → aceitar o convite na conta real que vai testar). Isso é uma
+limitação de fora do código — nenhuma correção no Sales Boost resolve
+isso, só o processo de review da Meta (ver P0/fora-do-código em
+[ROADMAP.md](ROADMAP.md)).
+
+## O que o callback salva
+
+`instagram_user_id`, `instagram_username` (sempre busca `/me` pra ter o @
+real, não só o id numérico), `instagram_access_token`,
+`instagram_token_expires_at` — os 4 campos de verdade da conexão.
+
+**Desconectar** (`IntegrationsTab.tsx` → `handleDisconnectIgOauth`) zera
+os 4 — corrigido em 2026-09-30 (antes só zerava `instagram_user_id` +
+`instagram_auto_post`, deixando o token válido escondido no banco mesmo
+com a tela mostrando "desconectado").
+
+## Proteção contra conta em 2 empresas (2026-10-01)
+
+`instagram-oauth-callback` agora confere, antes de salvar, se o
+`instagram_user_id` já está conectado em OUTRA empresa — se estiver,
+recusa e redireciona com um erro explicando qual empresa já tem essa
+conta, em vez de sobrescrever silenciosamente. Sem essa checagem, duas
+empresas podiam achar que "são donas" da mesma conta real ao mesmo tempo.
+
+## Como conectar do jeito certo
+
+1. Fazer login no dashboard **com a conta/empresa certa** (confirmar na
+   tela qual empresa está ativa antes de clicar em conectar — se tiver
+   mais de uma aba/sessão aberta, uma janela anônima evita conectar na
+   empresa errada por engano).
+2. Configurações → Conexões → "Conectar Instagram".
+3. Fazer login no Instagram com a conta que vai ser testada (precisa ser
+   testadora do app, ver acima) e aceitar as permissões.
+4. Confirmar na tela de Conexões que o **@ certo** apareceu — se aparecer
+   vazio/errado, não tentar de novo sem antes checar
+   [PITFALLS.md](PITFALLS.md) ("Instagram conectado na empresa errada").
+
+## Pitfall conhecido: "reconectei mas continua aparecendo desconectado"
+
+Já aconteceu 2 vezes nesta sessão de trabalho (2026-09-30): o dono
+reconectou o Instagram, e pouco depois a tela voltava a mostrar
+desconectado. **Investigado e não é bug do callback** — os logs confirmam
+que as duas trocas de código OAuth foram bem-sucedidas (sem erro, redirect
+de sucesso). A causa real: o agente de desenvolvimento, seguindo uma
+instrução anterior do dono ("se a conta conectada não for uma conta de
+teste, desconecte"), desconectou a conta automaticamente logo depois de
+cada reconexão, porque a conta usada era a oficial pública do Sales Boost
+(@getsaleboost), não uma conta de teste dedicada. Ver
+[DECISIONS.md](DECISIONS.md) — isso foi resolvido criando uma decisão
+explícita permitindo o uso do @getsaleboost para este teste específico, em
+vez de continuar desconectando automaticamente.
+
+**Se isso acontecer de novo:** antes de reconectar, confirmar no
+[DECISIONS.md](DECISIONS.md) se a conta em uso está com uso aprovado — se
+não estiver, é esperado que o agente desconecte, e a solução é pedir
+aprovação explícita, não insistir reconectando.

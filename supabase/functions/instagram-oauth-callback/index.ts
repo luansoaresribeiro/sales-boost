@@ -109,6 +109,17 @@ Deno.serve(async (req) => {
     if (!igUserId) throw new Error('Não foi possível obter o ID da conta do Instagram.')
 
     const admin = createClient(supabaseUrl, serviceKey)
+
+    // Protecao: a mesma conta do Instagram nao pode ficar conectada em 2
+    // empresas ao mesmo tempo (silenciosamente sobrescrever geraria 2
+    // empresas "conectadas" na mesma conta real, cada uma achando que
+    // publica sozinha nela). Avisa na tela em vez de conectar.
+    const { data: conflicting } = await admin.from('companies').select('id, business_name').eq('instagram_user_id', igUserId).neq('id', companyId).maybeSingle()
+    if (conflicting) {
+      const msg = `A conta @${igUsername ?? igUserId} já está conectada na empresa "${conflicting.business_name}" — desconecte lá primeiro.`
+      return htmlRedirect(`/dashboard/settings?tab=conexoes&error=${encodeURIComponent(msg)}`)
+    }
+
     const { error: updateErr } = await admin
       .from('companies')
       .update({
