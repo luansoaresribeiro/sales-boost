@@ -105,6 +105,18 @@ menos 5 tabelas usadas hoje não têm NENHUM arquivo de criação local:
 `supabase db query --linked` (ou a ferramenta MCP do Supabase, quando
 conectada) antes de uma migration nova.
 
+## Migrations com cron apontam pra produção
+
+Várias migrations (`010_insights_cron.sql`, `015_find_sales_leads_cron.sql`,
+`066_agent_actions_scheduling.sql`, `20260930170000_strategy_cron_dispatch.sql`
+e outras) criam `cron.schedule` que chama
+`https://miwcxakzyforbahpnpst.supabase.co/functions/v1/...` — a URL de
+**produção** fixa no SQL. Rodar essas migrations no banco de ensaio
+(`salesboost-ensaio`) faria o ensaio disparar functions **reais** de
+produção (gasto de IA, ações em clientes reais). **Nunca aplicar
+`supabase/migrations/` inteiro no ensaio** — copiar só a estrutura das
+tabelas e pular/neutralizar qualquer `cron.schedule`/`net.http_post`.
+
 ## Avisos de tipagem do Deno (não são bugs)
 
 `SupabaseClient<any,...>` vs `SupabaseClient<unknown,{PostgrestVersion}...>`

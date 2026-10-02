@@ -57,10 +57,83 @@ atualizar o doc correspondente no mesmo PR — nunca deixar pra depois.
    que travou e por quê — sempre em português simples (Luan não é
    desenvolvedor).
 
-## Até o P4 existir
+## Até o P4 existir (regra antiga — substituída em 2026-10-02)
 
-Enquanto [ROADMAP.md](ROADMAP.md) P4 (infra de autonomia: ambiente de
-ensaio, PR com checagens automáticas, deploy automático pós-aprovação)
-não estiver pronto, os agentes **não rodam sozinhos sem o dono
+Texto original, mantido como registro: "Enquanto o P4 (infra de
+autonomia) não estiver pronto, os agentes **não rodam sozinhos sem o dono
 acompanhar** — este roteiro é pra ser executado com a sessão principal
-visível pro dono, nunca em background sem supervisão.
+visível pro dono, nunca em background sem supervisão."
+
+**Divergência:** o dono decidiu liberar o modo autônomo abaixo enquanto o
+P4 é construído (ver [DECISIONS.md](DECISIONS.md)). O que segura a
+segurança agora é: só PR (nunca merge), `main` protegido no GitHub,
+sessões automáticas sem acesso a Supabase/Gmail/Instagram, e a lista de
+tarefas proibidas abaixo.
+
+## Modo autônomo (rotina agendada)
+
+Princípio: **autonomia pra trabalhar ≠ autonomia pra publicar.**
+
+### Agenda (horário do Rio)
+
+- **Seg/qua/sex de manhã — rodada de trabalho:** no máximo **1 tarefa**
+  por rodada (aumentar só quando o dono decidir, depois de observar o
+  comportamento).
+- **Sexta 18h — relatório da semana.**
+
+### Rodada de trabalho
+
+1. Ler `CLAUDE.md`, [ROADMAP.md](ROADMAP.md), [PITFALLS.md](PITFALLS.md),
+   [DECISIONS.md](DECISIONS.md) e os PRs abertos.
+2. Escolher **1 tarefa elegível** (critérios abaixo). Se já houver PR
+   aberto do modo autônomo esperando o dono pra mesma tarefa, não repetir.
+3. Seguir o roteiro normal (`product` → `engineer` → `qa`, máx. 3 voltas).
+4. Abrir PR pro `main` com o **relatório por tarefa** na descrição.
+5. Parar. Nunca fazer merge, nunca deployar, nunca "aproveitar" pra fazer
+   uma segunda tarefa.
+
+**Se não houver tarefa claramente segura e bem definida, o agente não
+inventa trabalho** — não faz nada e registra isso no relatório (por que
+nenhuma tarefa era elegível e o que destravaria).
+
+### Tarefa elegível (todas as condições)
+
+- Está no [ROADMAP.md](ROADMAP.md) (ou é um bug real documentado), com
+  critério de pronto claro.
+- **Não depende do dono** (seção "Fora do código" do roadmap, conta da
+  Meta, credencial, decisão em aberto).
+- **Não envolve nenhuma ALTERAÇÃO ARRISCADA** (lista em `CLAUDE.md`).
+  No modo autônomo não há dono pra responder "Posso seguir?" — então o
+  agente não pergunta e segue: ele **pula a tarefa** e lista no relatório
+  como "precisa de você".
+- **Não precisa de banco de dados** enquanto o banco de ensaio
+  (`salesboost-ensaio`) não estiver com o schema pronto (ver P4 no
+  [ROADMAP.md](ROADMAP.md)). Mesmo com ele pronto: migration/SQL só no
+  ensaio, nunca em produção.
+- Cabe em 1 PR revisável (prefira pequeno).
+
+### Proibido no modo autônomo (sem exceção)
+
+- Merge de PR, push no `main`, `wrangler deploy`, deploy de edge function.
+- Qualquer acesso ao banco de produção (`miwcxakzyforbahpnpst`).
+- Publicar/enviar qualquer coisa (Instagram, DM, e-mail, Telegram).
+- Gastar com provedor pago (Higgsfield, IA em lote, API nova).
+- Mexer em secrets, auth, crons, DNS, painel da Meta.
+- Desligar/remover funcionalidade existente.
+
+### Relatório por tarefa (descrição do PR)
+
+```
+Trabalho concluído: <o que foi feito, em português simples>
+Alterações: <arquivos principais>
+Testes: <build ok/falhou, checagens do qa, prints>
+PR: <link>
+Riscos/pendências: <ou "nenhum">
+Próximo passo: aguarda sua aprovação
+```
+
+### Relatório semanal (sexta 18h)
+
+O que foi implementado · PRs abertos/fechados · testes executados ·
+problemas encontrados · decisões que precisam do dono · próximo trabalho
+que o agente pretende executar. Sempre em português simples.
