@@ -69,10 +69,30 @@
   aprovação do dono.
 - **Critério de pronto:** um agente consegue propor uma mudança, ela roda
   num ambiente isolado, o dono aprova o PR, e o deploy acontece sozinho.
-- **Até este item existir, agentes NÃO rodam sozinhos sem o dono
-  acompanhar** — regra explícita, ver
-  [ORCHESTRATION.md](ORCHESTRATION.md).
-- **Status:** ❌ não começado.
+- ~~**Até este item existir, agentes NÃO rodam sozinhos sem o dono
+  acompanhar**~~ — substituído em 2026-10-02 pelo modo autônomo (só PR,
+  nunca merge), ver [ORCHESTRATION.md](ORCHESTRATION.md#modo-autônomo-rotina-agendada)
+  e [DECISIONS.md](DECISIONS.md).
+- **Status:** 🟡 em andamento.
+  - [x] Deploy automático depois do merge — já existia
+        (`.github/workflows/deploy.yml`).
+  - [x] Checagem automática em todo PR (`.github/workflows/pr-checks.yml`,
+        roda `npm run build`).
+  - [ ] **Dono:** proteger o `main` no GitHub (exigir PR + checagem verde
+        + aprovação do dono antes do merge).
+  - [x] Projeto Supabase de ensaio criado (`salesboost-ensaio`, ref
+        `ybmevrsijsayllgcxxeb`, plano grátis, 2026-10-02).
+  - [ ] Copiar o **schema** (só estrutura, nunca dados) de produção pro
+        ensaio. Não dá pra só rodar `supabase/migrations/` — ver
+        [PITFALLS.md](PITFALLS.md#deriva-de-migrations-vs-banco-real) e
+        [PITFALLS.md](PITFALLS.md#migrations-com-cron-apontam-pra-produção).
+        Fazer numa sessão supervisionada, não no modo autônomo.
+  - [ ] Dar à rotina autônoma as chaves do **ensaio** (nunca as de
+        produção) pra testar código que mexe com banco.
+  - [x] Rotinas agendadas (seg/qua/sex de manhã + relatório sexta 18h).
+  - [ ] Consertar o `npm run lint` (hoje quebra com 257 erros de
+        configuração do `tsconfigRootDir`, antes de qualquer regra) e
+        incluir no `pr-checks.yml`.
 
 ## Fora do código (depende do dono, nenhum agente resolve sozinho)
 

@@ -1,0 +1,30 @@
+name: PR checks
+
+# Roda em todo PR pro main. Não publica nada — só confere se o código
+# compila (checagem de tipos + build). Deploy continua só no deploy.yml,
+# depois do merge aprovado pelo dono.
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (type-check + vite)
+        run: npm run build

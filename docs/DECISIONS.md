@@ -61,3 +61,17 @@
 - **Alterações arriscadas exigem aprovação prévia do dono** — lista
   completa em CLAUDE.md. Nenhum agente pula essa parada pra "economizar
   tempo".
+- **Agentes de desenvolvimento trabalham sozinhos, mas nunca publicam** —
+  2026-10-02. O dono pediu que `product` → `engineer` → `qa` evoluam o
+  projeto sem precisar de prompt. Princípio: **autonomia pra trabalhar ≠
+  autonomia pra publicar.** Rotina automática seg/qua/sex de manhã (1
+  tarefa por rodada) + relatório semanal sexta 18h. O agente só abre PR;
+  merge (e o deploy que vem com ele) é sempre do dono. Se não houver
+  tarefa claramente segura e bem definida, o agente não inventa trabalho
+  — não faz nada e diz isso no relatório. Regras operacionais completas
+  em [ORCHESTRATION.md](ORCHESTRATION.md#modo-autônomo-rotina-agendada).
+  **Isto substitui** a regra anterior "agentes não rodam sozinhos até o
+  P4 existir" — o P4 passa a ser construído junto (ver
+  [ROADMAP.md](ROADMAP.md#p4--infra-de-autonomia)). Banco de ensaio:
+  segundo projeto grátis do Supabase (`salesboost-ensaio`), não o recurso
+  pago de cópia — reavaliar depois que o fluxo provar que funciona.
