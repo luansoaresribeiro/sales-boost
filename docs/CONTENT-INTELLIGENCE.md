@@ -31,6 +31,11 @@ peças de cada pilar entram por semana. A proporção 80/20
 comprovado-vs-experimental **não existe como regra separada** — é um
 gap registrado também em [ARCHITECTURE.md](ARCHITECTURE.md) etapa 3.
 
+**Atualização (P2 parte 1):** o cálculo determinístico do 80/20 agora existe
+em código (`_shared/learning.ts`, ver [LEARNING.md](LEARNING.md)) e alimenta o
+prompt do `refresh` da estratégia; ainda **não** limita o `catalog-package`
+nem o calendário — o `pillarCap` por peso da ficha continua sendo o que vale lá.
+
 ## Pilar → receita de produção (`production_recipes`)
 
 Hermes decide o MIX da semana; o Content Agent classifica cada ideia pelo

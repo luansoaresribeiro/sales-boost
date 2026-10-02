@@ -50,6 +50,9 @@
 - **Critério de pronto:** ver [LEARNING.md](LEARNING.md).
 - **Status:** 🟡 parcial — o loop de engajamento/alcance já realimenta a
   estratégia; 80/20 determinístico e relatório semanal não existem ainda.
+- **P2 parte 1 (em código, aguardando migration + deploy):** cálculo 80/20
+  determinístico (`_shared/learning.ts`) + `posts.pillar/recipe/format/item_id`.
+  Falta: ligar ao calendário/briefs (parte 2) e relatório semanal.
 
 ## P3 — Higgsfield (Motor de Mídia)
 

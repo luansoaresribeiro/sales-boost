@@ -73,6 +73,11 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente ·
    (pacote por item, ver [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md))
    tem um cap por-pilar-por-semana (`pillarCap`, baseado no peso da ficha)
    que é o único lugar com algo parecido com proporção real hoje.
+   **P2 parte 1:** o cálculo 80/20 por pilar/receita/formato existe em
+   `supabase/functions/_shared/learning.ts` (puro, 56 dias, ≥3 posts por
+   grupo) e é injetado no `refresh` da estratégia; `posts` ganhou
+   `pillar/recipe/format/item_id` (migration `20261001100000`), gravados por
+   `agent-actions`. Ainda não alimenta o calendário. Ver [LEARNING.md](LEARNING.md).
 
 4. **Content Agent** (roteiro/brief de cada peça) — 🟡 parcial.
    `creative-generate` (campo `video_script`), `content-engine`,
