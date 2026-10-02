@@ -7,7 +7,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
   // frontend/ é um projeto antigo separado, com eslint/tsconfig próprios.
-  globalIgnores(['dist', 'frontend']),
+  globalIgnores(['dist', 'frontend', '.claude']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

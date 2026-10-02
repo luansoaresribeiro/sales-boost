@@ -76,7 +76,7 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente ·
    **P2 parte 1:** o cálculo 80/20 por pilar/receita/formato existe em
    `supabase/functions/_shared/learning.ts` (puro, 56 dias, ≥3 posts por
    grupo) e é injetado no `refresh` da estratégia; `posts` ganhou
-   `pillar/recipe/format/item_id` (migration `20261001100000`), gravados por
+   `pillar/recipe/format/item_id` (migration `20261002100000`), gravados por
    `agent-actions`. Ainda não alimenta o calendário. Ver [LEARNING.md](LEARNING.md).
 
 4. **Content Agent** (roteiro/brief de cada peça) — 🟡 parcial.

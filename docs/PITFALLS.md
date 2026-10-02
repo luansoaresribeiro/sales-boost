@@ -107,14 +107,17 @@ conectada) antes de uma migration nova.
 
 ## `posts.pillar/recipe/format/item_id` pode não existir em produção
 
-A migration `20261001100000_posts_pillar_recipe.sql` é aditiva, mas se
+A migration `20261002100000_posts_pillar_recipe.sql` é aditiva, mas se
 `agent-actions` for deployado antes dela, o `update` dessas colunas falha —
 por isso é um update separado em try/catch depois do insert do post (publicar
 nunca depende dele). Não juntar essas colunas ao insert principal. Posts
 publicados antes da migration ficam sem pilar (o 80/20 os ignora com aviso).
-Também: `npm run lint` na raiz falha com "multiple candidate
+~~Também: `npm run lint` na raiz falha com "multiple candidate
 TSConfigRootDirs" por causa da pasta `frontend/` rastreada — erro de
-ambiente pré-existente, não de código novo.
+ambiente pré-existente, não de código novo.~~ Resolvido no mesmo dia
+(`tsconfigRootDir` + `frontend/` ignorado em `eslint.config.js`). Se
+voltar a aparecer, procure pastas de worktree de agente
+(`.claude/worktrees/`) — o eslint também as varre.
 
 ## Migrations com cron apontam pra produção
 

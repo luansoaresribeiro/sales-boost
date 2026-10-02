@@ -74,7 +74,7 @@ e `fetchLearning` (lê `posts` com pilar/receita/formato,
   divididos igualmente). Se <2 grupos elegíveis ou zero conversas → status
   geral `insufficient_data`.
 - Origem do pilar: coluna nova `posts.pillar/recipe/format/item_id`
-  (migration `20261001100000_posts_pillar_recipe.sql`), gravada por
+  (migration `20261002100000_posts_pillar_recipe.sql`), gravada por
   `agent-actions` ao criar o post a partir de `marketing_ai_test_content`
   (antes essa informação era perdida quando a linha de teste era apagada).
   **Não** usar `instagram_content_performance.pillar` — é palpite por
