@@ -71,7 +71,7 @@ export function launchWhatsAppSignup(): Promise<WhatsAppSignupResult> {
     const onMessage = (event: MessageEvent) => {
       // Aceita qualquer subdomínio do facebook.com (www, web, business, etc.) —
       // filtrar demais era o que fazia a gente perder a mensagem do número.
-      let host = ''
+      let host: string
       try { host = new URL(event.origin).hostname } catch { return }
       if (!host.endsWith('facebook.com')) return
       try {

@@ -51,7 +51,7 @@ export default function FormatsLibrary({ companyId, module }: { companyId: strin
   }, [companyId])
   useEffect(() => { load() }, [load])
 
-  const usePreset = (p: typeof PRESETS[number]) => { setName(p.title); setDesc(p.content); setFields(p.fields.join(', ')); setExample(''); setAdding(true) }
+  const applyPreset = (p: typeof PRESETS[number]) => { setName(p.title); setDesc(p.content); setFields(p.fields.join(', ')); setExample(''); setAdding(true) }
 
   const save = async () => {
     if (!name.trim()) return
@@ -118,7 +118,7 @@ export default function FormatsLibrary({ companyId, module }: { companyId: strin
         <div style={{ fontSize: '10.5px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '7px' }}>Começar rápido</div>
         <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' }}>
           {PRESETS.map(p => (
-            <button key={p.title} onClick={() => usePreset(p)} style={{ padding: '6px 12px', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: '99px', color: '#93c5fd', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>+ {p.title}</button>
+            <button key={p.title} onClick={() => applyPreset(p)} style={{ padding: '6px 12px', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: '99px', color: '#93c5fd', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>+ {p.title}</button>
           ))}
         </div>
       </div>
