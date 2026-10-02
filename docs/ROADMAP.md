@@ -93,8 +93,19 @@
         `pg_cron` e sem nenhum cron (produção tem 21), e
         `notify_hermes_new_lead()` virou função vazia — ver
         [PITFALLS.md](PITFALLS.md#migrations-com-cron-apontam-pra-produção).
-        Tabelas de catálogo (ex.: `vertical_playbooks`, `business_types`,
-        `progress_*`) estão **vazias** no ensaio.
+        Tabelas de catálogo/configuração copiadas em seguida (mesmo dia,
+        conferidas por md5 linha a linha — idênticas): `vertical_playbooks`,
+        `business_types`, `capability_registry`, `marketing_ai_tool_registry`,
+        `agent_roles`, `hermes_config`, `feature_flags`, `api_providers`,
+        `insight_sources`, `integration_catalog`, `plan_ai_defaults`,
+        `platform_services`, `progress_gp_rules/levels/pins/rewards`,
+        `report_config`, `telegram_agent_config`, `telegram_bots`,
+        `prospect_search_keywords` e a base global de
+        `marketing_ai_knowledge` (`company_id IS NULL`, 100 itens).
+        `monitor_config` copiada **sem** o chat do Telegram do admin
+        (alertas desligados). **Não copiadas de propósito:** `app_config` e
+        `_app_config` (guardam segredos: `cron_secret`, chaves de API) e
+        qualquer tabela com dado de cliente.
   - [ ] Quando o schema de produção mudar, repetir a cópia/ajuste no
         ensaio (hoje é manual).
   - [ ] Dar à rotina autônoma as chaves do **ensaio** (nunca as de
