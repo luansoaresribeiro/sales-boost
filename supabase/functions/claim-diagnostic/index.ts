@@ -101,11 +101,11 @@ Deno.serve(async (req) => {
     if (existingCompany) {
       companyId = existingCompany.id
     } else {
-      // Trial de 3 dias começa aqui — o único lugar onde uma empresa nova é
+      // Trial de 7 dias (decisão 2026-10-02; antes 3) começa aqui — o único lugar onde uma empresa nova é
       // criada de verdade. Nunca calculado depois, sempre a partir desses
       // dois timestamps (ver src/lib/trialState.ts no frontend).
       const trialStartedAt = new Date()
-      const trialExpiresAt = new Date(trialStartedAt.getTime() + 3 * 24 * 60 * 60 * 1000)
+      const trialExpiresAt = new Date(trialStartedAt.getTime() + 7 * 24 * 60 * 60 * 1000)
 
       // Entendimento do negócio capturado no onboarding conversacional — vira
       // Business Context que os agentes leem.

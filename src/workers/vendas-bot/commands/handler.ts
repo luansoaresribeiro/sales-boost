@@ -71,7 +71,7 @@ async function handlePreco(chatId: number, _text: string, env: Record<string, st
     chatId,
     'Plano SalesBoost:\\n' +
       '• R$ 14,49/mês — tudo incluído: conteúdo com IA, oportunidades de receita, atendimento automático e automação 24/7\\n' +
-      '• 3 dias grátis pra testar, cancela quando quiser\\n\\n' +
+      '• 7 dias grátis pra testar, cancela quando quiser\\n\\n' +
       'Use /agendar para uma demonstração personalizada.',
   );
   await logEvent(env, chatId, 'preco', '💰 Lead consultou preços');
