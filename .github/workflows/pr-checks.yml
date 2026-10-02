@@ -1,8 +1,8 @@
 name: PR checks
 
 # Roda em todo PR pro main. Não publica nada — só confere se o código
-# compila (checagem de tipos + build) e passa no lint. Deploy continua só no deploy.yml,
-# depois do merge aprovado pelo dono.
+# compila (checagem de tipos + build) e passa no lint. Deploy é feito pela integração Git
+# da Cloudflare (Workers Builds) depois do merge aprovado pelo dono.
 on:
   pull_request:
     branches:

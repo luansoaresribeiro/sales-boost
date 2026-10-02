@@ -78,7 +78,12 @@
   e [DECISIONS.md](DECISIONS.md).
 - **Status:** 🟡 em andamento.
   - [x] Deploy automático depois do merge — já existia
-        (`.github/workflows/deploy.yml`).
+        (`.github/workflows/deploy.yml`). **Mudou em 2026-10-02:** o
+        `deploy.yml` falhava em todo merge desde pelo menos 30/09 (token
+        da Cloudflare restrito por IP) e foi removido por decisão do dono;
+        quem publica o site é a integração Git da própria Cloudflare
+        (Workers Builds, worker `sales-boost-restaurants`) — ver
+        [PITFALLS.md](PITFALLS.md#deploy-do-site-é-a-cloudflare-não-o-github).
   - [x] Checagem automática em todo PR (`.github/workflows/pr-checks.yml`,
         roda `npm run build` e, desde 2026-10-02, `npm run lint`).
   - [x] **Dono:** proteger o `main` no GitHub (exigir PR + checagem verde
