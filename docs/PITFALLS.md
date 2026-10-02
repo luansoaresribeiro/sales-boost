@@ -117,6 +117,11 @@ produção (gasto de IA, ações em clientes reais). **Nunca aplicar
 `supabase/migrations/` inteiro no ensaio** — copiar só a estrutura das
 tabelas e pular/neutralizar qualquer `cron.schedule`/`net.http_post`.
 
+O mesmo vale pro trigger `on_lead_insert` → `notify_hermes_new_lead()`,
+que faz `net.http_post` pra `hermes-lead-alert` de produção. No ensaio a
+função existe mas é vazia (só `RETURN NEW`) — se um dia copiar o schema de
+novo, manter esse desligamento.
+
 ## Avisos de tipagem do Deno (não são bugs)
 
 `SupabaseClient<any,...>` vs `SupabaseClient<unknown,{PostgrestVersion}...>`

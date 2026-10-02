@@ -82,11 +82,21 @@
         + aprovação do dono antes do merge).
   - [x] Projeto Supabase de ensaio criado (`salesboost-ensaio`, ref
         `ybmevrsijsayllgcxxeb`, plano grátis, 2026-10-02).
-  - [ ] Copiar o **schema** (só estrutura, nunca dados) de produção pro
-        ensaio. Não dá pra só rodar `supabase/migrations/` — ver
-        [PITFALLS.md](PITFALLS.md#deriva-de-migrations-vs-banco-real) e
+  - [x] **Schema** de produção copiado pro ensaio (só estrutura, zero
+        dados) — 2026-10-02, sessão supervisionada. Lido direto do banco
+        real (não de `supabase/migrations/`, ver
+        [PITFALLS.md](PITFALLS.md#deriva-de-migrations-vs-banco-real)):
+        120 tabelas, 326 constraints, 221 índices, 171 policies de RLS (RLS
+        ligado nas 120), 5 funções, 3 triggers, bucket `post-images` + 6
+        policies de storage. Conferido por "impressão digital" (md5 da
+        estrutura) — idêntico à produção. **Diferenças de propósito:** sem
+        `pg_cron` e sem nenhum cron (produção tem 21), e
+        `notify_hermes_new_lead()` virou função vazia — ver
         [PITFALLS.md](PITFALLS.md#migrations-com-cron-apontam-pra-produção).
-        Fazer numa sessão supervisionada, não no modo autônomo.
+        Tabelas de catálogo (ex.: `vertical_playbooks`, `business_types`,
+        `progress_*`) estão **vazias** no ensaio.
+  - [ ] Quando o schema de produção mudar, repetir a cópia/ajuste no
+        ensaio (hoje é manual).
   - [ ] Dar à rotina autônoma as chaves do **ensaio** (nunca as de
         produção) pra testar código que mexe com banco.
   - [x] Rotinas agendadas (seg/qua/sex de manhã + relatório sexta 18h).
