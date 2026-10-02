@@ -119,6 +119,24 @@ ambiente pré-existente, não de código novo.~~ Resolvido no mesmo dia
 voltar a aparecer, procure pastas de worktree de agente
 (`.claude/worktrees/`) — o eslint também as varre.
 
+## Deploy do site é a Cloudflare, não o GitHub
+
+Descoberto em 2026-10-02: o workflow `.github/workflows/deploy.yml`
+falhava em todo merge desde pelo menos 30/09 ("Cannot use the access token
+from location", código 9109 — o token da Cloudflare só aceita certos IPs)
+e ninguém percebeu, porque o site continuava atualizando: quem publica de
+verdade é a integração Git da Cloudflare (Workers Builds), que faz o build
+e publica o worker `sales-boost-restaurants` (getsaleboost.com) a cada push
+no `main` (confirmado com `npx wrangler deployments list`: uma publicação
+logo depois de cada merge). O `deploy.yml` foi removido por decisão do
+dono. Consequências:
+- Pra conferir se o site subiu: `npx wrangler deployments list --name
+  sales-boost-restaurants`, não a aba Actions do GitHub.
+- As variáveis `VITE_*` do build ficam configuradas na Cloudflare
+  (Workers Builds), não nos secrets do GitHub.
+- Em branch de PR a Cloudflare comenta "Deployment successful", mas é só
+  versão de prévia — o domínio só muda com push no `main`.
+
 ## Migrations com cron apontam pra produção
 
 Várias migrations (`010_insights_cron.sql`, `015_find_sales_leads_cron.sql`,
