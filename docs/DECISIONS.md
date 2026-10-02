@@ -106,3 +106,12 @@
   mão; a revisão dele acontece no PR. **Isto ajusta** a regra anterior
   "mudança de estrutura fica marcada 'precisa de você' pro dono aplicar
   em produção".
+- **7-Day Growth Preview, passo 3 (vídeo grátis) — gatilho provisório e
+  trava** — 2026-10-02. Parte A (só tela + tabela): "Seu vídeo grátis — em
+  breve" e até 3 prévias borradas/travadas no resumo do trial, sem chamar
+  nenhuma API de vídeo. A prévia **não cita preço** ("Disponível no plano
+  completo") até o passo 4, pra não conflitar com o preço antigo
+  (R$14,49) ainda na tela. O gatilho de quando o vídeo grátis é gerado é
+  **provisório** (a definir na Parte B). A trava de 1 vídeo por teste vive
+  na tabela `trial_video_claims` (unique por empresa; só service role
+  escreve). Motivo: garantir 1 vídeo por teste sem gastar à toa.

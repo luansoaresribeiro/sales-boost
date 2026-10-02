@@ -152,3 +152,9 @@ Custo de API por cliente: ~$0,20–$0,80/mês (Claude Sonnet) +
   system-ui, sans-serif`.
 - Design dark, técnico, premium. Sem gradientes genéricos. Animações
   sutis.
+
+**Nota (passo 3, parte A — 2026-10-02):** o gatilho do vídeo grátis ainda é
+provisório; a tela mostra "em breve" + prévias travadas (foto real
+borrada), e a prévia **não cita preço** até o passo 4 do 7-Day Growth
+Preview. A trava de 1 vídeo por teste fica em `trial_video_claims`
+(ver [MEDIA-ENGINE.md](MEDIA-ENGINE.md)).
