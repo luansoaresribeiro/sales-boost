@@ -77,7 +77,7 @@ export default {
         return new Response(JSON.stringify(response), {
           headers: { 'content-type': 'application/json' },
         });
-      } catch (error) {
+      } catch {
         return new Response(JSON.stringify({ ok: false }), {
           status: 400,
           headers: { 'content-type': 'application/json' },

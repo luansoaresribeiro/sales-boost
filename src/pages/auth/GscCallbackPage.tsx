@@ -52,7 +52,7 @@ export default function GscCallbackPage() {
           setMessage(data.domain ? `Conectado: ${data.domain}` : 'Google Search Console conectado!')
           setTimeout(() => navigate('/dashboard/marketing-ai/conexoes'), 2000)
         }
-      } catch (err) {
+      } catch {
         setStatus('error')
         setMessage('Erro inesperado. Tente novamente.')
       }

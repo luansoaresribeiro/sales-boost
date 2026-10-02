@@ -77,8 +77,8 @@
   - [x] Deploy automático depois do merge — já existia
         (`.github/workflows/deploy.yml`).
   - [x] Checagem automática em todo PR (`.github/workflows/pr-checks.yml`,
-        roda `npm run build`).
-  - [ ] **Dono:** proteger o `main` no GitHub (exigir PR + checagem verde
+        roda `npm run build` e, desde 2026-10-02, `npm run lint`).
+  - [x] **Dono:** proteger o `main` no GitHub (exigir PR + checagem verde
         + aprovação do dono antes do merge).
   - [x] Projeto Supabase de ensaio criado (`salesboost-ensaio`, ref
         `ybmevrsijsayllgcxxeb`, plano grátis, 2026-10-02).
@@ -107,13 +107,35 @@
         `_app_config` (guardam segredos: `cron_secret`, chaves de API) e
         qualquer tabela com dado de cliente.
   - [ ] Quando o schema de produção mudar, repetir a cópia/ajuste no
-        ensaio (hoje é manual).
-  - [ ] Dar à rotina autônoma as chaves do **ensaio** (nunca as de
-        produção) pra testar código que mexe com banco.
+        ensaio (hoje é manual). Conferência de sincronia em 2026-10-02:
+        **idêntico** (120 tabelas, 171 policies; md5 de colunas,
+        constraints, índices e policies iguais nos dois). Regra: todo PR
+        que muda a estrutura do banco aplica a mesma mudança no ensaio no
+        mesmo PR; a conferência por md5 (consulta abaixo) roda numa sessão
+        supervisionada depois de cada mudança de schema — a rotina
+        autônoma não lê produção. Custo: só leitura de estrutura, de graça
+        no Supabase e poucos tokens.
+        ```sql
+        select
+         (select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE') as tabelas,
+         (select md5(string_agg(table_name||'.'||column_name||':'||data_type||':'||is_nullable||':'||coalesce(column_default,''), '|' order by table_name,column_name)) from information_schema.columns where table_schema='public') as colunas,
+         (select md5(string_agg(conrelid::regclass||':'||conname||':'||pg_get_constraintdef(oid), '|' order by conrelid::regclass::text,conname)) from pg_constraint where connamespace='public'::regnamespace) as constraints,
+         (select md5(string_agg(indexdef, '|' order by indexname)) from pg_indexes where schemaname='public') as indices,
+         (select md5(string_agg(tablename||':'||policyname||':'||cmd||':'||coalesce(qual,'')||':'||coalesce(with_check,''), '|' order by tablename,policyname)) from pg_policies where schemaname='public') as policies;
+        ```
+  - [x] Chaves do **ensaio** no ambiente do Claude Code (2026-10-02):
+        `SUPABASE_ENSAIO_URL`, `SUPABASE_ENSAIO_ANON_KEY` (role `anon`),
+        `SUPABASE_ENSAIO_SERVICE_ROLE_KEY` (role `service_role`) — todas
+        com ref `ybmevrsijsayllgcxxeb`, nenhuma de produção. Testadas: as
+        duas leem `vertical_playbooks` (2 fichas).
   - [x] Rotinas agendadas (seg/qua/sex de manhã + relatório sexta 18h).
-  - [ ] Consertar o `npm run lint` (hoje quebra com 257 erros de
-        configuração do `tsconfigRootDir`, antes de qualquer regra) e
-        incluir no `pr-checks.yml`.
+  - [x] Consertar o `npm run lint` e incluir no `pr-checks.yml`
+        (2026-10-02): `tsconfigRootDir` definido, `frontend/` (projeto
+        antigo separado) ignorado. Sobraram 172 achados antigos, rebaixados
+        pra aviso em `eslint.config.js` (só erro trava o PR).
+  - [ ] Pagar a dívida de lint aos poucos e voltar as regras pra erro —
+        principalmente `react-hooks/*` e as edge functions
+        (`supabase/functions`, mexer = deploy arriscado).
 
 ## Fora do código (depende do dono, nenhum agente resolve sozinho)
 

@@ -1,7 +1,7 @@
 name: PR checks
 
 # Roda em todo PR pro main. Não publica nada — só confere se o código
-# compila (checagem de tipos + build). Deploy continua só no deploy.yml,
+# compila (checagem de tipos + build) e passa no lint. Deploy continua só no deploy.yml,
 # depois do merge aprovado pelo dono.
 on:
   pull_request:
@@ -28,3 +28,7 @@ jobs:
 
       - name: Build (type-check + vite)
         run: npm run build
+
+      # Só erros travam o PR; avisos (dívida antiga) aparecem no log.
+      - name: Lint
+        run: npm run lint
