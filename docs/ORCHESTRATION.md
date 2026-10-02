@@ -106,9 +106,10 @@ nenhuma tarefa era elegível e o que destravaria).
   No modo autônomo não há dono pra responder "Posso seguir?" — então o
   agente não pergunta e segue: ele **pula a tarefa** e lista no relatório
   como "precisa de você".
-- **Não precisa de banco de dados** enquanto o banco de ensaio
-  (`salesboost-ensaio`) não estiver com o schema pronto (ver P4 no
-  [ROADMAP.md](ROADMAP.md)). Mesmo com ele pronto: migration/SQL só no
+- **Não precisa de banco de dados** enquanto a rotina autônoma não
+  tiver as chaves do banco de ensaio (`salesboost-ensaio` — o schema já
+  está lá desde 2026-10-02, mas a rotina ainda não consegue acessá-lo; ver
+  P4 no [ROADMAP.md](ROADMAP.md)). Mesmo depois: migration/SQL só no
   ensaio, nunca em produção.
 - Cabe em 1 PR revisável (prefira pequeno).
 
