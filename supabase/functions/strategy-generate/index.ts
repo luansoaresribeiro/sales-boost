@@ -57,6 +57,7 @@
  * cron_secret + Bearer de service role.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { fetchLearning, learningPromptBlock } from '../_shared/learning.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 type SupaClient = ReturnType<typeof createClient>
@@ -639,6 +640,10 @@ async function runRefresh(admin: SupaClient, supabaseUrl: string, cronSecret: st
       fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
     ])
 
+    // P2: números 80/20 calculados por código (aditivo; se falhar, prompt igual ao de antes).
+    let learningBlock = ''
+    try { learningBlock = learningPromptBlock(await fetchLearning(admin, company.id)) } catch (e) { console.error('learning 80/20 falhou (ignorado):', e) }
+
     const prompt = `Você é Hermes, ATUALIZANDO uma estratégia ativa (refresh de rotina mensal, ou porque o check-up semanal pediu ajuste) — a TESE principal já está decidida e NÃO deve mudar aqui, só o plano tático (funil/metas/orçamento/prioridades) precisa refletir o que já funcionou até agora + os dados mais recentes.
 
 ${businessPreamble(company, {})}${playbookBlock}
@@ -661,7 +666,7 @@ ${baseline ? `Dado real ATUAL: ${baseline.label}.` : 'Ainda sem dado real de per
 
 ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
 ${formatDomains(dataAgentState)}
-
+${learningBlock}
 REGRAS: mantenha a tese intacta; priorize (regra 80/20) manter e reforçar o que os sinais reais mostram que já funciona, reservando só uma fatia menor pra testar algo novo; NUNCA invente métrica que não foi te dada acima; metas no máximo 3 (goal_type: ${GOAL_TYPES.join('|')}), NÃO preencha baseline.
 
 Retorne APENAS um JSON:

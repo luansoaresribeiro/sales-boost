@@ -39,6 +39,18 @@ resto do pipeline).
 formatos aceitos (9:16), duração, preço por uso e como avisa que terminou
 (webhook ou consulta) — a doc pode ter mudado desde a última checagem.
 
+**Primeiro contato (2026-10-02):** SDK oficial `@higgsfield/client`
+(v0.2.6, `@higgsfield/client/v2`, devDependency) + exemplo em
+`scripts/higgsfield/index.ts` (Seedance 2.5 texto → vídeo, 5s, 720p,
+16:9), rodado com `node --env-file=.env.local --experimental-strip-types`.
+**Divergência:** o SDK usa `HF_CREDENTIALS` (`key-id:key-secret`), não
+`HIGGSFIELD_API_KEY` — ainda não há secret no Supabase. Resultado da 1ª
+execução: a API aceitou a chave e respondeu **"Not enough credits"** —
+nenhum vídeo gerado, nada cobrado. Status possíveis do SDK: `completed`,
+`failed`/`nsfw` (créditos devolvidos), cancelado. Os nomes dos campos de
+entrada do Seedance (`duration`, `resolution`, `aspect_ratio`) não foram
+conferidos na doc (bloqueada pela rede desta sessão).
+
 ## Escopo agora
 
 **(1) Tour virtual em vídeo:** cada foto real → clipe curto com movimento
