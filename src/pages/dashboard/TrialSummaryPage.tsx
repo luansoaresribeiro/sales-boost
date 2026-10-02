@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
 import { supabase } from '../../lib/supabase'
 import { getTrialInfo, TRIAL_DAYS, formatExpiresAt } from '../../lib/trialState'
+import TrialVideoPreviews from './TrialVideoPreviews'
 import { CARD, MUTED, BORDER, ORANGE, D, SUPABASE_URL } from './marketingAi/shared'
 
 const PLAN_PRICE_BR = 'R$14,49'
@@ -177,6 +178,8 @@ export default function TrialSummaryPage() {
           )}
         </div>
       )}
+
+      {info.isTrial && <TrialVideoPreviews companyId={company.id} verticalKey={company.vertical_key} />}
 
       {openOpps.length > 0 && (
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '20px 22px' }}>

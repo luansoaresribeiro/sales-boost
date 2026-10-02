@@ -97,3 +97,19 @@ texto via `render-format`.
 As functions `generate-image` (OpenAI) e `generate-video` (fal.ai) ficam
 como estão — `generate-video` está deployada mas órfã (zero chamadores).
 Migração/unificação pro Higgsfield é item futuro, não parte deste escopo.
+
+## Vídeo grátis do trial — Parte B (plano, não implementado)
+
+Tabela `trial_video_claims` (migration `20261002120000`, unique por
+`company_id`; leitura só pro dono, escrita só service role). A edge
+function da Parte B deve:
+
+1. Inserir a linha `claimed` com service role **antes** de chamar a
+   Higgsfield. Erro `23505` (já usado) → responder **409 sem chamar a
+   API**.
+2. Sucesso → marcar `completed` (guardar `item_id`/`job_ref`).
+3. Falha da geração → marcar `failed` e **liberar a trava (delete da
+   linha)**, pra o cliente não ficar sem vídeo por erro nosso.
+
+A Parte A (tela `TrialVideoPreviews` no resumo do trial) só lê dados e não
+chama nenhuma API de vídeo.
