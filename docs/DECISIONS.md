@@ -75,3 +75,13 @@
   [ROADMAP.md](ROADMAP.md#p4--infra-de-autonomia)). Banco de ensaio:
   segundo projeto grátis do Supabase (`salesboost-ensaio`), não o recurso
   pago de cópia — reavaliar depois que o fluxo provar que funciona.
+- **PR aprovado libera o agente a alterar o banco real** — 2026-10-02,
+  pedido do dono. A aprovação do PR (merge feito pelo dono) **é** a
+  aprovação da mudança no banco de produção (`miwcxakzyforbahpnpst`) que
+  está nele. Depois do merge, o agente aplica em produção exatamente o
+  SQL do PR — nada além. Antes disso, nunca. Condições e passo a passo em
+  [ORCHESTRATION.md](ORCHESTRATION.md#banco-de-produção-depois-do-pr-aprovado).
+  Motivo: o dono não é desenvolvedor e não deveria ter que rodar SQL à
+  mão; a revisão dele acontece no PR. **Isto ajusta** a regra anterior
+  "mudança de estrutura fica marcada 'precisa de você' pro dono aplicar
+  em produção".

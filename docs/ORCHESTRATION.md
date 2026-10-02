@@ -113,18 +113,47 @@ nenhuma tarefa era elegível e o que destravaria).
   [ROADMAP.md](ROADMAP.md)). ~~Não precisa de banco de dados enquanto a
   rotina não tiver as chaves do ensaio~~ — superado. Migration/SQL só no
   ensaio, nunca em produção; mudança de estrutura entra no PR com a
-  mesma mudança pro ensaio e fica marcada "precisa de você" pro dono
-  aplicar em produção.
+  mesma mudança pro ensaio. ~~Fica marcada "precisa de você" pro dono
+  aplicar em produção~~ — desde 2026-10-02 o agente aplica em produção
+  depois que o PR for aprovado (ver seção abaixo).
 - Cabe em 1 PR revisável (prefira pequeno).
 
 ### Proibido no modo autônomo (sem exceção)
 
 - Merge de PR, push no `main`, `wrangler deploy`, deploy de edge function.
-- Qualquer acesso ao banco de produção (`miwcxakzyforbahpnpst`).
+- Qualquer acesso ao banco de produção (`miwcxakzyforbahpnpst`) —
+  **única exceção:** aplicar o SQL de um PR já aprovado e juntado pelo
+  dono, seguindo a seção abaixo.
 - Publicar/enviar qualquer coisa (Instagram, DM, e-mail, Telegram).
 - Gastar com provedor pago (Higgsfield, IA em lote, API nova).
 - Mexer em secrets, auth, crons, DNS, painel da Meta.
 - Desligar/remover funcionalidade existente.
+
+### Banco de produção depois do PR aprovado
+
+Decisão de 2026-10-02 ([DECISIONS.md](DECISIONS.md)): o merge do PR pelo
+dono **é** a aprovação da mudança de banco que está nele. Regras:
+
+1. **No PR (antes do merge):** o SQL vai num arquivo em
+   `supabase/migrations/`, já aplicado e testado no ensaio. A descrição
+   do PR tem a seção "Banco de produção" em português simples: o que
+   muda, o que pode dar errado, e o SQL pra desfazer. Se apagar dados ou
+   mexer em RLS, dizer isso com essas palavras.
+2. **Só depois do merge no `main`:** PR aberto, só aprovado sem merge, ou
+   fechado sem merge = não aplica. Antes de aplicar, conferir que o PR
+   está mesmo juntado.
+3. **Exatamente o SQL do PR:** o mesmo arquivo, sem mudar nada e sem
+   acrescentar nada. Se precisar de ajuste, é outro PR.
+4. **Antes de aplicar, conferir que os dois bancos estão iguais** (consulta
+   md5 no P4 do [ROADMAP.md](ROADMAP.md)). Se estiverem diferentes, parar
+   e avisar o dono — não aplicar.
+5. **Depois de aplicar:** rodar a consulta md5 de novo e confirmar que os
+   dois bancos estão iguais. Relatar: PR, o que foi aplicado, resultado da
+   conferência.
+6. **Se der erro no meio:** parar, não tentar consertar direto em
+   produção, avisar o dono com o erro e o SQL de desfazer.
+7. Nunca criar cron que chame function de produção a partir de migration
+   sem estar escrito no PR (ver [PITFALLS.md](PITFALLS.md)).
 
 ### Relatório por tarefa (descrição do PR)
 

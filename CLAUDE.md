@@ -61,6 +61,9 @@ confiável pro próximo agente.
 ## 🔴 Alterações arriscadas — parar e pedir aprovação antes de fazer
 
 - Migration/SQL que altere o banco de produção, apague dados, mude RLS.
+  (Se a mudança veio num PR que o dono aprovou e juntou, o merge já é a
+  aprovação — aplicar só aquele SQL, conforme
+  [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md#banco-de-produção-depois-do-pr-aprovado).)
 - Mudar autenticação, `verify_jwt`, secrets, crons/agendamentos.
 - Deploy de functions usadas por clientes reais em funcionamento
   (`agent-actions`, `instagram-webhook`, `hermes-proxy`,

@@ -111,9 +111,11 @@
         **idêntico** (120 tabelas, 171 policies; md5 de colunas,
         constraints, índices e policies iguais nos dois). Regra: todo PR
         que muda a estrutura do banco aplica a mesma mudança no ensaio no
-        mesmo PR; a conferência por md5 (consulta abaixo) roda numa sessão
-        supervisionada depois de cada mudança de schema — a rotina
-        autônoma não lê produção. Custo: só leitura de estrutura, de graça
+        mesmo PR; depois do merge, o agente aplica o mesmo SQL em
+        produção (ver [ORCHESTRATION.md](ORCHESTRATION.md#banco-de-produção-depois-do-pr-aprovado));
+        a conferência por md5 (consulta abaixo) roda antes e depois de
+        aplicar cada mudança de schema (fora disso, a rotina autônoma não
+        lê produção). Custo: só leitura de estrutura, de graça
         no Supabase e poucos tokens.
         ```sql
         select
