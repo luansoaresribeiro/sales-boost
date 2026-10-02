@@ -282,6 +282,20 @@ async function execute(admin: Supa, act: any): Promise<any> {
         instagram_media_id: mediaId, published_at: mediaId ? new Date().toISOString() : null,
       }).select('id').single()
       if (error) return await fail(error.message)
+      // P2 (80/20): guarda pilar/receita/formato/item no post ANTES de apagar a
+      // linha de teste. Update separado e tolerante: se as colunas novas ainda
+      // não existem em produção (migration pendente), o post já foi criado e
+      // publica normalmente, só sem esses campos.
+      try {
+        if (postRow?.id) {
+          const { data: tc } = await admin.from('marketing_ai_test_content').select('pillar, recipe, format, item_id').eq('id', act.ref_id).eq('company_id', act.company_id).maybeSingle()
+          const meta = {
+            pillar: tc?.pillar ?? p.pillar ?? null, recipe: tc?.recipe ?? p.recipe ?? null,
+            format: tc?.format ?? p.format ?? null, item_id: tc?.item_id ?? p.item_id ?? null,
+          }
+          if (Object.values(meta).some(v => v)) await admin.from('posts').update(meta).eq('id', postRow.id).eq('company_id', act.company_id)
+        }
+      } catch (e) { console.error('agent-actions: gravar pilar/receita no post falhou (ignorado):', e) }
       await admin.from('marketing_ai_test_content').delete().eq('id', act.ref_id).eq('company_id', act.company_id)
       if (mediaId) await recordInstagramPost(admin, act.company_id, mediaId, caption, coverUrl)
 

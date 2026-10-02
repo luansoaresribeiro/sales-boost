@@ -56,6 +56,12 @@ o produto não deve nem tentar).
 → item/pilar (join via `posts.id`/`marketing_ai_test_content` no momento
 em que o lead é criado).
 
+> **Divergência registrada:** no código atual `leads` NÃO tem
+> `source_post_id`/`source_item_id`/`source_pillar` (nenhuma migration/uso).
+> `agent-actions` cria o lead só com name/contact/channel/stage/notes. Até
+> isso existir, a atribuição conversa→pilar vem de `engagement_events.media_ref`
+> → `posts.instagram_media_id` → `posts.pillar` (ver [LEARNING.md](LEARNING.md)).
+
 ## Status real (atualizar a cada mudança)
 
 🟡 **Parcial, em construção** — `supabase/functions/instagram-webhook/index.ts`.
