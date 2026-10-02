@@ -34,7 +34,9 @@ ficha."*
 
 - **Ficha ativa:** `imoveis_rio`.
 - **ICP:** corretor autônomo ou imobiliária pequena (até ~10 corretores) no
-  Rio de Janeiro.
+  Rio de Janeiro. **Ajuste 2026-10-02 (dono):** público-alvo por agora =
+  corretores e imobiliárias (sem o limite de tamanho), alinhado ao preço
+  de R$1.449/mês — ver [DECISIONS.md](DECISIONS.md).
 - **Canal:** só Instagram por enquanto.
 - **Onboarding por cliente** (`companies.playbook_answers`): transação
   (comprar/alugar), faixa de preço, bairros, cliente típico, CRECI, tamanho
@@ -53,7 +55,9 @@ confiável de receita — ver gap em [LEARNING.md](LEARNING.md)) → marketplace
 
 **Hoje:** setup (arrumar perfil, conectar, 3 primeiros imóveis) +
 mensalidade R$397–697 (~R$13–23/dia). Tática: desconto pra cliente que posta
-sobre o Sales Boost no próprio feed.
+sobre o Sales Boost no próprio feed. **Superado em 2026-10-02:** teste
+grátis de 7 dias ("7-Day Growth Preview") → plano único **R$1.449/mês**
+("Full Growth Access") — ver Modelo de cobrança abaixo.
 
 ## Princípios (nunca violar)
 
@@ -100,10 +104,34 @@ precisar virar especialista em marketing.
 - **Diferencial:** ninguém cruza preços + reviews + plano de ação + agente
   que executa + voz em PT-BR.
 
-## Modelo de cobrança — A DECIDIR
+## Modelo de cobrança — DECIDIDO (2026-10-02)
 
-Três hipóteses em aberto (decisão do dono, não é algo pra um agente decidir
-sozinho):
+**Decisão do dono:** plano único **Sales Boost — R$1.449/mês, Full Growth
+Access**, depois de um teste grátis de **7 dias** ("7-Day Growth Preview").
+Posicionamento: não é "pagar por mais gerações de IA", é "seu departamento
+de crescimento com IA está pronto pra executar".
+
+- **No teste (7 dias):** inteligência real, não demo — Telegram só com
+  sinais relevantes; painel do Hermes (estratégia, análise do negócio e do
+  mercado, concorrentes, oportunidades, ações recomendadas); oportunidades
+  de conteúdo; resultados esperados **sempre rotulados como estimativa**
+  (regra 5); plano de ação.
+- **1 vídeo real por teste**, muito personalizado, a partir das fotos
+  reais do cliente (regra 4), que ele pode ver e publicar (publicar no
+  Instagram depende do App Review da Meta; até lá, download).
+- **Depois do 1º vídeo:** outras oportunidades de vídeo aparecem como
+  prévias borradas/travadas (foto real do cliente borrada + título,
+  objetivo e formato recomendados pelo Hermes). Não abrem, não baixam, não
+  publicam, e **nunca chamam a API de vídeo**. Não podem parecer vídeos já
+  prontos — são "recomendados, prontos pra gerar".
+- **Fim do teste:** relatório de 7 dias com contagens reais (sinais de
+  mercado, movimentos de concorrentes, oportunidades de conteúdo, ações
+  recomendadas, conteúdo preparado, oportunidades estratégicas) → oferta
+  de R$1.449/mês.
+- **Progressão:** Insight → Estratégia → Oportunidade → Prova → Desejo →
+  Upgrade → Execução.
+
+Hipóteses anteriores (mantidas como histórico):
 
 - **(a)** Assinatura mensal fixa (ex. R$197–R$397/mês). Previsível, fácil
   de comunicar.

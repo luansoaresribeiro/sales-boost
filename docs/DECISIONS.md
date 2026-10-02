@@ -75,6 +75,18 @@
   [ROADMAP.md](ROADMAP.md#p4--infra-de-autonomia)). Banco de ensaio:
   segundo projeto grátis do Supabase (`salesboost-ensaio`), não o recurso
   pago de cópia — reavaliar depois que o fluxo provar que funciona.
+- **Teste grátis de 7 dias + plano único de R$1.449/mês** — 2026-10-02,
+  decisão do dono. Substitui o teste de 3 dias (`TRIAL_DAYS = 3` em
+  `src/lib/trialState.ts`) e as faixas R$197–697 de
+  [PRODUCT.md](PRODUCT.md). Público-alvo por agora: corretores e
+  imobiliárias. No teste, 1 vídeo real (o único que chama a API de vídeo);
+  os demais aparecem como prévias travadas, sem custo de API. Detalhes em
+  [PRODUCT.md](PRODUCT.md#modelo-de-cobrança--decidido-2026-10-02). Motivo:
+  o cliente precisa ver a inteligência real e uma prova de execução, não
+  uma demo limitada; o preço posiciona como departamento de crescimento,
+  não como créditos de IA. Ordem de construção: (1) testar Higgsfield com
+  fotos reais, (2) teste de 7 dias, (3) fluxo do vídeo + prévias, (4)
+  relatório e tela de assinatura.
 - **PR aprovado libera o agente a alterar o banco real** — 2026-10-02,
   pedido do dono. A aprovação do PR (merge feito pelo dono) **é** a
   aprovação da mudança no banco de produção (`miwcxakzyforbahpnpst`) que
