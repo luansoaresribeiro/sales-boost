@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useCompany } from '../../contexts/CompanyContext'
-import { getTrialInfo, formatExpiresAt } from '../../lib/trialState'
+import { getTrialInfo, TRIAL_DAYS, formatExpiresAt } from '../../lib/trialState'
 import { CARD, MUTED, BORDER, ORANGE, D } from './marketingAi/shared'
 
 // Mesmo plano/preço já mostrados na home antes do cadastro (Pro — o mais
@@ -16,8 +16,9 @@ export default function TrialStartModal() {
   const { company, refreshCompany } = useCompany()
   const [dismissing, setDismissing] = useState(false)
   const info = getTrialInfo(company)
+  const total = info.totalDays ?? TRIAL_DAYS
 
-  if (!company || company.trial_intro_seen_at || info.state !== 'trial_day_1') return null
+  if (!company || company.trial_intro_seen_at || info.dayNumber !== 1 || !info.isTrial) return null
 
   const dismiss = async () => {
     setDismissing(true)
@@ -31,14 +32,14 @@ export default function TrialStartModal() {
       <div style={{ width: '100%', maxWidth: '460px', background: `linear-gradient(180deg, ${CARD}, #100b07)`, border: `1px solid rgba(255,109,41,0.3)`, borderRadius: '20px', padding: '32px', fontFamily: D, boxShadow: '0 24px 80px rgba(0,0,0,0.6)' }}>
         <div style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>🚀 Trial de Crescimento ativado</div>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.2, marginBottom: '12px' }}>
-          Seu trial de 3 dias de Crescimento do Negócio começou.
+          {`Seu trial de ${total} dias de Crescimento do Negócio começou.`}
         </h1>
         <p style={{ fontSize: '13.5px', color: MUTED, lineHeight: 1.6, marginBottom: '22px' }}>
-          O SalesBoost vai analisar seu negócio, identificar oportunidades de crescimento e te ajudar a agir — tudo automaticamente, nesses 3 dias.
+          O SalesBoost vai analisar seu negócio, identificar oportunidades de crescimento e te ajudar a agir — tudo {`automaticamente, nesses ${total} dias.`}
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '22px' }}>
-          <Row label="Dia" value="1 de 3" />
+          <Row label="Dia" value={`1 de ${total}`} />
           <Row label="Termina em" value={formatExpiresAt(info.expiresAt)} />
           <Row label="Hoje" value="R$ 0" valueColor="#4ade80" />
           <Row label="Depois do trial" value={`${PLAN_PRICE_BR}/mês (${PLAN_PRICE_US}/mo)`} />

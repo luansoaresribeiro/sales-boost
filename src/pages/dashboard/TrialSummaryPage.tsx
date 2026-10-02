@@ -1,4 +1,4 @@
-// Resumo dos 3 dias do trial + conversão. Serve duas situações: dia 3 (o
+// Resumo do trial (7 dias nos novos; 3 nos antigos) + conversão. Serve duas situações: último dia (o
 // cliente ainda está no trial, vendo o valor acumulado) e trial expirado
 // (mesma tela, deixando claro que nada foi apagado). Métricas sempre reais
 // — nunca mostra um número que não veio de uma contagem de verdade.
@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
 import { supabase } from '../../lib/supabase'
-import { getTrialInfo, formatExpiresAt } from '../../lib/trialState'
+import { getTrialInfo, TRIAL_DAYS, formatExpiresAt } from '../../lib/trialState'
 import { CARD, MUTED, BORDER, ORANGE, D, SUPABASE_URL } from './marketingAi/shared'
 
 const PLAN_PRICE_BR = 'R$14,49'
@@ -20,6 +20,15 @@ interface Metrics {
   actionsCompleted: number
   gpEarned: number
 }
+interface Panel {
+  strategyName: string | null
+  analysisReports: number
+  ideas: number
+  initiatives: number
+  telegramConnected: boolean
+  estimateTotal: number | null
+  estimateCount: number
+}
 interface OpenOpportunity { id: string; title: string; value_estimate: number | null }
 
 export default function TrialSummaryPage() {
@@ -27,6 +36,7 @@ export default function TrialSummaryPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
   const [metrics, setMetrics] = useState<Metrics | null>(null)
+  const [panel, setPanel] = useState<Panel | null>(null)
   const [openOpps, setOpenOpps] = useState<OpenOpportunity[]>([])
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState('')
@@ -57,12 +67,45 @@ export default function TrialSummaryPage() {
     return () => { alive = false }
   }, [company?.id])
 
+  // Painel do trial: só contagens reais; vazio vira "Hermes ainda está analisando".
   useEffect(() => {
-    if (!company?.id || info.state !== 'trial_day_3') return
+    if (!company?.id) return
+    let alive = true
+    ;(async () => {
+      const [{ data: strat }, { count: reports }, { count: diags }, { count: ideas }, { data: co }, { data: vals }] = await Promise.all([
+        supabase.from('marketing_ai_strategies').select('id, name').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('insights_reports').select('id', { count: 'exact', head: true }).eq('company_id', company.id),
+        supabase.from('diagnostics').select('id', { count: 'exact', head: true }).eq('company_id', company.id),
+        supabase.from('marketing_ai_ideas').select('id', { count: 'exact', head: true }).eq('company_id', company.id).neq('status', 'dismissed'),
+        supabase.from('companies').select('telegram_chat_id').eq('id', company.id).maybeSingle(),
+        supabase.from('opportunities').select('value_estimate').eq('company_id', company.id).eq('status', 'open').not('value_estimate', 'is', null),
+      ])
+      let initiatives = 0
+      if (strat?.id) {
+        const { count } = await supabase.from('marketing_ai_strategies').select('id', { count: 'exact', head: true }).eq('parent_strategy_id', strat.id)
+        initiatives = count ?? 0
+      }
+      if (!alive) return
+      const nums = (vals ?? []).map(v => v.value_estimate as number).filter(n => typeof n === 'number' && n > 0)
+      setPanel({
+        strategyName: strat?.name ?? null,
+        analysisReports: (reports ?? 0) + (diags ?? 0),
+        ideas: ideas ?? 0,
+        initiatives,
+        telegramConnected: !!co?.telegram_chat_id,
+        estimateTotal: nums.length ? nums.reduce((a, b) => a + b, 0) : null,
+        estimateCount: nums.length,
+      })
+    })()
+    return () => { alive = false }
+  }, [company?.id])
+
+  useEffect(() => {
+    if (!company?.id || !info.isTrial || !(info.state === 'trial_expiring' || (info.dayNumber != null && info.dayNumber === info.totalDays))) return
     void supabase.from('progress_events').insert({
       company_id: company.id, event_type: 'trial_completed', gp: 50, source: 'trial', dedupe_key: `trial_completed:${company.id}`,
     })
-  }, [company?.id, info.state])
+  }, [company?.id, info.state, info.dayNumber, info.totalDays, info.isTrial])
 
   const startCheckout = async () => {
     if (!session) return
@@ -96,10 +139,10 @@ export default function TrialSummaryPage() {
   const isExpired = info.isBlocked
 
   return (
-    <div style={{ maxWidth: '820px', margin: '0 auto', padding: '32px 24px', fontFamily: D, display: 'flex', flexDirection: 'column', gap: '22px' }}>
+    <div style={{ maxWidth: '820px', margin: '0 auto', padding: '32px 16px', fontFamily: D, display: 'flex', flexDirection: 'column', gap: '22px' }}>
       <div>
         <div style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
-          {isExpired ? 'Seu trial terminou' : '🏆 Seus primeiros 3 dias com o SalesBoost'}
+          {isExpired ? 'Seu trial terminou' : `🏆 Seus primeiros ${info.totalDays ?? TRIAL_DAYS} dias com o SalesBoost`}
         </div>
         <h1 style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
           {isExpired ? 'Seu negócio já começou a progredir.' : 'Seu negócio já começou a progredir.'}
@@ -107,7 +150,7 @@ export default function TrialSummaryPage() {
         <p style={{ fontSize: '13.5px', color: MUTED, lineHeight: 1.6, marginTop: '10px', maxWidth: '560px' }}>
           {isExpired
             ? 'O trial acabou, mas nada foi apagado — todo o progresso, as descobertas e as conquistas do seu Business Game continuam guardados. É só continuar de onde parou.'
-            : 'Veja o que o SalesBoost já fez pelo seu negócio nesses 3 dias, com dados reais.'}
+            : `Veja o que o SalesBoost já fez pelo seu negócio nesses ${info.totalDays ?? TRIAL_DAYS} dias, com dados reais.`}
         </p>
       </div>
 
@@ -118,6 +161,20 @@ export default function TrialSummaryPage() {
           <MetricCard icon="🔍" value={metrics.competitorsAnalyzed} label="concorrentes analisados" />
           <MetricCard icon="⚡" value={metrics.actionsCompleted} label="ações de crescimento" />
           <MetricCard icon="🟢" value={metrics.gpEarned} label="XP ganhos" color="#4ade80" prefix="+" />
+        </div>
+      )}
+
+      {panel && metrics && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
+          <PanelBlock icon="🧠" title="Estratégia do Hermes" value={panel.strategyName} to="/dashboard/marketing-ai/estrategia" />
+          <PanelBlock icon="📊" title="Análise do negócio e do mercado" value={panel.analysisReports > 0 ? `${panel.analysisReports} ${panel.analysisReports === 1 ? 'análise pronta' : 'análises prontas'}` : null} to="/dashboard/insights" />
+          <PanelBlock icon="🔍" title="Concorrentes" value={metrics.competitorsAnalyzed > 0 ? `${metrics.competitorsAnalyzed} ${metrics.competitorsAnalyzed === 1 ? 'concorrente' : 'concorrentes'}` : null} to="/dashboard/marketing-ai/dados" />
+          <PanelBlock icon="💡" title="Oportunidades de conteúdo" value={panel.ideas > 0 ? `${panel.ideas} ${panel.ideas === 1 ? 'ideia' : 'ideias'}` : null} to="/dashboard/marketing-ai/content" />
+          <PanelBlock icon="✅" title="Plano de ação" value={panel.initiatives > 0 ? `${panel.initiatives} ${panel.initiatives === 1 ? 'iniciativa' : 'iniciativas'}` : null} to="/dashboard/marketing-ai/estrategia" />
+          <PanelBlock icon="✈️" title="Inteligência no Telegram" value={panel.telegramConnected ? 'Conectado' : 'Ainda não conectado'} to="/dashboard/settings?tab=integracoes" cta={panel.telegramConnected ? 'Ver →' : 'Conectar →'} />
+          {panel.estimateTotal != null && (
+            <PanelBlock icon="📈" title="Resultados esperados" value={`R$ ${panel.estimateTotal.toLocaleString('pt-BR')} em ${panel.estimateCount} ${panel.estimateCount === 1 ? 'oportunidade' : 'oportunidades'}`} note="Estimativa — não é garantia" to="/dashboard/oportunidades" />
+          )}
         </div>
       )}
 
@@ -157,6 +214,18 @@ function MetricCard({ icon, value, label, color, prefix }: { icon: string; value
       <div style={{ fontSize: '16px', marginBottom: '6px' }}>{icon}</div>
       <div style={{ fontSize: '22px', fontWeight: 900, color: color ?? 'white' }}>{prefix ?? ''}{value}</div>
       <div style={{ fontSize: '10.5px', color: MUTED, marginTop: '2px' }}>{label}</div>
+    </div>
+  )
+}
+
+function PanelBlock({ icon, title, value, to, note, cta }: { icon: string; title: string; value: string | null; to: string; note?: string; cta?: string }) {
+  const navigate = useNavigate()
+  return (
+    <div onClick={() => navigate(to)} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '16px', cursor: 'pointer', minWidth: 0 }}>
+      <div style={{ fontSize: '11.5px', fontWeight: 700, color: MUTED, marginBottom: '8px' }}>{icon} {title}</div>
+      <div style={{ fontSize: '14px', fontWeight: 800, color: value ? 'white' : MUTED, lineHeight: 1.35, wordBreak: 'break-word' }}>{value ?? 'Hermes ainda está analisando'}</div>
+      {note && <div style={{ fontSize: '10.5px', color: MUTED, marginTop: '4px' }}>{note}</div>}
+      <div style={{ fontSize: '11.5px', fontWeight: 700, color: ORANGE, marginTop: '10px' }}>{cta ?? 'Abrir →'}</div>
     </div>
   )
 }

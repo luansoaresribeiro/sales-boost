@@ -456,7 +456,7 @@ export default function SettingsPage() {
             return (
               <div style={{ marginBottom: '20px', padding: '14px 16px', background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.2)', borderRadius: '12px' }}>
                 <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>
-                  {trial.isTrial ? `Trial de Crescimento — Dia ${trial.dayNumber} de 3` : trial.state === 'cancelled' ? 'Trial cancelado' : 'Trial encerrado'}
+                  {trial.isTrial ? `Trial de Crescimento — Dia ${trial.dayNumber} de ${trial.totalDays}` : trial.state === 'cancelled' ? 'Trial cancelado' : 'Trial encerrado'}
                 </div>
                 {trial.isTrial && trial.expiresAt && (
                   <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '10px' }}>Termina em {formatExpiresAt(trial.expiresAt)} — sem cobrança automática.</div>
