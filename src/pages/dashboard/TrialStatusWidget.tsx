@@ -8,10 +8,12 @@ import { useCompany } from '../../contexts/CompanyContext'
 import { getTrialInfo } from '../../lib/trialState'
 import { CARD, MUTED, ORANGE, D } from './marketingAi/shared'
 
-const DAY_MESSAGE: Record<number, string> = {
-  1: 'Seu Trial de Crescimento do Negócio começou.',
-  2: 'O SalesBoost encontrou novas oportunidades pro seu negócio.',
-  3: 'Seu trial termina hoje. Veja o que o SalesBoost descobriu.',
+// Mensagem por fase, genérica pelo total de dias do trial (3 nos antigos, 7 nos novos).
+function dayMessage(day: number, total: number): string {
+  if (day <= 1) return 'Seu Trial de Crescimento do Negócio começou.'
+  if (day >= total) return 'Seu trial termina hoje. Veja o que o SalesBoost descobriu.'
+  if (day * 2 <= total) return 'O SalesBoost está analisando seu negócio e o mercado.'
+  return 'O SalesBoost encontrou novas oportunidades pro seu negócio.'
 }
 
 export default function TrialStatusWidget() {
@@ -47,10 +49,10 @@ export default function TrialStatusWidget() {
         <span style={{ fontSize: '18px', flexShrink: 0 }}>{isExpiring ? '⏳' : '🚀'}</span>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>
-            Trial de Crescimento · Dia {info.dayNumber} de 3
+            Trial de Crescimento · Dia {info.dayNumber} de {info.totalDays}
           </div>
           <div style={{ fontSize: '11px', color: MUTED, marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {info.dayNumber ? DAY_MESSAGE[info.dayNumber] : ''}
+            {info.dayNumber && info.totalDays ? dayMessage(info.dayNumber, info.totalDays) : ''}
           </div>
         </div>
       </div>

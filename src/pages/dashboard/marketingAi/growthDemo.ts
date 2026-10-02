@@ -11,7 +11,8 @@
 // banco; é só apresentação.
 
 import { useCallback, useState } from 'react'
-import type { CompanyData } from '../../../contexts/CompanyContext'
+import { useCompany, type CompanyData } from '../../../contexts/CompanyContext'
+import { getTrialInfo } from '../../../lib/trialState'
 
 // ── PRNG determinístico (xmur3 + mulberry32) ─────────────────────────────
 function xmur3(str: string): () => number {
@@ -292,7 +293,16 @@ function demoKey(companyId: string | undefined): string {
   return `sb_growth_demo_${companyId ?? 'anon'}`
 }
 
+// Durante o teste grátis o cliente só vê dado real (decisão 2026-10-02,
+// "7-Day Growth Preview" não é demo): o modo demonstração fica sempre
+// desligado e as telas escondem a chave/botão (ver useDemoAllowed).
+export function useDemoAllowed(): boolean {
+  const { company } = useCompany()
+  return !getTrialInfo(company).isTrial
+}
+
 export function useDemoMode(companyId: string | undefined): [boolean, (v: boolean) => void] {
+  const allowed = useDemoAllowed()
   const [on, setOn] = useState<boolean>(() => {
     if (typeof localStorage === 'undefined') return false
     const stored = localStorage.getItem(demoKey(companyId))
@@ -305,7 +315,7 @@ export function useDemoMode(companyId: string | undefined): [boolean, (v: boolea
     setOn(v)
     try { localStorage.setItem(demoKey(companyId), v ? '1' : '0') } catch { /* ignore */ }
   }, [companyId])
-  return [on, set]
+  return [allowed && on, set]
 }
 
 // ── Formatadores pt-BR ───────────────────────────────────────────────────

@@ -75,6 +75,27 @@
   [ROADMAP.md](ROADMAP.md#p4--infra-de-autonomia)). Banco de ensaio:
   segundo projeto grátis do Supabase (`salesboost-ensaio`), não o recurso
   pago de cópia — reavaliar depois que o fluxo provar que funciona.
+- **Teste grátis de 7 dias + plano único de R$1.449/mês** — 2026-10-02,
+  decisão do dono. Substitui o teste de 3 dias (`TRIAL_DAYS = 3` em
+  `src/lib/trialState.ts`) e as faixas R$197–697 de
+  [PRODUCT.md](PRODUCT.md). Público-alvo por agora: corretores e
+  imobiliárias. No teste, 1 vídeo real (o único que chama a API de vídeo);
+  os demais aparecem como prévias travadas, sem custo de API. Detalhes em
+  [PRODUCT.md](PRODUCT.md#modelo-de-cobrança--decidido-2026-10-02). Motivo:
+  o cliente precisa ver a inteligência real e uma prova de execução, não
+  uma demo limitada; o preço posiciona como departamento de crescimento,
+  não como créditos de IA. Ordem de construção: (1) testar Higgsfield com
+  fotos reais, (2) teste de 7 dias, (3) fluxo do vídeo + prévias, (4)
+  relatório e tela de assinatura.
+  **Status do passo 2 (tela, 2026-10-02):** `src/lib/trialState.ts` agora
+  deriva o total de dias de `trial_started_at`/`trial_expires_at`
+  (`TRIAL_DAYS = 7` só como padrão); estados `trial_day_1/2/3` viraram
+  `trial_active` e `TrialInfo` ganhou `totalDays`. Trials antigos de 3
+  dias seguem mostrando "Dia X de 3". **Divergência conhecida:** a edge
+  function `claim-diagnostic` ainda grava 3 dias ao criar trial novo até
+  ser deployada com a mudança (precisa de aprovação do dono); o worker
+  `vendas-bot` e o preço (`PLAN_PRICE` em `TrialSummaryPage`, passo 4) não
+  foram tocados.
 - **PR aprovado libera o agente a alterar o banco real** — 2026-10-02,
   pedido do dono. A aprovação do PR (merge feito pelo dono) **é** a
   aprovação da mudança no banco de produção (`miwcxakzyforbahpnpst`) que

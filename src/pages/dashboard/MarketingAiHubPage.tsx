@@ -4,7 +4,7 @@ import { useCompany } from '../../contexts/CompanyContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import GrowthCommandCenter from './marketingAi/GrowthCommandCenter'
-import { buildGrowthDemo, useDemoMode, type GrowthDemoData, type CommandInsight, type DemoAgentStatus } from './marketingAi/growthDemo'
+import { buildGrowthDemo, useDemoMode, useDemoAllowed, type GrowthDemoData, type CommandInsight, type DemoAgentStatus } from './marketingAi/growthDemo'
 import { mapStage, type LeadRow } from './marketingAi/salesReal'
 import type { LeadStageKey } from './marketingAi/salesDemo'
 import DataVeil, { veilMode } from './marketingAi/DataVeil'
@@ -142,6 +142,7 @@ export default function MarketingAiHubPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
   const [demoMode, setDemoMode] = useDemoMode(company?.id)
+  const demoAllowed = useDemoAllowed()
 
   const demo = useMemo(() => (company ? buildGrowthDemo(company) : null), [company])
   const { real, loading: realLoading, error: realError } = useRealGrowth(company?.id ?? '', session?.access_token ?? '')
@@ -174,10 +175,10 @@ export default function MarketingAiHubPage() {
             onMouseLeave={e => { e.currentTarget.style.color = MUTED; e.currentTarget.style.borderColor = BORDER }}>
             ⚙️ Configuração
           </button>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '9px', padding: '8px 14px', background: CARD, border: `1px solid ${demoMode ? 'rgba(251,191,36,0.3)' : BORDER}`, borderRadius: '10px', cursor: 'pointer' }}>
+          {demoAllowed && <label style={{ display: 'inline-flex', alignItems: 'center', gap: '9px', padding: '8px 14px', background: CARD, border: `1px solid ${demoMode ? 'rgba(251,191,36,0.3)' : BORDER}`, borderRadius: '10px', cursor: 'pointer' }}>
             <input type="checkbox" checked={demoMode} onChange={e => setDemoMode(e.target.checked)} style={{ width: '15px', height: '15px', accentColor: ORANGE, cursor: 'pointer' }} />
             <span style={{ fontSize: '12px', fontWeight: 700, color: demoMode ? '#FBBF24' : MUTED }}>Modo demonstração</span>
-          </label>
+          </label>}
         </div>
       </div>
 

@@ -8,6 +8,7 @@
 //   error  → igual ao locked, mas a mensagem diz que a atualização falhou.
 import type { ReactNode } from 'react'
 import { CARD, MUTED, BORDER, D } from './shared'
+import { useDemoAllowed } from './growthDemo'
 
 const ORANGE = '#FF6D29'
 const RED = '#f87171'
@@ -33,6 +34,13 @@ export default function DataVeil({ mode, title, message, errorDetail, cta, child
   cta?: { label: string; onClick: () => void }
   children: ReactNode
 }) {
+  // Em teste grátis não existe modo demonstração: some o botão e o convite.
+  const demoAllowed = useDemoAllowed()
+  if (!demoAllowed) {
+    if (cta && /demonstra/i.test(cta.label)) cta = undefined
+    if (message && /demonstra/i.test(message)) message = 'Hermes ainda está reunindo seus dados reais. Assim que houver dados de verdade, eles aparecem aqui.'
+  }
+
   // Dado real ou demo explícito → não borra nada.
   if (mode === 'real' || mode === 'demo') return <>{children}</>
 
@@ -54,7 +62,9 @@ export default function DataVeil({ mode, title, message, errorDetail, cta, child
           <div style={{ fontSize: '12px', color: MUTED, lineHeight: 1.55, marginBottom: cta ? '14px' : 0 }}>
             {message ?? (isError
               ? 'A conexão existe, mas a última atualização falhou. Tente de novo em instantes.'
-              : 'Estes números são só um exemplo do layout. Conecte a fonte pra ver os seus dados de verdade — ou ligue o Modo demonstração pra explorar com dados fictícios.')}
+              : demoAllowed
+                ? 'Estes números são só um exemplo do layout. Conecte a fonte pra ver os seus dados de verdade — ou ligue o Modo demonstração pra explorar com dados fictícios.'
+                : 'Estes números são só um exemplo do layout. Conecte a fonte pra ver os seus dados de verdade.')}
           </div>
           {isError && errorDetail && (
             <div style={{ marginBottom: cta ? '14px' : 0, padding: '9px 11px', background: 'rgba(248,113,113,0.08)', border: `1px solid rgba(248,113,113,0.25)`, borderRadius: '8px', fontSize: '10.5px', color: '#fca5a5', fontFamily: 'ui-monospace, monospace', textAlign: 'left', wordBreak: 'break-word', maxHeight: '110px', overflowY: 'auto' }}>

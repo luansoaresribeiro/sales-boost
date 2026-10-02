@@ -391,3 +391,12 @@ CRON_SECRET=                 # autentica chamadas de cron/internas (ver PITFALLS
 BOT_WEBHOOK_SECRET=          # autentica log-bot-event
 HIGGSFIELD_API_KEY=          # ainda não usado em código — ver MEDIA-ENGINE.md
 ```
+
+## Estado do trial (atualizado 2026-10-02)
+
+Antes: 3 dias fixos, estados `trial_day_1/2/3`. Agora: o total vem do par
+`trial_started_at`/`trial_expires_at` (`TrialInfo.totalDays`; padrão novo
+`TRIAL_DAYS = 7`), estado único `trial_active` (+ `trial_expiring` nas
+últimas 6h). `claim-diagnostic` ainda grava 3 dias até ser deployada.
+O painel do trial (`TrialSummaryPage`) mostra só contagens reais das
+tabelas existentes; sem dado, "Hermes ainda está analisando".
