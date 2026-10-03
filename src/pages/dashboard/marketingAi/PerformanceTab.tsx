@@ -14,6 +14,7 @@ import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import { useDemoMode } from './growthDemo'
 import { buildPerformanceDemo, type PerformanceData, type Recommendation } from './performanceDemo'
 import { proposeAgentAction } from '../../../lib/agentActions'
+import logo from '../../../assets/logo.png'
 import {
   PerfHeader, KpiCard, ScoreCard, TrendSection, AudienceSection, ReachSection,
   EngagementSection, Panel, RANGES, type RangeKey,
@@ -37,6 +38,10 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
   const [range, setRange] = useState<RangeKey>('30d')
   const [live, setLive] = useState<PerformanceData | null>(null)
   const [syncing, setSyncing] = useState(false)
+  // 1a consulta ainda não voltou: não dá pra saber se está conectado — sem
+  // isso a tela mostrava "Conectar Instagram" por alguns segundos e depois
+  // trocava sozinha pros dados (confundia o dono, 2026-10-03).
+  const [firstLoadDone, setFirstLoadDone] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -58,6 +63,7 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
       setSyncError(err instanceof Error ? err.message : 'Erro ao sincronizar')
     } finally {
       setSyncing(false)
+      setFirstLoadDone(true)
     }
   }
 
@@ -92,6 +98,8 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
     setToast('Ideia copiada. Abra a aba Conteúdo → Orgânico pra gerar o rascunho.')
     setTimeout(() => setToast(null), 5000)
   }
+
+  if (!firstLoadDone && !connected && !demoMode) return <BrandLoading label="Buscando seus dados do Instagram…" />
 
   // Estado 3: empty state premium (não conectado, sem modo demonstração).
   if (!connected && !demoMode) {
@@ -172,6 +180,16 @@ function Banner({ tone, children }: { tone: 'green' | 'amber' | 'red'; children:
   }[tone]
   return (
     <div style={{ padding: '12px 16px', background: map.bg, border: `1px solid ${map.bd}`, borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>{children}</div>
+  )
+}
+
+function BrandLoading({ label }: { label: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '14px', padding: '64px 16px', textAlign: 'center' }}>
+      <img src={logo} alt="Sales Boost" width={56} height={56} style={{ borderRadius: '14px', animation: 'sbPulse 1.4s ease-in-out infinite' }} />
+      <div style={{ fontSize: '12.5px', color: MUTED }}>{label}</div>
+      <style>{`@keyframes sbPulse { 0%,100% { opacity: .55; transform: scale(.96) } 50% { opacity: 1; transform: scale(1) } }`}</style>
+    </div>
   )
 }
 
