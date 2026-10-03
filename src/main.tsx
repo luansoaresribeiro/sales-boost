@@ -44,6 +44,14 @@ const Spinner = () => (
   </div>
 )
 
+const LoadRetry = ({ onRetry }: { onRetry: () => void }) => (
+  <div style={{ minHeight: '100vh', background: '#0E0B0A', display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center', justifyContent: 'center', padding: '16px', textAlign: 'center', fontFamily: "'Bricolage Grotesque', system-ui, sans-serif" }}>
+    <div style={{ color: 'white', fontSize: '15px', fontWeight: 700 }}>Não foi possível carregar sua conta agora.</div>
+    <div style={{ color: '#BABABA', fontSize: '13px' }}>Verifique sua internet e tente de novo.</div>
+    <button onClick={onRetry} style={{ padding: '10px 20px', background: '#FF6D29', color: '#000', fontWeight: 700, fontSize: '13px', border: 'none', borderRadius: '9px', cursor: 'pointer' }}>Tentar de novo</button>
+  </div>
+)
+
 // Página inicial do dashboard: cai no Marketing AI (agente principal). Se o
 // owner desligou o Marketing AI dessa empresa, cai em Atividades.
 function DashboardIndex() {
@@ -54,12 +62,15 @@ function DashboardIndex() {
 
 function ClientRoute({ children }: { children: React.ReactNode }) {
   const { user, role, loading } = useAuth()
-  const { company, access, loading: companyLoading } = useCompany()
+  const { company, access, loading: companyLoading, loadError, refreshCompany } = useCompany()
   const location = useLocation()
   if (loading) return <Spinner />
   if (!user) return <Navigate to="/login" replace />
   if (role === 'owner') return <Navigate to="/owner" replace />
   if (companyLoading) return <Spinner />
+  // Busca falhou (rede) e ainda não temos a empresa: nunca mandar pro
+  // onboarding por causa disso — deixa tentar de novo.
+  if (loadError && !company) return <LoadRetry onRetry={refreshCompany} />
   // Every client account must have a business profile — this is the one
   // place that gate is enforced, so it can't be skipped regardless of how
   // the account was created (signup, magic link, abandoned onboarding...).
