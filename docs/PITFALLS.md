@@ -145,8 +145,22 @@ na hora e sem nenhum dado): o popup "Bom dia, construtor de negócio"
 "+20.5% alcance", "+15% engajamento", "51 ações da IA". Os números vêm de
 `seededRng` (sorteio fixo por empresa, "demo-first") misturados com dado
 real via `Math.max(real, sorteio)`. Viola a regra 5 (nunca inventar números)
-e a decisão do teste de 7 dias ("não é demo"). **Não corrigido ainda** —
-depende de decisão do dono (mostrar só dado real ou esconder até haver).
+e a decisão do teste de 7 dias ("não é demo"). ~~Não corrigido ainda —
+depende de decisão do dono.~~
+
+**CORRIGIDO em 2026-10-06 (decisão do dono: só números reais; sem dado real =
+número embaçado).** Nova regra: `buildProgress(real)` em `progressGame.ts` não
+usa mais `seededRng` nem `Math.max(real, sorteio)` (o modo "demo-first" do
+progressGame acabou). Cada métrica vem de `fetchRealSignals()` (tabelas
+`posts`, `opportunities`, `reviews`, `campaigns`, `leads`, `progress_events`,
+`instagram_performance_snapshots`) ou fica `null`, e a tela mostra
+`<BlurredValue/>` (`progressParts.tsx`): placeholder fixo, `blur(6px)`, rótulo
+"aguardando dados reais". Ficam embaçados por falta de fonte: alcance %, saúde
+(score/status), conversas atendidas, automações, semanal (todas as linhas),
+receita. XP/liga vêm da soma de `progress_events.gp` (real). `choosePopup`
+só celebra (liga/streak/resultado) com dado real; sem nenhum dado de trabalho
+cai em "status" com o texto honesto. Ao criar métrica nova nessas telas: se não
+houver fonte real, `null` + `BlurredValue` — nunca estimativa.
 
 ## Teste visual local contra o ensaio
 

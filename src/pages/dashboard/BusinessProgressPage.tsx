@@ -4,11 +4,11 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
 import { supabase } from '../../lib/supabase'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './marketingAi/shared'
-import { buildProgress, type RealSignals, type ProgressData } from './marketingAi/progressGame'
+import { buildProgress, fetchRealSignals, type ProgressData } from './marketingAi/progressGame'
 import {
   LevelCard, MilestoneCard, WhileAway, HealthCard, WeeklyCard, PinsGrid,
   RewardsGrid, Timeline, NextBestAction, RecoveryCard, StreakCard,
-  JourneyTrack, LeagueLadder,
+  JourneyTrack, LeagueLadder, BlurredValue,
 } from './marketingAi/progressParts'
 import { fetchDiscoveries, DiscoveriesSection, type Discovery } from './marketingAi/Discoveries'
 import { type Goal, type Strategy, GOAL_TYPE_LABEL } from './marketingAi/strategyTypes'
@@ -112,11 +112,6 @@ function ObjetivosTab({ companyId, onOpenStrategy }: { companyId: string; onOpen
   )
 }
 
-async function headCount(q: { count: number | null } | PromiseLike<{ count: number | null }>): Promise<number> {
-  const { count } = await q
-  return count ?? 0
-}
-
 export default function BusinessProgressPage() {
   const { company } = useCompany()
   const { session } = useAuth()
@@ -136,15 +131,6 @@ export default function BusinessProgressPage() {
     let alive = true
     ;(async () => {
       setLoading(true)
-      // Sinais reais da plataforma (contagens) — não inventa, deriva do que existe.
-      const [posts, postsPublished, opportunities, reviewsReplied, campaigns] = await Promise.all([
-        headCount(supabase.from('posts').select('id', { count: 'exact', head: true }).eq('company_id', companyId)),
-        headCount(supabase.from('posts').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'publicado')),
-        headCount(supabase.from('opportunities').select('id', { count: 'exact', head: true }).eq('company_id', companyId)),
-        headCount(supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('company_id', companyId).not('owner_reply', 'is', null)),
-        headCount(supabase.from('campaigns').select('id', { count: 'exact', head: true }).eq('company_id', companyId)),
-      ])
-
       // Última visita: melhor esforço via progress_state; fallback localStorage.
       let daysSinceVisit = 1
       let lastVisitIso: string | null = null
@@ -156,15 +142,9 @@ export default function BusinessProgressPage() {
       if (lastVisitIso) daysSinceVisit = Math.max(0, Math.round((Date.now() - new Date(lastVisitIso).getTime()) / 86400000))
       try { localStorage.setItem(LS_VISIT, new Date().toISOString()) } catch { /* ignore */ }
 
-      let activitySinceVisit = 0
-      try {
-        const since = lastVisitIso ?? new Date(Date.now() - 7 * 86400000).toISOString()
-        const { count } = await supabase.from('client_activity').select('id', { count: 'exact', head: true }).eq('company_id', companyId).gte('created_at', since)
-        activitySinceVisit = count ?? 0
-      } catch { /* opcional */ }
-
-      const real: RealSignals = { posts, postsPublished, opportunities, reviewsReplied, campaigns, activitySinceVisit, daysSinceVisit }
-      const built = buildProgress({ id: companyId, business_name: businessName }, real)
+      // Só sinais reais; o que não tem fonte vem null e a tela embaça.
+      const real = await fetchRealSignals(companyId, lastVisitIso, daysSinceVisit)
+      const built = buildProgress(real)
 
       // Overlay: rewards ativos de verdade (do banco), se houver.
       try {
@@ -178,7 +158,7 @@ export default function BusinessProgressPage() {
       if (alive) { setData(built); setLoading(false) }
     })()
     return () => { alive = false }
-  }, [companyId, businessName])
+  }, [companyId])
 
   // Descobertas reais (detecta + lista). XP só credita quando o usuário revela.
   useEffect(() => {
@@ -217,9 +197,9 @@ export default function BusinessProgressPage() {
     <div style={{ maxWidth: '1120px', width: '100%', boxSizing: 'border-box', margin: '0 auto', padding: '28px 32px', fontFamily: D, display: 'flex', flexDirection: 'column', gap: '26px' }}>
       {/* Boas-vindas */}
       <div>
-        <div style={{ fontSize: 'clamp(1.6rem, 3vw, 2.2rem)', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.1 }}>🚀 Seu negócio avançou</div>
+        <div style={{ fontSize: 'clamp(1.6rem, 3vw, 2.2rem)', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.1 }}>🚀 Seu progresso real</div>
         <div style={{ fontSize: '13.5px', color: MUTED, marginTop: '6px', lineHeight: 1.5 }}>
-          Bem-vindo de volta, <strong style={{ color: 'white' }}>{firstName}</strong>. Seu SalesBoost trabalhou enquanto você estava fora — <strong style={{ color: 'white' }}>{data.actionsCount} ações executadas</strong> desde a última visita.
+          Bem-vindo de volta, <strong style={{ color: 'white' }}>{firstName}</strong>. Ações registradas desde a última visita: <strong style={{ color: 'white' }}>{data.actionsCount == null ? <BlurredValue hint={false} /> : data.actionsCount}</strong>{data.actionsCount == null && <span style={{ fontSize: '10px', marginLeft: '6px' }}>aguardando dados reais</span>}.
         </div>
       </div>
 
@@ -232,9 +212,9 @@ export default function BusinessProgressPage() {
         companyId && <ObjetivosTab companyId={companyId} onOpenStrategy={() => navigate('/dashboard/marketing-ai/estrategia')} />
       ) : (
       <>
-      {/* Modo demonstração (honestidade) */}
+      {/* Honestidade: só números reais */}
       <div style={{ padding: '11px 15px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-        🧪 <strong>Progresso combinado.</strong> Já usa seus dados reais (conteúdo, oportunidades, avaliações, campanhas). Leads, conversas e conversões entram como projeção até o Funil e o Atendimento reais (WhatsApp/Instagram) serem ligados — aí tudo vira 100% real, sem mudar a tela.
+        🔎 <strong>Só números reais.</strong> Tudo aqui vem dos seus dados (conteúdo, oportunidades, avaliações, campanhas, leads e eventos de progresso). O que ainda não tem dado real aparece <strong>embaçado</strong>, com o aviso "aguardando dados reais" — nunca um número inventado.
       </div>
 
       {/* Nível + Milestone */}
@@ -247,15 +227,15 @@ export default function BusinessProgressPage() {
       <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px', padding: '20px 22px' }}>
         <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>📈 Seu progresso</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: '16px' }}>
-          <span style={{ fontSize: '30px', fontWeight: 900, color: MUTED }}>{data.healthFrom}</span>
+          <span style={{ fontSize: '30px', fontWeight: 900, color: MUTED }}>{data.healthFrom == null ? <BlurredValue hint={false} /> : data.healthFrom}</span>
           <span style={{ fontSize: '20px', color: MUTED }}>→</span>
-          <span style={{ fontSize: '34px', fontWeight: 900, color: data.healthTo >= data.healthFrom ? GREEN : '#f87171' }}>{data.healthTo}</span>
-          <span style={{ fontSize: '12px', color: MUTED }}>Health Score</span>
+          <span style={{ fontSize: '34px', fontWeight: 900, color: data.healthTo == null || data.healthFrom == null || data.healthTo >= data.healthFrom ? GREEN : '#f87171' }}>{data.healthTo == null ? <BlurredValue hint={false} /> : data.healthTo}</span>
+          <span style={{ fontSize: '12px', color: MUTED }}>Health Score{(data.healthTo == null || data.healthFrom == null) && ' · aguardando dados reais'}</span>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           {data.deltas.map(dl => (
             <div key={dl.label} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '10px', padding: '9px 13px' }}>
-              <span style={{ fontSize: '15px', fontWeight: 800, color: dl.up ? GREEN : '#f87171' }}>{dl.value}</span>
+              <span style={{ fontSize: '15px', fontWeight: 800, color: dl.up ? GREEN : '#f87171' }}>{dl.value == null ? <BlurredValue hint={false} /> : dl.value}</span>
               <span style={{ fontSize: '11px', color: MUTED, marginLeft: '6px' }}>{dl.label}</span>
             </div>
           ))}

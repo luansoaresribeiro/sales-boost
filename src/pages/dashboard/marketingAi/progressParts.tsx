@@ -5,6 +5,19 @@ const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
 const RED = '#f87171'
 
+// Número sem fonte real: placeholder FIXO (nunca derivado de sorteio/dado),
+// embaçado e ilegível, com rótulo "aguardando dados reais". Dá pra perceber que
+// existe um número ali, mas não dá pra ler. Regra 5 do CLAUDE.md.
+export function BlurredValue({ kind = 'num', hint = true, size, color = 'white' }: { kind?: 'num' | 'pct' | 'xp'; hint?: boolean; size?: string; color?: string }) {
+  const text = kind === 'pct' ? '00,0%' : kind === 'xp' ? '0.000' : '00'
+  return (
+    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'inherit', lineHeight: 1.1, verticalAlign: 'middle' }}>
+      <span aria-label="aguardando dados reais" role="img" style={{ filter: 'blur(6px)', userSelect: 'none', pointerEvents: 'none', color, fontSize: size }}>{text}</span>
+      {hint && <span style={{ fontSize: '9px', fontWeight: 600, color: MUTED, letterSpacing: '0.02em', marginTop: '2px' }}>aguardando dados reais</span>}
+    </span>
+  )
+}
+
 function sectionTitle(icon: string, title: string, sub?: string) {
   return (
     <div style={{ marginBottom: '12px' }}>
@@ -27,16 +40,16 @@ export function LevelCard({ d }: { d: ProgressData }) {
           <div style={{ fontSize: '24px', fontWeight: 900, color: 'white', lineHeight: 1.1 }}>{d.level.name} League</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '22px', fontWeight: 900, color: c, lineHeight: 1 }}>{xp(d.totalGp)}</div>
+          <div style={{ fontSize: '22px', fontWeight: 900, color: c, lineHeight: 1 }}>{d.totalGp == null ? <BlurredValue kind="xp" size="22px" color={c} /> : xp(d.totalGp)}</div>
           <div style={{ fontSize: '10px', color: MUTED }}>XP</div>
         </div>
       </div>
       <div style={{ height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '99px', overflow: 'hidden', marginBottom: '7px' }}>
-        <div style={{ width: `${d.levelPct}%`, height: '100%', background: `linear-gradient(90deg, ${c}, #ffffff88)`, borderRadius: '99px', transition: 'width 0.6s ease' }} />
+        <div style={{ width: `${d.totalGp == null ? 0 : d.levelPct}%`, height: '100%', background: `linear-gradient(90deg, ${c}, #ffffff88)`, borderRadius: '99px', transition: 'width 0.6s ease' }} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: MUTED }}>
-        <span>{d.nextLevel ? `${xp(d.totalGp)} / ${xp(d.nextLevel.minGp)} XP` : 'Liga máxima atingida 🚀'}</span>
-        {d.nextLevel && <span><strong style={{ color: 'white' }}>{xp(d.gpToNext)} XP</strong> → {d.nextLevel.name}</span>}
+        <span>{d.nextLevel ? (d.totalGp == null ? <><BlurredValue kind="xp" hint={false} /> / {xp(d.nextLevel.minGp)} XP</> : `${xp(d.totalGp)} / ${xp(d.nextLevel.minGp)} XP`) : 'Liga máxima atingida 🚀'}</span>
+        {d.nextLevel && d.totalGp != null && <span><strong style={{ color: 'white' }}>{xp(d.gpToNext)} XP</strong> → {d.nextLevel.name}</span>}
       </div>
     </div>
   )
@@ -68,7 +81,7 @@ export function LeagueLadder({ d }: { d: ProgressData }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '9px' }}>
         {LEAGUES.map(lg => {
           const current = lg.key === d.level.key
-          const passed = d.totalGp >= (lg.maxGp ?? Infinity)
+          const passed = (d.totalGp ?? 0) >= (lg.maxGp ?? Infinity)
           return (
             <div key={lg.key} style={{ background: current ? `${lg.color}18` : CARD, border: `1px solid ${current ? lg.color : BORDER}`, borderRadius: '12px', padding: '13px 14px', opacity: passed || current ? 1 : 0.55 }}>
               <div style={{ fontSize: '20px', marginBottom: '4px' }}>{lg.icon}</div>
@@ -91,11 +104,15 @@ export function MilestoneCard({ d }: { d: ProgressData }) {
       <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>🚀 Próximo desbloqueio</div>
       <div style={{ fontSize: '18px', fontWeight: 800, color: 'white', marginBottom: '12px' }}>{m.icon} {m.title}</div>
       <div style={{ height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '99px', overflow: 'hidden', marginBottom: '7px' }}>
-        <div style={{ width: `${m.pct}%`, height: '100%', background: `linear-gradient(90deg, #A78BFA, #c4b5fd)`, borderRadius: '99px', transition: 'width 0.6s ease' }} />
+        <div style={{ width: `${d.totalGp == null ? 0 : m.pct}%`, height: '100%', background: `linear-gradient(90deg, #A78BFA, #c4b5fd)`, borderRadius: '99px', transition: 'width 0.6s ease' }} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: MUTED, marginBottom: '12px' }}>
-        <span>{m.current.toLocaleString('pt-BR')} / {m.target.toLocaleString('pt-BR')} XP · {m.pct}%</span>
-        <span><strong style={{ color: 'white' }}>Faltam {m.remaining.toLocaleString('pt-BR')} XP</strong></span>
+        {d.totalGp == null
+          ? <span><BlurredValue kind="xp" hint={false} /> / {m.target.toLocaleString('pt-BR')} XP</span>
+          : <span>{m.current.toLocaleString('pt-BR')} / {m.target.toLocaleString('pt-BR')} XP · {m.pct}%</span>}
+        {d.totalGp == null
+          ? <BlurredValue kind="xp" />
+          : <span><strong style={{ color: 'white' }}>Faltam {m.remaining.toLocaleString('pt-BR')} XP</strong></span>}
       </div>
       <div style={{ fontSize: '11.5px', color: MUTED, background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '9px', padding: '9px 12px' }}>
         🎯 Objetivo sugerido: <strong style={{ color: 'white' }}>{m.nextGoal}</strong>
@@ -108,14 +125,14 @@ export function MilestoneCard({ d }: { d: ProgressData }) {
 export function WhileAway({ d, onOpen }: { d: ProgressData; onOpen: (l: string) => void }) {
   return (
     <div>
-      {sectionTitle('🤖', 'Enquanto você estava fora', `Seu SalesBoost trabalhou ${d.lastVisitLabel === 'hoje' ? 'hoje' : d.lastVisitLabel} — clique para abrir cada resultado.`)}
+      {sectionTitle('🤖', 'Enquanto você estava fora', 'Totais reais da sua conta — clique para abrir cada resultado.')}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
         {d.whileAway.map(w => (
           <button key={w.key} onClick={() => w.link && onOpen(w.link)}
             style={{ textAlign: 'left', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '14px 15px', cursor: w.link ? 'pointer' : 'default', fontFamily: D, display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '20px' }}>{w.icon}</span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '20px', fontWeight: 900, color: 'white', lineHeight: 1 }}>{w.count}</div>
+              <div style={{ fontSize: '20px', fontWeight: 900, color: 'white', lineHeight: 1 }}>{w.count == null ? <BlurredValue size="20px" /> : w.count}</div>
               <div style={{ fontSize: '11px', color: MUTED, marginTop: '2px' }}>{w.label} {w.link && <span style={{ color: ORANGE }}>→</span>}</div>
             </div>
           </button>
@@ -127,21 +144,21 @@ export function WhileAway({ d, onOpen }: { d: ProgressData; onOpen: (l: string) 
 
 // ── Business Health ────────────────────────────────────────────────────────
 export function HealthCard({ d }: { d: ProgressData }) {
-  const meta = HEALTH_META[d.health.status]
+  const meta = d.health.status ? HEALTH_META[d.health.status] : null
   return (
     <div>
-      {sectionTitle('❤️‍🩹', 'Business Health', 'Saúde geral do negócio, calculada dos seus dados.')}
+      {sectionTitle('❤️‍🩹', 'Business Health', 'Só números reais da sua conta. O que ainda não tem fonte aparece embaçado.')}
       <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px 18px' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '15px', fontWeight: 800, color: meta.color, marginBottom: '14px' }}>
-          {meta.dot} Business Health: {meta.label}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '15px', fontWeight: 800, color: meta ? meta.color : MUTED, marginBottom: '14px' }}>
+          {meta ? `${meta.dot} Business Health: ${meta.label}` : <>Business Health: <BlurredValue kind="pct" hint={false} /> <span style={{ fontSize: '10px', fontWeight: 600, color: MUTED }}>aguardando dados reais</span></>}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '9px' }}>
           {d.health.metrics.map(m => (
             <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '10px', padding: '11px 12px' }}>
               <div style={{ fontSize: '10px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>{m.label}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '16px', fontWeight: 800, color: 'white' }}>{m.value}</span>
-                <span style={{ fontSize: '10px', fontWeight: 700, color: m.delta >= 0 ? GREEN : RED }}>{m.delta >= 0 ? '▲' : '▼'}{Math.abs(m.delta)}%</span>
+                <span style={{ fontSize: '16px', fontWeight: 800, color: 'white' }}>{m.value == null ? <BlurredValue size="16px" /> : m.value}</span>
+                {m.delta != null && <span style={{ fontSize: '10px', fontWeight: 700, color: m.delta >= 0 ? GREEN : RED }}>{m.delta >= 0 ? '▲' : '▼'}{Math.abs(m.delta)}%</span>}
               </div>
             </div>
           ))}
@@ -153,19 +170,23 @@ export function HealthCard({ d }: { d: ProgressData }) {
 
 // ── Progresso semanal ──────────────────────────────────────────────────────
 export function WeeklyCard({ d }: { d: ProgressData }) {
-  const max = Math.max(...d.weekly.map(w => Math.abs(w.pct)), 10)
+  const max = Math.max(...d.weekly.map(w => Math.abs(w.pct ?? 0)), 10)
   return (
     <div>
-      {sectionTitle('📊', 'Progresso semanal', 'Esta semana vs. semana passada.')}
+      {sectionTitle('📊', 'Progresso semanal', 'Esta semana vs. semana passada — aparece quando houver histórico real.')}
       <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {d.weekly.map(w => (
           <div key={w.label}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
               <span style={{ fontSize: '12px', color: MUTED }}>{w.label}</span>
-              <span style={{ fontSize: '12px', fontWeight: 800, color: w.pct >= 0 ? GREEN : RED }}>{w.pct >= 0 ? '+' : ''}{w.pct}%</span>
+              {w.pct == null
+                ? <BlurredValue kind="pct" />
+                : <span style={{ fontSize: '12px', fontWeight: 800, color: w.pct >= 0 ? GREEN : RED }}>{w.pct >= 0 ? '+' : ''}{w.pct}%</span>}
             </div>
             <div style={{ height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '99px', overflow: 'hidden' }}>
-              <div style={{ width: `${(Math.abs(w.pct) / max) * 100}%`, height: '100%', background: w.pct >= 0 ? GREEN : RED, borderRadius: '99px' }} />
+              {w.pct == null
+                ? <div aria-label="aguardando dados reais" style={{ width: '55%', height: '100%', background: 'rgba(255,255,255,0.25)', borderRadius: '99px', filter: 'blur(4px)' }} />
+                : <div style={{ width: `${(Math.abs(w.pct) / max) * 100}%`, height: '100%', background: w.pct >= 0 ? GREEN : RED, borderRadius: '99px' }} />}
             </div>
           </div>
         ))}
@@ -240,8 +261,9 @@ export function RewardsGrid({ rewards }: { rewards: Reward[] }) {
 export function Timeline({ d }: { d: ProgressData }) {
   return (
     <div>
-      {sectionTitle('🕒', 'Progresso recente', 'Cada resultado do negócio, em ordem.')}
+      {sectionTitle('🕒', 'Progresso recente', 'Eventos reais registrados no seu negócio, do mais recente ao mais antigo.')}
       <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '6px 18px' }}>
+        {d.timeline.length === 0 && <div style={{ padding: '16px 0', fontSize: '12px', color: MUTED }}>Ainda sem eventos registrados — os primeiros aparecem aqui assim que houver dados reais.</div>}
         {d.timeline.map((t, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 0', borderBottom: i < d.timeline.length - 1 ? `1px solid ${BORDER}` : 'none' }}>
             <span style={{ fontSize: '18px' }}>{t.icon}</span>
@@ -302,13 +324,19 @@ export function RecoveryCard({ d, onActivate, activating }: { d: ProgressData; o
 // ── Streak ─────────────────────────────────────────────────────────────────
 export function StreakCard({ d }: { d: ProgressData }) {
   const days = Array.from({ length: 7 }, (_, i) => i + 1)
+  const st = d.streak
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px 18px' }}>
-      <div style={{ fontSize: '13.5px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🔥 {d.streak} dias de progresso</div>
-      <div style={{ fontSize: '11px', color: MUTED, marginBottom: '12px' }}>Seu negócio evoluiu por {d.streak} dias seguidos — não é por abrir o app, é resultado real.</div>
+      <div style={{ fontSize: '13.5px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>
+        🔥 {st == null ? <BlurredValue hint={false} /> : st} {st === 1 ? 'dia' : 'dias'} de progresso
+        {st == null && <span style={{ fontSize: '10px', fontWeight: 600, color: MUTED, marginLeft: '8px' }}>aguardando dados reais</span>}
+      </div>
+      <div style={{ fontSize: '11px', color: MUTED, marginBottom: '12px' }}>
+        {st != null && st > 0 ? `Seu negócio teve resultado registrado por ${st} ${st === 1 ? 'dia' : 'dias'} seguidos — não é por abrir o app.` : 'Conta dias seguidos com resultado real registrado (não é por abrir o app).'}
+      </div>
       <div style={{ display: 'flex', gap: '6px' }}>
         {days.map(n => {
-          const on = n <= d.streak
+          const on = st != null && n <= st
           return <div key={n} style={{ flex: 1, height: '30px', borderRadius: '7px', background: on ? `linear-gradient(180deg, ${ORANGE}, rgba(255,109,41,0.3))` : 'rgba(255,255,255,0.05)', border: `1px solid ${on ? 'rgba(255,109,41,0.4)' : BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800, color: on ? '#000' : 'rgba(255,255,255,0.3)' }}>{n}</div>
         })}
       </div>

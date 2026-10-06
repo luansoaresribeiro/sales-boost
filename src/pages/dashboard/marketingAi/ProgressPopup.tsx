@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCompany } from '../../../contexts/CompanyContext'
 import { useAuth } from '../../../contexts/AuthContext'
-import { supabase } from '../../../lib/supabase'
 import { D } from './shared'
-import { buildProgress, choosePopup, type ProgressData, type PopupVariant, type RealSignals } from './progressGame'
+import { buildProgress, choosePopup, fetchRealSignals, type ProgressData, type PopupVariant } from './progressGame'
+import { BlurredValue } from './progressParts'
 import { fetchDiscoveries, revealDiscovery, DiscoveryChip, DiscoveryReveal, type Discovery } from './Discoveries'
 
 const ORANGE = '#FF6D29'
@@ -15,13 +15,6 @@ const LS_LEAGUE = 'sb_seen_league'
 const LS_STREAK = 'sb_seen_streak'
 
 const today = () => new Date().toISOString().slice(0, 10)
-
-async function count(table: string, companyId: string, filter?: [string, string]): Promise<number> {
-  let q = supabase.from(table).select('id', { count: 'exact', head: true }).eq('company_id', companyId)
-  if (filter) q = q.eq(filter[0], filter[1])
-  const { count } = await q
-  return count ?? 0
-}
 
 // Popup inteligente: NUNCA pede trabalho. Revela o que a IA já fez e onde o
 // negócio está. Aparece 1x/dia ao abrir a plataforma; escolhe a variante mais
@@ -46,14 +39,10 @@ export default function ProgressPopup() {
     let alive = true
     ;(async () => {
       const cid = company.id
-      const [posts, postsPublished, opportunities, reviewsReplied, campaigns] = await Promise.all([
-        count('posts', cid), count('posts', cid, ['status', 'publicado']),
-        count('opportunities', cid), count('reviews', cid),
-        count('campaigns', cid),
-      ])
       const daysSinceVisit = lastShown ? Math.max(1, Math.round((Date.now() - new Date(lastShown).getTime()) / 86400000)) : 1
-      const real: RealSignals = { posts, postsPublished, opportunities, reviewsReplied, campaigns, activitySinceVisit: 0, daysSinceVisit }
-      const d = buildProgress({ id: cid, business_name: company.business_name ?? '' }, real)
+      // Só números reais (progress_events, leads, posts…); o que não tem fonte vem null → embaçado.
+      const real = await fetchRealSignals(cid, lastShown ? new Date(lastShown).toISOString() : null, daysSinceVisit)
+      const d = buildProgress(real)
 
       let lastSeenLeague: string | null = null, lastStreakSeen = 0
       try { lastSeenLeague = localStorage.getItem(LS_LEAGUE); lastStreakSeen = Number(localStorage.getItem(LS_STREAK) ?? '0') } catch { /* ignore */ }
@@ -68,7 +57,7 @@ export default function ProgressPopup() {
       setData(d); setVariant(v); setOpen(true)
     })()
     return () => { alive = false }
-  }, [company?.id, company?.business_name, session])
+  }, [company?.id, session])
 
   const revealFirst = async () => {
     if (!company?.id || !session || pendingDisc.length === 0 || revealing) return
@@ -81,7 +70,7 @@ export default function ProgressPopup() {
   const dismiss = (go?: boolean) => {
     try {
       localStorage.setItem(LS_SHOWN, today())
-      if (data) { localStorage.setItem(LS_LEAGUE, data.level.key); localStorage.setItem(LS_STREAK, String(data.streak)) }
+      if (data) { localStorage.setItem(LS_LEAGUE, data.level.key); localStorage.setItem(LS_STREAK, String(data.streak ?? 0)) }
     } catch { /* ignore */ }
     setOpen(false)
     if (go) navigate('/dashboard/progresso')
@@ -91,16 +80,18 @@ export default function ProgressPopup() {
   const d = data
   const c = d.level.color
   const xp = (n: number) => n.toLocaleString('pt-BR')
+  const num = (v: number | null, f: (n: number) => string = String) => v == null ? <BlurredValue hint={false} /> : f(v)
+  const pct = (v: number | null) => v == null ? <BlurredValue kind="pct" hint={false} /> : `${v}%`
 
   const Bar = ({ pct, color }: { pct: number; color: string }) => (
     <div style={{ height: '12px', background: 'rgba(255,255,255,0.09)', borderRadius: '99px', overflow: 'hidden', margin: '4px 0 8px' }}>
       <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg, ${color}, #ffffff88)`, borderRadius: '99px' }} />
     </div>
   )
-  const Metric = ({ icon, label, value, color }: { icon: string; label: string; value: string; color?: string }) => (
+  const Metric = ({ icon, label, value, color }: { icon: string; label: string; value: React.ReactNode; color?: string }) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
       <span style={{ fontSize: '13px', color: MUTED }}>{icon} {label}</span>
-      <span style={{ fontSize: '15px', fontWeight: 800, color: color ?? 'white' }}>{value}</span>
+      <span style={{ fontSize: '15px', fontWeight: 800, color: color ?? 'white', textAlign: 'right' }}>{value}</span>
     </div>
   )
   const CTA = ({ label }: { label: string }) => (
@@ -113,17 +104,16 @@ export default function ProgressPopup() {
     switch (variant) {
       case 'results': return (<>
         <Title emoji="🚀" text="BOM DIA, CONSTRUTOR DE NEGÓCIO" />
-        <Sub>Seu negócio avançou enquanto você estava fora.</Sub>
+        <Sub>Resultados reais desde a sua última visita.</Sub>
         <div style={{ margin: '14px 0' }}>
-          <Metric icon="📈" label="Alcance" value={`+${d.reachPct}%`} color={GREEN} />
-          <Metric icon="❤️" label="Engajamento" value={`${d.engagementPct >= 0 ? '+' : ''}${d.engagementPct}%`} color={d.engagementPct >= 0 ? GREEN : '#f87171'} />
-          <Metric icon="🤖" label="Ações da IA" value={String(d.actionsCount)} />
-          <Metric icon="🟢" label="XP ganhos" value={`+${xp(d.gpEarnedSinceVisit)}`} color={c} />
+          <Metric icon="📈" label="Alcance" value={pct(d.reachPct)} color={GREEN} />
+          <Metric icon="❤️" label="Engajamento" value={pct(d.engagementPct)} color={GREEN} />
+          <Metric icon="🤖" label="Ações da IA" value={num(d.actionsCount)} />
+          <Metric icon="🟢" label="XP ganhos" value={num(d.gpEarnedSinceVisit, n => `+${xp(n)}`)} color={c} />
         </div>
         <LeagueLine d={d} c={c} />
         <Bar pct={d.levelPct} color={c} />
-        <div style={{ fontSize: '12.5px', color: 'white' }}>Você está chegando perto da <strong>{nextName} League</strong>.</div>
-        <div style={{ fontSize: '12px', color: MUTED, marginTop: '4px' }}>🔓 Algo novo está te esperando…</div>
+        {d.nextLevel && <div style={{ fontSize: '12.5px', color: 'white' }}>Faltam <strong>{xp(d.gpToNext)} XP</strong> para a <strong>{nextName} League</strong>.</div>}
         <CTA label="VER MEU PROGRESSO →" />
       </>)
       case 'status': return (<>
@@ -133,19 +123,27 @@ export default function ProgressPopup() {
           <div style={{ fontSize: '24px', fontWeight: 900, color: c, marginTop: '6px' }}>{d.level.name.toUpperCase()} BUSINESS</div>
           <div style={{ fontSize: '12px', color: MUTED }}>{d.level.identity}</div>
         </div>
-        <Bar pct={d.levelPct} color={c} />
-        <div style={{ textAlign: 'center', fontSize: '18px', fontWeight: 900, color: 'white' }}>{xp(d.totalGp)} XP</div>
-        <div style={{ textAlign: 'center', fontSize: '12.5px', color: MUTED, marginTop: '6px' }}>Você chegou à <strong style={{ color: c }}>{d.level.name} League</strong>. Está ganhando tração.</div>
-        <div style={{ textAlign: 'center', fontSize: '13px', color: ORANGE, fontWeight: 700, marginTop: '10px' }}>🔥 {d.streak} dias de Business Streak</div>
+        <Bar pct={d.totalGp == null ? 0 : d.levelPct} color={c} />
+        <div style={{ textAlign: 'center', fontSize: '18px', fontWeight: 900, color: 'white' }}>{d.totalGp == null ? <BlurredValue kind="xp" /> : `${xp(d.totalGp)} XP`}</div>
+        {d.hasRealData ? (
+          <div style={{ textAlign: 'center', fontSize: '12.5px', color: MUTED, marginTop: '6px' }}>Você está na <strong style={{ color: c }}>{d.level.name} League</strong>.</div>
+        ) : (<>
+          <div style={{ textAlign: 'center', fontSize: '13px', color: 'white', lineHeight: 1.5, marginTop: '12px' }}>Hermes começou a trabalhar — os primeiros resultados aparecem aqui assim que houver dados reais.</div>
+          <div style={{ margin: '12px 0 0' }}>
+            <Metric icon="📈" label="Alcance" value={<BlurredValue kind="pct" />} />
+            <Metric icon="❤️" label="Engajamento" value={d.engagementPct == null ? <BlurredValue kind="pct" /> : `${d.engagementPct}%`} />
+            <Metric icon="🤖" label="Ações da IA" value={<BlurredValue />} />
+          </div>
+        </>)}
+        {(d.streak ?? 0) >= 2 && <div style={{ textAlign: 'center', fontSize: '13px', color: ORANGE, fontWeight: 700, marginTop: '10px' }}>🔥 {d.streak} dias de Business Streak</div>}
         <CTA label="VER O BUSINESS GAME →" />
       </>)
       case 'almost': return (<>
         <Title emoji="👀" text="VOCÊ ESTÁ QUASE LÁ…" />
         <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 900, color: 'white', margin: '10px 0 2px' }}>{nextName} League</div>
         <Bar pct={d.levelPct} color={c} />
-        <div style={{ textAlign: 'center', fontSize: '14px', color: 'white', fontWeight: 700 }}>Só {xp(d.gpToNext)} XP para chegar.</div>
+        <div style={{ textAlign: 'center', fontSize: '14px', color: 'white', fontWeight: 700 }}>Faltam {xp(d.gpToNext)} XP para chegar.</div>
         <div style={{ textAlign: 'center', fontSize: '12.5px', color: MUTED, marginTop: '10px' }}>🔓 Algo novo desbloqueia na <strong style={{ color: c }}>{nextName} League</strong></div>
-        <div style={{ textAlign: 'center', fontSize: '12.5px', color: 'white', marginTop: '4px' }}>Consegue adivinhar o que é? 👀</div>
         <CTA label="VER MINHA JORNADA →" />
       </>)
       case 'levelup': return (<>
@@ -154,29 +152,25 @@ export default function ProgressPopup() {
           <div style={{ fontSize: '40px' }}>{d.level.icon}</div>
           <div style={{ fontSize: '22px', fontWeight: 900, color: c, marginTop: '6px' }}>{d.level.name.toUpperCase()} BUSINESS</div>
         </div>
-        <div style={{ textAlign: 'center', fontSize: '12.5px', color: MUTED }}>Seu negócio atingiu um novo marco.</div>
-        {d.newAchievement && <div style={{ textAlign: 'center', fontSize: '14px', fontWeight: 800, color: 'white', marginTop: '10px' }}>🏆 Nova conquista: {d.newAchievement}</div>}
-        <div style={{ textAlign: 'center', fontSize: '12.5px', color: GREEN, marginTop: '6px' }}>🔓 Nova capacidade desbloqueada</div>
+        <div style={{ textAlign: 'center', fontSize: '12.5px', color: MUTED }}>Seu XP real passou para a próxima liga.</div>
         <CTA label="VER O QUE DESBLOQUEEI →" />
       </>)
       case 'streak': return (<>
         <Title emoji="🔥" text="SEU BUSINESS STREAK" />
         <div style={{ textAlign: 'center', fontSize: '46px', fontWeight: 900, color: ORANGE, margin: '10px 0 4px' }}>{d.streak} DIAS</div>
-        <div style={{ textAlign: 'center', fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>Seu negócio evoluiu por {d.streak} dias seguidos. Sua IA continuou trabalhando. Seu negócio continuou se movendo.</div>
+        <div style={{ textAlign: 'center', fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>Seu negócio teve resultado registrado por {d.streak} dias seguidos.</div>
         <div style={{ textAlign: 'center', fontSize: '13px', fontWeight: 800, color: 'white', marginTop: '10px' }}>Não quebre o streak.</div>
-        <div style={{ textAlign: 'center', fontSize: '13px', fontWeight: 800, color: GREEN, marginTop: '6px' }}>🟢 +100 XP</div>
         <CTA label="CONTINUAR →" />
       </>)
       case 'while_away': return (<>
         <Title emoji="👀" text="ENQUANTO VOCÊ ESTAVA FORA…" />
-        <Sub>Sua IA continuou trabalhando.</Sub>
+        <Sub>Resultados reais desde a sua última visita.</Sub>
         <div style={{ margin: '14px 0' }}>
-          <Metric icon="🤖" label="Ações concluídas" value={String(d.actionsCount)} />
-          <Metric icon="📝" label="Conteúdos criados" value={String(d.contentCreated)} />
-          <Metric icon="📈" label="Alcance" value={`+${d.reachPct}%`} color={GREEN} />
-          <Metric icon="❤️" label="Engajamento" value={`${d.engagementPct >= 0 ? '+' : ''}${d.engagementPct}%`} color={d.engagementPct >= 0 ? GREEN : '#f87171'} />
-          {d.newAchievement && <Metric icon="🏆" label="Nova conquista" value={d.newAchievement} />}
-          <Metric icon="🟢" label="XP ganhos" value={`+${xp(d.gpEarnedSinceVisit)}`} color={c} />
+          <Metric icon="🤖" label="Ações concluídas" value={num(d.actionsCount)} />
+          <Metric icon="📝" label="Conteúdos criados" value={num(d.contentCreated)} />
+          <Metric icon="📈" label="Alcance" value={pct(d.reachPct)} color={GREEN} />
+          <Metric icon="❤️" label="Engajamento" value={pct(d.engagementPct)} color={GREEN} />
+          <Metric icon="🟢" label="XP ganhos" value={num(d.gpEarnedSinceVisit, n => `+${xp(n)}`)} color={c} />
         </div>
         <div style={{ fontSize: '13px', color: 'white', fontWeight: 700 }}>Seu negócio está na <strong style={{ color: c }}>{d.level.name} League</strong>.</div>
         <CTA label="VER TUDO →" />
@@ -214,7 +208,7 @@ function LeagueLine({ d, c }: { d: ProgressData; c: string }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '6px 0' }}>
       <span style={{ fontSize: '18px' }}>{d.level.icon}</span>
       <span style={{ fontSize: '14px', fontWeight: 800, color: c }}>{d.level.name.toUpperCase()} BUSINESS</span>
-      <span style={{ fontSize: '11px', color: MUTED, marginLeft: 'auto' }}>{d.levelPct}%</span>
+      <span style={{ fontSize: '11px', color: MUTED, marginLeft: 'auto' }}>{d.totalGp == null ? <BlurredValue kind="pct" hint={false} /> : `${d.levelPct}%`}</span>
     </div>
   )
 }
