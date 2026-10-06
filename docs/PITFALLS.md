@@ -137,6 +137,27 @@ dono. Consequências:
 - Em branch de PR a Cloudflare comenta "Deployment successful", mas é só
   versão de prévia — o domínio só muda com push no `main`.
 
+## Popup de boas-vindas mostra números inventados
+
+Achado em 2026-10-06 (teste visual com empresa sintética no ensaio, criada
+na hora e sem nenhum dado): o popup "Bom dia, construtor de negócio"
+(`ProgressPopup.tsx` → `buildProgress` em `progressGame.ts`) mostrou
+"+20.5% alcance", "+15% engajamento", "51 ações da IA". Os números vêm de
+`seededRng` (sorteio fixo por empresa, "demo-first") misturados com dado
+real via `Math.max(real, sorteio)`. Viola a regra 5 (nunca inventar números)
+e a decisão do teste de 7 dias ("não é demo"). **Não corrigido ainda** —
+depende de decisão do dono (mostrar só dado real ou esconder até haver).
+
+## Teste visual local contra o ensaio
+
+Pra ver a tela de verdade sem tocar produção: `vite build` com
+`VITE_SUPABASE_URL/ANON_KEY` do ensaio, `vite preview --open false` (o
+config usa https e tenta abrir navegador — sem `--open false` o processo
+cai), Playwright do `/opt/pw-browsers`. O Chromium não alcança o Supabase
+pelo proxy do ambiente: interceptar `*.supabase.co` com `page.route` e
+repassar via `fetch` do Node. Conta e empresa sintéticas criadas pelo
+service role do ensaio e apagadas no fim.
+
 ## Migrations com cron apontam pra produção
 
 Várias migrations (`010_insights_cron.sql`, `015_find_sales_leads_cron.sql`,

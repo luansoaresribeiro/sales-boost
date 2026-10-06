@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import type { Pendencia, PendenciaTone } from '../../lib/usePendencias'
 
@@ -77,7 +78,9 @@ export default function PendenciasBell({ items, count, isMobile, onOpen }: { ite
         )}
       </button>
 
-      {open && (
+      {/* Portal no body: a barra do topo (sticky, z 30) criava um contexto de
+          empilhamento e o botão "+" (z 60) ficava por cima do painel. */}
+      {open && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 79, background: isMobile ? 'rgba(0,0,0,0.6)' : 'transparent' }} />
           <div style={panelStyle} role="dialog" aria-label="Pendências">
@@ -101,7 +104,8 @@ export default function PendenciasBell({ items, count, isMobile, onOpen }: { ite
               </>
             )}
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </>
   )

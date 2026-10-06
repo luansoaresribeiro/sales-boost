@@ -133,13 +133,15 @@ function SidebarInner({ isMobile, open, onNavigate, onClose, approvalsCount }: {
       position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 40,
       transform: isMobile ? (open ? 'translateX(0)' : 'translateX(-100%)') : 'translateX(0)',
       transition: 'transform 0.25s ease', boxShadow: isMobile && open ? '0 0 28px rgba(0,0,0,0.55)' : 'none',
+      // Sem isso o cabeçalho (logo + idioma + ×) vazava pra fora do menu fechado no celular.
+      overflowX: 'hidden',
     }}>
       <div style={{ padding: '20px 20px 16px', borderBottom: `1px solid ${BORDER}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
             <img src={logo} alt="Sales Boost" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ color: 'white', fontWeight: 700, fontSize: '14px', lineHeight: 1.2 }}>SalesBoost</div>
             <div style={{ color: MUTED, fontSize: '10px', marginTop: '1px' }}>{T.layout.subtitle}</div>
           </div>
