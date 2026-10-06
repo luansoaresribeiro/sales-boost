@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { processImageTo4x5 } from '../../../lib/imageProcessing'
+import { catalogMinPhotos } from '../../../lib/setupRules'
 import { bi, sanitizeCatalogValues, type CatalogSchema, type CatalogField } from '../../../lib/verticalPlaybook'
 import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL } from './shared'
 import { ImageModal } from './TestingArea'
@@ -99,7 +100,9 @@ function ItemCreationTools({ itemId, companyId, verticalKey, itemLabel, onGenera
   )
 }
 
-export default function CatalogItems({ companyId, schema, verticalKey, focusItemId }: { companyId: string; schema: CatalogSchema; verticalKey: string; focusItemId?: string | null }) {
+// `setupMode` (tela /setup): só cadastrar/adicionar fotos — sem gerar pacote nem
+// ferramentas de criação. `onChanged` avisa quem estiver de olho no status.
+export default function CatalogItems({ companyId, schema, verticalKey, focusItemId, setupMode, onChanged }: { companyId: string; schema: CatalogSchema; verticalKey: string; focusItemId?: string | null; setupMode?: boolean; onChanged?: () => void }) {
   const { session } = useAuth()
   const [packageBusyId, setPackageBusyId] = useState<string | null>(null)
   const [packageResult, setPackageResult] = useState<{ itemId: string; result: PackageResult | { error: string } } | null>(null)
@@ -121,7 +124,7 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
   }
 
   const photosField = [...schema.required, ...schema.optional].find(f => f.type === 'photos')
-  const minPhotos = photosField?.min ?? 5
+  const minPhotos = catalogMinPhotos(schema)
   const formFields = [...schema.required, ...schema.optional].filter(f => f.type !== 'photos')
   const requiredKeys = new Set(schema.required.filter(f => f.type !== 'photos').map(f => f.key))
 
@@ -140,10 +143,13 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
   const [addError, setAddError] = useState<string | null>(null)
   const [highlightId, setHighlightId] = useState<string | null>(focusItemId ?? null)
 
+  const onChangedRef = useRef(onChanged)
+  onChangedRef.current = onChanged
   const load = useCallback(async () => {
     const { data } = await supabase.from('marketing_ai_knowledge').select('id, title, image_url, meta, created_at').eq('company_id', companyId).eq('module', 'visual').eq('kind', 'product').order('created_at', { ascending: false })
     setItems((data ?? []) as CatalogItem[])
     setLoading(false)
+    onChangedRef.current?.()
   }, [companyId])
   useEffect(() => { load() }, [load])
 
@@ -234,9 +240,9 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
 
   return (
     <div>
-      <div style={{ padding: '12px 16px', background: 'rgba(255,109,41,0.07)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '16px' }}>
+      {!setupMode && <div style={{ padding: '12px 16px', background: 'rgba(255,109,41,0.07)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '16px' }}>
         📋 <strong>{schema.catalogLabel}.</strong> Cadastre cada {schema.itemLabel.toLowerCase()} com fotos reais (mínimo {minPhotos}) e os dados dele — é a partir daqui que os pacotes de conteúdo são gerados.
-      </div>
+      </div>}
 
       {!creating ? (
         <button onClick={() => setCreating(true)} style={{ padding: '9px 18px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12.5px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontFamily: D, marginBottom: '18px' }}>
@@ -251,10 +257,10 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
               {bi(photosField?.label)} — {photos.length}/{minPhotos}
             </label>
             {photos.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 96px))', gap: '8px', marginBottom: '8px' }}>
                 {photos.map(p => (
                   <div key={p.path} style={{ position: 'relative' }}>
-                    <img src={p.url} alt="" style={{ width: '74px', height: '92px', objectFit: 'cover', borderRadius: '8px' }} />
+                    <img src={p.url} alt="" style={{ width: '100%', aspectRatio: '4 / 5', objectFit: 'cover', borderRadius: '8px', display: 'block' }} />
                     <button onClick={() => removePendingPhoto(p.path)} style={{ position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px', borderRadius: '50%', background: '#000', border: `1px solid ${BORDER}`, color: 'white', fontSize: '11px', cursor: 'pointer' }}>×</button>
                   </div>
                 ))}
@@ -302,10 +308,10 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                     style={{ width: '100%', padding: '7px 10px', marginBottom: '6px', background: photoCount < minPhotos ? 'rgba(255,109,41,0.14)' : 'transparent', border: `1px solid ${photoCount < minPhotos ? 'rgba(255,109,41,0.5)' : BORDER}`, borderRadius: '7px', color: photoCount < minPhotos ? ORANGE : MUTED, fontWeight: 700, fontSize: '11px', cursor: addingId === item.id ? 'default' : 'pointer', fontFamily: D }}>
                     {addingId === item.id ? 'Enviando...' : '＋ Adicionar fotos'}
                   </button>
-                  <button onClick={() => generatePackage(item.id)} disabled={packageBusyId === item.id}
+                  {!setupMode && <button onClick={() => generatePackage(item.id)} disabled={packageBusyId === item.id}
                     style={{ width: '100%', padding: '7px 10px', background: packageBusyId === item.id ? 'rgba(255,255,255,0.06)' : 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '7px', color: ORANGE, fontWeight: 700, fontSize: '11px', cursor: packageBusyId === item.id ? 'default' : 'pointer', fontFamily: D }}>
                     {packageBusyId === item.id ? 'Gerando...' : '✨ Gerar pacote'}
-                  </button>
+                  </button>}
                   {packageResult?.itemId === item.id && (
                     <div style={{ marginTop: '8px', fontSize: '10.5px', lineHeight: 1.5 }}>
                       {'error' in packageResult.result ? (
@@ -329,7 +335,7 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                       )}
                     </div>
                   )}
-                  <ItemCreationTools itemId={item.id} companyId={companyId} verticalKey={verticalKey} itemLabel={schema.itemLabel} onGenerate={generatePackage} busy={packageBusyId} />
+                  {!setupMode && <ItemCreationTools itemId={item.id} companyId={companyId} verticalKey={verticalKey} itemLabel={schema.itemLabel} onGenerate={generatePackage} busy={packageBusyId} />}
                 </div>
               </div>
             )

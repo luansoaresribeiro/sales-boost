@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 import { useRealtime } from './useRealtime'
 import { useCompany } from '../contexts/CompanyContext'
 import { bi, fetchCatalogSchema, fetchOnboardingQuestions } from './verticalPlaybook'
+import { catalogMinPhotos, isCatalogItem, itemPhotoCount, unansweredQuestions } from './setupRules'
 
 // Pendências do dono — tudo que falta pro Sales Boost trabalhar melhor.
 // SÓ LEITURA: nenhuma escrita aqui. Cada fonte é independente: se uma falha
@@ -26,15 +27,8 @@ export interface Pendencia {
   openAdd?: { tab: 'catalogo'; itemId: string } // abre o botão "+" na aba do catálogo
 }
 
-const DEFAULT_MIN_PHOTOS = 5 // mesmo default do catalog-package / CatalogItems
 const EXPIRY_WARN_DAYS = 7
 const DAY_MS = 86_400_000
-
-function hasAnswer(v: unknown): boolean {
-  if (v === null || v === undefined) return false
-  if (Array.isArray(v)) return v.some(x => String(x ?? '').trim() !== '')
-  return String(v).trim() !== ''
-}
 
 export function usePendencias() {
   const { company } = useCompany()
@@ -103,13 +97,12 @@ export function usePendencias() {
     try {
       const schema = await fetchCatalogSchema(verticalKey)
       if (schema) {
-        const photosField = [...schema.required, ...schema.optional].find(f => f.type === 'photos')
-        const min = photosField?.min ?? DEFAULT_MIN_PHOTOS
+        const min = catalogMinPhotos(schema)
         const { data, error } = await supabase.from('marketing_ai_knowledge').select('id, title, meta').eq('company_id', companyId).eq('module', 'visual').eq('kind', 'product').order('created_at', { ascending: false })
         if (!error) {
           for (const it of (data ?? []) as { id: string; title: string; meta: { photos?: unknown[]; fields?: unknown } | null }[]) {
-            if (!it.meta || (!Array.isArray(it.meta.photos) && !it.meta.fields)) continue // item antigo, sem estrutura do catálogo
-            const n = Array.isArray(it.meta.photos) ? it.meta.photos.length : 0
+            if (!isCatalogItem(it.meta)) continue // item antigo, sem estrutura do catálogo
+            const n = itemPhotoCount(it.meta)
             if (n < min) out.push({
               id: `fotos-${it.id}`, kind: 'fotos', tone: 'orange',
               title: it.title || schema.itemLabel,
@@ -125,7 +118,7 @@ export function usePendencias() {
     try {
       if (answers !== undefined) {
         const { questions } = await fetchOnboardingQuestions(verticalKey)
-        const missing = questions.filter(q => !hasAnswer(answers?.[q.key]))
+        const missing = unansweredQuestions(questions, answers)
         if (missing.length > 0) {
           const first = bi(missing[0].label)
           out.push({

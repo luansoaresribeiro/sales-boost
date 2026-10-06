@@ -84,7 +84,10 @@
   [ROADMAP.md](ROADMAP.md#p4--infra-de-autonomia)). Banco de ensaio:
   segundo projeto grátis do Supabase (`salesboost-ensaio`), não o recurso
   pago de cópia — reavaliar depois que o fluxo provar que funciona.
-- **Teste grátis de 7 dias + plano único de R$1.449/mês** — 2026-10-02,
+- **Teste grátis de 7 dias + plano único de R$1.449/mês** — 2026-10-02
+  (**SUBSTITUÍDA em 2026-10-06 pelo modelo de acesso grátis + preço novo,
+  ver entrada "Preço e acesso grátis" no fim deste arquivo — mantida aqui
+  como histórico; o código ainda reflete esta até a nova ser construída**),
   decisão do dono. Substitui o teste de 3 dias (`TRIAL_DAYS = 3` em
   `src/lib/trialState.ts`) e as faixas R$197–697 de
   [PRODUCT.md](PRODUCT.md). Público-alvo por agora: corretores e
@@ -124,3 +127,32 @@
   **provisório** (a definir na Parte B). A trava de 1 vídeo por teste vive
   na tabela `trial_video_claims` (unique por empresa; só service role
   escreve). Motivo: garantir 1 vídeo por teste sem gastar à toa.
+
+- **/setup obrigatório no fim do cadastro (contas novas sem assinatura)** —
+  2026-10-06, plano aprovado pelo dono. Contas criadas a partir de
+  `SETUP_GATE_FROM` (2026-10-06, `src/lib/setupGate.ts`) e sem
+  `stripe_subscription_id` só entram no painel depois de: (1) dados do
+  negócio (nome, cidade, telefone), (2) todas as perguntas da ficha
+  (`onboarding_questions`) e (3) o mínimo de itens do catálogo com o mínimo
+  de fotos reais (mesma regra do sino de pendências). Instagram vem em
+  destaque, mas **opcional** ("Conectar depois") até o App Review da Meta
+  sair; vira obrigatório ligando `vertical_playbooks.config.setup.
+  instagram_required = true` (padrão `{ instagram_required: false,
+  min_items: 1 }`; a ficha no banco NÃO foi alterada, só lida com padrão).
+  O onboarding anônimo (antes da conta) continua opcional/pulável: isto
+  muda só o **pós-cadastro**. As 4 empresas de produção são anteriores à
+  data, então nenhum cliente atual é trancado. Se der erro ao calcular o
+  status, o gate deixa passar (falha aberta). Motivo: sem dado real o
+  sistema não decide bem; melhor pedir tudo uma vez, no começo.
+- **Preço e acesso grátis (DECIDIDA 2026-10-06, AINDA NÃO IMPLEMENTADA)** —
+  substitui o "teste grátis de 7 dias" de 2026-10-02. Em vez de prazo em
+  dias: **diagnóstico grátis (Growth Score)** + **acesso grátis sem prazo
+  de dias, limitado a 1 vídeo + 1 estratégia**; depois disso a conta grátis
+  não gasta mais IA até pagar. Preços: mensal sem fidelidade **R$2.449/mês**;
+  cupom de 1º mês **R$1.449** (depois R$2.449); anual **R$1.449/mês**. O
+  cupom tem **prazo REAL de 7 dias a partir da entrega da estratégia** —
+  vencido, o desconto sai de fato (prazo falso é proibido). O preço de
+  referência R$2.449 é real (existe o plano mensal), então "de R$2.449 por
+  R$1.449" é honesto. Pendência: a Stripe ainda precisa dos 3 itens (preço
+  mensal, preço anual, cupom) — criar exige aprovação do dono. Próxima
+  etapa do [ROADMAP.md](ROADMAP.md) (Growth Qualification).

@@ -166,6 +166,20 @@
    Obrigatório: dados do negócio, perguntas da ficha e 1 item com fotos.
    Instagram em destaque, mas com "conectar depois" (vira pendência do
    item 1) até o App Review da Meta sair; depois passa a obrigatório.
+   **FEITO (2026-10-06, em PR, só frontend, sem migration/deploy de
+   function):** tela `/setup` (`src/pages/setup/`), hook
+   `src/lib/useSetupStatus.ts`, regras compartilhadas com o sino em
+   `src/lib/setupRules.ts`, gate em `ClientRoute` (`src/lib/setupGate.ts`).
+   Ainda falta: publicar o site e conferir no celular. Ver
+   [DECISIONS.md](DECISIONS.md).
+2b. **Growth Qualification** (próxima, antes do Plano da semana) —
+   diagnóstico com score (Growth Score), acesso grátis (1 vídeo + 1
+   estratégia, sem prazo em dias), popup "seu acesso grátis começou",
+   popup do cupom depois do 1º vídeo (cupom com prazo real de 7 dias a
+   partir da entrega da estratégia), preço novo (R$2.449 mensal; R$1.449
+   anual/cupom de 1º mês — Stripe precisa de 3 itens novos, aprovação do
+   dono) e Business Game pra retenção. Decisão registrada em
+   [DECISIONS.md](DECISIONS.md) (2026-10-06), **não implementada**.
 3. **Plano da semana** — no Calendário da Semana existente: quantos posts,
    de que tipo (vídeo/carrossel/bastidor), sobre qual item e por quê,
    calculado por fotos disponíveis, ritmo de aprovação do dono, 80/20,
