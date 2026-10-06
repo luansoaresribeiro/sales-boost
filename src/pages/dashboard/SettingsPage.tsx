@@ -144,7 +144,15 @@ export default function SettingsPage() {
     if (p === 'conexoes') setTab('conexoes')
     const section = searchParams.get('section')
     if (!section) return
-    setTimeout(() => document.getElementById(`section-${section}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
+    // O alvo pode ainda não existir (aba troca, dados carregando): tenta de novo
+    // algumas vezes até achar.
+    let tries = 0
+    const timer = setInterval(() => {
+      const el = document.getElementById(`section-${section}`)
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); clearInterval(timer) }
+      else if (++tries >= 25) clearInterval(timer)
+    }, 200)
+    return () => clearInterval(timer)
   }, [searchParams])
 
   // Tipos de estabelecimento (geridos pelo dono no painel owner).
@@ -398,7 +406,10 @@ export default function SettingsPage() {
             hint="Valor médio que um cliente gasta numa compra/visita. Usamos isso para calcular a receita recuperável real de cada oportunidade — sem preencher, esse valor não aparece." />
         </SectionCard>
 
-        {companyId && <BusinessUnderstandingCard companyId={companyId} />}
+        {/* sempre renderizado: o sino de pendências rola até aqui (?section=entendimento) */}
+        <div id="section-entendimento">
+          {companyId && <BusinessUnderstandingCard companyId={companyId} />}
+        </div>
 
         <SectionCard id="section-salvar" title="Salvar">
           {saveError && (

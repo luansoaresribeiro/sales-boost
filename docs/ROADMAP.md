@@ -153,6 +153,14 @@
    reais (aprovações, Instagram desconectado, item sem foto, dado da ficha
    faltando); cada item leva direto à tela/campo certo e some quando
    resolvido. Só tela + leitura.
+   **FEITO (2026-10-06, só no branch local, sem deploy):** sino no layout
+   (`src/lib/usePendencias.ts` + `PendenciasBell.tsx`). Fontes: aprovações
+   (agent_actions PENDING + marketing_ai_content idea/draft, mesma fila da
+   ApprovalsPage), Instagram (não conectado / vencido / vence em ≤7 dias),
+   fotos abaixo do mínimo por item do catálogo, perguntas da ficha sem
+   resposta, Telegram não conectado (baixa prioridade, não conta na
+   bolinha). Vault ficou de fora por decisão do dono. Tela e código andam
+   juntos: ainda falta publicar o site e conferir no celular/desktop.
 2. **Fim do onboarding com dados e conectores** — frase "Esse é o momento
    importante de alimentar os dados reais — depois é só relaxar!".
    Obrigatório: dados do negócio, perguntas da ficha e 1 item com fotos.
@@ -202,3 +210,19 @@ conforme forem retomados:
       [PRODUCT.md](PRODUCT.md).
 - [ ] Automação de deploy (GitHub Actions) — isso É o P4 acima, mantido
       também aqui pra cross-reference.
+
+## Divergências registradas (etapa 1, pendências)
+
+- **HermesGapsPanel × `usePendencias`:** `HermesGapsPanel.tsx` calcula
+  "lacunas" com condições mais fracas (ex.: só checa se há alguma resposta/
+  foto). O sino usa condições exatas e independentes: foto abaixo do
+  mínimo da ficha por item, cada pergunta da ficha sem resposta, validade
+  do token do Instagram. Os dois podem discordar; o sino é a fonte de
+  verdade pro dono. Unificar é trabalho futuro.
+- **`CatalogItems` agora adiciona fotos a item já existente** (botão
+  "＋ Adicionar fotos" no card; antes só dava pra subir fotos na criação).
+  Atualiza `meta.photos` e `image_url` (se vazio). O card mostra "N/min
+  fotos". Aceita `focusItemId` (vindo do sino via evento global
+  `sb:open-add`, ouvido por `BusinessContextButton`).
+- `useRealtime` ganhou opções `key` (evita colisão de canal com a
+  ApprovalsPage na mesma tabela) e `column` (em `companies` a chave é `id`).

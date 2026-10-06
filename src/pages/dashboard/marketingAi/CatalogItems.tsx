@@ -99,7 +99,7 @@ function ItemCreationTools({ itemId, companyId, verticalKey, itemLabel, onGenera
   )
 }
 
-export default function CatalogItems({ companyId, schema, verticalKey }: { companyId: string; schema: CatalogSchema; verticalKey: string }) {
+export default function CatalogItems({ companyId, schema, verticalKey, focusItemId }: { companyId: string; schema: CatalogSchema; verticalKey: string; focusItemId?: string | null }) {
   const { session } = useAuth()
   const [packageBusyId, setPackageBusyId] = useState<string | null>(null)
   const [packageResult, setPackageResult] = useState<{ itemId: string; result: PackageResult | { error: string } } | null>(null)
@@ -133,6 +133,12 @@ export default function CatalogItems({ companyId, schema, verticalKey }: { compa
   const [photos, setPhotos] = useState<Photo[]>([])
   const [fields, setFields] = useState<Record<string, unknown>>({})
   const fileRef = useRef<HTMLInputElement>(null)
+  // "＋ Adicionar fotos" em item que já existe (um input escondido, compartilhado)
+  const addRef = useRef<HTMLInputElement>(null)
+  const addTargetRef = useRef<CatalogItem | null>(null)
+  const [addingId, setAddingId] = useState<string | null>(null)
+  const [addError, setAddError] = useState<string | null>(null)
+  const [highlightId, setHighlightId] = useState<string | null>(focusItemId ?? null)
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('marketing_ai_knowledge').select('id, title, image_url, meta, created_at').eq('company_id', companyId).eq('module', 'visual').eq('kind', 'product').order('created_at', { ascending: false })
@@ -140,6 +146,46 @@ export default function CatalogItems({ companyId, schema, verticalKey }: { compa
     setLoading(false)
   }, [companyId])
   useEffect(() => { load() }, [load])
+
+  // Veio do sino de pendências: rola até o item e destaca com borda laranja.
+  useEffect(() => { setHighlightId(focusItemId ?? null) }, [focusItemId])
+  useEffect(() => {
+    if (!highlightId || loading) return
+    const t = setTimeout(() => document.getElementById(`catalog-item-${highlightId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100)
+    return () => clearTimeout(t)
+  }, [highlightId, loading, items.length])
+
+  // Mesmo upload/processamento/bucket da criação; só acrescenta em meta.photos
+  // (e põe a capa se o item ainda não tinha image_url).
+  const onAddFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    const item = addTargetRef.current
+    if (addRef.current) addRef.current.value = ''
+    if (!files.length || !item) return
+    setAddingId(item.id); setAddError(null)
+    try {
+      const uploaded: Photo[] = []
+      for (const file of files) {
+        const blob = await processImageTo4x5(file)
+        const path = `renders/${companyId}/catalog-${crypto.randomUUID()}.jpg`
+        const { error } = await supabase.storage.from('post-images').upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+        if (!error) {
+          const { data } = supabase.storage.from('post-images').getPublicUrl(path)
+          uploaded.push({ url: data.publicUrl, path })
+        }
+      }
+      if (!uploaded.length) { setAddError('Não consegui enviar as fotos. Tente de novo.'); return }
+      // relê o item antes de gravar, pra não sobrescrever fotos adicionadas em outra aba
+      const { data: fresh } = await supabase.from('marketing_ai_knowledge').select('image_url, meta').eq('id', item.id).eq('company_id', companyId).maybeSingle()
+      const meta = (fresh?.meta ?? item.meta ?? {}) as ItemMeta
+      const patch: Record<string, unknown> = { meta: { ...meta, photos: [...(meta.photos ?? []), ...uploaded] } }
+      if (!(fresh?.image_url ?? item.image_url)) patch.image_url = uploaded[0].url
+      const { error } = await supabase.from('marketing_ai_knowledge').update(patch).eq('id', item.id).eq('company_id', companyId)
+      if (error) setAddError('Não consegui salvar as fotos. Tente de novo.')
+      await load()
+    } catch { setAddError('Não consegui enviar as fotos. Tente de novo.') }
+    finally { setAddingId(null) }
+  }
 
   const onFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -231,6 +277,9 @@ export default function CatalogItems({ companyId, schema, verticalKey }: { compa
         </div>
       )}
 
+      <input ref={addRef} type="file" accept="image/*" multiple onChange={onAddFiles} style={{ display: 'none' }} />
+      {addError && <div style={{ fontSize: '11.5px', color: '#f87171', marginBottom: '10px' }}>{addError}</div>}
+
       {loading ? <div style={{ fontSize: '12px', color: MUTED }}>Carregando...</div> : items.length === 0 ? (
         <div style={{ padding: '28px', textAlign: 'center', color: MUTED, fontSize: '12.5px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>Nenhum {schema.itemLabel.toLowerCase()} cadastrado ainda.</div>
       ) : (
@@ -239,7 +288,7 @@ export default function CatalogItems({ companyId, schema, verticalKey }: { compa
             const photoCount = item.meta?.photos?.length ?? 0
             const f = item.meta?.fields ?? {}
             return (
-              <div key={item.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', overflow: 'hidden' }}>
+              <div key={item.id} id={`catalog-item-${item.id}`} style={{ background: CARD, border: `1px solid ${highlightId === item.id ? ORANGE : BORDER}`, boxShadow: highlightId === item.id ? '0 0 0 2px rgba(255,109,41,0.35)' : 'none', borderRadius: '11px', overflow: 'hidden' }}>
                 {item.image_url && <img src={item.image_url} alt="" onClick={() => setZoom(item.image_url)} style={{ width: '100%', height: '160px', objectFit: 'cover', cursor: 'zoom-in' }} />}
                 <div style={{ padding: '10px 11px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
@@ -247,8 +296,12 @@ export default function CatalogItems({ companyId, schema, verticalKey }: { compa
                     <button onClick={() => remove(item)} title="Remover" style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '12px', cursor: 'pointer' }}>🗑</button>
                   </div>
                   <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '8px' }}>
-                    {photoCount} foto{photoCount === 1 ? '' : 's'}{f.preco ? ` · R$ ${f.preco}` : ''}{f.quartos ? ` · ${f.quartos}q` : ''}
+                    <span style={{ color: photoCount < minPhotos ? '#f87171' : MUTED, fontWeight: photoCount < minPhotos ? 700 : 400 }}>{photoCount}/{minPhotos} fotos</span>{f.preco ? ` · R$ ${f.preco}` : ''}{f.quartos ? ` · ${f.quartos}q` : ''}
                   </div>
+                  <button onClick={() => { addTargetRef.current = item; addRef.current?.click() }} disabled={addingId === item.id}
+                    style={{ width: '100%', padding: '7px 10px', marginBottom: '6px', background: photoCount < minPhotos ? 'rgba(255,109,41,0.14)' : 'transparent', border: `1px solid ${photoCount < minPhotos ? 'rgba(255,109,41,0.5)' : BORDER}`, borderRadius: '7px', color: photoCount < minPhotos ? ORANGE : MUTED, fontWeight: 700, fontSize: '11px', cursor: addingId === item.id ? 'default' : 'pointer', fontFamily: D }}>
+                    {addingId === item.id ? 'Enviando...' : '＋ Adicionar fotos'}
+                  </button>
                   <button onClick={() => generatePackage(item.id)} disabled={packageBusyId === item.id}
                     style={{ width: '100%', padding: '7px 10px', background: packageBusyId === item.id ? 'rgba(255,255,255,0.06)' : 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '7px', color: ORANGE, fontWeight: 700, fontSize: '11px', cursor: packageBusyId === item.id ? 'default' : 'pointer', fontFamily: D }}>
                     {packageBusyId === item.id ? 'Gerando...' : '✨ Gerar pacote'}

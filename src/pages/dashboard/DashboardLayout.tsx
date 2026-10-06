@@ -8,6 +8,8 @@ import ProgressPopup from './marketingAi/ProgressPopup'
 import TrialStartModal from './TrialStartModal'
 import TrialStatusWidget from './TrialStatusWidget'
 import BusinessContextButton from './BusinessContextButton'
+import PendenciasBell from './PendenciasBell'
+import { usePendencias } from '../../lib/usePendencias'
 import logo from '../../assets/logo.png'
 
 const ORANGE = '#FF6D29'
@@ -18,10 +20,10 @@ const MUTED_BRIGHT = '#BABABA'
 
 const iconStroke = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
 
-type NavItem = { to: string; label: string; icon: React.ReactNode; end?: boolean }
+type NavItem = { to: string; label: string; icon: React.ReactNode; end?: boolean; badge?: number }
 type NavSection = { section?: string; accent?: boolean; items: NavItem[] }
 
-function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: boolean; marketingAi: boolean }, businessName: string | null): NavSection[] {
+function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: boolean; marketingAi: boolean }, businessName: string | null, approvalsCount = 0): NavSection[] {
   return [
     {
       items: [
@@ -49,7 +51,7 @@ function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: bool
     },
     {
       items: [{
-        to: '/dashboard/aprovacoes', label: T.layout.nav.approvals,
+        to: '/dashboard/aprovacoes', label: T.layout.nav.approvals, badge: approvalsCount,
         icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>,
       }],
     },
@@ -102,12 +104,15 @@ function NavItemLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => v
         textDecoration: 'none', fontSize: '13.5px', fontWeight: isActive ? 600 : 400,
         color: isActive ? ORANGE : MUTED_BRIGHT, background: isActive ? 'rgba(255,109,41,0.1)' : 'transparent', transition: 'all 0.15s',
       })}>
-      {item.icon}{item.label}
+      {item.icon}<span style={{ flex: 1 }}>{item.label}</span>
+      {!!item.badge && item.badge > 0 && (
+        <span style={{ minWidth: '16px', height: '16px', padding: '0 4px', boxSizing: 'border-box', borderRadius: '8px', background: '#EF4444', color: 'white', fontSize: '9.5px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>{item.badge > 99 ? '99+' : item.badge}</span>
+      )}
     </NavLink>
   )
 }
 
-function SidebarInner({ isMobile, open, onNavigate, onClose }: { isMobile: boolean; open: boolean; onNavigate: () => void; onClose: () => void }) {
+function SidebarInner({ isMobile, open, onNavigate, onClose, approvalsCount }: { isMobile: boolean; open: boolean; onNavigate: () => void; onClose: () => void; approvalsCount: number }) {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const { lang } = useLang()
@@ -115,7 +120,7 @@ function SidebarInner({ isMobile, open, onNavigate, onClose }: { isMobile: boole
   const { company } = useCompany()
   const flags = { agentesMenu: company?.agent_enabled ?? false, marketingAi: company?.marketing_ai_enabled ?? true }
 
-  const navSections = makeNavSections(T, flags, company?.business_name ?? null)
+  const navSections = makeNavSections(T, flags, company?.business_name ?? null, approvalsCount)
   const bottomItems = makeBottomItems(T)
 
   const handleSignOut = async () => { await signOut(); navigate('/') }
@@ -184,6 +189,7 @@ function SidebarInner({ isMobile, open, onNavigate, onClose }: { isMobile: boole
 export default function DashboardLayout() {
   const { company } = useCompany()
   const isMobile = useIsMobile()
+  const pend = usePendencias()
   const [mobileOpen, setMobileOpen] = useState(false)
   useEffect(() => { if (!isMobile) setMobileOpen(false) }, [isMobile])
 
@@ -193,13 +199,20 @@ export default function DashboardLayout() {
         {isMobile && mobileOpen && (
           <div onClick={() => setMobileOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 39 }} />
         )}
-        <SidebarInner isMobile={isMobile} open={!isMobile || mobileOpen} onNavigate={() => setMobileOpen(false)} onClose={() => setMobileOpen(false)} />
+        <SidebarInner isMobile={isMobile} open={!isMobile || mobileOpen} onNavigate={() => setMobileOpen(false)} onClose={() => setMobileOpen(false)} approvalsCount={pend.approvalsCount} />
         <main style={{ flex: 1, marginLeft: isMobile ? 0 : '240px', display: 'flex', flexDirection: 'column', minHeight: '100vh', minWidth: 0, overflowX: 'hidden' }}>
-          {isMobile && (
-            <button onClick={() => setMobileOpen(true)} aria-label="Abrir menu"
-              style={{ position: 'sticky', top: 0, zIndex: 30, alignSelf: 'flex-start', margin: '12px 0 0 14px', width: '38px', height: '38px', background: SIDEBAR_BG, border: `1px solid ${BORDER}`, borderRadius: '9px', color: 'white', fontSize: '17px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              ☰
-            </button>
+          {isMobile ? (
+            <div style={{ position: 'sticky', top: 0, zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: '#0E0B0A', borderBottom: `1px solid ${BORDER}` }}>
+              <button onClick={() => setMobileOpen(true)} aria-label="Abrir menu"
+                style={{ width: '38px', height: '38px', background: SIDEBAR_BG, border: `1px solid ${BORDER}`, borderRadius: '9px', color: 'white', fontSize: '17px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                ☰
+              </button>
+              <PendenciasBell items={pend.items} count={pend.count} isMobile onOpen={() => setMobileOpen(false)} />
+            </div>
+          ) : (
+            <div style={{ position: 'fixed', top: '14px', right: '20px', zIndex: 55 }}>
+              <PendenciasBell items={pend.items} count={pend.count} isMobile={false} />
+            </div>
           )}
           <TrialStatusWidget />
           <Outlet />

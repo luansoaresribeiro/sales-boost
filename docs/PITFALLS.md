@@ -219,3 +219,11 @@ filhos), o ajuste é trocar `children: childIds` por
 `children: childIds.join(',')` em `createMediaContainer` — mudança de 1
 linha, mas deploy de `agent-actions` é alteração arriscada (lista em
 CLAUDE.md), exige aprovação do dono antes.
+
+## Realtime: dois `useRealtime` na mesma tabela/empresa colidem
+
+O nome do canal era `rt:${table}:${companyId}`; o Supabase reaproveita
+canal de mesmo nome e dá erro ao adicionar callback depois do `subscribe()`.
+Quando mais de um componente escuta a mesma tabela (ex.: sino de pendências
+no layout + ApprovalsPage), passe `{ key: '...' }` como 4º argumento. Em
+`companies` a coluna de filtro é `id`, não `company_id` (`{ column: 'id' }`).
