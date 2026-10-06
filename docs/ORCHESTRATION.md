@@ -45,7 +45,8 @@ atualizar o doc correspondente no mesmo PR — nunca deixar pra depois.
    dono → PARAR e perguntar no formato combinado (CLAUDE.md). Só seguir
    com o "sim" explícito do dono.
 4. Chamar o agente `engineer` com o plano.
-5. Chamar o agente `qa`. Se REPROVADO → volta pro `engineer` (máx. 3
+5. Chamar o agente `qa` (que também confere se a tela bate com o que o
+   código faz de verdade — regra "tela e código andam juntos" do CLAUDE.md). Se REPROVADO → volta pro `engineer` (máx. 3
    voltas; depois disso, parar e reportar o bloqueio pro dono em vez de
    insistir sozinho).
 6. APROVADO → abrir PR com o resumo do QA em português simples, prints e

@@ -81,6 +81,13 @@ inventadas:
   `planWeekForCompany` — não duplicam a mesma data.
 - Pacote espalhado em 2-3 semanas (`candidateDates(21)`), respeitando o
   cap por pilar (`pillarCap`).
+- **Divergência tela × código (achada em 2026-10-06):** a tela Calendário
+  da Semana (`WeeklyCalendarTab.tsx`) diz que o agente "escolhe as melhores
+  Ideias do backlog… nunca inventa do zero", mas `planWeekForCompany`
+  gera cada peça **sem** seed/ideia, de propósito (comentário no código). A
+  cadência (1-2/dia, 7-14 por semana) não olha fotos disponíveis nem ritmo
+  de aprovação do dono, e o motivo de cada dia (`note`) é devolvido mas a
+  tela não mostra. Plano: "Plano da semana" (ver ROADMAP) alinha os dois.
 
 ## Tom e ganchos
 

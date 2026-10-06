@@ -92,6 +92,9 @@ resposta antes de agir.
 - NUNCA commitar segredo, credencial ou `.env`.
 - Manter arquivos abaixo de 500 linhas quando der.
 - Validar entrada nas bordas do sistema.
+- Tela e código andam juntos: em toda mudança, conferir se o que a tela
+  promete ou mostra é o que o código faz de verdade (e vice-versa). Achou
+  divergência → corrigir no mesmo trabalho ou registrar no doc da área.
 
 ## Build & Test
 
