@@ -147,6 +147,25 @@
         principalmente `react-hooks/*` e as edge functions
         (`supabase/functions`, mexer = deploy arriscado).
 
+## Próximas etapas pedidas pelo dono (2026-10-06, nesta ordem)
+
+1. **Pendências com bolinha vermelha** — ícone com contador de pendências
+   reais (aprovações, Instagram desconectado, item sem foto, dado da ficha
+   faltando); cada item leva direto à tela/campo certo e some quando
+   resolvido. Só tela + leitura.
+2. **Fim do onboarding com dados e conectores** — frase "Esse é o momento
+   importante de alimentar os dados reais — depois é só relaxar!".
+   Obrigatório: dados do negócio, perguntas da ficha e 1 item com fotos.
+   Instagram em destaque, mas com "conectar depois" (vira pendência do
+   item 1) até o App Review da Meta sair; depois passa a obrigatório.
+3. **Plano da semana** — no Calendário da Semana existente: quantos posts,
+   de que tipo (vídeo/carrossel/bastidor), sobre qual item e por quê,
+   calculado por fotos disponíveis, ritmo de aprovação do dono, 80/20,
+   regras da ficha e teto de vídeos. Corrige a divergência tela × código
+   registrada em [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md).
+   Mexe em `creative-generate` (deploy precisa de aprovação). Decisão do
+   dono pendente: teto de vídeos por semana no plano de R$1.449.
+
 ## Fora do código (depende do dono, nenhum agente resolve sozinho)
 
 - App Review / verificação da Meta (desbloqueia contas não-testadoras no
