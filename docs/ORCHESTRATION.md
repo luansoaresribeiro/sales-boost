@@ -72,6 +72,11 @@ tarefas proibidas abaixo.
 
 ## Modo autônomo (rotina agendada)
 
+> **PAUSADO desde 2026-10-06** (ver [DECISIONS.md](DECISIONS.md)): as duas
+> rotinas (seg/qua/sex e relatório de sexta) estão desligadas e o trabalho
+> segue por etapas que o dono comanda. O texto abaixo fica como referência
+> pra quando/se for religado.
+
 Princípio: **autonomia pra trabalhar ≠ autonomia pra publicar.**
 
 ### Agenda (horário do Rio)

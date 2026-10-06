@@ -61,6 +61,15 @@
 - **Alterações arriscadas exigem aprovação prévia do dono** — lista
   completa em CLAUDE.md. Nenhum agente pula essa parada pra "economizar
   tempo".
+- **Modo autônomo pausado; trabalho por etapas comandadas pelo dono** —
+  2026-10-06. A rodada seg/qua/sex foi desligada automaticamente em
+  05/10 (`auto_disabled_org_disabled`: a organização não permitiu a rotina
+  com o conector Supabase) e o relatório de sexta foi desligado a pedido do
+  dono. Daqui em diante o dono escolhe qual etapa do
+  [ROADMAP.md](ROADMAP.md) seguir e a sessão executa (product → engineer →
+  qa), um PR por assunto. As regras de segurança do modo autônomo continuam
+  valendo pra qualquer agente. **Isto suspende** o item abaixo; as rotinas
+  ficam guardadas (desligadas) pra religar se o dono quiser.
 - **Agentes de desenvolvimento trabalham sozinhos, mas nunca publicam** —
   2026-10-02. O dono pediu que `product` → `engineer` → `qa` evoluam o
   projeto sem precisar de prompt. Princípio: **autonomia pra trabalhar ≠
