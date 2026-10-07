@@ -50,6 +50,7 @@ export function OppCard({
   T: typeof d['pt']['opportunities']
 }) {
   const navigate = useNavigate()
+  const { lang: oppLang } = useLang()
   const [expanded, setExpanded] = useState(false)
   const [draft, setDraft] = useState(opp.ai_draft ?? '')
   const [loadingDraft, setLoadingDraft] = useState(false)
@@ -102,7 +103,7 @@ export function OppCard({
           body: JSON.stringify({ review_id: opp.ref_id, reply_text: draft }),
         })
         const data = await res.json()
-        if (!res.ok) throw new Error(data.error ?? 'Erro ao publicar no Google')
+        if (!res.ok) throw new Error(data.error ?? (oppLang === 'en' ? 'Error publishing to Google' : 'Erro ao publicar no Google'))
       } catch (e: unknown) {
         setResolveError(e instanceof Error ? e.message : String(e))
         setResolving(false)
@@ -326,7 +327,7 @@ export default function OpportunitiesPage() {
                   (company && !company.google_place_id && !company.instagram_url) ? T.noChannels :
                   opportunities.length === 0
                   ? T.noOpps
-                  : `${opportunities.length} ${T.detected} · ${lastScan ? `${T.updated} ${lastScan.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : ''}`)
+                  : `${opportunities.length} ${T.detected} · ${lastScan ? `${T.updated} ${lastScan.toLocaleTimeString(lang === 'en' ? 'en-US' : 'pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}`)
                 : T.pipeline}
             </p>
           </div>

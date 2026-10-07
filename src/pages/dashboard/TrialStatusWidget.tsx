@@ -6,18 +6,39 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useCompany } from '../../contexts/CompanyContext'
 import { getTrialInfo } from '../../lib/trialState'
+import { useLang } from '../../contexts/LanguageContext'
 import { CARD, MUTED, ORANGE, D } from './marketingAi/shared'
 
+const TX = {
+  pt: {
+    started: 'Seu Trial de Crescimento do Negócio começou.',
+    endsToday: 'Seu trial termina hoje. Veja o que o SalesBoost descobriu.',
+    analyzing: 'O SalesBoost está analisando seu negócio e o mercado.',
+    found: 'O SalesBoost encontrou novas oportunidades pro seu negócio.',
+    title: (d: number | null, t: number | null) => `Trial de Crescimento · Dia ${d} de ${t}`,
+    opps: 'oportunidades', cont: 'Continuar →',
+  },
+  en: {
+    started: 'Your Business Growth Trial has started.',
+    endsToday: 'Your trial ends today. See what SalesBoost found.',
+    analyzing: 'SalesBoost is analyzing your business and the market.',
+    found: 'SalesBoost found new opportunities for your business.',
+    title: (d: number | null, t: number | null) => `Growth Trial · Day ${d} of ${t}`,
+    opps: 'opportunities', cont: 'Continue →',
+  },
+} as const
+
 // Mensagem por fase, genérica pelo total de dias do trial (3 nos antigos, 7 nos novos).
-function dayMessage(day: number, total: number): string {
-  if (day <= 1) return 'Seu Trial de Crescimento do Negócio começou.'
-  if (day >= total) return 'Seu trial termina hoje. Veja o que o SalesBoost descobriu.'
-  if (day * 2 <= total) return 'O SalesBoost está analisando seu negócio e o mercado.'
-  return 'O SalesBoost encontrou novas oportunidades pro seu negócio.'
+function dayMessage(day: number, total: number, tx: typeof TX[keyof typeof TX]): string {
+  if (day <= 1) return tx.started
+  if (day >= total) return tx.endsToday
+  if (day * 2 <= total) return tx.analyzing
+  return tx.found
 }
 
 export default function TrialStatusWidget() {
   const { company } = useCompany()
+  const tx = TX[useLang().lang]
   const navigate = useNavigate()
   const [gp, setGp] = useState<number | null>(null)
   const [opportunities, setOpportunities] = useState<number | null>(null)
@@ -49,17 +70,17 @@ export default function TrialStatusWidget() {
         <span style={{ fontSize: '18px', flexShrink: 0 }}>{isExpiring ? '⏳' : '🚀'}</span>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>
-            Trial de Crescimento · Dia {info.dayNumber} de {info.totalDays}
+            {tx.title(info.dayNumber, info.totalDays)}
           </div>
           <div style={{ fontSize: '11px', color: MUTED, marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {info.dayNumber && info.totalDays ? dayMessage(info.dayNumber, info.totalDays) : ''}
+            {info.dayNumber && info.totalDays ? dayMessage(info.dayNumber, info.totalDays, tx) : ''}
           </div>
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
         {gp != null && <Stat label="XP" value={`+${gp}`} />}
-        {opportunities != null && <Stat label="oportunidades" value={String(opportunities)} />}
-        <span style={{ fontSize: '11.5px', fontWeight: 700, color: ORANGE, whiteSpace: 'nowrap' }}>Continuar →</span>
+        {opportunities != null && <Stat label={tx.opps} value={String(opportunities)} />}
+        <span style={{ fontSize: '11.5px', fontWeight: 700, color: ORANGE, whiteSpace: 'nowrap' }}>{tx.cont}</span>
       </div>
     </div>
   )

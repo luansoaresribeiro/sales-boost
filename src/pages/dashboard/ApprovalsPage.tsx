@@ -5,9 +5,30 @@ import { useLang } from '../../contexts/LanguageContext'
 import { d } from '../../i18n-dash'
 import {
   listAgentActions, decideAgentAction, editAgentAction, proposeAgentAction, retryAgentAction,
-  APPROVAL_META, EXECUTION_META, type AgentAction,
+  APPROVAL_META, EXECUTION_META, APPROVAL_LABEL_EN, EXECUTION_LABEL_EN, type AgentAction,
 } from '../../lib/agentActions'
 import { useRealtime } from '../../lib/useRealtime'
+
+const EXEC_LABEL_EN: Record<string, string> = { organico: 'Organic', cliente: 'Reply to customer', campanha: 'Campaign' }
+const RISK_EN: Record<string, string> = { high: 'high', medium: 'medium', low: 'low' }
+const TX = {
+  pt: {
+    retry: '↻ Tentar de novo', actionNoun: 'Conteúdo',
+    sub: 'Tudo que qualquer agente quer fazer passa por aqui. Nada é executado sem passar pela Central de Aprovações.',
+    toApprove: 'Pra aprovar', published: '✓ Aprovado e publicado de verdade no Instagram.',
+    failedPub: (e: string | null) => `Aprovado, mas não publicado: ${e ?? 'sem imagem ou Instagram desconectado'}.`,
+    approved: '✓ Aprovado.', nothing: 'Nada esperando aprovação agora.', history: 'Histórico de execução',
+    footer: 'Aprovar executa a ação — nada roda sem você.',
+  },
+  en: {
+    retry: '↻ Try again', actionNoun: 'Content',
+    sub: 'Everything any agent wants to do passes through here. Nothing runs without going through Approvals.',
+    toApprove: 'To approve', published: '✓ Approved and published to Instagram.',
+    failedPub: (e: string | null) => `Approved, but not published: ${e ?? 'no image or Instagram disconnected'}.`,
+    approved: '✓ Approved.', nothing: 'Nothing waiting for approval right now.', history: 'Execution history',
+    footer: 'Approving runs it — nothing runs without you.',
+  },
+} as const
 
 const FORMAT_ICON: Record<string, string> = { reel: '🎬', carrossel: '🎠', story: '📱', foto: '📸' }
 const CHANNEL_ICON: Record<string, string> = { instagram: '📸', whatsapp: '💬', google: '⭐', email: '✉️', facebook: '📘', website: '🌐', internal: '⚙️' }
@@ -43,9 +64,10 @@ function classifyAction(a: AgentAction): ExecKind {
   return 'organico'
 }
 function ExecBadge({ kind }: { kind: ExecKind }) {
+  const { lang } = useLang()
   const m = EXEC_META[kind]
   return (
-    <span style={{ fontSize: '9.5px', fontWeight: 700, color: m.color, padding: '2px 8px', border: `1px solid ${m.color}44`, borderRadius: '99px', flexShrink: 0, whiteSpace: 'nowrap' }}>{m.icon} {m.label}</span>
+    <span style={{ fontSize: '9.5px', fontWeight: 700, color: m.color, padding: '2px 8px', border: `1px solid ${m.color}44`, borderRadius: '99px', flexShrink: 0, whiteSpace: 'nowrap' }}>{m.icon} {lang === 'en' ? EXEC_LABEL_EN[kind] : m.label}</span>
   )
 }
 
@@ -65,7 +87,7 @@ function ActionCard({ a, busy, onDecide, onEdit, lang }: {
         </div>
         <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
           <ExecBadge kind={classifyAction(a)} />
-          <span style={{ fontSize: '9.5px', fontWeight: 700, color: ap.color, padding: '2px 8px', border: `1px solid ${ap.color}44`, borderRadius: '99px' }}>{ap.label}</span>
+          <span style={{ fontSize: '9.5px', fontWeight: 700, color: ap.color, padding: '2px 8px', border: `1px solid ${ap.color}44`, borderRadius: '99px' }}>{lang === 'en' ? APPROVAL_LABEL_EN[a.approval_status] ?? ap.label : ap.label}</span>
         </div>
       </div>
       {/* WHO / WHERE / WHEN */}
@@ -73,8 +95,8 @@ function ActionCard({ a, busy, onDecide, onEdit, lang }: {
         <span>👤 {a.agent_name ?? a.agent_key}</span>
         {a.channel && <span>· {a.channel}</span>}
         {a.target && <span>· 🎯 {a.target}</span>}
-        <span>· {new Date(a.created_at).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-        <span>· ⚠️ <span style={{ color: risk }}>{a.risk_level}</span></span>
+        <span>· {new Date(a.created_at).toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+        <span>· ⚠️ <span style={{ color: risk }}>{lang === 'en' ? RISK_EN[a.risk_level] ?? a.risk_level : a.risk_level}</span></span>
       </div>
       {/* WHY */}
       {(a.agent_interpretation || a.reason) && (
@@ -144,6 +166,8 @@ function ContentCard({ item, onApprove, onDiscard, busy, lang }: {
 
 // ── Linha do histórico de execução ──────────────────────────────────────────
 function HistoryRow({ a, busy, onRetry }: { a: AgentAction; busy: boolean; onRetry: () => void }) {
+  const { lang } = useLang()
+  const tx = TX[lang]
   const ap = APPROVAL_META[a.approval_status], ex = EXECUTION_META[a.execution_status]
   const failed = a.execution_status === 'FAILED'
   return (
@@ -151,14 +175,14 @@ function HistoryRow({ a, busy, onRetry }: { a: AgentAction; busy: boolean; onRet
       <span style={{ fontSize: '14px' }}>{CHANNEL_ICON[a.channel ?? 'internal'] ?? '⚙️'}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
-        <div style={{ fontSize: '9.5px', color: MUTED }}>{a.agent_name ?? a.agent_key} · {new Date(a.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}{a.execution_error ? ` · ${a.execution_error.slice(0, 60)}` : ''}</div>
+        <div style={{ fontSize: '9.5px', color: MUTED }}>{a.agent_name ?? a.agent_key} · {new Date(a.created_at).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' })}{a.execution_error ? ` · ${a.execution_error.slice(0, 60)}` : ''}</div>
       </div>
-      <span style={{ fontSize: '9px', fontWeight: 700, color: ap.color, flexShrink: 0 }}>{ap.label}</span>
-      <span style={{ fontSize: '9px', fontWeight: 700, color: ex.color, flexShrink: 0 }}>{ex.label}</span>
+      <span style={{ fontSize: '9px', fontWeight: 700, color: ap.color, flexShrink: 0 }}>{lang === 'en' ? APPROVAL_LABEL_EN[a.approval_status] ?? ap.label : ap.label}</span>
+      <span style={{ fontSize: '9px', fontWeight: 700, color: ex.color, flexShrink: 0 }}>{lang === 'en' ? EXECUTION_LABEL_EN[a.execution_status] ?? ex.label : ex.label}</span>
       {failed && (
         <button onClick={onRetry} disabled={busy}
           style={{ flexShrink: 0, padding: '4px 10px', background: 'transparent', border: `1px solid ${ORANGE}66`, borderRadius: '99px', color: ORANGE, fontSize: '9.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-          {busy ? '...' : '↻ Tentar de novo'}
+          {busy ? '...' : tx.retry}
         </button>
       )}
     </div>
@@ -169,6 +193,7 @@ export default function ApprovalsPage() {
   const { user, session } = useAuth()
   const { lang } = useLang()
   const T = d[lang].approvals
+  const tx = TX[lang]
 
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [content, setContent] = useState<AiContent[]>([])
@@ -241,11 +266,11 @@ export default function ApprovalsPage() {
         approve_now: true,
       })
       if (action.execution_status === 'EXECUTED' && (action.execution_result as { published_to_instagram?: boolean } | null)?.published_to_instagram) {
-        setContentMsg('✓ Aprovado e publicado de verdade no Instagram.')
+        setContentMsg(tx.published)
       } else if (action.execution_status === 'FAILED') {
-        setContentMsg(`Aprovado, mas não publicado: ${action.execution_error ?? 'sem imagem ou Instagram desconectado'}.`)
+        setContentMsg(tx.failedPub(action.execution_error))
       } else {
-        setContentMsg('✓ Aprovado.')
+        setContentMsg(tx.approved)
       }
     } catch { /* ignore — item segue na lista, dono pode tentar de novo */ }
     setContent(prev => prev.filter(i => i.id !== item.id)); setBusyId(null)
@@ -263,9 +288,7 @@ export default function ApprovalsPage() {
       <div style={{ padding: '28px 32px 24px', borderBottom: `1px solid ${BORDER}` }}>
         <h1 style={{ fontFamily: D, fontSize: '1.5rem', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>{T.title}</h1>
         <p style={{ color: MUTED, fontSize: '13px' }}>
-          {lang === 'en'
-            ? 'Everything any agent wants to do passes through here. Nothing runs without going through Approvals.'
-            : 'Tudo que qualquer agente quer fazer passa por aqui. Nada é executado sem passar pela Central de Approvals.'}
+          {tx.sub}
         </p>
       </div>
 
@@ -279,7 +302,7 @@ export default function ApprovalsPage() {
                 Responder cliente / Campanha) via ExecBadge. */}
             {(pending.length > 0 || content.length > 0) && (
               <section style={{ marginBottom: '28px' }}>
-                <SectionTitle label={lang === 'en' ? 'To approve' : 'Pra aprovar'} count={pending.length + content.length} />
+                <SectionTitle label={tx.toApprove} count={pending.length + content.length} />
                 {contentMsg && <div style={{ fontSize: '11.5px', color: contentMsg.startsWith('✓') ? GREEN : '#f87171', marginBottom: '10px' }}>{contentMsg}</div>}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {[
@@ -300,14 +323,14 @@ export default function ApprovalsPage() {
 
             {nothing && (
               <div style={{ padding: '18px', textAlign: 'center', border: `1px dashed ${BORDER}`, borderRadius: '12px', color: MUTED, fontSize: '13px', marginBottom: '28px' }}>
-                {lang === 'en' ? 'Nothing waiting for approval right now.' : 'Nada esperando aprovação agora.'}
+                {tx.nothing}
               </div>
             )}
 
             {/* Histórico de execução */}
             {history.length > 0 && (
               <section>
-                <SectionTitle label={lang === 'en' ? 'Execution history' : 'Histórico de execução'} count={history.length} />
+                <SectionTitle label={tx.history} count={history.length} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {history.map(a => <HistoryRow key={a.id} a={a} busy={busyId === a.id} onRetry={() => retry(a.id)} />)}
                 </div>
@@ -315,7 +338,7 @@ export default function ApprovalsPage() {
             )}
 
             <div style={{ marginTop: '20px', fontSize: '11.5px', color: MUTED, lineHeight: 1.6, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ color: GREEN }}>✓</span> {lang === 'en' ? 'Approving executes it — nothing runs without you.' : 'Aprovar executa a ação — nada roda sem você.'}
+              <span style={{ color: GREEN }}>✓</span> {tx.footer}
             </div>
           </>
         )}

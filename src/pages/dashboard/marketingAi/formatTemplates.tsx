@@ -278,3 +278,19 @@ export const TEMPLATES: Template[] = [
 ]
 
 export const templateByKey = (k: string) => TEMPLATES.find(t => t.key === k)
+
+// Rótulos de UI em inglês (nome do formato e dos campos do formulário). O
+// conteúdo renderizado na imagem (textos padrão, "Retuítes", etc.) NÃO muda —
+// é conteúdo da marca, não interface.
+const TEMPLATE_EN: Record<string, { label: string; fields: Record<string, string> }> = {
+  tweet: { label: 'Tweet Print', fields: { name: 'Name', handle: 'Username (@)', text: 'Tweet text', likes: 'Likes', retweets: 'Retweets', time: 'Time', date: 'Date', theme: 'Theme (dark/light)' } },
+  product: { label: 'Product Focus', fields: { productImage: 'Product photo', name: 'Name', price: 'Price', cta: 'Call to action' } },
+  photo: { label: 'Photo Post', fields: { eyebrow: 'Label (top)', headline: 'Main headline', offer: 'Offer (highlight)', cta: 'Call to action' } },
+  problem: { label: 'Problem → Turn', fields: { eyebrow: 'Label (top)', problem: 'The pain (customer quote)', reframe: 'The turn', insight: 'The insight' } },
+  faq: { label: 'FAQ / Objection', fields: { eyebrow: 'Label (top)', question: 'Customer question', answer: 'Answer' } },
+  trend: { label: 'Industry trend', fields: { eyebrow: 'Label (top)', title: 'Title', items: 'Items (one per line)' } },
+  market_watch: { label: 'Market Watch', fields: { eyebrow: 'Label (top)', headline: 'Headline', value: 'Number (e.g. 42%)', insight: 'What it means', source: 'Source' } },
+  review: { label: 'Social proof (review)', fields: { eyebrow: 'Label (top)', stars: 'Stars (1-5)', text: 'Review text', author: 'Author', source: 'Source (e.g. Google)' } },
+}
+export const templateUiLabel = (t: Template, lang: 'pt' | 'en') => (lang === 'en' ? TEMPLATE_EN[t.key]?.label : undefined) ?? t.label
+export const fieldUiLabel = (t: Template, f: FieldDef, lang: 'pt' | 'en') => (lang === 'en' ? TEMPLATE_EN[t.key]?.fields[f.key] : undefined) ?? f.label

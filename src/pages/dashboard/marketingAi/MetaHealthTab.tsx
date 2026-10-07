@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import type { CompanyData } from '../../../contexts/CompanyContext'
+import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D } from './shared'
 import { useDemoMode } from './growthDemo'
 import DataVeil, { veilMode } from './DataVeil'
+import { HEALTH_CLASS_EN, PRIORITY_EN, DIFFICULTY_EN } from './labels.i18n'
 import {
   buildMetaHealthDemo, classifyHealth, HEALTH_CLASS_META, CHECK_META,
   PRIORITY_META, DIFFICULTY_META,
@@ -12,18 +14,49 @@ import {
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
 
+const TX = {
+  pt: {
+    demoBanner: 'Modo demonstração.', demoBannerA: ' Este score e suas categorias são calculados a partir de dados de exemplo. Quando a conta da Meta (Business Manager, Pixel, anúncios) for conectada, o score vira um KPI vivo que aprende e evolui sozinho.',
+    outOf: 'de 100', whyScore: 'Por que este score', checklist: 'Checklist', priority: 'Prioridade', inScore: 'no score',
+    noRealTitle: 'Sem dados reais ainda', noRealMsg: 'A Saúde da Meta cruza seus dados reais de Instagram e anúncios — que ainda não estão disponíveis. Ligue o Modo demonstração pra explorar o layout com um exemplo.', seeExample: 'Ver exemplo (modo demonstração)',
+    introA: 'Em vez de métricas soltas, a IA calcula ', introB: 'um único score de 0 a 100', introC: ' que mede quão saudável, madura e otimizada está a presença do seu negócio na Meta — e responde: ', introD: 'o que melhorar primeiro pra crescer mais rápido.',
+    vsPrev: 'pts vs. mês anterior', heroA: 'Seu ecossistema na Meta está ', heroB: '. Você está à frente de ', heroC: ' dos ', heroD: '. As maiores alavancas agora são ', heroE: 'Pixel', heroF: ' e ', heroG: 'funil', heroH: '.',
+    catTitle: '🩺 Categorias de saúde', catSub: 'O score geral vem da média ponderada destas categorias. Clique pra ver os motivos e o checklist.',
+    recTitle: '🤖 Recomendações da IA', recSub: 'Cada problema vira uma ação com prioridade, dificuldade e quanto sobe no score.',
+    impTitle: '✅ Melhorar meu score', impSub: 'Marque o que já foi feito — o score projetado sobe na hora.', current: 'Score atual', projected: 'Projetado',
+    evoTitle: '📅 Evolução do score', evoSub: 'Em verde, o maior salto do período.', weekly: 'Semanal', monthly: 'Mensal', quarterly: 'Trimestral',
+    cmpTitle: '🏆 Comparação com o segmento', cmpSub: 'Como você está vs. ', ahead: 'à frente de ', similar: ' dos negócios parecidos.', youAre: 'Você está ',
+    yourScore: 'Seu score', segAvg: 'Média do segmento', segTop: 'Top 10% do segmento', sumTitle: '📋 Resumo executivo da IA', sumSub: 'A leitura de um consultor de Meta, em um parágrafo.',
+  },
+  en: {
+    demoBanner: 'Demo mode.', demoBannerA: ' This score and its categories are calculated from sample data. Once the Meta account (Business Manager, Pixel, ads) is connected, the score becomes a live KPI that learns and evolves on its own.',
+    outOf: 'out of 100', whyScore: 'Why this score', checklist: 'Checklist', priority: 'Priority', inScore: 'on score',
+    noRealTitle: 'No real data yet', noRealMsg: 'Meta Health combines your real Instagram and ads data — which is not available yet. Turn on Demo mode to explore the layout with an example.', seeExample: 'See an example (demo mode)',
+    introA: 'Instead of loose metrics, the AI calculates ', introB: 'a single score from 0 to 100', introC: ' that measures how healthy, mature and optimized your business presence on Meta is — and answers: ', introD: 'what to improve first to grow faster.',
+    vsPrev: 'pts vs. previous month', heroA: 'Your Meta ecosystem is ', heroB: '. You are ahead of ', heroC: ' of ', heroD: '. The biggest levers right now are ', heroE: 'Pixel', heroF: ' and ', heroG: 'funnel', heroH: '.',
+    catTitle: '🩺 Health categories', catSub: 'The overall score comes from the weighted average of these categories. Click to see the reasons and the checklist.',
+    recTitle: '🤖 AI recommendations', recSub: 'Each problem becomes an action with priority, difficulty and how much it raises the score.',
+    impTitle: '✅ Improve my score', impSub: 'Check what has already been done — the projected score goes up instantly.', current: 'Current score', projected: 'Projected',
+    evoTitle: '📅 Score evolution', evoSub: 'In green, the biggest jump of the period.', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly',
+    cmpTitle: '🏆 Comparison with the segment', cmpSub: 'How you are doing vs. ', ahead: 'ahead of ', similar: ' of similar businesses.', youAre: 'You are ',
+    yourScore: 'Your score', segAvg: 'Segment average', segTop: 'Top 10% of the segment', sumTitle: '📋 AI executive summary', sumSub: 'A Meta consultant\'s reading, in one paragraph.',
+  },
+} as const
+
 function Banner() {
+  const t = TX[useLang().lang]
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 15px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: '12px', marginBottom: '18px' }}>
       <span style={{ fontSize: '16px' }}>🧪</span>
       <div style={{ fontSize: '12px', color: 'white', lineHeight: 1.5 }}>
-        <strong style={{ color: '#FBBF24' }}>Modo demonstração.</strong> Este score e suas categorias são calculados a partir de dados de exemplo. Quando a conta da Meta (Business Manager, Pixel, anúncios) for conectada, o score vira um KPI vivo que aprende e evolui sozinho.
+        <strong style={{ color: '#FBBF24' }}>{t.demoBanner}</strong>{t.demoBannerA}
       </div>
     </div>
   )
 }
 
 function ScoreRing({ score }: { score: number }) {
+  const t = TX[useLang().lang]
   const cls = classifyHealth(score)
   const color = HEALTH_CLASS_META[cls].color
   const r = 62, c = 2 * Math.PI * r
@@ -36,7 +69,7 @@ function ScoreRing({ score }: { score: number }) {
       </svg>
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ fontSize: '36px', fontWeight: 900, color: 'white', lineHeight: 1 }}>{score}</div>
-        <div style={{ fontSize: '11px', color: MUTED, marginTop: '2px' }}>de 100</div>
+        <div style={{ fontSize: '11px', color: MUTED, marginTop: '2px' }}>{t.outOf}</div>
       </div>
     </div>
   )
@@ -69,6 +102,7 @@ function MiniChart({ points }: { points: HistoryPoint[] }) {
 }
 
 function CategoryCard({ cat }: { cat: HealthCategory }) {
+  const t = TX[useLang().lang]
   const [open, setOpen] = useState(false)
   const cls = classifyHealth(cat.score)
   const color = HEALTH_CLASS_META[cls].color
@@ -88,11 +122,11 @@ function CategoryCard({ cat }: { cat: HealthCategory }) {
       </button>
       {open && (
         <div style={{ padding: '4px 16px 16px', borderTop: `1px solid ${BORDER}` }}>
-          <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '13px 0 7px' }}>Por que este score</div>
+          <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '13px 0 7px' }}>{t.whyScore}</div>
           <ul style={{ margin: 0, paddingLeft: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {cat.reasons.map((r, i) => <li key={i} style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>{r}</li>)}
           </ul>
-          <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>Checklist</div>
+          <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>{t.checklist}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '6px' }}>
             {cat.checks.map((ch, i) => {
               const m = CHECK_META[ch.status]
@@ -114,22 +148,26 @@ function CategoryCard({ cat }: { cat: HealthCategory }) {
 }
 
 function RecCard({ rec }: { rec: HealthRecommendation }) {
+  const { lang } = useLang()
+  const t = TX[lang]
   const pri = PRIORITY_META[rec.priority]
   const diff = DIFFICULTY_META[rec.difficulty]
+  const priLabel = lang === 'en' ? PRIORITY_EN[rec.priority] ?? pri.label : pri.label
+  const diffLabel = lang === 'en' ? DIFFICULTY_EN[rec.difficulty] ?? diff.label : diff.label
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '9px' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '5px', lineHeight: 1.35 }}>{rec.title}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '9px', fontWeight: 700, color: pri.color, background: `${pri.color}18`, border: `1px solid ${pri.color}40`, borderRadius: '99px', padding: '2px 8px' }}>Prioridade {pri.label}</span>
-            <span style={{ fontSize: '9px', fontWeight: 700, color: diff.color }}>● {diff.label}</span>
+            <span style={{ fontSize: '9px', fontWeight: 700, color: pri.color, background: `${pri.color}18`, border: `1px solid ${pri.color}40`, borderRadius: '99px', padding: '2px 8px' }}>{t.priority} {priLabel}</span>
+            <span style={{ fontSize: '9px', fontWeight: 700, color: diff.color }}>● {diffLabel}</span>
             <span style={{ fontSize: '9px', color: MUTED, background: 'rgba(255,255,255,0.05)', borderRadius: '99px', padding: '2px 8px' }}>{rec.category}</span>
           </div>
         </div>
         <div style={{ flexShrink: 0, textAlign: 'center', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: '10px', padding: '6px 10px' }}>
           <div style={{ fontSize: '15px', fontWeight: 900, color: GREEN, lineHeight: 1 }}>+{rec.scoreGain}</div>
-          <div style={{ fontSize: '8.5px', color: MUTED, marginTop: '1px' }}>no score</div>
+          <div style={{ fontSize: '8.5px', color: MUTED, marginTop: '1px' }}>{t.inScore}</div>
         </div>
       </div>
       <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55, marginBottom: '7px' }}>{rec.impact}</div>
@@ -139,7 +177,9 @@ function RecCard({ rec }: { rec: HealthRecommendation }) {
 }
 
 export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city'> }) {
-  const demo = useMemo(() => buildMetaHealthDemo(company), [company])
+  const { lang } = useLang()
+  const t = TX[lang]
+  const demo = useMemo(() => buildMetaHealthDemo(company, lang), [company, lang])
   const { overall, trendDelta, categories, recommendations, actions, history, benchmark, executiveSummary } = demo
   // Não há fonte real de "Saúde da Meta" ainda → nunca mostra número real
   // fake. Com Modo demonstração desligado, o layout fica borrado (DataVeil).
@@ -148,6 +188,7 @@ export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 
 
   const cls = classifyHealth(overall)
   const clsMeta = HEALTH_CLASS_META[cls]
+  const clsLabel = (k: string) => (lang === 'en' ? HEALTH_CLASS_EN[k] ?? HEALTH_CLASS_META[k as keyof typeof HEALTH_CLASS_META].label : HEALTH_CLASS_META[k as keyof typeof HEALTH_CLASS_META].label)
   const [range, setRange] = useState<'weekly' | 'monthly' | 'quarterly'>('monthly')
   const [checked, setChecked] = useState<Set<string>>(() => new Set(actions.filter(a => a.done).map(a => a.id)))
 
@@ -158,9 +199,9 @@ export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 
 
   const toggle = (id: string) => setChecked(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
 
-  const sectionTitle = (t: string, s: string) => (
+  const sectionTitle = (title: string, s: string) => (
     <div style={{ marginBottom: '12px' }}>
-      <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', fontFamily: D }}>{t}</div>
+      <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', fontFamily: D }}>{title}</div>
       <div style={{ fontSize: '11.5px', color: MUTED, marginTop: '2px' }}>{s}</div>
     </div>
   )
@@ -169,13 +210,13 @@ export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 
   return (
     <div style={{ maxWidth: '1080px' }}>
     <DataVeil mode={mode}
-      title="Sem dados reais ainda"
-      message="A Saúde da Meta cruza seus dados reais de Instagram e anúncios — que ainda não estão disponíveis. Ligue o Modo demonstração pra explorar o layout com um exemplo."
-      cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+      title={t.noRealTitle}
+      message={t.noRealMsg}
+      cta={{ label: t.seeExample, onClick: () => setDemoMode(true) }}>
       <Banner />
 
       <div style={{ marginBottom: '20px', fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>
-        Em vez de métricas soltas, a IA calcula <strong style={{ color: 'white' }}>um único score de 0 a 100</strong> que mede quão saudável, madura e otimizada está a presença do seu negócio na Meta — e responde: <strong style={{ color: 'white' }}>o que melhorar primeiro pra crescer mais rápido.</strong>
+        {t.introA}<strong style={{ color: 'white' }}>{t.introB}</strong>{t.introC}<strong style={{ color: 'white' }}>{t.introD}</strong>
       </div>
 
       {/* Hero */}
@@ -184,19 +225,19 @@ export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 
         <div style={{ flex: 1, minWidth: '240px' }}>
           <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Meta Health Score</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-            <span style={{ fontSize: '20px', fontWeight: 900, color: clsMeta.color }}>{clsMeta.label}</span>
+            <span style={{ fontSize: '20px', fontWeight: 900, color: clsMeta.color }}>{clsLabel(cls)}</span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 700, color: trendDelta >= 0 ? GREEN : '#f87171', background: trendDelta >= 0 ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', borderRadius: '99px', padding: '3px 10px' }}>
-              {trendDelta >= 0 ? '▲' : '▼'} {Math.abs(trendDelta)} pts vs. mês anterior
+              {trendDelta >= 0 ? '▲' : '▼'} {Math.abs(trendDelta)} {t.vsPrev}
             </span>
           </div>
           <div style={{ fontSize: '12px', color: MUTED, lineHeight: 1.6 }}>
-            Seu ecossistema na Meta está <strong style={{ color: 'white' }}>{clsMeta.label.toLowerCase()}</strong>. Você está à frente de <strong style={{ color: 'white' }}>{benchmark.percentile}%</strong> dos {benchmark.segment}. As maiores alavancas agora são <strong style={{ color: 'white' }}>Pixel</strong> e <strong style={{ color: 'white' }}>funil</strong>.
+            {t.heroA}<strong style={{ color: 'white' }}>{clsLabel(cls).toLowerCase()}</strong>{t.heroB}<strong style={{ color: 'white' }}>{benchmark.percentile}%</strong>{t.heroC}{benchmark.segment}{t.heroD}<strong style={{ color: 'white' }}>{t.heroE}</strong>{t.heroF}<strong style={{ color: 'white' }}>{t.heroG}</strong>{t.heroH}
           </div>
           <div style={{ display: 'flex', gap: '4px', marginTop: '14px', flexWrap: 'wrap' }}>
             {(Object.keys(HEALTH_CLASS_META) as (keyof typeof HEALTH_CLASS_META)[]).reverse().map(k => {
               const m = HEALTH_CLASS_META[k]
               const active = k === cls
-              return <span key={k} style={{ fontSize: '9.5px', fontWeight: 700, color: active ? '#0E0B0A' : m.color, background: active ? m.color : `${m.color}14`, border: `1px solid ${m.color}${active ? '' : '30'}`, borderRadius: '99px', padding: '3px 9px' }}>{m.label} {m.range}</span>
+              return <span key={k} style={{ fontSize: '9.5px', fontWeight: 700, color: active ? '#0E0B0A' : m.color, background: active ? m.color : `${m.color}14`, border: `1px solid ${m.color}${active ? '' : '30'}`, borderRadius: '99px', padding: '3px 9px' }}>{clsLabel(k)} {m.range}</span>
             })}
           </div>
         </div>
@@ -204,7 +245,7 @@ export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 
 
       {/* Categorias */}
       <div style={{ marginBottom: '28px' }}>
-        {sectionTitle('🩺 Categorias de saúde', 'O score geral vem da média ponderada destas categorias. Clique pra ver os motivos e o checklist.')}
+        {sectionTitle(t.catTitle, t.catSub)}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '11px' }}>
           {categories.map(c => <CategoryCard key={c.key} cat={c} />)}
         </div>
@@ -212,7 +253,7 @@ export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 
 
       {/* Recomendações */}
       <div style={{ marginBottom: '28px' }}>
-        {sectionTitle('🤖 Recomendações da IA', 'Cada problema vira uma ação com prioridade, dificuldade e quanto sobe no score.')}
+        {sectionTitle(t.recTitle, t.recSub)}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '10px' }}>
           {recommendations.map(r => <RecCard key={r.id} rec={r} />)}
         </div>
@@ -220,16 +261,16 @@ export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 
 
       {/* Action Center */}
       <div style={{ marginBottom: '28px' }}>
-        {sectionTitle('✅ Melhorar meu score', 'Marque o que já foi feito — o score projetado sobe na hora.')}
+        {sectionTitle(t.impTitle, t.impSub)}
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: '14px', paddingBottom: '14px', borderBottom: `1px solid ${BORDER}` }}>
             <div>
-              <div style={{ fontSize: '10px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Score atual</div>
+              <div style={{ fontSize: '10px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.current}</div>
               <div style={{ fontSize: '24px', fontWeight: 900, color: 'white' }}>{overall}</div>
             </div>
             <span style={{ fontSize: '20px', color: MUTED }}>→</span>
             <div>
-              <div style={{ fontSize: '10px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Projetado</div>
+              <div style={{ fontSize: '10px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.projected}</div>
               <div style={{ fontSize: '24px', fontWeight: 900, color: GREEN }}>{projected}</div>
             </div>
             <div style={{ flex: 1, minWidth: '160px' }}>
@@ -259,13 +300,13 @@ export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', fontFamily: D }}>📅 Evolução do score</div>
-              <div style={{ fontSize: '11.5px', color: MUTED, marginTop: '2px' }}>Em verde, o maior salto do período.</div>
+              <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', fontFamily: D }}>{t.evoTitle}</div>
+              <div style={{ fontSize: '11.5px', color: MUTED, marginTop: '2px' }}>{t.evoSub}</div>
             </div>
             <div style={{ display: 'inline-flex', gap: '3px', padding: '3px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '9px' }}>
               {(['weekly', 'monthly', 'quarterly'] as const).map(r => (
                 <button key={r} onClick={() => setRange(r)} style={{ padding: '5px 11px', background: range === r ? 'rgba(255,109,41,0.12)' : 'transparent', border: `1px solid ${range === r ? 'rgba(255,109,41,0.35)' : 'transparent'}`, borderRadius: '7px', cursor: 'pointer', fontFamily: D, fontSize: '11px', fontWeight: 700, color: range === r ? ORANGE : MUTED }}>
-                  {r === 'weekly' ? 'Semanal' : r === 'monthly' ? 'Mensal' : 'Trimestral'}
+                  {r === 'weekly' ? t.weekly : r === 'monthly' ? t.monthly : t.quarterly}
                 </button>
               ))}
             </div>
@@ -277,17 +318,17 @@ export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 
 
         <div>
           <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', fontFamily: D }}>🏆 Comparação com o segmento</div>
-            <div style={{ fontSize: '11.5px', color: MUTED, marginTop: '2px' }}>Como você está vs. {benchmark.segment}.</div>
+            <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', fontFamily: D }}>{t.cmpTitle}</div>
+            <div style={{ fontSize: '11.5px', color: MUTED, marginTop: '2px' }}>{t.cmpSub}{benchmark.segment}.</div>
           </div>
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '18px' }}>
             <div style={{ fontSize: '13px', color: 'white', lineHeight: 1.5, marginBottom: '16px' }}>
-              Você está <strong style={{ color: GREEN, fontSize: '16px' }}>à frente de {benchmark.percentile}%</strong> dos negócios parecidos.
+              {t.youAre}<strong style={{ color: GREEN, fontSize: '16px' }}>{t.ahead}{benchmark.percentile}%</strong>{t.similar}
             </div>
             {[
-              { label: 'Seu score', value: benchmark.yourScore, color: ORANGE },
-              { label: 'Média do segmento', value: benchmark.segmentAvg, color: MUTED },
-              { label: 'Top 10% do segmento', value: benchmark.segmentTop, color: GREEN },
+              { label: t.yourScore, value: benchmark.yourScore, color: ORANGE },
+              { label: t.segAvg, value: benchmark.segmentAvg, color: MUTED },
+              { label: t.segTop, value: benchmark.segmentTop, color: GREEN },
             ].map((row, i) => (
               <div key={i} style={{ marginBottom: '11px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -305,7 +346,7 @@ export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 
 
       {/* Resumo executivo */}
       <div>
-        {sectionTitle('📋 Resumo executivo da IA', 'A leitura de um consultor de Meta, em um parágrafo.')}
+        {sectionTitle(t.sumTitle, t.sumSub)}
         <div style={{ background: 'linear-gradient(135deg, rgba(255,109,41,0.08), rgba(255,109,41,0.02))', border: '1px solid rgba(255,109,41,0.2)', borderRadius: '14px', padding: '18px 20px' }}>
           <div style={{ fontSize: '13px', color: 'white', lineHeight: 1.65 }}>{executiveSummary}</div>
         </div>

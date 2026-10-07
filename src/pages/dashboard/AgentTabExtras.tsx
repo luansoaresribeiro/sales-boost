@@ -15,6 +15,49 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 
 // ── Generic "coming soon" placeholder, shared by Crescimento/Atendimento/Opiniões ──
 
+const TX = {
+  pt: {
+    loc: 'pt-BR', loading: 'Carregando...',
+    srcLabels: { instagram_comment: 'Comentários do Instagram', x: 'Menções no X', reddit: 'Menções no Reddit' } as Record<string, string>,
+    opTitle: 'Opiniões da Internet',
+    opSub: (n: number, k: number) => `${n} opiniões coletadas em ${k} fonte${k === 1 ? '' : 's'}`,
+    opNone: 'Nenhuma opinião coletada ainda — os canais abaixo já estão sendo monitorados',
+    noneYet: 'Nenhuma opinião ainda',
+    opCount: (n: number, neg: number) => `${n} opiniões${neg > 0 ? ` · ${neg} negativas` : ''}`,
+    whatSay: 'O que mais falam sobre o seu negócio', pctDesc: '% de opiniões (todas as fontes) que mencionam a palavra',
+    noCaption: '(sem legenda)',
+    noPostsTitle: 'Ainda sem posts publicados',
+    noPostsDesc: 'Assim que o Instagram Auto-post publicar seus primeiros posts (Configurações → Integrações), o ranking de desempenho aparece aqui.',
+    growth: 'Crescimento', growthSub: (n: number) => `Desempenho dos posts publicados no Instagram — ${n} posts analisados`,
+    best: '🔥 Melhores posts', worst: '📉 Posts com menos engajamento', themes: 'Temas que mais aparecem nesses posts',
+    perfNote: 'Desempenho medido por curtidas + comentários dos posts publicados via Instagram Auto-post.',
+    unknownErr: 'Erro desconhecido',
+    clickA: 'Clique em "', clickB: '" para checar se todos os links do seu negócio (site, Instagram, Google Maps, etc.) estão no ar.',
+    brokenN: (n: number) => `${n} ${n === 1 ? 'link com problema' : 'links com problema'}`,
+    linkLabels: {} as Record<string, string>,
+  },
+  en: {
+    loc: 'en-US', loading: 'Loading...',
+    srcLabels: { instagram_comment: 'Instagram comments', x: 'Mentions on X', reddit: 'Mentions on Reddit' } as Record<string, string>,
+    opTitle: 'Web Opinions',
+    opSub: (n: number, k: number) => `${n} opinions collected from ${k} source${k === 1 ? '' : 's'}`,
+    opNone: 'No opinions collected yet — the channels below are already being monitored',
+    noneYet: 'No opinions yet',
+    opCount: (n: number, neg: number) => `${n} opinions${neg > 0 ? ` · ${neg} negative` : ''}`,
+    whatSay: 'What people say most about your business', pctDesc: '% of opinions (all sources) that mention the word',
+    noCaption: '(no caption)',
+    noPostsTitle: 'No published posts yet',
+    noPostsDesc: 'Once Instagram Auto-post publishes your first posts (Settings → Integrations), the performance ranking will appear here.',
+    growth: 'Growth', growthSub: (n: number) => `Performance of posts published on Instagram — ${n} posts analyzed`,
+    best: '🔥 Best posts', worst: '📉 Lowest-engagement posts', themes: 'Themes that appear most in these posts',
+    perfNote: 'Performance measured by likes + comments on posts published via Instagram Auto-post.',
+    unknownErr: 'Unknown error',
+    clickA: 'Click "', clickB: '" to check that all your business links (website, Instagram, Google Maps, etc.) are up.',
+    brokenN: (n: number) => `${n} ${n === 1 ? 'link with a problem' : 'links with problems'}`,
+    linkLabels: { website_url: 'Website', instagram_url: 'Instagram', facebook_url: 'Facebook', tiktok_url: 'TikTok', google_maps_url: 'Google Maps', tripadvisor_url: 'TripAdvisor', reclame_aqui_url: 'Reclame Aqui', ifood_url: 'iFood' } as Record<string, string>,
+  },
+} as const
+
 export function ComingSoonTab({ icon, title, desc }: { icon: string; title: string; desc: string }) {
   const { lang } = useLang()
   return (
@@ -57,6 +100,7 @@ const ALWAYS_SHOWN_SOURCES = ['facebook', 'instagram_comment', 'x', 'reddit']
 
 export function WebOpinionsTab() {
   const { user } = useAuth()
+  const X = TX[useLang().lang]
   const [reviews, setReviews] = useState<OpinionReview[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -69,7 +113,7 @@ export function WebOpinionsTab() {
     })
   }, [user])
 
-  if (loading) return <div style={{ padding: '28px 32px', color: MUTED, fontSize: '14px' }}>Carregando...</div>
+  if (loading) return <div style={{ padding: '28px 32px', color: MUTED, fontSize: '14px' }}>{X.loading}</div>
 
   const bySource: Record<string, OpinionReview[]> = {}
   for (const r of reviews) (bySource[r.source] ??= []).push(r)
@@ -81,9 +125,9 @@ export function WebOpinionsTab() {
   return (
     <div>
       <div style={{ padding: '28px 32px 24px', borderBottom: `1px solid ${BORDER}` }}>
-        <h1 style={{ fontFamily: D, fontSize: '1.5rem', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>Opiniões da Internet</h1>
+        <h1 style={{ fontFamily: D, fontSize: '1.5rem', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>{X.opTitle}</h1>
         <p style={{ color: MUTED, fontSize: '13px' }}>
-          {reviews.length > 0 ? `${reviews.length} opiniões coletadas em ${activeSourceCount} fonte${activeSourceCount === 1 ? '' : 's'}` : 'Nenhuma opinião coletada ainda — os canais abaixo já estão sendo monitorados'}
+          {reviews.length > 0 ? X.opSub(reviews.length, activeSourceCount) : X.opNone}
         </p>
       </div>
 
@@ -93,7 +137,8 @@ export function WebOpinionsTab() {
         {/* Per-source breakdown */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '24px' }}>
           {Object.entries(bySource).map(([source, revs]) => {
-            const meta = SOURCE_META[source] ?? { label: source, icon: '💬' }
+            const base = SOURCE_META[source] ?? { label: source, icon: '💬' }
+            const meta = { ...base, label: X.srcLabels[source] ?? base.label }
             const withRating = revs.filter(r => r.rating != null)
             const avg = withRating.length ? (withRating.reduce((s, r) => s + (r.rating ?? 0), 0) / withRating.length).toFixed(1) : null
             const neg = revs.filter(r => r.sentiment === 'negative').length
@@ -106,7 +151,7 @@ export function WebOpinionsTab() {
                 </div>
                 <div style={{ fontFamily: D, fontSize: '1.6rem', fontWeight: 900, color: avg ? '#FBBF24' : MUTED, lineHeight: 1 }}>{avg ? `${avg}★` : `${revs.length}`}</div>
                 <div style={{ fontSize: '11px', color: MUTED, marginTop: '6px' }}>
-                  {empty ? 'Nenhuma opinião ainda' : `${revs.length} opiniões${neg > 0 ? ` · ${neg} negativas` : ''}`}
+                  {empty ? X.noneYet : X.opCount(revs.length, neg)}
                 </div>
               </div>
             )
@@ -116,8 +161,8 @@ export function WebOpinionsTab() {
         {/* Word frequency across everything */}
         {words.length > 0 && (
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '20px 24px' }}>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', marginBottom: '4px' }}>O que mais falam sobre o seu negócio</div>
-            <div style={{ fontSize: '11px', color: MUTED, marginBottom: '14px' }}>% de opiniões (todas as fontes) que mencionam a palavra</div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', marginBottom: '4px' }}>{X.whatSay}</div>
+            <div style={{ fontSize: '11px', color: MUTED, marginBottom: '14px' }}>{X.pctDesc}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
               {words.map(w => (
                 <div key={w.word} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -147,12 +192,13 @@ interface IgPost {
 }
 
 function PostRow({ post, rank }: { post: IgPost; rank: number }) {
+  const X = TX[useLang().lang]
   const engagement = (post.likes_count ?? 0) + (post.comments_count ?? 0)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 16px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
       <div style={{ fontFamily: D, fontWeight: 900, color: MUTED, fontSize: '13px', width: '18px', flexShrink: 0 }}>{rank}</div>
       <div style={{ flex: 1, minWidth: 0, fontSize: '12.5px', color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {post.caption ? post.caption.slice(0, 90) : '(sem legenda)'}
+        {post.caption ? post.caption.slice(0, 90) : X.noCaption}
       </div>
       <div style={{ display: 'flex', gap: '12px', flexShrink: 0, fontSize: '11.5px', color: MUTED }}>
         <span>❤️ {post.likes_count ?? 0}</span>
@@ -165,6 +211,7 @@ function PostRow({ post, rank }: { post: IgPost; rank: number }) {
 
 export function GrowthTab() {
   const { user } = useAuth()
+  const X = TX[useLang().lang]
   const [posts, setPosts] = useState<IgPost[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -178,7 +225,7 @@ export function GrowthTab() {
     })
   }, [user])
 
-  if (loading) return <div style={{ padding: '28px 32px', color: MUTED, fontSize: '14px' }}>Carregando...</div>
+  if (loading) return <div style={{ padding: '28px 32px', color: MUTED, fontSize: '14px' }}>{X.loading}</div>
 
   if (posts.length === 0) {
     return (
@@ -186,9 +233,9 @@ export function GrowthTab() {
         <InsightReport tabKey="crescimento" />
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px', padding: '60px', textAlign: 'center' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>📈</div>
-          <div style={{ fontFamily: D, fontSize: '1.2rem', fontWeight: 700, color: 'white', marginBottom: '8px' }}>Ainda sem posts publicados</div>
+          <div style={{ fontFamily: D, fontSize: '1.2rem', fontWeight: 700, color: 'white', marginBottom: '8px' }}>{X.noPostsTitle}</div>
           <p style={{ color: MUTED, fontSize: '13px', maxWidth: '400px', margin: '0 auto', lineHeight: 1.7 }}>
-            Assim que o Instagram Auto-post publicar seus primeiros posts (Configurações → Integrações), o ranking de desempenho aparece aqui.
+            {X.noPostsDesc}
           </p>
         </div>
       </div>
@@ -204,8 +251,8 @@ export function GrowthTab() {
   return (
     <div>
       <div style={{ padding: '28px 32px 24px', borderBottom: `1px solid ${BORDER}` }}>
-        <h1 style={{ fontFamily: D, fontSize: '1.5rem', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>Crescimento</h1>
-        <p style={{ color: MUTED, fontSize: '13px' }}>Desempenho dos posts publicados no Instagram — {posts.length} posts analisados</p>
+        <h1 style={{ fontFamily: D, fontSize: '1.5rem', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>{X.growth}</h1>
+        <p style={{ color: MUTED, fontSize: '13px' }}>{X.growthSub(posts.length)}</p>
       </div>
 
       <div style={{ padding: '24px 32px' }}>
@@ -213,13 +260,13 @@ export function GrowthTab() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
           <div>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '12px' }}>🔥 Melhores posts</div>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '12px' }}>{X.best}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '18px' }}>
               {top.map((p, i) => <PostRow key={p.id} post={p} rank={i + 1} />)}
             </div>
             {topWordsFromBest.length > 0 && (
               <div style={{ background: CARD, border: '1px solid rgba(74,222,128,0.15)', borderRadius: '12px', padding: '14px 16px' }}>
-                <div style={{ fontSize: '11px', color: MUTED, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Temas que mais aparecem nesses posts</div>
+                <div style={{ fontSize: '11px', color: MUTED, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{X.themes}</div>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                   {topWordsFromBest.map(w => (
                     <span key={w.word} style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '99px', background: 'rgba(74,222,128,0.1)', color: '#4ade80', textTransform: 'capitalize' }}>{w.word}</span>
@@ -230,13 +277,13 @@ export function GrowthTab() {
           </div>
 
           <div>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '12px' }}>📉 Posts com menos engajamento</div>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '12px' }}>{X.worst}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '18px' }}>
               {bottom.map((p, i) => <PostRow key={p.id} post={p} rank={i + 1} />)}
             </div>
             {topWordsFromWorst.length > 0 && (
               <div style={{ background: CARD, border: '1px solid rgba(248,113,113,0.15)', borderRadius: '12px', padding: '14px 16px' }}>
-                <div style={{ fontSize: '11px', color: MUTED, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Temas que mais aparecem nesses posts</div>
+                <div style={{ fontSize: '11px', color: MUTED, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{X.themes}</div>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                   {topWordsFromWorst.map(w => (
                     <span key={w.word} style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '99px', background: 'rgba(248,113,113,0.1)', color: '#f87171', textTransform: 'capitalize' }}>{w.word}</span>
@@ -247,7 +294,7 @@ export function GrowthTab() {
           </div>
         </div>
         <div style={{ marginTop: '16px', fontSize: '11px', color: 'rgba(255,255,255,0.25)' }}>
-          Desempenho medido por curtidas + comentários dos posts publicados via Instagram Auto-post.
+          {X.perfNote}
         </div>
       </div>
     </div>
@@ -275,6 +322,7 @@ export function LinkHealthTab() {
   const { session } = useAuth()
   const { lang } = useLang()
   const T = d[lang].posts.linkHealth
+  const X = TX[lang]
   const [links, setLinks] = useState<LinkCheck[] | null>(null)
   const [checkedAt, setCheckedAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -291,7 +339,7 @@ export function LinkHealthTab() {
         body: JSON.stringify({}),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Erro desconhecido')
+      if (!res.ok) throw new Error(data.error ?? X.unknownErr)
       setLinks(data.links)
       setCheckedAt(data.checked_at)
     } catch (e: unknown) {
@@ -327,7 +375,7 @@ export function LinkHealthTab() {
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px', padding: '60px', textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>🩺</div>
             <div style={{ color: MUTED, fontSize: '13px', maxWidth: '380px', margin: '0 auto' }}>
-              Clique em "{T.checkNow}" para checar se todos os links do seu negócio (site, Instagram, Google Maps, etc.) estão no ar.
+              {X.clickA}{T.checkNow}{X.clickB}
             </div>
           </div>
         ) : configuredCount === 0 ? (
@@ -338,7 +386,7 @@ export function LinkHealthTab() {
           <>
             {brokenCount > 0 && (
               <div style={{ marginBottom: '16px', padding: '5px 12px', display: 'inline-block', borderRadius: '99px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.2)', fontSize: '12px', color: '#f87171', fontWeight: 600 }}>
-                {brokenCount} {brokenCount === 1 ? 'link com problema' : 'links com problema'}
+                {lang === 'en' ? X.brokenN(brokenCount) : `${brokenCount} ${brokenCount === 1 ? 'link com problema' : 'links com problema'}`}
               </div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -349,7 +397,7 @@ export function LinkHealthTab() {
                 }}>
                   <span style={{ fontSize: '18px' }}>{CHANNEL_ICON[l.key] ?? '🔗'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'white' }}>{l.label}</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'white' }}>{X.linkLabels[l.key] ?? l.label}</div>
                     {l.url && <div style={{ fontSize: '11px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.url}</div>}
                     {l.status === 'broken' && l.error_reason && (
                       <div style={{ fontSize: '11.5px', color: '#f87171', marginTop: '4px', lineHeight: 1.5 }}>{l.error_reason}</div>
@@ -367,7 +415,7 @@ export function LinkHealthTab() {
             </div>
             {checkedAt && (
               <div style={{ marginTop: '14px', fontSize: '11px', color: 'rgba(255,255,255,0.25)', textAlign: 'right' }}>
-                {T.lastChecked}: {new Date(checkedAt).toLocaleString('pt-BR')}
+                {T.lastChecked}: {new Date(checkedAt).toLocaleString(X.loc)}
               </div>
             )}
           </>

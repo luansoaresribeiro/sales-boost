@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { useLang } from '../contexts/LanguageContext'
 
 const ORANGE = '#FF6D29'
 const CARD = '#150E08'
@@ -17,8 +18,15 @@ interface Report {
   created_at: string
 }
 
+const TX = {
+  pt: { err: 'Erro ao gerar relatório', title: 'Análise do agente', generating: 'Gerando...', refresh: '↻ Atualizar', generate: '▶ Gerar análise', empty: 'Clique em "Gerar análise" para ver uma interpretação dos dados desta aba e sugestões do que fazer a respeito.' },
+  en: { err: 'Error generating report', title: 'Agent analysis', generating: 'Generating...', refresh: '↻ Refresh', generate: '▶ Generate analysis', empty: 'Click "Generate analysis" to see an interpretation of this tab\'s data and suggestions on what to do about it.' },
+}
+
 export function InsightReport({ tabKey }: { tabKey: InsightTabKey }) {
   const { session } = useAuth()
+  const { lang } = useLang()
+  const t = TX[lang]
   const [report, setReport] = useState<Report | null>(null)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
@@ -46,7 +54,7 @@ export function InsightReport({ tabKey }: { tabKey: InsightTabKey }) {
         body: JSON.stringify({ tab_key: tabKey }),
       })
       const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error ?? 'Erro ao gerar relatório')
+      if (!res.ok || data.error) throw new Error(data.error ?? t.err)
       setReport(data.report as Report)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
@@ -61,21 +69,21 @@ export function InsightReport({ tabKey }: { tabKey: InsightTabKey }) {
       <div style={{ padding: '14px 20px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ fontSize: '15px' }}>🧠</span>
-          <span style={{ fontFamily: D, fontSize: '13px', fontWeight: 700, color: 'white' }}>Análise do agente</span>
+          <span style={{ fontFamily: D, fontSize: '13px', fontWeight: 700, color: 'white' }}>{t.title}</span>
           {report?.created_at && (
-            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>· {new Date(report.created_at).toLocaleDateString('pt-BR')}</span>
+            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>· {new Date(report.created_at).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR')}</span>
           )}
         </div>
         <button onClick={generate} disabled={generating}
           style={{ padding: '6px 14px', background: generating ? 'rgba(255,109,41,0.15)' : 'rgba(255,109,41,0.1)', color: ORANGE, fontWeight: 700, fontSize: '11px', borderRadius: '7px', border: '1px solid rgba(255,109,41,0.25)', cursor: generating ? 'not-allowed' : 'pointer', flexShrink: 0 }}>
-          {generating ? 'Gerando...' : report ? '↻ Atualizar' : '▶ Gerar análise'}
+          {generating ? t.generating : report ? t.refresh : t.generate}
         </button>
       </div>
       <div style={{ padding: '16px 20px' }}>
         {error && <div style={{ fontSize: '12px', color: '#f87171', marginBottom: report ? '10px' : 0 }}>{error}</div>}
         {!report && !error && (
           <div style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>
-            Clique em "Gerar análise" para ver uma interpretação dos dados desta aba e sugestões do que fazer a respeito.
+            {t.empty}
           </div>
         )}
         {report && (

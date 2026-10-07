@@ -1,7 +1,9 @@
 // Primitivas visuais + seções "acima da dobra e meio" do Performance.
 // (Content/anomalias/IA/recomendações ficam em performanceInsights.tsx.)
 import { Fragment, useState } from 'react'
+import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D } from './shared'
+import { PERF_TX, localeOf, KPI_LABEL_EN, SCORE_LABEL_EN, HEALTH_EN } from './performance.i18n'
 import {
   metricText, deltaOf, HEALTH_META,
   type PerformanceData, type Kpi, type MetricValue, type TrendPoint, type PerformanceScore,
@@ -35,16 +37,17 @@ export function DeltaBadge({ d, small }: { d: { pct: number; positive: boolean }
 }
 
 export function InfoTip({ tip }: { tip: { meaning: string; calc: string; matters: string; ifDown: string } }) {
+  const t = PERF_TX[useLang().lang]
   const [open, setOpen] = useState(false)
   return (
     <span style={{ position: 'relative', display: 'inline-flex' }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
       <span style={{ width: '15px', height: '15px', borderRadius: '99px', border: `1px solid ${BORDER}`, color: MUTED, fontSize: '9.5px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'help' }}>i</span>
       {open && (
         <div style={{ position: 'absolute', top: '20px', right: 0, zIndex: 20, width: '250px', background: '#0E0B0A', border: `1px solid ${BORDER}`, borderRadius: '10px', padding: '11px 13px', boxShadow: '0 12px 30px rgba(0,0,0,0.5)' }}>
-          <Row k="O que é" v={tip.meaning} />
-          <Row k="Como calculamos" v={tip.calc} />
-          <Row k="Por que importa" v={tip.matters} />
-          <Row k="Se estiver caindo" v={tip.ifDown} last />
+          <Row k={t.tipMeaning} v={tip.meaning} />
+          <Row k={t.tipCalc} v={tip.calc} />
+          <Row k={t.tipMatters} v={tip.matters} />
+          <Row k={t.tipIfDown} v={tip.ifDown} last />
         </div>
       )}
     </span>
@@ -108,15 +111,18 @@ export function Heatmap({ grid, rows, cols, max }: { grid: number[][]; rows: str
 
 // ── Header ──────────────────────────────────────────────────────────────
 export const RANGES = [
-  { key: '7d', label: '7 dias', days: 7 }, { key: '30d', label: '30 dias', days: 30 },
-  { key: '90d', label: '90 dias', days: 90 }, { key: '6m', label: '6 meses', days: 180 },
+  { key: '7d', label: '7 dias', labelEn: '7 days', days: 7 }, { key: '30d', label: '30 dias', labelEn: '30 days', days: 30 },
+  { key: '90d', label: '90 dias', labelEn: '90 days', days: 90 }, { key: '6m', label: '6 meses', labelEn: '6 months', days: 180 },
 ] as const
 export type RangeKey = typeof RANGES[number]['key']
 
 export function PerfHeader({ d, range, onRange, onSync, syncing }: {
   d: PerformanceData; range: RangeKey; onRange: (r: RangeKey) => void; onSync: () => void; syncing: boolean
 }) {
+  const { lang } = useLang()
+  const t = PERF_TX[lang]
   const h = HEALTH_META[d.health.level]
+  const healthLabel = lang === 'en' ? HEALTH_EN[d.health.level] ?? h.label : h.label
   const initials = d.username.slice(0, 2).toUpperCase()
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
@@ -127,9 +133,9 @@ export function PerfHeader({ d, range, onRange, onSync, syncing }: {
         <div>
           <div style={{ fontSize: '16px', fontWeight: 900, color: 'white', letterSpacing: '-0.02em' }}>@{d.username}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginTop: '2px' }}>
-            <span style={{ fontSize: '11px', color: MUTED }}>Sincronizado {syncLabel(d.lastSync)}</span>
+            <span style={{ fontSize: '11px', color: MUTED }}>{t.synced} {syncLabel(d.lastSync, lang)}</span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10.5px', fontWeight: 700, color: h.color, padding: '2px 8px', border: `1px solid ${h.color}44`, borderRadius: '99px', background: `${h.color}12` }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '99px', background: h.color }} /> Saúde: {h.label}
+              <span style={{ width: '6px', height: '6px', borderRadius: '99px', background: h.color }} /> {t.health} {healthLabel}
             </span>
           </div>
         </div>
@@ -139,42 +145,44 @@ export function PerfHeader({ d, range, onRange, onSync, syncing }: {
           {RANGES.map(r => (
             <button key={r.key} onClick={() => onRange(r.key)}
               style={{ padding: '6px 11px', background: range === r.key ? 'rgba(255,109,41,0.14)' : 'transparent', border: `1px solid ${range === r.key ? 'rgba(255,109,41,0.35)' : 'transparent'}`, borderRadius: '7px', color: range === r.key ? ORANGE : MUTED, fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>
-              {r.label}
+              {lang === 'en' ? r.labelEn : r.label}
             </button>
           ))}
         </div>
         <button onClick={onSync} disabled={syncing}
           style={{ padding: '8px 14px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '11.5px', border: 'none', borderRadius: '9px', cursor: syncing ? 'default' : 'pointer', fontFamily: D, opacity: syncing ? 0.6 : 1 }}>
-          {syncing ? 'Sincronizando…' : '↻ Sincronizar agora'}
+          {syncing ? t.syncing : t.syncNow}
         </button>
       </div>
     </div>
   )
 }
-function syncLabel(iso: string): string {
+function syncLabel(iso: string, lang: 'pt' | 'en'): string {
+  const t = PERF_TX[lang]
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
-  if (mins < 1) return 'agora mesmo'
-  if (mins < 60) return `há ${mins}min`
+  if (mins < 1) return t.syncedNow
+  if (mins < 60) return t.ago(`${mins}min`)
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `há ${hrs}h`
-  return `há ${Math.floor(hrs / 24)}d`
+  if (hrs < 24) return t.ago(`${hrs}h`)
+  return t.ago(`${Math.floor(hrs / 24)}d`)
 }
 
 // ── KPIs executivos ────────────────────────────────────────────────────────
 export function KpiCard({ kpi }: { kpi: Kpi }) {
+  const { lang } = useLang()
   const d = deltaOf(kpi.value, kpi.prev)
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '13px', padding: '13px 15px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '7px' }}>
-        <span style={{ fontSize: '10px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{kpi.label}</span>
+        <span style={{ fontSize: '10px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{lang === 'en' ? KPI_LABEL_EN[kpi.key] ?? kpi.label : kpi.label}</span>
         <InfoTip tip={kpi} />
       </div>
       <div style={{ fontSize: '20px', fontWeight: 800, color: kpi.value == null ? 'rgba(255,255,255,0.4)' : 'white', letterSpacing: '-0.02em' }}>
-        {metricText(kpi.value, kpi.format)}
+        {metricText(kpi.value, kpi.format, lang)}
       </div>
       <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
         <DeltaBadge d={d} small />
-        {d && <span style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.35)' }}>vs período anterior</span>}
+        {d && <span style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.35)' }}>{PERF_TX[lang].vsPrev}</span>}
       </div>
     </div>
   )
@@ -182,6 +190,7 @@ export function KpiCard({ kpi }: { kpi: Kpi }) {
 
 // ── Score ───────────────────────────────────────────────────────────────
 export function ScoreCard({ score }: { score: PerformanceScore }) {
+  const { lang } = useLang()
   const [sel, setSel] = useState<string | null>(null)
   const color = score.total >= 80 ? GREEN : score.total >= 60 ? '#8bd450' : score.total >= 40 ? '#FBBF24' : RED
   const R = 52, C = 2 * Math.PI * R
@@ -205,7 +214,7 @@ export function ScoreCard({ score }: { score: PerformanceScore }) {
             <button key={c.key} onClick={() => setSel(sel === c.key ? null : c.key)}
               style={{ textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: D }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '11px', color: MUTED, width: '96px', flexShrink: 0 }}>{c.label}</span>
+                <span style={{ fontSize: '11px', color: MUTED, width: '96px', flexShrink: 0 }}>{lang === 'en' ? SCORE_LABEL_EN[c.key] ?? c.label : c.label}</span>
                 <div style={{ flex: 1, height: '7px', borderRadius: '99px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
                   <div style={{ width: `${c.value}%`, height: '100%', background: ORANGE, borderRadius: '99px' }} />
                 </div>
@@ -221,13 +230,14 @@ export function ScoreCard({ score }: { score: PerformanceScore }) {
 }
 
 // ── Trend ───────────────────────────────────────────────────────────────
-const TREND_METRICS: { key: keyof TrendPoint; label: string }[] = [
-  { key: 'followers', label: 'Seguidores' }, { key: 'reach', label: 'Alcance' },
-  { key: 'impressions', label: 'Impressões' }, { key: 'engagement', label: 'Engajamento' },
-  { key: 'engagementRate', label: 'Taxa de eng.' }, { key: 'profileVisits', label: 'Visitas ao perfil' },
-  { key: 'websiteClicks', label: 'Cliques no link' }, { key: 'published', label: 'Publicações' },
+const TREND_KEYS: { key: keyof TrendPoint; tk: 'followers' | 'reach' | 'impressions' | 'engagement' | 'engRateShort' | 'profileVisits' | 'linkClicks' | 'published' }[] = [
+  { key: 'followers', tk: 'followers' }, { key: 'reach', tk: 'reach' },
+  { key: 'impressions', tk: 'impressions' }, { key: 'engagement', tk: 'engagement' },
+  { key: 'engagementRate', tk: 'engRateShort' }, { key: 'profileVisits', tk: 'profileVisits' },
+  { key: 'websiteClicks', tk: 'linkClicks' }, { key: 'published', tk: 'published' },
 ]
 export function TrendSection({ trend, days }: { trend: TrendPoint[]; days: number }) {
+  const t = PERF_TX[useLang().lang]
   const [metric, setMetric] = useState<keyof TrendPoint>('reach')
   const cur = trend.slice(-days)
   const prev = trend.slice(-days * 2, -days)
@@ -238,12 +248,12 @@ export function TrendSection({ trend, days }: { trend: TrendPoint[]; days: numbe
   const prevSum = (prevSeries ?? []).reduce((s, v) => s + v, 0)
   const d = prevSum ? deltaOf(curSum, prevSum) : null
   return (
-    <Panel title="Tendência de performance" icon="📈" right={
+    <Panel title={t.trendTitle} icon="📈" right={
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         {d && <DeltaBadge d={d} />}
         <select value={metric} onChange={e => setMetric(e.target.value as keyof TrendPoint)}
           style={{ padding: '6px 10px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '8px', color: 'white', fontSize: '11.5px', fontFamily: D, outline: 'none', cursor: 'pointer' }}>
-          {TREND_METRICS.map(m => <option key={m.key} value={m.key} style={{ background: '#0E0B0A' }}>{m.label}</option>)}
+          {TREND_KEYS.map(m => <option key={m.key} value={m.key} style={{ background: '#0E0B0A' }}>{t[m.tk]}</option>)}
         </select>
       </div>
     }>
@@ -251,19 +261,20 @@ export function TrendSection({ trend, days }: { trend: TrendPoint[]; days: numbe
         <>
           <LineChart points={series} prev={prevSeries} />
           <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '10px', color: MUTED }}>
-            <span><span style={{ display: 'inline-block', width: '18px', height: '2px', background: ORANGE, verticalAlign: 'middle', marginRight: '5px' }} />Período atual</span>
-            <span><span style={{ display: 'inline-block', width: '18px', borderTop: `2px dashed ${MUTED}`, verticalAlign: 'middle', marginRight: '5px' }} />Período anterior</span>
+            <span><span style={{ display: 'inline-block', width: '18px', height: '2px', background: ORANGE, verticalAlign: 'middle', marginRight: '5px' }} />{t.curPeriod}</span>
+            <span><span style={{ display: 'inline-block', width: '18px', borderTop: `2px dashed ${MUTED}`, verticalAlign: 'middle', marginRight: '5px' }} />{t.prevPeriod}</span>
           </div>
         </>
-      ) : <NotAvailable label="Esta métrica não está disponível para a conta conectada." />}
+      ) : <NotAvailable label={t.metricNA} />}
     </Panel>
   )
 }
 
 export function NotAvailable({ label }: { label?: string }) {
+  const t = PERF_TX[useLang().lang]
   return (
     <div style={{ padding: '20px', textAlign: 'center', border: `1px dashed ${BORDER}`, borderRadius: '10px', color: MUTED, fontSize: '11.5px' }}>
-      {label ?? 'Não disponível para esta conta.'}
+      {label ?? t.naDefault}
     </div>
   )
 }
@@ -278,23 +289,25 @@ export function StatLine({ label, value, color }: { label: string; value: string
   )
 }
 
-const MOMENTUM_META: Record<PerformanceData['audience']['momentum'], { label: string; color: string }> = {
-  accelerating: { label: 'Acelerando', color: GREEN }, stable: { label: 'Estável', color: '#8bd450' },
-  slowing: { label: 'Desacelerando', color: '#FBBF24' }, declining: { label: 'Em queda', color: RED },
+const MOMENTUM_COLOR: Record<PerformanceData['audience']['momentum'], string> = {
+  accelerating: GREEN, stable: '#8bd450', slowing: '#FBBF24', declining: RED,
 }
 export function AudienceSection({ a, trend, days }: { a: PerformanceData['audience']; trend: TrendPoint[]; days: number }) {
-  const m = MOMENTUM_META[a.momentum]
+  const { lang } = useLang()
+  const t = PERF_TX[lang]
+  const loc = localeOf(lang)
+  const m = { label: t.momentum[a.momentum], color: MOMENTUM_COLOR[a.momentum] }
   return (
-    <Panel title="Crescimento de audiência" icon="👥" right={
-      <span style={{ fontSize: '11px', fontWeight: 700, color: m.color }}>{a.velocityPerWeek >= 0 ? '+' : ''}{a.velocityPerWeek}/semana · {m.label}</span>
+    <Panel title={t.audTitle} icon="👥" right={
+      <span style={{ fontSize: '11px', fontWeight: 700, color: m.color }}>{a.velocityPerWeek >= 0 ? '+' : ''}{a.velocityPerWeek}{t.perWeek} · {m.label}</span>
     }>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
         <div>
-          <StatLine label="Seguidores no início" value={a.start.toLocaleString('pt-BR')} />
-          <StatLine label="Seguidores agora" value={a.current.toLocaleString('pt-BR')} />
-          <StatLine label="Novos (líquido)" value={`${a.net >= 0 ? '+' : ''}${a.net.toLocaleString('pt-BR')}`} color={a.net >= 0 ? GREEN : RED} />
-          <StatLine label="Ganhos / perdidos" value={`+${a.gained.toLocaleString('pt-BR')} / -${a.lost.toLocaleString('pt-BR')}`} />
-          <StatLine label="Taxa de crescimento" value={`${a.growthRate >= 0 ? '+' : ''}${a.growthRate}%`} color={a.growthRate >= 0 ? GREEN : RED} />
+          <StatLine label={t.startF} value={a.start.toLocaleString(loc)} />
+          <StatLine label={t.nowF} value={a.current.toLocaleString(loc)} />
+          <StatLine label={t.netNew} value={`${a.net >= 0 ? '+' : ''}${a.net.toLocaleString(loc)}`} color={a.net >= 0 ? GREEN : RED} />
+          <StatLine label={t.gainedLost} value={`+${a.gained.toLocaleString(loc)} / -${a.lost.toLocaleString(loc)}`} />
+          <StatLine label={t.growthRate} value={`${a.growthRate >= 0 ? '+' : ''}${a.growthRate}%`} color={a.growthRate >= 0 ? GREEN : RED} />
         </div>
         <div>
           <LineChart points={trend.slice(-days).map(p => p.followers)} height={120} color={GREEN} />
@@ -308,31 +321,32 @@ export function AudienceSection({ a, trend, days }: { a: PerformanceData['audien
 }
 
 export function ReachSection({ r }: { r: PerformanceData['reach'] }) {
+  const { lang } = useLang(); const t = PERF_TX[lang]
   const nf = r.nonFollowerPct
   return (
-    <Panel title="Alcance & Descoberta" icon="🔭">
+    <Panel title={t.reachTitle} icon="🔭">
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
         <div>
-          <StatLine label="Alcance total" value={metricText(r.total)} />
-          <StatLine label="Não-seguidores" value={metricText(r.nonFollowers)} color={ORANGE} />
-          <StatLine label="Seguidores" value={metricText(r.followers)} />
-          <StatLine label="Impressões" value={metricText(r.impressions)} />
-          <StatLine label="Alcance médio / conteúdo" value={metricText(r.avgPerContent)} />
-          <StatLine label="Crescimento do alcance" value={metricText(r.growth, 'pct')} color={(r.growth ?? 0) >= 0 ? GREEN : RED} />
+          <StatLine label={t.totalReach} value={metricText(r.total, 'int', lang)} />
+          <StatLine label={t.nonFollowers} value={metricText(r.nonFollowers, 'int', lang)} color={ORANGE} />
+          <StatLine label={t.followers} value={metricText(r.followers, 'int', lang)} />
+          <StatLine label={t.impressions} value={metricText(r.impressions, 'int', lang)} />
+          <StatLine label={t.avgPerContent} value={metricText(r.avgPerContent, 'int', lang)} />
+          <StatLine label={t.reachGrowth} value={metricText(r.growth, 'pct', lang)} color={(r.growth ?? 0) >= 0 ? GREEN : RED} />
         </div>
         <div>
           {nf != null ? (
             <>
-              <div style={{ fontSize: '11px', color: MUTED, marginBottom: '8px' }}>Seguidores vs não-seguidores</div>
+              <div style={{ fontSize: '11px', color: MUTED, marginBottom: '8px' }}>{t.fvn}</div>
               <div style={{ display: 'flex', height: '30px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${BORDER}` }}>
                 <div style={{ width: `${100 - nf}%`, background: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: 'white' }}>{100 - nf}%</div>
                 <div style={{ width: `${nf}%`, background: ORANGE, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800, color: '#000' }}>{nf}%</div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', color: MUTED, marginTop: '5px' }}>
-                <span>Seguidores</span><span>Não-seguidores (descoberta)</span>
+                <span>{t.followers}</span><span>{t.nonFollowersDisc}</span>
               </div>
             </>
-          ) : <NotAvailable label="Divisão de alcance não disponível para esta conta." />}
+          ) : <NotAvailable label={t.splitNA} />}
         </div>
       </div>
       <div style={{ marginTop: '12px', fontSize: '11.5px', color: 'white', lineHeight: 1.55, background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.15)', borderRadius: '9px', padding: '9px 12px' }}>
@@ -343,31 +357,32 @@ export function ReachSection({ r }: { r: PerformanceData['reach'] }) {
 }
 
 export function EngagementSection({ e }: { e: PerformanceData['engagement'] }) {
+  const { lang } = useLang(); const t = PERF_TX[lang]
   const parts: { k: string; label: string; value: MetricValue; delta: number; strong?: boolean }[] = [
-    { k: 'likes', label: 'Curtidas', value: e.likes, delta: e.breakdownDelta.likes },
-    { k: 'comments', label: 'Comentários', value: e.comments, delta: e.breakdownDelta.comments, strong: true },
-    { k: 'shares', label: 'Compart.', value: e.shares, delta: e.breakdownDelta.shares, strong: true },
-    { k: 'saves', label: 'Salvamentos', value: e.saves, delta: e.breakdownDelta.saves, strong: true },
+    { k: 'likes', label: t.likes, value: e.likes, delta: e.breakdownDelta.likes },
+    { k: 'comments', label: t.comments, value: e.comments, delta: e.breakdownDelta.comments, strong: true },
+    { k: 'shares', label: t.sharesShort, value: e.shares, delta: e.breakdownDelta.shares, strong: true },
+    { k: 'saves', label: t.saves, value: e.saves, delta: e.breakdownDelta.saves, strong: true },
   ]
   const maxV = Math.max(1, ...parts.map(p => Number(p.value ?? 0)))
   return (
-    <Panel title="Inteligência de engajamento" icon="💬" right={<span style={{ fontSize: '11px', color: MUTED }}>Taxa: <strong style={{ color: 'white' }}>{metricText(e.rate, 'pct')}</strong></span>}>
+    <Panel title={t.engTitle} icon="💬" right={<span style={{ fontSize: '11px', color: MUTED }}>{t.rate} <strong style={{ color: 'white' }}>{metricText(e.rate, 'pct', lang)}</strong></span>}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
         {parts.map(p => (
           <div key={p.k} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '11px', color: p.strong ? 'white' : MUTED, width: '92px', flexShrink: 0 }}>
-              {p.label}{p.strong && <span title="Sinal de alta intenção" style={{ color: ORANGE }}> ★</span>}
+              {p.label}{p.strong && <span title={t.highIntent} style={{ color: ORANGE }}> ★</span>}
             </span>
             <div style={{ flex: 1, height: '9px', borderRadius: '99px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
               <div style={{ width: `${(Number(p.value ?? 0) / maxV) * 100}%`, height: '100%', background: p.strong ? ORANGE : 'rgba(255,255,255,0.25)', borderRadius: '99px' }} />
             </div>
-            <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'white', width: '58px', textAlign: 'right' }}>{metricText(p.value)}</span>
+            <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'white', width: '58px', textAlign: 'right' }}>{metricText(p.value, 'int', lang)}</span>
             <span style={{ width: '52px', textAlign: 'right' }}><DeltaBadge d={{ pct: p.delta, positive: p.delta >= 0 }} small /></span>
           </div>
         ))}
       </div>
       <div style={{ marginTop: '12px', fontSize: '11.5px', color: 'white', lineHeight: 1.55, background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.15)', borderRadius: '9px', padding: '9px 12px' }}>
-        💡 {e.note} <span style={{ color: MUTED }}>Priorizamos salvamentos, compartilhamentos e comentários (★) por serem sinais de intenção mais alta que curtidas.</span>
+        💡 {e.note} <span style={{ color: MUTED }}>{t.engNoteTail}</span>
       </div>
     </Panel>
   )

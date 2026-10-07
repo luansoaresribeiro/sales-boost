@@ -10,10 +10,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { CompanyData } from '../../../contexts/CompanyContext'
 import { useAuth } from '../../../contexts/AuthContext'
+import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import { useDemoMode } from './growthDemo'
 import { buildPerformanceDemo, type PerformanceData, type Recommendation } from './performanceDemo'
 import { proposeAgentAction } from '../../../lib/agentActions'
+import { PERF_TX, localeOf } from './performance.i18n'
 import logo from '../../../assets/logo.png'
 import {
   PerfHeader, KpiCard, ScoreCard, TrendSection, AudienceSection, ReachSection,
@@ -33,6 +35,8 @@ type Company = Pick<CompanyData, 'id' | 'business_name' | 'instagram_user_id' | 
 
 export default function PerformanceTab({ company, onCreateContent }: { company: Company; onCreateContent?: (prompt: string) => void }) {
   const { session } = useAuth()
+  const { lang } = useLang()
+  const t = PERF_TX[lang]
   const navigate = useNavigate()
   const [demoMode] = useDemoMode(company.id)
   const [range, setRange] = useState<RangeKey>('30d')
@@ -45,7 +49,7 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
   const [syncError, setSyncError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
-  const demo = useMemo(() => buildPerformanceDemo(company), [company])
+  const demo = useMemo(() => buildPerformanceDemo(company, lang), [company, lang])
 
   const load = async (force = false) => {
     if (!session) return
@@ -60,7 +64,7 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
       if (d?.connected && d?.score) setLive(d as PerformanceData)
       else { setLive(null); if (d?.error) setSyncError(String(d.error)) }
     } catch (err) {
-      setSyncError(err instanceof Error ? err.message : 'Erro ao sincronizar')
+      setSyncError(err instanceof Error ? err.message : t.syncErr)
     } finally {
       setSyncing(false)
       setFirstLoadDone(true)
@@ -81,7 +85,7 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
       try {
         await proposeAgentAction(session.access_token, {
           company_id: company.id,
-          agent_key: 'marketing', agent_name: 'Agente de Marketing',
+          agent_key: 'marketing', agent_name: lang === 'en' ? 'Marketing Agent' : 'Agente de Marketing',
           action_type: 'create_content', channel: 'instagram', source: 'performance',
           title: r.title, description: r.action,
           agent_interpretation: r.reason, reason: r.reason, expected_outcome: r.objective,
@@ -89,17 +93,17 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
           risk_level: 'low', priority: r.priority === 'high' ? 'high' : 'normal',
           // Sem forçar: o motor decide auto/manual pela config de Modo automático.
         })
-        setToast('Recomendação enviada pra Central de Approvals — abra "Aprovações" pra revisar (ou já executa, se o Modo automático estiver ligado).')
+        setToast(t.toastApprovals)
         setTimeout(() => setToast(null), 6000)
         return
       } catch { /* cai no fallback abaixo */ }
     }
     onCreateContent?.(r.prompt)
-    setToast('Ideia copiada. Abra a aba Conteúdo → Orgânico pra gerar o rascunho.')
+    setToast(t.toastCopied)
     setTimeout(() => setToast(null), 5000)
   }
 
-  if (!firstLoadDone && !connected && !demoMode) return <BrandLoading label="Buscando seus dados do Instagram…" />
+  if (!firstLoadDone && !connected && !demoMode) return <BrandLoading label={t.loadingIg} />
 
   // Estado 3: empty state premium (não conectado, sem modo demonstração).
   if (!connected && !demoMode) {
@@ -116,19 +120,19 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
 
       {/* Banner de estado dos dados */}
       {connected ? (
-        <Banner tone="green">🟢 <strong>Dados reais</strong> da conta @{data.username} — atualizados direto do Instagram. Métricas sem permissão da API aparecem como "Não disponível" (nunca inventamos número).</Banner>
+        <Banner tone="green">🟢 <strong>{t.realData}</strong>{t.realDataTail}{data.username}{t.realDataTail2}</Banner>
       ) : (
-        <Banner tone="amber">⏳ <strong>Modo demonstração.</strong> Estes números são exemplos pra você ver o produto. Conecte seu Instagram em <strong>Configurações → Conexões</strong> — aí tudo aqui vira dado real da sua conta, sem mudar o design.</Banner>
+        <Banner tone="amber">⏳ <strong>{t.demoBanner}</strong>{t.demoBannerTail}<strong>{t.demoBannerPath}</strong>{t.demoBannerEnd}</Banner>
       )}
 
-      {syncError && <Banner tone="red">⚠️ Não consegui sincronizar agora: {syncError}. Os dados podem estar desatualizados. Tente "Sincronizar agora".</Banner>}
+      {syncError && <Banner tone="red">⚠️ {t.syncFail} {syncError}. {t.syncFailTail}</Banner>}
 
       <PerfHeader d={data} range={range} onRange={setRange} onSync={() => load(true)} syncing={syncing} />
 
       {/* Acima da dobra: score + KPIs principais */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 0.9fr) 1.5fr', gap: '14px', alignItems: 'stretch' }}>
-        <Panel title="Score de performance" icon="⚡"><ScoreCard score={data.score} /></Panel>
-        <Panel title="Visão executiva" icon="📌">
+        <Panel title={t.scoreTitle} icon="⚡"><ScoreCard score={data.score} /></Panel>
+        <Panel title={t.execTitle} icon="📌">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '9px' }}>
             {data.kpis.slice(0, 6).map(k => <KpiCard key={k.key} kpi={k} />)}
           </div>
@@ -194,34 +198,38 @@ function BrandLoading({ label }: { label: string }) {
 }
 
 function SyncFooter({ data, connected, syncing, error }: { data: PerformanceData; connected: boolean; syncing: boolean; error: string | null }) {
-  const status = syncing ? 'Sincronizando…' : error ? 'Erro na sincronização' : connected ? 'Conectado' : 'Modo demonstração'
+  const { lang } = useLang()
+  const t = PERF_TX[lang]
+  const status = syncing ? t.syncing : error ? t.syncErrStatus : connected ? t.connected : t.demoStatus
   const color = syncing ? '#FBBF24' : error ? RED : connected ? GREEN : MUTED
-  const last = new Date(data.lastSync).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  const last = new Date(data.lastSync).toLocaleString(localeOf(lang), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', padding: '11px 16px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', fontSize: '10.5px', color: MUTED }}>
-      <span>Camada de dados isolada por empresa (Supabase) · snapshots históricos pra comparar períodos.</span>
+      <span>{t.isolated}</span>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
         <span style={{ width: '6px', height: '6px', borderRadius: '99px', background: color }} />
-        <span style={{ color }}>{status}</span> · última sincronização {last}
+        <span style={{ color }}>{status}</span> · {t.lastSync} {last}
       </span>
     </div>
   )
 }
 
 function EmptyState({ hasInstagram, onConnect }: { hasInstagram: boolean; onConnect: () => void }) {
+  const { lang } = useLang()
+  const t = PERF_TX[lang]
   return (
     <div style={{ padding: '56px 32px', textAlign: 'center', background: 'linear-gradient(135deg, rgba(255,109,41,0.08), rgba(255,109,41,0.01))', border: `1px solid ${BORDER}`, borderRadius: '18px' }}>
       <div style={{ fontSize: '44px', marginBottom: '14px' }}>📊</div>
-      <div style={{ fontSize: '18px', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '8px' }}>Conecte o Instagram pra desbloquear o Performance</div>
+      <div style={{ fontSize: '18px', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '8px' }}>{t.emptyTitle}</div>
       <div style={{ fontSize: '13px', color: MUTED, maxWidth: '460px', margin: '0 auto 20px', lineHeight: 1.6 }}>
-        O Performance transforma os dados reais do seu Instagram em um centro de inteligência: score, crescimento, alcance, melhores conteúdos, melhor horário e as próximas ações — tudo com dado de verdade, nada inventado.
+        {t.emptyDesc}
       </div>
       <button onClick={onConnect}
         style={{ padding: '11px 22px', background: ORANGE, color: '#000', fontWeight: 800, fontSize: '13px', border: 'none', borderRadius: '11px', cursor: 'pointer', fontFamily: D }}>
-        {hasInstagram ? 'Conectar Instagram' : 'Conectar Instagram'}
+        {hasInstagram ? t.connectIg : t.connectIg}
       </button>
       <div style={{ marginTop: '16px', fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
-        Prefere só ver como fica? Ligue o <strong style={{ color: MUTED }}>Modo demonstração</strong> no topo do Growth OS.
+        {t.emptyHint}<strong style={{ color: MUTED }}>{t.demoMode}</strong>{t.emptyHintEnd}
       </div>
     </div>
   )

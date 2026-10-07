@@ -2,12 +2,47 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { CompanyData } from '../../../contexts/CompanyContext'
 import { useAuth } from '../../../contexts/AuthContext'
+import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import {
   buildMetaAdsDemo, fmtBRL, fmtNum, AD_STATUS_META, AD_RECO_META, useDemoMode,
   type DemoAdCampaign, type AdRecommendation,
 } from './growthDemo'
 import DataVeil, { veilMode } from './DataVeil'
+import { AD_STATUS_EN, AD_RECO_EN } from './labels.i18n'
+
+const TX = {
+  pt: {
+    expired: 'Token de acesso da Meta expirou — reconecte em Conexões.', unknown: 'Erro desconhecido',
+    invested: 'Investido', revenue: 'Receita', ctrAvg: 'CTR médio', cpcAvg: 'CPC médio', cpaAvg: 'CPA médio', conversions: 'Conversões',
+    execReco: 'Executar recomendação da IA',
+    realBanner: 'Dados reais', realBannerA: ' da sua conta de anúncios', realBannerB: ' — últimos 30 dias. Investido, ROAS, campanhas e conversões vêm direto da Meta. Públicos, criativos e recomendações da IA seguem sendo a leitura do agente; "Executar recomendação" continua passando pela sua aprovação.',
+    demoBanner: 'Modo demonstração.', demoBannerA: ' Estes números são fictícios, só pra explorar o layout. Conecte sua conta em ', demoBannerPath: 'Conexões → Meta Ads Manager', demoBannerB: ' pra ver os reais. "Executar recomendação" aqui é uma simulação.',
+    errTitle: 'Erro ao buscar os dados da Meta', connTitle: 'Conecte o Meta Ads',
+    errMsg: 'A conexão existe, mas a Meta devolveu um erro — veja abaixo pra saber o que corrigir.',
+    connMsg: 'Estes números são um exemplo do layout. Conecte sua conta de anúncios pra ver investido, ROAS e campanhas de verdade — ou ligue o Modo demonstração no topo do Growth OS.',
+    goConn: 'Ir pra Conexões', connectAds: 'Conectar Meta Ads', last30: 'Últimos 30 dias', campaigns: '📊 Campanhas',
+    noCamp: 'Nenhuma campanha ativa na sua conta nos últimos 30 dias.',
+    noReadTitle: 'Ainda sem essa leitura real', noReadMsg: 'Públicos, criativos e recomendações da IA ainda são a leitura do agente, não um dado direto da Marketing API. Ligue o Modo demonstração pra ver o layout com um exemplo.',
+    seeExample: 'Ver exemplo (modo demonstração)', audiences: '👥 Públicos que convertem', creatives: '🎬 Criativos', recos: '✨ Recomendações da IA', executedOf: 'executadas',
+    conv: 'Conv.', share: 'Share',
+  },
+  en: {
+    expired: 'Your Meta access token expired — reconnect in Connections.', unknown: 'Unknown error',
+    invested: 'Spend', revenue: 'Revenue', ctrAvg: 'Avg. CTR', cpcAvg: 'Avg. CPC', cpaAvg: 'Avg. CPA', conversions: 'Conversions',
+    execReco: 'Run AI recommendation',
+    realBanner: 'Real data', realBannerA: ' from your ad account', realBannerB: ' — last 30 days. Spend, ROAS, campaigns and conversions come straight from Meta. Audiences, creatives and AI recommendations are still the agent\'s reading; "Run recommendation" still goes through your approval.',
+    demoBanner: 'Demo mode.', demoBannerA: ' These numbers are fictional, just to explore the layout. Connect your account in ', demoBannerPath: 'Connections → Meta Ads Manager', demoBannerB: ' to see the real ones. "Run recommendation" here is a simulation.',
+    errTitle: 'Error fetching Meta data', connTitle: 'Connect Meta Ads',
+    errMsg: 'The connection exists, but Meta returned an error — see below to know what to fix.',
+    connMsg: 'These numbers are an example of the layout. Connect your ad account to see real spend, ROAS and campaigns — or turn on Demo mode at the top of Growth OS.',
+    goConn: 'Go to Connections', connectAds: 'Connect Meta Ads', last30: 'Last 30 days', campaigns: '📊 Campaigns',
+    noCamp: 'No active campaign in your account in the last 30 days.',
+    noReadTitle: 'No real reading for this yet', noReadMsg: 'Audiences, creatives and AI recommendations are still the agent\'s reading, not data straight from the Marketing API. Turn on Demo mode to see the layout with an example.',
+    seeExample: 'See an example (demo mode)', audiences: '👥 Audiences that convert', creatives: '🎬 Creatives', recos: '✨ AI recommendations', executedOf: 'executed',
+    conv: 'Conv.', share: 'Share',
+  },
+} as const
 
 interface LiveAds {
   account_name?: string
@@ -37,7 +72,10 @@ function Kpi({ label, value, color }: { label: string; value: string; color?: st
 
 // ── Campaign row ─────────────────────────────────────────────────────────
 function CampaignRow({ c }: { c: DemoAdCampaign }) {
+  const { lang } = useLang()
+  const t = TX[lang]
   const st = AD_STATUS_META[c.status]
+  const stLabel = lang === 'en' ? AD_STATUS_EN[c.status] ?? st.label : st.label
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.8fr 0.8fr 0.7fr 0.7fr 0.8fr', gap: '8px', alignItems: 'center', padding: '11px 14px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
       <div style={{ minWidth: 0 }}>
@@ -45,15 +83,15 @@ function CampaignRow({ c }: { c: DemoAdCampaign }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '3px' }}>
           <span style={{ fontSize: '9.5px', color: MUTED }}>{c.objective}</span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '9px', fontWeight: 700, color: st.color }}>
-            <span style={{ width: '5px', height: '5px', borderRadius: '99px', background: st.color }} />{st.label}
+            <span style={{ width: '5px', height: '5px', borderRadius: '99px', background: st.color }} />{stLabel}
           </span>
         </div>
       </div>
-      <Metric label="Investido" value={fmtBRL(c.spend, true)} />
+      <Metric label={t.invested} value={fmtBRL(c.spend, true, lang)} />
       <Metric label="ROAS" value={`${c.roas}x`} color={roasColor(c.roas)} />
       <Metric label="CTR" value={`${c.ctr}%`} />
-      <Metric label="CPC" value={fmtBRL(c.cpc)} />
-      <Metric label="CPA" value={fmtBRL(c.cpa)} />
+      <Metric label="CPC" value={fmtBRL(c.cpc, false, lang)} />
+      <Metric label="CPA" value={fmtBRL(c.cpa, false, lang)} />
     </div>
   )
 }
@@ -69,13 +107,16 @@ function Metric({ label, value, color }: { label: string; value: string; color?:
 
 // ── Recommendation card ──────────────────────────────────────────────────
 function RecoCard({ r, executed, onExecute }: { r: AdRecommendation; executed: boolean; onExecute: () => void }) {
+  const { lang } = useLang()
+  const t = TX[lang]
   const meta = AD_RECO_META[r.kind]
+  const metaLabel = lang === 'en' ? AD_RECO_EN[r.kind] ?? meta.label : meta.label
   const impactColor = r.impact === 'high' ? RED : r.impact === 'medium' ? '#FBBF24' : MUTED
   return (
     <div style={{ background: CARD, border: `1px solid ${executed ? 'rgba(74,222,128,0.3)' : BORDER}`, borderRadius: '12px', padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '5px' }}>
         <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>{meta.icon} {r.title}</span>
-        <span style={{ fontSize: '9px', fontWeight: 700, color: impactColor, textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0 }}>{meta.label}</span>
+        <span style={{ fontSize: '9px', fontWeight: 700, color: impactColor, textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0 }}>{metaLabel}</span>
       </div>
       <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55, marginBottom: '12px' }}>{r.description}</div>
       {executed ? (
@@ -85,7 +126,7 @@ function RecoCard({ r, executed, onExecute }: { r: AdRecommendation; executed: b
       ) : (
         <button onClick={onExecute}
           style={{ padding: '7px 15px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '11.5px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: D }}>
-          Executar recomendação da IA
+          {t.execReco}
         </button>
       )}
     </div>
@@ -93,7 +134,9 @@ function RecoCard({ r, executed, onExecute }: { r: AdRecommendation; executed: b
 }
 
 export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name'> }) {
-  const demo = useMemo(() => buildMetaAdsDemo(company), [company])
+  const { lang } = useLang()
+  const t = TX[lang]
+  const demo = useMemo(() => buildMetaAdsDemo(company, lang), [company, lang])
   const { session } = useAuth()
   const navigate = useNavigate()
   const [demoMode, setDemoMode] = useDemoMode(company.id)
@@ -122,7 +165,7 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
         if (d?.connected && d.totals && !d.error) { setLive(d as LiveAds); setApiError(false); setApiErrorDetail(null) }
         else if (d?.connected && (d.error || d.expired)) {
           setApiError(true)
-          setApiErrorDetail(String(d.error ?? (d.expired ? 'Token de acesso da Meta expirou — reconecte em Conexões.' : 'Erro desconhecido')))
+          setApiErrorDetail(String(d.error ?? (d.expired ? t.expired : t.unknown)))
           console.error('meta-ads-insights:', d.error ?? 'token expirado')
         }
       })
@@ -133,6 +176,7 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
         console.error('meta-ads-insights fetch falhou:', e)
       })
     return () => { alive = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company.id, session])
 
   // Estado da fonte de dado → decide real / demo / borrado / erro.
@@ -153,41 +197,41 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
     <div style={{ display: 'flex', flexDirection: 'column', gap: '26px' }}>
       {mode === 'real' && (
         <div style={{ padding: '12px 16px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-          🟢 <strong>Dados reais</strong> da sua conta de anúncios{live?.account_name ? ` (${live.account_name})` : ''} — últimos 30 dias. Investido, ROAS, campanhas e conversões vêm direto da Meta. Públicos, criativos e recomendações da IA seguem sendo a leitura do agente; "Executar recomendação" continua passando pela sua aprovação.
+          🟢 <strong>{t.realBanner}</strong>{t.realBannerA}{live?.account_name ? ` (${live.account_name})` : ''}{t.realBannerB}
         </div>
       )}
       {mode === 'demo' && (
         <div style={{ padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-          🔵 <strong>Modo demonstração.</strong> Estes números são fictícios, só pra explorar o layout. Conecte sua conta em <strong>Conexões → Meta Ads Manager</strong> pra ver os reais. "Executar recomendação" aqui é uma simulação.
+          🔵 <strong>{t.demoBanner}</strong>{t.demoBannerA}<strong>{t.demoBannerPath}</strong>{t.demoBannerB}
         </div>
       )}
 
       <DataVeil mode={mode}
-        title={apiError ? 'Erro ao buscar os dados da Meta' : 'Conecte o Meta Ads'}
-        message={apiError ? 'A conexão existe, mas a Meta devolveu um erro — veja abaixo pra saber o que corrigir.' : 'Estes números são um exemplo do layout. Conecte sua conta de anúncios pra ver investido, ROAS e campanhas de verdade — ou ligue o Modo demonstração no topo do Growth OS.'}
+        title={apiError ? t.errTitle : t.connTitle}
+        message={apiError ? t.errMsg : t.connMsg}
         errorDetail={apiErrorDetail}
-        cta={{ label: apiError ? 'Ir pra Conexões' : 'Conectar Meta Ads', onClick: () => navigate('/dashboard/settings?tab=conexoes') }}>
+        cta={{ label: apiError ? t.goConn : t.connectAds, onClick: () => navigate('/dashboard/settings?tab=conexoes') }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '26px' }}>
       {/* KPIs agregados */}
       <section>
-        <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '11px' }}>Últimos 30 dias</div>
+        <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '11px' }}>{t.last30}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px' }}>
-          <Kpi label="Investido" value={fmtBRL(totals.spend, true)} />
-          <Kpi label="Receita" value={fmtBRL(totals.revenue, true)} />
+          <Kpi label={t.invested} value={fmtBRL(totals.spend, true, lang)} />
+          <Kpi label={t.revenue} value={fmtBRL(totals.revenue, true, lang)} />
           <Kpi label="ROAS" value={`${totals.roas}x`} color={roasColor(totals.roas)} />
-          <Kpi label="CTR médio" value={`${totals.ctr}%`} />
-          <Kpi label="CPC médio" value={fmtBRL(totals.cpc)} />
-          <Kpi label="CPA médio" value={fmtBRL(totals.cpa)} />
-          <Kpi label="Conversões" value={fmtNum(totals.conversions)} />
+          <Kpi label={t.ctrAvg} value={`${totals.ctr}%`} />
+          <Kpi label={t.cpcAvg} value={fmtBRL(totals.cpc, false, lang)} />
+          <Kpi label={t.cpaAvg} value={fmtBRL(totals.cpa, false, lang)} />
+          <Kpi label={t.conversions} value={fmtNum(totals.conversions, lang)} />
         </div>
       </section>
 
       {/* Campanhas */}
       <section>
-        <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>📊 Campanhas</div>
+        <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>{t.campaigns}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
           {campaigns.length === 0
-            ? <div style={{ fontSize: '12px', color: MUTED, padding: '14px', textAlign: 'center', border: `1px dashed ${BORDER}`, borderRadius: '10px' }}>Nenhuma campanha ativa na sua conta nos últimos 30 dias.</div>
+            ? <div style={{ fontSize: '12px', color: MUTED, padding: '14px', textAlign: 'center', border: `1px dashed ${BORDER}`, borderRadius: '10px' }}>{t.noCamp}</div>
             : campaigns.map(c => <CampaignRow key={c.id} c={c} />)}
         </div>
       </section>
@@ -196,22 +240,22 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
           API não devolve essa leitura hoje); independente das KPIs/campanhas
           acima, que já podem estar reais. */}
       <DataVeil mode={veilMode({ hasReal: false, demoMode })}
-        title="Ainda sem essa leitura real"
-        message="Públicos, criativos e recomendações da IA ainda são a leitura do agente, não um dado direto da Marketing API. Ligue o Modo demonstração pra ver o layout com um exemplo."
-        cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+        title={t.noReadTitle}
+        message={t.noReadMsg}
+        cta={{ label: t.seeExample, onClick: () => setDemoMode(true) }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '26px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '20px', alignItems: 'start' }}>
         {/* Públicos */}
         <section>
-          <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>👥 Públicos que convertem</div>
+          <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>{t.audiences}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
             {demo.audiences.map((a, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '11px 14px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
                 <span style={{ fontSize: '12px', color: 'white', fontWeight: 600 }}>{a.name}</span>
                 <div style={{ display: 'flex', gap: '14px', flexShrink: 0 }}>
-                  <Metric label="CPL" value={fmtBRL(a.cpl)} />
-                  <Metric label="Conv." value={fmtNum(a.conversions)} />
-                  <Metric label="Share" value={`${a.share}%`} color={ORANGE} />
+                  <Metric label="CPL" value={fmtBRL(a.cpl, false, lang)} />
+                  <Metric label={t.conv} value={fmtNum(a.conversions, lang)} />
+                  <Metric label={t.share} value={`${a.share}%`} color={ORANGE} />
                 </div>
               </div>
             ))}
@@ -220,17 +264,18 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
 
         {/* Criativos */}
         <section>
-          <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>🎬 Criativos</div>
+          <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>{t.creatives}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
             {demo.creatives.map((c, i) => {
               const st = AD_STATUS_META[c.status]
+              const stLabel = lang === 'en' ? AD_STATUS_EN[c.status] ?? st.label : st.label
               return (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '11px 14px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '12px', color: 'white', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '3px' }}>
                       <span style={{ fontSize: '9.5px', color: MUTED }}>{c.type}</span>
-                      <span style={{ fontSize: '9px', fontWeight: 700, color: st.color }}>· {st.label}</span>
+                      <span style={{ fontSize: '9px', fontWeight: 700, color: st.color }}>· {stLabel}</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '14px', flexShrink: 0 }}>
@@ -247,8 +292,8 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
       {/* Recomendações da IA */}
       <section>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '11px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 800, color: 'white' }}>✨ Recomendações da IA</span>
-          <span style={{ fontSize: '10.5px', color: MUTED }}>{executed.size}/{demo.recommendations.length} executadas</span>
+          <span style={{ fontSize: '13px', fontWeight: 800, color: 'white' }}>{t.recos}</span>
+          <span style={{ fontSize: '10.5px', color: MUTED }}>{executed.size}/{demo.recommendations.length} {t.executedOf}</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '10px' }}>
           {demo.recommendations.map(r => (

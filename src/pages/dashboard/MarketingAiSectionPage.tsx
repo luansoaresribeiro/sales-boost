@@ -3,8 +3,9 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import type { CompanyData } from '../../contexts/CompanyContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
+import { useLang } from '../../contexts/LanguageContext'
 import { useMarketingAiData } from './marketingAi/useMarketingAiData'
-import { CARD, MUTED, BORDER, D, PILLAR_ICON, IMPACT_COLOR, IMPACT_LABEL, timeAgo, type ActivityLogRow, type Insight, type TrackingSnapshot, type MarketingAiConfig } from './marketingAi/shared'
+import { CARD, MUTED, BORDER, D, PILLAR_ICON, IMPACT_COLOR, IMPACT_LABEL, IMPACT_LABEL_EN, timeAgo, type ActivityLogRow, type Insight, type TrackingSnapshot, type MarketingAiConfig } from './marketingAi/shared'
 import TrackingTab from './marketingAi/TrackingTab'
 import ContentSection from './marketingAi/ContentSection'
 import MarketIntelTab from './marketingAi/MarketIntelTab'
@@ -29,7 +30,7 @@ import { buildGrowthDemo } from './marketingAi/growthDemo'
 
 const ORANGE = '#FF6D29'
 
-const SECTION_TITLE: Record<string, string> = {
+const SECTION_TITLE_BY_LANG: Record<'pt' | 'en', Record<string, string>> = { pt: {
   tracking: 'Tracking', content: 'Agente de Conteúdo e Campanha', dados: 'Agente de Dados', estrategia: 'Agente de Estratégia', conversao: 'Agente de Conversão', brain: 'Aprendizado',
   overview: 'Visão Geral', experiments: 'Experimentos', tools: 'Configuração', timeline: 'Central de Execução', reports: 'Relatórios',
   conexoes: 'Conexões', configuracao: 'Configuração dos Agentes', avaliacoes: 'Avaliações', context: 'Contexto do Negócio',
@@ -37,7 +38,31 @@ const SECTION_TITLE: Record<string, string> = {
   // DadosSection) — o link antigo continua funcionando, só cai direto na
   // sub-aba certa em vez de ser uma página solta.
   insights: 'Agente de Dados', 'saude-meta': 'Agente de Dados',
-}
+}, en: {
+  tracking: 'Tracking', content: 'Content & Campaign Agent', dados: 'Data Agent', estrategia: 'Strategy Agent', conversao: 'Conversion Agent', brain: 'Learning',
+  overview: 'Overview', experiments: 'Experiments', tools: 'Settings', timeline: 'Execution Center', reports: 'Reports',
+  conexoes: 'Connections', configuracao: 'Agent Settings', avaliacoes: 'Reviews', context: 'Business Context',
+  insights: 'Data Agent', 'saude-meta': 'Data Agent',
+} }
+
+const TX = {
+  pt: {
+    loading: 'Carregando...', notActive: 'Marketing AI ainda não foi ativado',
+    notActiveDesc: 'A ativação é feita pela equipe Sales Boost, configurando a marca, o público e os concorrentes. Fale com a gente pra ativar.',
+    back: '← Voltar', followers: 'Seguidores', pendingApproval: 'Conteúdo esperando aprovação', newRecs: 'Recomendações novas', competitors: 'Concorrentes monitorados',
+    openInsights: 'Insights em aberto', noInsights: 'Nenhum insight aberto agora.', recent: 'Atividade recente', noActivity: 'Nenhuma atividade ainda.',
+    performance: 'Performance', market: 'Inteligência de Mercado', visual: 'Estilos e Visuais', insights: 'Insights', metaHealth: 'Saúde da Meta',
+    funnel: 'Funil de Vendas', service: 'Atendimento', engagement: 'Engagement',
+  },
+  en: {
+    loading: 'Loading...', notActive: 'Marketing AI has not been activated yet',
+    notActiveDesc: 'Activation is done by the Sales Boost team, setting up the brand, audience and competitors. Contact us to activate it.',
+    back: '← Back', followers: 'Followers', pendingApproval: 'Content awaiting approval', newRecs: 'New recommendations', competitors: 'Competitors monitored',
+    openInsights: 'Open insights', noInsights: 'No open insights right now.', recent: 'Recent activity', noActivity: 'No activity yet.',
+    performance: 'Performance', market: 'Market Intelligence', visual: 'Styles & Visuals', insights: 'Insights', metaHealth: 'Meta Health',
+    funnel: 'Sales Pipeline', service: 'Customer Service', engagement: 'Engagement',
+  },
+} as const
 const SECTION_ICON: Record<string, string> = {
   tracking: '📈', content: '✍️', dados: '📊', estrategia: '🧭', conversao: '🔀', brain: '🧠',
   overview: '🏠', experiments: '🧪', tools: '🛠️', timeline: '🕓', reports: '📊',
@@ -53,6 +78,9 @@ const DEMO_SECTIONS = new Set(['overview', 'conexoes', 'dados', 'estrategia', 'c
 const AGENT_SECTIONS = new Set(['dados', 'estrategia', 'content', 'conversao'])
 
 export default function MarketingAiSectionPage() {
+  const { lang } = useLang()
+  const t = TX[lang]
+  const SECTION_TITLE = SECTION_TITLE_BY_LANG[lang]
   const { section } = useParams<{ section: string }>()
   const navigate = useNavigate()
   const { session } = useAuth()
@@ -60,7 +88,7 @@ export default function MarketingAiSectionPage() {
   const data = useMarketingAiData(company?.id)
 
   if (!company || data.loading) {
-    return <div style={{ padding: '48px', color: MUTED, fontSize: '14px' }}>Carregando...</div>
+    return <div style={{ padding: '48px', color: MUTED, fontSize: '14px' }}>{t.loading}</div>
   }
 
   // Links antigos: Meta Ads virou item próprio no menu esquerdo (fora do
@@ -92,9 +120,9 @@ export default function MarketingAiSectionPage() {
       return (
         <div style={{ padding: '48px 32px', textAlign: 'center', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', margin: '28px 32px' }}>
           <div style={{ fontSize: '32px', marginBottom: '12px' }}>✨</div>
-          <div style={{ fontSize: '15px', fontWeight: 700, color: 'white', marginBottom: '6px' }}>Marketing AI ainda não foi ativado</div>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: 'white', marginBottom: '6px' }}>{t.notActive}</div>
           <div style={{ fontSize: '12.5px', color: MUTED, maxWidth: '420px', margin: '0 auto' }}>
-            A ativação é feita pela equipe Sales Boost, configurando a marca, o público e os concorrentes. Fale com a gente pra ativar.
+            {t.notActiveDesc}
           </div>
         </div>
       )
@@ -102,7 +130,7 @@ export default function MarketingAiSectionPage() {
     switch (section) {
       case 'overview':
         return (
-          <OverviewSection
+          <OverviewSection lang={lang}
             config={data.config} snapshots={data.snapshots} insights={data.insights} pendingContent={pendingContent}
             proposedStrategy={proposedStrategy} activity={data.activity} onNavigate={s => navigate(`/dashboard/marketing-ai/${s}`)}
           />
@@ -128,7 +156,7 @@ export default function MarketingAiSectionPage() {
       case 'reports':
         return <ReportsTab accessToken={accessToken} insights={data.insights} strategyLog={data.strategyLog} reports={data.reports} onRefresh={data.refresh} />
       case 'conexoes':
-        return <ConnectionsTab connections={buildGrowthDemo(company).connections} />
+        return <ConnectionsTab connections={buildGrowthDemo(company, lang).connections} />
       case 'avaliacoes':
         return <ReviewsAgentTab company={company} />
       case 'insights':
@@ -149,7 +177,7 @@ export default function MarketingAiSectionPage() {
           style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: D, flexShrink: 0 }}
           onMouseEnter={e => { e.currentTarget.style.color = ORANGE; e.currentTarget.style.borderColor = 'rgba(255,109,41,0.3)' }}
           onMouseLeave={e => { e.currentTarget.style.color = MUTED; e.currentTarget.style.borderColor = BORDER }}>
-          ← Voltar
+          {t.back}
         </button>
         <span style={{ fontFamily: D, fontSize: '14px', fontWeight: 700, color: 'white' }}>{SECTION_ICON[section]} {SECTION_TITLE[section]}</span>
       </div>
@@ -164,35 +192,37 @@ export default function MarketingAiSectionPage() {
 }
 
 function OverviewSection({
-  config, snapshots, insights, pendingContent, proposedStrategy, activity, onNavigate,
+  lang, config, snapshots, insights, pendingContent, proposedStrategy, activity, onNavigate,
 }: {
+  lang: 'pt' | 'en'
   config: MarketingAiConfig | null; snapshots: TrackingSnapshot[]; insights: Insight[]
   pendingContent: number; proposedStrategy: number; activity: ActivityLogRow[]; onNavigate: (s: string) => void
 }) {
+  const t = TX[lang]
   const latest = snapshots[0]
   const topInsights = insights.slice(0, 5)
 
   return (
     <div style={{ padding: '28px 32px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
-        <StatCard label="Seguidores" value={latest?.followers ?? '—'} onClick={() => onNavigate('tracking')} />
-        <StatCard label="Conteúdo esperando aprovação" value={pendingContent} onClick={() => onNavigate('content')} highlight={pendingContent > 0} />
-        <StatCard label="Recomendações novas" value={proposedStrategy} onClick={() => onNavigate('brain')} highlight={proposedStrategy > 0} />
-        <StatCard label="Concorrentes monitorados" value={config?.competitors.length ?? 0} onClick={() => onNavigate('dados')} />
+        <StatCard label={t.followers} value={latest?.followers ?? '—'} onClick={() => onNavigate('tracking')} />
+        <StatCard label={t.pendingApproval} value={pendingContent} onClick={() => onNavigate('content')} highlight={pendingContent > 0} />
+        <StatCard label={t.newRecs} value={proposedStrategy} onClick={() => onNavigate('brain')} highlight={proposedStrategy > 0} />
+        <StatCard label={t.competitors} value={config?.competitors.length ?? 0} onClick={() => onNavigate('dados')} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         <div>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '10px' }}>Insights em aberto</div>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '10px' }}>{t.openInsights}</div>
           {topInsights.length === 0 ? (
-            <div style={{ color: MUTED, fontSize: '12.5px' }}>Nenhum insight aberto agora.</div>
+            <div style={{ color: MUTED, fontSize: '12.5px' }}>{t.noInsights}</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {topInsights.map(ins => (
                 <div key={ins.id} style={{ padding: '10px 12px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '2px' }}>
                     <span style={{ fontSize: '12px', fontWeight: 600, color: 'white' }}>{PILLAR_ICON[ins.pillar]} {ins.title}</span>
-                    {ins.impact && <span style={{ fontSize: '9px', fontWeight: 700, color: IMPACT_COLOR[ins.impact], flexShrink: 0 }}>{IMPACT_LABEL[ins.impact]}</span>}
+                    {ins.impact && <span style={{ fontSize: '9px', fontWeight: 700, color: IMPACT_COLOR[ins.impact], flexShrink: 0 }}>{(lang === 'en' ? IMPACT_LABEL_EN : IMPACT_LABEL)[ins.impact]}</span>}
                   </div>
                   <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>{ins.description}</div>
                 </div>
@@ -201,16 +231,16 @@ function OverviewSection({
           )}
         </div>
         <div>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '10px' }}>Atividade recente</div>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '10px' }}>{t.recent}</div>
           {activity.length === 0 ? (
-            <div style={{ color: MUTED, fontSize: '12.5px' }}>Nenhuma atividade ainda.</div>
+            <div style={{ color: MUTED, fontSize: '12.5px' }}>{t.noActivity}</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {activity.slice(0, 5).map(a => (
                 <div key={a.id} style={{ padding: '10px 12px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
                     <span style={{ fontSize: '12px', color: 'white' }}>{PILLAR_ICON[a.pillar ?? ''] ?? '🤖'} {a.action}</span>
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}>{timeAgo(a.created_at)}</span>
+                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}>{timeAgo(a.created_at, lang)}</span>
                   </div>
                 </div>
               ))}
@@ -241,15 +271,16 @@ const subTabsRow: React.CSSProperties = { display: 'inline-flex', gap: '4px', pa
 // leitura/inteligência que o Agente de Dados consome, não seções soltas.
 function DadosSection({ company, initialSub }: { company: CompanyData; initialSub?: 'insights' | 'saude-meta' }) {
   const navigate = useNavigate()
+  const t = TX[useLang().lang]
   const [sub, setSub] = useState<'performance' | 'mercado' | 'visual' | 'insights' | 'saude-meta'>(initialSub ?? 'performance')
   return (
     <div>
       <div style={subTabsRow}>
-        <SubTabButton active={sub === 'performance'} onClick={() => setSub('performance')} icon="📊" label="Performance" />
-        <SubTabButton active={sub === 'mercado'} onClick={() => setSub('mercado')} icon="🧭" label="Inteligência de Mercado" />
-        <SubTabButton active={sub === 'visual'} onClick={() => setSub('visual')} icon="🎨" label="Estilos e Visuais" />
-        <SubTabButton active={sub === 'insights'} onClick={() => setSub('insights')} icon="💡" label="Insights" />
-        <SubTabButton active={sub === 'saude-meta'} onClick={() => setSub('saude-meta')} icon="❤️‍🩹" label="Saúde da Meta" />
+        <SubTabButton active={sub === 'performance'} onClick={() => setSub('performance')} icon="📊" label={t.performance} />
+        <SubTabButton active={sub === 'mercado'} onClick={() => setSub('mercado')} icon="🧭" label={t.market} />
+        <SubTabButton active={sub === 'visual'} onClick={() => setSub('visual')} icon="🎨" label={t.visual} />
+        <SubTabButton active={sub === 'insights'} onClick={() => setSub('insights')} icon="💡" label={t.insights} />
+        <SubTabButton active={sub === 'saude-meta'} onClick={() => setSub('saude-meta')} icon="❤️‍🩹" label={t.metaHealth} />
       </div>
       {sub === 'performance'
         ? <PerformanceTab company={company} onCreateContent={() => navigate('/dashboard/marketing-ai/content')} />
@@ -266,13 +297,14 @@ function DadosSection({ company, initialSub }: { company: CompanyData; initialSu
 // Agente de Conteúdo (Dados → Conteúdo → Conversão → Feedback Loop): quem
 // chegou vira lead, o funil/atendimento/engagement fecham.
 function ConversaoSection({ company }: { company: CompanyData }) {
+  const t = TX[useLang().lang]
   const [sub, setSub] = useState<'funil' | 'atendimento' | 'engagement'>('funil')
   return (
     <div>
       <div style={subTabsRow}>
-        <SubTabButton active={sub === 'funil'} onClick={() => setSub('funil')} icon="🔀" label="Funil de Vendas" />
-        <SubTabButton active={sub === 'atendimento'} onClick={() => setSub('atendimento')} icon="💬" label="Atendimento" />
-        <SubTabButton active={sub === 'engagement'} onClick={() => setSub('engagement')} icon="🤝" label="Engagement" />
+        <SubTabButton active={sub === 'funil'} onClick={() => setSub('funil')} icon="🔀" label={t.funnel} />
+        <SubTabButton active={sub === 'atendimento'} onClick={() => setSub('atendimento')} icon="💬" label={t.service} />
+        <SubTabButton active={sub === 'engagement'} onClick={() => setSub('engagement')} icon="🤝" label={t.engagement} />
       </div>
       {sub === 'funil' ? <FunnelTab company={company} /> : sub === 'atendimento' ? <WhatsAppTab company={company} /> : <EngagementTab company={company} />}
     </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useLang } from '../../../contexts/LanguageContext'
 import type { CompanyData } from '../../../contexts/CompanyContext'
 import { BORDER, MUTED, D } from './shared'
 import ContentLibrary from './ContentLibrary'
@@ -22,14 +23,28 @@ type Mode = 'calendario' | 'overview' | 'biblioteca' | 'campanha'
 // real do fluxo (decide o que vai ser feito, com base nas Ideias que também
 // moraram pra dentro dela). Overview, mesmo sendo o que vem DEPOIS no fluxo
 // (resumo do que já saiu), fica logo ao lado — é o "e aí, como estamos".
-const TABS: { key: Mode; icon: string; label: string; sub: string }[] = [
-  { key: 'calendario', icon: '🗓️', label: 'Calendário da Semana', sub: 'Ideias, planejamento e stories/posts da semana' },
-  { key: 'overview', icon: '🏠', label: 'Overview', sub: 'Agendados, Vault e equilíbrio do funil' },
-  { key: 'biblioteca', icon: '📚', label: 'Biblioteca', sub: 'Ideias, formatos, testes e vault' },
-  { key: 'campanha', icon: '🎯', label: 'Campanha', sub: 'Meta Ads: performance real e campanhas' },
-]
+const TABS_BY_LANG: Record<'pt' | 'en', { key: Mode; icon: string; label: string; sub: string }[]> = {
+  pt: [
+    { key: 'calendario', icon: '🗓️', label: 'Calendário da Semana', sub: 'Ideias, planejamento e stories/posts da semana' },
+    { key: 'overview', icon: '🏠', label: 'Overview', sub: 'Agendados, Vault e equilíbrio do funil' },
+    { key: 'biblioteca', icon: '📚', label: 'Biblioteca', sub: 'Ideias, formatos, testes e vault' },
+    { key: 'campanha', icon: '🎯', label: 'Campanha', sub: 'Meta Ads: performance real e campanhas' },
+  ],
+  en: [
+    { key: 'calendario', icon: '🗓️', label: 'Weekly Calendar', sub: 'Ideas, planning and the week\'s stories/posts' },
+    { key: 'overview', icon: '🏠', label: 'Overview', sub: 'Scheduled, Vault and funnel balance' },
+    { key: 'biblioteca', icon: '📚', label: 'Library', sub: 'Ideas, formats, tests and vault' },
+    { key: 'campanha', icon: '🎯', label: 'Campaign', sub: 'Meta Ads: real performance and campaigns' },
+  ],
+}
+const SUB_TABS = {
+  pt: { perf: { label: 'Performance', sub: 'Conta Meta conectada' }, camp: { label: 'Campanhas', sub: 'Funil, pixel e ideias de conteúdo' } },
+  en: { perf: { label: 'Performance', sub: 'Connected Meta account' }, camp: { label: 'Campaigns', sub: 'Funnel, pixel and content ideas' } },
+} as const
 
 export default function ContentSection({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city' | 'instagram_user_id' | 'instagram_url'> }) {
+  const { lang } = useLang()
+  const TABS = TABS_BY_LANG[lang]
   const [params] = useSearchParams()
   const [mode, setMode] = useState<Mode>(params.get('tab') === 'campanha' ? 'campanha' : 'calendario')
 
@@ -51,12 +66,14 @@ export default function ContentSection({ company }: { company: Pick<CompanyData,
 // real + Campanhas), reaproveitado sem nenhuma mudança interna — só mudou
 // de casa pra dentro do Agente de Conteúdo e Campanha.
 function CampanhaPanel({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city' | 'instagram_user_id' | 'instagram_url'> }) {
+  const { lang } = useLang()
+  const st = SUB_TABS[lang]
   const [sub, setSub] = useState<'performance' | 'campanhas'>('performance')
   return (
     <div>
       <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.15)', borderRadius: '12px', marginBottom: '22px', flexWrap: 'wrap' }}>
-        <TabButton t={{ icon: '📊', label: 'Performance', sub: 'Conta Meta conectada' }} active={sub === 'performance'} onClick={() => setSub('performance')} />
-        <TabButton t={{ icon: '📣', label: 'Campanhas', sub: 'Funil, pixel e ideias de conteúdo' }} active={sub === 'campanhas'} onClick={() => setSub('campanhas')} />
+        <TabButton t={{ icon: '📊', label: st.perf.label, sub: st.perf.sub }} active={sub === 'performance'} onClick={() => setSub('performance')} />
+        <TabButton t={{ icon: '📣', label: st.camp.label, sub: st.camp.sub }} active={sub === 'campanhas'} onClick={() => setSub('campanhas')} />
       </div>
       {sub === 'performance' ? <MetaAdsTab company={company} /> : <CampaignsTab company={company} />}
     </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import CompanyAiControl from './CompanyAiControl'
 import CompanyAiUsage from './CompanyAiUsage'
 
@@ -111,6 +111,8 @@ export default function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { session } = useAuth()
   const navigate = useNavigate()
+  // E-mail de cadastro vem da lista do Owner (owner-companies já lê do Auth).
+  const ownerEmail = (useLocation().state as { email?: string } | null)?.email ?? null
 
   const [loading, setLoading] = useState(true)
   const [detail, setDetail] = useState<CompanyDetail | null>(null)
@@ -333,6 +335,7 @@ export default function CompanyDetailPage() {
           <button onClick={goBack} style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '18px', cursor: 'pointer', padding: '4px' }}>← Voltar</button>
           <div style={{ width: '1px', height: '20px', background: BORDER }} />
           <span style={{ fontFamily: D, fontSize: '1rem', fontWeight: 800, color: 'white' }}>{detail.business_name}</span>
+          {ownerEmail && <span style={{ fontSize: '12px', color: MUTED }}>✉️ {ownerEmail}</span>}
         </div>
         <button onClick={() => setShowDelete(true)} style={{ padding: '7px 16px', background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '8px', color: '#f87171', fontSize: '12px', cursor: 'pointer' }}>
           🗑️ Deletar empresa

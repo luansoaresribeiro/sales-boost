@@ -3,7 +3,8 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { track } from '../../../lib/analytics'
 import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL, FORMAT_CLASS, FUNNEL_LABEL } from './shared'
-import type { Template, Brand } from './formatTemplates'
+import { templateUiLabel, fieldUiLabel, type Template, type Brand } from './formatTemplates'
+import { useLang } from '../../../contexts/LanguageContext'
 import { STANDARD_FORMATS, safePx, type FormatDef } from './formats'
 import { callContentTest } from './TestingArea'
 
@@ -13,7 +14,52 @@ interface Preset { id: string; name: string; formats: { name: string; w: number;
 interface ProductPhoto { id: string; title: string; image_url: string | null }
 
 const ORANGE = '#FF6D29'
-const MODS: { key: string; label: string }[] = [{ key: 'organico', label: 'Orgânico' }, { key: 'stories', label: 'Stories' }, { key: 'campanhas', label: 'Campanhas' }]
+const MODS = (en: boolean): { key: string; label: string }[] => [{ key: 'organico', label: en ? 'Organic' : 'Orgânico' }, { key: 'stories', label: 'Stories' }, { key: 'campanhas', label: en ? 'Campaigns' : 'Campanhas' }]
+const FUNNEL_EN: Record<string, string> = { topo: 'Top', meio: 'Middle', fundo: 'Bottom' }
+
+const TX = {
+  pt: {
+    fillErr: 'Erro ao preencher', imgErr: 'Erro ao gerar imagem', varErr: 'Erro ao gerar variações', presetErr: 'Erro ao gerar preset', saveInstrErr: 'Erro ao salvar instrução',
+    instrSaved: '✓ Instrução salva — vale pro próximo "Preencher com IA".', pickPreset: 'Escolha um preset.', needColors: 'Defina cores 2ª/destaque no Kit da Marca pra gerar variações.',
+    vaultImg: '✅ Imagem gerada com nota boa — já foi direto pro Vault!', testsImg: 'Imagem gerada! Está na Área de Testes (seção Conteúdo), esperando sua aprovação.',
+    vars: (n: number, v: number) => `${n} variações geradas (fundo reusado)${v > 0 ? ` — ${v} com nota boa já foram direto pro Vault` : ' na Área de Testes'}.`,
+    fmts: (n: number, v: number) => `${n} formatos gerados (fundo reusado)${v > 0 ? ` — ${v} com nota boa já foram direto pro Vault` : ' na Área de Testes'}.`,
+    subjectPh: 'Sobre o que é o post? (opcional)', fillAi: '✨ Preencher com IA', hide: 'ocultar', edit: 'editar', instrLabel: 'instrução da IA pra esse formato',
+    instrHelp: 'Isso é o comando que já vai pra IA todo "Preencher com IA" — edite pra mudar tom, tamanho ou regra pra esse formato específico.',
+    saving: 'Salvando...', saveInstr: '💾 Salvar instrução', productPhoto: 'Foto do produto (da aba Produtos)',
+    noPhotos: 'Nenhuma foto ainda — suba em Agente de Dados → Estilos e Visuais → Arquivo → Produtos.', pickProduct: 'Escolha um produto…',
+    format: 'Formato', component: 'Componente (opcional)', none: 'nenhum', bgPhoto: 'Fundo (foto)', bgPh: 'Cole a URL de uma foto (asset) — ou deixe vazio e gere com IA',
+    genBg: 'Gerar fundo com IA se vazio', genBgCost: '(gasta 1 crédito; variações reusam de graça)',
+    captionLabel: 'Legenda do post (vai junto)', captionPh: 'Legenda que acompanha a imagem no Instagram',
+    generating: 'Gerando...', generate: '🎨 Gerar imagem', varTitle: 'Recompõe a mesma peça com as outras cores do kit — sem custo de IA', varBtn: '🎨✕ Variações grátis',
+    preset: 'Preset…', presetTitle: 'Gera o mesmo conceito em todos os formatos do preset (fundo reusado)', genPreset: '🎯 Gerar preset',
+    n1: 'A imagem é montada em camadas ', n2: 'no servidor', n3: ' (mesmo motor do automático). Texto, cores, selo e logo = montagem, ', n4: 'custo zero', n5: '. Só o ', n6: 'fundo', n7: ' (no "Post com Foto") pode gastar IA — e só quando não há um asset pra reusar. Variações reusam o mesmo fundo, de graça. O preview é uma prévia (a fonte final pode variar). Depois de gerar, cai na Área de Testes pra aprovar.',
+    defaultInstr: 'Escreva um texto curto, completo e no tom da marca pra esse campo.',
+  },
+  en: {
+    fillErr: 'Error filling in', imgErr: 'Error generating image', varErr: 'Error generating variations', presetErr: 'Error generating preset', saveInstrErr: 'Error saving instruction',
+    instrSaved: '✓ Instruction saved — applies to the next "Fill with AI".', pickPreset: 'Pick a preset.', needColors: 'Set the 2nd/accent colors in the Brand Kit to generate variations.',
+    vaultImg: '✅ Image generated with a good score — it went straight to the Vault!', testsImg: 'Image generated! It is in the Testing Area (Content section), waiting for your approval.',
+    vars: (n: number, v: number) => `${n} variations generated (background reused)${v > 0 ? ` — ${v} with a good score went straight to the Vault` : ' in the Testing Area'}.`,
+    fmts: (n: number, v: number) => `${n} formats generated (background reused)${v > 0 ? ` — ${v} with a good score went straight to the Vault` : ' in the Testing Area'}.`,
+    subjectPh: 'What is the post about? (optional)', fillAi: '✨ Fill with AI', hide: 'hide', edit: 'edit', instrLabel: 'AI instruction for this format',
+    instrHelp: 'This is the command that goes to the AI on every "Fill with AI" — edit it to change tone, length or rules for this specific format.',
+    saving: 'Saving...', saveInstr: '💾 Save instruction', productPhoto: 'Product photo (from the Products tab)',
+    noPhotos: 'No photos yet — upload them in Data Agent → Styles and Visuals → Archive → Products.', pickProduct: 'Pick a product…',
+    format: 'Format', component: 'Component (optional)', none: 'none', bgPhoto: 'Background (photo)', bgPh: 'Paste a photo URL (asset) — or leave empty and generate with AI',
+    genBg: 'Generate background with AI if empty', genBgCost: '(costs 1 credit; variations reuse it for free)',
+    captionLabel: 'Post caption (goes along)', captionPh: 'Caption that goes with the image on Instagram',
+    generating: 'Generating...', generate: '🎨 Generate image', varTitle: 'Recomposes the same piece with the other brand kit colors — no AI cost', varBtn: '🎨✕ Free variations',
+    preset: 'Preset…', presetTitle: 'Generates the same concept in all formats of the preset (background reused)', genPreset: '🎯 Generate preset',
+    n1: 'The image is built in layers ', n2: 'on the server', n3: ' (same engine as the automation). Text, colors, badge and logo = assembly, ', n4: 'zero cost', n5: '. Only the ', n6: 'background', n7: ' (in "Photo Post") can spend AI — and only when there is no asset to reuse. Variations reuse the same background, for free. The preview is a rough view (the final font may vary). After generating, it goes to the Testing Area for approval.',
+    defaultInstr: 'Write a short, complete text in the brand tone for this field.',
+  },
+} as const
+const DEFAULT_INSTRUCTION_EN: Record<string, string> = {
+  tweet: 'Write a short, COMPLETE punchline (up to 140 characters), in the brand tone, no emoji — it must fit whole inside the card, never cut off midway.',
+  product: 'Write a short button call (up to 4 words, like "Buy now") for the featured product. No emoji.',
+  photo: 'Write a short impact line (up to 8 words) to overlay on the photo. No emoji.',
+}
 
 // Instrução padrão que o "Preencher com IA" já usa por baixo dos panos hoje
 // (ver format-fill) — pedido do dono: isso tem que ficar EDITÁVEL aqui, não
@@ -31,8 +77,10 @@ const DEFAULT_INSTRUCTION: Record<string, string> = {
 // mesmo motor do piloto automático. O resultado cai na Área de Testes.
 export default function FormatStudio({ template, brand, initialKind, companyId, onClose, onSaved }: { template: Template; brand: Brand; initialKind?: string; companyId: string; onClose: () => void; onSaved: () => void }) {
   const { session } = useAuth()
+  const { lang } = useLang(); const tx = TX[lang]; const en = lang === 'en'
+  const defaultInstr = (en ? DEFAULT_INSTRUCTION_EN : DEFAULT_INSTRUCTION)[template.key] ?? tx.defaultInstr
   const token = session?.access_token ?? ''
-  const [instruction, setInstruction] = useState(DEFAULT_INSTRUCTION[template.key] ?? 'Escreva um texto curto, completo e no tom da marca pra esse campo.')
+  const [instruction, setInstruction] = useState(defaultInstr)
   const [instructionOpen, setInstructionOpen] = useState(false)
   const [instructionRowId, setInstructionRowId] = useState<string | null>(null)
   const [savingInstruction, setSavingInstruction] = useState(false)
@@ -88,10 +136,10 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
         if (!alive) return
         const row = data as { id: string; content: string | null } | null
         setInstructionRowId(row?.id ?? null)
-        setInstruction(row?.content || DEFAULT_INSTRUCTION[template.key] || 'Escreva um texto curto, completo e no tom da marca pra esse campo.')
+        setInstruction(row?.content || defaultInstr)
       })
     return () => { alive = false }
-  }, [companyId, template.key])
+  }, [companyId, template.key, defaultInstr])
 
   const saveInstruction = async () => {
     setSavingInstruction(true)
@@ -104,9 +152,9 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
         }).select('id').single()
         if (data) setInstructionRowId(data.id as string)
       }
-      setMsg('✓ Instrução salva — vale pro próximo "Preencher com IA".')
+      setMsg(tx.instrSaved)
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Erro ao salvar instrução')
+      setErr(e instanceof Error ? e.message : tx.saveInstrErr)
     }
     setSavingInstruction(false)
   }
@@ -130,11 +178,11 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
         body: JSON.stringify({ template: template.label, fields: template.fields.map(f => ({ key: f.key, label: f.label })), subject, instruction }),
       })
       const r = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(r.error ?? 'Erro ao preencher')
+      if (!res.ok) throw new Error(r.error ?? tx.fillErr)
       setFields(f => ({ ...f, ...(r.values ?? {}) }))
       if (!caption && r.values?.text) setCaption(String(r.values.text))
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Erro ao preencher')
+      setErr(e instanceof Error ? e.message : tx.fillErr)
     }
     setFilling(false)
   }
@@ -156,7 +204,7 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
       }),
     })
     const r = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(r.error ?? 'Erro ao gerar imagem')
+    if (!res.ok) throw new Error(r.error ?? tx.imgErr)
     return r as { bg_url?: string | null; id?: string | null }
   }
 
@@ -178,10 +226,10 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
       if (isPhoto && !bg && r.bg_url) setBg(r.bg_url) // guarda o fundo pra reusar de graça
       const wentToVault = await scoreGenerated(r.id)
       track('content_generated', `Gerou imagem de formato (${template.label})`, { template: template.key, auto_vault: wentToVault })
-      setMsg(wentToVault ? '✅ Imagem gerada com nota boa — já foi direto pro Vault!' : 'Imagem gerada! Está na Área de Testes (seção Conteúdo), esperando sua aprovação.')
+      setMsg(wentToVault ? tx.vaultImg : tx.testsImg)
       onSaved()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Erro ao gerar imagem')
+      setErr(e instanceof Error ? e.message : tx.imgErr)
     }
     setSaving(false)
   }
@@ -196,7 +244,7 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
       const alts = [brand.primary2, brand.accent, brand.accent2].filter((c): c is string => !!c && c !== brand.primary).slice(0, 3)
       const jobs: { fl: Record<string, string>; br: Brand }[] = alts.map(c => ({ fl: fields, br: { ...brand, primary: c } }))
       if (template.key === 'tweet') jobs.unshift({ fl: { ...fields, theme: (fields.theme === 'light' ? 'dark' : 'light') }, br: brand })
-      if (jobs.length === 0) { setErr('Defina cores 2ª/destaque no Kit da Marca pra gerar variações.'); setSaving(false); return }
+      if (jobs.length === 0) { setErr(tx.needColors); setSaving(false); return }
       let useBg = bg
       let vaulted = 0
       for (const j of jobs) {
@@ -206,10 +254,10 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
       }
       if (useBg && !bg) setBg(useBg)
       track('content_generated', `Gerou ${jobs.length} variações (${template.label})`, { template: template.key, variations: jobs.length, auto_vault: vaulted })
-      setMsg(`${jobs.length} variações geradas (fundo reusado)${vaulted > 0 ? ` — ${vaulted} com nota boa já foram direto pro Vault` : ' na Área de Testes'}.`)
+      setMsg(tx.vars(jobs.length, vaulted))
       onSaved()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Erro ao gerar variações')
+      setErr(e instanceof Error ? e.message : tx.varErr)
     }
     setSaving(false)
   }
@@ -218,7 +266,7 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
   // gerado no máximo 1x e reusado em todos — trocar formato = re-render (grátis).
   const generatePreset = async () => {
     const preset = presets.find(p => p.id === presetId)
-    if (!preset || preset.formats.length === 0) { setErr('Escolha um preset.'); return }
+    if (!preset || preset.formats.length === 0) { setErr(tx.pickPreset); return }
     setSaving(true); setErr(''); setMsg('')
     try {
       let useBg = bg
@@ -230,10 +278,10 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
       }
       if (useBg && !bg) setBg(useBg)
       track('content_generated', `Gerou preset ${preset.name} (${preset.formats.length} formatos)`, { preset: preset.name, auto_vault: vaulted })
-      setMsg(`${preset.formats.length} formatos gerados (fundo reusado)${vaulted > 0 ? ` — ${vaulted} com nota boa já foram direto pro Vault` : ' na Área de Testes'}.`)
+      setMsg(tx.fmts(preset.formats.length, vaulted))
       onSaved()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Erro ao gerar preset')
+      setErr(e instanceof Error ? e.message : tx.presetErr)
     }
     setSaving(false)
   }
@@ -247,11 +295,11 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#0E0B0A', border: `1px solid ${BORDER}`, borderRadius: '16px', width: '100%', maxWidth: '860px', maxHeight: '92vh', overflow: 'auto', padding: '22px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '16px' }}>
-          <div style={{ fontSize: '15px', fontWeight: 800, color: 'white' }}>{template.icon} {template.label}</div>
+          <div style={{ fontSize: '15px', fontWeight: 800, color: 'white' }}>{template.icon} {templateUiLabel(template, lang)}</div>
           {FORMAT_CLASS[template.key] && (
             <>
               <span style={{ fontSize: '9px', fontWeight: 800, color: '#A78BFA', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: '99px', padding: '3px 9px', letterSpacing: '0.03em' }}>
-                {FORMAT_CLASS[template.key].funnel.map(f => FUNNEL_LABEL[f].toUpperCase()).join(' / ')}
+                {FORMAT_CLASS[template.key].funnel.map(f => (en ? FUNNEL_EN[f] : FUNNEL_LABEL[f]).toUpperCase()).join(' / ')}
               </span>
               <span style={{ fontSize: '9px', fontWeight: 700, color: '#60a5fa', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', borderRadius: '99px', padding: '3px 9px' }}>
                 {FORMAT_CLASS[template.key].objective}
@@ -265,27 +313,27 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
           {/* Campos */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', minWidth: 0 }}>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Sobre o que é o post? (opcional)" style={{ ...inputStyle, flex: 1 }} />
-              <button onClick={fillWithAi} disabled={filling} style={{ padding: '8px 14px', background: filling ? 'rgba(255,109,41,0.4)' : ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: filling ? 'wait' : 'pointer', fontFamily: D, whiteSpace: 'nowrap' }}>{filling ? '...' : '✨ Preencher com IA'}</button>
+              <input value={subject} onChange={e => setSubject(e.target.value)} placeholder={tx.subjectPh} style={{ ...inputStyle, flex: 1 }} />
+              <button onClick={fillWithAi} disabled={filling} style={{ padding: '8px 14px', background: filling ? 'rgba(255,109,41,0.4)' : ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: filling ? 'wait' : 'pointer', fontFamily: D, whiteSpace: 'nowrap' }}>{filling ? '...' : tx.fillAi}</button>
             </div>
             <button onClick={() => setInstructionOpen(o => !o)} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: MUTED, fontSize: '10.5px', cursor: 'pointer', padding: '2px 0', fontFamily: D, textDecoration: 'underline' }}>
-              {instructionOpen ? '▾' : '▸'} {instructionOpen ? 'ocultar' : 'editar'} instrução da IA pra esse formato
+              {instructionOpen ? '▾' : '▸'} {instructionOpen ? tx.hide : tx.edit} {tx.instrLabel}
             </button>
             {instructionOpen && (
               <div style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '9px' }}>
-                <div style={{ fontSize: '10px', color: MUTED, marginBottom: '6px', lineHeight: 1.5 }}>Isso é o comando que já vai pra IA todo "Preencher com IA" — edite pra mudar tom, tamanho ou regra pra esse formato específico.</div>
+                <div style={{ fontSize: '10px', color: MUTED, marginBottom: '6px', lineHeight: 1.5 }}>{tx.instrHelp}</div>
                 <textarea value={instruction} onChange={e => setInstruction(e.target.value)} rows={3} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: D, marginBottom: '8px' }} />
-                <button onClick={saveInstruction} disabled={savingInstruction} style={{ padding: '6px 13px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '7px', color: ORANGE, fontSize: '11px', fontWeight: 700, cursor: savingInstruction ? 'wait' : 'pointer', fontFamily: D }}>{savingInstruction ? 'Salvando...' : '💾 Salvar instrução'}</button>
+                <button onClick={saveInstruction} disabled={savingInstruction} style={{ padding: '6px 13px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '7px', color: ORANGE, fontSize: '11px', fontWeight: 700, cursor: savingInstruction ? 'wait' : 'pointer', fontFamily: D }}>{savingInstruction ? tx.saving : tx.saveInstr}</button>
               </div>
             )}
             {isProduct && (
               <div>
-                <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Foto do produto (da aba Produtos)</label>
+                <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{tx.productPhoto}</label>
                 {products.length === 0 ? (
-                  <div style={{ fontSize: '11px', color: MUTED, padding: '9px 0' }}>Nenhuma foto ainda — suba em Agente de Dados → Estilos e Visuais → Arquivo → Produtos.</div>
+                  <div style={{ fontSize: '11px', color: MUTED, padding: '9px 0' }}>{tx.noPhotos}</div>
                 ) : (
                   <select value={fields.productImage ?? ''} onChange={e => set('productImage', e.target.value)} style={{ ...inputStyle, width: '100%', fontFamily: D }}>
-                    <option value="">Escolha um produto…</option>
+                    <option value="">{tx.pickProduct}</option>
                     {products.map(p => <option key={p.id} value={p.image_url ?? ''}>{p.title}</option>)}
                   </select>
                 )}
@@ -293,7 +341,7 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
             )}
             {template.fields.filter(fd => !(isProduct && fd.key === 'productImage')).map(fd => (
               <div key={fd.key}>
-                <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{fd.label}</label>
+                <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{fieldUiLabel(template, fd, lang)}</label>
                 {fd.type === 'textarea'
                   ? <textarea value={fields[fd.key] ?? ''} onChange={e => set(fd.key, e.target.value)} rows={2} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: D }} />
                   : <input value={fields[fd.key] ?? ''} onChange={e => set(fd.key, e.target.value)} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />}
@@ -303,32 +351,32 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
               <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: '6px', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Formato</label>
+                    <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{tx.format}</label>
                     <select value={fmtKey} onChange={e => setFmtKey(e.target.value)} style={{ ...inputStyle, width: '100%', fontFamily: D }}>
                       {formats.map(f => <option key={f.key} value={f.key}>{f.name} · {f.w}×{f.h}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Componente (opcional)</label>
+                    <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{tx.component}</label>
                     <select value={sticker} onChange={e => setSticker(e.target.value)} style={{ ...inputStyle, width: '100%', fontFamily: D }}>
-                      <option value="">nenhum</option>
+                      <option value="">{tx.none}</option>
                       {comps.map(c => <option key={c.id} value={c.image_url ?? ''}>{c.title}</option>)}
                     </select>
                   </div>
                 </div>
-                <label style={{ display: 'block', fontSize: '10px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fundo (foto)</label>
-                <input value={bg} onChange={e => setBg(e.target.value)} placeholder="Cole a URL de uma foto (asset) — ou deixe vazio e gere com IA" style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+                <label style={{ display: 'block', fontSize: '10px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{tx.bgPhoto}</label>
+                <input value={bg} onChange={e => setBg(e.target.value)} placeholder={tx.bgPh} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'rgba(255,255,255,0.75)', cursor: 'pointer' }}>
                   <input type="checkbox" checked={genBg} onChange={e => setGenBg(e.target.checked)} style={{ accentColor: ORANGE }} />
-                  Gerar fundo com IA se vazio <span style={{ color: MUTED }}>(gasta 1 crédito; variações reusam de graça)</span>
+                  {tx.genBg} <span style={{ color: MUTED }}>{tx.genBgCost}</span>
                 </label>
               </div>
             )}
             <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: '6px', paddingTop: '10px' }}>
-              <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Legenda do post (vai junto)</label>
-              <textarea value={caption} onChange={e => setCaption(e.target.value)} rows={2} placeholder="Legenda que acompanha a imagem no Instagram" style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: D }} />
+              <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{tx.captionLabel}</label>
+              <textarea value={caption} onChange={e => setCaption(e.target.value)} rows={2} placeholder={tx.captionPh} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: D }} />
               <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
-                {MODS.map(m => (
+                {MODS(en).map(m => (
                   <button key={m.key} onClick={() => setMod(m.key)} style={{ padding: '5px 12px', borderRadius: '7px', border: `1px solid ${mod === m.key ? 'rgba(255,109,41,0.4)' : BORDER}`, background: mod === m.key ? 'rgba(255,109,41,0.1)' : 'transparent', color: mod === m.key ? ORANGE : MUTED, fontSize: '11px', cursor: 'pointer', fontFamily: D }}>{m.label}</button>
                 ))}
               </div>
@@ -347,22 +395,22 @@ export default function FormatStudio({ template, brand, initialKind, companyId, 
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '18px' }}>
-          <button onClick={generate} disabled={saving} style={{ padding: '10px 22px', background: saving ? 'rgba(255,109,41,0.4)' : ORANGE, color: '#000', fontWeight: 700, fontSize: '13px', borderRadius: '9px', border: 'none', cursor: saving ? 'wait' : 'pointer', fontFamily: D }}>{saving ? 'Gerando...' : '🎨 Gerar imagem'}</button>
-          <button onClick={generateVariations} disabled={saving} title="Recompõe a mesma peça com as outras cores do kit — sem custo de IA" style={{ padding: '10px 18px', background: 'transparent', border: `1px solid ${BORDER}`, color: 'white', fontWeight: 700, fontSize: '12.5px', borderRadius: '9px', cursor: saving ? 'wait' : 'pointer', fontFamily: D }}>🎨✕ Variações grátis</button>
+          <button onClick={generate} disabled={saving} style={{ padding: '10px 22px', background: saving ? 'rgba(255,109,41,0.4)' : ORANGE, color: '#000', fontWeight: 700, fontSize: '13px', borderRadius: '9px', border: 'none', cursor: saving ? 'wait' : 'pointer', fontFamily: D }}>{saving ? tx.generating : tx.generate}</button>
+          <button onClick={generateVariations} disabled={saving} title={tx.varTitle} style={{ padding: '10px 18px', background: 'transparent', border: `1px solid ${BORDER}`, color: 'white', fontWeight: 700, fontSize: '12.5px', borderRadius: '9px', cursor: saving ? 'wait' : 'pointer', fontFamily: D }}>{tx.varBtn}</button>
           {isPhoto && presets.length > 0 && (
             <>
               <select value={presetId} onChange={e => setPresetId(e.target.value)} style={{ ...inputStyle, fontFamily: D }}>
-                <option value="">Preset…</option>
+                <option value="">{tx.preset}</option>
                 {presets.map(p => <option key={p.id} value={p.id}>{p.name} ({p.formats.length})</option>)}
               </select>
-              <button onClick={generatePreset} disabled={saving || !presetId} title="Gera o mesmo conceito em todos os formatos do preset (fundo reusado)" style={{ padding: '10px 16px', background: 'transparent', border: `1px solid ${BORDER}`, color: presetId ? 'white' : MUTED, fontWeight: 700, fontSize: '12.5px', borderRadius: '9px', cursor: saving || !presetId ? 'default' : 'pointer', fontFamily: D }}>🎯 Gerar preset</button>
+              <button onClick={generatePreset} disabled={saving || !presetId} title={tx.presetTitle} style={{ padding: '10px 16px', background: 'transparent', border: `1px solid ${BORDER}`, color: presetId ? 'white' : MUTED, fontWeight: 700, fontSize: '12.5px', borderRadius: '9px', cursor: saving || !presetId ? 'default' : 'pointer', fontFamily: D }}>{tx.genPreset}</button>
             </>
           )}
           {msg && <span style={{ fontSize: '11.5px', color: '#4ade80' }}>{msg}</span>}
           {err && <span style={{ fontSize: '11.5px', color: '#f87171' }}>{err}</span>}
         </div>
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '8px', padding: '9px 12px', marginTop: '12px', fontSize: '10.5px', color: MUTED, lineHeight: 1.5 }}>
-          A imagem é montada em camadas <strong>no servidor</strong> (mesmo motor do automático). Texto, cores, selo e logo = montagem, <strong>custo zero</strong>. Só o <strong>fundo</strong> (no "Post com Foto") pode gastar IA — e só quando não há um asset pra reusar. Variações reusam o mesmo fundo, de graça. O preview é uma prévia (a fonte final pode variar). Depois de gerar, cai na Área de Testes pra aprovar.
+          {tx.n1}<strong>{tx.n2}</strong>{tx.n3}<strong>{tx.n4}</strong>{tx.n5}<strong>{tx.n6}</strong>{tx.n7}
         </div>
       </div>
     </div>

@@ -11,7 +11,7 @@ import AgentConfigTab from './marketingAi/AgentConfigTab'
 import ConnectionsTab from './marketingAi/ConnectionsTab'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
 import { fetchBusinessTypes, OTHER_BUSINESS_TYPE } from '../../lib/businessTypes'
-import { getTrialInfo, formatExpiresAt } from '../../lib/trialState'
+import { getTrialInfo } from '../../lib/trialState'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 
@@ -30,6 +30,59 @@ const GOALS = [
   'Melhorar performance do site',
   'Outro',
 ]
+
+const TX = {
+  pt: {
+    goalLabels: {} as Record<string, string>,
+    select: 'Selecione...', bizType: 'Tipo de estabelecimento', otherSpecify: 'Outro (especifique)', typeYourBiz: 'Digite o tipo do seu negócio',
+    tabs: { info: 'Informações da empresa', agentes: 'Agentes', conexoes: 'Conexões', integrations: 'Notificações' },
+    cancelConfirm: 'Cancelar o trial? Você perde o acesso ao dashboard, mas nada do que já foi feito (progresso, descobertas, conquistas) é apagado — pode voltar quando quiser.',
+    nameRequired: 'Nome do negócio é obrigatório.',
+    welcomeBold: 'Bem-vindo!', welcomeRest: ' Preencha as informações abaixo para configurar seu painel. Depois de salvar, o dashboard mostrará seus dados.',
+    createFirst1: 'Crie o perfil do seu negócio primeiro (aba ', createFirst2: ') pra ', configAgents: 'configurar os agentes.', connectChannels: 'conectar seus canais.',
+    aboutBiz: 'Sobre o negócio', bizName: 'Nome do negócio', bizNamePh: 'Ex: Studio Beleza Carioca', cityLabel: 'Cidade / UF', cityPh: 'Ex: Rio de Janeiro, RJ',
+    phoneLabel: 'Telefone / WhatsApp', emailLabel: 'E-mail de contato', mainGoal: 'Principal objetivo', goalHint: 'Guia a IA para gerar conteúdo e plano de ação relevantes',
+    ticket: 'Ticket médio (R$)', ticketPh: 'Ex: 80', ticketHint: 'Valor médio que um cliente gasta numa compra/visita. Usamos isso para calcular a receita recuperável real de cada oportunidade — sem preencher, esse valor não aparece.',
+    save: 'Salvar', saved: '✓ Salvo com sucesso!', saving: 'Salvando...', saveChanges: 'Salvar alterações', createProfile: 'Criar perfil do negócio →',
+    syncing: (l: string) => `🔄 Sincronizando: ${l}`, syncErr: '⚠ Sincronização concluída com alguns erros', syncDone: '✓ Avaliações e concorrentes atualizados',
+    syncBg: 'Pode fechar esta aba tranquilo — a sincronização continua rodando e você vê o progresso da próxima vez que abrir Configurações.',
+    account: 'Conta', email: 'E-mail', upgradeOk: '✓ Upgrade realizado com sucesso! Seu plano foi atualizado.',
+    trialDay: (n: number, t: number) => `Trial de Crescimento — Dia ${n} de ${t}`, trialCancelled: 'Trial cancelado', trialEnded: 'Trial encerrado',
+    endsOn: (d: string) => `Termina em ${d} — sem cobrança automática.`, cancelTrial: 'Cancelar trial',
+    currentPlan: 'Plano atual', free: 'Gratuito — 5 posts/mês', basic: 'Basic — 15 posts/mês', pro: 'Pro — 35 posts/mês', ultra: 'Ultra — 50 posts/mês',
+    msgsUsed: (n: number) => `${n} de 30 mensagens usadas este mês`,
+    danger: 'Zona de perigo', dangerText: 'Excluir sua conta remove permanentemente todos os dados. Esta ação não pode ser desfeita.', deleteAccount: 'Excluir conta',
+  },
+  en: {
+    goalLabels: {
+      'Atrair mais clientes novos': 'Attract more new customers',
+      'Aumentar frequência dos clientes atuais': 'Increase visit frequency of current customers',
+      'Recuperar clientes inativos': 'Win back inactive customers',
+      'Aumentar ticket médio': 'Increase average ticket',
+      'Melhorar reputação online': 'Improve online reputation',
+      'Melhorar performance do site': 'Improve website performance',
+      'Outro': 'Other',
+    } as Record<string, string>,
+    select: 'Select...', bizType: 'Business type', otherSpecify: 'Other (specify)', typeYourBiz: 'Type your business type',
+    tabs: { info: 'Company info', agentes: 'Agents', conexoes: 'Connections', integrations: 'Notifications' },
+    cancelConfirm: 'Cancel the trial? You lose access to the dashboard, but nothing already done (progress, findings, achievements) is deleted — you can come back anytime.',
+    nameRequired: 'Business name is required.',
+    welcomeBold: 'Welcome!', welcomeRest: ' Fill in the information below to set up your dashboard. After saving, the dashboard will show your data.',
+    createFirst1: 'Create your business profile first (', createFirst2: ' tab) to ', configAgents: 'set up the agents.', connectChannels: 'connect your channels.',
+    aboutBiz: 'About the business', bizName: 'Business name', bizNamePh: 'e.g. Carioca Beauty Studio', cityLabel: 'City / State', cityPh: 'e.g. Rio de Janeiro, RJ',
+    phoneLabel: 'Phone / WhatsApp', emailLabel: 'Contact email', mainGoal: 'Main goal', goalHint: 'Guides the AI to generate relevant content and action plans',
+    ticket: 'Average ticket (R$)', ticketPh: 'e.g. 80', ticketHint: 'Average amount a customer spends per purchase/visit. We use it to calculate the real recoverable revenue of each opportunity — if left blank, this value does not appear.',
+    save: 'Save', saved: '✓ Saved successfully!', saving: 'Saving...', saveChanges: 'Save changes', createProfile: 'Create business profile →',
+    syncing: (l: string) => `🔄 Syncing: ${l}`, syncErr: '⚠ Sync finished with some errors', syncDone: '✓ Reviews and competitors updated',
+    syncBg: 'You can safely close this tab — the sync keeps running and you will see the progress next time you open Settings.',
+    account: 'Account', email: 'Email', upgradeOk: '✓ Upgrade successful! Your plan has been updated.',
+    trialDay: (n: number, t: number) => `Growth Trial — Day ${n} of ${t}`, trialCancelled: 'Trial cancelled', trialEnded: 'Trial ended',
+    endsOn: (d: string) => `Ends on ${d} — no automatic charge.`, cancelTrial: 'Cancel trial',
+    currentPlan: 'Current plan', free: 'Free — 5 posts/month', basic: 'Basic — 15 posts/month', pro: 'Pro — 35 posts/month', ultra: 'Ultra — 50 posts/month',
+    msgsUsed: (n: number) => `${n} of 30 messages used this month`,
+    danger: 'Danger zone', dangerText: 'Deleting your account permanently removes all data. This action cannot be undone.', deleteAccount: 'Delete account',
+  },
+} as const
 
 function Field({ label, value, onChange, placeholder, type = 'text', readOnly = false, hint }: {
   label: string; value: string; onChange?: (v: string) => void; placeholder?: string
@@ -55,6 +108,8 @@ function SelectField({ label, value, onChange, options, hint }: {
   label: string; value: string; onChange: (v: string) => void; options: string[]; hint?: string
 }) {
   const [focused, setFocused] = useState(false)
+  const { lang } = useLang()
+  const X = TX[lang]
   return (
     <div style={{ marginBottom: '16px' }}>
       <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>{label}</label>
@@ -63,8 +118,8 @@ function SelectField({ label, value, onChange, options, hint }: {
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         style={{ width: '100%', padding: '11px 14px', boxSizing: 'border-box', background: '#150E08', border: `1px solid ${focused ? 'rgba(255,109,41,0.55)' : BORDER}`, borderRadius: '10px', color: value ? 'white' : MUTED, fontSize: '14px', outline: 'none', cursor: 'pointer', appearance: 'none' }}
       >
-        <option value="">Selecione...</option>
-        {options.map(o => <option key={o} value={o} style={{ background: '#150E08' }}>{o}</option>)}
+        <option value="">{X.select}</option>
+        {options.map(o => <option key={o} value={o} style={{ background: '#150E08' }}>{X.goalLabels[o] ?? o}</option>)}
       </select>
       {hint && <div style={{ fontSize: '11px', color: MUTED, marginTop: '5px', lineHeight: 1.5 }}>{hint}</div>}
     </div>
@@ -79,25 +134,27 @@ function BusinessTypeField({ value, onChange, options, hint }: {
 }) {
   const [focused, setFocused] = useState(false)
   const [otherMode, setOtherMode] = useState(false)
+  const { lang } = useLang()
+  const X = TX[lang]
   const known = options.includes(value)
   const showOther = otherMode || (value !== '' && !known && options.length > 0)
   const selectValue = showOther ? OTHER_BUSINESS_TYPE : (known ? value : '')
   return (
     <div style={{ marginBottom: '16px' }}>
-      <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>Tipo de estabelecimento</label>
+      <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>{X.bizType}</label>
       <select
         value={selectValue}
         onChange={e => { const v = e.target.value; if (v === OTHER_BUSINESS_TYPE) { setOtherMode(true); onChange('') } else { setOtherMode(false); onChange(v) } }}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         style={{ width: '100%', padding: '11px 14px', boxSizing: 'border-box', background: '#150E08', border: `1px solid ${focused ? 'rgba(255,109,41,0.55)' : BORDER}`, borderRadius: '10px', color: selectValue ? 'white' : MUTED, fontSize: '14px', outline: 'none', cursor: 'pointer', appearance: 'none' }}
       >
-        <option value="">Selecione...</option>
+        <option value="">{X.select}</option>
         {options.map(o => <option key={o} value={o} style={{ background: '#150E08' }}>{o}</option>)}
-        <option value={OTHER_BUSINESS_TYPE} style={{ background: '#150E08' }}>Outro (especifique)</option>
+        <option value={OTHER_BUSINESS_TYPE} style={{ background: '#150E08' }}>{X.otherSpecify}</option>
       </select>
       {showOther && (
         <input
-          value={value} onChange={e => onChange(e.target.value)} placeholder="Digite o tipo do seu negócio"
+          value={value} onChange={e => onChange(e.target.value)} placeholder={X.typeYourBiz}
           style={{ width: '100%', marginTop: '10px', padding: '11px 14px', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '10px', color: 'white', fontSize: '14px', outline: 'none' }}
         />
       )}
@@ -132,6 +189,7 @@ export default function SettingsPage() {
   const [searchParams] = useSearchParams()
   const { lang } = useLang()
   const T = d[lang].settings
+  const X = TX[lang]
 
   const tabFromParam = (p: string | null): 'info' | 'integrations' | 'agentes' | 'conexoes' =>
     p === 'integracoes' ? 'integrations' : p === 'agentes' ? 'agentes' : p === 'conexoes' ? 'conexoes' : 'info'
@@ -263,7 +321,7 @@ export default function SettingsPage() {
 
   const cancelTrial = async () => {
     if (!companyId) return
-    if (!window.confirm('Cancelar o trial? Você perde o acesso ao dashboard, mas nada do que já foi feito (progresso, descobertas, conquistas) é apagado — pode voltar quando quiser.')) return
+    if (!window.confirm(X.cancelConfirm)) return
     await supabase.from('companies').update({ trial_cancelled_at: new Date().toISOString() }).eq('id', companyId)
     void refreshCompany()
   }
@@ -294,7 +352,7 @@ export default function SettingsPage() {
   }
 
   const handleSave = async () => {
-    if (!user || !businessName.trim()) { setSaveError('Nome do negócio é obrigatório.'); return }
+    if (!user || !businessName.trim()) { setSaveError(X.nameRequired); return }
     setSaving(true)
     setSaveError('')
     try {
@@ -356,7 +414,7 @@ export default function SettingsPage() {
 
         {/* Tab switcher */}
         <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '5px', marginBottom: '24px', width: 'fit-content', flexWrap: 'wrap' }}>
-          {([['info', 'Informações da empresa'], ['agentes', 'Agentes'], ['conexoes', 'Conexões'], ['integrations', 'Notificações']] as const).map(([key, label]) => (
+          {(['info', 'agentes', 'conexoes', 'integrations'] as const).map(key => [key, X.tabs[key]] as const).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
               style={{ padding: '9px 18px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, background: tab === key ? ORANGE : 'transparent', color: tab === key ? '#000' : MUTED, transition: 'all 0.15s' }}>
               {label}
@@ -366,7 +424,7 @@ export default function SettingsPage() {
 
         {!companyId && tab === 'info' && (
           <div style={{ background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.2)', borderRadius: '12px', padding: '14px 18px', marginBottom: '20px', fontSize: '13px', color: MUTED, lineHeight: 1.6 }}>
-            👋 <strong style={{ color: 'white' }}>Bem-vindo!</strong> Preencha as informações abaixo para configurar seu painel. Depois de salvar, o dashboard mostrará seus dados.
+            👋 <strong style={{ color: 'white' }}>{X.welcomeBold}</strong>{X.welcomeRest}
           </div>
         )}
 
@@ -375,7 +433,7 @@ export default function SettingsPage() {
             <AgentConfigTab company={{ id: companyId }} />
           ) : (
             <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '22px', fontSize: '13px', color: MUTED, lineHeight: 1.6 }}>
-              Crie o perfil do seu negócio primeiro (aba <strong style={{ color: 'white' }}>Informações da empresa</strong>) pra configurar os agentes.
+              {X.createFirst1}<strong style={{ color: 'white' }}>{X.tabs.info}</strong>{X.createFirst2}{X.configAgents}
             </div>
           )
         )}
@@ -384,10 +442,10 @@ export default function SettingsPage() {
 
         {tab === 'conexoes' && (
           company ? (
-            <ConnectionsTab connections={buildGrowthDemo(company).connections} />
+            <ConnectionsTab connections={buildGrowthDemo(company, lang).connections} />
           ) : (
             <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '22px', fontSize: '13px', color: MUTED, lineHeight: 1.6 }}>
-              Crie o perfil do seu negócio primeiro (aba <strong style={{ color: 'white' }}>Informações da empresa</strong>) pra conectar seus canais.
+              {X.createFirst1}<strong style={{ color: 'white' }}>{X.tabs.info}</strong>{X.createFirst2}{X.connectChannels}
             </div>
           )
         )}
@@ -395,15 +453,15 @@ export default function SettingsPage() {
         {tab === 'info' && (
         <>
 
-        <SectionCard id="section-negocio" title="Sobre o negócio">
-          <Field label="Nome do negócio" value={businessName} onChange={setBusinessName} placeholder="Ex: Studio Beleza Carioca" />
+        <SectionCard id="section-negocio" title={X.aboutBiz}>
+          <Field label={X.bizName} value={businessName} onChange={setBusinessName} placeholder={X.bizNamePh} />
           <BusinessTypeField value={businessType} onChange={setBusinessType} options={businessTypes} />
-          <Field label="Cidade / UF" value={city} onChange={setCity} placeholder="Ex: Rio de Janeiro, RJ" />
-          <Field label="Telefone / WhatsApp" value={phone} onChange={setPhone} placeholder="(21) 99999-9999" />
-          <Field label="E-mail de contato" value={contactEmail} onChange={setContactEmail} placeholder="voce@seunegocio.com.br" type="email" />
-          <SelectField label="Principal objetivo" value={goal} onChange={setGoal} options={GOALS} hint="Guia a IA para gerar conteúdo e plano de ação relevantes" />
-          <Field label="Ticket médio (R$)" value={avgTicket} onChange={setAvgTicket} placeholder="Ex: 80" type="number"
-            hint="Valor médio que um cliente gasta numa compra/visita. Usamos isso para calcular a receita recuperável real de cada oportunidade — sem preencher, esse valor não aparece." />
+          <Field label={X.cityLabel} value={city} onChange={setCity} placeholder={X.cityPh} />
+          <Field label={X.phoneLabel} value={phone} onChange={setPhone} placeholder="(21) 99999-9999" />
+          <Field label={X.emailLabel} value={contactEmail} onChange={setContactEmail} placeholder="voce@seunegocio.com.br" type="email" />
+          <SelectField label={X.mainGoal} value={goal} onChange={setGoal} options={GOALS} hint={X.goalHint} />
+          <Field label={X.ticket} value={avgTicket} onChange={setAvgTicket} placeholder={X.ticketPh} type="number"
+            hint={X.ticketHint} />
         </SectionCard>
 
         {/* sempre renderizado: o sino de pendências rola até aqui (?section=entendimento) */}
@@ -411,7 +469,7 @@ export default function SettingsPage() {
           {companyId && <BusinessUnderstandingCard companyId={companyId} />}
         </div>
 
-        <SectionCard id="section-salvar" title="Salvar">
+        <SectionCard id="section-salvar" title={X.save}>
           {saveError && (
             <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '12px', padding: '10px 14px', background: 'rgba(248,113,113,0.08)', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.2)' }}>
               {saveError}
@@ -420,7 +478,7 @@ export default function SettingsPage() {
 
           <button onClick={handleSave} disabled={saving}
             style={{ padding: '11px 24px', background: saved ? '#4ade80' : ORANGE, color: '#000', fontWeight: 700, fontSize: '14px', borderRadius: '10px', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', transition: 'background 0.2s', opacity: saving ? 0.7 : 1 }}>
-            {saved ? '✓ Salvo com sucesso!' : saving ? 'Salvando...' : companyId ? 'Salvar alterações' : 'Criar perfil do negócio →'}
+            {saved ? X.saved : saving ? X.saving : companyId ? X.saveChanges : X.createProfile}
           </button>
 
           {syncJob && (
@@ -428,10 +486,10 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '7px' }}>
                 <span style={{ fontSize: '12px', color: syncJob.status === 'error' ? '#f87171' : syncJob.status === 'done' ? '#4ade80' : MUTED, fontWeight: 600 }}>
                   {syncJob.status === 'running'
-                    ? `🔄 Sincronizando: ${syncCurrentStep?.label ?? '...'}`
+                    ? X.syncing(syncCurrentStep?.label ?? '...')
                     : syncJob.status === 'error'
-                    ? '⚠ Sincronização concluída com alguns erros'
-                    : '✓ Avaliações e concorrentes atualizados'}
+                    ? X.syncErr
+                    : X.syncDone}
                 </span>
                 <span style={{ fontSize: '11px', color: MUTED }}>{syncDone}/{syncTotal}</span>
               </div>
@@ -443,19 +501,19 @@ export default function SettingsPage() {
               </div>
               {syncJob.status === 'running' && (
                 <div style={{ fontSize: '11px', color: MUTED, marginTop: '8px', lineHeight: 1.5 }}>
-                  Pode fechar esta aba tranquilo — a sincronização continua rodando e você vê o progresso da próxima vez que abrir Configurações.
+                  {X.syncBg}
                 </div>
               )}
             </div>
           )}
         </SectionCard>
 
-        <SectionCard id="section-conta" title="Conta">
-          <Field label="E-mail" value={user?.email ?? ''} readOnly />
+        <SectionCard id="section-conta" title={X.account}>
+          <Field label={X.email} value={user?.email ?? ''} readOnly />
 
           {upgradeSuccess && (
             <div style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', fontSize: '13px', color: '#4ade80', fontWeight: 600 }}>
-              ✓ Upgrade realizado com sucesso! Seu plano foi atualizado.
+              {X.upgradeOk}
               <button onClick={() => setUpgradeSuccess(false)} style={{ background: 'none', border: 'none', color: '#4ade80', cursor: 'pointer', float: 'right', fontSize: '16px', lineHeight: 1 }}>×</button>
             </div>
           )}
@@ -467,14 +525,14 @@ export default function SettingsPage() {
             return (
               <div style={{ marginBottom: '20px', padding: '14px 16px', background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.2)', borderRadius: '12px' }}>
                 <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>
-                  {trial.isTrial ? `Trial de Crescimento — Dia ${trial.dayNumber} de ${trial.totalDays}` : trial.state === 'cancelled' ? 'Trial cancelado' : 'Trial encerrado'}
+                  {trial.isTrial ? X.trialDay(trial.dayNumber ?? 0, trial.totalDays ?? 0) : trial.state === 'cancelled' ? X.trialCancelled : X.trialEnded}
                 </div>
                 {trial.isTrial && trial.expiresAt && (
-                  <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '10px' }}>Termina em {formatExpiresAt(trial.expiresAt)} — sem cobrança automática.</div>
+                  <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '10px' }}>{X.endsOn(trial.expiresAt.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}</div>
                 )}
                 {trial.isTrial && (
                   <button onClick={cancelTrial} style={{ fontSize: '11.5px', color: '#f87171', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
-                    Cancelar trial
+                    {X.cancelTrial}
                   </button>
                 )}
               </div>
@@ -483,28 +541,28 @@ export default function SettingsPage() {
 
           {/* Current plan badge */}
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>Plano atual</label>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>{X.currentPlan}</label>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '7px 14px', background: currentPlan === 'free' ? 'rgba(255,255,255,0.04)' : 'rgba(255,109,41,0.1)', border: `1px solid ${currentPlan === 'free' ? BORDER : 'rgba(255,109,41,0.3)'}`, borderRadius: '99px' }}>
               <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: currentPlan === 'free' ? MUTED : ORANGE }} />
               <span style={{ fontSize: '13px', fontWeight: 600, color: currentPlan === 'free' ? MUTED : ORANGE, textTransform: 'capitalize' }}>
-                {currentPlan === 'free' ? 'Gratuito — 5 posts/mês' : currentPlan === 'basic' ? 'Basic — 15 posts/mês' : currentPlan === 'pro' ? 'Pro — 35 posts/mês' : 'Ultra — 50 posts/mês'}
+                {currentPlan === 'free' ? X.free : currentPlan === 'basic' ? X.basic : currentPlan === 'pro' ? X.pro : X.ultra}
               </span>
             </div>
             {currentPlan === 'free' && (
               <div style={{ marginTop: '8px', fontSize: '12px', color: MUTED }}>
-                {agentUsed} de 30 mensagens usadas este mês
+                {X.msgsUsed(agentUsed)}
               </div>
             )}
           </div>
 
         </SectionCard>
 
-        <SectionCard title="Zona de perigo">
+        <SectionCard title={X.danger}>
           <p style={{ fontSize: '13px', color: MUTED, marginBottom: '14px', lineHeight: 1.5 }}>
-            Excluir sua conta remove permanentemente todos os dados. Esta ação não pode ser desfeita.
+            {X.dangerText}
           </p>
           <button style={{ padding: '9px 18px', background: 'rgba(239,68,68,0.1)', color: '#f87171', fontWeight: 700, fontSize: '13px', borderRadius: '9px', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}>
-            Excluir conta
+            {X.deleteAccount}
           </button>
         </SectionCard>
         </>

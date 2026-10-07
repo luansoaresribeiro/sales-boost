@@ -7,6 +7,7 @@
 //            de verdade" por cima. O número fica ilegível — não engana.
 //   error  → igual ao locked, mas a mensagem diz que a atualização falhou.
 import type { ReactNode } from 'react'
+import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D } from './shared'
 import { useDemoAllowed } from './growthDemo'
 
@@ -22,6 +23,23 @@ export function veilMode(opts: { hasReal: boolean; demoMode: boolean; error?: bo
   return opts.demoMode ? 'demo' : 'locked'
 }
 
+const TX = {
+  pt: {
+    noDemoMsg: 'Hermes ainda está reunindo seus dados reais. Assim que houver dados de verdade, eles aparecem aqui.',
+    errTitle: 'Não foi possível atualizar', lockTitle: 'Sem dados reais ainda',
+    errMsg: 'A conexão existe, mas a última atualização falhou. Tente de novo em instantes.',
+    lockDemo: 'Estes números são só um exemplo do layout. Conecte a fonte pra ver os seus dados de verdade — ou ligue o Modo demonstração pra explorar com dados fictícios.',
+    lock: 'Estes números são só um exemplo do layout. Conecte a fonte pra ver os seus dados de verdade.',
+  },
+  en: {
+    noDemoMsg: 'Hermes is still gathering your real data. As soon as there is real data, it will show up here.',
+    errTitle: 'Could not update', lockTitle: 'No real data yet',
+    errMsg: 'The connection exists, but the last update failed. Try again in a moment.',
+    lockDemo: 'These numbers are just an example of the layout. Connect the source to see your real data — or turn on Demo mode to explore with sample data.',
+    lock: 'These numbers are just an example of the layout. Connect the source to see your real data.',
+  },
+} as const
+
 export default function DataVeil({ mode, title, message, errorDetail, cta, children }: {
   mode: VeilMode
   title?: string
@@ -36,9 +54,11 @@ export default function DataVeil({ mode, title, message, errorDetail, cta, child
 }) {
   // Em teste grátis não existe modo demonstração: some o botão e o convite.
   const demoAllowed = useDemoAllowed()
+  const { lang } = useLang()
+  const t = TX[lang]
   if (!demoAllowed) {
-    if (cta && /demonstra/i.test(cta.label)) cta = undefined
-    if (message && /demonstra/i.test(message)) message = 'Hermes ainda está reunindo seus dados reais. Assim que houver dados de verdade, eles aparecem aqui.'
+    if (cta && /demonstra|demo mode/i.test(cta.label)) cta = undefined
+    if (message && /demonstra|demo mode/i.test(message)) message = t.noDemoMsg
   }
 
   // Dado real ou demo explícito → não borra nada.
@@ -57,14 +77,14 @@ export default function DataVeil({ mode, title, message, errorDetail, cta, child
         <div style={{ maxWidth: '360px', textAlign: 'center', background: CARD, border: `1px solid ${isError ? 'rgba(248,113,113,0.35)' : BORDER}`, borderRadius: '14px', padding: '22px 24px', boxShadow: '0 12px 40px rgba(0,0,0,0.45)' }}>
           <div style={{ fontSize: '26px', marginBottom: '10px' }}>{isError ? '⚠️' : '🔒'}</div>
           <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', fontFamily: D, marginBottom: '6px' }}>
-            {title ?? (isError ? 'Não foi possível atualizar' : 'Sem dados reais ainda')}
+            {title ?? (isError ? t.errTitle : t.lockTitle)}
           </div>
           <div style={{ fontSize: '12px', color: MUTED, lineHeight: 1.55, marginBottom: cta ? '14px' : 0 }}>
             {message ?? (isError
-              ? 'A conexão existe, mas a última atualização falhou. Tente de novo em instantes.'
+              ? t.errMsg
               : demoAllowed
-                ? 'Estes números são só um exemplo do layout. Conecte a fonte pra ver os seus dados de verdade — ou ligue o Modo demonstração pra explorar com dados fictícios.'
-                : 'Estes números são só um exemplo do layout. Conecte a fonte pra ver os seus dados de verdade.')}
+                ? t.lockDemo
+                : t.lock)}
           </div>
           {isError && errorDetail && (
             <div style={{ marginBottom: cta ? '14px' : 0, padding: '9px 11px', background: 'rgba(248,113,113,0.08)', border: `1px solid rgba(248,113,113,0.25)`, borderRadius: '8px', fontSize: '10.5px', color: '#fca5a5', fontFamily: 'ui-monospace, monospace', textAlign: 'left', wordBreak: 'break-word', maxHeight: '110px', overflowY: 'auto' }}>

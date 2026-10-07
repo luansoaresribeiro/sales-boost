@@ -2,6 +2,7 @@
 // nenhuma API da Meta é chamada. A estrutura já é a que a integração real vai
 // preencher: campanhas por etapa de funil, métricas simuladas, recomendações
 // da IA, jornada do pixel e aprendizado. Pensado como um "media buyer" de IA.
+import type { Lang } from '../../../contexts/LanguageContext'
 
 export type FunnelStage = 'awareness' | 'consideration' | 'conversion' | 'retention' | 'remarketing'
 
@@ -88,7 +89,7 @@ export interface CampaignDemo {
   overview: { active: number; drafts: number; predictedRoas: number; health: number; monthlyBudget: string }
 }
 
-export function buildCampaignDemo(company: { business_name?: string; business_type?: string | null; city?: string | null }): CampaignDemo {
+export function buildCampaignDemo(company: { business_name?: string; business_type?: string | null; city?: string | null }, lang: Lang = 'pt'): CampaignDemo {
   const local = company.city ?? 'sua região'
   const biz = company.business_name ?? 'seu negócio'
 
@@ -246,8 +247,150 @@ export function buildCampaignDemo(company: { business_name?: string; business_ty
   const drafts = campaigns.filter(c => c.status === 'draft').length
   const health = Math.round(campaigns.reduce((s, c) => s + c.healthScore, 0) / campaigns.length)
 
-  return {
+  const demo: CampaignDemo = {
     campaigns, recommendations, pixelJourney, pixelReads, creatives, learnings, contentIdeas, storyAds,
     overview: { active, drafts, predictedRoas: 3.9, health, monthlyBudget: 'R$ 1.100' },
+  }
+  return lang === 'en' ? translateCampaignDemo(demo, company) : demo
+}
+
+// Overlay EN: mantém números/estrutura do demo e troca só os textos, por id/posição.
+function translateCampaignDemo(d: CampaignDemo, company: { business_name?: string; city?: string | null }): CampaignDemo {
+  const local = company.city ?? 'your area'
+  const biz = company.business_name ?? 'your business'
+  const C: Record<string, Partial<Campaign>> = {
+    cmp1: {
+      name: 'Free guide — “How to choose without mistakes”',
+      whyStage: 'Cold audience does not know the brand yet. The AI chose Top of Funnel to build recognition with valuable content before asking for any conversion.',
+      offer: 'Free guide/checklist (value lead magnet)', offerRationale: 'Instead of advertising a price, we deliver useful material — it attracts people with real interest who are not ready to buy yet, feeding remarketing later.',
+      goal: 'Build recognition and capture an interested audience (not buyers yet).',
+      strategy: 'Educational ad → click to the guide → pixel marks “ViewContent” → remarketing afterwards.',
+      audience: `Interests related to the segment + 8 km radius around ${local}, ages 25–45`,
+      persona: 'Curious person researching options, sensitive to social proof, decides calmly.',
+      angle: 'Education / authority', hook: 'Most people get this wrong because they miss one simple thing…',
+      headline: `The guide ${biz} prepared so you do not choose wrong`,
+      primaryText: 'We made a quick checklist with everything you need to know before deciding. It is free and takes 2 minutes to read. 👇',
+      cta: 'Download free guide', imagePrompt: 'Premium flat lay, warm tones, elegant printed material on a wooden table, no text',
+      videoConcept: '15s Reels showing the 3 most common mistakes (on-screen text + behind the scenes).',
+      landingPage: 'Simple page with the guide + email form (1 field).',
+      successMetrics: ['Cost per lead < R$ 4', 'CTR > 1.5%', '500+ downloads/month'],
+      expectedOutcome: 'Base of 500–800 warm contacts/month to nurture and remarket.',
+      risk: 'If the creative over-promises, it generates unqualified leads. Mitigate with honest copy.',
+      variations: [
+        { angle: 'Fear of getting it wrong', hook: 'Do not decide before seeing this', headline: 'The mistake almost everyone makes' },
+        { angle: 'Social proof', hook: 'This is how hundreds chose right', headline: 'The checklist that became the standard here' },
+      ],
+    },
+    cmp2: {
+      name: 'Free assessment/diagnosis',
+      whyStage: 'The audience has already interacted (saw content/guide). The AI chose Middle of Funnel to deepen interest with a no-price value offer.',
+      offer: 'Free diagnosis / assessment', offerRationale: 'The free offer lowers the friction of taking the first step and creates commitment — it converts far better than “X% off”.',
+      goal: 'Turn interest into intent — book free assessments.',
+      strategy: 'Ad for people who engaged in the last 30 days → booking → team contact.',
+      audience: 'Remarketing to those who saw the guide + engaged with the profile (last 30 days)',
+      persona: 'Already considers solving the problem, wants to feel confident before paying.',
+      angle: 'Risk reduction', hook: 'Before spending a single real, do this for free',
+      headline: 'Your free assessment with the ' + biz + ' team',
+      primaryText: 'No commitment: we assess your case and show you the way. You decide later. Book in 1 minute.',
+      cta: 'Book free assessment', imagePrompt: 'Real person smiling in a welcoming service moment, natural light, business environment',
+      videoConcept: 'Short testimonial from a customer who did the assessment and came back.',
+      landingPage: 'Booking with calendar + social proof (real reviews).',
+      successMetrics: ['Cost per booking < R$ 18', 'Show-up rate > 60%'],
+      expectedOutcome: '80–120 assessments booked/month, feeding the Bottom of the Funnel.',
+      risk: 'High no-show. Mitigate with an automatic WhatsApp reminder.',
+      variations: [{ angle: 'Curiosity', hook: 'Can it be solved? Find out for free', headline: 'Free assessment, no hassle' }],
+    },
+    cmp3: {
+      name: 'VIP invitation — exclusive experience',
+      whyStage: 'Hot audience (booked an assessment / asked for a quote). The AI marked Bottom of Funnel: time to convert with a premium value offer.',
+      offer: 'VIP invitation + exclusive limited-time bonus', offerRationale: 'Scarcity + exclusivity (not pure discount). Preserves perceived value and avoids attracting bargain hunters.',
+      goal: 'Convert hot leads into customers.',
+      strategy: 'Remarketing to those who booked but did not close → VIP invitation with bonus and deadline.',
+      audience: 'Those who started booking/quote in the last 14 days and did not close',
+      persona: 'Ready to decide, needs a push and wants to feel special.',
+      angle: 'Exclusivity / honest urgency', hook: 'We saved something special just for you',
+      headline: 'Your VIP invitation with a bonus that ends this week',
+      primaryText: 'You took the first step — now we are unlocking an exclusive bonus for those who close by Sunday. Limited spots.',
+      cta: 'Secure my spot', imagePrompt: 'Premium detail of the product/service, soft gold, feeling of exclusivity',
+      videoConcept: 'Reels “what you get by joining now” (bonus on screen).',
+      landingPage: 'Offer page with bonus, deadline (countdown) and testimonials.',
+      successMetrics: ['ROAS > 3.0', 'Remarketing conversion rate > 8%'],
+      expectedOutcome: '8–12% conversion of hot leads, ticket preserved.',
+      risk: 'If the urgency is fake, it burns trust. Use a real, rotating deadline.',
+      variations: [
+        { angle: 'Bonus', hook: 'An extra that only those who join this week get', headline: 'The VIP bonus ends Sunday' },
+        { angle: 'Belonging', hook: 'Join the group that has already decided', headline: 'Your place among VIP customers' },
+      ],
+    },
+    cmp4: {
+      name: 'Active customers — refer and earn an experience',
+      whyStage: 'Current customer base. The AI chose Retention to increase repurchase and referrals — the cheapest growth there is.',
+      offer: 'Exclusive experience for referrals (value, not cashback)', offerRationale: 'A reward in experience creates more perceived value and bond than money back.',
+      goal: 'Increase repurchase and bring qualified referrals.',
+      strategy: 'Customer audience (list/buyers pixel) → referral program.',
+      audience: 'Buyers from the last 6 months',
+      persona: 'Already trusts the brand, likes being recognized.',
+      angle: 'Recognition / community', hook: 'You are already family — how about bringing someone?',
+      headline: 'Refer a friend and earn a special experience',
+      primaryText: 'Thanks for being a customer 💛 Refer someone and you both get something exclusive. As simple as that.',
+      cta: 'I want to refer', imagePrompt: 'Two happy people sharing the business experience, human warmth',
+      videoConcept: 'Reels of real customers referring (UGC).',
+      landingPage: 'Referral program page with a unique link.',
+      successMetrics: ['Referral rate > 5%', 'Referred-customer CAC < half of paid'],
+      expectedOutcome: '30–50 qualified referrals/month at nearly zero cost.',
+      risk: 'Low adoption if the prize is not exciting. Test different experiences.',
+      variations: [{ angle: 'Gratitude', hook: 'A thank-you that becomes a gift for you and a friend', headline: 'Your referral is worth an experience' }],
+    },
+  }
+  const R: Record<string, { title: string; detail: string; action: string }> = {
+    r1: { title: 'Clicks on “Learn more”, but they leave on seeing the price', detail: 'In the consideration campaign, 38% click and leave on the pricing page. The audience has not yet perceived enough value.', action: 'Run an educational Top of Funnel before asking for conversion — nurture before selling.' },
+    r2: { title: 'Saw services but did not ask for a quote', detail: '1,240 people visited the services page and did not move forward in the last 14 days.', action: 'Create remarketing with the free assessment offer for this audience.' },
+    r3: { title: 'Swap discount for value', detail: 'The draft “-15%” campaign tends to attract bargain hunters and cuts the margin.', action: 'Replace with “exclusive limited-time bonus” — converts better without burning price.' },
+    r4: { title: 'The guide campaign is healthy — scale it', detail: 'Cost per lead 40% below target and high CTR. There is room to increase budget.', action: 'Raise the budget by 30% gradually (avoids resetting learning).' },
+    r5: { title: 'Form loses people at the 2nd question', detail: '46% drop-off after the second question of the lead form.', action: 'Reduce the form to 1 field (WhatsApp only) and ask for the rest later.' },
+  }
+  const pixelLabels = ['Saw the ad', 'Clicked (Learn more)', 'Visited the site', 'Saw services', 'Saw prices', 'Started contact', 'Converted']
+  const reads = [
+    { event: 'Saw prices → left', what: '38% drop off right after seeing the pricing page.', why: 'They arrive without enough perceived value — the offer looks expensive for their stage.', improve: 'Add social proof and value anchoring before the price; nurture with Top of Funnel.', nextCampaign: 'Educational campaign (free guide) targeting those who saw the price and left.' },
+    { event: 'Started contact → did not finish', what: 'Half start the form and do not complete it.', why: 'A long form creates friction at the moment of highest interest.', improve: '1-field form + WhatsApp; qualify later.', nextCampaign: 'Remarketing “1 step left” for those who started and stopped.' },
+    { event: 'Returning visitor', what: '2nd and 3rd visits without buying.', why: 'High interest, but no decision trigger.', improve: 'Offer a limited-time bonus (not a discount).', nextCampaign: 'Bottom of Funnel “VIP invitation” for returning visitors.' },
+  ]
+  const cr: Record<string, { angle: string; caption: string; tone: string }> = {
+    cr1: { angle: 'Behind the scenes / authority', caption: 'The 3 mistakes almost everyone makes (and how to avoid them).', tone: 'Educational' },
+    cr2: { angle: 'Value lead magnet', caption: 'Download the free guide and decide without mistakes. 👇', tone: 'Direct' },
+    cr3: { angle: 'Social proof', caption: 'This is how hundreds chose right (swipe 👉).', tone: 'Trust' },
+    cr4: { angle: 'Exclusivity', caption: 'Your VIP invitation with a bonus that ends Sunday.', tone: 'Premium' },
+    cr5: { angle: 'Testimonial', caption: '“I did the free assessment and came back” — real customer.', tone: 'Emotional' },
+  }
+  const learn = [
+    { dimension: 'Best hook', winner: 'Education / “the mistake to avoid”', note: '2.3× more clicks than a price hook.' },
+    { dimension: 'Best creative', winner: 'Behind-the-scenes Reels with a real person', note: 'CTR 0.6pp above product photo.' },
+    { dimension: 'Best CTA', winner: '“Download free guide”', note: 'Beats “Learn more” at Top of Funnel.' },
+    { dimension: 'Best offer', winner: 'Free assessment/diagnosis', note: 'Converts more and preserves margin vs. discount.' },
+    { dimension: 'Most profitable stage', winner: 'Remarketing (Bottom)', note: 'Highest ROAS — audience already warmed up.' },
+    { dimension: 'Best time', winner: '7pm–9pm', note: 'Lowest CPM and highest completion rate.' },
+  ]
+  const ci: Record<string, { title: string; format: string; why: string }> = {
+    ci1: { title: '"The 3 mistakes almost everyone makes" (educational carousel)', format: 'Carousel', why: 'Tested organically with above-average engagement — already validated before spending paid media on it.' },
+    ci2: { title: 'Real behind-the-scenes of service/production', format: 'Reel', why: 'The behind-the-scenes format converted better than "posed" product in the latest Vault posts.' },
+    ci3: { title: 'Testimonial of a recent real result', format: 'Product Focus', why: 'Concrete proof for those already considering — same logic as the Product Focus template in the Library.' },
+    ci4: { title: 'Video testimonial from a satisfied customer', format: 'Reel', why: 'Social proof at the Bottom of Funnel reduces the final objection before conversion.' },
+  }
+  const sa: Record<string, { concept: string; goal: string; example: string }> = {
+    sa1: { concept: '"Which of these describes you best?" — segments the audience by itself', goal: 'Discovery + pixel signal collection (who answered what)', example: '"Have you tried solving this on your own?" [Yes] [Not yet]' },
+    sa2: { concept: 'Quick 2-question quiz to point to the right service', goal: 'Qualifies the lead before the click — arrives warmer', example: '"What is your biggest challenge today?" with 3 options' },
+    sa3: { concept: 'Slider "how much does this bother you from 0 to 10"', goal: 'Gradual intent signal — separates curious from decided', example: '0 to 10 slider about the problem the business solves' },
+    sa4: { concept: 'Countdown to the limited-time offer', goal: 'Real (not fake) urgency for Bottom of Funnel', example: 'Countdown to the end of the bonus, with an automatic reminder 1h before' },
+  }
+  return {
+    ...d,
+    campaigns: d.campaigns.map(c => ({ ...c, ...(C[c.id] ?? {}) })),
+    recommendations: d.recommendations.map(r => ({ ...r, ...(R[r.id] ?? {}) })),
+    pixelJourney: d.pixelJourney.map((p, i) => ({ ...p, label: pixelLabels[i] ?? p.label })),
+    pixelReads: d.pixelReads.map((p, i) => ({ ...p, ...(reads[i] ?? {}) })),
+    creatives: d.creatives.map(c => ({ ...c, ...(cr[c.id] ?? {}) })),
+    learnings: d.learnings.map((l, i) => ({ ...l, ...(learn[i] ?? {}) })),
+    contentIdeas: d.contentIdeas.map(c => ({ ...c, ...(ci[c.id] ?? {}) })),
+    storyAds: d.storyAds.map(c => ({ ...c, ...(sa[c.id] ?? {}) })),
   }
 }

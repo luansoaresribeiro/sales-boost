@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../../contexts/AuthContext'
 import { CARD, MUTED, BORDER, SUPABASE_URL } from './shared'
+import { useLang } from '../../../contexts/LanguageContext'
 import { DOMAINS, DOMAIN_ORDER, type DomainKey, type Maturity } from '../../../../shared/data-agent/domains'
 
 // Painel do Data Agent — os 9 domínios que alimentam o Hermes (ver
@@ -22,12 +23,20 @@ const ICON: Record<DomainKey, string> = {
   business: '🏢', customer: '🧑‍🤝‍🧑', market: '🌍', competition: '🥊', digital: '💻',
   content: '✍️', history: '🕰️', resources: '🧰', performance: '📈',
 }
-const MATURITY_LABEL: Record<Maturity, string> = { rich: 'Dado rico', partial: 'Dado parcial', empty: 'Sem dado ainda' }
+const TX = {
+  pt: { maturity: { rich: 'Dado rico', partial: 'Dado parcial', empty: 'Sem dado ainda' } as Record<Maturity, string>, queryErr: 'Erro ao consultar o Data Agent', loading: 'Carregando inteligência...',
+    intro: 'Isso é o que a IA (Hermes) usa pra decidir — não é um painel pro dono mexer, é o modelo interno do negócio. Nunca inventa número: quando não há dado real, o domínio aparece honestamente vazio.',
+    unknown: 'desconhecido', noSignal: 'Nenhum sinal real ainda nesse domínio.', confidence: 'confiança', missing: 'Falta hoje' },
+  en: { maturity: { rich: 'Rich data', partial: 'Partial data', empty: 'No data yet' } as Record<Maturity, string>, queryErr: 'Error querying the Data Agent', loading: 'Loading intelligence...',
+    intro: 'This is what the AI (Hermes) uses to decide — it is not a panel for the owner to edit, it is the internal model of the business. It never makes up numbers: when there is no real data, the domain honestly shows up empty.',
+    unknown: 'unknown', noSignal: 'No real signals in this domain yet.', confidence: 'confidence', missing: 'Missing today' },
+} as const
 const MATURITY_COLOR: Record<Maturity, string> = { rich: '#4ade80', partial: '#FBBF24', empty: MUTED }
 const RELEVANCE_COLOR: Record<string, string> = { high: '#f87171', medium: '#FBBF24', low: MUTED }
 
 export default function IntelligenceDomainsPanel({ companyId }: { companyId: string }) {
   const { session } = useAuth()
+  const tx = TX[useLang().lang]
   const [states, setStates] = useState<DomainState[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -46,18 +55,18 @@ export default function IntelligenceDomainsPanel({ companyId }: { companyId: str
         if (data.error) { setError(String(data.error)); setStates(null) }
         else { setStates(data.domains ?? []); setError('') }
       })
-      .catch(e => { if (alive) setError(e instanceof Error ? e.message : 'Erro ao consultar o Data Agent') })
+      .catch(e => { if (alive) setError(e instanceof Error ? e.message : tx.queryErr) })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [companyId, session?.access_token])
+  }, [companyId, session?.access_token, tx.queryErr])
 
-  if (loading) return <div style={{ fontSize: '12px', color: MUTED }}>Carregando inteligência...</div>
+  if (loading) return <div style={{ fontSize: '12px', color: MUTED }}>{tx.loading}</div>
   if (error) return <div style={{ fontSize: '12px', color: '#f87171' }}>{error}</div>
 
   return (
     <div>
       <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55, marginBottom: '14px', maxWidth: '680px' }}>
-        Isso é o que a IA (Hermes) usa pra decidir — não é um painel pro dono mexer, é o modelo interno do negócio. Nunca inventa número: quando não há dado real, o domínio aparece honestamente vazio.
+        {tx.intro}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
         {DOMAIN_ORDER.map(key => {
@@ -70,7 +79,7 @@ export default function IntelligenceDomainsPanel({ companyId }: { companyId: str
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
                 <span style={{ fontSize: '13px', fontWeight: 800, color: 'white' }}>{ICON[key]} {def.title}</span>
                 <span style={{ fontSize: '9px', fontWeight: 800, color: MATURITY_COLOR[def.maturity], border: `1px solid ${MATURITY_COLOR[def.maturity]}44`, borderRadius: '99px', padding: '2px 8px', flexShrink: 0 }}>
-                  {MATURITY_LABEL[def.maturity]}
+                  {tx.maturity[def.maturity]}
                 </span>
               </div>
               <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', marginBottom: '8px' }}>{def.question}</div>
@@ -82,13 +91,13 @@ export default function IntelligenceDomainsPanel({ companyId }: { companyId: str
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
                       {Object.entries(state.metrics).map(([k, v]) => (
                         <span key={k} style={{ fontSize: '10px', color: MUTED, background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '7px', padding: '3px 8px' }}>
-                          {k}: <strong style={{ color: v == null ? 'rgba(255,255,255,0.3)' : 'white' }}>{v == null ? 'desconhecido' : String(v)}</strong>
+                          {k}: <strong style={{ color: v == null ? 'rgba(255,255,255,0.3)' : 'white' }}>{v == null ? tx.unknown : String(v)}</strong>
                         </span>
                       ))}
                     </div>
                   )}
                   {!state?.signals.length ? (
-                    <div style={{ fontSize: '11.5px', color: MUTED }}>Nenhum sinal real ainda nesse domínio.</div>
+                    <div style={{ fontSize: '11.5px', color: MUTED }}>{tx.noSignal}</div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                       {state.signals.map((s, i) => (
@@ -98,14 +107,14 @@ export default function IntelligenceDomainsPanel({ companyId }: { companyId: str
                             <span style={{ fontSize: '9px', fontWeight: 800, color: RELEVANCE_COLOR[s.business_relevance] }}>{s.business_relevance.toUpperCase()}</span>
                           </div>
                           {s.evidence.map((ev, j) => <div key={j} style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>• {ev}</div>)}
-                          <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>confiança: {s.confidence}</div>
+                          <div style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>{tx.confidence}: {s.confidence}</div>
                         </div>
                       ))}
                     </div>
                   )}
                   {def.gaps.length > 0 && (
                     <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)', marginTop: '10px', lineHeight: 1.5 }}>
-                      Falta hoje: {def.gaps.join(' · ')}
+                      {tx.missing}: {def.gaps.join(' · ')}
                     </div>
                   )}
                 </div>

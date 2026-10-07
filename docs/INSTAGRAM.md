@@ -78,3 +78,16 @@ em `ClientRoute` leva a pessoa de volta pro `/setup`, onde o cartão já
 aparece como conectado. "Conectar depois" não grava nada: o sino de
 pendências continua mostrando "Conectar o Instagram". Pode virar
 obrigatório por ficha com `config.setup.instagram_required = true`.
+
+## Página do Facebook e API com login do Facebook (2026-10-07)
+
+O @getsaleboost está ligado à Página **"Sales Boost Company"** (IG id
+`17841442836358659`, Portfólio empresarial "SalesBoost"). Existe também
+uma Página "Sales Boost" criada no mesmo dia por engano, sem Instagram.
+Pode ser apagada. A conta do Facebook usada para administrar é um
+**perfil** chamado "Sales Boost" (não uma Página). Isso confunde, e foi o
+motivo de `me/accounts` voltar vazio até a Página ser criada e ligada.
+O app lê a própria conta pela API com login do Facebook, mas
+`business_discovery` de terceiros retorna erro #10 até o App Review. Não
+é usado (o diagnóstico usa Apify, ver DECISIONS 2026-10-07). Material do
+pedido de aprovação: [META-APP-REVIEW.md](META-APP-REVIEW.md).

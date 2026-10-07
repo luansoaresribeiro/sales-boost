@@ -3,6 +3,33 @@ import { MUTED, BORDER, D } from './shared'
 import FormatsLibrary from './FormatsLibrary'
 import TestingArea from './TestingArea'
 import ContentVault from './ContentVault'
+import { useLang, type Lang } from '../../../contexts/LanguageContext'
+
+const TX = {
+  pt: {
+    topFormats: 'Formatos & Testes', topVault: 'Vault', organic: 'Orgânico', stories: 'Stories',
+    title: '📚 Biblioteca do Agente de Conteúdo',
+    d1: 'Formatos', d2: ' (a anatomia de cada imagem), ', d3: 'Testes', d4: ' (controle de qualidade) e ', d5: 'Vault', d6: ' (aprovados, prontos pra publicar). Ideias vive em ',
+    d7: 'Calendário da Semana', d8: ' agora; Estilos e Visuais (Kit da marca) fica na aba ', d9: 'Agente de Dados', d10: '.',
+  },
+  en: {
+    topFormats: 'Formats & Tests', topVault: 'Vault', organic: 'Organic', stories: 'Stories',
+    title: '📚 Content Agent Library',
+    d1: 'Formats', d2: ' (the anatomy of each image), ', d3: 'Tests', d4: ' (quality control) and ', d5: 'Vault', d6: ' (approved, ready to publish). Ideas now live in ',
+    d7: 'Weekly Calendar', d8: '; Styles and Visuals (Brand Kit) are in the ', d9: 'Data Agent', d10: ' tab.',
+  },
+} as const
+
+const KIND_LABEL_EN: Record<string, string> = {
+  personality: 'Personalities', framework: 'Copy frameworks', hook: 'Hooks', cta: 'CTAs', visual_system: 'Visual systems',
+  principle: 'Principles', design: 'Design', carousel: 'Carousel', single_image: 'Single image', educational: 'Educational',
+  storytelling: 'Storytelling', authority: 'Authority', engagement: 'Engagement', viral: 'Viral', feed: 'Feed', structure: 'Structures',
+  sequence: 'Sequences', sticker: 'Stickers', poll: 'Polls', countdown: 'Countdown', link: 'Links', bts: 'Behind the scenes',
+  urgency: 'Urgency', retention: 'Retention', story_ads: 'Story Ads',
+  objective: 'Objectives', funnel: 'Funnel', ad_copy: 'Ad copy', headline: 'Headlines', offer: 'Offers', targeting: 'Targeting',
+  retargeting: 'Retargeting', ugc: 'UGC', video_ad: 'Video ad', image_ad: 'Image ad', meta_best: 'Meta Ads', scaling: 'Scaling', fatigue: 'Creative fatigue',
+  emotion: 'Emotions', composition: 'Composition', component: 'Components',
+}
 
 const ORANGE = '#FF6D29'
 
@@ -13,15 +40,15 @@ const ORANGE = '#FF6D29'
 // sem trocar de aba no meio do caminho). Vault continua separado.
 // Estilos e Visuais mudou pra aba Agente de Dados — identidade visual/marca é
 // dado de contexto pro agente, não algo que se "testa" ou "publica" daqui.
-const TOP_TABS: { key: string; icon: string; label: string }[] = [
-  { key: 'formatos', icon: '🧩', label: 'Formatos & Testes' },
-  { key: 'vault', icon: '⭐', label: 'Vault' },
+const TOP_TABS = (lang: Lang): { key: string; icon: string; label: string }[] => [
+  { key: 'formatos', icon: '🧩', label: TX[lang].topFormats },
+  { key: 'vault', icon: '⭐', label: TX[lang].topVault },
 ]
 // Sub-abas de módulo — filtram Formatos e Testes por Orgânico/Stories.
 // Campanhas saiu (mudou pra dentro de Agente de Meta Ads).
-const MODULES: { key: 'organico' | 'stories'; icon: string; label: string }[] = [
-  { key: 'organico', icon: '✍️', label: 'Orgânico' },
-  { key: 'stories', icon: '📖', label: 'Stories' },
+const MODULES = (lang: Lang): { key: 'organico' | 'stories'; icon: string; label: string }[] => [
+  { key: 'organico', icon: '✍️', label: TX[lang].organic },
+  { key: 'stories', icon: '📖', label: TX[lang].stories },
 ]
 
 // Continuam exportados — usados por ModuleLibrary.tsx e ContentVault.tsx.
@@ -35,27 +62,28 @@ export const KIND_LABEL: Record<string, string> = {
   retargeting: 'Retargeting', ugc: 'UGC', video_ad: 'Vídeo ad', image_ad: 'Imagem ad', meta_best: 'Meta Ads', scaling: 'Escala', fatigue: 'Fadiga de criativo',
   emotion: 'Emoções', composition: 'Composição', component: 'Componentes',
 }
-export const kindLabel = (k: string) => KIND_LABEL[k] ?? k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ')
+export const kindLabel = (k: string, lang: Lang = 'pt') => (lang === 'en' ? KIND_LABEL_EN : KIND_LABEL)[k] ?? k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ')
 
 // Biblioteca: Formatos (a anatomia de cada imagem), Testes (QC) e Vault
 // (aprovados) — tudo num lugar só. Ideias mudou pra Calendário da Semana;
 // Estilos e Visuais fica na aba Agente de Dados.
 export default function ContentLibrary({ companyId }: { companyId: string }) {
+  const { lang } = useLang(); const tx = TX[lang]
   const [top, setTop] = useState('formatos')
   const [mod, setMod] = useState<'organico' | 'stories'>('organico')
 
   return (
     <div>
       <div style={{ marginBottom: '18px' }}>
-        <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>📚 Biblioteca do Agente de Conteúdo</div>
+        <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>{tx.title}</div>
         <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55, maxWidth: '760px' }}>
-          <strong style={{ color: 'white' }}>Formatos</strong> (a anatomia de cada imagem), <strong style={{ color: 'white' }}>Testes</strong> (controle de qualidade) e <strong style={{ color: 'white' }}>Vault</strong> (aprovados, prontos pra publicar). Ideias vive em <strong style={{ color: 'white' }}>Calendário da Semana</strong> agora; Estilos e Visuais (Kit da marca) fica na aba <strong style={{ color: 'white' }}>Agente de Dados</strong>.
+          <strong style={{ color: 'white' }}>{tx.d1}</strong>{tx.d2}<strong style={{ color: 'white' }}>{tx.d3}</strong>{tx.d4}<strong style={{ color: 'white' }}>{tx.d5}</strong>{tx.d6}<strong style={{ color: 'white' }}>{tx.d7}</strong>{tx.d8}<strong style={{ color: 'white' }}>{tx.d9}</strong>{tx.d10}
         </div>
       </div>
 
       {/* Abas de topo da Biblioteca */}
       <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '18px', flexWrap: 'wrap' }}>
-        {TOP_TABS.map(t => {
+        {TOP_TABS(lang).map(t => {
           const active = top === t.key
           return (
             <button key={t.key} onClick={() => setTop(t.key)}
@@ -71,7 +99,7 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
           (Vault é da marca/QC como um todo, não por módulo). */}
       {top === 'formatos' && (
         <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          {MODULES.map(m => {
+          {MODULES(lang).map(m => {
             const active = mod === m.key
             return (
               <button key={m.key} onClick={() => setMod(m.key)}

@@ -90,5 +90,31 @@ export const COMPONENT_LABEL: Record<string, string> = {
   competitive_response: 'Resposta à concorrência', digital_infrastructure: 'Infraestrutura digital',
 }
 
+// Versão EN dos rótulos acima (mesmas chaves) — usada quando o idioma é 'en'.
+const LABELS_EN = {
+  GOAL_TYPE: {
+    lead_gen: 'Lead generation', sales: 'Sales / revenue', acquisition: 'Customer acquisition', awareness: 'Brand awareness',
+    instagram_growth: 'Instagram growth', engagement: 'Engagement', website_conversions: 'Website conversions',
+    whatsapp: 'WhatsApp conversations', bookings: 'Bookings', retention: 'Customer retention', other: 'Other',
+  } as Record<string, string>,
+  STATUS: { draft: 'Draft', active: 'Active', paused: 'Paused', completed: 'Completed', needs_review: 'Needs review', generating: 'Generating...', failed: 'Failed' } as Record<string, string>,
+  FEASIBILITY: {
+    supports_plan: 'Current conditions support the plan', needs_more_data: 'Needs more data to be sure',
+    needs_adjustment: 'The plan needs adjustments', significant_constraints: 'There are important constraints today',
+  } as Record<string, string>,
+  FUNNEL_STAGE: { awareness: 'Top (Awareness)', consideration: 'Middle (Consideration)', conversion: 'Bottom (Conversion)', retention: 'Retention' } as Record<string, string>,
+  DECISION_TYPE: { refine: 'Refine', pivot: 'Change direction', terminate: 'End' } as Record<string, string>,
+  COMPONENT: {
+    positioning: 'Positioning', offer: 'Offer', acquisition: 'Acquisition', content: 'Content', conversion: 'Conversion',
+    customer_service: 'Customer service', retention: 'Retention', reactivation: 'Reactivation', reputation: 'Reputation',
+    competitive_response: 'Competitive response', digital_infrastructure: 'Digital infrastructure',
+  } as Record<string, string>,
+}
+export function strategyLabels(lang: 'pt' | 'en') {
+  return lang === 'en'
+    ? LABELS_EN
+    : { GOAL_TYPE: GOAL_TYPE_LABEL, STATUS: STATUS_LABEL, FEASIBILITY: FEASIBILITY_LABEL, FUNNEL_STAGE: FUNNEL_STAGE_LABEL, DECISION_TYPE: DECISION_TYPE_LABEL, COMPONENT: COMPONENT_LABEL }
+}
+
 export const EMPTY_BUDGET: Budget = { total: null, currency: 'BRL', period: 'monthly', paid_ads: null, organic: null, creative: null, other: null, is_flexible: true, allocation: [] }
 export const EMPTY_ESTIMATES: Estimates = { time_to_signals: '', time_to_progress: '', time_to_target: '', confidence: 'medium', risks: '', feasibility_status: 'needs_more_data', feasibility_reasoning: '' }

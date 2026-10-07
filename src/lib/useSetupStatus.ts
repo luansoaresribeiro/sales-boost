@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
+import { useLang, type Lang } from '../contexts/LanguageContext'
 import { useRealtime } from './useRealtime'
 import {
   DEFAULT_SETUP_CONFIG, fetchCatalogSchema, fetchOnboardingQuestions, fetchSetupConfig,
@@ -39,16 +40,32 @@ export interface SetupStatus {
   refresh: () => Promise<void>
 }
 
+const MT = {
+  pt: {
+    name: 'nome', city: 'cidade', phone: 'telefone', business: (p: string) => `dados do negócio (${p})`,
+    question: 'pergunta', questions: 'perguntas', photo: 'foto', photos: 'fotos',
+    itemsWith: (n: number, item: string, p: number) => `${n} ${item} com ${p} fotos`,
+    connectIg: 'conectar o Instagram', missing: 'Falta',
+  },
+  en: {
+    name: 'name', city: 'city', phone: 'phone', business: (p: string) => `business details (${p})`,
+    question: 'question', questions: 'questions', photo: 'photo', photos: 'photos',
+    itemsWith: (n: number, item: string, p: number) => `${n} ${item} with ${p} photos`,
+    connectIg: 'connect Instagram', missing: 'Missing',
+  },
+} as const
+
 export const phoneDigits = (p: string) => p.replace(/\D/g, '')
 export function businessDataValid(b: BusinessData): boolean {
   return b.business_name.trim().length >= 2 && b.city.trim().length >= 2 && phoneDigits(b.phone).length >= 10
 }
-function businessMissing(b: BusinessData): string {
+function businessMissing(b: BusinessData, lang: Lang): string {
+  const m = MT[lang]
   const parts: string[] = []
-  if (b.business_name.trim().length < 2) parts.push('nome')
-  if (b.city.trim().length < 2) parts.push('cidade')
-  if (phoneDigits(b.phone).length < 10) parts.push('telefone')
-  return `dados do negócio (${parts.join(', ')})`
+  if (b.business_name.trim().length < 2) parts.push(m.name)
+  if (b.city.trim().length < 2) parts.push(m.city)
+  if (phoneDigits(b.phone).length < 10) parts.push(m.phone)
+  return m.business(parts.join(', '))
 }
 
 const EMPTY: Omit<SetupStatus, 'refresh' | 'loading' | 'error'> = {
@@ -60,12 +77,14 @@ const EMPTY: Omit<SetupStatus, 'refresh' | 'loading' | 'error'> = {
 /** `live`: assina mudanças em tempo real (tela /setup). O gate usa live=false: avalia uma vez, sem expulsar o dono do painel depois. */
 export function useSetupStatus(companyId: string | null | undefined, opts: { live?: boolean } = {}): SetupStatus {
   const live = opts.live ?? true
+  const { lang } = useLang()
   const [state, setState] = useState<{ loading: boolean; error: boolean; data: Omit<SetupStatus, 'refresh' | 'loading' | 'error'> }>({ loading: true, error: false, data: EMPTY })
   const seq = useRef(0)
 
   const compute = useCallback(async () => {
     if (!companyId) return
     const run = ++seq.current
+    const m = MT[lang]
     try {
       const { data: c, error: cErr } = await supabase.from('companies')
         .select('business_name, city, phone, instagram_user_id, vertical_key, playbook_answers').eq('id', companyId).maybeSingle()
@@ -78,11 +97,11 @@ export function useSetupStatus(companyId: string | null | undefined, opts: { liv
 
       const steps: SetupStep[] = []
       const bOk = businessDataValid(business)
-      steps.push({ id: 'dados', done: bOk, missing: bOk ? '' : businessMissing(business) })
+      steps.push({ id: 'dados', done: bOk, missing: bOk ? '' : businessMissing(business, lang) })
 
       if (questions.length > 0) {
         const miss = unansweredQuestions(questions, answers).length
-        steps.push({ id: 'perguntas', done: miss === 0, missing: miss === 0 ? '' : `${miss} ${miss === 1 ? 'pergunta' : 'perguntas'}` })
+        steps.push({ id: 'perguntas', done: miss === 0, missing: miss === 0 ? '' : `${miss} ${miss === 1 ? m.question : m.questions}` })
       }
 
       const minPhotos = catalogMinPhotos(schema)
@@ -98,9 +117,9 @@ export function useSetupStatus(companyId: string | null | undefined, opts: { liv
           const partial = list.filter(i => !itemHasEnoughPhotos(i.meta, minPhotos)).map(i => minPhotos - itemPhotoCount(i.meta)).sort((a, b) => a - b)
           if (partial.length > 0) {
             const f = partial.slice(0, need).reduce((s, n) => s + n, 0)
-            missing = `${f} ${f === 1 ? 'foto' : 'fotos'}`
+            missing = `${f} ${f === 1 ? m.photo : m.photos}`
           } else {
-            missing = `${need} ${schema.itemLabel.toLowerCase()} com ${minPhotos} fotos`
+            missing = m.itemsWith(need, schema.itemLabel.toLowerCase(), minPhotos)
           }
         }
         steps.push({ id: 'catalogo', done: need === 0, missing })
@@ -111,14 +130,14 @@ export function useSetupStatus(companyId: string | null | undefined, opts: { liv
       const required = steps.length + (instagramRequired ? 1 : 0)
       const doneCount = steps.filter(s => s.done).length + (instagramRequired && instagramConnected ? 1 : 0)
       const missingParts = steps.filter(s => !s.done).map(s => s.missing)
-      if (instagramRequired && !instagramConnected) missingParts.push('conectar o Instagram')
+      if (instagramRequired && !instagramConnected) missingParts.push(m.connectIg)
 
       if (run !== seq.current) return
       setState({
         loading: false, error: false,
         data: {
           steps, instagramRequired, instagramConnected, required, doneCount, allDone: doneCount === required,
-          missingText: missingParts.length ? `Falta: ${missingParts.join(' · ')}` : '',
+          missingText: missingParts.length ? `${m.missing}: ${missingParts.join(' · ')}` : '',
           business, questions, answers, schema, verticalKey, minPhotos, minItems: cfg.minItems,
         },
       })
@@ -126,7 +145,7 @@ export function useSetupStatus(companyId: string | null | undefined, opts: { liv
       if (run !== seq.current) return
       setState(s => ({ ...s, loading: false, error: true }))
     }
-  }, [companyId])
+  }, [companyId, lang])
 
   useEffect(() => { void compute() }, [compute])
 

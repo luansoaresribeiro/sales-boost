@@ -1,10 +1,34 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { useLang } from '../../../contexts/LanguageContext'
 import { ORANGE, CARD, MUTED, BORDER, timeAgo, type ToolRegistryRow, type ToolConfigRow } from './shared'
 
-const STATUS_LABEL: Record<string, string> = { live: 'Conectada', partial: 'Parcial', planned: 'Planejada' }
+const TX = {
+  pt: {
+    status: { live: 'Conectada', partial: 'Parcial', planned: 'Planejada' } as Record<string, string>,
+    health: { ok: '● saudável', warning: '● atenção', error: '● erro', unknown: '○ sem dado' } as Record<string, string>,
+    fields: null as Record<string, string> | null,
+    creationTitle: '✨ Ferramentas de criação do seu setor', creationSub: 'As prontas se usam dentro de cada item do seu catálogo. As "Em breve" você pode pedir pra avisar quando lançar.',
+    notified: '✓ Você será avisado quando lançar', want: 'Quero quando lançar',
+    intro: 'Tudo que o Marketing AI sabe (ou vai saber) fazer. As marcadas como "Planejada" dependem de acesso a APIs que a Sales Boost ainda não tem (Meta Business API pra DMs/comentários/Insights oficial) — a configuração já existe, só a integração real que falta.',
+    lastSync: 'última sync', never: 'nunca sincronizou', requires: 'requer', close: '▲ Fechar configurações', settings: '⚙️ Configurações',
+  },
+  en: {
+    status: { live: 'Connected', partial: 'Partial', planned: 'Planned' } as Record<string, string>,
+    health: { ok: '● healthy', warning: '● warning', error: '● error', unknown: '○ no data' } as Record<string, string>,
+    fields: {
+      refresh_frequency: 'Refresh frequency', historical_window: 'Historical window', retry_policy: 'Retry policy', default_view: 'Default view',
+      sentiment_detection: 'Sentiment detection', lead_detection: 'Lead detection', sensitivity: 'Sensitivity', aspect_ratio: 'Aspect ratio',
+      creativity: 'Creativity', length: 'Caption length', emoji_density: 'Emoji use', report_frequency: 'Report frequency',
+      confidence_threshold: 'Minimum confidence', max_experiments: 'Max. simultaneous experiments', memory_limit: 'Brain item limit',
+    } as Record<string, string> | null,
+    creationTitle: '✨ Creation tools for your industry', creationSub: 'The ready ones are used inside each item of your catalog. For the "Coming soon" ones you can ask to be notified when they launch.',
+    notified: '✓ You will be notified when it launches', want: 'Notify me when it launches',
+    intro: 'Everything Marketing AI can do (or will be able to do). Those marked "Planned" depend on API access Sales Boost doesn\'t have yet (Meta Business API for DMs/comments/official Insights) — the configuration already exists, only the real integration is missing.',
+    lastSync: 'last sync', never: 'never synced', requires: 'requires', close: '▲ Close settings', settings: '⚙️ Settings',
+  },
+}
 const STATUS_COLOR: Record<string, string> = { live: '#4ade80', partial: '#FBBF24', planned: 'rgba(255,255,255,0.35)' }
-const HEALTH_LABEL: Record<string, string> = { ok: '● saudável', warning: '● atenção', error: '● erro', unknown: '○ sem dado' }
 const HEALTH_COLOR: Record<string, string> = { ok: '#4ade80', warning: '#FBBF24', error: '#f87171', unknown: 'rgba(255,255,255,0.3)' }
 
 interface SettingField { key: string; label: string; type: 'text' | 'select' | 'number'; options?: string[] }
@@ -33,6 +57,8 @@ const TOOL_SETTINGS_SCHEMA: Record<string, SettingField[]> = {
 // CatalogItems.tsx); aqui é só a visão geral + interesse nas que ainda não
 // existem ("Quero quando lançar").
 function CreationToolsPanel({ tools, companyId }: { tools: ToolRegistryRow[]; companyId: string }) {
+  const { lang } = useLang()
+  const tx = TX[lang]
   const [interested, setInterested] = useState<Set<string>>(new Set())
   useEffect(() => {
     supabase.from('marketing_ai_tool_interest').select('tool_id').eq('company_id', companyId)
@@ -44,22 +70,22 @@ function CreationToolsPanel({ tools, companyId }: { tools: ToolRegistryRow[]; co
   }
   return (
     <div style={{ marginBottom: '22px' }}>
-      <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>✨ Ferramentas de criação do seu setor</div>
-      <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '12px', lineHeight: 1.5 }}>As prontas se usam dentro de cada item do seu catálogo. As "Em breve" você pode pedir pra avisar quando lançar.</div>
+      <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>{tx.creationTitle}</div>
+      <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '12px', lineHeight: 1.5 }}>{tx.creationSub}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
         {tools.map(t => (
           <div key={t.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '14px 16px' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '6px' }}>
               <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{t.name}</div>
-              <span style={{ fontSize: '9.5px', fontWeight: 700, color: STATUS_COLOR[t.status], padding: '1px 7px', borderRadius: '99px', border: `1px solid ${STATUS_COLOR[t.status]}44`, flexShrink: 0 }}>{STATUS_LABEL[t.status]}</span>
+              <span style={{ fontSize: '9.5px', fontWeight: 700, color: STATUS_COLOR[t.status], padding: '1px 7px', borderRadius: '99px', border: `1px solid ${STATUS_COLOR[t.status]}44`, flexShrink: 0 }}>{tx.status[t.status]}</span>
             </div>
             <div style={{ fontSize: '11px', color: MUTED, marginBottom: '10px', lineHeight: 1.5 }}>{t.description}</div>
             {t.status === 'planned' && (
               interested.has(t.id) ? (
-                <span style={{ fontSize: '11px', color: '#4ade80', fontWeight: 700 }}>✓ Você será avisado quando lançar</span>
+                <span style={{ fontSize: '11px', color: '#4ade80', fontWeight: 700 }}>{tx.notified}</span>
               ) : (
                 <button onClick={() => registerInterest(t.id)} style={{ padding: '6px 12px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '8px', color: ORANGE, fontWeight: 700, fontSize: '11px', cursor: 'pointer' }}>
-                  Quero quando lançar
+                  {tx.want}
                 </button>
               )
             )}
@@ -71,6 +97,8 @@ function CreationToolsPanel({ tools, companyId }: { tools: ToolRegistryRow[]; co
 }
 
 export default function ToolsTab({ companyId, tools, configs, onRefresh }: { companyId: string; tools: ToolRegistryRow[]; configs: ToolConfigRow[]; onRefresh: () => Promise<void> }) {
+  const { lang } = useLang()
+  const tx = TX[lang]
   const [expanded, setExpanded] = useState<string | null>(null)
   const configByTool = Object.fromEntries(configs.map(c => [c.tool_id, c]))
   const creationTools = tools.filter(t => t.category === 'criacao')
@@ -94,7 +122,7 @@ export default function ToolsTab({ companyId, tools, configs, onRefresh }: { com
       {creationTools.length > 0 && <CreationToolsPanel tools={creationTools} companyId={companyId} />}
 
       <div style={{ fontSize: '12.5px', color: MUTED, marginBottom: '18px', lineHeight: 1.6 }}>
-        Tudo que o Marketing AI sabe (ou vai saber) fazer. As marcadas como "Planejada" dependem de acesso a APIs que a Sales Boost ainda não tem (Meta Business API pra DMs/comentários/Insights oficial) — a configuração já existe, só a integração real que falta.
+        {tx.intro}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -112,21 +140,21 @@ export default function ToolsTab({ companyId, tools, configs, onRefresh }: { com
               </div>
               <div style={{ fontSize: '11px', color: MUTED, marginBottom: '10px', lineHeight: 1.5 }}>{t.description}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: fields.length ? '10px' : 0 }}>
-                <span style={{ fontSize: '9.5px', fontWeight: 700, color: STATUS_COLOR[t.status], padding: '1px 7px', borderRadius: '99px', border: `1px solid ${STATUS_COLOR[t.status]}44` }}>{STATUS_LABEL[t.status]}</span>
-                <span style={{ fontSize: '10px', color: HEALTH_COLOR[cfg?.health ?? 'unknown'] }}>{HEALTH_LABEL[cfg?.health ?? 'unknown']}</span>
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>{cfg?.last_sync_at ? `última sync ${timeAgo(cfg.last_sync_at)}` : 'nunca sincronizou'}</span>
-                {!t.connected && t.requires_integration && <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>requer {t.requires_integration}</span>}
+                <span style={{ fontSize: '9.5px', fontWeight: 700, color: STATUS_COLOR[t.status], padding: '1px 7px', borderRadius: '99px', border: `1px solid ${STATUS_COLOR[t.status]}44` }}>{tx.status[t.status]}</span>
+                <span style={{ fontSize: '10px', color: HEALTH_COLOR[cfg?.health ?? 'unknown'] }}>{tx.health[cfg?.health ?? 'unknown']}</span>
+                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>{cfg?.last_sync_at ? `${tx.lastSync} ${timeAgo(cfg.last_sync_at, lang)}` : tx.never}</span>
+                {!t.connected && t.requires_integration && <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>{tx.requires} {t.requires_integration}</span>}
               </div>
               {fields.length > 0 && (
                 <>
                   <button onClick={() => setExpanded(isOpen ? null : t.id)} style={{ background: 'transparent', border: 'none', color: ORANGE, fontSize: '11px', cursor: 'pointer', padding: 0 }}>
-                    {isOpen ? '▲ Fechar configurações' : '⚙️ Configurações'}
+                    {isOpen ? tx.close : tx.settings}
                   </button>
                   {isOpen && (
                     <div style={{ display: 'grid', gridTemplateColumns: fields.length > 1 ? '1fr 1fr' : '1fr', gap: '10px', marginTop: '10px' }}>
                       {fields.map(f => (
                         <div key={f.key}>
-                          <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '4px' }}>{f.label}</label>
+                          <label style={{ display: 'block', fontSize: '10px', color: MUTED, marginBottom: '4px' }}>{tx.fields?.[f.key] ?? f.label}</label>
                           {f.type === 'select' ? (
                             <select value={String(cfg?.settings?.[f.key] ?? f.options?.[0] ?? '')} onChange={e => saveSetting(t.id, f.key, e.target.value)}
                               style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '7px', color: 'white', fontSize: '12px' }}>

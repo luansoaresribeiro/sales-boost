@@ -25,6 +25,8 @@ conteúdo técnico detalhado vive em `docs/`:
   ao lead.
 - [docs/LEARNING.md](docs/LEARNING.md) — medição e aprendizado.
 - [docs/INSTAGRAM.md](docs/INSTAGRAM.md) — conexão e publicação.
+- [docs/META-APP-REVIEW.md](docs/META-APP-REVIEW.md) — roteiro e textos
+  do pedido de aprovação do app na Meta.
 - [docs/PITFALLS.md](docs/PITFALLS.md) — armadilhas já descobertas (ler
   antes de mexer em cron, auth, domínio, migrations).
 - [docs/DECISIONS.md](docs/DECISIONS.md) — decisões, com data e motivo.

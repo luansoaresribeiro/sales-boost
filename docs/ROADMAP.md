@@ -176,10 +176,28 @@
    diagnóstico com score (Growth Score), acesso grátis (1 vídeo + 1
    estratégia, sem prazo em dias), popup "seu acesso grátis começou",
    popup do cupom depois do 1º vídeo (cupom com prazo real de 7 dias a
-   partir da entrega da estratégia), preço novo (R$2.449 mensal; R$1.449
+   partir da entrega da estratégia — ajustado em 10-07: conta de quando o cliente VÊ o popup), preço novo (R$2.449 mensal; R$1.449
    anual/cupom de 1º mês — Stripe precisa de 3 itens novos, aprovação do
    dono) e Business Game pra retenção. Decisão registrada em
-   [DECISIONS.md](DECISIONS.md) (2026-10-06), **não implementada**.
+   [DECISIONS.md](DECISIONS.md) (2026-10-06 e 2026-10-07). Fatias:
+   - **Fatia 1 — Growth Score (código pronto, falta aplicar migration
+     `20261007120000_diagnostics_instagram_data.sql` e deployar
+     `run-diagnosis`):** nota centrada no Instagram via scraper, site/Google
+     como adendo, "Análise parcial", tela do diagnóstico nova, onboarding
+     exigindo Instagram e site opcional.
+   - **Fatia 2 — Acesso grátis na tela:** textos/popup "seu acesso grátis
+     começou", remover o `TrialStartModal` (mostra R$14,49, preço errado) e
+     travar os botões de IA só pra contas novas grátis que já usaram a
+     estratégia.
+   - **Fatia 3 — Corte de IA no servidor (ARRISCADA):** functions de IA
+     recusam conta grátis que já gastou a cota. Mexe em functions de
+     cliente real; exige aprovação antes do deploy.
+   - **Fatia 4 — Stripe:** preço mensal R$2.449, anual R$1.449 (fidelidade
+     12 meses, cláusula no checkout, validar com advogado), cupom de 1º mês.
+     Exige aprovação do dono.
+   - **Fatia 5 — Vídeo/Higgsfield + popup do cupom:** 1 vídeo real no
+     acesso grátis; popup do cupom, com prazo de 7 dias contado de quando o
+     cliente vê o popup. Só então a promessa pública inclui "+1 vídeo".
 3. **Plano da semana** — no Calendário da Semana existente: quantos posts,
    de que tipo (vídeo/carrossel/bastidor), sobre qual item e por quê,
    calculado por fotos disponíveis, ritmo de aprovação do dono, 80/20,
