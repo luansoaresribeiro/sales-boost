@@ -224,14 +224,14 @@ export default function OverviewPage() {
                 {hasAnyValue ? (
                   <>
                     <div style={{ fontFamily: D, fontSize: '2rem', fontWeight: 900, color: ORANGE, lineHeight: 1, letterSpacing: '-0.02em' }}>
-                      {totalOppValue.toLocaleString(locale, { style: 'currency', currency: lang === 'en' ? 'USD' : 'BRL', maximumFractionDigits: 0 })}
+                      {totalOppValue.toLocaleString(locale, { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
                     </div>
                     <div style={{ fontSize: '11px', color: MUTED, marginTop: '6px' }}>{T.ifResolveAll}</div>
                   </>
                 ) : (
                   <button onClick={() => navigate('/dashboard/settings?section=negocio')}
                     style={{ fontSize: '11px', color: ORANGE, background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer', lineHeight: 1.5 }}>
-                    Configure seu ticket médio para ver o valor estimado →
+                    {lang === 'en' ? 'Set your average ticket to see the estimated value →' : 'Configure seu ticket médio para ver o valor estimado →'}
                   </button>
                 )}
               </div>
@@ -247,7 +247,7 @@ export default function OverviewPage() {
                       </div>
                       {o.estimated_value != null && (
                         <div style={{ fontSize: '13px', fontWeight: 700, color: ORANGE, flexShrink: 0 }}>
-                          + {o.estimated_value.toLocaleString(locale, { style: 'currency', currency: lang === 'en' ? 'USD' : 'BRL', maximumFractionDigits: 0 })}
+                          + {o.estimated_value.toLocaleString(locale, { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
                         </div>
                       )}
                       <span style={{ fontSize: '13px', color: MUTED, flexShrink: 0 }}>›</span>

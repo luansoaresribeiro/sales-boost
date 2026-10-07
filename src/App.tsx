@@ -495,8 +495,29 @@ function HowItWorksSection({ lang }: { lang: Lang }) {
 /* ══════════════════════════════════════════════════
    SHOWCASE  — laptop slides from right + parallax
 ══════════════════════════════════════════════════ */
+const MOCK = {
+  pt: {
+    menu: ['Dashboard', 'Reviews', 'Concorrentes', 'Relatório', 'Config'],
+    score: 'Score de Saúde · Jun 2026', login: 'Login / Cadastro', vsPrev: '↑ +12 pts vs. mês anterior', watermark: 'RELATÓRIO',
+    tags: ['Atendimento ↑', 'Preço ok', 'Espera ↓', '3 Ações do Mês'],
+    nextComp: 'Concorrente próx.', topComplaint: 'Top reclamação', waitTime: 'Tempo de espera', pctOneStar: '73% das 1★ reviews',
+  },
+  en: {
+    menu: ['Dashboard', 'Reviews', 'Competitors', 'Report', 'Settings'],
+    score: 'Health Score · Jun 2026', login: 'Login / Sign up', vsPrev: '↑ +12 pts vs. last month', watermark: 'REPORT',
+    tags: ['Service ↑', 'Price ok', 'Wait ↓', '3 Actions this Month'],
+    nextComp: 'Nearest competitor', topComplaint: 'Top complaint', waitTime: 'Wait time', pctOneStar: '73% of 1★ reviews',
+  },
+} as const
+
+const FOOTER_TX = {
+  pt: { menu: 'Menu', start: 'Começar', privacy: 'Política de Privacidade', terms: 'Termos de Uso' },
+  en: { menu: 'Menu', start: 'Get started', privacy: 'Privacy Policy', terms: 'Terms of Use' },
+} as const
+
 function ShowcaseSection({ lang }: { lang: Lang }) {
   const tx = t[lang].showcase
+  const mk = MOCK[lang]
   const sectionRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
@@ -547,7 +568,7 @@ function ShowcaseSection({ lang }: { lang: Lang }) {
                     </div>
                     <span style={{ fontWeight: 700, color: 'white', fontSize: '12px' }}>SalesBoost</span>
                   </div>
-                  {['Dashboard', 'Reviews', 'Concorrentes', 'Relatório', 'Config'].map((item, i) => (
+                  {mk.menu.map((item, i) => (
                     <div key={item} style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: i === 0 ? ORANGE : 'rgba(255,255,255,0.4)', background: i === 0 ? 'rgba(255,109,41,0.1)' : 'transparent', fontWeight: i === 0 ? 600 : 400 }}>{item}</div>
                   ))}
                   <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -567,32 +588,32 @@ function ShowcaseSection({ lang }: { lang: Lang }) {
                   <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 28% 38%, rgba(255,220,130,0.18) 0%, transparent 55%)' }} />
                   <div style={{ position: 'relative', zIndex: 1, padding: '26px 28px', height: '100%', display: 'flex', flexDirection: 'column' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-                      <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.55)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Score de Saúde · Jun 2026</div>
+                      <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.55)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{mk.score}</div>
                       <div style={{ display: 'flex', gap: '5px' }}>
-                        {['Eng ▾', 'Login / Cadastro'].map((b) => (
+                        {['Eng ▾', mk.login].map((b) => (
                           <div key={b} style={{ padding: '4px 10px', borderRadius: '6px', background: 'rgba(0,0,0,0.22)', fontSize: '8px', color: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)' }}>{b}</div>
                         ))}
                       </div>
                     </div>
                     <div style={{ fontFamily: D, fontSize: '9rem', fontWeight: 900, color: 'white', lineHeight: 0.82, letterSpacing: '-0.04em' }}>87</div>
-                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.52)', marginTop: '10px' }}>↑ +12 pts vs. mês anterior</div>
-                    <div aria-hidden style={{ position: 'absolute', bottom: '-18px', left: '14px', fontFamily: D, fontSize: '7.5rem', fontWeight: 900, color: 'rgba(0,0,0,0.14)', lineHeight: 1, whiteSpace: 'nowrap', pointerEvents: 'none', userSelect: 'none' }}>RELATÓRIO</div>
+                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.52)', marginTop: '10px' }}>{mk.vsPrev}</div>
+                    <div aria-hidden style={{ position: 'absolute', bottom: '-18px', left: '14px', fontFamily: D, fontSize: '7.5rem', fontWeight: 900, color: 'rgba(0,0,0,0.14)', lineHeight: 1, whiteSpace: 'nowrap', pointerEvents: 'none', userSelect: 'none' }}>{mk.watermark}</div>
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: 'auto', position: 'relative', zIndex: 2 }}>
-                      {['Atendimento ↑', 'Preço ok', 'Espera ↓', '3 Ações do Mês'].map((tag) => (
+                      {mk.tags.map((tag) => (
                         <div key={tag} style={{ padding: '5px 13px', borderRadius: '99px', fontSize: '10px', color: 'white', fontWeight: 500, background: 'rgba(0,0,0,0.24)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.13)' }}>{tag}</div>
                       ))}
                     </div>
                   </div>
                   <div style={{ position: 'absolute', right: '18px', top: '18px', width: '155px', display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 2 }}>
                     <div style={{ padding: '11px 13px', borderRadius: '11px', background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                      <div style={{ fontSize: '7px', color: 'rgba(255,255,255,0.45)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Concorrente próx.</div>
+                      <div style={{ fontSize: '7px', color: 'rgba(255,255,255,0.45)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{mk.nextComp}</div>
                       <div style={{ fontSize: '11px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>Bela Vista Rest.</div>
                       <div style={{ fontSize: '9px', color: ORANGE }}>★ 4.2 · 238 reviews</div>
                     </div>
                     <div style={{ padding: '11px 13px', borderRadius: '11px', background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                      <div style={{ fontSize: '7px', color: 'rgba(255,255,255,0.45)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Top reclamação</div>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>Tempo de espera</div>
-                      <div style={{ fontSize: '9px', color: '#f87171' }}>73% das 1★ reviews</div>
+                      <div style={{ fontSize: '7px', color: 'rgba(255,255,255,0.45)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{mk.topComplaint}</div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>{mk.waitTime}</div>
+                      <div style={{ fontSize: '9px', color: '#f87171' }}>{mk.pctOneStar}</div>
                     </div>
                   </div>
                 </div>
@@ -741,6 +762,7 @@ function IcpSection({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => vo
 ══════════════════════════════════════════════════ */
 function SiteFooter({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => void }) {
   const tx = t[lang].footer
+  const ft = FOOTER_TX[lang]
   const nav = t[lang].nav
   const labels = [nav.features, nav.how, nav.pricing]
   return (
@@ -759,7 +781,7 @@ function SiteFooter({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => vo
             <p className="text-xs mt-4" style={{ color: 'rgba(255,255,255,0.5)', maxWidth: '260px' }}>68.292.967 LUAN SOARES RIBEIRO — CNPJ 68.292.967/0001-28</p>
           </div>
           <div>
-            <div className="text-xs font-bold uppercase tracking-widest mb-5" style={{ color: 'rgba(255,255,255,0.3)' }}>Menu</div>
+            <div className="text-xs font-bold uppercase tracking-widest mb-5" style={{ color: 'rgba(255,255,255,0.3)' }}>{ft.menu}</div>
             <div className="flex flex-col gap-3">
               {labels.map((label, i) => (
                 <a key={label} href={NAV_LINKS[i]} className="text-sm transition-colors w-fit" style={{ color: MUTED }} onMouseEnter={e => (e.currentTarget.style.color = '#fff')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>
@@ -770,7 +792,7 @@ function SiteFooter({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => vo
           </div>
           <div className="flex flex-col justify-between">
             <div>
-              <div className="text-xs font-bold uppercase tracking-widest mb-5" style={{ color: 'rgba(255,255,255,0.3)' }}>Começar</div>
+              <div className="text-xs font-bold uppercase tracking-widest mb-5" style={{ color: 'rgba(255,255,255,0.3)' }}>{ft.start}</div>
               <button onClick={onTrialClick} className="font-bold text-sm px-6 py-3 rounded-xl text-black transition-all" style={{ background: ORANGE, border: 'none', cursor: 'pointer' }}>
                 {nav.cta}
               </button>
@@ -781,10 +803,10 @@ function SiteFooter({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => vo
           <div className="flex items-center gap-5 flex-wrap justify-center">
             <p className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>© 68.292.967 LUAN SOARES RIBEIRO — {tx.copy}</p>
             <Link to="/privacidade" className="text-xs transition-colors" style={{ color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.color = '#fff')} onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.4)')}>
-              Política de Privacidade
+              {ft.privacy}
             </Link>
             <Link to="/termos" className="text-xs transition-colors" style={{ color: 'rgba(255,255,255,0.4)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.color = '#fff')} onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.4)')}>
-              Termos de Uso
+              {ft.terms}
             </Link>
           </div>
           <div className="flex gap-3">

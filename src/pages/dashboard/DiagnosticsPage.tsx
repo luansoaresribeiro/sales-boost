@@ -52,12 +52,34 @@ interface Company {
 
 type Strategy = 'mobile' | 'desktop'
 
-const SCORE_LABELS: Record<string, string> = {
-  performance: 'Performance',
-  seo: 'SEO',
-  accessibility: 'Acessibilidade',
-  best_practices: 'Boas Práticas',
-}
+const TX = {
+  pt: {
+    loc: 'pt-BR', loading: 'Carregando...', runErr: 'Erro ao rodar diagnóstico',
+    scores: { performance: 'Performance', seo: 'SEO', accessibility: 'Acessibilidade', best_practices: 'Boas Práticas' } as Record<string, string>,
+    running: 'Rodando diagnóstico do site...', last: 'Último', autoRun: 'Rodando diagnóstico automático...', setUrl: 'Configure o URL do site nas Configurações para ativar',
+    runningBtn: 'Rodando...', newDiag: 'Novo diagnóstico', runDiag: 'Rodar diagnóstico',
+    analyzing: (u: string) => `Analisando ${u}...`, yourSite: 'seu site',
+    psRunning: 'Rodando PageSpeed Insights mobile e desktop. Leva ~30 segundos.',
+    unavailable: 'Diagnóstico técnico indisponível',
+    unavA: 'As métricas técnicas (PageSpeed) não puderam ser coletadas. Adicione a chave ', unavB: ' nos secrets do Supabase para ativar.',
+    meanwhile: 'Enquanto isso, rode novamente para obter a análise de IA.', runAI: 'Rodar análise de IA →',
+    improvements: 'Oportunidades de Melhoria', critique: 'Crítica visual/UX (IA)', shotAlt: 'Screenshot do site',
+    strengths: 'Pontos fortes', suggested: 'Melhorias sugeridas',
+  },
+  en: {
+    loc: 'en-US', loading: 'Loading...', runErr: 'Error running diagnosis',
+    scores: { performance: 'Performance', seo: 'SEO', accessibility: 'Accessibility', best_practices: 'Best Practices' } as Record<string, string>,
+    running: 'Running site diagnosis...', last: 'Last', autoRun: 'Running automatic diagnosis...', setUrl: 'Set your site URL in Settings to activate',
+    runningBtn: 'Running...', newDiag: 'New diagnosis', runDiag: 'Run diagnosis',
+    analyzing: (u: string) => `Analyzing ${u}...`, yourSite: 'your site',
+    psRunning: 'Running PageSpeed Insights for mobile and desktop. Takes ~30 seconds.',
+    unavailable: 'Technical diagnosis unavailable',
+    unavA: "The technical metrics (PageSpeed) couldn't be collected. Add the key ", unavB: ' to the Supabase secrets to enable it.',
+    meanwhile: 'Meanwhile, run it again to get the AI analysis.', runAI: 'Run AI analysis →',
+    improvements: 'Improvement Opportunities', critique: 'Visual/UX review (AI)', shotAlt: 'Site screenshot',
+    strengths: 'Strengths', suggested: 'Suggested improvements',
+  },
+} as const
 
 const METRIC_LABELS: Record<string, string> = {
   lcp: 'LCP',
@@ -90,6 +112,7 @@ export default function DiagnosticsPage() {
   const navigate = useNavigate()
   const { lang } = useLang()
   const T = d[lang].diagnostics
+  const X = TX[lang]
   const [diag, setDiag] = useState<Diagnostic | null>(null)
   const [company, setCompany] = useState<Company | null>(null)
   const [loading, setLoading] = useState(true)
@@ -144,7 +167,7 @@ export default function DiagnosticsPage() {
         body: JSON.stringify({}),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Erro ao rodar diagnóstico')
+      if (!res.ok) throw new Error(data.error ?? X.runErr)
       const { data: newDiag } = await supabase
         .from('diagnostics')
         .select('id, status, created_at, website_url, pagespeed_mobile, pagespeed_desktop, frontend_review')
@@ -157,7 +180,7 @@ export default function DiagnosticsPage() {
     setRunning(false)
   }
 
-  if (loading) return <div style={{ padding: '28px 32px', color: MUTED, fontSize: '14px' }}>Carregando...</div>
+  if (loading) return <div style={{ padding: '28px 32px', color: MUTED, fontSize: '14px' }}>{X.loading}</div>
 
   const ps = strategy === 'mobile' ? diag?.pagespeed_mobile : diag?.pagespeed_desktop
   const hasWebsite = !!company?.website_url
@@ -168,9 +191,9 @@ export default function DiagnosticsPage() {
         <div>
           <h1 style={{ fontFamily: D, fontSize: '1.5rem', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>{T.title}</h1>
           <p style={{ color: MUTED, fontSize: '13px' }}>
-            {running ? 'Rodando diagnóstico do site...' : diag
-              ? `Último: ${new Date(diag.created_at!).toLocaleDateString('pt-BR')} · ${diag.website_url}`
-              : hasWebsite ? 'Rodando diagnóstico automático...' : 'Configure o URL do site nas Configurações para ativar'}
+            {running ? X.running : diag
+              ? `${X.last}: ${new Date(diag.created_at!).toLocaleDateString(X.loc)} · ${diag.website_url}`
+              : hasWebsite ? X.autoRun : X.setUrl}
           </p>
         </div>
         {hasWebsite && (
@@ -178,7 +201,7 @@ export default function DiagnosticsPage() {
             onClick={() => runDiagnosis()}
             disabled={running}
             style={{ padding: '9px 18px', background: running ? 'rgba(255,109,41,0.3)' : ORANGE, color: '#000', fontWeight: 700, fontSize: '13px', borderRadius: '9px', border: 'none', cursor: running ? 'not-allowed' : 'pointer', flexShrink: 0 }}>
-            {running ? 'Rodando...' : diag ? 'Novo diagnóstico' : 'Rodar diagnóstico'}
+            {running ? X.runningBtn : diag ? X.newDiag : X.runDiag}
           </button>
         )}
       </div>
@@ -200,10 +223,10 @@ export default function DiagnosticsPage() {
               ))}
             </div>
             <div style={{ fontFamily: D, fontSize: '1.1rem', fontWeight: 700, color: 'white', marginBottom: '8px' }}>
-              Analisando {company?.website_url ?? 'seu site'}...
+              {X.analyzing(company?.website_url ?? X.yourSite)}
             </div>
             <div style={{ fontSize: '13px', color: MUTED }}>
-              Rodando PageSpeed Insights mobile e desktop. Leva ~30 segundos.
+              {X.psRunning}
             </div>
           </div>
         )}
@@ -223,16 +246,16 @@ export default function DiagnosticsPage() {
         {!running && hasWebsite && diag && diag.status === 'partial' && !diag.pagespeed_mobile && !diag.pagespeed_desktop && !diag.frontend_review && (
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '48px 32px', textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>⚠️</div>
-            <div style={{ fontFamily: D, fontSize: '1.2rem', fontWeight: 800, color: 'white', marginBottom: '8px' }}>Diagnóstico técnico indisponível</div>
+            <div style={{ fontFamily: D, fontSize: '1.2rem', fontWeight: 800, color: 'white', marginBottom: '8px' }}>{X.unavailable}</div>
             <div style={{ fontSize: '14px', color: MUTED, maxWidth: '420px', margin: '0 auto 12px', lineHeight: 1.7 }}>
-              As métricas técnicas (PageSpeed) não puderam ser coletadas. Adicione a chave <strong style={{ color: 'white' }}>PAGESPEED_API_KEY</strong> nos secrets do Supabase para ativar.
+              {X.unavA}<strong style={{ color: 'white' }}>PAGESPEED_API_KEY</strong>{X.unavB}
             </div>
             <div style={{ fontSize: '13px', color: MUTED, marginBottom: '24px' }}>
-              Enquanto isso, rode novamente para obter a análise de IA.
+              {X.meanwhile}
             </div>
             <button onClick={() => runDiagnosis()} disabled={running}
               style={{ padding: '11px 24px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '14px', borderRadius: '10px', border: 'none', cursor: 'pointer' }}>
-              Rodar análise de IA →
+              {X.runAI}
             </button>
           </div>
         )}
@@ -249,7 +272,7 @@ export default function DiagnosticsPage() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
-              {Object.entries(SCORE_LABELS).map(([key, label]) => (
+              {Object.entries(X.scores).map(([key, label]) => (
                 <ScoreCard key={key} label={label} score={ps?.[key as keyof PagespeedData] as number | undefined} />
               ))}
             </div>
@@ -278,7 +301,7 @@ export default function DiagnosticsPage() {
             {ps?.opportunities && ps.opportunities.length > 0 && (
               <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', overflow: 'hidden' }}>
                 <div style={{ padding: '16px 22px', borderBottom: `1px solid ${BORDER}` }}>
-                  <span style={{ color: 'white', fontWeight: 600, fontSize: '14px' }}>Oportunidades de Melhoria</span>
+                  <span style={{ color: 'white', fontWeight: 600, fontSize: '14px' }}>{X.improvements}</span>
                 </div>
                 {ps.opportunities.map((op, i) => (
                   <div key={op.id} style={{ padding: '14px 22px', borderBottom: i < ps.opportunities!.length - 1 ? `1px solid ${BORDER}` : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
@@ -294,14 +317,14 @@ export default function DiagnosticsPage() {
         {!running && hasWebsite && diag?.frontend_review && (
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', marginTop: ps ? '24px' : 0, marginBottom: '24px', overflow: 'hidden' }}>
             <div style={{ padding: '16px 22px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-              <span style={{ color: 'white', fontWeight: 600, fontSize: '14px' }}>Crítica visual/UX (IA)</span>
+              <span style={{ color: 'white', fontWeight: 600, fontSize: '14px' }}>{X.critique}</span>
               {diag.frontend_review.score != null && (
                 <span style={{ fontFamily: D, fontSize: '1.4rem', fontWeight: 900, color: scoreColor(diag.frontend_review.score) }}>{diag.frontend_review.score}</span>
               )}
             </div>
             <div style={{ padding: '20px 22px', display: 'grid', gridTemplateColumns: diag.frontend_review.screenshot_url ? '220px 1fr' : '1fr', gap: '20px' }}>
               {diag.frontend_review.screenshot_url && (
-                <img src={diag.frontend_review.screenshot_url} alt="Screenshot do site" style={{ width: '100%', borderRadius: '10px', border: `1px solid ${BORDER}`, display: 'block' }} />
+                <img src={diag.frontend_review.screenshot_url} alt={X.shotAlt} style={{ width: '100%', borderRadius: '10px', border: `1px solid ${BORDER}`, display: 'block' }} />
               )}
               <div>
                 {diag.frontend_review.summary && (
@@ -310,7 +333,7 @@ export default function DiagnosticsPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   {diag.frontend_review.strengths && diag.frontend_review.strengths.length > 0 && (
                     <div>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px' }}>Pontos fortes</div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px' }}>{X.strengths}</div>
                       <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         {diag.frontend_review.strengths.map((s, i) => (
                           <li key={i} style={{ fontSize: '12px', color: MUTED, lineHeight: 1.6, display: 'flex', gap: '6px' }}><span style={{ color: '#4ade80', flexShrink: 0 }}>✓</span>{s}</li>
@@ -320,7 +343,7 @@ export default function DiagnosticsPage() {
                   )}
                   {diag.frontend_review.improvements && diag.frontend_review.improvements.length > 0 && (
                     <div>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px' }}>Melhorias sugeridas</div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px' }}>{X.suggested}</div>
                       <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         {diag.frontend_review.improvements.map((s, i) => (
                           <li key={i} style={{ fontSize: '12px', color: MUTED, lineHeight: 1.6, display: 'flex', gap: '6px' }}><span style={{ color: ORANGE, flexShrink: 0 }}>→</span>{s}</li>
