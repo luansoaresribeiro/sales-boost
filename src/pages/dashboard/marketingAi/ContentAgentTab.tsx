@@ -239,7 +239,7 @@ function IdeaCard({ idea, approved, onApprove }: { idea: ContentIdea; approved: 
 
 export default function ContentAgentTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type'> }) {
   const { lang } = useLang(); const tx = TX[lang]
-  const demo = useMemo(() => buildContentDemo(company), [company])
+  const demo = useMemo(() => buildContentDemo(company, lang), [company, lang])
   const [approved, setApproved] = useState<Set<string>>(new Set())
   const { featured } = demo
   const [demoMode, setDemoMode] = useDemoMode(company.id)

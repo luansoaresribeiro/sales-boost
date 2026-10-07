@@ -253,12 +253,12 @@ export default function CampaignsTab({ company }: { company: Pick<CompanyData, '
   const { lang } = useLang()
   const t = TX[lang]
   const navigate = useNavigate()
-  const demo = useMemo(() => buildCampaignDemo(company), [company])
+  const demo = useMemo(() => buildCampaignDemo(company, lang), [company, lang])
   const { campaigns, recommendations, pixelJourney, pixelReads, creatives, learnings, contentIdeas, storyAds, overview } = demo
   // Mesmo score que vive em Agente de Dados → Saúde da Meta — aparece aqui
   // também porque quem roda campanha paga precisa ver isso sem trocar de aba
   // (o Pixel/Business Manager são a base de tudo que acontece em Campanhas).
-  const metaHealth = useMemo(() => buildMetaHealthDemo(company), [company])
+  const metaHealth = useMemo(() => buildMetaHealthDemo(company, lang), [company, lang])
   const healthKey = classifyHealth(metaHealth.overall)
   const healthCls = HEALTH_CLASS_META[healthKey]
   const healthLabel = lang === 'en' ? HEALTH_CLASS_EN[healthKey] ?? healthCls.label : healthCls.label

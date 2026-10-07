@@ -5,16 +5,10 @@ import { useLang } from '../../contexts/LanguageContext'
 import { d } from '../../i18n-dash'
 import {
   listAgentActions, decideAgentAction, editAgentAction, proposeAgentAction, retryAgentAction,
-  APPROVAL_META, EXECUTION_META, type AgentAction,
+  APPROVAL_META, EXECUTION_META, APPROVAL_LABEL_EN, EXECUTION_LABEL_EN, type AgentAction,
 } from '../../lib/agentActions'
 import { useRealtime } from '../../lib/useRealtime'
 
-const APPROVAL_EN: Record<string, string> = {
-  PENDING: 'Awaiting approval', AUTO_APPROVED: 'Auto-approved', APPROVED: 'Approved', REJECTED: 'Rejected', EDITED: 'Edited', CANCELLED: 'Cancelled',
-}
-const EXECUTION_EN: Record<string, string> = {
-  NOT_READY: 'Not ready', QUEUED: 'Queued', EXECUTING: 'Running', EXECUTED: 'Done', FAILED: 'Failed',
-}
 const EXEC_LABEL_EN: Record<string, string> = { organico: 'Organic', cliente: 'Reply to customer', campanha: 'Campaign' }
 const RISK_EN: Record<string, string> = { high: 'high', medium: 'medium', low: 'low' }
 const TX = {
@@ -93,7 +87,7 @@ function ActionCard({ a, busy, onDecide, onEdit, lang }: {
         </div>
         <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
           <ExecBadge kind={classifyAction(a)} />
-          <span style={{ fontSize: '9.5px', fontWeight: 700, color: ap.color, padding: '2px 8px', border: `1px solid ${ap.color}44`, borderRadius: '99px' }}>{lang === 'en' ? APPROVAL_EN[a.approval_status] ?? ap.label : ap.label}</span>
+          <span style={{ fontSize: '9.5px', fontWeight: 700, color: ap.color, padding: '2px 8px', border: `1px solid ${ap.color}44`, borderRadius: '99px' }}>{lang === 'en' ? APPROVAL_LABEL_EN[a.approval_status] ?? ap.label : ap.label}</span>
         </div>
       </div>
       {/* WHO / WHERE / WHEN */}
@@ -183,8 +177,8 @@ function HistoryRow({ a, busy, onRetry }: { a: AgentAction; busy: boolean; onRet
         <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
         <div style={{ fontSize: '9.5px', color: MUTED }}>{a.agent_name ?? a.agent_key} · {new Date(a.created_at).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' })}{a.execution_error ? ` · ${a.execution_error.slice(0, 60)}` : ''}</div>
       </div>
-      <span style={{ fontSize: '9px', fontWeight: 700, color: ap.color, flexShrink: 0 }}>{lang === 'en' ? APPROVAL_EN[a.approval_status] ?? ap.label : ap.label}</span>
-      <span style={{ fontSize: '9px', fontWeight: 700, color: ex.color, flexShrink: 0 }}>{lang === 'en' ? EXECUTION_EN[a.execution_status] ?? ex.label : ex.label}</span>
+      <span style={{ fontSize: '9px', fontWeight: 700, color: ap.color, flexShrink: 0 }}>{lang === 'en' ? APPROVAL_LABEL_EN[a.approval_status] ?? ap.label : ap.label}</span>
+      <span style={{ fontSize: '9px', fontWeight: 700, color: ex.color, flexShrink: 0 }}>{lang === 'en' ? EXECUTION_LABEL_EN[a.execution_status] ?? ex.label : ex.label}</span>
       {failed && (
         <button onClick={onRetry} disabled={busy}
           style={{ flexShrink: 0, padding: '4px 10px', background: 'transparent', border: `1px solid ${ORANGE}66`, borderRadius: '99px', color: ORANGE, fontSize: '9.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>

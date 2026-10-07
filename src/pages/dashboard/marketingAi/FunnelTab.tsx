@@ -56,7 +56,7 @@ function LeadCard({ lead, drafted, onDraft, onAdvance }: { lead: DemoLead; draft
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
         <ChannelBadge channel={lead.channelKey} />
-        <span style={{ fontSize: '11px', fontWeight: 700, color: ORANGE }}>{fmtBRL(lead.value)}</span>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: ORANGE }}>{fmtBRL(lead.value, false, lang)}</span>
         <span style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)' }}>{lead.lastContact}</span>
       </div>
       <div style={{ fontSize: '10.5px', color: MUTED, lineHeight: 1.45, marginBottom: '8px' }}>{lead.note}</div>
@@ -88,7 +88,7 @@ function LeadCard({ lead, drafted, onDraft, onAdvance }: { lead: DemoLead; draft
 export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name'> }) {
   const { lang } = useLang()
   const t = TX[lang]
-  const demo = useMemo(() => buildFunnelDemo(company), [company])
+  const demo = useMemo(() => buildFunnelDemo(company, lang), [company, lang])
   // Dado real da tabela `leads`. null = ainda carregando; [] = carregou e não
   // há lead real (então cai no demo, preservando o design).
   const [realLeads, setRealLeads] = useState<DemoLead[] | null>(null)
@@ -166,10 +166,10 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
 
       {/* Resumo */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
-        <Summary label={t.leadsInFunnel} value={fmtNum(total)} />
+        <Summary label={t.leadsInFunnel} value={fmtNum(total, lang)} />
         <Summary label={t.conversion} value={`${conversion}%`} />
-        <Summary label={t.pipelineValue} value={fmtBRL(pipelineValue, true)} color={ORANGE} />
-        <Summary label={t.noReplyLbl} value={fmtNum(noReply)} color={noReply > 0 ? '#FBBF24' : undefined} />
+        <Summary label={t.pipelineValue} value={fmtBRL(pipelineValue, true, lang)} color={ORANGE} />
+        <Summary label={t.noReplyLbl} value={fmtNum(noReply, lang)} color={noReply > 0 ? '#FBBF24' : undefined} />
       </div>
 
       {/* Kanban */}

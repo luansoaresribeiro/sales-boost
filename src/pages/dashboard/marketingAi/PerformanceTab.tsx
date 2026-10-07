@@ -49,7 +49,7 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
   const [syncError, setSyncError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
-  const demo = useMemo(() => buildPerformanceDemo(company), [company])
+  const demo = useMemo(() => buildPerformanceDemo(company, lang), [company, lang])
 
   const load = async (force = false) => {
     if (!session) return

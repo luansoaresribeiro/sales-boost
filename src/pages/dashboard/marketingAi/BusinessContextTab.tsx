@@ -29,15 +29,6 @@ const inputStyle = { width: '100%', boxSizing: 'border-box' as const, padding: '
 
 const CAT_EN: Record<string, string> = { operacao: 'Operations', equipe: 'Team', estrategia: 'Strategy', financeiro: 'Finance', marketing: 'Marketing', clientes: 'Customers', expansao: 'Expansion' }
 const IMP_EN: Record<string, string> = { high: 'High', medium: 'Medium', low: 'Low' }
-// Exemplos (só leitura) em inglês — mesmos ids de buildContextDemo().
-const DEMO_EN: Record<string, { text: string; tags: string[]; aiSummary: string }> = {
-  c1: { text: 'We will focus on weddings and events this season — I want campaigns and content aimed at that audience.', tags: ['weddings', 'events', 'season'], aiSummary: 'Season priority: weddings/events audience. I will prioritize campaigns, creatives and offers for that segment for about 4 months.' },
-  c2: { text: 'I hired another salesperson, so we can now answer leads much faster.', tags: ['sales', 'support'], aiSummary: 'Response capacity went up — I can be more aggressive on lead generation without overloading the team.' },
-  c3: { text: "We're closed every Monday. Don't schedule anything or suggest campaigns calling people in on Monday.", tags: ['hours', 'opening'], aiSummary: 'Closed on Mondays — never schedule actions, promotions or bookings for that day.' },
-  c4: { text: 'We will raise prices by about 8% next month because of costs.', tags: ['price', 'margin'], aiSummary: 'A ~8% price increase is coming — communicate value before the increase and avoid promising old prices.' },
-  c5: { text: "We're sponsoring the local neighborhood soccer team this year.", tags: ['sponsorship', 'community', 'neighborhood'], aiSummary: 'Local sponsorship active — use it as proof of community ties in content and PR.' },
-  c6: { text: 'We lost our biggest corporate client last month — we need to replace that revenue.', tags: ['b2b', 'revenue'], aiSummary: 'B2B revenue gap — prioritize corporate prospecting and business offers to replace it.' },
-}
 const TX = {
   pt: {
     intro1: '🧠 Aqui você ensina à IA o que ', introB1: 'nenhuma integração consegue saber', intro2: ' — decisões, planos, mudanças na equipe, foco da temporada. Vira a ', introB2: 'memória estratégica', intro3: ' do negócio e passa a influenciar toda campanha, conteúdo e recomendação do agente.',
@@ -103,7 +94,7 @@ export default function BusinessContextTab({ company }: { company: Pick<CompanyD
   // Enquanto o dono não registrou nada, mostramos exemplos (só leitura) pra ele
   // entender pra que serve. Somem no instante em que a primeira nota real entra.
   const isPreview = !loading && notes.length === 0
-  const demoNotes = useMemo(() => (isPreview ? buildContextDemo() : []), [isPreview])
+  const demoNotes = useMemo(() => (isPreview ? buildContextDemo(lang) : []), [isPreview, lang])
   const source = isPreview ? demoNotes : notes
 
   const visible = useMemo(() => {
@@ -235,7 +226,6 @@ export default function BusinessContextTab({ company }: { company: Pick<CompanyD
           {visible.map(n => {
             const c = CONTEXT_CATEGORY_META[n.category]
             const imp = IMPORTANCE_META[n.importance]
-            const demo = isPreview && lang === 'en' ? DEMO_EN[n.id] : undefined
             const catLabel = lang === 'en' ? CAT_EN[n.category] ?? c.label : c.label
             const impLabel = lang === 'en' ? IMP_EN[n.importance] : imp.label
             return (
@@ -243,7 +233,7 @@ export default function BusinessContextTab({ company }: { company: Pick<CompanyD
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '9px', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '10px', fontWeight: 700, color: MUTED, background: 'rgba(255,255,255,0.05)', border: `1px solid ${BORDER}`, borderRadius: '99px', padding: '2px 9px' }}>{c.icon} {catLabel}</span>
                   <span style={{ fontSize: '10px', fontWeight: 700, color: imp.color, border: `1px solid ${imp.color}44`, borderRadius: '99px', padding: '2px 9px' }}>{tx.impOf}{impLabel}</span>
-                  {(demo?.tags ?? n.tags).map(t => <span key={t} style={{ fontSize: '10px', color: '#60a5fa' }}>#{t}</span>)}
+                  {(n.tags).map(t => <span key={t} style={{ fontSize: '10px', color: '#60a5fa' }}>#{t}</span>)}
                   {isPreview ? (
                     <span style={{ marginLeft: 'auto', fontSize: '9.5px', fontWeight: 700, color: '#FBBF24' }}>{tx.example}</span>
                   ) : (
@@ -253,9 +243,9 @@ export default function BusinessContextTab({ company }: { company: Pick<CompanyD
                     </div>
                   )}
                 </div>
-                <div style={{ fontSize: '13.5px', color: 'white', lineHeight: 1.55, marginBottom: '9px' }}>{demo?.text ?? n.text}</div>
+                <div style={{ fontSize: '13.5px', color: 'white', lineHeight: 1.55, marginBottom: '9px' }}>{n.text}</div>
                 <div style={{ padding: '9px 12px', background: 'rgba(255,109,41,0.05)', borderRadius: '9px', fontSize: '11.5px', color: 'rgba(255,255,255,0.7)', lineHeight: 1.5, marginBottom: '9px' }}>
-                  <span style={{ color: ORANGE, fontWeight: 700 }}>{tx.aiSum}</span> {demo?.aiSummary ?? n.aiSummary}
+                  <span style={{ color: ORANGE, fontWeight: 700 }}>{tx.aiSum}</span> {n.aiSummary}
                 </div>
                 <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                   {n.effectiveDate && <span>{tx.validFrom}{fmt(n.effectiveDate, loc)}</span>}

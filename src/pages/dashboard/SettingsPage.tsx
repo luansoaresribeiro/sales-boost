@@ -442,7 +442,7 @@ export default function SettingsPage() {
 
         {tab === 'conexoes' && (
           company ? (
-            <ConnectionsTab connections={buildGrowthDemo(company).connections} />
+            <ConnectionsTab connections={buildGrowthDemo(company, lang).connections} />
           ) : (
             <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '22px', fontSize: '13px', color: MUTED, lineHeight: 1.6 }}>
               {X.createFirst1}<strong style={{ color: 'white' }}>{X.tabs.info}</strong>{X.createFirst2}{X.connectChannels}

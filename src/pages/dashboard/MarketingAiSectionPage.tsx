@@ -156,7 +156,7 @@ export default function MarketingAiSectionPage() {
       case 'reports':
         return <ReportsTab accessToken={accessToken} insights={data.insights} strategyLog={data.strategyLog} reports={data.reports} onRefresh={data.refresh} />
       case 'conexoes':
-        return <ConnectionsTab connections={buildGrowthDemo(company).connections} />
+        return <ConnectionsTab connections={buildGrowthDemo(company, lang).connections} />
       case 'avaliacoes':
         return <ReviewsAgentTab company={company} />
       case 'insights':

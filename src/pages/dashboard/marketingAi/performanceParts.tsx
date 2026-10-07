@@ -178,7 +178,7 @@ export function KpiCard({ kpi }: { kpi: Kpi }) {
         <InfoTip tip={kpi} />
       </div>
       <div style={{ fontSize: '20px', fontWeight: 800, color: kpi.value == null ? 'rgba(255,255,255,0.4)' : 'white', letterSpacing: '-0.02em' }}>
-        {metricText(kpi.value, kpi.format)}
+        {metricText(kpi.value, kpi.format, lang)}
       </div>
       <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
         <DeltaBadge d={d} small />
@@ -321,18 +321,18 @@ export function AudienceSection({ a, trend, days }: { a: PerformanceData['audien
 }
 
 export function ReachSection({ r }: { r: PerformanceData['reach'] }) {
-  const t = PERF_TX[useLang().lang]
+  const { lang } = useLang(); const t = PERF_TX[lang]
   const nf = r.nonFollowerPct
   return (
     <Panel title={t.reachTitle} icon="🔭">
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
         <div>
-          <StatLine label={t.totalReach} value={metricText(r.total)} />
-          <StatLine label={t.nonFollowers} value={metricText(r.nonFollowers)} color={ORANGE} />
-          <StatLine label={t.followers} value={metricText(r.followers)} />
-          <StatLine label={t.impressions} value={metricText(r.impressions)} />
-          <StatLine label={t.avgPerContent} value={metricText(r.avgPerContent)} />
-          <StatLine label={t.reachGrowth} value={metricText(r.growth, 'pct')} color={(r.growth ?? 0) >= 0 ? GREEN : RED} />
+          <StatLine label={t.totalReach} value={metricText(r.total, 'int', lang)} />
+          <StatLine label={t.nonFollowers} value={metricText(r.nonFollowers, 'int', lang)} color={ORANGE} />
+          <StatLine label={t.followers} value={metricText(r.followers, 'int', lang)} />
+          <StatLine label={t.impressions} value={metricText(r.impressions, 'int', lang)} />
+          <StatLine label={t.avgPerContent} value={metricText(r.avgPerContent, 'int', lang)} />
+          <StatLine label={t.reachGrowth} value={metricText(r.growth, 'pct', lang)} color={(r.growth ?? 0) >= 0 ? GREEN : RED} />
         </div>
         <div>
           {nf != null ? (
@@ -357,7 +357,7 @@ export function ReachSection({ r }: { r: PerformanceData['reach'] }) {
 }
 
 export function EngagementSection({ e }: { e: PerformanceData['engagement'] }) {
-  const t = PERF_TX[useLang().lang]
+  const { lang } = useLang(); const t = PERF_TX[lang]
   const parts: { k: string; label: string; value: MetricValue; delta: number; strong?: boolean }[] = [
     { k: 'likes', label: t.likes, value: e.likes, delta: e.breakdownDelta.likes },
     { k: 'comments', label: t.comments, value: e.comments, delta: e.breakdownDelta.comments, strong: true },
@@ -366,7 +366,7 @@ export function EngagementSection({ e }: { e: PerformanceData['engagement'] }) {
   ]
   const maxV = Math.max(1, ...parts.map(p => Number(p.value ?? 0)))
   return (
-    <Panel title={t.engTitle} icon="💬" right={<span style={{ fontSize: '11px', color: MUTED }}>{t.rate} <strong style={{ color: 'white' }}>{metricText(e.rate, 'pct')}</strong></span>}>
+    <Panel title={t.engTitle} icon="💬" right={<span style={{ fontSize: '11px', color: MUTED }}>{t.rate} <strong style={{ color: 'white' }}>{metricText(e.rate, 'pct', lang)}</strong></span>}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
         {parts.map(p => (
           <div key={p.k} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -376,7 +376,7 @@ export function EngagementSection({ e }: { e: PerformanceData['engagement'] }) {
             <div style={{ flex: 1, height: '9px', borderRadius: '99px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
               <div style={{ width: `${(Number(p.value ?? 0) / maxV) * 100}%`, height: '100%', background: p.strong ? ORANGE : 'rgba(255,255,255,0.25)', borderRadius: '99px' }} />
             </div>
-            <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'white', width: '58px', textAlign: 'right' }}>{metricText(p.value)}</span>
+            <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'white', width: '58px', textAlign: 'right' }}>{metricText(p.value, 'int', lang)}</span>
             <span style={{ width: '52px', textAlign: 'right' }}><DeltaBadge d={{ pct: p.delta, positive: p.delta >= 0 }} small /></span>
           </div>
         ))}

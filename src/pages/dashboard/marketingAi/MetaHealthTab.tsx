@@ -179,7 +179,7 @@ function RecCard({ rec }: { rec: HealthRecommendation }) {
 export default function MetaHealthTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city'> }) {
   const { lang } = useLang()
   const t = TX[lang]
-  const demo = useMemo(() => buildMetaHealthDemo(company), [company])
+  const demo = useMemo(() => buildMetaHealthDemo(company, lang), [company, lang])
   const { overall, trendDelta, categories, recommendations, actions, history, benchmark, executiveSummary } = demo
   // Não há fonte real de "Saúde da Meta" ainda → nunca mostra número real
   // fake. Com Modo demonstração desligado, o layout fica borrado (DataVeil).

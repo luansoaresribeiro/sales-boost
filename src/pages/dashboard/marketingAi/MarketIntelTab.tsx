@@ -126,13 +126,13 @@ function useRealTrendsOpportunities(companyId: string): { state: { trends: Marke
 }
 
 function CompetitorCard({ c }: { c: CompetitorMove }) {
-  const t = TX[useLang().lang]
+  const { lang } = useLang(); const t = TX[lang]
   const m = c.moveType ? MOVE_META[c.moveType] : { icon: '🔍', color: MUTED }
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', padding: '13px 15px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '7px' }}>
         <span style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{c.name}</span>
-        <span style={{ fontSize: '10px', color: MUTED }}>{fmtNum(c.followers)} {t.followersAbbr} · {c.engagement != null ? `${c.engagement}% ${t.eng}` : t.noEng}</span>
+        <span style={{ fontSize: '10px', color: MUTED }}>{fmtNum(c.followers, lang)} {t.followersAbbr} · {c.engagement != null ? `${c.engagement}% ${t.eng}` : t.noEng}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', padding: '9px 11px' }}>
         <span style={{ fontSize: '13px', flexShrink: 0 }}>{m.icon}</span>
@@ -174,7 +174,7 @@ function OpportunityCard({ o }: { o: MarketOpportunity }) {
 export default function MarketIntelTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city'> }) {
   const { lang } = useLang()
   const t = TX[lang]
-  const demo = useMemo(() => buildMarketDemo(company), [company])
+  const demo = useMemo(() => buildMarketDemo(company, lang), [company, lang])
   const { items: real, error: competitorsError } = useRealCompetitors(company.id, lang)
   const hasRealCompetitors = !!real && real.length > 0
   const competitors = hasRealCompetitors ? real : demo.competitors

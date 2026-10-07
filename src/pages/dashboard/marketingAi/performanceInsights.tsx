@@ -40,10 +40,10 @@ function ContentCard({ c, rank }: { c: ContentPerf; rank?: number }) {
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-        <Mini label={t.reach} value={metricText(c.reach)} />
-        <Mini label={t.sRate} value={metricText(c.engagementRate, 'pct')} color={ORANGE} />
-        <Mini label={t.sharesShort} value={metricText(c.shares)} />
-        <Mini label={t.savesShort} value={metricText(c.saves)} />
+        <Mini label={t.reach} value={metricText(c.reach, 'int', lang)} />
+        <Mini label={t.sRate} value={metricText(c.engagementRate, 'pct', lang)} color={ORANGE} />
+        <Mini label={t.sharesShort} value={metricText(c.shares, 'int', lang)} />
+        <Mini label={t.savesShort} value={metricText(c.saves, 'int', lang)} />
       </div>
     </div>
   )
@@ -95,14 +95,14 @@ export function ContentTypeSection({ types, conclusion }: { types: PerformanceDa
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, color: 'white' }}>{FMT_ICON[t.type]} {lang === 'en' ? FORMAT_EN[t.type] ?? t.label : t.label} <span style={{ color: MUTED, fontWeight: 400 }}>({t.count})</span></span>
               <span style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>{tx.avgReachLbl} {metricText(t.avgReach)}</span>
+                <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>{tx.avgReachLbl} {metricText(t.avgReach, 'int', lang)}</span>
                 <DeltaBadge d={{ pct: t.delta, positive: t.delta >= 0 }} small />
               </span>
             </div>
             <div style={{ height: '9px', borderRadius: '99px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
               <div style={{ width: `${(Number(t.avgReach ?? 0) / max) * 100}%`, height: '100%', background: ORANGE, borderRadius: '99px' }} />
             </div>
-            <div style={{ fontSize: '9.5px', color: MUTED, marginTop: '3px' }}>{tx.avgEng} {metricText(t.avgEng)} · {tx.sharesShort} {metricText(t.avgShares)} · {tx.savesShort} {metricText(t.avgSaves)}</div>
+            <div style={{ fontSize: '9.5px', color: MUTED, marginTop: '3px' }}>{tx.avgEng} {metricText(t.avgEng, 'int', lang)} · {tx.sharesShort} {metricText(t.avgShares, 'int', lang)} · {tx.savesShort} {metricText(t.avgSaves, 'int', lang)}</div>
           </div>
         ))}
       </div>
@@ -180,7 +180,7 @@ export function FunnelSection({ funnel, note }: { funnel: PerformanceData['funne
   )
 }
 export function PillarSection({ pillars }: { pillars: PerformanceData['pillars'] }) {
-  const t = PERF_TX[useLang().lang]
+  const { lang } = useLang(); const t = PERF_TX[lang]
   const rows = pillars.filter(p => p.posts > 0)
   const max = Math.max(1, ...rows.map(p => Number(p.avgReach ?? 0)))
   const best = rows.reduce((a, b) => (Number(b.avgReach ?? 0) > Number(a.avgReach ?? 0) ? b : a), rows[0])
@@ -193,7 +193,7 @@ export function PillarSection({ pillars }: { pillars: PerformanceData['pillars']
             <div style={{ flex: 1, height: '9px', borderRadius: '99px', background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
               <div style={{ width: `${(Number(p.avgReach ?? 0) / max) * 100}%`, height: '100%', background: p.name === best?.name ? ORANGE : 'rgba(255,255,255,0.25)', borderRadius: '99px' }} />
             </div>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: 'white', width: '62px', textAlign: 'right' }}>{metricText(p.avgReach)}</span>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: 'white', width: '62px', textAlign: 'right' }}>{metricText(p.avgReach, 'int', lang)}</span>
             <span style={{ width: '52px', textAlign: 'right' }}><DeltaBadge d={{ pct: p.delta, positive: p.delta >= 0 }} small /></span>
           </div>
         ))}

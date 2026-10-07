@@ -87,11 +87,11 @@ function CampaignRow({ c }: { c: DemoAdCampaign }) {
           </span>
         </div>
       </div>
-      <Metric label={t.invested} value={fmtBRL(c.spend, true)} />
+      <Metric label={t.invested} value={fmtBRL(c.spend, true, lang)} />
       <Metric label="ROAS" value={`${c.roas}x`} color={roasColor(c.roas)} />
       <Metric label="CTR" value={`${c.ctr}%`} />
-      <Metric label="CPC" value={fmtBRL(c.cpc)} />
-      <Metric label="CPA" value={fmtBRL(c.cpa)} />
+      <Metric label="CPC" value={fmtBRL(c.cpc, false, lang)} />
+      <Metric label="CPA" value={fmtBRL(c.cpa, false, lang)} />
     </div>
   )
 }
@@ -136,7 +136,7 @@ function RecoCard({ r, executed, onExecute }: { r: AdRecommendation; executed: b
 export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name'> }) {
   const { lang } = useLang()
   const t = TX[lang]
-  const demo = useMemo(() => buildMetaAdsDemo(company), [company])
+  const demo = useMemo(() => buildMetaAdsDemo(company, lang), [company, lang])
   const { session } = useAuth()
   const navigate = useNavigate()
   const [demoMode, setDemoMode] = useDemoMode(company.id)
@@ -216,13 +216,13 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
       <section>
         <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '11px' }}>{t.last30}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px' }}>
-          <Kpi label={t.invested} value={fmtBRL(totals.spend, true)} />
-          <Kpi label={t.revenue} value={fmtBRL(totals.revenue, true)} />
+          <Kpi label={t.invested} value={fmtBRL(totals.spend, true, lang)} />
+          <Kpi label={t.revenue} value={fmtBRL(totals.revenue, true, lang)} />
           <Kpi label="ROAS" value={`${totals.roas}x`} color={roasColor(totals.roas)} />
           <Kpi label={t.ctrAvg} value={`${totals.ctr}%`} />
-          <Kpi label={t.cpcAvg} value={fmtBRL(totals.cpc)} />
-          <Kpi label={t.cpaAvg} value={fmtBRL(totals.cpa)} />
-          <Kpi label={t.conversions} value={fmtNum(totals.conversions)} />
+          <Kpi label={t.cpcAvg} value={fmtBRL(totals.cpc, false, lang)} />
+          <Kpi label={t.cpaAvg} value={fmtBRL(totals.cpa, false, lang)} />
+          <Kpi label={t.conversions} value={fmtNum(totals.conversions, lang)} />
         </div>
       </section>
 
@@ -253,8 +253,8 @@ export default function MetaAdsTab({ company }: { company: Pick<CompanyData, 'id
               <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '11px 14px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
                 <span style={{ fontSize: '12px', color: 'white', fontWeight: 600 }}>{a.name}</span>
                 <div style={{ display: 'flex', gap: '14px', flexShrink: 0 }}>
-                  <Metric label="CPL" value={fmtBRL(a.cpl)} />
-                  <Metric label={t.conv} value={fmtNum(a.conversions)} />
+                  <Metric label="CPL" value={fmtBRL(a.cpl, false, lang)} />
+                  <Metric label={t.conv} value={fmtNum(a.conversions, lang)} />
                   <Metric label={t.share} value={`${a.share}%`} color={ORANGE} />
                 </div>
               </div>

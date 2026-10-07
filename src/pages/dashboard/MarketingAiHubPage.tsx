@@ -199,7 +199,7 @@ export default function MarketingAiHubPage() {
   const [demoMode, setDemoMode] = useDemoMode(company?.id)
   const demoAllowed = useDemoAllowed()
 
-  const demo = useMemo(() => (company ? buildGrowthDemo(company) : null), [company])
+  const demo = useMemo(() => (company ? buildGrowthDemo(company, lang) : null), [company, lang])
   const { real, loading: realLoading, error: realError } = useRealGrowth(company?.id ?? '', session?.access_token ?? '', lang)
   const { summary: strategySummary } = useStrategySummary(company?.id)
 

@@ -184,7 +184,7 @@ function SubBlock({ title, children }: { title: string; children: React.ReactNod
 function IcpDemoPreview({ businessType, city }: { businessType: string; city: string }) {
   const { lang } = useLang()
   const X = TX[lang]
-  const { profile } = buildIcpDemo(businessType || null, city || null)
+  const { profile } = buildIcpDemo(businessType || null, city || null, lang)
   return (
     <div style={{ marginTop: '4px', padding: '14px 16px', background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: '10px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>

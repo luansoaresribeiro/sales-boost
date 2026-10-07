@@ -85,7 +85,7 @@ export default function InsightsTab({ company }: { company: Pick<CompanyData, 'i
   const { session } = useAuth()
   const { lang } = useLang()
   const t = TX[lang]
-  const demo = useMemo(() => buildInsightsDemo(company.city), [company.city])
+  const demo = useMemo(() => buildInsightsDemo(company.city, lang), [company.city, lang])
   const [real, setReal] = useState<InsightItem[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
