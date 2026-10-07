@@ -13,6 +13,14 @@ export const CAMP_FUNNEL_EN: Record<string, { label: string; short: string }> = 
 export const CAMP_STATUS_EN: Record<string, string> = { active: 'Active', scheduled: 'Scheduled', draft: 'Draft' }
 export const HEALTH_CLASS_EN: Record<string, string> = { excellent: 'Excellent', very_good: 'Very good', good: 'Good', attention: 'Needs attention', critical: 'Critical' }
 
+// Saúde da Meta / Insights (metaHealthDemo, growthIntelDemo)
+export const PRIORITY_EN: Record<string, string> = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }
+export const DIFFICULTY_EN: Record<string, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard' }
+export const INSIGHT_CAT_EN: Record<string, string> = {
+  evento: 'Events', feriado: 'Dates', sazonal: 'Seasonal', tendencia: 'Trends', opiniao: 'Opinions', parceria: 'Partnerships',
+  influenciador: 'Influencers', concorrente: 'Competitors', setor: 'Industry',
+}
+
 // Funil de vendas / Engagement (salesDemo, engagementDemo)
 export const STAGE_EN: Record<string, string> = { novo: 'New Lead', contato: 'Contacted', qualificado: 'Qualified', proposta: 'Proposal', venda: 'Sale closed' }
 export const TEMP_EN: Record<string, string> = { quente: 'Hot', morno: 'Warm', frio: 'Cold' }
