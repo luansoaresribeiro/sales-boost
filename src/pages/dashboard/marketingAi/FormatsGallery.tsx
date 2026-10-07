@@ -2,6 +2,16 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { CARD, MUTED, BORDER, D, inputStyle } from './shared'
 import { STANDARD_FORMATS, type FormatDef } from './formats'
+import { useLang } from '../../../contexts/LanguageContext'
+
+const TX = {
+  pt: { title: '📐 Formatos & Dimensões', d1: 'Tamanhos e placements por plataforma. O criativo é adaptado pra cada formato pelo renderizador (recompõe, não estica) — ', d2: 'trocar formato não gera nova imagem de IA', d3: '. Escolha o formato no Studio ao gerar.',
+    loading: 'Carregando...', deactivate: 'Desativar', activate: 'Ativar', remove: 'Remover', custom: '+ Formato custom:', name: 'Nome', width: 'Largura', height: 'Altura', save: 'Salvar',
+    presets: '🎯 Presets (campanhas multi-formato)', presetPh: 'Nome do preset (ex: Campanha Instagram)', savePreset: 'Salvar preset' },
+  en: { title: '📐 Formats & Dimensions', d1: 'Sizes and placements per platform. The creative is adapted to each format by the renderer (recomposes, does not stretch) — ', d2: 'switching format does not generate a new AI image', d3: '. Pick the format in the Studio when generating.',
+    loading: 'Loading...', deactivate: 'Deactivate', activate: 'Activate', remove: 'Remove', custom: '+ Custom format:', name: 'Name', width: 'Width', height: 'Height', save: 'Save',
+    presets: '🎯 Presets (multi-format campaigns)', presetPh: 'Preset name (e.g. Instagram Campaign)', savePreset: 'Save preset' },
+} as const
 
 const ORANGE = '#FF6D29'
 
@@ -22,6 +32,7 @@ function Preview({ w, h }: { w: number; h: number }) {
 // formato — trocar formato = re-render, sem nova IA. Padrão em código; custom +
 // presets no banco. Modular: novo formato/plataforma não mexe na arquitetura.
 export default function FormatsGallery({ companyId }: { companyId: string }) {
+  const tx = TX[useLang().lang]
   const [custom, setCustom] = useState<CustomFmt[]>([])
   const [presets, setPresets] = useState<Preset[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,10 +72,10 @@ export default function FormatsGallery({ companyId }: { companyId: string }) {
 
   return (
     <div style={{ marginBottom: '24px' }}>
-      <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>📐 Formatos & Dimensões</div>
-      <div style={{ fontSize: '11px', color: MUTED, marginBottom: '13px', maxWidth: '720px' }}>Tamanhos e placements por plataforma. O criativo é adaptado pra cada formato pelo renderizador (recompõe, não estica) — <strong>trocar formato não gera nova imagem de IA</strong>. Escolha o formato no Studio ao gerar.</div>
+      <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>{tx.title}</div>
+      <div style={{ fontSize: '11px', color: MUTED, marginBottom: '13px', maxWidth: '720px' }}>{tx.d1}<strong>{tx.d2}</strong>{tx.d3}</div>
 
-      {loading ? <div style={{ fontSize: '12px', color: MUTED }}>Carregando...</div> : (
+      {loading ? <div style={{ fontSize: '12px', color: MUTED }}>{tx.loading}</div> : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px', marginBottom: '18px' }}>
           {all.map(f => (
             <div key={f.key} style={{ display: 'flex', gap: '11px', alignItems: 'center', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', padding: '11px 12px', opacity: f.active === false ? 0.45 : 1 }}>
@@ -76,8 +87,8 @@ export default function FormatsGallery({ companyId }: { companyId: string }) {
               </div>
               {f.id && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <button onClick={() => toggleCustom(custom.find(c => c.id === f.id)!)} title={f.active ? 'Desativar' : 'Ativar'} style={{ background: 'transparent', border: 'none', color: f.active ? '#4ade80' : MUTED, fontSize: '11px', cursor: 'pointer' }}>{f.active ? '●' : '○'}</button>
-                  <button onClick={() => delCustom(f.id!)} title="Remover" style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '11px', cursor: 'pointer' }}>🗑</button>
+                  <button onClick={() => toggleCustom(custom.find(c => c.id === f.id)!)} title={f.active ? tx.deactivate : tx.activate} style={{ background: 'transparent', border: 'none', color: f.active ? '#4ade80' : MUTED, fontSize: '11px', cursor: 'pointer' }}>{f.active ? '●' : '○'}</button>
+                  <button onClick={() => delCustom(f.id!)} title={tx.remove} style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '11px', cursor: 'pointer' }}>🗑</button>
                 </div>
               )}
             </div>
@@ -87,31 +98,31 @@ export default function FormatsGallery({ companyId }: { companyId: string }) {
 
       {/* Custom Format */}
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '16px', padding: '11px 13px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
-        <span style={{ fontSize: '11px', fontWeight: 700, color: MUTED }}>+ Formato custom:</span>
-        <input value={cName} onChange={e => setCName(e.target.value)} placeholder="Nome" style={{ ...inputStyle, width: '160px' }} />
-        <input value={cW} onChange={e => setCW(e.target.value)} placeholder="Largura" style={{ ...inputStyle, width: '90px' }} />
+        <span style={{ fontSize: '11px', fontWeight: 700, color: MUTED }}>{tx.custom}</span>
+        <input value={cName} onChange={e => setCName(e.target.value)} placeholder={tx.name} style={{ ...inputStyle, width: '160px' }} />
+        <input value={cW} onChange={e => setCW(e.target.value)} placeholder={tx.width} style={{ ...inputStyle, width: '90px' }} />
         <span style={{ color: MUTED }}>×</span>
-        <input value={cH} onChange={e => setCH(e.target.value)} placeholder="Altura" style={{ ...inputStyle, width: '90px' }} />
-        <button onClick={addCustom} disabled={!cName.trim()} style={{ padding: '8px 16px', background: cName.trim() ? ORANGE : 'rgba(255,255,255,0.08)', color: cName.trim() ? '#000' : MUTED, fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: cName.trim() ? 'pointer' : 'not-allowed', fontFamily: D }}>Salvar</button>
+        <input value={cH} onChange={e => setCH(e.target.value)} placeholder={tx.height} style={{ ...inputStyle, width: '90px' }} />
+        <button onClick={addCustom} disabled={!cName.trim()} style={{ padding: '8px 16px', background: cName.trim() ? ORANGE : 'rgba(255,255,255,0.08)', color: cName.trim() ? '#000' : MUTED, fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: cName.trim() ? 'pointer' : 'not-allowed', fontFamily: D }}>{tx.save}</button>
       </div>
 
       {/* Presets */}
-      <div style={{ fontSize: '11.5px', fontWeight: 800, color: 'white', marginBottom: '6px' }}>🎯 Presets (campanhas multi-formato)</div>
+      <div style={{ fontSize: '11.5px', fontWeight: 800, color: 'white', marginBottom: '6px' }}>{tx.presets}</div>
       {presets.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
           {presets.map(p => (
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '9px', padding: '8px 12px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, color: 'white' }}>{p.name}</span>
               <span style={{ fontSize: '10px', color: MUTED, flex: 1 }}>{p.formats.map(f => f.name).join(' · ')}</span>
-              <button onClick={() => delPreset(p.id)} title="Remover" style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '11px', cursor: 'pointer' }}>🗑</button>
+              <button onClick={() => delPreset(p.id)} title={tx.remove} style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '11px', cursor: 'pointer' }}>🗑</button>
             </div>
           ))}
         </div>
       )}
       <div style={{ padding: '11px 13px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '9px' }}>
-          <input value={pName} onChange={e => setPName(e.target.value)} placeholder="Nome do preset (ex: Campanha Instagram)" style={{ ...inputStyle, flex: 1 }} />
-          <button onClick={addPreset} disabled={!pName.trim() || pSel.length === 0} style={{ padding: '8px 16px', background: pName.trim() && pSel.length ? ORANGE : 'rgba(255,255,255,0.08)', color: pName.trim() && pSel.length ? '#000' : MUTED, fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: pName.trim() && pSel.length ? 'pointer' : 'not-allowed', fontFamily: D }}>Salvar preset</button>
+          <input value={pName} onChange={e => setPName(e.target.value)} placeholder={tx.presetPh} style={{ ...inputStyle, flex: 1 }} />
+          <button onClick={addPreset} disabled={!pName.trim() || pSel.length === 0} style={{ padding: '8px 16px', background: pName.trim() && pSel.length ? ORANGE : 'rgba(255,255,255,0.08)', color: pName.trim() && pSel.length ? '#000' : MUTED, fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: pName.trim() && pSel.length ? 'pointer' : 'not-allowed', fontFamily: D }}>{tx.savePreset}</button>
         </div>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           {all.filter(f => f.active !== false).map(f => (

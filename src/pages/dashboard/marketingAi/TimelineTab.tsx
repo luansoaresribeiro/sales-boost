@@ -1,10 +1,14 @@
+import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, PILLAR_LABEL, PILLAR_ICON, timeAgo, type ActivityLogRow } from './shared'
 
+const PILLAR_EN: Record<string, string> = { tracking: 'Tracking', content: 'Content', competitor: 'Competitors', strategy: 'Strategy' }
+
 export default function TimelineTab({ activity }: { activity: ActivityLogRow[] }) {
+  const { lang } = useLang(); const en = lang === 'en'
   if (activity.length === 0) {
     return (
       <div style={{ padding: '32px', textAlign: 'center', color: MUTED, fontSize: '13px' }}>
-        Nenhuma atividade registrada ainda. Assim que o Marketing AI coletar dados, gerar conteúdo ou recomendar algo, aparece aqui.
+        {en ? 'No activity recorded yet. As soon as Marketing AI collects data, generates content or recommends something, it shows up here.' : 'Nenhuma atividade registrada ainda. Assim que o Marketing AI coletar dados, gerar conteúdo ou recomendar algo, aparece aqui.'}
       </div>
     )
   }
@@ -18,8 +22,8 @@ export default function TimelineTab({ activity }: { activity: ActivityLogRow[] }
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-              <span style={{ fontSize: '9.5px', fontWeight: 700, color: 'rgba(255,109,41,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{PILLAR_LABEL[a.pillar ?? ''] ?? 'Sistema'}</span>
-              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>{timeAgo(a.created_at)}</span>
+              <span style={{ fontSize: '9.5px', fontWeight: 700, color: 'rgba(255,109,41,0.6)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{(en ? PILLAR_EN : PILLAR_LABEL)[a.pillar ?? ''] ?? (en ? 'System' : 'Sistema')}</span>
+              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>{timeAgo(a.created_at, lang)}</span>
             </div>
             <div style={{ fontSize: '12.5px', color: 'white', fontWeight: 500 }}>{a.action}</div>
             {a.reasoning && <div style={{ fontSize: '11px', color: MUTED, marginTop: '3px', lineHeight: 1.5 }}>{a.reasoning}</div>}

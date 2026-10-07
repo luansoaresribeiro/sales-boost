@@ -9,7 +9,55 @@ import {
 import ModuleLibrary from './ModuleLibrary'
 import { useDemoMode } from './growthDemo'
 import DataVeil, { veilMode } from './DataVeil'
-import { BriefBlock, VideoScript, ScoreBreakdown, PostMedia, TEMPLATE_LABEL, type TestPost } from './TestingArea'
+import { BriefBlock, VideoScript, ScoreBreakdown, PostMedia, templateLabel, type TestPost } from './TestingArea'
+import { useLang, type Lang } from '../../../contexts/LanguageContext'
+
+const TX = {
+  pt: {
+    dow: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'], untitled: 'Sem título', ideaUntitled: 'Ideia sem título', postUntitled: 'Post sem título',
+    flow: ['Dados', 'Estratégia', 'Conteúdo', 'Aprovação', 'Publicação'],
+    funnelBalance: '🔀 Equilíbrio do funil', funnelDesc: 'Cada post tem um papel: atrair, nutrir ou converter. Um feed saudável tem os três.',
+    ai: '✨ IA:', sentDraft: '✓ Enviado pra aba Posts como rascunho', toDraft: 'Transformar em rascunho',
+    howBorn: 'Como o conteúdo nasce',
+    noRealT: 'Sem conteúdo real ainda', noRealM: 'Quando o agente gerar posts de verdade, o calendário e as ideias aparecem aqui. Ligue o Modo demonstração pra explorar o layout com exemplos.',
+    seeExample: 'Ver exemplo (modo demonstração)',
+    demoMode: 'Modo demonstração.', demoRest1: ' O agente monta o calendário e cria ideias baseado no que a Inteligência de Mercado e o Feedback Loop aprenderam. ', demoRest2: 'Nada é publicado sem sua aprovação.',
+    weekCal: '📅 Calendário da semana', ideas: '💡 Ideias sugeridas',
+    noAnalysisT: 'Sem essa análise real ainda', noAnalysisM: 'O equilíbrio do funil é uma leitura mais profunda que ainda não tem fonte real. Ligue o Modo demonstração pra ver o layout com um exemplo.',
+    noApprovedT: 'Sem conteúdo aprovado ainda', noApprovedM: 'Assim que um post passar pelo controle de qualidade na Área de Testes (nota ≥90) e for pro Vault, ele aparece aqui com roteiro e direção de arte completos. Ligue o Modo demonstração pra ver o layout com um exemplo.',
+    readyApprove: '🎬 Conteúdo pronto pra aprovar', score: 'nota', preview: 'Prévia', script: 'Roteiro', caption: 'Legenda', hashtags: 'Hashtags',
+    creativeDir: '🎬 Direção criativa (brief do Diretor)', qualityScore: 'Nota de qualidade',
+    approveAt1: 'Aprovar e publicar esse post é feito no ', approveAt2: 'Vault', approveAt3: ' (Biblioteca → Testes → Vault) — a mesma aprovação central de sempre.',
+    creativeSug: 'Sugestão de criativo', artDir: '🎨 Direção criativa (do DNA da marca)', palette: 'Paleta', style: 'Estilo', visualRef: 'Referência visual', avoid: 'Evitar',
+    approveSchedule: 'Aprovar e agendar',
+    fmt: { Reel: 'Reel', Carrossel: 'Carrossel', Story: 'Story', Foto: 'Foto' } as Record<string, string>,
+    st: { ideia: 'Ideia', rascunho: 'Rascunho', aprovado: 'Aprovado', agendado: 'Agendado' } as Record<string, string>,
+    fun: { topo: 'Topo', meio: 'Meio', fundo: 'Fundo' } as Record<string, string>,
+    funLabel: { topo: 'Topo — Atrair', meio: 'Meio — Nutrir', fundo: 'Fundo — Converter' } as Record<string, string>,
+  },
+  en: {
+    dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], untitled: 'Untitled', ideaUntitled: 'Untitled idea', postUntitled: 'Untitled post',
+    flow: ['Data', 'Strategy', 'Content', 'Approval', 'Publishing'],
+    funnelBalance: '🔀 Funnel balance', funnelDesc: 'Every post has a role: attract, nurture or convert. A healthy feed has all three.',
+    ai: '✨ AI:', sentDraft: '✓ Sent to the Posts tab as a draft', toDraft: 'Turn into draft',
+    howBorn: 'How content is born',
+    noRealT: 'No real content yet', noRealM: 'When the agent generates real posts, the calendar and ideas show up here. Turn on Demo mode to explore the layout with examples.',
+    seeExample: 'See example (demo mode)',
+    demoMode: 'Demo mode.', demoRest1: ' The agent builds the calendar and creates ideas based on what Market Intelligence and the Feedback Loop learned. ', demoRest2: 'Nothing is published without your approval.',
+    weekCal: '📅 Weekly calendar', ideas: '💡 Suggested ideas',
+    noAnalysisT: 'No real analysis yet', noAnalysisM: 'Funnel balance is a deeper reading that has no real source yet. Turn on Demo mode to see the layout with an example.',
+    noApprovedT: 'No approved content yet', noApprovedM: 'As soon as a post passes quality control in the Testing Area (score ≥90) and goes to the Vault, it shows up here with the full script and art direction. Turn on Demo mode to see the layout with an example.',
+    readyApprove: '🎬 Content ready to approve', score: 'score', preview: 'Preview', script: 'Script', caption: 'Caption', hashtags: 'Hashtags',
+    creativeDir: '🎬 Creative direction (Director brief)', qualityScore: 'Quality score',
+    approveAt1: 'Approving and publishing this post is done in the ', approveAt2: 'Vault', approveAt3: ' (Library → Tests → Vault) — the same central approval as always.',
+    creativeSug: 'Creative suggestion', artDir: '🎨 Creative direction (from the brand DNA)', palette: 'Palette', style: 'Style', visualRef: 'Visual reference', avoid: 'Avoid',
+    approveSchedule: 'Approve and schedule',
+    fmt: { Reel: 'Reel', Carrossel: 'Carousel', Story: 'Story', Foto: 'Photo' } as Record<string, string>,
+    st: { ideia: 'Idea', rascunho: 'Draft', aprovado: 'Approved', agendado: 'Scheduled' } as Record<string, string>,
+    fun: { topo: 'Top', meio: 'Middle', fundo: 'Bottom' } as Record<string, string>,
+    funLabel: { topo: 'Top — Attract', meio: 'Middle — Nurture', fundo: 'Bottom — Convert' } as Record<string, string>,
+  },
+} as const
 
 const FORMAT_ICON_LC: Record<string, string> = { reel: '🎬', carrossel: '🖼️', story: '⚡', foto: '📷' }
 
@@ -65,26 +113,25 @@ function useRealContent(companyId: string | undefined) {
   return items
 }
 
-const DOW = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const FALLBACK_FORMAT: ContentFormat = 'Foto'
 const FALLBACK_STATUS: ContentStatus = 'ideia'
 
-function toCalendarPost(r: RealContentRow): CalendarPost {
+function toCalendarPost(r: RealContentRow, lang: Lang): CalendarPost {
   const d = r.scheduled_at ? new Date(r.scheduled_at) : null
   return {
-    day: d ? DOW[d.getDay()] : '—',
-    time: d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+    day: d ? TX[lang].dow[d.getDay()] : '—',
+    time: d ? d.toLocaleTimeString(lang === 'en' ? 'en-US' : 'pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
     format: (r.format as ContentFormat) ?? FALLBACK_FORMAT,
-    title: r.idea ?? r.caption?.slice(0, 40) ?? 'Sem título',
+    title: r.idea ?? r.caption?.slice(0, 40) ?? TX[lang].untitled,
     status: (r.status as ContentStatus) ?? FALLBACK_STATUS,
     funnel: 'meio', // sem fonte real pra etapa do funil — neutro em vez de inventado
   }
 }
-function toContentIdea(r: RealContentRow): ContentIdea {
+function toContentIdea(r: RealContentRow, lang: Lang): ContentIdea {
   return {
     id: r.id,
     format: (r.format as ContentFormat) ?? FALLBACK_FORMAT,
-    hook: r.idea ?? r.caption?.slice(0, 60) ?? 'Ideia sem título',
+    hook: r.idea ?? r.caption?.slice(0, 60) ?? TX[lang].ideaUntitled,
     reasoning: r.reasoning ?? '',
     funnel: 'meio',
   }
@@ -93,9 +140,8 @@ function toContentIdea(r: RealContentRow): ContentIdea {
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
 
-const FLOW = ['Dados', 'Estratégia', 'Conteúdo', 'Aprovação', 'Publicação']
-
 function FlowBar() {
+  const FLOW = TX[useLang().lang].flow
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
       {FLOW.map((step, i) => (
@@ -109,15 +155,17 @@ function FlowBar() {
 }
 
 function FunnelTag({ funnel, compact }: { funnel: ContentFunnel; compact?: boolean }) {
+  const { lang } = useLang(); const tx = TX[lang]
   const m = CONTENT_FUNNEL_META[funnel]
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '9px', fontWeight: 700, color: m.color, background: `${m.color}18`, border: `1px solid ${m.color}40`, borderRadius: '99px', padding: '2px 8px', flexShrink: 0 }}>
-      {m.icon} {compact ? m.short : m.label}
+      {m.icon} {compact ? tx.fun[funnel] : tx.funLabel[funnel]}
     </span>
   )
 }
 
 function CalendarRow({ p }: { p: CalendarPost }) {
+  const tx = TX[useLang().lang]
   const st = CONTENT_STATUS_META[p.status]
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 13px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
@@ -128,24 +176,25 @@ function CalendarRow({ p }: { p: CalendarPost }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{CONTENT_FORMAT_ICON[p.format]} {p.title}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '2px' }}>
-          <span style={{ fontSize: '9.5px', color: MUTED }}>{p.format}</span>
+          <span style={{ fontSize: '9.5px', color: MUTED }}>{tx.fmt[p.format] ?? p.format}</span>
           <FunnelTag funnel={p.funnel} compact />
         </div>
       </div>
-      <span style={{ fontSize: '9px', fontWeight: 700, color: st.color, flexShrink: 0 }}>{st.label}</span>
+      <span style={{ fontSize: '9px', fontWeight: 700, color: st.color, flexShrink: 0 }}>{tx.st[p.status] ?? st.label}</span>
     </div>
   )
 }
 
 function FunnelBalance({ counts, insight }: { counts: Record<ContentFunnel, number>; insight: string }) {
+  const tx = TX[useLang().lang]
   const total = counts.topo + counts.meio + counts.fundo || 1
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '13px', padding: '15px 17px' }}>
-      <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🔀 Equilíbrio do funil</div>
-      <div style={{ fontSize: '11px', color: MUTED, marginBottom: '12px', lineHeight: 1.5 }}>Cada post tem um papel: atrair, nutrir ou converter. Um feed saudável tem os três.</div>
+      <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>{tx.funnelBalance}</div>
+      <div style={{ fontSize: '11px', color: MUTED, marginBottom: '12px', lineHeight: 1.5 }}>{tx.funnelDesc}</div>
       <div style={{ display: 'flex', height: '10px', borderRadius: '99px', overflow: 'hidden', marginBottom: '10px' }}>
         {(['topo', 'meio', 'fundo'] as ContentFunnel[]).map(f => (
-          <div key={f} style={{ width: `${(counts[f] / total) * 100}%`, background: CONTENT_FUNNEL_META[f].color }} title={`${CONTENT_FUNNEL_META[f].short}: ${counts[f]}`} />
+          <div key={f} style={{ width: `${(counts[f] / total) * 100}%`, background: CONTENT_FUNNEL_META[f].color }} title={`${tx.fun[f]}: ${counts[f]}`} />
         ))}
       </div>
       <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginBottom: '12px' }}>
@@ -155,19 +204,20 @@ function FunnelBalance({ counts, insight }: { counts: Record<ContentFunnel, numb
             <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ width: '9px', height: '9px', borderRadius: '3px', background: m.color, display: 'inline-block' }} />
               <span style={{ fontSize: '11px', color: 'white', fontWeight: 700 }}>{counts[f]}</span>
-              <span style={{ fontSize: '11px', color: MUTED }}>{m.short}</span>
+              <span style={{ fontSize: '11px', color: MUTED }}>{tx.fun[f]}</span>
             </div>
           )
         })}
       </div>
       <div style={{ fontSize: '11.5px', color: 'white', lineHeight: 1.55, padding: '10px 12px', background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.18)', borderRadius: '9px' }}>
-        <span style={{ color: ORANGE, fontWeight: 700 }}>✨ IA:</span> {insight}
+        <span style={{ color: ORANGE, fontWeight: 700 }}>{tx.ai}</span> {insight}
       </div>
     </div>
   )
 }
 
 function IdeaCard({ idea, approved, onApprove }: { idea: ContentIdea; approved: boolean; onApprove: () => void }) {
+  const tx = TX[useLang().lang]
   return (
     <div style={{ background: CARD, border: `1px solid ${approved ? 'rgba(74,222,128,0.3)' : BORDER}`, borderRadius: '11px', padding: '13px 15px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '5px' }}>
@@ -176,11 +226,11 @@ function IdeaCard({ idea, approved, onApprove }: { idea: ContentIdea; approved: 
       </div>
       <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5, marginBottom: '11px' }}>{idea.reasoning}</div>
       {approved ? (
-        <div style={{ fontSize: '11px', color: GREEN }}>✓ Enviado pra aba Posts como rascunho</div>
+        <div style={{ fontSize: '11px', color: GREEN }}>{tx.sentDraft}</div>
       ) : (
         <button onClick={onApprove}
           style={{ padding: '6px 13px', background: 'rgba(255,109,41,0.12)', border: '1px solid rgba(255,109,41,0.35)', color: ORANGE, fontWeight: 700, fontSize: '11px', borderRadius: '8px', cursor: 'pointer', fontFamily: D }}>
-          Transformar em rascunho
+          {tx.toDraft}
         </button>
       )}
     </div>
@@ -188,6 +238,7 @@ function IdeaCard({ idea, approved, onApprove }: { idea: ContentIdea; approved: 
 }
 
 export default function ContentAgentTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type'> }) {
+  const { lang } = useLang(); const tx = TX[lang]
   const demo = useMemo(() => buildContentDemo(company), [company])
   const [approved, setApproved] = useState<Set<string>>(new Set())
   const { featured } = demo
@@ -196,8 +247,8 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
   // Calendário/ideias: reais assim que o agente gerar algo em marketing_ai_content.
   const realContent = useRealContent(company.id)
   const hasRealContent = !!realContent && realContent.length > 0
-  const calendar = hasRealContent ? realContent.map(toCalendarPost) : demo.calendar
-  const ideas = hasRealContent ? realContent.map(toContentIdea) : demo.ideas
+  const calendar = hasRealContent ? realContent.map(r => toCalendarPost(r, lang)) : demo.calendar
+  const ideas = hasRealContent ? realContent.map(r => toContentIdea(r, lang)) : demo.ideas
   const calendarMode = veilMode({ hasReal: hasRealContent, demoMode })
 
   // Equilíbrio do funil ainda não tem fonte real (nenhum post tem etapa do
@@ -211,24 +262,24 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <section>
-        <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '11px' }}>Como o conteúdo nasce</div>
+        <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '11px' }}>{tx.howBorn}</div>
         <FlowBar />
       </section>
 
       <DataVeil mode={calendarMode}
-        title="Sem conteúdo real ainda"
-        message="Quando o agente gerar posts de verdade, o calendário e as ideias aparecem aqui. Ligue o Modo demonstração pra explorar o layout com exemplos."
-        cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+        title={tx.noRealT}
+        message={tx.noRealM}
+        cta={{ label: tx.seeExample, onClick: () => setDemoMode(true) }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {!hasRealContent && (
             <div style={{ padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-              🔵 <strong>Modo demonstração.</strong> O agente monta o calendário e cria ideias baseado no que a Inteligência de Mercado e o Feedback Loop aprenderam. <strong>Nada é publicado sem sua aprovação.</strong>
+              🔵 <strong>{tx.demoMode}</strong>{tx.demoRest1}<strong>{tx.demoRest2}</strong>
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)', gap: '20px', alignItems: 'start' }}>
             {/* Calendário */}
             <section>
-              <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>📅 Calendário da semana</div>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>{tx.weekCal}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                 {calendar.map((p, i) => <CalendarRow key={i} p={p} />)}
               </div>
@@ -236,7 +287,7 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
 
             {/* Ideias */}
             <section>
-              <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>💡 Ideias sugeridas</div>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>{tx.ideas}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {ideas.map(idea => (
                   <IdeaCard key={idea.id} idea={idea} approved={approved.has(idea.id)} onApprove={() => setApproved(prev => new Set(prev).add(idea.id))} />
@@ -250,9 +301,9 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
       {/* Equilíbrio do funil — ainda sem fonte real (etapa do funil não
           existe em marketing_ai_content). */}
       <DataVeil mode={funnelBalanceMode}
-        title="Sem essa análise real ainda"
-        message="O equilíbrio do funil é uma leitura mais profunda que ainda não tem fonte real. Ligue o Modo demonstração pra ver o layout com um exemplo."
-        cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+        title={tx.noAnalysisT}
+        message={tx.noAnalysisM}
+        cta={{ label: tx.seeExample, onClick: () => setDemoMode(true) }}>
         <FunnelBalance counts={demo.balance.counts} insight={demo.balance.insight} />
       </DataVeil>
 
@@ -260,52 +311,52 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
           algo no Vault — o mesmo dado que a Área de Testes/Vault já gravam,
           só reaproveitado aqui. */}
       <DataVeil mode={detailMode}
-        title="Sem conteúdo aprovado ainda"
-        message="Assim que um post passar pelo controle de qualidade na Área de Testes (nota ≥90) e for pro Vault, ele aparece aqui com roteiro e direção de arte completos. Ligue o Modo demonstração pra ver o layout com um exemplo."
-        cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+        title={tx.noApprovedT}
+        message={tx.noApprovedM}
+        cta={{ label: tx.seeExample, onClick: () => setDemoMode(true) }}>
         <section>
-          <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>🎬 Conteúdo pronto pra aprovar</div>
+          <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>{tx.readyApprove}</div>
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '20px 22px' }}>
             {hasVaultContent && vaultItem ? (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{FORMAT_ICON_LC[vaultItem.format ?? ''] ?? '📝'} {vaultItem.idea ?? 'Post sem título'}</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{FORMAT_ICON_LC[vaultItem.format ?? ''] ?? '📝'} {vaultItem.idea ?? tx.postUntitled}</div>
                   {vaultItem.format === 'foto' && vaultItem.brief?.template && (
-                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#A78BFA', border: '1px solid rgba(167,139,250,0.4)', borderRadius: '99px', padding: '2px 8px' }}>{TEMPLATE_LABEL[vaultItem.brief.template] ?? vaultItem.brief.template}</span>
+                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#A78BFA', border: '1px solid rgba(167,139,250,0.4)', borderRadius: '99px', padding: '2px 8px' }}>{templateLabel(vaultItem.brief.template, lang)}</span>
                   )}
-                  {vaultItem.quality_score != null && <span style={{ fontSize: '9px', fontWeight: 700, color: GREEN, border: '1px solid rgba(74,222,128,0.4)', borderRadius: '99px', padding: '2px 8px' }}>nota {vaultItem.quality_score}</span>}
+                  {vaultItem.quality_score != null && <span style={{ fontSize: '9px', fontWeight: 700, color: GREEN, border: '1px solid rgba(74,222,128,0.4)', borderRadius: '99px', padding: '2px 8px' }}>{tx.score} {vaultItem.quality_score}</span>}
                 </div>
                 {vaultItem.reasoning && <div style={{ fontSize: '11px', color: MUTED, marginBottom: '14px' }}>{vaultItem.reasoning}</div>}
 
-                <Block label="Prévia">
+                <Block label={tx.preview}>
                   <div style={{ maxWidth: '260px', borderRadius: '9px', overflow: 'hidden' }}>
                     <PostMedia post={{ ...vaultItem, status: 'vault' } as TestPost} height={200} />
                   </div>
                 </Block>
 
-                <Block label="Roteiro">
+                <Block label={tx.script}>
                   <VideoScript post={{ ...vaultItem, status: 'vault' } as TestPost} />
                 </Block>
 
-                <Block label="Legenda">
+                <Block label={tx.caption}>
                   <div style={{ fontSize: '12px', color: 'white', lineHeight: 1.6, background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '11px 13px' }}>{vaultItem.caption}</div>
                 </Block>
 
                 {vaultItem.hashtags && (
-                  <Block label="Hashtags">
+                  <Block label={tx.hashtags}>
                     <div style={{ fontSize: '11.5px', color: '#60a5fa' }}>{vaultItem.hashtags}</div>
                   </Block>
                 )}
 
-                <Block label="🎬 Direção criativa (brief do Diretor)">
+                <Block label={tx.creativeDir}>
                   <BriefBlock post={{ ...vaultItem, status: 'vault' } as TestPost} />
                 </Block>
 
-                <Block label="Nota de qualidade">
+                <Block label={tx.qualityScore}>
                   <ScoreBreakdown post={{ ...vaultItem, status: 'vault' } as TestPost} />
                 </Block>
 
-                <div style={{ fontSize: '11px', color: MUTED, marginTop: '4px' }}>Aprovar e publicar esse post é feito no <strong style={{ color: 'white' }}>Vault</strong> (Biblioteca → Testes → Vault) — a mesma aprovação central de sempre.</div>
+                <div style={{ fontSize: '11px', color: MUTED, marginTop: '4px' }}>{tx.approveAt1}<strong style={{ color: 'white' }}>{tx.approveAt2}</strong>{tx.approveAt3}</div>
               </>
             ) : (
               <>
@@ -315,7 +366,7 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
                 </div>
                 <div style={{ fontSize: '11px', color: MUTED, marginBottom: '14px' }}>{CONTENT_FUNNEL_META[featured.funnel].goal}</div>
 
-                <Block label="Roteiro">
+                <Block label={tx.script}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {featured.script.map((line, i) => (
                       <div key={i} style={{ fontSize: '12px', color: 'white', lineHeight: 1.5, paddingLeft: '12px', borderLeft: `2px solid rgba(255,109,41,0.4)` }}>{line}</div>
@@ -323,25 +374,25 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
                   </div>
                 </Block>
 
-                <Block label="Legenda">
+                <Block label={tx.caption}>
                   <div style={{ fontSize: '12px', color: 'white', lineHeight: 1.6, background: 'rgba(255,255,255,0.03)', borderRadius: '9px', padding: '11px 13px' }}>{featured.caption}</div>
                 </Block>
 
-                <Block label="Hashtags">
+                <Block label={tx.hashtags}>
                   <div style={{ fontSize: '11.5px', color: '#60a5fa' }}>{featured.hashtags}</div>
                 </Block>
 
-                <Block label="Sugestão de criativo">
+                <Block label={tx.creativeSug}>
                   <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55 }}>{featured.creative}</div>
                 </Block>
 
-                <Block label="🎨 Direção criativa (do DNA da marca)">
+                <Block label={tx.artDir}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '9px' }}>
                     {[
-                      { k: 'Paleta', v: featured.art.palette },
-                      { k: 'Estilo', v: featured.art.style },
-                      { k: 'Referência visual', v: featured.art.reference },
-                      { k: 'Evitar', v: featured.art.doNot },
+                      { k: tx.palette, v: featured.art.palette },
+                      { k: tx.style, v: featured.art.style },
+                      { k: tx.visualRef, v: featured.art.reference },
+                      { k: tx.avoid, v: featured.art.doNot },
                     ].map(row => (
                       <div key={row.k} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '9px', padding: '10px 12px' }}>
                         <div style={{ fontSize: '9.5px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>{row.k}</div>
@@ -352,7 +403,7 @@ export default function ContentAgentTab({ company }: { company: Pick<CompanyData
                 </Block>
 
                 <button style={{ marginTop: '6px', padding: '8px 18px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', border: 'none', borderRadius: '9px', cursor: 'pointer', fontFamily: D }}>
-                  Aprovar e agendar
+                  {tx.approveSchedule}
                 </button>
               </>
             )}
