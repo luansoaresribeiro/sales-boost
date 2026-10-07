@@ -8,6 +8,18 @@ import BrandKit from './BrandKit'
 import ProductPhotos from './ProductPhotos'
 import CatalogItems from './CatalogItems'
 import { fetchCatalogSchema, type CatalogSchema } from '../../../lib/verticalPlaybook'
+import { useLang } from '../../../contexts/LanguageContext'
+
+const TX = {
+  pt: { companyLang: '🗣️ Língua da empresa (usada em todo conteúdo gerado):',
+    b1: '🎨 ', b2: 'Estilos e Visuais — a identidade visual da marca.', b3: ' ', b4: 'Kit', b5: ' = logo, cores, tipografia e voz · ', b6: 'Arquivo', b7: ' = tudo que você publica no Instagram (fotos, carrosséis ', b8: 'e vídeos/Reels', b9: ') + as fotos de produto que você subir. A geração filtra e monta as peças a partir daqui.',
+    kit: '🎨 Kit da Marca', archive: '🗂️ Arquivo', published: '📷 Publicados', products: '📦 Produtos', loading: 'Carregando...',
+    e1: 'Arquivo vazio. Ele enche automaticamente com seus posts e ', e2: 'vídeos/Reels', e3: ' quando o ', e4: 'Instagram', e5: ' estiver conectado e a aba ', e6: 'Performance', e7: ' sincronizar (é ela que importa as mídias).' },
+  en: { companyLang: '🗣️ Company language (used in all generated content):',
+    b1: '🎨 ', b2: 'Styles and Visuals — the brand visual identity.', b3: ' ', b4: 'Kit', b5: ' = logo, colors, typography and voice · ', b6: 'Archive', b7: ' = everything you publish on Instagram (photos, carousels ', b8: 'and videos/Reels', b9: ') + the product photos you upload. Generation filters and builds pieces from here.',
+    kit: '🎨 Brand Kit', archive: '🗂️ Archive', published: '📷 Published', products: '📦 Products', loading: 'Loading...',
+    e1: 'Archive is empty. It fills up automatically with your posts and ', e2: 'videos/Reels', e3: ' when ', e4: 'Instagram', e5: ' is connected and the ', e6: 'Performance', e7: ' tab syncs (it is the one that imports the media).' },
+} as const
 
 interface ArchivePost { id: string; caption: string | null; image_url: string | null; posted_at: string | null; likes_count: number | null; comments_count: number | null; media_type: string | null }
 
@@ -19,6 +31,7 @@ const LANGUAGES: { key: string; label: string }[] = [{ key: 'pt', label: '🇧�
 // outro traço da identidade da marca, igual voz/tom no Kit da Marca.
 function LanguageSelector({ company }: { company: CompanyData }) {
   const { refreshCompany } = useCompany()
+  const tx = TX[useLang().lang]
   const [saving, setSaving] = useState(false)
   const current = company.language ?? 'pt'
 
@@ -32,7 +45,7 @@ function LanguageSelector({ company }: { company: CompanyData }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
-      <span style={{ fontSize: '11px', color: MUTED }}>🗣️ Língua da empresa (usada em todo conteúdo gerado):</span>
+      <span style={{ fontSize: '11px', color: MUTED }}>{tx.companyLang}</span>
       <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '9px' }}>
         {LANGUAGES.map(l => (
           <button key={l.key} onClick={() => setLanguage(l.key)} disabled={saving}
@@ -51,6 +64,7 @@ function LanguageSelector({ company }: { company: CompanyData }) {
 // Performance importa) + o que a própria plataforma publicou + fotos de produto.
 export default function VisualLibrary({ company }: { company: CompanyData }) {
   const companyId = company.id
+  const { lang } = useLang(); const tx = TX[lang]
   const [tab, setTab] = useState<'kit' | 'archive'>('kit')
   const [archiveTab, setArchiveTab] = useState<'publicados' | 'produtos' | 'catalogo'>('publicados')
   const [archive, setArchive] = useState<ArchivePost[]>([])
@@ -99,13 +113,13 @@ export default function VisualLibrary({ company }: { company: CompanyData }) {
   return (
     <div>
       <div style={{ padding: '12px 16px', background: 'rgba(167,139,250,0.07)', border: '1px solid rgba(167,139,250,0.25)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '16px' }}>
-        🎨 <strong>Estilos e Visuais — a identidade visual da marca.</strong> <strong>Kit</strong> = logo, cores, tipografia e voz · <strong>Arquivo</strong> = tudo que você publica no Instagram (fotos, carrosséis <strong>e vídeos/Reels</strong>) + as fotos de produto que você subir. A geração filtra e monta as peças a partir daqui.
+        {tx.b1}<strong>{tx.b2}</strong>{tx.b3}<strong>{tx.b4}</strong>{tx.b5}<strong>{tx.b6}</strong>{tx.b7}<strong>{tx.b8}</strong>{tx.b9}
       </div>
 
       <LanguageSelector company={company} />
 
       <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '10px', marginBottom: '18px', flexWrap: 'wrap' }}>
-        {([['kit', '🎨 Kit da Marca'], ['archive', '🗂️ Arquivo']] as const).map(([k, label]) => (
+        {([['kit', tx.kit], ['archive', tx.archive]] as const).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} style={{ padding: '7px 13px', background: tab === k ? 'rgba(167,139,250,0.15)' : 'transparent', border: `1px solid ${tab === k ? 'rgba(167,139,250,0.4)' : 'transparent'}`, borderRadius: '7px', color: tab === k ? '#A78BFA' : 'white', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>{label}</button>
         ))}
       </div>
@@ -113,15 +127,15 @@ export default function VisualLibrary({ company }: { company: CompanyData }) {
       {tab === 'kit' ? <BrandKit companyId={companyId} /> : (
         <>
           <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '10px', marginBottom: '18px', flexWrap: 'wrap' }}>
-            {([['publicados', '📷 Publicados'], ['produtos', '📦 Produtos'], ...(catalogSchema ? [['catalogo', `📋 ${catalogSchema.catalogLabel}`] as const] : [])] as const).map(([k, label]) => (
+            {([['publicados', tx.published], ['produtos', tx.products], ...(catalogSchema ? [['catalogo', `📋 ${catalogSchema.catalogLabel}`] as const] : [])] as const).map(([k, label]) => (
               <button key={k} onClick={() => setArchiveTab(k)} style={{ padding: '6px 12px', background: archiveTab === k ? 'rgba(255,109,41,0.14)' : 'transparent', border: `1px solid ${archiveTab === k ? 'rgba(255,109,41,0.4)' : 'transparent'}`, borderRadius: '7px', color: archiveTab === k ? '#FF6D29' : 'white', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>{label}</button>
             ))}
           </div>
 
           {archiveTab === 'catalogo' && catalogSchema ? <CatalogItems companyId={companyId} schema={catalogSchema} verticalKey={company.vertical_key ?? 'generico'} /> : archiveTab === 'produtos' ? <ProductPhotos companyId={companyId} /> : (
-            loading ? <div style={{ fontSize: '12px', color: MUTED }}>Carregando...</div> : archive.length === 0 ? (
+            loading ? <div style={{ fontSize: '12px', color: MUTED }}>{tx.loading}</div> : archive.length === 0 ? (
               <div style={{ padding: '28px', textAlign: 'center', color: MUTED, fontSize: '12.5px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>
-                Arquivo vazio. Ele enche automaticamente com seus posts e <strong>vídeos/Reels</strong> quando o <strong>Instagram</strong> estiver conectado e a aba <strong>Performance</strong> sincronizar (é ela que importa as mídias).
+                {tx.e1}<strong>{tx.e2}</strong>{tx.e3}<strong>{tx.e4}</strong>{tx.e5}<strong>{tx.e6}</strong>{tx.e7}
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
@@ -143,7 +157,7 @@ export default function VisualLibrary({ company }: { company: CompanyData }) {
                       {p.caption && <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.4, maxHeight: '48px', overflow: 'hidden', marginBottom: '6px' }}>{p.caption}</div>}
                       <div style={{ display: 'flex', gap: '10px', fontSize: '10px', color: 'rgba(255,255,255,0.45)' }}>
                         <span>❤️ {p.likes_count ?? 0}</span><span>💬 {p.comments_count ?? 0}</span>
-                        {p.posted_at && <span style={{ marginLeft: 'auto' }}>{timeAgo(p.posted_at)}</span>}
+                        {p.posted_at && <span style={{ marginLeft: 'auto' }}>{timeAgo(p.posted_at, lang)}</span>}
                       </div>
                     </div>
                   </div>

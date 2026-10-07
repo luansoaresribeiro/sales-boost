@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { CARD, MUTED, BORDER, D, inputStyle, FORMAT_CLASS, FUNNEL_LABEL, type FunnelStage } from './shared'
-import { TEMPLATES, type Template, type Brand } from './formatTemplates'
+import { TEMPLATES, templateUiLabel, type Template, type Brand } from './formatTemplates'
 import FormatStudio from './FormatStudio'
 import FormatsGallery from './FormatsGallery'
+import { useLang } from '../../../contexts/LanguageContext'
 
 const ORANGE = '#FF6D29'
 
@@ -16,15 +17,34 @@ const PRESETS: { title: string; content: string; fields: string[] }[] = [
   { title: 'Infográfico', content: 'Dados/passos em blocos visuais numerados.', fields: ['título', 'itens (lista)', 'ícone por item', 'fonte do dado', 'logo'] },
   { title: 'Foco no Produto', content: 'Produto em destaque com nome e preço.', fields: ['foto do produto', 'nome', 'preço', 'chamada', 'logo'] },
 ]
+const PRESETS_EN: typeof PRESETS = [
+  { title: 'Infographic', content: 'Data/steps in numbered visual blocks.', fields: ['title', 'items (list)', 'icon per item', 'data source', 'logo'] },
+  { title: 'Product Focus', content: 'Featured product with name and price.', fields: ['product photo', 'name', 'price', 'call to action', 'logo'] },
+]
+const FUNNEL_EN: Record<string, string> = { topo: 'Top', meio: 'Middle', fundo: 'Bottom' }
+
+const TX = {
+  pt: { brandFallback: 'Sua marca', b1: '🧩 ', b2: 'Formatos.', b3: ' Cada formato é a ', b4: 'anatomia', b5: ' de um tipo de post. Os formatos com ', b6: 'motor de imagem', b7: ' (abaixo) você ', b8: 'gera de verdade', b9: ' — a imagem é montada campo a campo, não é foto de IA. Os formatos que você cadastra no catálogo (mais abaixo) ', b10: 'guiam o Diretor Criativo', b11: ' ao gerar. Quanto mais formatos, mais tipos de imagem o agente sabe montar.',
+    genTitle: '🎨 Gerar imagem de formato', genDesc: 'Escolha um formato, preencha (ou deixe a IA preencher) e gere a imagem real. Ela cai na Área de Testes pra aprovação. Cada um serve melhor pra uma etapa do funil — use o filtro pra achar o certo.',
+    all: 'Todos', fields: 'campos', catT: '📚 Catálogo de formatos', catD: 'Formatos que guiam a IA na hora de gerar (sem motor de imagem próprio ainda).', quick: 'Começar rápido',
+    cancel: 'Cancelar', createScratch: '+ Criar formato do zero', namePh: 'Nome do formato (ex: Print de Tweet)', descPh: 'Quando usar / o que é', fieldsPh: 'Campos necessários, separados por vírgula (ex: @usuário, nome, avatar, texto, curtidas)', examplePh: 'Exemplo/observação (opcional)', saveFmt: 'Salvar formato',
+    loading: 'Carregando...', empty: 'Nenhum formato ainda. Use um modelo pronto acima ou crie do zero — o Diretor Criativo passa a usar assim que você salvar.', remove: 'Remover' },
+  en: { brandFallback: 'Your brand', b1: '🧩 ', b2: 'Formats.', b3: ' Each format is the ', b4: 'anatomy', b5: ' of a post type. For formats with an ', b6: 'image engine', b7: ' (below) you ', b8: 'really generate', b9: ' — the image is built field by field, it is not an AI photo. The formats you add to the catalog (further down) ', b10: 'guide the Creative Director', b11: ' when generating. The more formats, the more image types the agent can build.',
+    genTitle: '🎨 Generate format image', genDesc: 'Pick a format, fill it in (or let the AI fill it) and generate the real image. It lands in the Testing Area for approval. Each one fits a funnel stage better — use the filter to find the right one.',
+    all: 'All', fields: 'fields', catT: '📚 Format catalog', catD: 'Formats that guide the AI when generating (no image engine of their own yet).', quick: 'Quick start',
+    cancel: 'Cancel', createScratch: '+ Create format from scratch', namePh: 'Format name (e.g. Tweet Print)', descPh: 'When to use / what it is', fieldsPh: 'Required fields, comma-separated (e.g. @user, name, avatar, text, likes)', examplePh: 'Example/note (optional)', saveFmt: 'Save format',
+    loading: 'Loading...', empty: 'No formats yet. Use a ready-made template above or create one from scratch — the Creative Director starts using it as soon as you save.', remove: 'Remove' },
+} as const
 
 // Formatos — a anatomia de cada tipo de post: quais campos/componentes a IA
 // precisa preencher pra montar aquela imagem. Reusa marketing_ai_knowledge
 // (module='formato'); o creative-generate consulta esses formatos ao criar.
 export default function FormatsLibrary({ companyId, module }: { companyId: string; module?: string }) {
+  const { lang } = useLang(); const tx = TX[lang]; const en = lang === 'en'
   const [formats, setFormats] = useState<Fmt[]>([])
   const [loading, setLoading] = useState(true)
   const [studio, setStudio] = useState<Template | null>(null)
-  const [brand, setBrand] = useState<Brand>({ primary: ORANGE, name: 'Sua marca' })
+  const [brand, setBrand] = useState<Brand>({ primary: ORANGE, name: tx.brandFallback })
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [desc, setDesc] = useState('')
@@ -68,7 +88,7 @@ export default function FormatsLibrary({ companyId, module }: { companyId: strin
   return (
     <div>
       <div style={{ padding: '12px 16px', background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '16px' }}>
-        🧩 <strong>Formatos.</strong> Cada formato é a <strong>anatomia</strong> de um tipo de post. Os formatos com <strong>motor de imagem</strong> (abaixo) você <strong>gera de verdade</strong> — a imagem é montada campo a campo, não é foto de IA. Os formatos que você cadastra no catálogo (mais abaixo) <strong>guiam o Diretor Criativo</strong> ao gerar. Quanto mais formatos, mais tipos de imagem o agente sabe montar.
+        {tx.b1}<strong>{tx.b2}</strong>{tx.b3}<strong>{tx.b4}</strong>{tx.b5}<strong>{tx.b6}</strong>{tx.b7}<strong>{tx.b8}</strong>{tx.b9}<strong>{tx.b10}</strong>{tx.b11}
       </div>
 
       {/* Biblioteca de formatos & dimensões (tamanhos/placements + custom + presets) */}
@@ -76,13 +96,13 @@ export default function FormatsLibrary({ companyId, module }: { companyId: strin
 
       {/* Motor de imagem — formatos que geram a imagem real, campo a campo */}
       <div style={{ marginBottom: '22px' }}>
-        <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🎨 Gerar imagem de formato</div>
-        <div style={{ fontSize: '11px', color: MUTED, marginBottom: '9px' }}>Escolha um formato, preencha (ou deixe a IA preencher) e gere a imagem real. Ela cai na Área de Testes pra aprovação. Cada um serve melhor pra uma etapa do funil — use o filtro pra achar o certo.</div>
+        <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>{tx.genTitle}</div>
+        <div style={{ fontSize: '11px', color: MUTED, marginBottom: '9px' }}>{tx.genDesc}</div>
         <div style={{ display: 'flex', gap: '6px', marginBottom: '11px' }}>
           {(['todos', 'topo', 'meio', 'fundo'] as const).map(f => (
             <button key={f} onClick={() => setFunnelFilter(f)}
               style={{ padding: '5px 12px', borderRadius: '99px', border: `1px solid ${funnelFilter === f ? 'rgba(255,109,41,0.5)' : BORDER}`, background: funnelFilter === f ? 'rgba(255,109,41,0.12)' : 'transparent', color: funnelFilter === f ? ORANGE : MUTED, fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D, textTransform: 'capitalize' }}>
-              {f === 'todos' ? 'Todos' : FUNNEL_LABEL[f]}
+              {f === 'todos' ? tx.all : en ? FUNNEL_EN[f] : FUNNEL_LABEL[f]}
             </button>
           ))}
         </div>
@@ -92,12 +112,12 @@ export default function FormatsLibrary({ companyId, module }: { companyId: strin
             return (
               <button key={t.key} onClick={() => setStudio(t)} style={{ textAlign: 'left', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', padding: '13px', cursor: 'pointer', fontFamily: D }}>
                 <div style={{ fontSize: '22px', marginBottom: '6px' }}>{t.icon}</div>
-                <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>{t.label}</div>
-                <div style={{ fontSize: '9.5px', color: MUTED, marginBottom: cls ? '6px' : 0 }}>{t.w}×{t.h} · {t.fields.length} campos</div>
+                <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>{templateUiLabel(t, lang)}</div>
+                <div style={{ fontSize: '9.5px', color: MUTED, marginBottom: cls ? '6px' : 0 }}>{t.w}×{t.h} · {t.fields.length} {tx.fields}</div>
                 {cls && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
                     <span style={{ fontSize: '8.5px', fontWeight: 800, color: '#A78BFA', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: '99px', padding: '2px 7px', letterSpacing: '0.03em' }}>
-                      {cls.funnel.map(f => FUNNEL_LABEL[f].toUpperCase()).join(' / ')}
+                      {cls.funnel.map(f => (en ? FUNNEL_EN[f] : FUNNEL_LABEL[f]).toUpperCase()).join(' / ')}
                     </span>
                     <span style={{ fontSize: '8.5px', fontWeight: 700, color: '#60a5fa', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', borderRadius: '99px', padding: '2px 7px' }}>
                       {cls.objective}
@@ -110,14 +130,14 @@ export default function FormatsLibrary({ companyId, module }: { companyId: strin
         </div>
       </div>
 
-      <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>📚 Catálogo de formatos</div>
-      <div style={{ fontSize: '11px', color: MUTED, marginBottom: '13px' }}>Formatos que guiam a IA na hora de gerar (sem motor de imagem próprio ainda).</div>
+      <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>{tx.catT}</div>
+      <div style={{ fontSize: '11px', color: MUTED, marginBottom: '13px' }}>{tx.catD}</div>
 
       {/* Modelos prontos */}
       <div style={{ marginBottom: '14px' }}>
-        <div style={{ fontSize: '10.5px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '7px' }}>Começar rápido</div>
+        <div style={{ fontSize: '10.5px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '7px' }}>{tx.quick}</div>
         <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' }}>
-          {PRESETS.map(p => (
+          {(en ? PRESETS_EN : PRESETS).map(p => (
             <button key={p.title} onClick={() => applyPreset(p)} style={{ padding: '6px 12px', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: '99px', color: '#93c5fd', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>+ {p.title}</button>
           ))}
         </div>
@@ -125,24 +145,24 @@ export default function FormatsLibrary({ companyId, module }: { companyId: strin
 
       <div style={{ marginBottom: '18px' }}>
         <button onClick={() => setAdding(a => !a)} style={{ padding: '6px 13px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '7px', color: ORANGE, fontSize: '11.5px', cursor: 'pointer', fontFamily: D }}>
-          {adding ? 'Cancelar' : '+ Criar formato do zero'}
+          {adding ? tx.cancel : tx.createScratch}
         </button>
         {adding && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px', padding: '14px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', maxWidth: '560px' }}>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do formato (ex: Print de Tweet)" style={inputStyle} />
-            <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Quando usar / o que é" style={inputStyle} />
-            <textarea value={fields} onChange={e => setFields(e.target.value)} placeholder="Campos necessários, separados por vírgula (ex: @usuário, nome, avatar, texto, curtidas)" rows={2} style={{ ...inputStyle, resize: 'vertical', fontFamily: D }} />
-            <input value={example} onChange={e => setExample(e.target.value)} placeholder="Exemplo/observação (opcional)" style={inputStyle} />
-            <button onClick={save} disabled={!name.trim()} style={{ alignSelf: 'flex-start', padding: '8px 18px', background: name.trim() ? ORANGE : 'rgba(255,255,255,0.08)', color: name.trim() ? '#000' : MUTED, fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: name.trim() ? 'pointer' : 'not-allowed', fontFamily: D }}>Salvar formato</button>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder={tx.namePh} style={inputStyle} />
+            <input value={desc} onChange={e => setDesc(e.target.value)} placeholder={tx.descPh} style={inputStyle} />
+            <textarea value={fields} onChange={e => setFields(e.target.value)} placeholder={tx.fieldsPh} rows={2} style={{ ...inputStyle, resize: 'vertical', fontFamily: D }} />
+            <input value={example} onChange={e => setExample(e.target.value)} placeholder={tx.examplePh} style={inputStyle} />
+            <button onClick={save} disabled={!name.trim()} style={{ alignSelf: 'flex-start', padding: '8px 18px', background: name.trim() ? ORANGE : 'rgba(255,255,255,0.08)', color: name.trim() ? '#000' : MUTED, fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: name.trim() ? 'pointer' : 'not-allowed', fontFamily: D }}>{tx.saveFmt}</button>
           </div>
         )}
       </div>
 
       {loading ? (
-        <div style={{ fontSize: '12px', color: MUTED }}>Carregando...</div>
+        <div style={{ fontSize: '12px', color: MUTED }}>{tx.loading}</div>
       ) : formats.length === 0 ? (
         <div style={{ padding: '28px', textAlign: 'center', color: MUTED, fontSize: '12.5px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>
-          Nenhum formato ainda. Use um modelo pronto acima ou crie do zero — o Diretor Criativo passa a usar assim que você salvar.
+          {tx.empty}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
@@ -150,7 +170,7 @@ export default function FormatsLibrary({ companyId, module }: { companyId: strin
             <div key={f.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '5px' }}>
                 <span style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', flex: 1 }}>{f.title}</span>
-                <button onClick={() => remove(f.id)} title="Remover" style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '12px', cursor: 'pointer' }}>🗑</button>
+                <button onClick={() => remove(f.id)} title={tx.remove} style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '12px', cursor: 'pointer' }}>🗑</button>
               </div>
               {f.content && <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5, marginBottom: '8px' }}>{f.content}</div>}
               {f.meta?.fields?.length ? (

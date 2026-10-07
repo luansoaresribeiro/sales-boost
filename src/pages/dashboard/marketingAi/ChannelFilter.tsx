@@ -1,5 +1,6 @@
 import { MUTED, BORDER, D } from './shared'
 import { CHANNEL_META, type Channel } from './salesDemo'
+import { useLang } from '../../../contexts/LanguageContext'
 
 const ORANGE = '#FF6D29'
 export type ChannelFilterValue = 'all' | Channel
@@ -7,8 +8,9 @@ export type ChannelFilterValue = 'all' | Channel
 // Seletor de canal [ Todos ] [ 📷 Instagram ] [ 💬 WhatsApp ] usado pelo Funil
 // e pelo Atendimento. Filtra instantaneamente (estado local, sem reload).
 export default function ChannelFilter({ value, onChange }: { value: ChannelFilterValue; onChange: (v: ChannelFilterValue) => void }) {
+  const { lang } = useLang()
   const opts: { key: ChannelFilterValue; label: string }[] = [
-    { key: 'all', label: 'Todos' },
+    { key: 'all', label: lang === 'en' ? 'All' : 'Todos' },
     { key: 'instagram', label: `${CHANNEL_META.instagram.icon} ${CHANNEL_META.instagram.label}` },
     { key: 'whatsapp', label: `${CHANNEL_META.whatsapp.icon} ${CHANNEL_META.whatsapp.label}` },
   ]

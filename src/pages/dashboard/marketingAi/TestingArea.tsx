@@ -4,12 +4,69 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { track } from '../../../lib/analytics'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL, timeAgo, FORMAT_CLASS, FUNNEL_LABEL } from './shared'
 import AdaptModal, { type VaultPost } from './AdaptModal'
+import { useLang, type Lang } from '../../../contexts/LanguageContext'
+
+const TX = {
+  pt: {
+    close: 'Fechar', openOrig: 'Abrir original ↗', noImage: 'sem imagem', clickZoom: 'Clique pra ampliar',
+    howToRecord: '🎥 Como gravar', directorBrief: '🎬 Brief do Diretor',
+    testsErr: 'Erro na Área de Testes', coherence: 'Coerência', visualCoherence: 'Coerência visual',
+    incoherent: 'Post incoerente', coherent: 'Post coerente', visualBad: 'Imagem com problema visual', visualOk: 'Imagem sem problema visual',
+    genErr: 'Erro ao gerar post de teste', errGeneric: 'Erro',
+    autoVaultMsg: '✅ Post gerado com nota boa — já foi direto pro Vault!',
+    trackGen: 'Gerou conteúdo', trackApproved: 'Aprovou conteúdo pro Vault',
+    regenerated: (a: unknown, b: unknown) => `Regenerado (${a}) → nova nota ${b}`,
+    title: '🧪 Área de Testes + Controle de Qualidade',
+    intro1: 'Gera com o ', intro2: 'mesmo motor', intro3: ' da automação e é avaliado por dois analistas — ', intro4: 'coerência',
+    intro5: ' (o post faz sentido do início ao fim?) e ', intro6: 'coerência visual', intro7: ' (a imagem saiu legível, sem nada cortado/quebrado?). São sinais, não um portão: ',
+    intro8: '"Enviar pro Vault" sempre aparece', intro9: ', e "Corrigir" só aparece quando algo estiver claramente ruim. Só do Vault é que você publica.',
+    tplTitle: 'Escolha o template da imagem — ou deixe automático pra ele rotacionar sozinho por todos',
+    tplAuto: '🔀 Automático (rotaciona)', tplRandom: '🎲 Aleatório',
+    generating: 'Gerando + avaliando...', generate: '✨ Gerar post de teste',
+    autoDailyT: 'Gerar automaticamente todo dia às 10h', autoDailyD: 'Cria 1 post de teste (Orgânico) sozinho, esperando você avaliar no QC.',
+    withImage: 'Incluir imagem', carouselT: 'Considerar formato Carrossel',
+    carouselD: 'Desligado: todo post vira foto única, sempre usando um dos templates reais (Tweet Print, Foco no Produto, etc.).',
+    progress: 'Diretor Criativo criando + controle de qualidade avaliando... (pode levar ~1 min)',
+    loading: 'Carregando testes...', empty1: 'Nenhum post de teste ainda. Clique em ', empty2: '"Gerar post de teste"', empty3: ' — ele já vem com nota de qualidade.',
+    evaluate: 'Avaliar', toVault: '⭐ Enviar pro Vault', sentVault: 'Enviado pro Vault ✓', regenerating: 'Regenerando...',
+    fixCoh: '🔁 Corrigir coerência', fixImg: '🔁 Corrigir imagem', discard: 'Descartar', adapt: '✨ Adaptar', adaptations: 'Adaptações', del: 'Excluir',
+  },
+  en: {
+    close: 'Close', openOrig: 'Open original ↗', noImage: 'no image', clickZoom: 'Click to enlarge',
+    howToRecord: '🎥 How to record', directorBrief: '🎬 Director brief',
+    testsErr: 'Testing Area error', coherence: 'Coherence', visualCoherence: 'Visual coherence',
+    incoherent: 'Incoherent post', coherent: 'Coherent post', visualBad: 'Image has a visual problem', visualOk: 'Image has no visual problem',
+    genErr: 'Error generating test post', errGeneric: 'Error',
+    autoVaultMsg: '✅ Post generated with a good score — it went straight to the Vault!',
+    trackGen: 'Generated content', trackApproved: 'Approved content to the Vault',
+    regenerated: (a: unknown, b: unknown) => `Regenerated (${a}) → new score ${b}`,
+    title: '🧪 Testing Area + Quality Control',
+    intro1: 'Generates with the ', intro2: 'same engine', intro3: ' as the automation and is rated by two analysts — ', intro4: 'coherence',
+    intro5: ' (does the post make sense from start to finish?) and ', intro6: 'visual coherence', intro7: ' (is the image legible, with nothing cut off or broken?). These are signals, not a gate: ',
+    intro8: '"Send to Vault" always shows up', intro9: ', and "Fix" only shows up when something is clearly bad. You only publish from the Vault.',
+    tplTitle: 'Pick the image template — or leave it on automatic so it rotates through all of them',
+    tplAuto: '🔀 Automatic (rotates)', tplRandom: '🎲 Random',
+    generating: 'Generating + rating...', generate: '✨ Generate test post',
+    autoDailyT: 'Generate automatically every day at 10am', autoDailyD: 'Creates 1 test post (Organic) on its own, waiting for you to review it in QC.',
+    withImage: 'Include image', carouselT: 'Consider Carousel format',
+    carouselD: 'Off: every post becomes a single photo, always using one of the real templates (Tweet Print, Product Focus, etc.).',
+    progress: 'Creative Director creating + quality control rating... (may take ~1 min)',
+    loading: 'Loading tests...', empty1: 'No test posts yet. Click ', empty2: '"Generate test post"', empty3: ' — it comes with a quality score.',
+    evaluate: 'Rate', toVault: '⭐ Send to Vault', sentVault: 'Sent to Vault ✓', regenerating: 'Regenerating...',
+    fixCoh: '🔁 Fix coherence', fixImg: '🔁 Fix image', discard: 'Discard', adapt: '✨ Adapt', adaptations: 'Adaptations', del: 'Delete',
+  },
+} as const
+const FUNNEL_EN: Record<string, string> = { topo: 'Top', meio: 'Middle', fundo: 'Bottom' }
 
 const KIND_PT: Record<string, string> = { organico: 'Orgânico', stories: 'Stories', campanhas: 'Campanhas' }
 // Mesmas chaves do "template" escolhido pelo Diretor em creative-generate.
 export const TEMPLATE_LABEL: Record<string, string> = {
   livre: 'Livre', tweet: 'Tweet', product: 'Produto',
 }
+export const TEMPLATE_LABEL_EN: Record<string, string> = {
+  livre: 'Free', tweet: 'Tweet', product: 'Product',
+}
+export const templateLabel = (key: string, lang: Lang): string => (lang === 'en' ? TEMPLATE_LABEL_EN : TEMPLATE_LABEL)[key] ?? key
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -40,10 +97,11 @@ export interface TestPost {
 
 // Recomendação de como GRAVAR o vídeo (roteiro), quando o formato é vídeo/reel/story.
 export function VideoScript({ post }: { post: TestPost }) {
+  const { lang } = useLang(); const t = TX[lang]
   if (!post.video_script || !post.video_script.trim()) return null
   return (
     <div style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.25)', borderRadius: '8px', padding: '8px 10px' }}>
-      <div style={{ fontSize: '9px', fontWeight: 700, color: '#A78BFA', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>🎥 Como gravar</div>
+      <div style={{ fontSize: '9px', fontWeight: 700, color: '#A78BFA', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{t.howToRecord}</div>
       <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{post.video_script}</div>
     </div>
   )
@@ -54,6 +112,7 @@ interface MediaItem { url: string; text?: string }
 // Popup controlável — suporta 1 imagem OU carrossel (várias). Navega com as
 // setas / ‹ ›, fecha no X, no fundo ou ESC. Mostra o texto do slide, se houver.
 export function ImageModal({ images, start = 0, onClose }: { images: MediaItem[]; start?: number; onClose: () => void }) {
+  const { lang } = useLang(); const t = TX[lang]
   const [i, setI] = useState(start)
   const n = images.length
   const go = useCallback((d: number) => setI(p => (p + d + n) % n), [n])
@@ -71,10 +130,10 @@ export function ImageModal({ images, start = 0, onClose }: { images: MediaItem[]
   return (
     <div onClick={onClose}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.87)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '28px' }}>
-      <button onClick={onClose} aria-label="Fechar"
+      <button onClick={onClose} aria-label={t.close}
         style={{ position: 'absolute', top: '16px', right: '18px', width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: 'white', fontSize: '18px', cursor: 'pointer' }}>✕</button>
       <a href={cur.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-        style={{ position: 'absolute', top: '18px', left: '18px', fontSize: '12px', color: 'white', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '8px', padding: '6px 12px', textDecoration: 'none' }}>Abrir original ↗</a>
+        style={{ position: 'absolute', top: '18px', left: '18px', fontSize: '12px', color: 'white', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '8px', padding: '6px 12px', textDecoration: 'none' }}>{t.openOrig}</a>
       <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: '14px', maxWidth: '96vw' }}>
         {n > 1 && <button onClick={() => go(-1)} style={navBtn}>‹</button>}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', minWidth: 0 }}>
@@ -90,17 +149,18 @@ export function ImageModal({ images, start = 0, onClose }: { images: MediaItem[]
 
 // Player de vídeo, carrossel (slides) ou imagem única. Clique abre no popup.
 export function PostMedia({ post, height = 150 }: { post: TestPost; height?: number }) {
+  const { lang } = useLang(); const t = TX[lang]
   const [zoom, setZoom] = useState(false)
   if (post.video_url) return <video src={post.video_url} controls style={{ width: '100%', height, objectFit: 'cover', background: '#000' }} />
 
   const slideImgs = (post.slides ?? []).filter(s => s?.image_url).map(s => ({ url: s.image_url as string, text: s.text }))
   const carouselImgs = (post.media ?? []).map(m => ({ url: m.url }))
   const images: MediaItem[] = slideImgs.length > 0 ? slideImgs : carouselImgs.length > 0 ? carouselImgs : (post.image_url ? [{ url: post.image_url }] : [])
-  if (images.length === 0) return <div style={{ width: '100%', height, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.03)', color: MUTED, fontSize: '11px' }}>sem imagem</div>
+  if (images.length === 0) return <div style={{ width: '100%', height, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.03)', color: MUTED, fontSize: '11px' }}>{t.noImage}</div>
 
   return (
     <>
-      <div onClick={() => setZoom(true)} title="Clique pra ampliar" style={{ position: 'relative', cursor: 'zoom-in' }}>
+      <div onClick={() => setZoom(true)} title={t.clickZoom} style={{ position: 'relative', cursor: 'zoom-in' }}>
         <img src={images[0].url} alt="" style={{ width: '100%', height, objectFit: 'cover', display: 'block' }} />
         {images.length > 1 && <span style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.65)', color: 'white', fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: '99px' }}>🖼 1/{images.length}</span>}
       </div>
@@ -124,6 +184,7 @@ export function ProgressBar({ label }: { label?: string }) {
 
 // Brief do Diretor Criativo (Fase 2): mostra como o conteúdo nasceu.
 export function BriefBlock({ post }: { post: TestPost }) {
+  const { lang } = useLang(); const t = TX[lang]
   const b = post.brief
   if (!b && !post.personality) return null
   const chips = [
@@ -134,7 +195,7 @@ export function BriefBlock({ post }: { post: TestPost }) {
   ].filter(Boolean) as string[]
   return (
     <div style={{ background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.18)', borderRadius: '8px', padding: '8px 10px' }}>
-      <div style={{ fontSize: '9px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '5px' }}>🎬 Brief do Diretor</div>
+      <div style={{ fontSize: '9px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '5px' }}>{t.directorBrief}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
         {chips.map(c => <span key={c} style={{ fontSize: '9.5px', color: 'white', background: 'rgba(255,255,255,0.05)', borderRadius: '99px', padding: '2px 7px' }}>{c}</span>)}
       </div>
@@ -162,7 +223,7 @@ export async function callContentTest(token: string, payload: Record<string, unk
     body: JSON.stringify(payload),
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.error ?? 'Erro na Área de Testes')
+  if (!res.ok) throw new Error(data.error ?? TX[localStorage.getItem('sb_lang') === 'en' ? 'en' : 'pt'].testsErr)
   return data as { id?: string; quality_score?: number; regenerated?: string; image_generated?: boolean; auto_vault?: boolean }
 }
 
@@ -186,16 +247,17 @@ function CoherenceRow({ label, score, comment, bad }: { label: string; score: nu
 // coerência VISUAL (a imagem saiu legível, sem nada cortado/quebrado?).
 // Nenhum dos dois bloqueia o Vault — são avisos, quem decide é o dono.
 export function ScoreBreakdown({ post }: { post: TestPost }) {
+  const { lang } = useLang(); const t = TX[lang]
   if (post.quality_score == null || !post.scores?.coherence) return null
   const coherence = post.scores.coherence
   const visual = post.scores.visual_coherence
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      <CoherenceRow label="Coerência" score={coherence.score} bad={coherenceIsBad(post)}
-        comment={coherence.comment || (coherenceIsBad(post) ? 'Post incoerente' : 'Post coerente')} />
+      <CoherenceRow label={t.coherence} score={coherence.score} bad={coherenceIsBad(post)}
+        comment={coherence.comment || (coherenceIsBad(post) ? t.incoherent : t.coherent)} />
       {visual && (
-        <CoherenceRow label="Coerência visual" score={visual.score} bad={visualIsBad(post)}
-          comment={visual.comment || (visualIsBad(post) ? 'Imagem com problema visual' : 'Imagem sem problema visual')} />
+        <CoherenceRow label={t.visualCoherence} score={visual.score} bad={visualIsBad(post)}
+          comment={visual.comment || (visualIsBad(post) ? t.visualBad : t.visualOk)} />
       )}
     </div>
   )
@@ -216,6 +278,7 @@ function Switch({ on, onClick, disabled }: { on: boolean; onClick: () => void; d
 // principal; só publica quando o dono manda.
 export default function TestingArea({ companyId, kind, onVaultChange }: { companyId: string; kind: Kind; onVaultChange?: () => void }) {
   const { session } = useAuth()
+  const { lang } = useLang(); const tx = TX[lang]
   const token = session?.access_token ?? ''
   const [tests, setTests] = useState<TestPost[]>([])
   const [adapts, setAdapts] = useState<Record<string, (TestPost & { source_id: string })[]>>({})
@@ -288,15 +351,15 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
         body: JSON.stringify({ kind, ...(templateChoice ? { template: templateChoice } : {}) }),
       })
       const r = await res.json().catch(() => ({})) as { error?: string; auto_vault?: boolean }
-      if (!res.ok) throw new Error(r.error ?? 'Erro ao gerar post de teste')
+      if (!res.ok) throw new Error(r.error ?? tx.genErr)
       await load()
       // Fluxo novo: classificação boa (coerência + coerência visual) já vai
       // direto pro Vault sozinho — some da Área de Testes na hora, então
       // avisa pra não parecer que sumiu sem explicação.
-      if (r.auto_vault) { setOkMsg('✅ Post gerado com nota boa — já foi direto pro Vault!'); onVaultChange?.() }
-      track('content_generated', `Gerou conteúdo (${KIND_PT[kind] ?? kind})`, { kind, auto_vault: !!r.auto_vault })
+      if (r.auto_vault) { setOkMsg(tx.autoVaultMsg); onVaultChange?.() }
+      track('content_generated', `${TX.pt.trackGen} (${KIND_PT[kind] ?? kind})`, { kind, auto_vault: !!r.auto_vault })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao gerar post de teste')
+      setError(e instanceof Error ? e.message : tx.genErr)
     }
     setGenerating(false)
   }
@@ -306,11 +369,11 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
     try {
       const r = await callContentTest(token, { ...payload, test_id: id })
       if (okText) setOkMsg(okText)
-      if (payload.action === 'regenerate') setOkMsg(`Regenerado (${r.regenerated}) → nova nota ${r.quality_score}`)
+      if (payload.action === 'regenerate') setOkMsg(tx.regenerated(r.regenerated, r.quality_score))
       await load()
-      if (payload.action === 'to_vault') { onVaultChange?.(); track('post_approved', 'Aprovou conteúdo pro Vault', { kind, test_id: id }) }
+      if (payload.action === 'to_vault') { onVaultChange?.(); track('post_approved', TX.pt.trackApproved, { kind, test_id: id }) }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro')
+      setError(e instanceof Error ? e.message : tx.errGeneric)
     }
     setBusyId(null)
   }
@@ -326,25 +389,25 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
     <section style={{ marginTop: '26px', paddingTop: '22px', borderTop: `1px solid ${BORDER}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
         <div style={{ maxWidth: '600px' }}>
-          <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🧪 Área de Testes + Controle de Qualidade</div>
+          <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>{tx.title}</div>
           <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55 }}>
-            Gera com o <strong>mesmo motor</strong> da automação e é avaliado por dois analistas — <strong>coerência</strong> (o post faz sentido do início ao fim?) e <strong>coerência visual</strong> (a imagem saiu legível, sem nada cortado/quebrado?). São sinais, não um portão: <strong>"Enviar pro Vault" sempre aparece</strong>, e "Corrigir" só aparece quando algo estiver claramente ruim. Só do Vault é que você publica.
+            {tx.intro1}<strong>{tx.intro2}</strong>{tx.intro3}<strong>{tx.intro4}</strong>{tx.intro5}<strong>{tx.intro6}</strong>{tx.intro7}<strong>{tx.intro8}</strong>{tx.intro9}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
           {kind === 'organico' && (
             <select value={templateChoice} onChange={e => setTemplateChoice(e.target.value)} disabled={generating}
-              title="Escolha o template da imagem — ou deixe automático pra ele rotacionar sozinho por todos"
+              title={tx.tplTitle}
               style={{ padding: '9px 10px', background: 'rgba(255,255,255,0.04)', color: 'white', fontSize: '11.5px', borderRadius: '9px', border: `1px solid ${BORDER}`, fontFamily: D, cursor: generating ? 'default' : 'pointer' }}>
-              <option value="">🔀 Automático (rotaciona)</option>
-              <option value="random">🎲 Aleatório</option>
-              {Object.entries(TEMPLATE_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              <option value="">{tx.tplAuto}</option>
+              <option value="random">{tx.tplRandom}</option>
+              {Object.entries(lang === 'en' ? TEMPLATE_LABEL_EN : TEMPLATE_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
             </select>
           )}
           {kind === 'organico' && templateChoice && FORMAT_CLASS[templateChoice] && (
             <div style={{ display: 'flex', gap: '5px' }}>
               <span style={{ fontSize: '9px', fontWeight: 800, color: '#A78BFA', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: '99px', padding: '3px 9px', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
-                {FORMAT_CLASS[templateChoice].funnel.map(f => FUNNEL_LABEL[f].toUpperCase()).join(' / ')}
+                {FORMAT_CLASS[templateChoice].funnel.map(f => (lang === 'en' ? FUNNEL_EN[f] : FUNNEL_LABEL[f]).toUpperCase()).join(' / ')}
               </span>
               <span style={{ fontSize: '9px', fontWeight: 700, color: '#60a5fa', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', borderRadius: '99px', padding: '3px 9px', whiteSpace: 'nowrap' }}>
                 {FORMAT_CLASS[templateChoice].objective}
@@ -353,7 +416,7 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
           )}
           <button onClick={generate} disabled={generating || !token}
             style={{ padding: '9px 16px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '9px', border: 'none', cursor: generating ? 'default' : 'pointer', fontFamily: D, flexShrink: 0, opacity: generating ? 0.7 : 1 }}>
-            {generating ? 'Gerando + avaliando...' : '✨ Gerar post de teste'}
+            {generating ? tx.generating : tx.generate}
           </button>
         </div>
       </div>
@@ -363,35 +426,35 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
           <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
             <Switch on={autoDaily} disabled={!autoLoaded || autoSaving} onClick={() => saveAuto({ auto_daily_test: !autoDaily })} />
             <div>
-              <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>Gerar automaticamente todo dia às 10h</div>
-              <div style={{ fontSize: '10px', color: MUTED }}>Cria 1 post de teste (Orgânico) sozinho, esperando você avaliar no QC.</div>
+              <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>{tx.autoDailyT}</div>
+              <div style={{ fontSize: '10px', color: MUTED }}>{tx.autoDailyD}</div>
             </div>
           </div>
           {autoDaily && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
               <Switch on={autoDailyImage} disabled={autoSaving} onClick={() => saveAuto({ auto_daily_test_image: !autoDailyImage })} />
-              <div style={{ fontSize: '11.5px', color: 'white' }}>Incluir imagem</div>
+              <div style={{ fontSize: '11.5px', color: 'white' }}>{tx.withImage}</div>
             </div>
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
             <Switch on={allowCarrossel} disabled={!autoLoaded || autoSaving} onClick={() => saveAuto({ allow_carrossel: !allowCarrossel })} />
             <div>
-              <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>Considerar formato Carrossel</div>
-              <div style={{ fontSize: '10px', color: MUTED }}>Desligado: todo post vira foto única, sempre usando um dos templates reais (Tweet Print, Foco no Produto, etc.).</div>
+              <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>{tx.carouselT}</div>
+              <div style={{ fontSize: '10px', color: MUTED }}>{tx.carouselD}</div>
             </div>
           </div>
         </div>
       )}
 
-      {generating && <ProgressBar label="Diretor Criativo criando + controle de qualidade avaliando... (pode levar ~1 min)" />}
+      {generating && <ProgressBar label={tx.progress} />}
       {error && <div style={{ color: '#f87171', fontSize: '11.5px', marginBottom: '12px' }}>{error}</div>}
       {okMsg && <div style={{ color: GREEN, fontSize: '11.5px', marginBottom: '12px' }}>{okMsg}</div>}
 
       {loading ? (
-        <div style={{ fontSize: '12px', color: MUTED }}>Carregando testes...</div>
+        <div style={{ fontSize: '12px', color: MUTED }}>{tx.loading}</div>
       ) : tests.length === 0 ? (
         <div style={{ padding: '24px', textAlign: 'center', color: MUTED, fontSize: '12.5px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '11px' }}>
-          Nenhum post de teste ainda. Clique em <strong>"Gerar post de teste"</strong> — ele já vem com nota de qualidade.
+          {tx.empty1}<strong>{tx.empty2}</strong>{tx.empty3}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: '12px' }}>
@@ -406,10 +469,10 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
                     {/* Template só é usado de verdade quando format="foto" (ver creative-generate) — pra carrossel/reel/story o valor é só um placeholder sem efeito, então não mostra. */}
                     {t.format === 'foto' && t.brief?.template && (
                       <span style={{ fontSize: '9px', fontWeight: 700, color: '#A78BFA', padding: '2px 7px', borderRadius: '99px', border: '1px solid rgba(167,139,250,0.35)' }}>
-                        {TEMPLATE_LABEL[t.brief.template] ?? t.brief.template}
+                        {templateLabel(t.brief.template, lang)}
                       </span>
                     )}
-                    <span style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', marginLeft: 'auto' }}>{timeAgo(t.created_at)}</span>
+                    <span style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)', marginLeft: 'auto' }}>{timeAgo(t.created_at, lang)}</span>
                   </div>
                   {t.idea && <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>{t.idea}</div>}
                   {t.caption && <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.5, maxHeight: '84px', overflow: 'auto' }}>{t.caption}</div>}
@@ -428,33 +491,33 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
                     {t.quality_score == null ? (
                       <button onClick={() => act(t.id, { action: 'score' })} disabled={busy}
                         style={{ flex: 1, padding: '8px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${BORDER}`, borderRadius: '8px', color: 'white', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-                        {busy ? '...' : 'Avaliar'}
+                        {busy ? '...' : tx.evaluate}
                       </button>
                     ) : (
                       <>
                         {/* Enviar pro Vault sempre existe — a IA só avisa quando acha ruim, quem decide é o dono. */}
-                        <button onClick={() => act(t.id, { action: 'to_vault' }, 'Enviado pro Vault ✓')} disabled={busy}
+                        <button onClick={() => act(t.id, { action: 'to_vault' }, tx.sentVault)} disabled={busy}
                           style={{ flex: 1, padding: '8px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: '8px', color: GREEN, fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-                          {busy ? '...' : '⭐ Enviar pro Vault'}
+                          {busy ? '...' : tx.toVault}
                         </button>
                         {(coherenceIsBad(t) || visualIsBad(t)) && (
                           <button onClick={() => act(t.id, { action: 'regenerate' })} disabled={busy}
                             style={{ flex: 1, padding: '8px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '8px', color: '#FBBF24', fontSize: '11.5px', fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-                            {busy ? 'Regenerando...' : coherenceIsBad(t) ? '🔁 Corrigir coerência' : '🔁 Corrigir imagem'}
+                            {busy ? tx.regenerating : coherenceIsBad(t) ? tx.fixCoh : tx.fixImg}
                           </button>
                         )}
                       </>
                     )}
                     <button onClick={() => discard(t.id)} disabled={busy}
                       style={{ padding: '8px 12px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '11.5px', cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-                      Descartar
+                      {tx.discard}
                     </button>
                   </div>
 
-                  <button onClick={() => setAdaptFor(t as unknown as VaultPost)} style={{ padding: '7px', background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.3)', borderRadius: '8px', color: '#FF6D29', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D, marginTop: '2px' }}>✨ Adaptar</button>
+                  <button onClick={() => setAdaptFor(t as unknown as VaultPost)} style={{ padding: '7px', background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.3)', borderRadius: '8px', color: '#FF6D29', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D, marginTop: '2px' }}>{tx.adapt}</button>
                   {adapts[t.id]?.length ? (
                     <div>
-                      <button onClick={() => toggleExpanded(t.id)} style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: MUTED, fontSize: '10.5px', fontWeight: 700, cursor: 'pointer', fontFamily: D, padding: '3px 0' }}>Adaptações ({adapts[t.id].length}) {expanded.has(t.id) ? '▴' : '▾'}</button>
+                      <button onClick={() => toggleExpanded(t.id)} style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 'none', color: MUTED, fontSize: '10.5px', fontWeight: 700, cursor: 'pointer', fontFamily: D, padding: '3px 0' }}>{tx.adaptations} ({adapts[t.id].length}) {expanded.has(t.id) ? '▴' : '▾'}</button>
                       {expanded.has(t.id) && (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(78px, 1fr))', gap: '6px', marginTop: '3px' }}>
                           {adapts[t.id].map(a => (
@@ -462,7 +525,7 @@ export default function TestingArea({ companyId, kind, onVaultChange }: { compan
                               {a.image_url && <img src={a.image_url} alt="" style={{ width: '100%', height: '64px', objectFit: 'cover' }} />}
                               <div style={{ padding: '4px 5px' }}>
                                 <div style={{ fontSize: '8px', color: MUTED, marginBottom: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.format}</div>
-                                <button onClick={() => discard(a.id)} title="Excluir" style={{ width: '100%', padding: '2px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '4px', color: MUTED, fontSize: '8px', cursor: 'pointer', fontFamily: D }}>🗑</button>
+                                <button onClick={() => discard(a.id)} title={tx.del} style={{ width: '100%', padding: '2px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '4px', color: MUTED, fontSize: '8px', cursor: 'pointer', fontFamily: D }}>🗑</button>
                               </div>
                             </div>
                           ))}
