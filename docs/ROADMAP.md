@@ -194,7 +194,12 @@
      cliente real; exige aprovação antes do deploy.
    - **Fatia 4 — Stripe:** preço mensal R$2.449, anual R$1.449 (fidelidade
      12 meses, cláusula no checkout, validar com advogado), cupom de 1º mês.
-     Exige aprovação do dono.
+     Exige aprovação do dono. **Status 2026-10-08: código pronto em PR
+     (branch `stripe-4`), NADA deployado nem aplicado.** Falta: aprovar/mesclar,
+     aplicar a migration `20261008100000_billing_plans.sql` ANTES de publicar o
+     site e as functions `create-checkout`, `stripe-webhook`,
+     `owner-company-activity`, e criar os itens no Stripe de PRODUÇÃO (hoje só
+     existem no sandbox). Popup que grava `coupon_offer_shown_at` = fatia 5.
    - **Fatia 5 — Vídeo/Higgsfield + popup do cupom:** 1 vídeo real no
      acesso grátis; popup do cupom, com prazo de 7 dias contado de quando o
      cliente vê o popup. Só então a promessa pública inclui "+1 vídeo".

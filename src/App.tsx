@@ -94,11 +94,11 @@ function TrialModal({ lang, open, onClose }: { lang: Lang; open: boolean; onClos
         <Badge text={tx.badge} />
         <h3 className="font-black text-white leading-tight mb-4" style={{ fontFamily: D, fontSize: '1.6rem' }}>{tx.title}</h3>
         <p className="text-sm leading-relaxed mb-6" style={{ color: MUTED }}>{tx.body}</p>
-        <div className="flex items-baseline gap-3 mb-8 p-4 rounded-xl" style={{ background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.2)' }}>
+        {tx.priceTo && <div className="flex items-baseline gap-3 mb-8 p-4 rounded-xl" style={{ background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.2)' }}>
           <span className="text-sm line-through" style={{ color: 'rgba(255,255,255,0.35)' }}>{tx.priceFrom}</span>
           <span className="font-black" style={{ fontFamily: D, fontSize: '2rem', color: ORANGE }}>{tx.priceTo}</span>
           <span className="text-xs" style={{ color: MUTED }}>{tx.priceNote}</span>
-        </div>
+        </div>}
         <Link to="/onboarding" className="w-full font-bold text-sm px-6 py-4 rounded-xl text-black transition-all text-center" style={{ background: ORANGE, textDecoration: 'none', display: 'block' }}>
           {tx.cta}
         </Link>
