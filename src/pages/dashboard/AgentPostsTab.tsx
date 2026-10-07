@@ -13,11 +13,30 @@ const D = "'Bricolage Grotesque', system-ui, sans-serif"
 const BORDER = 'rgba(255,255,255,0.06)'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 
+const TX = {
+  pt: {
+    quota: (n: number) => `Você atingiu o limite de ${n} posts do plano este mês. Aguarde o próximo mês ou faça upgrade.`,
+    genFail: 'Erro ao gerar posts', noGen: 'Não foi possível gerar posts agora.',
+    unavailable: 'Agente de Marketing temporariamente indisponível. Tente novamente em alguns instantes.',
+    busy: 'Agente de Marketing muito ocupado agora. Tente novamente em alguns minutos.',
+    failed: 'Agente de Marketing não conseguiu gerar posts agora. Tente novamente em instantes.',
+    seePlans: 'Ver planos →',
+  },
+  en: {
+    quota: (n: number) => `You've reached your plan's limit of ${n} posts this month. Wait for next month or upgrade.`,
+    genFail: 'Error generating posts', noGen: "Couldn't generate posts right now.",
+    unavailable: 'Marketing Agent is temporarily unavailable. Please try again in a moment.',
+    busy: 'Marketing Agent is too busy right now. Please try again in a few minutes.',
+    failed: "Marketing Agent couldn't generate posts right now. Please try again shortly.",
+    seePlans: 'See plans →',
+  },
+} as const
+
 const PLAN_LIMITS: Record<string, number> = { free: 5, basic: 15, pro: 35, ultra: 50 }
 
-function AgentStatusBar({ generating, lastGeneratedAt, onRequestMore, monthlyCount, monthlyLimit, plan, T }: {
+function AgentStatusBar({ generating, lastGeneratedAt, onRequestMore, monthlyCount, monthlyLimit, plan, T, loc }: {
   generating: boolean; lastGeneratedAt: string | null; onRequestMore: () => void
-  monthlyCount: number; monthlyLimit: number; plan: string; T: typeof d['pt']['posts']
+  monthlyCount: number; monthlyLimit: number; plan: string; T: typeof d['pt']['posts']; loc: string
 }) {
   const [dot, setDot] = useState(0)
   useEffect(() => {
@@ -29,7 +48,7 @@ function AgentStatusBar({ generating, lastGeneratedAt, onRequestMore, monthlyCou
   const atLimit = monthlyCount >= monthlyLimit
   const quotaPercent = monthlyLimit > 0 ? Math.min(100, (monthlyCount / monthlyLimit) * 100) : 0
   const quotaColor = quotaPercent >= 100 ? '#f87171' : quotaPercent >= 80 ? '#FBBF24' : '#4ade80'
-  const monthName = new Date().toLocaleDateString(undefined, { month: 'long' })
+  const monthName = new Date().toLocaleDateString(loc, { month: 'long' })
 
   return (
     <div style={{ padding: '12px 16px', borderRadius: '10px', marginBottom: '24px', background: generating ? 'rgba(255,109,41,0.06)' : 'rgba(255,255,255,0.02)', border: `1px solid ${generating ? 'rgba(255,109,41,0.2)' : BORDER}`, transition: 'all 0.3s' }}>
@@ -40,7 +59,7 @@ function AgentStatusBar({ generating, lastGeneratedAt, onRequestMore, monthlyCou
             {generating
               ? `${T.agentCreating}${'.'.repeat(dot)}`
               : lastGeneratedAt
-                ? `${T.agentLast} ${new Date(lastGeneratedAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                ? `${T.agentLast} ${new Date(lastGeneratedAt).toLocaleDateString(loc, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
                 : T.agentActive}
           </span>
         </div>
@@ -71,6 +90,8 @@ export default function AgentPostsTab() {
   const { user, session } = useAuth()
   const { lang } = useLang()
   const T = d[lang].posts
+  const X = TX[lang]
+  const [genLimit, setGenLimit] = useState(false)
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
@@ -112,7 +133,7 @@ export default function AgentPostsTab() {
 
   const triggerGenerate = async (token: string) => {
     setGenerating(true)
-    setGenError('')
+    setGenError(''); setGenLimit(false)
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-posts`, {
         method: 'POST',
@@ -121,21 +142,21 @@ export default function AgentPostsTab() {
       })
       const data = await res.json()
       if (data.quota_reached) {
-        setGenError(`Você atingiu o limite de ${data.limit} posts do plano este mês. Aguarde o próximo mês ou faça upgrade.`)
+        setGenError(X.quota(data.limit)); setGenLimit(true)
         setGenerating(false)
         return
       }
-      if (!res.ok) throw new Error(data.error ?? 'Erro ao gerar posts')
-      if (!data.generated) throw new Error(data.message ?? 'Não foi possível gerar posts agora.')
+      if (!res.ok) throw new Error(data.error ?? X.genFail)
+      if (!data.generated) throw new Error(data.message ?? X.noGen)
       await loadPostsOnly()
     } catch (e: unknown) {
       const msg = String(e instanceof Error ? e.message : e).toLowerCase()
       if (msg.includes('credit') || msg.includes('balance')) {
-        setGenError('Agente de Marketing temporariamente indisponível. Tente novamente em alguns instantes.')
+        setGenError(X.unavailable)
       } else if (msg.includes('rate') || msg.includes('429') || msg.includes('overload')) {
-        setGenError('Agente de Marketing muito ocupado agora. Tente novamente em alguns minutos.')
+        setGenError(X.busy)
       } else {
-        setGenError('Agente de Marketing não conseguiu gerar posts agora. Tente novamente em instantes.')
+        setGenError(X.failed)
       }
     }
     setGenerating(false)
@@ -179,13 +200,13 @@ export default function AgentPostsTab() {
       {genError && (
         <div style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', fontSize: '13px', color: '#FBBF24', lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span>⚠️</span><span>{genError}</span>
-          {genError.includes('limite') && (
-            <Link to="/dashboard/settings" style={{ color: ORANGE, marginLeft: 'auto', fontWeight: 700, textDecoration: 'none', fontSize: '12px', flexShrink: 0 }}>Ver planos →</Link>
+          {genLimit && (
+            <Link to="/dashboard/settings" style={{ color: ORANGE, marginLeft: 'auto', fontWeight: 700, textDecoration: 'none', fontSize: '12px', flexShrink: 0 }}>{X.seePlans}</Link>
           )}
         </div>
       )}
 
-      <AgentStatusBar generating={generating} lastGeneratedAt={lastGeneratedAt} onRequestMore={() => session && triggerGenerate(session.access_token)} monthlyCount={monthlyCount} monthlyLimit={monthlyLimit} plan={plan} T={T} />
+      <AgentStatusBar generating={generating} lastGeneratedAt={lastGeneratedAt} onRequestMore={() => session && triggerGenerate(session.access_token)} monthlyCount={monthlyCount} monthlyLimit={monthlyLimit} plan={plan} T={T} loc={lang === 'en' ? 'en-US' : 'pt-BR'} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
         {(['todos', 'rascunho', 'aprovado', 'publicado'] as const).map(k => (

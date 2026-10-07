@@ -31,7 +31,15 @@ const EVENT_META: Record<string, { icon: string; label: string }> = {
   relatorio: { icon: '📄', label: 'Relatório' },
   concorrentes: { icon: '🧭', label: 'Concorrentes' },
 }
-const eventMeta = (t: string) => EVENT_META[t] ?? { icon: '🤖', label: t.replace(/_/g, ' ').toLowerCase().replace(/^./, c => c.toUpperCase()) }
+const EVENT_LABEL_EN: Record<string, string> = {
+  DAILY_REPORT: 'Daily report', WEEKLY_REPORT: 'Weekly report', MONTHLY_REPORT: 'Monthly report', AGENT_ACTION: 'Agent action',
+  OPPORTUNITY_DETECTED: 'Opportunity detected', NEW_COMPETITOR: 'New competitor', chat_response: 'Chat reply',
+  conectar_ok: 'Connection', relatorio: 'Report', concorrentes: 'Competitors',
+}
+const eventMeta = (t: string, lang: 'pt' | 'en' = 'pt') => {
+  const m = EVENT_META[t] ?? { icon: '🤖', label: t.replace(/_/g, ' ').toLowerCase().replace(/^./, c => c.toUpperCase()) }
+  return lang === 'en' && EVENT_LABEL_EN[t] ? { ...m, label: EVENT_LABEL_EN[t] } : m
+}
 
 // Primeira linha da mensagem vira o título curto da lista; o resto some no
 // preview (2 linhas) e volta inteiro ao abrir o popup.
@@ -47,6 +55,12 @@ function restOf(msg: string): string {
 // Exemplo mostrado só quando ainda não há atividade real — sempre marcado como
 // demonstração e substituído automaticamente assim que o primeiro aviso real chegar.
 const _n = Date.now()
+const DEMO_ACTIVITY_EN: Record<string, string> = {
+  'demo-1': 'Recommended focusing on Reels this week\nReels got 3x more reach than carousels in the last 14 days.',
+  'demo-2': 'Created 2 post ideas for approval\nBased on the theme that engaged most: behind the scenes.',
+  'demo-3': 'Analyzed 3 competitors\nA competitor increased their posting frequency — you can stand out on the weekend.',
+  'demo-4': 'Daily report\nEngagement rose 12% after the 7pm posts.',
+}
 const DEMO_ACTIVITY: BotNotifRow[] = [
   { id: 'demo-1', bot_name: 'marketing', event_type: 'AGENT_ACTION', message: 'Recomendou focar em Reels nesta semana\nOs Reels tiveram 3x mais alcance que os carrosséis nos últimos 14 dias.', created_at: new Date(_n - 2 * 3600e3).toISOString() },
   { id: 'demo-2', bot_name: 'marketing', event_type: 'AGENT_ACTION', message: 'Criou 2 ideias de post para aprovação\nBaseado no tema que mais engajou: bastidores do preparo.', created_at: new Date(_n - 5 * 3600e3).toISOString() },
@@ -63,7 +77,7 @@ export default function ActivityPage() {
   const [noCompany, setNoCompany] = useState(false)
 
   const isDemo = !loading && !noCompany && activity.length === 0
-  const rows = isDemo ? DEMO_ACTIVITY : activity
+  const rows = isDemo ? DEMO_ACTIVITY.map(r => lang === 'en' ? { ...r, message: DEMO_ACTIVITY_EN[r.id] ?? r.message } : r) : activity
 
   useEffect(() => {
     if (!user) return
@@ -123,7 +137,7 @@ export default function ActivityPage() {
             {(
               <div style={{ padding: '8px 0', opacity: isDemo ? 0.6 : 1 }}>
                 {rows.map((a, i) => {
-                  const m = eventMeta(a.event_type)
+                  const m = eventMeta(a.event_type, lang)
                   const title = firstLine(a.message)
                   const preview = restOf(a.message)
                   return (
@@ -142,7 +156,7 @@ export default function ActivityPage() {
                           <span style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,109,41,0.65)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                             {m.label}
                           </span>
-                          <span style={{ fontSize: '10px', color: MUTED }}>{timeAgo(a.created_at)}</span>
+                          <span style={{ fontSize: '10px', color: MUTED }}>{timeAgo(a.created_at, lang)}</span>
                         </div>
                         <div style={{ fontSize: '13px', color: 'white', fontWeight: 500 }}>{title}</div>
                         {preview && (
@@ -161,7 +175,7 @@ export default function ActivityPage() {
       </div>
 
       {selected && (() => {
-        const m = eventMeta(selected.event_type)
+        const m = eventMeta(selected.event_type, lang)
         return (
           <div onClick={() => setSelected(null)} style={{
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
