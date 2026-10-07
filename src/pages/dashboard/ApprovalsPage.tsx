@@ -14,7 +14,7 @@ const RISK_EN: Record<string, string> = { high: 'high', medium: 'medium', low: '
 const TX = {
   pt: {
     retry: '↻ Tentar de novo', actionNoun: 'Conteúdo',
-    sub: 'Tudo que qualquer agente quer fazer passa por aqui. Nada é executado sem passar pela Central de Approvals.',
+    sub: 'Tudo que qualquer agente quer fazer passa por aqui. Nada é executado sem passar pela Central de Aprovações.',
     toApprove: 'Pra aprovar', published: '✓ Aprovado e publicado de verdade no Instagram.',
     failedPub: (e: string | null) => `Aprovado, mas não publicado: ${e ?? 'sem imagem ou Instagram desconectado'}.`,
     approved: '✓ Aprovado.', nothing: 'Nada esperando aprovação agora.', history: 'Histórico de execução',
