@@ -216,3 +216,24 @@ dá o teste de 7 dias até a fatia 2. O cadastro não pede cartão
 - **App Review continua necessário** para clientes conectarem o Instagram
   no painel. Material em [META-APP-REVIEW.md](META-APP-REVIEW.md). Pedir
   só as 5 permissões `instagram_business_*` que o código usa.
+
+## 2026-10-07 — Itens do Stripe criados no SANDBOX (modo de teste)
+
+Conta disponível para o agente: só "Luan sandbox" (`acct_1TaTYGDHopb5YvZ5`,
+modo de teste, sem dinheiro real). Criados lá:
+
+- Produto `prod_VOnjWp0Zharpbn` "Sales Boost".
+- Preço mensal sem fidelidade: `price_1UO08QDHopb5YvZ5zLcqUoJh`, R$2.449/mês,
+  lookup_key `sb_monthly`.
+- Preço anual com fidelidade (cobrança mensal): `price_1UO08TDHopb5YvZ572CUgxmd`,
+  R$1.449/mês, lookup_key `sb_annual_commit`, metadata
+  `commitment_months=12`, `early_termination_pct=30`. A fidelidade e a
+  multa NÃO são feitas pelo Stripe sozinho: precisam de código nosso.
+- Cupom `SB_PRIMEIRO_MES`: R$1.000 de desconto, uma vez, só nesse produto,
+  sem data de validade no Stripe (o prazo de 7 dias por cliente é
+  conferido no servidor antes de aplicar).
+
+**Produção (modo real):** a conta real do Stripe ainda não está conectada
+ao agente. Os mesmos itens precisam ser criados lá (pelo dono ou depois que
+ele der acesso), e os IDs reais vão para os secrets do Supabase.
+Usar `lookup_key` no código para não depender do ID.
