@@ -1,10 +1,46 @@
 import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useLang } from '../../contexts/LanguageContext'
 import { useCompany } from '../../contexts/CompanyContext'
 import { setupGateApplies } from '../../lib/setupGate'
 import { useSetupStatus, type SetupStepId } from '../../lib/useSetupStatus'
 import CatalogItems from '../dashboard/marketingAi/CatalogItems'
 import { DadosForm, PerguntasForm, StepShell, BG, CARD, D, GREEN, MUTED, ORANGE } from './SetupSteps'
+
+const TX = {
+  pt: {
+    h1a: 'Esse é o momento importante de ', h1b: 'alimentar os dados reais', h1c: ' — depois é só relaxar!',
+    required: (a: number, b: number) => `${a} de ${b} obrigatórios`,
+    igLater: 'Instagram: você conecta depois — vai ficar lembrado no sino de pendências.',
+    connectNow: 'Conectar agora', featured: 'Em destaque',
+    igDone: '✓ Instagram conectado', igCta: 'Conecte seu Instagram',
+    igDoneP: 'Pronto. O Sales Boost já pode publicar e medir o resultado — sempre com a sua aprovação.',
+    igP: 'Assim o Sales Boost publica e mede o resultado. Nada vai ao ar sem você aprovar.',
+    igReq: ' Obrigatório nesta etapa.', connectIg: 'Conectar Instagram', connectLater: 'Conectar depois',
+    dadosT: 'Dados do negócio', dadosH: 'Nome, cidade e telefone/WhatsApp',
+    qT: 'Perguntas sobre seu negócio', qH: (n: string) => `Responda todas (${n} sem resposta)`,
+    catMany: (label: string, n: number) => `${label}: cadastre ${n}`,
+    catOne: (item: string) => `Seu primeiro ${item}`,
+    catHint: (label: string, p: number, item: string) => `${label} · mínimo de ${p} fotos reais por ${item}`,
+    go: 'Ir para o painel', saved: 'Seu progresso fica salvo.',
+  },
+  en: {
+    h1a: 'This is the important moment to ', h1b: 'add your real data', h1c: ' — then just relax!',
+    required: (a: number, b: number) => `${a} of ${b} required`,
+    igLater: "Instagram: you'll connect it later — the to-do bell will remind you.",
+    connectNow: 'Connect now', featured: 'Featured',
+    igDone: '✓ Instagram connected', igCta: 'Connect your Instagram',
+    igDoneP: 'Done. Sales Boost can now publish and measure results — always with your approval.',
+    igP: 'This lets Sales Boost publish and measure results. Nothing goes live without your approval.',
+    igReq: ' Required for this step.', connectIg: 'Connect Instagram', connectLater: 'Connect later',
+    dadosT: 'Business details', dadosH: 'Name, city and phone/WhatsApp',
+    qT: 'Questions about your business', qH: (n: string) => `Answer all (${n} unanswered)`,
+    catMany: (label: string, n: number) => `${label}: add ${n}`,
+    catOne: (item: string) => `Your first ${item}`,
+    catHint: (label: string, p: number, item: string) => `${label} · at least ${p} real photos per ${item}`,
+    go: 'Go to dashboard', saved: 'Your progress is saved.',
+  },
+} as const
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 
@@ -14,6 +50,8 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 // com o botão liberado (sem redirecionar — evita qualquer loop com o gate).
 export default function SetupPage() {
   const { company, refreshCompany } = useCompany()
+  const { lang } = useLang()
+  const tx = TX[lang]
   const navigate = useNavigate()
   const status = useSetupStatus(company?.id)
   // undefined = automático (abre o 1º pendente); null = tudo fechado; id = aberto à mão
@@ -59,12 +97,12 @@ export default function SetupPage() {
         </div>
 
         <h1 style={{ fontFamily: D, fontSize: 'clamp(1.5rem, 6.5vw, 2.1rem)', fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.03em', textAlign: 'center', margin: '0 0 22px', overflowWrap: 'break-word' }}>
-          Esse é o momento importante de <span style={{ color: ORANGE }}>alimentar os dados reais</span> — depois é só relaxar!
+          {tx.h1a}<span style={{ color: ORANGE }}>{tx.h1b}</span>{tx.h1c}
         </h1>
 
         <div style={{ marginBottom: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
-            <span>{status.doneCount} de {status.required} obrigatórios</span>
+            <span>{tx.required(status.doneCount, status.required)}</span>
             <span style={{ color: status.allDone ? GREEN : MUTED }}>{pct}%</span>
           </div>
           <div style={{ height: '8px', borderRadius: '99px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
@@ -75,30 +113,30 @@ export default function SetupPage() {
         {/* Instagram em destaque */}
         {igLater && !status.instagramConnected && !status.instagramRequired ? (
           <div style={{ background: CARD, border: '1px solid rgba(255,109,41,0.4)', borderRadius: '14px', padding: '12px 16px', marginBottom: '14px', fontSize: '13px', color: MUTED, lineHeight: 1.5 }}>
-            Instagram: você conecta depois — vai ficar lembrado no sino de pendências.{' '}
-            <button type="button" onClick={() => setIgLater(false)} style={{ minHeight: '44px', background: 'none', border: 'none', color: ORANGE, fontWeight: 700, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>Conectar agora</button>
+            {tx.igLater}{' '}
+            <button type="button" onClick={() => setIgLater(false)} style={{ minHeight: '44px', background: 'none', border: 'none', color: ORANGE, fontWeight: 700, fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>{tx.connectNow}</button>
           </div>
         ) : (
         <section style={{ position: 'relative', background: CARD, border: `2px solid ${ORANGE}`, borderRadius: '16px', padding: '22px 16px 16px', marginBottom: '14px', boxShadow: '0 0 28px rgba(255,109,41,0.18)' }}>
-          <span style={{ position: 'absolute', top: '-11px', left: '16px', background: ORANGE, color: '#000', fontSize: '11px', fontWeight: 800, padding: '3px 10px', borderRadius: '99px', letterSpacing: '0.04em' }}>Em destaque</span>
+          <span style={{ position: 'absolute', top: '-11px', left: '16px', background: ORANGE, color: '#000', fontSize: '11px', fontWeight: 800, padding: '3px 10px', borderRadius: '99px', letterSpacing: '0.04em' }}>{tx.featured}</span>
           <h2 style={{ fontFamily: D, fontSize: '18px', fontWeight: 800, margin: '0 0 6px' }}>
-            {status.instagramConnected ? '✓ Instagram conectado' : 'Conecte seu Instagram'}
+            {status.instagramConnected ? tx.igDone : tx.igCta}
           </h2>
           <p style={{ fontSize: '14px', color: MUTED, lineHeight: 1.55, margin: '0 0 14px' }}>
             {status.instagramConnected
-              ? 'Pronto. O Sales Boost já pode publicar e medir o resultado — sempre com a sua aprovação.'
-              : 'Assim o Sales Boost publica e mede o resultado. Nada vai ao ar sem você aprovar.'}
-            {status.instagramRequired && !status.instagramConnected && <strong style={{ color: 'white' }}> Obrigatório nesta etapa.</strong>}
+              ? tx.igDoneP
+              : tx.igP}
+            {status.instagramRequired && !status.instagramConnected && <strong style={{ color: 'white' }}>{tx.igReq}</strong>}
           </p>
           {!status.instagramConnected && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <a href={igLink} style={{ minHeight: '44px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '14px', borderRadius: '10px', textDecoration: 'none' }}>
-                Conectar Instagram
+                {tx.connectIg}
               </a>
               {!status.instagramRequired && (
                 <button type="button" onClick={() => setIgLater(true)}
                   style={{ minHeight: '44px', background: 'transparent', border: 'none', color: MUTED, fontSize: '13.5px', textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit' }}>
-                  Conectar depois
+                  {tx.connectLater}
                 </button>
               )}
             </div>
@@ -111,12 +149,12 @@ export default function SetupPage() {
             const n = i + 1
             const open = openId === s.id
             if (s.id === 'dados') return (
-              <StepShell key={s.id} n={n} done={s.done} open={open} onToggle={() => toggle(s.id)} title="Dados do negócio" hint="Nome, cidade e telefone/WhatsApp">
+              <StepShell key={s.id} n={n} done={s.done} open={open} onToggle={() => toggle(s.id)} title={tx.dadosT} hint={tx.dadosH}>
                 <DadosForm companyId={company.id} initial={status.business} onSaved={() => saved('dados')} />
               </StepShell>
             )
             if (s.id === 'perguntas') return (
-              <StepShell key={s.id} n={n} done={s.done} open={open} onToggle={() => toggle(s.id)} title="Perguntas sobre seu negócio" hint={s.done ? '' : `Responda todas (${s.missing} sem resposta)`}>
+              <StepShell key={s.id} n={n} done={s.done} open={open} onToggle={() => toggle(s.id)} title={tx.qT} hint={s.done ? '' : tx.qH(s.missing)}>
                 <PerguntasForm companyId={company.id} questions={status.questions} initial={status.answers} onSaved={() => saved('perguntas')} />
               </StepShell>
             )
@@ -125,8 +163,8 @@ export default function SetupPage() {
             const item = schema.itemLabel.toLowerCase()
             return (
               <StepShell key={s.id} n={n} done={s.done} open={open} onToggle={() => toggle(s.id)}
-                title={status.minItems > 1 ? `${schema.catalogLabel}: cadastre ${status.minItems}` : `Seu primeiro ${item}`}
-                hint={`${schema.catalogLabel} · mínimo de ${status.minPhotos} fotos reais por ${item}`}>
+                title={status.minItems > 1 ? tx.catMany(schema.catalogLabel, status.minItems) : tx.catOne(item)}
+                hint={tx.catHint(schema.catalogLabel, status.minPhotos, item)}>
                 <CatalogItems companyId={company.id} schema={schema} verticalKey={status.verticalKey} setupMode onChanged={onChanged} />
               </StepShell>
             )
@@ -140,9 +178,9 @@ export default function SetupPage() {
           {!canGo && <div style={{ fontSize: '13px', color: MUTED, textAlign: 'center', marginBottom: '8px', lineHeight: 1.4 }}>{status.missingText}</div>}
           <button type="button" disabled={!canGo} onClick={() => navigate('/dashboard')}
             style={{ width: '100%', minHeight: '48px', background: canGo ? ORANGE : 'rgba(255,255,255,0.08)', color: canGo ? '#000' : MUTED, fontWeight: 800, fontSize: '15px', border: 'none', borderRadius: '12px', cursor: canGo ? 'pointer' : 'not-allowed', fontFamily: D }}>
-            Ir para o painel
+            {tx.go}
           </button>
-          <div style={{ fontSize: '12px', color: MUTED, textAlign: 'center', marginTop: '8px' }}>Seu progresso fica salvo.</div>
+          <div style={{ fontSize: '12px', color: MUTED, textAlign: 'center', marginTop: '8px' }}>{tx.saved}</div>
         </div>
       </footer>
     </div>

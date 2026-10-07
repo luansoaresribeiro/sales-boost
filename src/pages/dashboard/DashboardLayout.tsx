@@ -67,6 +67,11 @@ function makeBottomItems(T: typeof d[keyof typeof d]): NavItem[] {
   ]
 }
 
+const TX = {
+  pt: { close: 'Fechar menu', open: 'Abrir menu' },
+  en: { close: 'Close menu', open: 'Open menu' },
+} as const
+
 function LangToggle() {
   const { lang, setLang } = useLang()
   return (
@@ -147,7 +152,7 @@ function SidebarInner({ isMobile, open, onNavigate, onClose, approvalsCount }: {
           </div>
           <LangToggle />
           {isMobile && (
-            <button onClick={onClose} aria-label="Fechar menu"
+            <button onClick={onClose} aria-label={TX[lang].close}
               style={{ width: '30px', height: '30px', flexShrink: 0, background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED_BRIGHT, fontSize: '15px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               ×
             </button>
@@ -189,6 +194,16 @@ function SidebarInner({ isMobile, open, onNavigate, onClose, approvalsCount }: {
 }
 
 export default function DashboardLayout() {
+  return (
+    <LanguageProvider>
+      <DashboardShell />
+    </LanguageProvider>
+  )
+}
+
+// Dentro do provider, pra que o sino/pendências e o resto leiam o idioma escolhido.
+function DashboardShell() {
+  const { lang } = useLang()
   const { company } = useCompany()
   const isMobile = useIsMobile()
   const pend = usePendencias()
@@ -196,7 +211,7 @@ export default function DashboardLayout() {
   useEffect(() => { if (!isMobile) setMobileOpen(false) }, [isMobile])
 
   return (
-    <LanguageProvider>
+    <>
       <div style={{ display: 'flex', minHeight: '100vh', background: '#0E0B0A' }}>
         {isMobile && mobileOpen && (
           <div onClick={() => setMobileOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 39 }} />
@@ -205,7 +220,7 @@ export default function DashboardLayout() {
         <main style={{ flex: 1, marginLeft: isMobile ? 0 : '240px', display: 'flex', flexDirection: 'column', minHeight: '100vh', minWidth: 0, overflowX: 'hidden' }}>
           {isMobile ? (
             <div style={{ position: 'sticky', top: 0, zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: '#0E0B0A', borderBottom: `1px solid ${BORDER}` }}>
-              <button onClick={() => setMobileOpen(true)} aria-label="Abrir menu"
+              <button onClick={() => setMobileOpen(true)} aria-label={TX[lang].open}
                 style={{ width: '38px', height: '38px', background: SIDEBAR_BG, border: `1px solid ${BORDER}`, borderRadius: '9px', color: 'white', fontSize: '17px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 ☰
               </button>
@@ -223,6 +238,6 @@ export default function DashboardLayout() {
       <TrialStartModal />
       <ProgressPopup />
       {company && <BusinessContextButton companyId={company.id} />}
-    </LanguageProvider>
+    </>
   )
 }

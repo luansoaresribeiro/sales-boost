@@ -2,6 +2,18 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import type { Pendencia, PendenciaTone } from '../../lib/usePendencias'
+import { useLang } from '../../contexts/LanguageContext'
+
+const TX = {
+  pt: {
+    title: 'Pendências', sub: 'O que falta pro Sales Boost trabalhar melhor por você',
+    allDone: '✓ Tudo em dia. O Hermes está trabalhando.', more: 'ver mais',
+  },
+  en: {
+    title: 'To-do', sub: 'What Sales Boost still needs to work better for you',
+    allDone: '✓ All caught up. Hermes is working.', more: 'show more',
+  },
+} as const
 
 const ORANGE = '#FF6D29'
 const BELL_BG = '#0D0A07'
@@ -50,6 +62,8 @@ function Row({ p, onPick }: { p: Pendencia; onPick: (p: Pendencia) => void }) {
 // leva direto ao lugar certo.
 export default function PendenciasBell({ items, count, isMobile, onOpen }: { items: Pendencia[]; count: number; isMobile: boolean; onOpen?: () => void }) {
   const navigate = useNavigate()
+  const { lang } = useLang()
+  const tx = TX[lang]
   const [open, setOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
 
@@ -68,7 +82,7 @@ export default function PendenciasBell({ items, count, isMobile, onOpen }: { ite
 
   return (
     <>
-      <button onClick={toggle} aria-label={count > 0 ? `Pendências: ${count}` : 'Pendências'}
+      <button onClick={toggle} aria-label={count > 0 ? `${tx.title}: ${count}` : tx.title}
         style={{ position: 'relative', width: '38px', height: '38px', borderRadius: '50%', background: BELL_BG, border: `1px solid ${BORDER}`, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
         <svg {...svgProps} style={{ width: 18, height: 18 }}><path d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" /></svg>
         {count > 0 && (
@@ -83,14 +97,14 @@ export default function PendenciasBell({ items, count, isMobile, onOpen }: { ite
       {open && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 79, background: isMobile ? 'rgba(0,0,0,0.6)' : 'transparent' }} />
-          <div style={panelStyle} role="dialog" aria-label="Pendências">
+          <div style={panelStyle} role="dialog" aria-label={tx.title}>
             <div style={{ padding: '14px 14px 12px' }}>
-              <div style={{ fontSize: '14px', fontWeight: 800, color: 'white' }}>Pendências</div>
-              <div style={{ fontSize: '11px', color: '#9A8C7E', marginTop: '2px' }}>O que falta pro Sales Boost trabalhar melhor por você</div>
+              <div style={{ fontSize: '14px', fontWeight: 800, color: 'white' }}>{tx.title}</div>
+              <div style={{ fontSize: '11px', color: '#9A8C7E', marginTop: '2px' }}>{tx.sub}</div>
             </div>
             {items.length === 0 ? (
               <div style={{ padding: '18px 14px 22px', borderTop: `1px solid ${BORDER}`, fontSize: '12.5px', fontWeight: 700, color: '#4ade80' }}>
-                ✓ Tudo em dia. O Hermes está trabalhando.
+                {tx.allDone}
               </div>
             ) : (
               <>
@@ -98,7 +112,7 @@ export default function PendenciasBell({ items, count, isMobile, onOpen }: { ite
                 {!showAll && items.length > MAX_LINES && (
                   <button onClick={() => setShowAll(true)}
                     style={{ width: '100%', minHeight: '44px', background: 'transparent', border: 'none', borderTop: `1px solid ${BORDER}`, color: ORANGE, fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                    ver mais ({items.length - MAX_LINES})
+                    {tx.more} ({items.length - MAX_LINES})
                   </button>
                 )}
               </>
