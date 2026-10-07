@@ -1,13 +1,32 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
+import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import { TEMPLATE_LABEL, type TestPost } from './TestingArea'
 import CreativeAgent from './CreativeAgent'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
-const DAY_LABEL = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
+const DAY_LABELS = {
+  pt: ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'],
+  en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+} as const
+const STATUS_LABEL_EN: Record<string, string> = { draft: 'Evaluating', vault: 'In Vault', scheduled: 'Scheduled', adapt: 'Adapting' }
+const TX = {
+  pt: {
+    errPlan: 'Erro ao planejar a semana', planned: (n: number) => `✅ Planejado: ${n} peça(s) geradas e avaliadas.`, loading: 'Carregando...', empty: 'vazio',
+    title: '🗓️ Calendário da Semana', introA: 'O agente escolhe as melhores ', introB: 'Ideias', introC: ' do backlog abaixo pra cada dia (nunca inventa do zero) e usa o mesmo motor de sempre pra gerar e avaliar — o que sair com nota boa já cai no Vault sozinho.',
+    tabCal: 'Calendário', tabIdeas: 'Ideias', autoTitle: 'Planejar sozinho todo domingo às 18h', autoDesc: 'Escolhe entre as Ideias disponíveis e já gera tudo — sem precisar clicar em nada.',
+    planning: 'Planejando + gerando...', planNow: '🗓️ Planejar semana agora', thisWeek: 'Esta semana', nextWeek: 'Próxima semana',
+  },
+  en: {
+    errPlan: 'Error planning the week', planned: (n: number) => `✅ Planned: ${n} piece(s) generated and evaluated.`, loading: 'Loading...', empty: 'empty',
+    title: '🗓️ Weekly Calendar', introA: 'The agent picks the best ', introB: 'Ideas', introC: ' from the backlog below for each day (it never makes things up from scratch) and uses the same engine as always to generate and evaluate — whatever scores well goes to the Vault on its own.',
+    tabCal: 'Calendar', tabIdeas: 'Ideas', autoTitle: 'Plan automatically every Sunday at 6 PM', autoDesc: 'Picks from the available Ideas and generates everything — no clicking needed.',
+    planning: 'Planning + generating...', planNow: '🗓️ Plan the week now', thisWeek: 'This week', nextWeek: 'Next week',
+  },
+} as const
 const KIND_ICON: Record<string, string> = { organico: '📝', stories: '📖', campanhas: '🎯' }
 const STATUS_META: Record<string, { label: string; color: string }> = {
   draft: { label: 'Avaliando', color: '#FBBF24' },
@@ -25,6 +44,9 @@ const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.g
 const toIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 export default function WeeklyCalendarTab({ companyId }: { companyId: string }) {
+  const { lang } = useLang()
+  const t = TX[lang]
+  const DAY_LABEL = DAY_LABELS[lang]
   const { session } = useAuth()
   const token = session?.access_token ?? ''
   const [items, setItems] = useState<Item[]>([])
@@ -73,16 +95,16 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
         body: JSON.stringify({ action: 'plan_week' }),
       })
       const r = await res.json().catch(() => ({})) as { error?: string; planned?: number }
-      if (!res.ok) throw new Error(r.error ?? 'Erro ao planejar a semana')
-      setMsg(`✅ Planejado: ${r.planned ?? 0} peça(s) geradas e avaliadas.`)
+      if (!res.ok) throw new Error(r.error ?? t.errPlan)
+      setMsg(t.planned(r.planned ?? 0))
       await load()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Erro ao planejar a semana')
+      setErr(e instanceof Error ? e.message : t.errPlan)
     }
     setPlanning(false)
   }
 
-  if (loading) return <div style={{ fontSize: '12px', color: MUTED }}>Carregando...</div>
+  if (loading) return <div style={{ fontSize: '12px', color: MUTED }}>{t.loading}</div>
 
   const today = new Date()
 
@@ -100,7 +122,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                 {DAY_LABEL[i]} <span style={{ fontWeight: 600, color: 'rgba(255,255,255,0.35)' }}>{d.getDate()}/{d.getMonth() + 1}</span>
               </div>
               {dayItems.length === 0 ? (
-                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>vazio</div>
+                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>{t.empty}</div>
               ) : dayItems.map(it => {
                 const status = scheduledIds.has(it.id) ? 'scheduled' : it.status
                 const sm = STATUS_META[status] ?? STATUS_META.draft
@@ -110,7 +132,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                       {KIND_ICON[it.kind ?? 'organico'] ?? '📝'} {it.idea ?? 'Post'}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
-                      <span style={{ fontSize: '8.5px', fontWeight: 700, color: sm.color }}>● {sm.label}</span>
+                      <span style={{ fontSize: '8.5px', fontWeight: 700, color: sm.color }}>● {lang === 'en' ? STATUS_LABEL_EN[status] ?? sm.label : sm.label}</span>
                       {it.brief?.template && <span style={{ fontSize: '8.5px', color: MUTED }}>· {TEMPLATE_LABEL[it.brief.template] ?? it.brief.template}</span>}
                     </div>
                   </div>
@@ -126,9 +148,9 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   return (
     <div>
       <div style={{ marginBottom: '16px' }}>
-        <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🗓️ Calendário da Semana</div>
+        <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>{t.title}</div>
         <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55, maxWidth: '760px' }}>
-          O agente escolhe as melhores <strong style={{ color: 'white' }}>Ideias</strong> do backlog abaixo pra cada dia (nunca inventa do zero) e usa o mesmo motor de sempre pra gerar e avaliar — o que sair com nota boa já cai no Vault sozinho.
+          {t.introA}<strong style={{ color: 'white' }}>{t.introB}</strong>{t.introC}
         </div>
       </div>
 
@@ -136,12 +158,12 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
         <button onClick={() => setSub('calendario')}
           style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 14px', background: sub === 'calendario' ? 'rgba(255,109,41,0.12)' : 'transparent', border: `1px solid ${sub === 'calendario' ? 'rgba(255,109,41,0.35)' : 'transparent'}`, borderRadius: '8px', cursor: 'pointer', fontFamily: D }}>
           <span style={{ fontSize: '14px' }}>🗓️</span>
-          <span style={{ fontSize: '12.5px', fontWeight: 700, color: sub === 'calendario' ? ORANGE : 'white' }}>Calendário</span>
+          <span style={{ fontSize: '12.5px', fontWeight: 700, color: sub === 'calendario' ? ORANGE : 'white' }}>{t.tabCal}</span>
         </button>
         <button onClick={() => setSub('ideias')}
           style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 14px', background: sub === 'ideias' ? 'rgba(255,109,41,0.12)' : 'transparent', border: `1px solid ${sub === 'ideias' ? 'rgba(255,109,41,0.35)' : 'transparent'}`, borderRadius: '8px', cursor: 'pointer', fontFamily: D }}>
           <span style={{ fontSize: '14px' }}>💡</span>
-          <span style={{ fontSize: '12.5px', fontWeight: 700, color: sub === 'ideias' ? ORANGE : 'white' }}>Ideias</span>
+          <span style={{ fontSize: '12.5px', fontWeight: 700, color: sub === 'ideias' ? ORANGE : 'white' }}>{t.tabIdeas}</span>
         </button>
       </div>
 
@@ -154,20 +176,20 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                 <span style={{ position: 'absolute', top: '2px', left: autoOn ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: 'white', transition: 'left 0.15s' }} />
               </button>
               <div>
-                <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>Planejar sozinho todo domingo às 18h</div>
-                <div style={{ fontSize: '10px', color: MUTED }}>Escolhe entre as Ideias disponíveis e já gera tudo — sem precisar clicar em nada.</div>
+                <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>{t.autoTitle}</div>
+                <div style={{ fontSize: '10px', color: MUTED }}>{t.autoDesc}</div>
               </div>
             </div>
             <button onClick={planNow} disabled={planning || !token}
               style={{ marginLeft: 'auto', padding: '9px 16px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '9px', border: 'none', cursor: planning ? 'default' : 'pointer', fontFamily: D, opacity: planning ? 0.7 : 1 }}>
-              {planning ? 'Planejando + gerando...' : '🗓️ Planejar semana agora'}
+              {planning ? t.planning : t.planNow}
             </button>
           </div>
           {err && <div style={{ color: '#f87171', fontSize: '11.5px', marginBottom: '12px' }}>{err}</div>}
           {msg && <div style={{ color: GREEN, fontSize: '11.5px', marginBottom: '12px' }}>{msg}</div>}
 
-          <Week label="Esta semana" days={thisWeek} />
-          <Week label="Próxima semana" days={nextWeek} />
+          <Week label={t.thisWeek} days={thisWeek} />
+          <Week label={t.nextWeek} days={nextWeek} />
         </>
       )}
     </div>
