@@ -67,12 +67,9 @@ export default function IntegrationsTab() {
   const [loading, setLoading] = useState(true)
   const [metricsLoading, setMetricsLoading] = useState(false)
   const [metricsError, setMetricsError] = useState('')
-  // Instagram auto-post state
+  // Instagram (publicação com aprovação)
   const [igConnected, setIgConnected] = useState(false)
   const [igUsername, setIgUsername] = useState<string | null>(null)
-  const [igAutoPost, setIgAutoPost] = useState(false)
-  const [igFrequency, setIgFrequency] = useState('daily')
-  const [igTogglingAuto, setIgTogglingAuto] = useState(false)
   const igOauthError = searchParams.get('error')
   const igOauthSuccess = searchParams.get('instagram') === 'connected'
   // WhatsApp — só guarda o número do cliente por enquanto (a resposta
@@ -113,7 +110,7 @@ export default function IntegrationsTab() {
     setLoading(true)
     const { data: company } = await supabase
       .from('companies')
-      .select('id, instagram_user_id, instagram_username, instagram_auto_post, instagram_post_frequency, whatsapp_number, whatsapp_connected_at, whatsapp_phone_number_id, meta_business_name, meta_business_connected_at, meta_ads_account_id, meta_ads_account_name')
+      .select('id, instagram_user_id, instagram_username, whatsapp_number, whatsapp_connected_at, whatsapp_phone_number_id, meta_business_name, meta_business_connected_at, meta_ads_account_id, meta_ads_account_name')
       .eq('user_id', user!.id)
       .single()
 
@@ -121,8 +118,6 @@ export default function IntegrationsTab() {
     setCompanyId(company.id)
     setIgConnected(!!company.instagram_user_id)
     setIgUsername(company.instagram_username ?? null)
-    setIgAutoPost(company.instagram_auto_post ?? false)
-    setIgFrequency(company.instagram_post_frequency ?? 'daily')
     setWaNumber(company.whatsapp_number ?? '')
     setWaConnectedAt(company.whatsapp_connected_at ?? null)
     setWaPhoneId(company.whatsapp_phone_number_id ?? null)
@@ -181,20 +176,6 @@ export default function IntegrationsTab() {
     setMetricsLoading(false)
   }
 
-  const toggleAutoPost = async (enabled: boolean) => {
-    if (!companyId) return
-    setIgTogglingAuto(true)
-    await supabase.from('companies').update({ instagram_auto_post: enabled }).eq('id', companyId)
-    setIgAutoPost(enabled)
-    setIgTogglingAuto(false)
-  }
-
-  const updateFrequency = async (freq: string) => {
-    if (!companyId) return
-    setIgFrequency(freq)
-    await supabase.from('companies').update({ instagram_post_frequency: freq }).eq('id', companyId)
-  }
-
   const handleDisconnectGsc = async () => {
     if (!integration) return
     await supabase.from('company_integrations').delete().eq('id', integration.id)
@@ -219,7 +200,6 @@ export default function IntegrationsTab() {
     }).eq('id', companyId)
     setIgConnected(false)
     setIgUsername(null)
-    setIgAutoPost(false)
   }
 
   const connectWhatsapp = async () => {
@@ -417,7 +397,7 @@ export default function IntegrationsTab() {
             )}
             {!GSC_CLIENT_ID && (
               <div style={{ fontSize: '12px', color: MUTED, fontStyle: 'italic', padding: '8px' }}>
-                Configure VITE_GOOGLE_OAUTH_CLIENT_ID
+                {X.gscSoon}
               </div>
             )}
           </div>
@@ -491,14 +471,16 @@ export default function IntegrationsTab() {
         )}
       </div>
 
-      {/* Instagram Auto-post (agente 24/7) */}
+      {/* Instagram: publicação com aprovação (2026-10-07: saiu o "Auto-post"
+          com botão Ativo/Pausado e frequência — a publicação automática
+          (publish-instagram) está deprecada e nada vai ao ar sem aprovação). */}
       <div style={{ background: CARD, border: `1px solid ${igConnected ? 'rgba(74,222,128,0.25)' : BORDER}`, borderRadius: '14px', overflow: 'hidden', marginBottom: '20px' }}>
         <div style={{ padding: '20px 24px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: igConnected ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🤖</div>
             <div>
               <div style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>
-                Instagram Auto-post{' '}
+                {X.igTitle}{' '}
                 {igConnected ? (
                   <span style={{ fontSize: '10px', background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>{X.connectedBadge}</span>
                 ) : (
@@ -507,7 +489,7 @@ export default function IntegrationsTab() {
               </div>
               <div style={{ fontSize: '12px', color: igConnected ? '#4ade80' : MUTED }}>
                 {igConnected
-                  ? X.igConnectedLine(igUsername, igAutoPost)
+                  ? X.igConnectedLine(igUsername)
                   : X.igConnectHint}
               </div>
             </div>
@@ -518,15 +500,6 @@ export default function IntegrationsTab() {
               style={{ padding: '8px 18px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', textDecoration: 'none', display: 'inline-block', cursor: 'pointer' }}>
               {X.igConnectBtn}
             </a>
-          )}
-          {igConnected && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: '12px', color: igAutoPost ? ORANGE : MUTED }}>{igAutoPost ? X.igActive : X.igPaused}</span>
-              <div onClick={() => !igTogglingAuto && toggleAutoPost(!igAutoPost)}
-                style={{ width: 42, height: 22, borderRadius: 99, cursor: igTogglingAuto ? 'wait' : 'pointer', background: igAutoPost ? ORANGE : 'rgba(255,255,255,0.1)', position: 'relative', transition: 'all 0.2s' }}>
-                <div style={{ position: 'absolute', top: 3, left: igAutoPost ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: igAutoPost ? '#000' : 'rgba(255,255,255,0.4)', transition: 'left 0.2s' }} />
-              </div>
-            </div>
           )}
         </div>
 
@@ -551,16 +524,7 @@ export default function IntegrationsTab() {
 
         {igConnected && (
           <div style={{ padding: '20px 24px' }}>
-            <div style={{ fontSize: '12px', color: MUTED, marginBottom: 12 }}>{X.igFreq}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {X.freqs.map(([val, label]) => (
-                <button key={val} onClick={() => updateFrequency(val)}
-                  style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${igFrequency === val ? ORANGE : BORDER}`, background: igFrequency === val ? 'rgba(255,109,41,0.1)' : 'transparent', color: igFrequency === val ? ORANGE : MUTED, fontSize: '12px', fontWeight: igFrequency === val ? 700 : 400, cursor: 'pointer' }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div style={{ marginTop: 14, fontSize: '12px', color: MUTED, lineHeight: 1.6 }}>
+            <div style={{ fontSize: '12px', color: MUTED, lineHeight: 1.6 }}>
               {X.igAgentDesc}
             </div>
             {companyId && (

@@ -237,3 +237,17 @@ modo de teste, sem dinheiro real). Criados lá:
 ao agente. Os mesmos itens precisam ser criados lá (pelo dono ou depois que
 ele der acesso), e os IDs reais vão para os secrets do Supabase.
 Usar `lookup_key` no código para não depender do ID.
+
+## 2026-10-07 — Fim do cartão "Instagram Auto-post" (aprovado pelo dono)
+
+Configurações → Conexões mostrava "Instagram Auto-post" com botão
+Ativo/Pausado e frequência (diário/3x/semanal), prometendo publicar
+sozinho todo dia às 10h. A tela não batia com o código: o único leitor
+de `instagram_auto_post`/`instagram_post_frequency` é a function
+`publish-instagram`, deprecada e sem chamador. Também contradizia a
+regra 1 (nada vai ao ar sem aprovação) e apareceria no vídeo do App
+Review. O cartão virou "Instagram · Publicação com aprovação": conectar,
+reconectar, desconectar e texto dizendo que os posts só vão ao ar depois
+de aprovados em Aprovações. As colunas continuam no banco (sem
+migration). WhatsApp: o dono pediu para não mexer agora (o texto ainda diz
+que o agente responde sozinho).
