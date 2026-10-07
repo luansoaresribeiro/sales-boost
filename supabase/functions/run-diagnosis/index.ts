@@ -27,6 +27,11 @@ interface PagespeedResult {
 }
 
 const MAX_PER_EMAIL_PER_DAY = 3
+// Teto mensal de leituras do Instagram na Apify (decisão do dono 2026-10-07:
+// sempre Apify, dentro do crédito grátis). Padrão 50/mês; muda pelo secret
+// APIFY_IG_MONTHLY_CAP sem novo deploy. Passou do teto: Instagram "não
+// avaliado" no Growth Score, sem chamar a Apify.
+const APIFY_IG_MONTHLY_CAP = Number(Deno.env.get('APIFY_IG_MONTHLY_CAP') ?? '50') || 50
 const APIFY_BASE = 'https://api.apify.com/v2'
 const IG_WAIT_SECS = 60 // Apify limita waitForFinish a 60s; cabe nos 150s do Supabase Free
 const RESERVED_IG_PATHS = new Set(['p', 'reel', 'reels', 'explore', 'accounts', 'stories', 'tv', 'direct'])
@@ -93,21 +98,37 @@ async function collectInstagram(supabase: any, handle: string, igUrl: string, to
     if ((recent ?? []).length > 0) return unavailable()
     if (!token) return unavailable()
 
+    // Teto mensal: cada tentativa paga grava `apify_run` no instagram_data;
+    // cópias reaproveitadas (cache 24h) repetem o mesmo id e não contam 2x.
+    const monthStart = new Date(); monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0)
+    const { data: monthRows } = await supabase
+      .from('diagnostics')
+      .select('instagram_data')
+      .gte('created_at', monthStart.toISOString())
+      .not('instagram_data', 'is', null)
+      .limit(2000)
+    const runs = new Set((monthRows ?? []).map((r: { instagram_data?: { apify_run?: string } }) => r.instagram_data?.apify_run).filter(Boolean))
+    if (runs.size >= APIFY_IG_MONTHLY_CAP) {
+      console.log('[run-diagnosis] teto mensal da Apify atingido', runs.size, '/', APIFY_IG_MONTHLY_CAP)
+      return { error: 'monthly_cap', collected_at: new Date().toISOString() }
+    }
+
     const res = await fetch(
       `${APIFY_BASE}/acts/${encodeURIComponent('apify/instagram-profile-scraper')}/runs?token=${token}&waitForFinish=${IG_WAIT_SECS}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usernames: [handle] }), signal: AbortSignal.timeout((IG_WAIT_SECS + 15) * 1000) },
     )
     if (!res.ok) { console.log('[run-diagnosis] apify ig http', res.status); return unavailable() }
     const run = await res.json()
+    const apify_run = run?.data?.id as string | undefined
     if (run?.data?.status !== 'SUCCEEDED' || !run?.data?.defaultDatasetId) {
       // ainda rodando depois da espera: aborta pra não gastar à toa
-      if (run?.data?.id) fetch(`${APIFY_BASE}/actor-runs/${run.data.id}/abort?token=${token}`, { method: 'POST' }).catch(() => {})
+      if (apify_run) fetch(`${APIFY_BASE}/actor-runs/${apify_run}/abort?token=${token}`, { method: 'POST' }).catch(() => {})
       console.log('[run-diagnosis] apify ig status', run?.data?.status)
-      return unavailable()
+      return { ...unavailable(), apify_run }
     }
     const itemsRes = await fetch(`${APIFY_BASE}/datasets/${run.data.defaultDatasetId}/items?token=${token}&clean=true`, { signal: AbortSignal.timeout(20_000) })
-    if (!itemsRes.ok) return unavailable()
-    const lean = leanInstagram(await itemsRes.json(), handle)
+    if (!itemsRes.ok) return { ...unavailable(), apify_run }
+    const lean = { ...leanInstagram(await itemsRes.json(), handle), apify_run }
     // Registro de custo: não há tabela de uso padrão pra Apify nas functions; fica no log.
     console.log('[run-diagnosis] instagram coletado', handle, lean.error ?? 'ok', 'apify_run', run.data.id)
     return lean
@@ -127,12 +148,16 @@ Deno.serve(async (req) => {
       return json({ error: 'Campos obrigatórios: business_name, contact_email, instagram_url' }, 400)
     }
 
-    // Instagram obrigatório (aceita @usuario ou link) — mesmo jeito do scrape-social
-    const igHandle = extractInstagramHandle(data.instagram_url ?? '')
-    if (!igHandle) {
+    // Instagram obrigatório no formulário novo (aceita @usuario ou link).
+    // Compatibilidade: o formulário antigo (ainda no ar até o merge) manda
+    // site obrigatório e Instagram opcional — se vier só o site, aceita e o
+    // Instagram fica "não avaliado".
+    const igRaw = (data.instagram_url ?? '').trim()
+    const igHandle = extractInstagramHandle(igRaw)
+    if (!igHandle && (igRaw || !(data.website_url ?? '').trim())) {
       return json({ error: 'Informe o Instagram do negócio (ex: @seuperfil ou instagram.com/seuperfil).' }, 400)
     }
-    const igUrl = `https://instagram.com/${igHandle}`
+    const igUrl = igHandle ? `https://instagram.com/${igHandle}` : null
 
     // Site opcional: só normaliza/valida se veio preenchido
     let websiteUrl = (data.website_url ?? '').trim()
@@ -198,7 +223,9 @@ Deno.serve(async (req) => {
     const skipped = Promise.reject(new Error('sem site'))
     skipped.catch(() => {})
 
-    const igPromise = collectInstagram(supabase, igHandle, igUrl, apifyToken, since)
+    const igPromise = igHandle && igUrl
+      ? collectInstagram(supabase, igHandle, igUrl, apifyToken, since)
+      : Promise.resolve({ error: 'not_provided', collected_at: new Date().toISOString() })
 
     const [mobileRes, desktopRes] = await Promise.allSettled([
       websiteUrl ? psFetch('mobile') : skipped,

@@ -251,3 +251,16 @@ reconectar, desconectar e texto dizendo que os posts só vão ao ar depois
 de aprovados em Aprovações. As colunas continuam no banco (sem
 migration). WhatsApp: o dono pediu para não mexer agora (o texto ainda diz
 que o agente responde sozinho).
+
+## 2026-10-07 — Teto mensal da Apify no diagnóstico (opção A do dono)
+
+`run-diagnosis` conta as leituras pagas do Instagram no mês (cada uma
+grava `apify_run` em `diagnostics.instagram_data`; cópias do cache de 24h
+não contam 2x). Teto padrão **50 por mês** (sugestão aceita pelo dono ao
+escolher a opção A; ajustável pelo secret `APIFY_IG_MONTHLY_CAP` sem novo
+deploy). Bateu o teto: `instagram_data = {error:'monthly_cap'}` e o Growth
+Score mostra o Instagram como "não avaliado". A função continua aceitando
+o formulário antigo (só site, sem Instagram) para não quebrar nada entre o
+deploy da função e o merge da tela nova. Ensaio não tem `APIFY_TOKEN`: lá
+a leitura sempre volta "unavailable" (testado); a leitura real só é
+testável em produção.
