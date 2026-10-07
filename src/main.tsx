@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { LanguageProvider } from './contexts/LanguageContext'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import './lib/analytics' // inicializa o PostHog antes da app renderizar
 import './lib/facebookSdk' // carrega o Facebook SDK (JS) — exigência da Meta
@@ -176,12 +177,15 @@ function RouterRoot() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
+      {/* Idioma (PT/EN) vale pro site inteiro: landing, login, cadastro, /setup e painel. */}
+      <LanguageProvider>
       <AuthProvider>
         <CompanyProvider>
           <RouterRoot />
           <CookieConsent />
         </CompanyProvider>
       </AuthProvider>
+      </LanguageProvider>
     </BrowserRouter>
   </StrictMode>,
 )

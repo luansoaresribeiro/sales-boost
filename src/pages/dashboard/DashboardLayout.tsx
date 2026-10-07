@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
-import { LanguageProvider, useLang } from '../../contexts/LanguageContext'
+import { useLang } from '../../contexts/LanguageContext'
 import { d } from '../../i18n-dash'
 import ProgressPopup from './marketingAi/ProgressPopup'
 import TrialStartModal from './TrialStartModal'
@@ -193,15 +193,12 @@ function SidebarInner({ isMobile, open, onNavigate, onClose, approvalsCount }: {
   )
 }
 
+// O LanguageProvider fica na raiz (main.tsx), pra login, cadastro e /setup
+// também seguirem o idioma escolhido.
 export default function DashboardLayout() {
-  return (
-    <LanguageProvider>
-      <DashboardShell />
-    </LanguageProvider>
-  )
+  return <DashboardShell />
 }
 
-// Dentro do provider, pra que o sino/pendências e o resto leiam o idioma escolhido.
 function DashboardShell() {
   const { lang } = useLang()
   const { company } = useCompany()

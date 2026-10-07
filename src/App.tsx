@@ -4,6 +4,7 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
 import { t, type Lang } from './i18n'
+import { useLang } from './contexts/LanguageContext'
 import logo from './assets/logo.png'
 
 gsap.registerPlugin(ScrollTrigger, ScrollToPlugin)
@@ -801,7 +802,9 @@ function SiteFooter({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => vo
    APP
 ══════════════════════════════════════════════════ */
 export default function App() {
-  const [lang, setLang] = useState<Lang>('pt')
+  // Mesmo idioma do resto do site (salvo em sb_lang): escolher EN na landing
+  // já abre login, cadastro e painel em inglês.
+  const { lang, setLang } = useLang()
   const [trialOpen, setTrialOpen] = useState(false)
   return (
     <div style={{ background: BG }}>
