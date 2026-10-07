@@ -56,102 +56,342 @@ as outras (Human Agent, Marketing API Access Tier, WhatsApp, `pages_*`,
 `ads_mcp_management`, `leads_retrieval`, `catalog_management`,
 `manage_fundraisers`).
 
-Para cada uma, a Meta pede: (1) texto de uso, (2) vídeo mostrando o uso,
-(3) aceitar as políticas. Os textos abaixo são para colar no campo
-"How will your app use this permission?".
+**Como usar esta seção:** para cada permissão, a Meta mostra uma caixa
+"Please provide a detailed description...". Cole **o bloco inteiro em
+inglês** daquela permissão (ele já responde: por que pedimos, como o app
+usa, que valor gera para o cliente, por que é necessária e como o revisor
+testa). Onde aparecer `[EMAIL]` e `[SENHA]`, digite **direto no
+formulário da Meta** o login da conta do revisor no Sales Boost. Nunca
+escreva a senha neste doc nem no chat. A Meta pede para **não** informar
+senha de conta do Instagram: o revisor usa a conta do Instagram dele.
+
+Depois de colar: subir o vídeo daquela permissão e marcar "I agree".
 
 ### 1. `instagram_business_basic`
 
-O que faz no Sales Boost: ler o @, nome, foto e lista de posts da conta
-conectada, para mostrar no painel e montar a estratégia.
+Em português: ler o @ e os posts da conta que o dono conectou, para
+mostrar no painel e montar a estratégia de conteúdo. Também é
+pré-requisito de comentários, mensagens, publicação e estatísticas.
 
-> Sales Boost is a marketing assistant for real estate agents and
-> agencies. After the business owner connects their Instagram
-> professional account, we read the account's basic profile (username,
-> name, profile picture) and its list of media so the owner can see
-> their own posts inside the Sales Boost dashboard and so our system can
-> plan their content strategy. We only access the account the owner
-> connected, and the owner can disconnect at any time in Settings →
-> Connections, which deletes the stored access token.
+**Colar na caixa de descrição:**
+
+```text
+WHAT SALES BOOST IS
+Sales Boost (https://getsaleboost.com) is a marketing assistant for real
+estate agents and small real estate agencies in Brazil. The business
+owner connects their own Instagram professional account; Sales Boost
+then plans content, drafts posts for the owner to approve, organizes
+interested buyers who comment or send messages, and shows results. The
+owner approves everything before anything is published or sent.
+
+HOW WE USE instagram_business_basic
+After the owner connects their Instagram professional account with
+Instagram Business Login, we read the account's basic profile
+information (Instagram user ID and username) and the list of the
+account's own media (posts with caption, media type and timestamp).
+- The username is shown in Settings > Connections so the owner can
+  confirm which account is connected, and at the top of the Performance
+  screen.
+- The list of the owner's posts is used to show their content inside
+  the dashboard and to plan the next posts (for example, which formats
+  and topics the account already uses).
+We only access the account that the owner connected. We do not access
+any other Instagram account.
+
+VALUE FOR THE USER AND WHY IT IS NECESSARY
+Without this permission the app cannot identify which Instagram account
+belongs to the business, cannot show the owner's own posts, and cannot
+plan content based on what the account already publishes. It is the
+base for every other feature, and it is also required as a dependency
+for instagram_business_manage_comments, instagram_business_manage_messages,
+instagram_business_content_publish and instagram_business_manage_insights,
+which we are requesting in this same submission.
+
+DATA HANDLING
+The access token is stored encrypted at rest in our database and used
+only server-side. The owner can disconnect at any time in Settings >
+Connections ("Desconectar"), which deletes the stored token and username.
+We do not sell or share this data.
+
+HOW TO TEST
+1. Go to https://getsaleboost.com/login and sign in with:
+   Email: [EMAIL]   Password: [SENHA]
+2. In the left menu, open "Configurações" (Settings) and then the tab
+   "Conexões" (Connections).
+3. Click "Conectar Instagram" and log in with your own Instagram
+   professional (Business or Creator) account. Accept the permissions.
+4. You return to Settings > Connections, which now shows the connected
+   username (@yourusername).
+5. Open "Marketing AI" in the left menu > "Agente de Dados" (Data Agent)
+   > tab "Performance". The connected username and the account's posts
+   are displayed there.
+The interface is in Portuguese; the screen recording has English
+captions showing each step.
+```
+
+**O vídeo deve mostrar:** login no Sales Boost → Configurações → Conexões
+→ Conectar Instagram → tela do Instagram pedindo permissão → volta com
+o @ aparecendo → Marketing AI → Agente de Dados → Performance com o @ e
+os posts.
 
 ### 2. `instagram_business_content_publish`
 
-O que faz: publicar post ou carrossel **só depois que o dono aprova**
-(regra 1 do produto). Código: `publish-instagram`, `agent-actions`.
+Em português: publicar um post **só depois que o dono clica em Aprovar**
+(regra 1 do produto). Código: `agent-actions` (a function antiga
+`publish-instagram` está deprecada e não é usada, ver
+[PITFALLS.md](PITFALLS.md)).
 
-> Sales Boost drafts posts and carousels for the business owner (photos
-> of real properties uploaded by the owner, plus captions). Nothing is
-> published automatically: every post appears in the "Approvals" screen
-> and is only published to the owner's Instagram account after the owner
-> explicitly clicks "Approve". We use this permission solely to publish
-> the content the owner approved, on the account the owner connected.
+**Colar na caixa de descrição:**
+
+```text
+HOW WE USE instagram_business_content_publish
+Sales Boost prepares post drafts for the business owner: photos of real
+properties that the owner uploaded, plus a caption. Every draft goes to
+the "Aprovações" (Approvals) screen. Nothing is published
+automatically. A post is published to the owner's connected Instagram
+account only after the owner opens the draft and clicks "Aprovar"
+(Approve). We use this permission only to publish content that the
+owner explicitly approved, on the account the owner connected.
+
+VALUE FOR THE USER AND WHY IT IS NECESSARY
+Real estate agents usually have little time to post. Sales Boost saves
+them time by preparing the post and publishing it with one click after
+approval, without downloading files and posting manually. Without this
+permission the owner would have to leave the app and publish by hand,
+which is the main problem our product solves.
+
+HOW TO TEST
+1. Go to https://getsaleboost.com/login and sign in with:
+   Email: [EMAIL]   Password: [SENHA]
+2. Connect your Instagram professional account in "Configurações" >
+   "Conexões" > "Conectar Instagram" (if not connected yet).
+3. Open "Aprovações" (Approvals) in the left menu. A draft post is
+   waiting there.
+4. Open the draft and click "Aprovar" (Approve).
+5. The post is published on the connected Instagram account. Open the
+   Instagram profile to see it.
+This permission is requested together with instagram_business_basic,
+which identifies the connected account.
+```
+
+**O vídeo deve mostrar:** Aprovações → abrir rascunho → Aprovar → abrir o
+Instagram e mostrar o post publicado. **Atenção:** isso publica de
+verdade. Gravar com o @getsaleboost só com aprovação do dono (regra 3), ou
+com uma conta de teste.
 
 ### 3. `instagram_business_manage_comments`
 
-O que faz: receber os comentários dos posts do dono (webhook), entender
-se é interesse em imóvel e sugerir uma resposta, que vai para aprovação.
-Código: `instagram-webhook`.
+Em português: receber os comentários dos posts do dono, identificar
+interesse em imóvel ("qual o valor?") e sugerir resposta, que só sai com
+aprovação. Código: `instagram-webhook`.
 
-> We receive comments on the owner's own posts through webhooks so the
-> owner can see in the Sales Boost dashboard which comments show buying
-> or renting interest (for example, "what is the price?"). For each such
-> comment we suggest a reply. The reply is sent only after the owner
-> approves it in the "Approvals" screen, or when the owner has explicitly
-> turned on an automatic rule they configured themselves.
+**Colar na caixa de descrição:**
+
+```text
+HOW WE USE instagram_business_manage_comments
+We subscribe to comment webhooks for the owner's connected account. When
+someone comments on one of the owner's own posts, Sales Boost reads the
+comment and checks if it shows interest in a property (for example
+"what is the price?" or "is it still available?"). For these comments,
+Sales Boost suggests a reply and places it in the "Aprovações"
+(Approvals) screen. The reply is sent only after the owner clicks
+"Aprovar" (Approve), or under an automatic rule that the owner created
+and can turn off at any time. We only read and reply to comments on the
+owner's own posts.
+
+VALUE FOR THE USER AND WHY IT IS NECESSARY
+Comments asking about price or availability are potential buyers. Small
+agencies often miss them or answer too late. Sales Boost makes sure
+every interested comment is seen and answered quickly, with the owner
+in control. Without this permission the app cannot see the comments or
+reply to them.
+
+HOW TO TEST
+1. Go to https://getsaleboost.com/login and sign in with:
+   Email: [EMAIL]   Password: [SENHA]
+2. Connect your Instagram professional account in "Configurações" >
+   "Conexões" > "Conectar Instagram".
+3. From a different Instagram account, comment on a post of the
+   connected account, for example: "Qual o valor?" ("What is the
+   price?").
+4. In Sales Boost, open "Aprovações" (Approvals). The comment appears
+   with a suggested reply.
+5. Click "Aprovar" (Approve). The reply is sent.
+This permission is requested together with instagram_business_basic,
+which is required as a dependent permission.
+```
+
+**O vídeo deve mostrar:** comentário feito por outra conta → aparece em
+Aprovações com a resposta sugerida → Aprovar → resposta chegando.
 
 ### 4. `instagram_business_manage_messages`
 
-O que faz: receber as DMs como leads no Funil de Vendas e responder em
-privado a um comentário, com aprovação do dono. Código:
-`instagram-webhook` (lead_messages, envio para `/{ig-id}/messages`).
+Em português: receber as DMs como leads e mandar resposta privada para
+quem comentou com interesse, com aprovação do dono. Código:
+`instagram-webhook` (grava em `lead_messages`, envia por
+`/{ig-id}/messages`).
 
-> When a person sends a direct message to the owner's business account,
-> or comments with purchase interest, Sales Boost records the
-> conversation as a lead in the owner's sales pipeline so they do not
-> miss potential buyers. The owner can send a private reply to an
-> interested commenter; replies are only sent after the owner approves
-> them (or under an automatic rule the owner configured and can turn off
-> at any time). We never message people who did not contact the
-> business first.
+**Colar na caixa de descrição:**
+
+```text
+HOW WE USE instagram_business_manage_messages
+1) Receiving messages: when a person sends a Direct Message to the
+owner's connected business account, Sales Boost receives it by webhook
+and saves the conversation as a lead in the owner's sales pipeline
+("Agente de Conversão" / Sales Pipeline), so the owner does not lose
+potential buyers.
+2) Private replies: when someone comments with interest in a property,
+the owner can send that person a private reply in Direct Messages. The
+private reply is sent only after the owner approves it in "Aprovações"
+(Approvals), or under an automatic rule that the owner created and can
+turn off at any time.
+We only message people who contacted the business first (a comment or a
+message). We never send unsolicited or bulk messages.
+
+VALUE FOR THE USER AND WHY IT IS NECESSARY
+For real estate agents, Direct Messages are where most negotiations
+start. Organizing these conversations as leads and answering interested
+people quickly is the core value of Sales Boost. Without this
+permission the app cannot receive Direct Messages or send the private
+reply that the owner approved.
+
+HOW TO TEST
+1. Go to https://getsaleboost.com/login and sign in with:
+   Email: [EMAIL]   Password: [SENHA]
+2. Connect your Instagram professional account in "Configurações" >
+   "Conexões" > "Conectar Instagram".
+3. From a different Instagram account, send a Direct Message to the
+   connected account.
+4. In Sales Boost, open "Marketing AI" > "Agente de Conversão"
+   (Conversion Agent). The person appears as a new lead with the
+   message.
+5. To test a private reply: comment "Qual o valor?" on a post of the
+   connected account from a different account, open "Aprovações"
+   (Approvals) and click "Aprovar". The commenter receives the reply in
+   Direct Messages.
+This permission is requested together with instagram_business_basic,
+which is required as a dependent permission.
+```
+
+**O vídeo deve mostrar:** DM enviada por outra conta → lead aparecendo em
+Agente de Conversão → comentário com interesse → Aprovar → resposta
+privada chegando na DM.
 
 ### 5. `instagram_business_manage_insights`
 
-O que faz: ler alcance, curtidas, comentários e salvamentos dos posts
-para a aba Performance e para o aprendizado (o que funcionou). Código:
+Em português: ler alcance, curtidas, comentários e salvamentos dos posts
+para a aba Performance e para aprender o que funciona. Código:
 `instagram-performance`, `insights-collect`.
 
-> We read insights (reach, impressions, likes, comments, saves) for the
-> owner's own posts to show performance reports in the Sales Boost
-> dashboard and to learn which content works best, so future content
-> suggestions improve. Insights are shown only to the owner of the
-> connected account.
+**Colar na caixa de descrição:**
 
-### 6. `ads_read` e 7. `business_management` (anúncios, só leitura)
+```text
+HOW WE USE instagram_business_manage_insights
+We read insights for the owner's own posts and account (reach,
+impressions, likes, comments, saves and follower count) and show them
+in the "Performance" screen. Sales Boost also uses these numbers to
+learn which posts work best for that business, so the next content
+suggestions are based on real results instead of guesses. Insights are
+shown only to the owner of the connected account and are not shared
+with anyone else.
 
-Pedidas no mesmo envio por decisão do dono (2026-10-07). Hoje o Sales
-Boost só **lê** resultados de anúncios do cliente (gasto, alcance,
-cliques) na aba Meta Ads. Não cria nem edita anúncios. Código:
+VALUE FOR THE USER AND WHY IT IS NECESSARY
+Small real estate businesses rarely measure their results. Showing
+which posts reached more people and generated more interest helps them
+invest time in what works. Without this permission the app cannot show
+any performance data or improve its suggestions.
+
+HOW TO TEST
+1. Go to https://getsaleboost.com/login and sign in with:
+   Email: [EMAIL]   Password: [SENHA]
+2. Connect your Instagram professional account in "Configurações" >
+   "Conexões" > "Conectar Instagram".
+3. Open "Marketing AI" > "Agente de Dados" (Data Agent) > tab
+   "Performance". Reach, likes, comments and saves of the account's posts
+   are displayed.
+This permission is requested together with instagram_business_basic,
+which is required as a dependent permission.
+```
+
+**O vídeo deve mostrar:** Marketing AI → Agente de Dados → Performance
+com os números dos posts da conta conectada.
+
+### 6. `ads_read`
+
+Em português: ler resultados dos anúncios do cliente (gasto, alcance,
+cliques) em Agente de Conteúdo e Campanha → Campanha. **Não cria nem edita anúncios.** Código:
 `meta-ads-oauth-start` (scopes `ads_read`, `business_management`),
 `meta-ads-insights`, `MetaAdsTab.tsx`. Pedir `ads_management`,
 `pages_manage_ads` ou "Marketing API Access Tier" só quando existir a
-função de criar anúncios (senão a Meta reprova). O vídeo precisa mostrar:
-Configurações → Conexões → "Conectar Meta Ads" → login do Facebook →
-escolher a conta de anúncios → aba Meta Ads com os números.
+função de criar anúncios.
 
-`ads_read`:
+**Colar na caixa de descrição:**
 
-> Business owners connect their Meta ad account to Sales Boost so they
-> can see their ad results (spend, reach, impressions, clicks, cost per
-> result) next to their organic Instagram results in one dashboard. We
-> only read insights of the ad accounts the owner chose to connect. We
-> do not create, edit or pause ads.
+```text
+HOW WE USE ads_read
+Business owners can connect their own Meta ad account to Sales Boost
+with Facebook Login. We then read the insights of that ad account (spend,
+reach, impressions, clicks and cost per result) and show them in the
+"Campanha" (Campaign) screen, next to their organic Instagram results. We only read
+data from the ad accounts that the owner chose to connect. We do not
+create, edit, pause or delete ads.
 
-`business_management`:
+VALUE FOR THE USER AND WHY IT IS NECESSARY
+Real estate agents who run ads usually see paid and organic results in
+different places and cannot tell what is working. Sales Boost shows both
+in one dashboard, in simple language. Without this permission the app
+cannot show any ad results.
 
-> Many business owners manage their ad account inside a Meta Business
-> portfolio. We use business_management only to list the ad accounts the
-> owner has access to, so the owner can pick which one to connect to
-> Sales Boost. We do not change any business settings, users or assets.
+HOW TO TEST
+1. Go to https://getsaleboost.com/login and sign in with:
+   Email: [EMAIL]   Password: [SENHA]
+2. Open "Configurações" (Settings) > "Conexões" (Connections) and click
+   "Conectar Meta Ads". Log in with a Facebook account that has access
+   to an ad account and select the ad account.
+3. Open "Marketing AI" > "Agente de Conteúdo e Campanha" (Content and
+   Campaign Agent) > tab "Campanha" (Campaign) > "Performance". The ad
+   account results are displayed.
+This permission is requested together with business_management, used
+only to list the ad accounts the owner can access.
+```
+
+### 7. `business_management`
+
+Em português: só listar as contas de anúncio que o dono acessa dentro do
+portfólio empresarial dele, para ele escolher qual conectar.
+
+**Colar na caixa de descrição:**
+
+```text
+HOW WE USE business_management
+Many business owners manage their ad account inside a Meta Business
+portfolio. When the owner clicks "Conectar Meta Ads", we use
+business_management only to list the ad accounts that the owner has
+access to, so the owner can select which one to connect to Sales Boost.
+We do not change any business settings, users, permissions or assets.
+
+VALUE FOR THE USER AND WHY IT IS NECESSARY
+Without this permission, owners whose ad account belongs to a Business
+portfolio cannot find and select their ad account, so they cannot see
+their ad results in Sales Boost.
+
+HOW TO TEST
+1. Go to https://getsaleboost.com/login and sign in with:
+   Email: [EMAIL]   Password: [SENHA]
+2. Open "Configurações" (Settings) > "Conexões" (Connections) and click
+   "Conectar Meta Ads". Log in with Facebook. The list of ad accounts
+   from your Business portfolio is shown so you can select one.
+3. Open "Marketing AI" > "Agente de Conteúdo e Campanha" > tab
+   "Campanha" (Campaign) > "Performance" to see the selected ad
+   account's results.
+This permission is requested together with ads_read.
+```
+
+**O vídeo de anúncios (6 e 7) deve mostrar:** Configurações → Conexões →
+Conectar Meta Ads → login do Facebook → lista de contas de anúncio →
+escolher → Marketing AI → Agente de Conteúdo e Campanha → Campanha →
+Performance com os números. A conta precisa ter pelo menos
+um anúncio com resultado, senão a aba aparece vazia.
 
 ## Vídeos (screencast)
 
@@ -233,3 +473,11 @@ formulário da Meta**, nunca neste doc nem no chat.
   e-mail de privacidade. Mudança só de texto.
 - Conferir no site, com a conta do revisor, cada passo do roteiro acima
   (principalmente o passo 5: resposta privada a comentário).
+- **Texto da tela que contradiz o pedido:** depois de conectar, Configurações
+  → Conexões mostra "✓ Instagram conectado! O agente já pode publicar
+  automaticamente." (`IntegrationsTab.tsx`, linha ~544). Isso aparece no
+  vídeo e contradiz "nada é publicado sem aprovação". Trocar por algo como
+  "✓ Instagram conectado! Os posts só vão ao ar depois que você aprovar."
+  antes de gravar.
+- Conferir no site o caminho da tela de anúncios (Marketing AI → Agente de
+  Conteúdo e Campanha → Campanha → Performance) antes de gravar.
