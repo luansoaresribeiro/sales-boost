@@ -199,3 +199,20 @@ enquanto parte dos docs diz 3 — conferir o que está deployado. A tela do
 diagnóstico já diz "Sem prazo em dias" (decisão nova), mas o cadastro ainda
 dá o teste de 7 dias até a fatia 2. O cadastro não pede cartão
 (confirmado: `SignupPage` não tem pagamento).
+
+## 2026-10-07 — Coleta do Instagram: sempre Apify com teto grátis
+
+- **Decisão do dono: o diagnóstico usa SEMPRE a Apify, com teto mensal
+  dentro do crédito grátis do plano.** Ao bater o teto, os critérios do
+  Instagram aparecem como "não avaliado" (sem cobrança extra). Não trocar
+  pela Business Discovery da API oficial, mesmo depois do App Review.
+  O valor do teto depende do crédito grátis e do uso atual da conta Apify
+  (dono vai informar). Não chutar número.
+- **Motivo:** custo zero garantido sem depender da Meta. Teste de
+  2026-10-07 no Graph API Explorer: a Página "Sales Boost Company" está
+  ligada ao @getsaleboost (IG id `17841442836358659`) e o app lê a própria
+  conta, mas `business_discovery` de outros perfis volta erro #10 (exige
+  App Review).
+- **App Review continua necessário** para clientes conectarem o Instagram
+  no painel. Material em [META-APP-REVIEW.md](META-APP-REVIEW.md). Pedir
+  só as 5 permissões `instagram_business_*` que o código usa.
