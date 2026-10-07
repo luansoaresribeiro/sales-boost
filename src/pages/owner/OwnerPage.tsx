@@ -210,7 +210,7 @@ export default function OwnerPage() {
               return (
               <div
                 key={c.user_id}
-                onClick={() => c.id && navigate(`/owner/company/${c.id}`)}
+                onClick={() => c.id && navigate(`/owner/company/${c.id}`, { state: { email: c.user_email } })}
                 style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 130px 80px 80px 100px', gap: '0', padding: '16px 24px', borderBottom: i < filtered.length - 1 ? `1px solid ${BORDER}` : 'none', alignItems: 'center', transition: 'background 0.15s', cursor: c.id ? 'pointer' : 'default' }}
                 onMouseEnter={e => { if (c.id) e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
                 onMouseLeave={e => { if (c.id) e.currentTarget.style.background = 'transparent' }}
@@ -223,8 +223,12 @@ export default function OwnerPage() {
                     )}
                     {c.id && <span style={{ fontSize: '10px', color: 'rgba(255,109,41,0.4)' }}>→</span>}
                   </div>
+                  {/* E-mail de cadastro sempre visível (pedido do dono, 2026-10-07); site embaixo, se houver. */}
                   {c.business_name && (
-                    <div style={{ fontSize: '11px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.website_url ?? c.user_email}</div>
+                    <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.user_email}>✉️ {c.user_email}</div>
+                  )}
+                  {c.business_name && c.website_url && (
+                    <div style={{ fontSize: '11px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.website_url}</div>
                   )}
                 </div>
                 <div style={{ fontSize: '12px', color: MUTED }}>{c.business_type ?? '—'}</div>
