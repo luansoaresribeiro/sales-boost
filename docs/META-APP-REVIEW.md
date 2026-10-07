@@ -48,10 +48,10 @@ isso. Pedir permissão que o app não usa é motivo comum de reprovação.
   teste. Ela precisa estar como testadora do app (Funções do app →
   Testadores do Instagram).
 
-## Permissões a pedir (as 5 do Instagram + 2 de anúncios)
+## Permissões a pedir (5 do Instagram + business_management + public_profile)
 
-Lista final do formulário: as 7 abaixo + `public_profile`. Excluir todas
-as outras (Human Agent, Marketing API Access Tier, WhatsApp, `pages_*`,
+Lista final do formulário: as 7 abaixo. Excluir todas as outras (Human
+Agent, Marketing API Access Tier, WhatsApp, `pages_*`, `ads_read`,
 `instagram_basic`, `instagram_manage_comments`, `ads_management`,
 `ads_mcp_management`, `leads_retrieval`, `catalog_management`,
 `manage_fundraisers`).
@@ -316,47 +316,14 @@ which is required as a dependent permission.
 **O vídeo deve mostrar:** Marketing AI → Agente de Dados → Performance
 com os números dos posts da conta conectada.
 
-### 6. `ads_read`
+### 6. `business_management`
 
-Em português: ler resultados dos anúncios do cliente (gasto, alcance,
-cliques) em Agente de Conteúdo e Campanha → Campanha. **Não cria nem edita anúncios.** Código:
-`meta-ads-oauth-start` (scopes `ads_read`, `business_management`),
-`meta-ads-insights`, `MetaAdsTab.tsx`. Pedir `ads_management`,
-`pages_manage_ads` ou "Marketing API Access Tier" só quando existir a
-função de criar anúncios.
-
-**Colar na caixa de descrição:**
-
-```text
-HOW WE USE ads_read
-Business owners can connect their own Meta ad account to Sales Boost
-with Facebook Login. We then read the insights of that ad account (spend,
-reach, impressions, clicks and cost per result) and show them in the
-"Campanha" (Campaign) screen, next to their organic Instagram results. We only read
-data from the ad accounts that the owner chose to connect. We do not
-create, edit, pause or delete ads.
-
-VALUE FOR THE USER AND WHY IT IS NECESSARY
-Real estate agents who run ads usually see paid and organic results in
-different places and cannot tell what is working. Sales Boost shows both
-in one dashboard, in simple language. Without this permission the app
-cannot show any ad results.
-
-HOW TO TEST
-1. Go to https://getsaleboost.com/login and sign in with:
-   Email: [EMAIL]   Password: [SENHA]
-2. Open "Configurações" (Settings) > "Conexões" (Connections) and, in the
-   "Meta Ads Manager" card, click "Conectar" (Connect). Log in with a
-   Facebook account that has access
-   to an ad account and select the ad account.
-3. Open "Marketing AI" > "Agente de Conteúdo e Campanha" (Content and
-   Campaign Agent) > tab "Campanha" (Campaign) > "Performance". The ad
-   account results are displayed.
-This permission is requested together with business_management, used
-only to list the ad accounts the owner can access.
-```
-
-### 7. `business_management`
+> ⚠️ **Atenção (2026-10-07):** o dono tirou `ads_read` do pedido. Hoje o
+> único uso de `business_management` no código é listar contas de anúncio
+> para a tela de resultados de anúncios, que depende de `ads_read`. Sem
+> `ads_read` a Meta tende a reprovar esta permissão também, porque o vídeo
+> não consegue mostrar a tela de anúncios com números. Decidir com o dono
+> se tira `business_management` também.
 
 Em português: só listar as contas de anúncio que o dono acessa dentro do
 portfólio empresarial dele, para ele escolher qual conectar.
@@ -387,14 +354,33 @@ HOW TO TEST
 3. Open "Marketing AI" > "Agente de Conteúdo e Campanha" > tab
    "Campanha" (Campaign) > "Performance" to see the selected ad
    account's results.
-This permission is requested together with ads_read.
 ```
 
-**O vídeo de anúncios (6 e 7) deve mostrar:** Configurações → Conexões →
+**O vídeo de anúncios deve mostrar:** Configurações → Conexões →
 cartão "Meta Ads Manager" → Conectar → login do Facebook → lista de contas de anúncio →
 escolher → Marketing AI → Agente de Conteúdo e Campanha → Campanha →
 Performance com os números. A conta precisa ter pelo menos
 um anúncio com resultado, senão a aba aparece vazia.
+
+### 7. `public_profile`
+
+Em português: é a permissão básica de todo login pelo Facebook (nome e ID
+de quem entrou). No Sales Boost o login pelo Facebook só aparece quando o
+dono conecta contas da Meta em Configurações → Conexões (por exemplo, o
+cartão "Meta Ads Manager"). O login no site do Sales Boost é por e-mail e
+senha, não pelo Facebook. Normalmente o formulário só pede para aceitar
+as políticas; se aparecer uma caixa de descrição, colar:
+
+```text
+HOW WE USE public_profile
+public_profile is used only when the business owner connects a Meta
+business asset to Sales Boost with Facebook Login, in "Configurações"
+(Settings) > "Conexões" (Connections). We read the person's name and ID
+only to show which Facebook account made the connection and to keep
+that connection linked to the correct Sales Boost company. We do not
+post, message or show this information to anyone else. Sign-in to Sales
+Boost itself uses email and password, not Facebook Login.
+```
 
 ## Vídeos (screencast)
 
