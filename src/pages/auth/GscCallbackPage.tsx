@@ -6,10 +6,30 @@ const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
 const MUTED = '#BABABA'
 
+// Esta página roda fora do LanguageProvider (rota pública de retorno do OAuth),
+// então lê a preferência salva direto do localStorage.
+
+const TX = {
+  pt: {
+    invalid: 'Parâmetros inválidos. Tente conectar novamente.', failed: 'Erro ao conectar. Tente novamente.',
+    domain: (d: string) => `Conectado: ${d}`, ok: 'Google Search Console conectado!', unexpected: 'Erro inesperado. Tente novamente.',
+    connecting: 'Conectando Google Search Console...', success: 'Conectado com sucesso!', redirecting: 'Redirecionando...',
+    errTitle: 'Erro ao conectar', back: 'Voltar às Conexões',
+  },
+  en: {
+    invalid: 'Invalid parameters. Please try connecting again.', failed: 'Error connecting. Please try again.',
+    domain: (d: string) => `Connected: ${d}`, ok: 'Google Search Console connected!', unexpected: 'Unexpected error. Please try again.',
+    connecting: 'Connecting Google Search Console...', success: 'Connected successfully!', redirecting: 'Redirecting...',
+    errTitle: 'Connection error', back: 'Back to Connections',
+  },
+} as const
+const getX = () => TX[localStorage.getItem('sb_lang') === 'en' ? 'en' : 'pt']
+
 export default function GscCallbackPage() {
   const [searchParams] = useSearchParams()
   const { session, loading: authLoading } = useAuth()
   const navigate = useNavigate()
+  const X = getX()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [message, setMessage] = useState('')
 
@@ -21,7 +41,7 @@ export default function GscCallbackPage() {
 
     if (!code || !state) {
       setStatus('error')
-      setMessage('Parâmetros inválidos. Tente conectar novamente.')
+      setMessage(X.invalid)
       return
     }
 
@@ -46,15 +66,15 @@ export default function GscCallbackPage() {
 
         if (!res.ok || data.error) {
           setStatus('error')
-          setMessage(data.error ?? 'Erro ao conectar. Tente novamente.')
+          setMessage(data.error ?? X.failed)
         } else {
           setStatus('success')
-          setMessage(data.domain ? `Conectado: ${data.domain}` : 'Google Search Console conectado!')
+          setMessage(data.domain ? X.domain(data.domain) : X.ok)
           setTimeout(() => navigate('/dashboard/marketing-ai/conexoes'), 2000)
         }
       } catch {
         setStatus('error')
-        setMessage('Erro inesperado. Tente novamente.')
+        setMessage(X.unexpected)
       }
     }
 
@@ -68,27 +88,27 @@ export default function GscCallbackPage() {
           <>
             <div style={{ width: '48px', height: '48px', border: `3px solid rgba(255,109,41,0.2)`, borderTopColor: ORANGE, borderRadius: '50%', animation: 'spin 0.7s linear infinite', margin: '0 auto 20px' }} />
             <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-            <div style={{ fontSize: '15px', color: MUTED }}>Conectando Google Search Console...</div>
+            <div style={{ fontSize: '15px', color: MUTED }}>{X.connecting}</div>
           </>
         )}
         {status === 'success' && (
           <>
             <div style={{ fontSize: '3rem', marginBottom: '16px' }}>✅</div>
-            <div style={{ fontSize: '16px', fontWeight: 600, color: 'white', marginBottom: '8px' }}>Conectado com sucesso!</div>
+            <div style={{ fontSize: '16px', fontWeight: 600, color: 'white', marginBottom: '8px' }}>{X.success}</div>
             <div style={{ fontSize: '13px', color: MUTED }}>{message}</div>
-            <div style={{ fontSize: '12px', color: MUTED, marginTop: '8px' }}>Redirecionando...</div>
+            <div style={{ fontSize: '12px', color: MUTED, marginTop: '8px' }}>{X.redirecting}</div>
           </>
         )}
         {status === 'error' && (
           <>
             <div style={{ fontSize: '3rem', marginBottom: '16px' }}>❌</div>
-            <div style={{ fontSize: '16px', fontWeight: 600, color: 'white', marginBottom: '8px' }}>Erro ao conectar</div>
+            <div style={{ fontSize: '16px', fontWeight: 600, color: 'white', marginBottom: '8px' }}>{X.errTitle}</div>
             <div style={{ fontSize: '13px', color: MUTED, marginBottom: '20px' }}>{message}</div>
             <button
               onClick={() => navigate('/dashboard/marketing-ai/conexoes')}
               style={{ padding: '10px 20px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '13px', borderRadius: '10px', border: 'none', cursor: 'pointer' }}
             >
-              Voltar às Conexões
+              {X.back}
             </button>
           </>
         )}

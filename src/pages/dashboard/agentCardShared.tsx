@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
+import { useLang } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
 import { d } from '../../i18n-dash'
 
@@ -109,6 +110,7 @@ interface CardPreviewData {
 export function useAgentCardPreviews(T: typeof d['pt']['posts']) {
   const { user } = useAuth()
   const { company } = useCompany()
+  const { lang } = useLang()
   const [data, setData] = useState<CardPreviewData>({ insightSummaries: {}, insightUpdatedAt: {}, postsCount: null, draftsCount: null, campaignsCount: null })
 
   useEffect(() => {
@@ -134,12 +136,12 @@ export function useAgentCardPreviews(T: typeof d['pt']['posts']) {
   const previewFor = (key: CardKey): string | null => {
     if (key === 'posts') {
       if (data.postsCount == null) return null
-      if (data.draftsCount) return `${data.draftsCount} rascunho${data.draftsCount === 1 ? '' : 's'} aguardando aprovação`
-      return data.postsCount > 0 ? `${data.postsCount} posts no total` : T.cards.noPreview
+      if (data.draftsCount) return lang === 'en' ? `${data.draftsCount} draft${data.draftsCount === 1 ? '' : 's'} awaiting approval` : `${data.draftsCount} rascunho${data.draftsCount === 1 ? '' : 's'} aguardando aprovação`
+      return data.postsCount > 0 ? (lang === 'en' ? `${data.postsCount} posts in total` : `${data.postsCount} posts no total`) : T.cards.noPreview
     }
     if (key === 'campanhas') {
       if (data.campaignsCount == null) return null
-      return data.campaignsCount > 0 ? `${data.campaignsCount} campanha${data.campaignsCount === 1 ? '' : 's'}` : T.cards.noPreview
+      return data.campaignsCount > 0 ? (lang === 'en' ? `${data.campaignsCount} campaign${data.campaignsCount === 1 ? '' : 's'}` : `${data.campaignsCount} campanha${data.campaignsCount === 1 ? '' : 's'}`) : T.cards.noPreview
     }
     if (INSIGHT_KEYS.includes(key)) {
       return data.insightSummaries[key] ?? T.cards.noPreview
