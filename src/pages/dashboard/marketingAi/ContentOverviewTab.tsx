@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useLang } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { CARD, MUTED, BORDER, D, FORMAT_CLASS, FUNNEL_LABEL, type FunnelStage } from './shared'
-import { TEMPLATE_LABEL, type TestPost } from './TestingArea'
+import { templateLabel, type TestPost } from './TestingArea'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -101,7 +101,7 @@ export default function ContentOverviewTab({ companyId, onOpenVault }: { company
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.post.idea ?? 'Post'}</div>
                     <div style={{ fontSize: '10px', color: MUTED }}>
-                      {s.post.format}{s.post.brief?.template ? ` · ${TEMPLATE_LABEL[s.post.brief.template] ?? s.post.brief.template}` : ''}
+                      {s.post.format}{s.post.brief?.template ? ` · ${templateLabel(s.post.brief.template, lang)}` : ''}
                     </div>
                   </div>
                   <span style={{ fontSize: '10px', fontWeight: 700, color: '#60a5fa', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', borderRadius: '99px', padding: '4px 10px', flexShrink: 0, whiteSpace: 'nowrap' }}>

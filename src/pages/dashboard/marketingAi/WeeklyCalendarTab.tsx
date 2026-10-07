@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
-import { TEMPLATE_LABEL, type TestPost } from './TestingArea'
+import { templateLabel, type TestPost } from './TestingArea'
 import CreativeAgent from './CreativeAgent'
 
 const ORANGE = '#FF6D29'
@@ -133,7 +133,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
                       <span style={{ fontSize: '8.5px', fontWeight: 700, color: sm.color }}>● {lang === 'en' ? STATUS_LABEL_EN[status] ?? sm.label : sm.label}</span>
-                      {it.brief?.template && <span style={{ fontSize: '8.5px', color: MUTED }}>· {TEMPLATE_LABEL[it.brief.template] ?? it.brief.template}</span>}
+                      {it.brief?.template && <span style={{ fontSize: '8.5px', color: MUTED }}>· {templateLabel(it.brief.template, lang)}</span>}
                     </div>
                   </div>
                 )
