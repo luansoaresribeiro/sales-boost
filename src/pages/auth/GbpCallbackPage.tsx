@@ -4,9 +4,27 @@ import { useAuth } from '../../contexts/AuthContext'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 
+// Esta página roda fora do LanguageProvider (rota pública de retorno do OAuth),
+// então lê a preferência salva direto do localStorage.
+
+const TX = {
+  pt: {
+    denied: (e: string) => `Google recusou o acesso: ${e}`, invalid: 'Parâmetros inválidos na URL de callback', unknown: 'Erro desconhecido',
+    ok: (a: string) => `Google Business Profile conectado! Conta: ${a}`, connecting: 'Conectando Google Business Profile...',
+    connected: 'Conectado!', redirecting: 'Redirecionando...', errTitle: 'Erro na conexão', back: 'Voltar para Conexões',
+  },
+  en: {
+    denied: (e: string) => `Google denied access: ${e}`, invalid: 'Invalid parameters in the callback URL', unknown: 'Unknown error',
+    ok: (a: string) => `Google Business Profile connected! Account: ${a}`, connecting: 'Connecting Google Business Profile...',
+    connected: 'Connected!', redirecting: 'Redirecting...', errTitle: 'Connection error', back: 'Back to Connections',
+  },
+} as const
+const getX = () => TX[localStorage.getItem('sb_lang') === 'en' ? 'en' : 'pt']
+
 export default function GbpCallbackPage() {
   const { session, user } = useAuth()
   const navigate = useNavigate()
+  const X = getX()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [message, setMessage] = useState('')
 
@@ -18,13 +36,13 @@ export default function GbpCallbackPage() {
 
     if (error) {
       setStatus('error')
-      setMessage(`Google recusou o acesso: ${error}`)
+      setMessage(X.denied(error))
       return
     }
 
     if (!code || !state) {
       setStatus('error')
-      setMessage('Parâmetros inválidos na URL de callback')
+      setMessage(X.invalid)
       return
     }
 
@@ -41,9 +59,9 @@ export default function GbpCallbackPage() {
           body: JSON.stringify({ code, company_id: state }),
         })
         const data = await res.json()
-        if (!res.ok) throw new Error(data.error ?? 'Erro desconhecido')
+        if (!res.ok) throw new Error(data.error ?? X.unknown)
         setStatus('success')
-        setMessage(`Google Business Profile conectado! Conta: ${data.account_name || 'OK'}`)
+        setMessage(X.ok(data.account_name || 'OK'))
         setTimeout(() => navigate('/dashboard/marketing-ai/conexoes'), 2000)
       } catch (e: unknown) {
         setStatus('error')
@@ -72,25 +90,25 @@ export default function GbpCallbackPage() {
           <>
             <div style={{ width: '40px', height: '40px', border: '3px solid rgba(255,109,41,0.2)', borderTopColor: '#FF6D29', borderRadius: '50%', animation: 'spin 0.7s linear infinite', margin: '0 auto 20px' }} />
             <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-            <div style={{ color: '#BABABA', fontSize: '14px' }}>Conectando Google Business Profile...</div>
+            <div style={{ color: '#BABABA', fontSize: '14px' }}>{X.connecting}</div>
           </>
         )}
         {status === 'success' && (
           <>
             <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>✓</div>
-            <div style={{ color: '#4ade80', fontSize: '15px', fontWeight: 700, marginBottom: '8px' }}>Conectado!</div>
+            <div style={{ color: '#4ade80', fontSize: '15px', fontWeight: 700, marginBottom: '8px' }}>{X.connected}</div>
             <div style={{ color: '#BABABA', fontSize: '13px' }}>{message}</div>
-            <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px', marginTop: '8px' }}>Redirecionando...</div>
+            <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px', marginTop: '8px' }}>{X.redirecting}</div>
           </>
         )}
         {status === 'error' && (
           <>
             <div style={{ fontSize: '2.5rem', marginBottom: '16px' }}>✗</div>
-            <div style={{ color: '#f87171', fontSize: '15px', fontWeight: 700, marginBottom: '8px' }}>Erro na conexão</div>
+            <div style={{ color: '#f87171', fontSize: '15px', fontWeight: 700, marginBottom: '8px' }}>{X.errTitle}</div>
             <div style={{ color: '#BABABA', fontSize: '13px', marginBottom: '24px' }}>{message}</div>
             <button onClick={() => navigate('/dashboard/marketing-ai/conexoes')}
               style={{ padding: '10px 24px', background: '#FF6D29', color: '#000', fontWeight: 700, fontSize: '13px', borderRadius: '10px', border: 'none', cursor: 'pointer' }}>
-              Voltar para Conexões
+              {X.back}
             </button>
           </>
         )}

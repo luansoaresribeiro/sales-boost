@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
 import { useSearchParams } from 'react-router-dom'
+import { useLang } from '../../../contexts/LanguageContext'
+import { TX } from './IntegrationsTab.i18n'
 import { launchWhatsAppSignup, isWhatsAppSignupConfigured } from '../../../lib/facebookSdk'
 
 function buildGbpAuthUrl(companyId: string): string {
@@ -55,6 +57,8 @@ function buildGscAuthUrl(companyId: string): string {
 
 export default function IntegrationsTab() {
   const { user, session } = useAuth()
+  const { lang } = useLang()
+  const X = TX[lang]
   const [searchParams] = useSearchParams()
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [integration, setIntegration] = useState<Integration | null>(null)
@@ -167,12 +171,12 @@ export default function IntegrationsTab() {
       })
       const data = await res.json() as GscMetrics & { error?: string }
       if (!res.ok || data.error) {
-        setMetricsError(data.error ?? 'Erro ao carregar métricas')
+        setMetricsError(data.error ?? X.metricsErr)
       } else {
         setMetrics(data)
       }
     } catch {
-      setMetricsError('Erro inesperado ao buscar métricas')
+      setMetricsError(X.metricsErrUnexpected)
     }
     setMetricsLoading(false)
   }
@@ -225,7 +229,7 @@ export default function IntegrationsTab() {
     try {
       const { code, wabaId, phoneNumberId } = await launchWhatsAppSignup()
       // #13: popup fechado NÃO é sucesso — só seguimos com WABA + phone reais.
-      if (!wabaId || !phoneNumberId) throw new Error('A janela do Meta terminou sem devolver o número. Isso acontece quando o cadastro não vai até o fim: refaça e, na janela, escolha o Portfólio de Negócios → a conta do WhatsApp (WABA) → selecione ou cadastre o número → clique em Concluir/Continuar até a janela fechar sozinha. Se a janela não chegou a pedir um número, o problema é a configuração do login do WhatsApp na Meta (Configuration ID sem o produto WhatsApp).')
+      if (!wabaId || !phoneNumberId) throw new Error(X.waSignupIncomplete)
       console.log('[Meta Signup] backend validação iniciada', { temWaba: !!wabaId, temPhone: !!phoneNumberId })
       const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-embedded-signup`, {
         method: 'POST',
@@ -254,7 +258,7 @@ export default function IntegrationsTab() {
     setWaError('')
     try {
       if (!waManualWaba.trim() || !waManualPhoneId.trim() || !waManualToken.trim())
-        throw new Error('Preencha os 3 campos: ID do número, ID da conta (WABA) e token.')
+        throw new Error(X.waFill3)
       const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-manual-connect`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
@@ -277,12 +281,12 @@ export default function IntegrationsTab() {
 
   // Traduz erros técnicos da Meta em algo que o dono entende e sabe agir.
   const friendlyWaError = (err?: string): string => {
-    const raw = err ?? 'Erro ao conectar o WhatsApp'
+    const raw = err ?? X.waErrDefault
     const low = raw.toLowerCase()
     if (low.includes('permission') || low.includes('advanced access') || low.includes('scope'))
-      return 'A Meta recusou por falta de permissão. Enquanto o app estiver em modo de desenvolvimento, só você e testadores conseguem conectar — pra liberar pra clientes, é preciso a Verificação do Negócio + App Review. (Detalhe técnico: ' + raw + ')'
+      return X.waPerm(raw)
     if (low.includes('redirect') || low.includes('config'))
-      return 'Configuração do login do WhatsApp incompleta na Meta. Confira o Configuration ID e as permissões da configuração. (Detalhe: ' + raw + ')'
+      return X.waConfig(raw)
     return raw
   }
 
@@ -316,7 +320,7 @@ export default function IntegrationsTab() {
   }
 
   if (loading) {
-    return <div style={{ color: MUTED, fontSize: '14px' }}>Carregando...</div>
+    return <div style={{ color: MUTED, fontSize: '14px' }}>{X.loading}</div>
   }
 
   return (
@@ -330,13 +334,13 @@ export default function IntegrationsTab() {
               <div style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>
                 Meta Business Suite{' '}
                 {metaBusinessConnectedAt && (
-                  <span style={{ fontSize: '10px', background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>✓ CONECTADO</span>
+                  <span style={{ fontSize: '10px', background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>{X.connectedBadge}</span>
                 )}
               </div>
               <div style={{ fontSize: '12px', color: metaBusinessConnectedAt ? '#4ade80' : MUTED }}>
                 {metaBusinessConnectedAt
-                  ? `✓ Conectado como ${metaBusinessName ?? '—'} · ${metaBusinessPagesCount} página(s)`
-                  : 'Faça login com sua conta do Meta pra liberar dados reais (Páginas, Instagram, negócios)'}
+                  ? X.mbConnectedAs(metaBusinessName ?? '—', metaBusinessPagesCount)
+                  : X.mbLoginHint}
               </div>
             </div>
           </div>
@@ -344,12 +348,12 @@ export default function IntegrationsTab() {
             <div style={{ display: 'flex', gap: '8px' }}>
               <a href={`${SUPABASE_URL}/functions/v1/meta-business-oauth-start?company_id=${companyId}`}
                 style={{ padding: '8px 18px', background: metaBusinessConnectedAt ? 'rgba(255,255,255,0.04)' : ORANGE, color: metaBusinessConnectedAt ? MUTED : '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: metaBusinessConnectedAt ? `1px solid ${BORDER}` : 'none', textDecoration: 'none', display: 'inline-block', cursor: 'pointer' }}>
-                {metaBusinessConnectedAt ? 'Reconectar' : 'Conectar Meta Business Suite →'}
+                {metaBusinessConnectedAt ? X.reconnect : X.mbConnectBtn}
               </a>
               {metaBusinessConnectedAt && (
                 <button onClick={handleDisconnectMetaBusiness}
                   style={{ padding: '8px 14px', background: 'transparent', color: '#f87171', fontWeight: 600, fontSize: '12px', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.3)', cursor: 'pointer' }}>
-                  Desconectar
+                  {X.disconnect}
                 </button>
               )}
             </div>
@@ -357,13 +361,13 @@ export default function IntegrationsTab() {
         </div>
         {(metaBusinessSuccess || metaBusinessError) && (
           <div style={{ padding: '12px 24px', background: metaBusinessSuccess ? 'rgba(74,222,128,0.06)' : 'rgba(239,68,68,0.08)', fontSize: '12px', color: metaBusinessSuccess ? '#4ade80' : '#f87171', borderTop: `1px solid ${BORDER}` }}>
-            {metaBusinessSuccess ? '✓ Conta do Meta conectada! Já sincronizamos suas Páginas.' : `Erro: ${metaBusinessError}`}
+            {metaBusinessSuccess ? X.mbSuccess : `${X.errorPrefix}${metaBusinessError}`}
           </div>
         )}
         {!metaBusinessConnectedAt && (
           <div style={{ padding: '0 24px 20px' }}>
             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>
-              Esse login é a fonte principal de dados reais da plataforma — dá acesso às suas Páginas do Facebook, à conta de Instagram vinculada e aos negócios do seu Business Manager, tudo de uma vez.
+              {X.mbDesc}
             </div>
           </div>
         )}
@@ -380,13 +384,13 @@ export default function IntegrationsTab() {
               <div style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>
                 Google Search Console{' '}
                 {integration && (
-                  <span style={{ fontSize: '10px', background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>✓ CONECTADO</span>
+                  <span style={{ fontSize: '10px', background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>{X.connectedBadge}</span>
                 )}
               </div>
               <div style={{ fontSize: '12px', color: MUTED }}>
                 {integration ? (
-                  <span style={{ color: '#4ade80' }}>✓ Conectado{integration.domain ? ` · ${integration.domain}` : ''}</span>
-                ) : 'Não conectado'}
+                  <span style={{ color: '#4ade80' }}>{X.connectedWord}{integration.domain ? ` · ${integration.domain}` : ''}</span>
+                ) : X.notConnected}
               </div>
             </div>
           </div>
@@ -394,19 +398,19 @@ export default function IntegrationsTab() {
             {integration && (
               <button onClick={loadGscMetrics} disabled={metricsLoading}
                 style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.06)', color: MUTED, fontWeight: 600, fontSize: '12px', borderRadius: '8px', border: `1px solid ${BORDER}`, cursor: metricsLoading ? 'not-allowed' : 'pointer' }}>
-                {metricsLoading ? 'Carregando...' : 'Atualizar dados'}
+                {metricsLoading ? X.loading : X.refreshData}
               </button>
             )}
             {companyId && GSC_CLIENT_ID && (
               <>
                 <a href={buildGscAuthUrl(companyId)}
                   style={{ padding: '8px 16px', background: integration ? 'rgba(255,255,255,0.04)' : ORANGE, color: integration ? MUTED : '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: integration ? `1px solid ${BORDER}` : 'none', textDecoration: 'none', cursor: 'pointer', display: 'inline-block' }}>
-                  {integration ? 'Reconectar' : 'Conectar →'}
+                  {integration ? X.reconnect : X.connect}
                 </a>
                 {integration && (
                   <button onClick={handleDisconnectGsc}
                     style={{ padding: '8px 14px', background: 'transparent', color: '#f87171', fontWeight: 600, fontSize: '12px', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.3)', cursor: 'pointer' }}>
-                    Desconectar
+                    {X.disconnect}
                   </button>
                 )}
               </>
@@ -429,16 +433,16 @@ export default function IntegrationsTab() {
         {metrics && (
           <div style={{ padding: '24px' }}>
             <div style={{ fontSize: '11px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '16px' }}>
-              Últimos 28 dias ({metrics.period.start} → {metrics.period.end})
+              {X.last28(metrics.period.start, metrics.period.end)}
             </div>
 
             {/* Summary */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
               {[
-                { label: 'Cliques', value: metrics.summary.clicks.toLocaleString('pt-BR'), color: ORANGE },
-                { label: 'Impressões', value: metrics.summary.impressions.toLocaleString('pt-BR'), color: '#A78BFA' },
+                { label: X.clicks, value: metrics.summary.clicks.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR'), color: ORANGE },
+                { label: X.impressions, value: metrics.summary.impressions.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR'), color: '#A78BFA' },
                 { label: 'CTR', value: `${metrics.summary.ctr}%`, color: '#4ade80' },
-                { label: 'Posição média', value: String(metrics.summary.position), color: '#FBBF24' },
+                { label: X.avgPosition, value: String(metrics.summary.position), color: '#FBBF24' },
               ].map(s => (
                 <div key={s.label} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '10px', padding: '16px' }}>
                   <div style={{ fontSize: '10px', color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px' }}>{s.label}</div>
@@ -450,12 +454,12 @@ export default function IntegrationsTab() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               {/* Top queries */}
               <div>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', marginBottom: '12px' }}>Top queries</div>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', marginBottom: '12px' }}>{X.topQueries}</div>
                 {metrics.top_queries.map((q, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${BORDER}`, gap: '12px' }}>
                     <div style={{ fontSize: '12px', color: MUTED, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.query}</div>
                     <div style={{ display: 'flex', gap: '12px', flexShrink: 0 }}>
-                      <span style={{ fontSize: '12px', color: ORANGE }}>{q.clicks} cliques</span>
+                      <span style={{ fontSize: '12px', color: ORANGE }}>{X.clicksN(q.clicks)}</span>
                       <span style={{ fontSize: '12px', color: MUTED }}>P{q.position}</span>
                     </div>
                   </div>
@@ -464,13 +468,13 @@ export default function IntegrationsTab() {
 
               {/* Top pages */}
               <div>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', marginBottom: '12px' }}>Top páginas</div>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', marginBottom: '12px' }}>{X.topPages}</div>
                 {metrics.top_pages.map((p, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${BORDER}`, gap: '12px' }}>
                     <div style={{ fontSize: '12px', color: MUTED, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.page}>
                       {p.page.replace(/^https?:\/\/[^/]+/, '') || '/'}
                     </div>
-                    <span style={{ fontSize: '12px', color: ORANGE, flexShrink: 0 }}>{p.clicks} cliques</span>
+                    <span style={{ fontSize: '12px', color: ORANGE, flexShrink: 0 }}>{X.clicksN(p.clicks)}</span>
                   </div>
                 ))}
               </div>
@@ -481,7 +485,7 @@ export default function IntegrationsTab() {
         {!integration && (
           <div style={{ padding: '20px 24px' }}>
             <div style={{ fontSize: '13px', color: MUTED, lineHeight: 1.6 }}>
-              Conecte o Google Search Console para ver quais palavras-chave trazem visitantes para o seu site, quais páginas têm mais tráfego orgânico e oportunidades de SEO.
+              {X.gscDesc}
             </div>
           </div>
         )}
@@ -496,15 +500,15 @@ export default function IntegrationsTab() {
               <div style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>
                 Instagram Auto-post{' '}
                 {igConnected ? (
-                  <span style={{ fontSize: '10px', background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>✓ CONECTADO</span>
+                  <span style={{ fontSize: '10px', background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>{X.connectedBadge}</span>
                 ) : (
-                  <span style={{ fontSize: '10px', background: 'rgba(255,109,41,0.15)', color: ORANGE, padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle' }}>NOVO</span>
+                  <span style={{ fontSize: '10px', background: 'rgba(255,109,41,0.15)', color: ORANGE, padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle' }}>{X.igNew}</span>
                 )}
               </div>
               <div style={{ fontSize: '12px', color: igConnected ? '#4ade80' : MUTED }}>
                 {igConnected
-                  ? `✓ Conectado${igUsername ? ` como @${igUsername}` : ''}${igAutoPost ? ' · publicando automaticamente' : ' · auto-post pausado'}`
-                  : 'Conecte para o Agente de Marketing publicar sozinho 24/7'}
+                  ? X.igConnectedLine(igUsername, igAutoPost)
+                  : X.igConnectHint}
               </div>
             </div>
           </div>
@@ -512,12 +516,12 @@ export default function IntegrationsTab() {
             <a
               href={`${SUPABASE_URL}/functions/v1/instagram-oauth-start?company_id=${companyId}`}
               style={{ padding: '8px 18px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', textDecoration: 'none', display: 'inline-block', cursor: 'pointer' }}>
-              Conectar Instagram →
+              {X.igConnectBtn}
             </a>
           )}
           {igConnected && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: '12px', color: igAutoPost ? ORANGE : MUTED }}>{igAutoPost ? 'Ativo' : 'Pausado'}</span>
+              <span style={{ fontSize: '12px', color: igAutoPost ? ORANGE : MUTED }}>{igAutoPost ? X.igActive : X.igPaused}</span>
               <div onClick={() => !igTogglingAuto && toggleAutoPost(!igAutoPost)}
                 style={{ width: 42, height: 22, borderRadius: 99, cursor: igTogglingAuto ? 'wait' : 'pointer', background: igAutoPost ? ORANGE : 'rgba(255,255,255,0.1)', position: 'relative', transition: 'all 0.2s' }}>
                 <div style={{ position: 'absolute', top: 3, left: igAutoPost ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: igAutoPost ? '#000' : 'rgba(255,255,255,0.4)', transition: 'left 0.2s' }} />
@@ -528,28 +532,28 @@ export default function IntegrationsTab() {
 
         {!igConnected && (
           <div style={{ padding: '14px 24px', background: 'rgba(251,191,36,0.06)', borderBottom: `1px solid ${BORDER}` }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#FBBF24', marginBottom: '8px' }}>⚠️ Antes de conectar:</div>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#FBBF24', marginBottom: '8px' }}>{X.igBefore}</div>
             <div style={{ display: 'flex', gap: '8px', fontSize: '12.5px', color: 'white', lineHeight: 1.5 }}>
               <span style={{ color: '#FBBF24', flexShrink: 0 }}>•</span>
-              <span>Seu Instagram precisa ser <strong>Profissional</strong> — conta <strong>Business</strong> ou <strong>Criador</strong> (não pode ser pessoal).</span>
+              <span>{X.igProA}<strong>{X.igProB}</strong>{X.igProC}<strong>{X.igBiz}</strong>{X.igOr}<strong>{X.igCreator}</strong>{X.igProD}</span>
             </div>
             <div style={{ fontSize: '11px', color: MUTED, marginTop: '9px', lineHeight: 1.5 }}>
-              Você vai logar direto com o Instagram — <strong>não precisa</strong> de Página do Facebook. Trocar pra conta Profissional é grátis, nas configurações do app do Instagram.
+              {X.igLoginA}<strong>{X.igLoginB}</strong>{X.igLoginC}
             </div>
           </div>
         )}
 
         {(igOauthSuccess || igOauthError) && (
           <div style={{ padding: '12px 24px', background: igOauthSuccess ? 'rgba(74,222,128,0.06)' : 'rgba(239,68,68,0.08)', fontSize: '12px', color: igOauthSuccess ? '#4ade80' : '#f87171' }}>
-            {igOauthSuccess ? '✓ Instagram conectado! O agente já pode publicar automaticamente.' : `Erro: ${igOauthError}`}
+            {igOauthSuccess ? X.igSuccess : `${X.errorPrefix}${igOauthError}`}
           </div>
         )}
 
         {igConnected && (
           <div style={{ padding: '20px 24px' }}>
-            <div style={{ fontSize: '12px', color: MUTED, marginBottom: 12 }}>Frequência de publicação</div>
+            <div style={{ fontSize: '12px', color: MUTED, marginBottom: 12 }}>{X.igFreq}</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {[['daily', 'Diário'], ['3x_week', '3x por semana'], ['weekly', 'Semanal']].map(([val, label]) => (
+              {X.freqs.map(([val, label]) => (
                 <button key={val} onClick={() => updateFrequency(val)}
                   style={{ padding: '7px 14px', borderRadius: 8, border: `1px solid ${igFrequency === val ? ORANGE : BORDER}`, background: igFrequency === val ? 'rgba(255,109,41,0.1)' : 'transparent', color: igFrequency === val ? ORANGE : MUTED, fontSize: '12px', fontWeight: igFrequency === val ? 700 : 400, cursor: 'pointer' }}>
                   {label}
@@ -557,17 +561,17 @@ export default function IntegrationsTab() {
               ))}
             </div>
             <div style={{ marginTop: 14, fontSize: '12px', color: MUTED, lineHeight: 1.6 }}>
-              O Agente de Marketing vai criar conteúdo com IA, gerar uma imagem e publicar direto no Instagram, todos os dias às 10h. Você pode pausar a qualquer momento.
+              {X.igAgentDesc}
             </div>
             {companyId && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12 }}>
                 <a href={`${SUPABASE_URL}/functions/v1/instagram-oauth-start?company_id=${companyId}`}
                   style={{ fontSize: '11px', color: 'rgba(255,109,41,0.5)', textDecoration: 'none' }}>
-                  Reconectar Instagram
+                  {X.igReconnect}
                 </a>
                 <button onClick={handleDisconnectIgOauth}
                   style={{ background: 'transparent', border: 'none', padding: 0, fontSize: '11px', color: 'rgba(248,113,113,0.5)', cursor: 'pointer' }}>
-                  Desconectar
+                  {X.disconnect}
                 </button>
               </div>
             )}
@@ -577,7 +581,7 @@ export default function IntegrationsTab() {
         {!igConnected && (
           <div style={{ padding: '16px 24px' }}>
             <div style={{ fontSize: '13px', color: MUTED, lineHeight: 1.7 }}>
-              O Agente de Marketing vai criar posts com IA, gerar imagem e publicar direto no seu Instagram todos os dias — sem você precisar fazer nada.
+              {X.igDescDisconnected}
             </div>
           </div>
         )}
@@ -593,28 +597,28 @@ export default function IntegrationsTab() {
               <div style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>
                 WhatsApp Business{' '}
                 {waConnected && (
-                  <span style={{ fontSize: '10px', background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>✓ CONECTADO</span>
+                  <span style={{ fontSize: '10px', background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>{X.connectedBadge}</span>
                 )}
               </div>
               <div style={{ fontSize: '12px', color: waConnected ? '#4ade80' : MUTED }}>
-                {waConnected ? `✓ Conectado · ${waNumber}` : 'Conecte pra o Agente responder seus clientes pelo WhatsApp'}
+                {waConnected ? `${X.connectedWord} · ${waNumber}` : X.waHint}
               </div>
             </div>
           </div>
           {companyId && (
             <div style={{ display: 'flex', gap: '8px' }}>
               {!isWhatsAppSignupConfigured() ? (
-                <span style={{ fontSize: '11px', color: MUTED, fontStyle: 'italic', padding: '8px' }}>WhatsApp ainda não configurado na plataforma</span>
+                <span style={{ fontSize: '11px', color: MUTED, fontStyle: 'italic', padding: '8px' }}>{X.waNotConfigured}</span>
               ) : (
                 <button onClick={connectWhatsapp} disabled={waSaving}
                   style={{ padding: '8px 18px', background: waConnected ? 'rgba(255,255,255,0.04)' : ORANGE, color: waConnected ? MUTED : '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: waConnected ? `1px solid ${BORDER}` : 'none', cursor: waSaving ? 'wait' : 'pointer' }}>
-                  {waSaving ? 'Conectando...' : waConnected ? 'Reconectar' : 'Conectar WhatsApp →'}
+                  {waSaving ? X.waConnecting : waConnected ? X.reconnect : X.waConnectBtn}
                 </button>
               )}
               {(waConnected || waConnectedAt) && (
                 <button onClick={handleDisconnectWhatsapp}
                   style={{ padding: '8px 14px', background: 'transparent', color: '#f87171', fontWeight: 600, fontSize: '12px', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.3)', cursor: 'pointer' }}>
-                  Desconectar
+                  {X.disconnect}
                 </button>
               )}
             </div>
@@ -627,33 +631,33 @@ export default function IntegrationsTab() {
         )}
         {waSaved && !waError && (
           <div style={{ padding: '12px 24px', background: 'rgba(74,222,128,0.06)', fontSize: '12px', color: '#4ade80', borderTop: `1px solid ${BORDER}` }}>
-            ✓ WhatsApp conectado! O Agente já pode responder as mensagens.
+            {X.waSaved}
           </div>
         )}
         {!waConnected && (
           <div style={{ padding: '0 24px 20px' }}>
             <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>
-              Você escolhe (ou cria) o número de WhatsApp Business numa janela do Meta — sem precisar mexer em configuração técnica. Depois disso, o Agente passa a responder as mensagens que chegarem nesse número.
+              {X.waDesc}
             </div>
 
             {/* Conexão manual: pro dono ligar o próprio número hoje, sem depender
                 do app ser Tech Provider verificado. */}
             <button onClick={() => setWaManualOpen(o => !o)}
               style={{ marginTop: '12px', background: 'transparent', border: 'none', color: ORANGE, fontSize: '12px', fontWeight: 700, cursor: 'pointer', padding: 0, fontFamily: D }}>
-              {waManualOpen ? '▾ Conectar meu próprio número (avançado)' : '▸ Conectar meu próprio número (avançado)'}
+              {waManualOpen ? '▾ ' : '▸ '}{X.waManual}
             </button>
 
             {waManualOpen && (
               <div style={{ marginTop: '12px', padding: '16px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '10px' }}>
                 <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.6, marginBottom: '14px' }}>
-                  Pegue estes 3 dados no painel da Meta em <strong style={{ color: 'white' }}>WhatsApp → Configuração da API</strong> e cole aqui. O token é enviado com segurança e guardado só no servidor — <strong style={{ color: 'white' }}>nunca</strong> fica salvo no seu navegador.
+                  {X.waManualIntroA}<strong style={{ color: 'white' }}>{X.waManualIntroB}</strong>{X.waManualIntroC}<strong style={{ color: 'white' }}>{X.waManualIntroD}</strong>{X.waManualIntroE}
                 </div>
-                <ManualField label="ID do número (Phone Number ID)" placeholder="ex: 123456789012345" value={waManualPhoneId} onChange={setWaManualPhoneId} />
-                <ManualField label="ID da conta do WhatsApp (WhatsApp Business Account ID / WABA)" placeholder="ex: 987654321098765" value={waManualWaba} onChange={setWaManualWaba} />
-                <ManualField label="Token de acesso" placeholder="Cole o token gerado na Meta" value={waManualToken} onChange={setWaManualToken} secret />
+                <ManualField label={X.waPhoneIdLabel} placeholder={X.waPhoneIdPh} value={waManualPhoneId} onChange={setWaManualPhoneId} />
+                <ManualField label={X.waWabaLabel} placeholder={X.waWabaPh} value={waManualWaba} onChange={setWaManualWaba} />
+                <ManualField label={X.waTokenLabel} placeholder={X.waTokenPh} value={waManualToken} onChange={setWaManualToken} secret />
                 <button onClick={connectWhatsappManual} disabled={waSaving}
                   style={{ marginTop: '6px', padding: '9px 18px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: waSaving ? 'wait' : 'pointer', fontFamily: D }}>
-                  {waSaving ? 'Conectando...' : 'Conectar número →'}
+                  {waSaving ? X.waConnecting : X.waConnectNumber}
                 </button>
               </div>
             )}
@@ -670,13 +674,13 @@ export default function IntegrationsTab() {
               <div style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>
                 Google Business Profile{' '}
                 {gbpIntegration && (
-                  <span style={{ fontSize: '10px', background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>✓ CONECTADO</span>
+                  <span style={{ fontSize: '10px', background: 'rgba(74,222,128,0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: 99, marginLeft: 6, verticalAlign: 'middle', fontWeight: 700 }}>{X.connectedBadge}</span>
                 )}
               </div>
               <div style={{ fontSize: '12px', color: gbpIntegration ? '#4ade80' : MUTED }}>
                 {gbpIntegration
-                  ? `✓ Conectado${gbpIntegration.domain ? ` · ${gbpIntegration.domain}` : ''}`
-                  : 'Responda avaliações do Google direto pelo painel'}
+                  ? `${X.connectedWord}${gbpIntegration.domain ? ` · ${gbpIntegration.domain}` : ''}`
+                  : X.gbpHint}
               </div>
             </div>
           </div>
@@ -686,12 +690,12 @@ export default function IntegrationsTab() {
                 href={buildGbpAuthUrl(companyId)}
                 style={{ padding: '8px 16px', background: gbpIntegration ? 'rgba(255,255,255,0.04)' : ORANGE, color: gbpIntegration ? MUTED : '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: gbpIntegration ? `1px solid ${BORDER}` : 'none', textDecoration: 'none', display: 'inline-block', cursor: 'pointer' }}
               >
-                {gbpIntegration ? 'Reconectar' : 'Conectar →'}
+                {gbpIntegration ? X.reconnect : X.connect}
               </a>
               {gbpIntegration && (
                 <button onClick={handleDisconnectGbp}
                   style={{ padding: '8px 14px', background: 'transparent', color: '#f87171', fontWeight: 600, fontSize: '12px', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.3)', cursor: 'pointer' }}>
-                  Desconectar
+                  {X.disconnect}
                 </button>
               )}
             </div>
@@ -700,14 +704,14 @@ export default function IntegrationsTab() {
         {!gbpIntegration && (
           <div style={{ padding: '0 24px 20px' }}>
             <div style={{ fontSize: '13px', color: MUTED, lineHeight: 1.6 }}>
-              Conecte seu Google Business Profile para responder avaliações diretamente pelo Sales Boost. As respostas aparecem publicamente no Google Maps.
+              {X.gbpDesc}
             </div>
           </div>
         )}
         {gbpIntegration && (
           <div style={{ padding: '12px 24px', background: 'rgba(74,222,128,0.04)', borderTop: `1px solid ${BORDER}` }}>
             <div style={{ fontSize: '12px', color: MUTED }}>
-              ✓ Botão "Responder no Google" ativo em <strong style={{ color: 'white' }}>Avaliações</strong>. Conectado em {new Date(gbpIntegration.connected_at!).toLocaleDateString('pt-BR')}.
+              {X.gbpActiveA}<strong style={{ color: 'white' }}>{X.gbpActiveB}</strong>{X.gbpActiveC}{new Date(gbpIntegration.connected_at!).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR')}.
             </div>
           </div>
         )}
@@ -721,7 +725,7 @@ export default function IntegrationsTab() {
             <div>
               <div style={{ fontSize: '14px', fontWeight: 700, color: 'white' }}>Meta Ads Manager</div>
               <div style={{ fontSize: '12px', color: metaAdsAccount ? '#4ade80' : MUTED }}>
-                {metaAdsAccount ? `✓ Conectado · ${metaAdsAccount.name}` : 'Traz gasto, ROAS e campanhas reais pro painel de Campanhas'}
+                {metaAdsAccount ? X.adsConnectedLine(metaAdsAccount.name) : X.adsHint}
               </div>
             </div>
           </div>
@@ -729,12 +733,12 @@ export default function IntegrationsTab() {
             <div style={{ display: 'flex', gap: '8px' }}>
               <a href={`${SUPABASE_URL}/functions/v1/meta-ads-oauth-start?company_id=${companyId}`}
                 style={{ padding: '8px 16px', background: metaAdsAccount ? 'rgba(255,255,255,0.04)' : ORANGE, color: metaAdsAccount ? MUTED : '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: metaAdsAccount ? `1px solid ${BORDER}` : 'none', textDecoration: 'none', display: 'inline-block', cursor: 'pointer' }}>
-                {metaAdsAccount ? 'Reconectar' : 'Conectar →'}
+                {metaAdsAccount ? X.reconnect : X.connect}
               </a>
               {metaAdsAccount && (
                 <button onClick={handleDisconnectMetaAds}
                   style={{ padding: '8px 14px', background: 'transparent', color: '#f87171', fontWeight: 600, fontSize: '12px', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.3)', cursor: 'pointer' }}>
-                  Desconectar
+                  {X.disconnect}
                 </button>
               )}
             </div>
@@ -742,13 +746,13 @@ export default function IntegrationsTab() {
         </div>
         {(metaAdsSuccess || igOauthError) && !metaAdsAccount && (
           <div style={{ padding: '12px 24px', background: metaAdsSuccess ? 'rgba(74,222,128,0.06)' : 'rgba(239,68,68,0.08)', fontSize: '12px', color: metaAdsSuccess ? '#4ade80' : '#f87171', borderTop: `1px solid ${BORDER}` }}>
-            {metaAdsSuccess ? '✓ Conta de anúncios conectada! Os números reais entram no painel de Campanhas.' : `Erro: ${igOauthError}`}
+            {metaAdsSuccess ? X.adsSuccess : `${X.errorPrefix}${igOauthError}`}
           </div>
         )}
         {!metaAdsAccount && (
           <div style={{ padding: '0 24px 18px' }}>
             <div style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>
-              Conecte sua conta de anúncios da Meta pra trocar os números demo do painel de <strong style={{ color: 'white' }}>Campanhas</strong> pelos reais (investido, ROAS, CTR, conversões). Requer conta com <strong style={{ color: 'white' }}>Marketing API</strong> aprovada.
+              {X.adsDescA}<strong style={{ color: 'white' }}>{X.adsDescB}</strong>{X.adsDescC}<strong style={{ color: 'white' }}>{X.adsDescD}</strong>{X.adsDescE}
             </div>
           </div>
         )}

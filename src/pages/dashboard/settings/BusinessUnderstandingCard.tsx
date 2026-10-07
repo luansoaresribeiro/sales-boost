@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { useLang } from '../../../contexts/LanguageContext'
 import { fetchOnboardingQuestions, sanitizePlaybookAnswers, bi, type PlaybookQuestion } from '../../../lib/verticalPlaybook'
 
 const ORANGE = '#FF6D29'
@@ -25,14 +26,33 @@ const EMPTY: Understanding = {
   main_challenges: '', current_channels: '', agent_business_interpretation: '',
 }
 
-const FIELDS: { key: keyof Understanding; label: string; area?: boolean }[] = [
-  { key: 'business_description', label: 'O que seu negócio faz', area: true },
-  { key: 'ideal_customer', label: 'Cliente ideal', area: true },
-  { key: 'business_stage', label: 'Fase do negócio' },
-  { key: 'primary_goals', label: 'Objetivo principal' },
-  { key: 'main_challenges', label: 'Maior desafio' },
-  { key: 'current_channels', label: 'Canais atuais' },
+const FIELDS: { key: keyof Understanding; area?: boolean }[] = [
+  { key: 'business_description', area: true },
+  { key: 'ideal_customer', area: true },
+  { key: 'business_stage' },
+  { key: 'primary_goals' },
+  { key: 'main_challenges' },
+  { key: 'current_channels' },
 ]
+
+const TX = {
+  pt: {
+    labels: { business_description: 'O que seu negócio faz', ideal_customer: 'Cliente ideal', business_stage: 'Fase do negócio', primary_goals: 'Objetivo principal', main_challenges: 'Maior desafio', current_channels: 'Canais atuais' } as Record<string, string>,
+    title: '🧠 Entendimento do negócio',
+    introA: 'O que captamos no seu cadastro. Isso é o ', introB: 'contexto que os agentes usam', introC: ' pra decidir e recomendar. Pode ajustar quando quiser.',
+    select: 'Selecione...', sectorQs: 'Perguntas específicas do seu setor',
+    ficha: (n: string) => `Ficha: ${n}. Tudo aqui é opcional.`, aiSummary: 'Como a IA resume seu negócio',
+    saved: '✓ Salvo', saving: 'Salvando...', save: 'Salvar entendimento',
+  },
+  en: {
+    labels: { business_description: 'What your business does', ideal_customer: 'Ideal customer', business_stage: 'Business stage', primary_goals: 'Main goal', main_challenges: 'Biggest challenge', current_channels: 'Current channels' } as Record<string, string>,
+    title: '🧠 Business understanding',
+    introA: 'What we captured at signup. This is the ', introB: 'context the agents use', introC: ' to decide and recommend. You can adjust it anytime.',
+    select: 'Select...', sectorQs: 'Questions specific to your industry',
+    ficha: (n: string) => `Profile: ${n}. Everything here is optional.`, aiSummary: 'How the AI summarizes your business',
+    saved: '✓ Saved', saving: 'Saving...', save: 'Save understanding',
+  },
+} as const
 
 // Campo "digite e vira pílula" — versão compacta do mesmo componente do
 // onboarding (src/pages/onboarding/OnboardingPage.tsx), pro estilo deste card.
@@ -68,6 +88,8 @@ export function SettingsTagInput({ values, onChange, max }: { values: string[]; 
 }
 
 export default function BusinessUnderstandingCard({ companyId }: { companyId: string }) {
+  const { lang } = useLang()
+  const X = TX[lang]
   const [u, setU] = useState<Understanding>(EMPTY)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -126,14 +148,14 @@ export default function BusinessUnderstandingCard({ companyId }: { companyId: st
 
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '22px 24px', marginBottom: '20px' }}>
-      <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>🧠 Entendimento do negócio</div>
+      <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>{X.title}</div>
       <p style={{ fontSize: '12px', color: MUTED, marginBottom: '18px', lineHeight: 1.6 }}>
-        O que captamos no seu cadastro. Isso é o <strong style={{ color: 'white' }}>contexto que os agentes usam</strong> pra decidir e recomendar. Pode ajustar quando quiser.
+        {X.introA}<strong style={{ color: 'white' }}>{X.introB}</strong>{X.introC}
       </p>
 
       {FIELDS.map(f => (
         <div key={f.key} style={{ marginBottom: '14px' }}>
-          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>{f.label}</label>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>{X.labels[f.key]}</label>
           {f.area ? (
             <textarea value={u[f.key]} onChange={e => set(f.key)(e.target.value)} rows={2}
               style={{ width: '100%', boxSizing: 'border-box', padding: '10px 13px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '10px', color: 'white', fontSize: '13.5px', outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }} />
@@ -146,16 +168,16 @@ export default function BusinessUnderstandingCard({ companyId }: { companyId: st
 
       {fichaQuestions.length > 0 && (
         <div style={{ margin: '4px 0 18px', paddingTop: '16px', borderTop: `1px solid ${BORDER}` }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>Perguntas específicas do seu setor</div>
-          {fichaName && <p style={{ fontSize: '11.5px', color: MUTED, marginBottom: '12px', lineHeight: 1.5 }}>Ficha: {fichaName}. Tudo aqui é opcional.</p>}
+          <div style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>{X.sectorQs}</div>
+          {fichaName && <p style={{ fontSize: '11.5px', color: MUTED, marginBottom: '12px', lineHeight: 1.5 }}>{X.ficha(fichaName)}</p>}
           {fichaQuestions.map(q => (
             <div key={q.key} style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>{bi(q.label)}</label>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>{bi(q.label, lang)}</label>
               {q.type === 'select' && (
                 <select value={String(playbookAnswers[q.key] ?? '')} onChange={e => setAnswer(q.key, e.target.value)}
                   style={{ width: '100%', boxSizing: 'border-box', padding: '10px 13px', background: '#1a1008', border: `1px solid ${BORDER}`, borderRadius: '10px', color: 'white', fontSize: '13.5px', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }}>
-                  <option value="">Selecione...</option>
-                  {(q.options ?? []).map(o => <option key={o.pt} value={o.pt}>{bi(o)}</option>)}
+                  <option value="">{X.select}</option>
+                  {(q.options ?? []).map(o => <option key={o.pt} value={o.pt}>{bi(o, lang)}</option>)}
                 </select>
               )}
               {q.type === 'text' && (
@@ -172,14 +194,14 @@ export default function BusinessUnderstandingCard({ companyId }: { companyId: st
 
       {u.agent_business_interpretation && (
         <div style={{ margin: '4px 0 16px', padding: '12px 14px', background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.15)', borderRadius: '10px', fontSize: '12px', color: 'white', lineHeight: 1.6 }}>
-          <div style={{ fontSize: '9.5px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Como a IA resume seu negócio</div>
+          <div style={{ fontSize: '9.5px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{X.aiSummary}</div>
           {u.agent_business_interpretation}
         </div>
       )}
 
       <button onClick={save} disabled={saving}
         style={{ padding: '10px 20px', background: saved ? '#4ade80' : ORANGE, color: '#000', fontWeight: 700, fontSize: '13px', border: 'none', borderRadius: '10px', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: D }}>
-        {saved ? '✓ Salvo' : saving ? 'Salvando...' : 'Salvar entendimento'}
+        {saved ? X.saved : saving ? X.saving : X.save}
       </button>
     </div>
   )
