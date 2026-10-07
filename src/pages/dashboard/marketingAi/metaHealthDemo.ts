@@ -3,6 +3,7 @@
 // integração real vai preencher: um score 0–100 por categoria, motivos, ações
 // priorizadas, evolução histórica, benchmark do segmento e resumo executivo.
 // Pensa como um consultor de marketing da Meta: traduz métrica em prioridade.
+import type { Lang } from '../../../contexts/LanguageContext'
 
 export type HealthClass = 'excellent' | 'very_good' | 'good' | 'attention' | 'critical'
 
@@ -85,7 +86,7 @@ export interface MetaHealthDemo {
   executiveSummary: string
 }
 
-export function buildMetaHealthDemo(company: { business_name?: string; business_type?: string | null; city?: string | null }): MetaHealthDemo {
+export function buildMetaHealthDemo(company: { business_name?: string; business_type?: string | null; city?: string | null }, lang: Lang = 'pt'): MetaHealthDemo {
   const biz = company.business_name ?? 'seu negócio'
   const segment = company.business_type ?? 'negócios parecidos com o seu'
 
@@ -235,5 +236,81 @@ export function buildMetaHealthDemo(company: { business_name?: string; business_
 
   const executiveSummary = `A presença de ${biz} na Meta está saudável no geral (${overall}/100, acima de ${benchmark.percentile}% dos ${segment}), com crescimento consistente de alcance e leads. As maiores oportunidades dos próximos 30 dias estão no rastreamento e no funil: completar os eventos do Pixel e ativar a API de Conversões daria à IA muito mais visibilidade sobre quem converte, enquanto criar remarketing e campanhas de topo equilibraria um funil hoje concentrado no fundo. Priorizando o Pixel primeiro, o score projetado passa de ${overall} para ${Math.min(100, overall + 14)} em poucas semanas.`
 
-  return { overall, trendDelta, categories, recommendations, actions, history, benchmark, executiveSummary }
+  const demo: MetaHealthDemo = { overall, trendDelta, categories, recommendations, actions, history, benchmark, executiveSummary }
+  return lang === 'en' ? translateMetaHealthDemo(demo, company) : demo
+}
+
+// Overlay EN: mantém scores/estrutura e troca só os textos (por chave/id/posição).
+function translateMetaHealthDemo(d: MetaHealthDemo, company: { business_name?: string; business_type?: string | null }): MetaHealthDemo {
+  const biz = company.business_name ?? 'your business'
+  const segment = company.business_type ?? 'businesses like yours'
+  const CAT: Record<string, { label: string; summary: string; reasons: string[]; checks: [string, string?][] }> = {
+    account: {
+      label: 'Account setup', summary: 'Well-built base — missing the Conversions API and business verification.',
+      reasons: ['Business Manager, Page and Instagram connected', 'Pixel installed and active', 'Missing Conversions API (server-side tracking)', 'Business verification still pending'],
+      checks: [['Business Manager set up'], ['Facebook Page connected'], ['Instagram connected'], ['Ad account set up'], ['Pixel installed'], ['Domain verified'], ['Business verification', 'Increases limits and trust'], ['Conversions API (CAPI)', 'Server-side tracking'], ['Two-factor authentication']],
+    },
+    content: {
+      label: 'Content health', summary: 'Good visual consistency; lacks format variety and more educational content.',
+      reasons: ['Consistent posting (4×/week)', 'Strong visual identity', 'Few Reels compared to photos', 'Little educational / authority content'],
+      checks: [['Posting consistency'], ['Posting frequency'], ['Visual identity'], ['Caption quality'], ['Reels usage', 'Highest-reach format today'], ['Stories usage'], ['Educational content'], ['CTA quality']],
+    },
+    audience: {
+      label: 'Audience health', summary: 'Healthy growth and engagement above the segment average.',
+      reasons: ['Followers growing ~4%/month', 'Engagement above the local average', 'Alignment with the ideal customer (ICP) still to refine', 'Community not very active in comments'],
+      checks: [['Follower growth'], ['Audience engagement'], ['Returning followers'], ['ICP alignment'], ['Audience diversity'], ['Community activity']],
+    },
+    campaign: {
+      label: 'Campaign health', summary: 'Structure is fine, but no remarketing and budget concentrated on a cold audience.',
+      reasons: ['CTR below target (1.1%)', 'No active remarketing campaign', 'Budget concentrated on a single audience', 'Low creative diversity'],
+      checks: [['Campaign structure'], ['Correct objectives'], ['Audience targeting'], ['Creative quality'], ['CTR', '1.1% — target 1.5%'], ['ROAS'], ['Budget allocation'], ['Remarketing usage']],
+    },
+    funnel: {
+      label: 'Funnel health', summary: 'The bottom of the funnel is well served, but the top and remarketing are missing.',
+      reasons: ['No awareness campaigns (top)', 'Remarketing missing', 'Concentration at the bottom of the funnel (conversion)', 'Retention only in draft'],
+      checks: [['Top — Discovery', 'No awareness campaign'], ['Middle — Consideration'], ['Bottom — Conversion'], ['Retention', 'Draft only'], ['Remarketing']],
+    },
+    pixel: {
+      label: 'Pixel health', summary: 'Pixel active, but conversion events incomplete — the AI "sees" little.',
+      reasons: ['Pixel installed and firing PageView', 'Lead, Purchase and Checkout events missing', 'No Conversions API (loses iOS data)', 'Partial conversion attribution'],
+      checks: [['Pixel installed'], ['Pixel active'], ['PageView'], ['ViewContent'], ['Lead'], ['InitiateCheckout'], ['Purchase'], ['Custom events'], ['Conversion attribution']],
+    },
+    growth: {
+      label: 'Business growth', summary: 'Positive trends in reach and leads; sales rising consistently.',
+      reasons: ['Reach +18% in the quarter', 'Leads +12% in the month', 'Sales steadily rising', 'Engagement stable'],
+      checks: [['Reach trend'], ['Lead trend'], ['Sales trend'], ['Engagement trend'], ['Conversion trend']],
+    },
+  }
+  const REC: Record<string, { title: string; category: string; impact: string; action: string }> = {
+    rec1: { title: 'Complete the Pixel events (Lead, Purchase, Checkout)', category: 'Pixel', impact: 'The AI starts seeing who converts — much better optimization and audiences.', action: 'Set up the conversion events in Events Manager and test with the Meta Pixel Helper.' },
+    rec2: { title: 'Enable the Conversions API (CAPI)', category: 'Setup', impact: 'Recovers data lost on iOS and improves sales attribution.', action: 'Integrate CAPI (server-side) alongside the Pixel for redundant tracking.' },
+    rec3: { title: 'Create a remarketing campaign', category: 'Campaigns', impact: 'Warm audiences convert cheaper — usually the highest ROAS in the funnel.', action: 'Create an audience of people who visited the site/engaged in the last 30 days and run a value offer.' },
+    rec4: { title: 'Add top-of-funnel (awareness) campaigns', category: 'Funnel', impact: 'Fills the funnel with new audience to nurture and remarket later.', action: 'Run educational content (value lead magnet) targeting a cold audience in your area.' },
+    rec5: { title: 'Increase creative diversity', category: 'Campaigns', impact: 'Reduces ad fatigue and improves CTR.', action: 'Generate 3–4 variations (angles and formats) per campaign and A/B test them.' },
+    rec6: { title: 'More educational content and Reels', category: 'Content', impact: 'Reels have the highest organic reach today; educational content builds authority.', action: 'Add 2 educational Reels per week to the Content Agent calendar.' },
+    rec7: { title: 'Complete business verification', category: 'Setup', impact: 'Unlocks higher limits and builds more trust in the account.', action: 'Submit the business documents in Business Manager.' },
+  }
+  const ACT: Record<string, string> = {
+    a1: 'Set up Pixel events (Lead, Purchase)', a2: 'Enable Conversions API (CAPI)', a3: 'Create a remarketing campaign', a4: 'Create an awareness (top) campaign',
+    a5: 'Add 3+ creative variations', a6: 'Increase Reels and educational content', a7: 'Complete business verification', a8: 'Connect Instagram and Page',
+  }
+  const wk = ['6 wk', '5 wk', '4 wk', '3 wk', '2 wk', 'Now']
+  const mo = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul']
+  const qt = ['Q3/25', 'Q4/25', 'Q1/26', 'Q2/26']
+  return {
+    ...d,
+    categories: d.categories.map(c => {
+      const t = CAT[c.key]
+      if (!t) return c
+      return { ...c, label: t.label, summary: t.summary, reasons: t.reasons, checks: c.checks.map((k, i) => ({ ...k, label: t.checks[i]?.[0] ?? k.label, note: k.note ? (t.checks[i]?.[1] ?? k.note) : k.note })) }
+    }),
+    recommendations: d.recommendations.map(r => ({ ...r, ...(REC[r.id] ?? {}) })),
+    actions: d.actions.map(a => ({ ...a, label: ACT[a.id] ?? a.label })),
+    history: {
+      weekly: d.history.weekly.map((h, i) => ({ ...h, period: wk[i] ?? h.period })),
+      monthly: d.history.monthly.map((h, i) => ({ ...h, period: mo[i] ?? h.period })),
+      quarterly: d.history.quarterly.map((h, i) => ({ ...h, period: qt[i] ?? h.period })),
+    },
+    executiveSummary: `${biz}'s presence on Meta is healthy overall (${d.overall}/100, above ${d.benchmark.percentile}% of ${segment}), with consistent growth in reach and leads. The biggest opportunities for the next 30 days are in tracking and the funnel: completing the Pixel events and enabling the Conversions API would give the AI far more visibility into who converts, while creating remarketing and top-of-funnel campaigns would balance a funnel that is currently concentrated at the bottom. Prioritizing the Pixel first, the projected score goes from ${d.overall} to ${Math.min(100, d.overall + 14)} in a few weeks.`,
+  }
 }

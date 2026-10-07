@@ -1,6 +1,10 @@
 import type { PlaybookQuestion } from './verticalPlaybook'
 import { hasAnswer, itemHasEnoughPhotos, type ItemMetaLike } from './setupRules'
 
+type Lang = 'pt' | 'en'
+type Tr = (pt: string, en: string) => string
+const trOf = (lang: Lang): Tr => (pt, en) => (lang === 'en' ? en : pt)
+
 // Growth Score (etapa 2b, fatia 1). Função PURA: sem rede, sem relógio global.
 // Centrado no Instagram coletado por scraper; site e Google são adendo.
 // Regra 5: critério sem dado = "não avaliado" e SAI da conta (não penaliza).
@@ -22,6 +26,21 @@ export const CRITERIA_INFO: Record<CriterionKey, CriterionInfo> = {
   addon: { label: 'Site e Google (adendo)', rule: 'Média das notas de velocidade do site e da nota no Google, quando existirem. Sem site e sem Google, não entra na conta.' },
   setup: { label: 'Dados preenchidos', rule: 'Só depois do cadastro: perguntas do seu negócio respondidas e itens com fotos suficientes.' },
 }
+
+export const CRITERIA_INFO_EN: Record<CriterionKey, CriterionInfo> = {
+  frequency: { label: 'Posting frequency', rule: '0 posts in 30 days = 0 points; 8 or more = full score; in between, proportional.' },
+  engagement: { label: 'Engagement', rule: 'Average likes + comments on recent posts ÷ followers. 0% = 0 points; 3% or more = full score.' },
+  format: { label: 'Format (videos and Reels)', rule: 'Share of videos/Reels in recent posts. 0% = 0 points; 50% or more = full score.' },
+  profile: { label: 'Profile ready to sell', rule: 'Equal parts: filled-in bio, link in bio, business/professional account and highlights (only the parts we can see count).' },
+  addon: { label: 'Website and Google (add-on)', rule: 'Average of the website speed scores and the Google rating, when they exist. With no website and no Google, it does not count.' },
+  setup: { label: 'Data filled in', rule: 'Only after sign-up: your business questions answered and items with enough photos.' },
+}
+
+export const VERDICT_BANDS_EN = [
+  { verdict: 'ready', label: 'Growth Ready', range: '70 to 100' },
+  { verdict: 'potential', label: 'Growth Potential', range: '40 to 69' },
+  { verdict: 'blocked', label: 'Growth Blocked', range: '0 to 39' },
+] as const
 
 export const VERDICT_BANDS = [
   { verdict: 'ready', label: 'Growth Ready', range: '70 a 100' },
@@ -92,11 +111,11 @@ export interface GrowthScoreResult {
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n))
 const round1 = (n: number) => Math.round(n * 10) / 10
-const NE = (key: CriterionKey, reason: string): CriterionResult =>
-  ({ key, label: CRITERIA_INFO[key].label, weight: CRITERIA_WEIGHTS[key], evaluated: false, points: 0, value: 'Não avaliado', reason })
-const OK = (key: CriterionKey, fraction: number, value: string, reason: string): CriterionResult => {
+const NE = (key: CriterionKey, reason: string, lang: Lang = 'pt'): CriterionResult =>
+  ({ key, label: (lang === 'en' ? CRITERIA_INFO_EN : CRITERIA_INFO)[key].label, weight: CRITERIA_WEIGHTS[key], evaluated: false, points: 0, value: lang === 'en' ? 'Not evaluated' : 'Não avaliado', reason })
+const OK = (key: CriterionKey, fraction: number, value: string, reason: string, lang: Lang = 'pt'): CriterionResult => {
   const w = CRITERIA_WEIGHTS[key]
-  return { key, label: CRITERIA_INFO[key].label, weight: w, evaluated: true, points: round1(clamp01(fraction) * w), value, reason }
+  return { key, label: (lang === 'en' ? CRITERIA_INFO_EN : CRITERIA_INFO)[key].label, weight: w, evaluated: true, points: round1(clamp01(fraction) * w), value, reason }
 }
 
 function validIg(d: InstagramData | null | undefined): d is InstagramData {
@@ -104,55 +123,60 @@ function validIg(d: InstagramData | null | undefined): d is InstagramData {
 }
 
 function plural(n: number, s: string, p: string) { return `${n} ${n === 1 ? s : p}` }
+const numFmt = (n: string, lang: Lang) => (lang === 'en' ? n : n.replace('.', ','))
 
-function frequency(d: InstagramData | null | undefined): CriterionResult {
-  if (!validIg(d)) return NE('frequency', 'Não conseguimos ler os posts do Instagram.')
+function frequency(d: InstagramData | null | undefined, lang: Lang = 'pt'): CriterionResult {
+  const L = trOf(lang)
+  if (!validIg(d)) return NE('frequency', L('Não conseguimos ler os posts do Instagram.', 'We could not read the Instagram posts.'), lang)
   const ref = d.collected_at ? new Date(d.collected_at).getTime() : NaN
-  if (Number.isNaN(ref)) return NE('frequency', 'Sem data da coleta.')
+  if (Number.isNaN(ref)) return NE('frequency', L('Sem data da coleta.', 'No collection date.'), lang)
   const posts = d.posts ?? []
   if (posts.length === 0) {
     // Perfil privado também devolve lista vazia: só vale 0 se o perfil declara 0 posts.
-    if (d.posts_total === 0) return OK('frequency', 0, '0 posts em 30 dias', 'Perfil sem posts.')
-    return NE('frequency', 'Não conseguimos ler os posts (perfil privado ou sem acesso).')
+    if (d.posts_total === 0) return OK('frequency', 0, L('0 posts em 30 dias', '0 posts in 30 days'), L('Perfil sem posts.', 'Profile with no posts.'), lang)
+    return NE('frequency', L('Não conseguimos ler os posts (perfil privado ou sem acesso).', 'We could not read the posts (private profile or no access).'), lang)
   }
   const from = ref - WINDOW_DAYS * 86400000
   const dated = posts.filter(p => p.ts && !Number.isNaN(new Date(p.ts).getTime()))
-  if (dated.length === 0) return NE('frequency', 'Os posts vieram sem data.')
+  if (dated.length === 0) return NE('frequency', L('Os posts vieram sem data.', 'The posts came without dates.'), lang)
   const n = dated.filter(p => { const t = new Date(p.ts as string).getTime(); return t >= from && t <= ref + 86400000 }).length
-  return OK('frequency', n / FREQ_FULL_POSTS, plural(n, 'post', 'posts') + ' em 30 dias', 'Posts dos últimos 30 dias.')
+  return OK('frequency', n / FREQ_FULL_POSTS, lang === 'en' ? plural(n, 'post', 'posts') + ' in 30 days' : plural(n, 'post', 'posts') + ' em 30 dias', L('Posts dos últimos 30 dias.', 'Posts from the last 30 days.'), lang)
 }
 
-function engagement(d: InstagramData | null | undefined): CriterionResult {
-  if (!validIg(d)) return NE('engagement', 'Não conseguimos ler os posts do Instagram.')
-  if (!d.followers || d.followers <= 0) return NE('engagement', 'Sem seguidores, não dá pra calcular a taxa.')
+function engagement(d: InstagramData | null | undefined, lang: Lang = 'pt'): CriterionResult {
+  const L = trOf(lang)
+  if (!validIg(d)) return NE('engagement', L('Não conseguimos ler os posts do Instagram.', 'We could not read the Instagram posts.'), lang)
+  if (!d.followers || d.followers <= 0) return NE('engagement', L('Sem seguidores, não dá pra calcular a taxa.', 'With no followers, the rate cannot be calculated.'), lang)
   // curtidas ocultas vêm como -1 (ou ausentes): esse post não entra
   const usable = (d.posts ?? []).filter(p => typeof p.likes === 'number' && p.likes >= 0)
-  if (usable.length === 0) return NE('engagement', 'Sem posts com curtidas visíveis.')
+  if (usable.length === 0) return NE('engagement', L('Sem posts com curtidas visíveis.', 'No posts with visible likes.'), lang)
   const avg = usable.reduce((s, p) => s + (p.likes as number) + Math.max(0, p.comments ?? 0), 0) / usable.length
   const pct = (avg / d.followers) * 100
-  return OK('engagement', pct / ENGAGEMENT_FULL_PCT, `${pct.toFixed(1).replace('.', ',')}% (média de ${Math.round(avg)} interações por post)`, `Em ${plural(usable.length, 'post', 'posts')} recentes.`)
+  return OK('engagement', pct / ENGAGEMENT_FULL_PCT, L(`${pct.toFixed(1).replace('.', ',')}% (média de ${Math.round(avg)} interações por post)`, `${pct.toFixed(1)}% (average of ${Math.round(avg)} interactions per post)`), L(`Em ${plural(usable.length, 'post', 'posts')} recentes.`, `Across ${plural(usable.length, 'recent post', 'recent posts')}.`), lang)
 }
 
-function format(d: InstagramData | null | undefined): CriterionResult {
-  if (!validIg(d)) return NE('format', 'Não conseguimos ler os posts do Instagram.')
+function format(d: InstagramData | null | undefined, lang: Lang = 'pt'): CriterionResult {
+  const L = trOf(lang)
+  if (!validIg(d)) return NE('format', L('Não conseguimos ler os posts do Instagram.', 'We could not read the Instagram posts.'), lang)
   const known = (d.posts ?? []).filter(p => typeof p.is_video === 'boolean')
-  if (known.length === 0) return NE('format', 'Não conseguimos identificar o tipo dos posts.')
+  if (known.length === 0) return NE('format', L('Não conseguimos identificar o tipo dos posts.', 'We could not identify the type of the posts.'), lang)
   const vids = known.filter(p => p.is_video).length
   const frac = vids / known.length
-  return OK('format', frac / FORMAT_FULL_FRACTION, `${vids} de ${known.length} posts são vídeo/Reels (${Math.round(frac * 100)}%)`, 'Posts recentes.')
+  return OK('format', frac / FORMAT_FULL_FRACTION, L(`${vids} de ${known.length} posts são vídeo/Reels (${Math.round(frac * 100)}%)`, `${vids} of ${known.length} posts are video/Reels (${Math.round(frac * 100)}%)`), L('Posts recentes.', 'Recent posts.'), lang)
 }
 
-function profile(d: InstagramData | null | undefined): CriterionResult {
-  if (!validIg(d)) return NE('profile', 'Não conseguimos ler o perfil do Instagram.')
+function profile(d: InstagramData | null | undefined, lang: Lang = 'pt'): CriterionResult {
+  const L = trOf(lang)
+  if (!validIg(d)) return NE('profile', L('Não conseguimos ler o perfil do Instagram.', 'We could not read the Instagram profile.'), lang)
   const parts: { name: string; ok: boolean }[] = [
-    { name: 'bio', ok: !!d.biography && d.biography.trim() !== '' },
-    { name: 'link na bio', ok: !!d.external_url && d.external_url.trim() !== '' },
+    { name: L('bio', 'bio'), ok: !!d.biography && d.biography.trim() !== '' },
+    { name: L('link na bio', 'link in bio'), ok: !!d.external_url && d.external_url.trim() !== '' },
   ]
-  if (typeof d.is_business === 'boolean') parts.push({ name: 'conta comercial', ok: d.is_business })
-  if (typeof d.highlights === 'number') parts.push({ name: 'destaques', ok: d.highlights > 0 })
+  if (typeof d.is_business === 'boolean') parts.push({ name: L('conta comercial', 'business account'), ok: d.is_business })
+  if (typeof d.highlights === 'number') parts.push({ name: L('destaques', 'highlights'), ok: d.highlights > 0 })
   const okN = parts.filter(p => p.ok).length
   const missing = parts.filter(p => !p.ok).map(p => p.name)
-  return OK('profile', okN / parts.length, `${okN} de ${parts.length} itens (${missing.length ? 'falta: ' + missing.join(', ') : 'tudo certo'})`, 'Bio, link, conta comercial e destaques, quando visíveis.')
+  return OK('profile', okN / parts.length, L(`${okN} de ${parts.length} itens (${missing.length ? 'falta: ' + missing.join(', ') : 'tudo certo'})`, `${okN} of ${parts.length} items (${missing.length ? 'missing: ' + missing.join(', ') : 'all good'})`), L('Bio, link, conta comercial e destaques, quando visíveis.', 'Bio, link, business account and highlights, when visible.'), lang)
 }
 
 function psAvg(p: PagespeedLike | null | undefined): number | null {
@@ -163,37 +187,39 @@ function psAvg(p: PagespeedLike | null | undefined): number | null {
   return v.reduce((a, b) => a + b, 0) / 4
 }
 
-function addon(i: GrowthScoreInput): CriterionResult {
+function addon(i: GrowthScoreInput, lang: Lang = 'pt'): CriterionResult {
+  const L = trOf(lang)
   const fr: number[] = []
   const bits: string[] = []
   const ps = [psAvg(i.pagespeed_mobile), psAvg(i.pagespeed_desktop)].filter((x): x is number => x !== null)
   if (ps.length) {
     const a = ps.reduce((x, y) => x + y, 0) / ps.length
     fr.push(a / 100)
-    bits.push(`site ${Math.round(a)}/100`)
+    bits.push(L(`site ${Math.round(a)}/100`, `website ${Math.round(a)}/100`))
   }
   if (typeof i.google_rating === 'number' && i.google_rating > 0) {
     fr.push(clamp01(i.google_rating / 5))
-    bits.push(`Google ${i.google_rating.toFixed(1).replace('.', ',')}/5`)
+    bits.push(`Google ${numFmt(i.google_rating.toFixed(1), lang)}/5`)
   }
-  if (!fr.length) return NE('addon', 'Sem site analisado nem nota no Google. Isso não tira pontos.')
-  return OK('addon', fr.reduce((a, b) => a + b, 0) / fr.length, bits.join(' · '), 'Média das notas disponíveis.')
+  if (!fr.length) return NE('addon', L('Sem site analisado nem nota no Google. Isso não tira pontos.', 'No website analyzed and no Google rating. This does not cost points.'), lang)
+  return OK('addon', fr.reduce((a, b) => a + b, 0) / fr.length, bits.join(' · '), L('Média das notas disponíveis.', 'Average of the available scores.'), lang)
 }
 
-function setup(s: SetupInput | null | undefined): CriterionResult {
-  if (!s) return NE('setup', 'Entra na conta só depois do cadastro.')
+function setup(s: SetupInput | null | undefined, lang: Lang = 'pt'): CriterionResult {
+  const L = trOf(lang)
+  if (!s) return NE('setup', L('Entra na conta só depois do cadastro.', 'Counts only after sign-up.'), lang)
   const q = s.questions.length
   const answered = q - s.questions.filter(x => !hasAnswer(s.answers?.[x.key])).length
   const okItems = s.items.filter(m => itemHasEnoughPhotos(m, s.minPhotos)).length
   const qFrac = q > 0 ? answered / q : 1
   const iFrac = s.minItems > 0 ? Math.min(1, okItems / s.minItems) : 1
-  return OK('setup', (qFrac + iFrac) / 2, `${answered} de ${q} perguntas respondidas · ${okItems} de ${s.minItems} itens com fotos`, 'Perguntas da ficha e itens com fotos reais.')
+  return OK('setup', (qFrac + iFrac) / 2, L(`${answered} de ${q} perguntas respondidas · ${okItems} de ${s.minItems} itens com fotos`, `${answered} of ${q} questions answered · ${okItems} of ${s.minItems} items with photos`), L('Perguntas da ficha e itens com fotos reais.', 'Playbook questions and items with real photos.'), lang)
 }
 
-export function computeGrowthScore(input: GrowthScoreInput): GrowthScoreResult {
+export function computeGrowthScore(input: GrowthScoreInput, lang: Lang = 'pt'): GrowthScoreResult {
   const ig = input.instagram_data
   const criteria: CriterionResult[] = [
-    frequency(ig), engagement(ig), format(ig), profile(ig), addon(input), setup(input.setup),
+    frequency(ig, lang), engagement(ig, lang), format(ig, lang), profile(ig, lang), addon(input, lang), setup(input.setup, lang),
   ]
   const ev = criteria.filter(c => c.evaluated)
   const weights = ev.reduce((s, c) => s + c.weight, 0)
@@ -204,6 +230,7 @@ export function computeGrowthScore(input: GrowthScoreInput): GrowthScoreResult {
   if (raw === null || !igEvaluated || coverage < MIN_COVERAGE) {
     return { state: 'partial', score: null, verdict: null, verdictLabel: null, coverage, rawScore: raw, criteria }
   }
-  const band = raw >= 70 ? VERDICT_BANDS[0] : raw >= 40 ? VERDICT_BANDS[1] : VERDICT_BANDS[2]
+  const bands = lang === 'en' ? VERDICT_BANDS_EN : VERDICT_BANDS
+  const band = raw >= 70 ? bands[0] : raw >= 40 ? bands[1] : bands[2]
   return { state: 'scored', score: raw, verdict: band.verdict, verdictLabel: band.label, coverage, rawScore: raw, criteria }
 }
