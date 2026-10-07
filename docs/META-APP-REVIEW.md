@@ -48,7 +48,13 @@ isso. Pedir permissão que o app não usa é motivo comum de reprovação.
   teste. Ela precisa estar como testadora do app (Funções do app →
   Testadores do Instagram).
 
-## Permissões a pedir (as 5 que o app usa)
+## Permissões a pedir (as 5 do Instagram + 2 de anúncios)
+
+Lista final do formulário: as 7 abaixo + `public_profile`. Excluir todas
+as outras (Human Agent, Marketing API Access Tier, WhatsApp, `pages_*`,
+`instagram_basic`, `instagram_manage_comments`, `ads_management`,
+`ads_mcp_management`, `leads_retrieval`, `catalog_management`,
+`manage_fundraisers`).
 
 Para cada uma, a Meta pede: (1) texto de uso, (2) vídeo mostrando o uso,
 (3) aceitar as políticas. Os textos abaixo são para colar no campo
@@ -119,6 +125,33 @@ para a aba Performance e para o aprendizado (o que funcionou). Código:
 > dashboard and to learn which content works best, so future content
 > suggestions improve. Insights are shown only to the owner of the
 > connected account.
+
+### 6. `ads_read` e 7. `business_management` (anúncios, só leitura)
+
+Pedidas no mesmo envio por decisão do dono (2026-10-07). Hoje o Sales
+Boost só **lê** resultados de anúncios do cliente (gasto, alcance,
+cliques) na aba Meta Ads. Não cria nem edita anúncios. Código:
+`meta-ads-oauth-start` (scopes `ads_read`, `business_management`),
+`meta-ads-insights`, `MetaAdsTab.tsx`. Pedir `ads_management`,
+`pages_manage_ads` ou "Marketing API Access Tier" só quando existir a
+função de criar anúncios (senão a Meta reprova). O vídeo precisa mostrar:
+Configurações → Conexões → "Conectar Meta Ads" → login do Facebook →
+escolher a conta de anúncios → aba Meta Ads com os números.
+
+`ads_read`:
+
+> Business owners connect their Meta ad account to Sales Boost so they
+> can see their ad results (spend, reach, impressions, clicks, cost per
+> result) next to their organic Instagram results in one dashboard. We
+> only read insights of the ad accounts the owner chose to connect. We
+> do not create, edit or pause ads.
+
+`business_management`:
+
+> Many business owners manage their ad account inside a Meta Business
+> portfolio. We use business_management only to list the ad accounts the
+> owner has access to, so the owner can pick which one to connect to
+> Sales Boost. We do not change any business settings, users or assets.
 
 ## Vídeos (screencast)
 
