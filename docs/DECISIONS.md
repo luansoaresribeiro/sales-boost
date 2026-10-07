@@ -156,3 +156,46 @@
   R$1.449" é honesto. Pendência: a Stripe ainda precisa dos 3 itens (preço
   mensal, preço anual, cupom) — criar exige aprovação do dono. Próxima
   etapa do [ROADMAP.md](ROADMAP.md) (Growth Qualification).
+
+## 2026-10-07 — Growth Score centrado no Instagram, acesso grátis e preço anual
+
+- **(a) Growth Score centrado no Instagram (fatia 1 da etapa 2b,
+  implementada em código, ainda não publicada).** A nota vem do Instagram
+  coletado por scraper (Apify, actor `apify/instagram-profile-scraper`).
+  Site (PageSpeed) e Google são **adendo**: se existirem somam, se não
+  existirem ficam "não avaliado" e **não penalizam** (muitos corretores não
+  têm site nem Google). Regra 5: critério sem dado = "não avaliado" e sai
+  da conta. Pesos: frequência de posts 25 (0 posts=0, 8 ou mais=cheio),
+  engajamento 25 (0%=0, 3% ou mais=cheio), formato vídeo/Reels 15 (0=0, 50%
+  ou mais=cheio), perfil pronto pra vender 15, adendo site+Google 10, dados
+  preenchidos 10 (só depois do cadastro). Nota = pontos avaliados ÷ pesos
+  avaliados × 100. Faixas: 70+ Growth Ready, 40–69 Growth Potential, abaixo
+  de 40 Growth Blocked; cobertura abaixo de 40% ou Instagram não avaliado =
+  "Análise parcial", sem veredito. **Nunca projetar ganho** (nada de "você
+  pode vender X% mais"). Código: `src/lib/growthScore.ts` (função pura),
+  coleta em `supabase/functions/run-diagnosis`, coluna nova
+  `diagnostics.instagram_data` (migration escrita, não aplicada).
+- **(b) Diagnóstico exige Instagram; site é opcional.** O formulário do
+  onboarding e o `run-diagnosis` pedem o Instagram (@ ou link). PageSpeed só
+  roda se houver site. Proteção de custo: 1 coleta por perfil a cada 24h
+  (reusa a anterior) e no máximo 3 diagnósticos por e-mail por dia.
+- **(c) Plano anual: R$1.449/mês com fidelidade de 12 meses.** Cancelar
+  antes do fim = multa de 30% das mensalidades restantes. A cláusula precisa
+  aparecer clara no checkout. **Validar com advogado (CDC) antes de
+  cobrar.**
+- **(d) Cupom: o prazo de 7 dias conta de quando o cliente VÊ o popup do
+  cupom**, não da entrega da estratégia — assim o desconto não vence antes
+  de o cliente vê-lo se o vídeo atrasar. Ajusta a entrada de 2026-10-06 (que
+  dizia "a partir da entrega da estratégia"); a anterior fica como
+  histórico. O prazo continua REAL: vencido, o desconto sai de verdade.
+- **(e) Promessa pública por enquanto: "diagnóstico grátis + 1
+  estratégia".** "+1 vídeo" só entra no texto quando a geração de vídeo
+  existir (fatia 5).
+
+**Divergências registradas nesta data:** `TrialStartModal` ainda mostra
+"R$14,49" (preço errado no ar; sai na fatia 2). `claim-diagnostic` no
+repositório grava trial de **7 dias** (`SignupPage.tsx`, linhas ~104-108)
+enquanto parte dos docs diz 3 — conferir o que está deployado. A tela do
+diagnóstico já diz "Sem prazo em dias" (decisão nova), mas o cadastro ainda
+dá o teste de 7 dias até a fatia 2. O cadastro não pede cartão
+(confirmado: `SignupPage` não tem pagamento).

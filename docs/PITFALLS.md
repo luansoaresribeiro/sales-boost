@@ -36,6 +36,17 @@ sozinho não basta — a chamada interna precisa de
 **Nunca colocar a service role key dentro do SQL do pg_cron** — ela fica
 só nas edge functions, lida via `Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')`.
 
+## Coleta do Instagram no diagnóstico (Apify, 2026-10-07)
+
+- `run-diagnosis` espera o actor `apify/instagram-profile-scraper` por no
+  máximo ~60s (`waitForFinish`, teto da Apify) e roda em paralelo com o
+  PageSpeed, pra caber nos 150s do Supabase Free. Se o actor ainda estiver
+  rodando depois da espera, a run é abortada e grava
+  `instagram_data = {error:'unavailable'}` — o diagnóstico segue com nota
+  parcial. Nunca bloquear o diagnóstico por causa do scraper.
+- Curtidas ocultas vêm como `-1` no scraper: o Growth Score ignora esses
+  posts. Perfil privado devolve lista de posts vazia — não é "0 posts".
+
 ## Limite de 150s (plano Free do Supabase)
 
 Toda execução HTTP de edge function (e trabalho em segundo plano via

@@ -50,7 +50,7 @@ const CHALLENGES = [
 const CHANNELS = ['Instagram', 'Facebook', 'WhatsApp', 'Google', 'Site', 'Indicações', 'Anúncios pagos', 'E-mail', 'Equipe de vendas', 'Ainda não sei']
 
 const LOADING_MSGS = [
-  'Entendendo seu negócio...', 'Montando seu perfil...', 'Verificando seu site...',
+  'Entendendo seu negócio...', 'Montando seu perfil...', 'Analisando seu Instagram...',
   'Analisando seu segmento...', 'Preparando seu diagnóstico...',
 ]
 
@@ -233,6 +233,16 @@ function buildContext(d: OnboardingData) {
   }
 }
 
+// "@usuario", "usuario" ou link -> https://instagram.com/usuario (null se inválido)
+function normalizeInstagram(raw: string): string | null {
+  let v = raw.trim()
+  if (!v) return null
+  const m = v.match(/instagram\.com\/([^/?#\s]+)/i)
+  v = (m ? m[1] : v).replace(/^@/, '').replace(/\/$/, '')
+  if (!/^[A-Za-z0-9._]{1,30}$/.test(v) || ['p', 'reel', 'reels', 'explore', 'accounts', 'stories'].includes(v.toLowerCase())) return null
+  return `https://instagram.com/${v.toLowerCase()}`
+}
+
 const STEPS = ['Seu negócio', 'Seu cliente', 'Objetivo', 'Canais', 'Finalizar']
 
 export default function OnboardingPage() {
@@ -281,11 +291,14 @@ export default function OnboardingPage() {
     try { return new URL(s.startsWith('http') ? s : `https://${s}`).hostname.includes('.') } catch { return false }
   }
 
+  const igInvalid = !!data.instagram_url.trim() && !normalizeInstagram(data.instagram_url)
+  const siteInvalid = !!data.website_url.trim() && !isValidUrl(data.website_url)
+
   const canNext = () => {
     if (step === 0) return !!(data.business_description.trim() && data.business_type)
     if (step === 1) return !!(data.ideal_customer.trim() && data.business_stage)
     if (step === 2) return !!data.goal
-    if (step === 3) return isValidUrl(data.website_url)
+    if (step === 3) return !!normalizeInstagram(data.instagram_url) && !siteInvalid
     if (step === 4) return !!(data.business_name.trim() && data.city.trim() && data.contact_email.trim())
     return false
   }
@@ -300,7 +313,7 @@ export default function OnboardingPage() {
       const onboarding_context = buildContext(data)
       const payload = {
         business_name: data.business_name, business_type: data.business_type, city: data.city,
-        website_url: data.website_url, instagram_url: data.instagram_url, facebook_url: data.facebook_url,
+        website_url: data.website_url.trim(), instagram_url: normalizeInstagram(data.instagram_url) ?? '', facebook_url: data.facebook_url,
         tiktok_url: data.tiktok_url, google_maps_url: data.google_maps_url, phone: data.phone,
         contact_email: data.contact_email, goal: data.goal, onboarding_context,
       }
@@ -422,10 +435,10 @@ export default function OnboardingPage() {
             )}
             {step === 3 && (
               <>
-                <H t="Como você traz clientes hoje?" s="Marque os canais que usa. O site é usado pro seu diagnóstico gratuito." />
+                <H t="Como você traz clientes hoje?" s="Marque os canais que usa. O Instagram é a base do seu diagnóstico gratuito." />
                 <MultiSelect label="Canais atuais" values={data.current_channels} options={CHANNELS} onToggle={toggleChannel} />
-                <Field label="Site" value={data.website_url} onChange={set('website_url')} type="url" placeholder="https://seunegocio.com.br" required hint={data.website_url.trim() && !isValidUrl(data.website_url) ? '⚠️ URL inválida — use: https://seunegocio.com.br' : 'Analisamos performance, SEO e experiência do site (diagnóstico grátis).'} />
-                <Field label="Instagram (opcional)" value={data.instagram_url} onChange={set('instagram_url')} placeholder="https://instagram.com/seuperfil" />
+                <Field label="Instagram do negócio" value={data.instagram_url} onChange={set('instagram_url')} placeholder="@seuperfil ou instagram.com/seuperfil" required hint={igInvalid ? '⚠️ Não entendi esse Instagram. Digite assim: @seuperfil' : 'Olhamos seus posts, engajamento e perfil pra montar sua nota (só dados públicos).'} />
+                <Field label="Site (opcional)" value={data.website_url} onChange={set('website_url')} type="url" placeholder="https://seunegocio.com.br" hint={siteInvalid ? '⚠️ Esse endereço parece errado. Use: https://seunegocio.com.br — ou deixe em branco se não tem site.' : 'Se tiver site, analisamos a velocidade dele também. Não tem? Tudo bem, é só deixar em branco.'} />
                 <Field label="Facebook (opcional)" value={data.facebook_url} onChange={set('facebook_url')} placeholder="https://facebook.com/suapagina" />
               </>
             )}
