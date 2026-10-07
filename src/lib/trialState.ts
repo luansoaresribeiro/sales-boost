@@ -62,7 +62,7 @@ export function getTrialInfo(company: Pick<CompanyData, 'trial_started_at' | 'tr
   return { state: 'trial_active', dayNumber, totalDays, hoursRemaining, expiresAt, isTrial: true, isBlocked: false }
 }
 
-export function formatExpiresAt(date: Date | null): string {
+export function formatExpiresAt(date: Date | null, lang: 'pt' | 'en' = 'pt'): string {
   if (!date) return ''
-  return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }

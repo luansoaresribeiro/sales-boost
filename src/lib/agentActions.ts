@@ -45,7 +45,7 @@ async function call(token: string, body: Record<string, unknown>): Promise<{ act
     body: JSON.stringify(body),
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.error ?? 'Erro na Central de Approvals')
+  if (!res.ok) throw new Error(data.error ?? (localStorage.getItem('sb_lang') === 'en' ? 'Approvals Center error' : 'Erro na Central de Approvals'))
   return data
 }
 
@@ -107,6 +107,14 @@ export const APPROVAL_META: Record<ApprovalStatus, { label: string; color: strin
   REJECTED: { label: 'Rejeitada', color: '#f87171' },
   EDITED: { label: 'Editada', color: '#c084fc' },
   CANCELLED: { label: 'Cancelada', color: '#BABABA' },
+}
+// Rótulos EN (mesmas chaves) — a tela escolhe conforme o idioma selecionado.
+export const APPROVAL_LABEL_EN: Record<ApprovalStatus, string> = {
+  PENDING: 'Awaiting approval', AUTO_APPROVED: 'Auto-approved', APPROVED: 'Approved',
+  REJECTED: 'Rejected', EDITED: 'Edited', CANCELLED: 'Cancelled',
+}
+export const EXECUTION_LABEL_EN: Record<ExecutionStatus, string> = {
+  NOT_READY: 'Not ready', QUEUED: 'Queued', EXECUTING: 'Executing', EXECUTED: 'Executed', FAILED: 'Failed',
 }
 export const EXECUTION_META: Record<ExecutionStatus, { label: string; color: string }> = {
   NOT_READY: { label: 'Não pronta', color: '#BABABA' },
