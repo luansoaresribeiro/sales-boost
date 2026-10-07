@@ -210,7 +210,7 @@ export default function MarketingAiHubPage() {
         <div style={{ border: '1px solid rgba(255,109,41,0.18)', borderRadius: '22px', padding: '16px', background: 'rgba(255,109,41,0.035)' }}>
           <HeroAgentCard m={DATA_MODULE} badge="1 · Observa" onClick={() => open(DATA_MODULE.section)} />
           <FlowArrow />
-          <HeroAgentCard m={STRATEGY_MODULE} badge="2 · Direciona" onClick={() => open(STRATEGY_MODULE.section)} compact
+          <HeroAgentCard m={STRATEGY_MODULE} badge="2 · Direciona" onClick={() => open(STRATEGY_MODULE.section)}
             summary={strategySummary ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '9.5px', fontWeight: 800, color: STRATEGY_STATUS_COLOR[strategySummary.status] ?? MUTED }}>● {STRATEGY_STATUS_LABEL[strategySummary.status] ?? strategySummary.status}</span>
@@ -246,10 +246,10 @@ function FlowArrow() {
 
 // Card hero — usado 3x (Dados, Conteúdo, Conversão), sempre no mesmo tamanho
 // e estilo, formando o fluxo vertical do Growth OS.
-// `compact`/`summary` são usados só pelo Agente de Estratégia: card um
-// pouco menor (ícone/padding reduzidos) com um resumo ao vivo no lugar da
-// descrição estática, pra comunicar que ele é a ponte entre Dados e
-// Conteúdo — sem perder função nenhuma, é só o tamanho do card de entrada.
+// `summary` é usado só pelo Agente de Estratégia: resumo ao vivo da
+// estratégia ativa, mostrado embaixo da descrição. O card tem o mesmo
+// tamanho dos outros (pedido do dono, 2026-10-07). `compact` continua
+// existindo mas não é mais usado no hub.
 function HeroAgentCard({ m, badge, onClick, compact, summary }: { m: ModuleDef; badge: string; onClick: () => void; compact?: boolean; summary?: React.ReactNode }) {
   const [hover, setHover] = useState(false)
   const iconSize = compact ? 44 : 58
@@ -275,9 +275,8 @@ function HeroAgentCard({ m, badge, onClick, compact, summary }: { m: ModuleDef; 
             {badge}
           </span>
         </div>
-        {compact && summary
-          ? summary
-          : <p style={{ fontSize: '13px', color: MUTED, margin: 0, lineHeight: 1.55, maxWidth: '560px' }}>{m.desc}</p>}
+        <p style={{ fontSize: '13px', color: MUTED, margin: 0, lineHeight: 1.55, maxWidth: '560px' }}>{m.desc}</p>
+        {summary && <div style={{ marginTop: '8px' }}>{summary}</div>}
       </div>
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexShrink: 0, padding: compact ? '9px 16px' : '11px 20px', borderRadius: '11px', background: hover ? ORANGE : 'rgba(255,109,41,0.14)', border: `1px solid ${hover ? ORANGE : 'rgba(255,109,41,0.35)'}`, color: hover ? '#0E0B0A' : ORANGE, fontSize: '13px', fontWeight: 800, transition: 'background 0.18s, color 0.18s' }}>
         Abrir <span style={{ transition: 'transform 0.18s', transform: hover ? 'translateX(3px)' : 'none' }}>→</span>
