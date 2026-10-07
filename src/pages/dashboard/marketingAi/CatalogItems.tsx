@@ -6,6 +6,28 @@ import { catalogMinPhotos } from '../../../lib/setupRules'
 import { bi, sanitizeCatalogValues, type CatalogSchema, type CatalogField } from '../../../lib/verticalPlaybook'
 import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL } from './shared'
 import { ImageModal } from './TestingArea'
+import { useLang } from '../../../contexts/LanguageContext'
+
+const TX = {
+  pt: {
+    select: 'Selecione...', whatToCreate: 'O que criar com este ', create: 'Criar', notifyDone: '✓ Avisar quando lançar', soonNotify: 'Em breve — avisar',
+    errPackage: 'Erro ao gerar pacote', errUpload: 'Não consegui enviar as fotos. Tente de novo.', errSavePhotos: 'Não consegui salvar as fotos. Tente de novo.',
+    info1: 'Cadastre cada ', info2: ' com fotos reais (mínimo ', info3: ') e os dados dele — é a partir daqui que os pacotes de conteúdo são gerados.',
+    add: '＋ Adicionar ', newItem: 'Novo ', sending: 'Enviando...', addPhotos: '＋ Adicionar fotos', save: 'Salvar', cancel: 'Cancelar',
+    loading: 'Carregando...', none: (item: string) => `Nenhum ${item} cadastrado ainda.`, remove: 'Remover',
+    photosN: 'fotos', bedrooms: 'q', generating: 'Gerando...', genPackage: '✨ Gerar pacote',
+    pieces: (n: number) => `${n} peça${n === 1 ? '' : 's'} em rascunho, esperando aprovação:`,
+  },
+  en: {
+    select: 'Select...', whatToCreate: 'What to create with this ', create: 'Create', notifyDone: '✓ We will notify you at launch', soonNotify: 'Coming soon — notify me',
+    errPackage: 'Error generating package', errUpload: "Couldn't upload the photos. Please try again.", errSavePhotos: "Couldn't save the photos. Please try again.",
+    info1: 'Add each ', info2: ' with real photos (at least ', info3: ') and its details — this is where content packages are generated from.',
+    add: '＋ Add ', newItem: 'New ', sending: 'Uploading...', addPhotos: '＋ Add photos', save: 'Save', cancel: 'Cancel',
+    loading: 'Loading...', none: (item: string) => `No ${item} added yet.`, remove: 'Remove',
+    photosN: 'photos', bedrooms: 'bd', generating: 'Generating...', genPackage: '✨ Generate package',
+    pieces: (n: number) => `${n} draft piece${n === 1 ? '' : 's'}, waiting for approval:`,
+  },
+} as const
 
 const ORANGE = '#FF6D29'
 
@@ -21,14 +43,16 @@ function titleFromFields(fields: Record<string, unknown>, fallback: string): str
 }
 
 function FieldInput({ field, value, onChange }: { field: CatalogField; value: unknown; onChange: (v: unknown) => void }) {
-  const label = bi(field.label)
+  const { lang } = useLang()
+  const tx = TX[lang]
+  const label = bi(field.label, lang)
   if (field.type === 'select') {
     return (
       <div style={{ marginBottom: '10px' }}>
         <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '5px' }}>{label}</label>
         <select value={String(value ?? '')} onChange={e => onChange(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-          <option value="">Selecione...</option>
-          {(field.options ?? []).map(o => <option key={o.pt} value={o.pt}>{bi(o)}</option>)}
+          <option value="">{tx.select}</option>
+          {(field.options ?? []).map(o => <option key={o.pt} value={o.pt}>{bi(o, lang)}</option>)}
         </select>
       </div>
     )
@@ -59,6 +83,7 @@ const TOOL_RECIPE: Record<string, string> = { tour_virtual_tool: 'carrossel_tour
 function ItemCreationTools({ itemId, companyId, verticalKey, itemLabel, onGenerate, busy }: {
   itemId: string; companyId: string; verticalKey: string; itemLabel: string; onGenerate: (itemId: string, recipe: string) => void; busy: string | null
 }) {
+  const tx = TX[useLang().lang]
   const [tools, setTools] = useState<ToolRow[]>([])
   const [interested, setInterested] = useState<Set<string>>(new Set())
   useEffect(() => {
@@ -76,7 +101,7 @@ function ItemCreationTools({ itemId, companyId, verticalKey, itemLabel, onGenera
   if (!tools.length) return null
   return (
     <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${BORDER}` }}>
-      <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>O que criar com este {itemLabel.toLowerCase()}</div>
+      <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>{tx.whatToCreate}{itemLabel.toLowerCase()}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
         {tools.map(t => (
           <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
@@ -84,13 +109,13 @@ function ItemCreationTools({ itemId, companyId, verticalKey, itemLabel, onGenera
             {t.status === 'live' && TOOL_RECIPE[t.id] ? (
               <button onClick={() => onGenerate(itemId, TOOL_RECIPE[t.id])} disabled={busy === itemId}
                 style={{ padding: '4px 9px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '6px', color: ORANGE, fontWeight: 700, fontSize: '10px', cursor: busy === itemId ? 'default' : 'pointer' }}>
-                {busy === itemId ? '...' : 'Criar'}
+                {busy === itemId ? '...' : tx.create}
               </button>
             ) : interested.has(t.id) ? (
-              <span style={{ fontSize: '9.5px', color: '#4ade80' }}>✓ Avisar quando lançar</span>
+              <span style={{ fontSize: '9.5px', color: '#4ade80' }}>{tx.notifyDone}</span>
             ) : (
               <button onClick={() => registerInterest(t.id)} style={{ padding: '4px 9px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '6px', color: MUTED, fontSize: '9.5px', cursor: 'pointer' }}>
-                Em breve — avisar
+                {tx.soonNotify}
               </button>
             )}
           </div>
@@ -104,6 +129,8 @@ function ItemCreationTools({ itemId, companyId, verticalKey, itemLabel, onGenera
 // ferramentas de criação. `onChanged` avisa quem estiver de olho no status.
 export default function CatalogItems({ companyId, schema, verticalKey, focusItemId, setupMode, onChanged }: { companyId: string; schema: CatalogSchema; verticalKey: string; focusItemId?: string | null; setupMode?: boolean; onChanged?: () => void }) {
   const { session } = useAuth()
+  const { lang } = useLang()
+  const tx = TX[lang]
   const [packageBusyId, setPackageBusyId] = useState<string | null>(null)
   const [packageResult, setPackageResult] = useState<{ itemId: string; result: PackageResult | { error: string } } | null>(null)
 
@@ -116,9 +143,9 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
         body: JSON.stringify({ item_id: itemId, ...(onlyRecipe ? { only_recipe: onlyRecipe } : {}) }),
       })
       const data = await res.json().catch(() => ({}))
-      setPackageResult({ itemId, result: res.ok ? data : { error: data.error ?? 'Erro ao gerar pacote' } })
+      setPackageResult({ itemId, result: res.ok ? data : { error: data.error ?? tx.errPackage } })
     } catch (e) {
-      setPackageResult({ itemId, result: { error: e instanceof Error ? e.message : 'Erro ao gerar pacote' } })
+      setPackageResult({ itemId, result: { error: e instanceof Error ? e.message : tx.errPackage } })
     }
     setPackageBusyId(null)
   }
@@ -180,16 +207,16 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
           uploaded.push({ url: data.publicUrl, path })
         }
       }
-      if (!uploaded.length) { setAddError('Não consegui enviar as fotos. Tente de novo.'); return }
+      if (!uploaded.length) { setAddError(tx.errUpload); return }
       // relê o item antes de gravar, pra não sobrescrever fotos adicionadas em outra aba
       const { data: fresh } = await supabase.from('marketing_ai_knowledge').select('image_url, meta').eq('id', item.id).eq('company_id', companyId).maybeSingle()
       const meta = (fresh?.meta ?? item.meta ?? {}) as ItemMeta
       const patch: Record<string, unknown> = { meta: { ...meta, photos: [...(meta.photos ?? []), ...uploaded] } }
       if (!(fresh?.image_url ?? item.image_url)) patch.image_url = uploaded[0].url
       const { error } = await supabase.from('marketing_ai_knowledge').update(patch).eq('id', item.id).eq('company_id', companyId)
-      if (error) setAddError('Não consegui salvar as fotos. Tente de novo.')
+      if (error) setAddError(tx.errSavePhotos)
       await load()
-    } catch { setAddError('Não consegui enviar as fotos. Tente de novo.') }
+    } catch { setAddError(tx.errUpload) }
     finally { setAddingId(null) }
   }
 
@@ -241,20 +268,20 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
   return (
     <div>
       {!setupMode && <div style={{ padding: '12px 16px', background: 'rgba(255,109,41,0.07)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '16px' }}>
-        📋 <strong>{schema.catalogLabel}.</strong> Cadastre cada {schema.itemLabel.toLowerCase()} com fotos reais (mínimo {minPhotos}) e os dados dele — é a partir daqui que os pacotes de conteúdo são gerados.
+        📋 <strong>{schema.catalogLabel}.</strong> {tx.info1}{schema.itemLabel.toLowerCase()}{tx.info2}{minPhotos}{tx.info3}
       </div>}
 
       {!creating ? (
         <button onClick={() => setCreating(true)} style={{ padding: '9px 18px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12.5px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontFamily: D, marginBottom: '18px' }}>
-          ＋ Adicionar {schema.itemLabel.toLowerCase()}
+          {tx.add}{schema.itemLabel.toLowerCase()}
         </button>
       ) : (
         <div style={{ padding: '16px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', marginBottom: '18px' }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>Novo {schema.itemLabel.toLowerCase()}</div>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>{tx.newItem}{schema.itemLabel.toLowerCase()}</div>
 
           <div style={{ marginBottom: '14px' }}>
             <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
-              {bi(photosField?.label)} — {photos.length}/{minPhotos}
+              {bi(photosField?.label, lang)} — {photos.length}/{minPhotos}
             </label>
             {photos.length > 0 && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 96px))', gap: '8px', marginBottom: '8px' }}>
@@ -268,7 +295,7 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
             )}
             <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} style={{ display: 'none' }} />
             <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{ padding: '7px 14px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.5)', borderRadius: '8px', color: ORANGE, fontWeight: 700, fontSize: '11.5px', cursor: 'pointer', fontFamily: D }}>
-              {uploading ? 'Enviando...' : '＋ Adicionar fotos'}
+              {uploading ? tx.sending : tx.addPhotos}
             </button>
           </div>
 
@@ -277,8 +304,8 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
           ))}
 
           <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-            <button onClick={save} disabled={!canSave} style={{ padding: '9px 18px', background: canSave ? ORANGE : 'rgba(255,255,255,0.08)', color: canSave ? '#000' : MUTED, fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: canSave ? 'pointer' : 'not-allowed', fontFamily: D }}>Salvar</button>
-            <button onClick={() => { setCreating(false); setPhotos([]); setFields({}) }} style={{ padding: '9px 16px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '12px', cursor: 'pointer', fontFamily: D }}>Cancelar</button>
+            <button onClick={save} disabled={!canSave} style={{ padding: '9px 18px', background: canSave ? ORANGE : 'rgba(255,255,255,0.08)', color: canSave ? '#000' : MUTED, fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: canSave ? 'pointer' : 'not-allowed', fontFamily: D }}>{tx.save}</button>
+            <button onClick={() => { setCreating(false); setPhotos([]); setFields({}) }} style={{ padding: '9px 16px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '12px', cursor: 'pointer', fontFamily: D }}>{tx.cancel}</button>
           </div>
         </div>
       )}
@@ -286,8 +313,8 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
       <input ref={addRef} type="file" accept="image/*" multiple onChange={onAddFiles} style={{ display: 'none' }} />
       {addError && <div style={{ fontSize: '11.5px', color: '#f87171', marginBottom: '10px' }}>{addError}</div>}
 
-      {loading ? <div style={{ fontSize: '12px', color: MUTED }}>Carregando...</div> : items.length === 0 ? (
-        <div style={{ padding: '28px', textAlign: 'center', color: MUTED, fontSize: '12.5px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>Nenhum {schema.itemLabel.toLowerCase()} cadastrado ainda.</div>
+      {loading ? <div style={{ fontSize: '12px', color: MUTED }}>{tx.loading}</div> : items.length === 0 ? (
+        <div style={{ padding: '28px', textAlign: 'center', color: MUTED, fontSize: '12.5px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>{tx.none(schema.itemLabel.toLowerCase())}</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
           {items.map(item => {
@@ -299,18 +326,18 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                 <div style={{ padding: '10px 11px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                     <span style={{ fontSize: '12px', fontWeight: 700, color: 'white', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</span>
-                    <button onClick={() => remove(item)} title="Remover" style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '12px', cursor: 'pointer' }}>🗑</button>
+                    <button onClick={() => remove(item)} title={tx.remove} style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '12px', cursor: 'pointer' }}>🗑</button>
                   </div>
                   <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '8px' }}>
-                    <span style={{ color: photoCount < minPhotos ? '#f87171' : MUTED, fontWeight: photoCount < minPhotos ? 700 : 400 }}>{photoCount}/{minPhotos} fotos</span>{f.preco ? ` · R$ ${f.preco}` : ''}{f.quartos ? ` · ${f.quartos}q` : ''}
+                    <span style={{ color: photoCount < minPhotos ? '#f87171' : MUTED, fontWeight: photoCount < minPhotos ? 700 : 400 }}>{photoCount}/{minPhotos} {tx.photosN}</span>{f.preco ? ` · R$ ${f.preco}` : ''}{f.quartos ? ` · ${f.quartos}${tx.bedrooms}` : ''}
                   </div>
                   <button onClick={() => { addTargetRef.current = item; addRef.current?.click() }} disabled={addingId === item.id}
                     style={{ width: '100%', padding: '7px 10px', marginBottom: '6px', background: photoCount < minPhotos ? 'rgba(255,109,41,0.14)' : 'transparent', border: `1px solid ${photoCount < minPhotos ? 'rgba(255,109,41,0.5)' : BORDER}`, borderRadius: '7px', color: photoCount < minPhotos ? ORANGE : MUTED, fontWeight: 700, fontSize: '11px', cursor: addingId === item.id ? 'default' : 'pointer', fontFamily: D }}>
-                    {addingId === item.id ? 'Enviando...' : '＋ Adicionar fotos'}
+                    {addingId === item.id ? tx.sending : tx.addPhotos}
                   </button>
                   {!setupMode && <button onClick={() => generatePackage(item.id)} disabled={packageBusyId === item.id}
                     style={{ width: '100%', padding: '7px 10px', background: packageBusyId === item.id ? 'rgba(255,255,255,0.06)' : 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '7px', color: ORANGE, fontWeight: 700, fontSize: '11px', cursor: packageBusyId === item.id ? 'default' : 'pointer', fontFamily: D }}>
-                    {packageBusyId === item.id ? 'Gerando...' : '✨ Gerar pacote'}
+                    {packageBusyId === item.id ? tx.generating : tx.genPackage}
                   </button>}
                   {packageResult?.itemId === item.id && (
                     <div style={{ marginTop: '8px', fontSize: '10.5px', lineHeight: 1.5 }}>
@@ -320,7 +347,7 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                         <>
                           {packageResult.result.generated.length > 0 && (
                             <div style={{ color: '#4ade80', marginBottom: '4px' }}>
-                              {packageResult.result.generated.length} peça{packageResult.result.generated.length === 1 ? '' : 's'} em rascunho, esperando aprovação:
+                              {tx.pieces(packageResult.result.generated.length)}
                               <ul style={{ margin: '4px 0 0', paddingLeft: '16px' }}>
                                 {packageResult.result.generated.map((g, i) => <li key={i}>{g.recipe} — {g.planned_for}</li>)}
                               </ul>

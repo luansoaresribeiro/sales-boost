@@ -12,6 +12,45 @@ import {
 } from './marketingAi/progressParts'
 import { fetchDiscoveries, DiscoveriesSection, type Discovery } from './marketingAi/Discoveries'
 import { type Goal, type Strategy, GOAL_TYPE_LABEL } from './marketingAi/strategyTypes'
+import { useLang } from '../../contexts/LanguageContext'
+import { trProgress } from './marketingAi/progressParts.i18n'
+
+const GOAL_EN: Record<string, string> = {
+  lead_gen: 'Lead generation', sales: 'Sales / revenue', acquisition: 'Customer acquisition', awareness: 'Brand awareness',
+  instagram_growth: 'Instagram growth', engagement: 'Engagement', website_conversions: 'Website conversions',
+  whatsapp: 'WhatsApp conversations', bookings: 'Bookings', retention: 'Customer retention', other: 'Other',
+}
+
+const TX = {
+  pt: {
+    loadingGoals: 'Carregando objetivos…', noStrat: 'Nenhuma estratégia ativa ainda',
+    noStratP: 'Os objetivos aparecem aqui assim que o Agente de Estratégia criar a estratégia principal.',
+    openStrat: 'Abrir Agente de Estratégia →', viewEdit: 'Ver e editar →', noGoals: 'Nenhuma meta registrada nessa estratégia ainda.',
+    base: 'Base', unknown: 'desconhecido', goal: 'Meta', progress: 'Progresso',
+    fail: 'Falha ao ativar', already: 'Esse boost já estava ativo.', boost: 'Boost',
+    activated: (name: string, h: number) => `✓ ${name} ativado por ${h}h!`, errActivate: 'Erro ao ativar boost',
+    loading: 'Carregando…', calc: 'Calculando seu progresso…', yourBiz: 'seu negócio',
+    title: '🚀 Seu progresso real', welcome: 'Bem-vindo de volta, ', actionsSince: '. Ações registradas desde a última visita: ',
+    waiting: 'aguardando dados reais', tabProgress: '🚀 Progresso', tabGoals: '🎯 Objetivos',
+    realOnlyA: 'Só números reais.', realOnlyB: ' Tudo aqui vem dos seus dados (conteúdo, oportunidades, avaliações, campanhas, leads e eventos de progresso). O que ainda não tem dado real aparece ',
+    blurred: 'embaçado', realOnlyC: ', com o aviso "aguardando dados reais" — nunca um número inventado.',
+    yourProgress: '📈 Seu progresso',
+  },
+  en: {
+    loadingGoals: 'Loading goals…', noStrat: 'No active strategy yet',
+    noStratP: 'Goals show up here as soon as the Strategy Agent creates the main strategy.',
+    openStrat: 'Open Strategy Agent →', viewEdit: 'View and edit →', noGoals: 'No goals recorded in this strategy yet.',
+    base: 'Baseline', unknown: 'unknown', goal: 'Target', progress: 'Progress',
+    fail: 'Failed to activate', already: 'That boost was already active.', boost: 'Boost',
+    activated: (name: string, h: number) => `✓ ${name} activated for ${h}h!`, errActivate: 'Error activating boost',
+    loading: 'Loading…', calc: 'Calculating your progress…', yourBiz: 'your business',
+    title: '🚀 Your real progress', welcome: 'Welcome back, ', actionsSince: '. Actions recorded since your last visit: ',
+    waiting: 'waiting for real data', tabProgress: '🚀 Progress', tabGoals: '🎯 Goals',
+    realOnlyA: 'Real numbers only.', realOnlyB: ' Everything here comes from your data (content, opportunities, reviews, campaigns, leads and progress events). Anything without real data shows ',
+    blurred: 'blurred', realOnlyC: ', with the note "waiting for real data" — never a made-up number.',
+    yourProgress: '📈 Your progress',
+  },
+} as const
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -32,6 +71,8 @@ function TabButton({ active, onClick, label }: { active: boolean; onClick: () =>
 // mora no Agente de Estratégia, pra não ter dois lugares mexendo na mesma
 // meta de jeitos diferentes.
 function ObjetivosTab({ companyId, onOpenStrategy }: { companyId: string; onOpenStrategy: () => void }) {
+  const { lang } = useLang()
+  const tx = TX[lang]
   const [strategy, setStrategy] = useState<Strategy | null>(null)
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,15 +94,15 @@ function ObjetivosTab({ companyId, onOpenStrategy }: { companyId: string; onOpen
     return () => { alive = false }
   }, [companyId])
 
-  if (loading) return <div style={{ color: MUTED, fontSize: '13px' }}>Carregando objetivos…</div>
+  if (loading) return <div style={{ color: MUTED, fontSize: '13px' }}>{tx.loadingGoals}</div>
 
   if (!strategy) {
     return (
       <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px', padding: '28px', textAlign: 'center' }}>
         <div style={{ fontSize: '28px', marginBottom: '10px' }}>🧭</div>
-        <div style={{ fontSize: '14px', fontWeight: 700, color: 'white', marginBottom: '6px' }}>Nenhuma estratégia ativa ainda</div>
-        <p style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6, marginBottom: '16px' }}>Os objetivos aparecem aqui assim que o Agente de Estratégia criar a estratégia principal.</p>
-        <button onClick={onOpenStrategy} style={{ padding: '10px 18px', background: ORANGE, color: '#000', fontWeight: 800, fontSize: '13px', border: 'none', borderRadius: '10px', cursor: 'pointer', fontFamily: D }}>Abrir Agente de Estratégia →</button>
+        <div style={{ fontSize: '14px', fontWeight: 700, color: 'white', marginBottom: '6px' }}>{tx.noStrat}</div>
+        <p style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6, marginBottom: '16px' }}>{tx.noStratP}</p>
+        <button onClick={onOpenStrategy} style={{ padding: '10px 18px', background: ORANGE, color: '#000', fontWeight: 800, fontSize: '13px', border: 'none', borderRadius: '10px', cursor: 'pointer', fontFamily: D }}>{tx.openStrat}</button>
       </div>
     )
   }
@@ -73,10 +114,10 @@ function ObjetivosTab({ companyId, onOpenStrategy }: { companyId: string; onOpen
           <div style={{ fontSize: '15px', fontWeight: 800, color: 'white' }}>{strategy.name}</div>
           {strategy.thesis && <div style={{ fontSize: '12px', color: MUTED, marginTop: '3px', maxWidth: '600px', lineHeight: 1.5 }}>{strategy.thesis}</div>}
         </div>
-        <button onClick={onOpenStrategy} style={{ padding: '9px 14px', background: 'transparent', border: `1px solid ${BORDER}`, color: ORANGE, fontWeight: 700, fontSize: '12px', borderRadius: '9px', cursor: 'pointer', fontFamily: D, flexShrink: 0 }}>Ver e editar →</button>
+        <button onClick={onOpenStrategy} style={{ padding: '9px 14px', background: 'transparent', border: `1px solid ${BORDER}`, color: ORANGE, fontWeight: 700, fontSize: '12px', borderRadius: '9px', cursor: 'pointer', fontFamily: D, flexShrink: 0 }}>{tx.viewEdit}</button>
       </div>
       {goals.length === 0 ? (
-        <div style={{ fontSize: '12.5px', color: MUTED }}>Nenhuma meta registrada nessa estratégia ainda.</div>
+        <div style={{ fontSize: '12.5px', color: MUTED }}>{tx.noGoals}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {goals.map(g => (
@@ -84,23 +125,23 @@ function ObjetivosTab({ companyId, onOpenStrategy }: { companyId: string; onOpen
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
                 <div>
                   <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{g.name}</div>
-                  <div style={{ fontSize: '10.5px', color: MUTED }}>{GOAL_TYPE_LABEL[g.goal_type] ?? g.goal_type}{g.period ? ` · ${g.period}` : ''}</div>
+                  <div style={{ fontSize: '10.5px', color: MUTED }}>{(lang === 'en' ? GOAL_EN[g.goal_type] : GOAL_TYPE_LABEL[g.goal_type]) ?? g.goal_type}{g.period ? ` · ${g.period}` : ''}</div>
                 </div>
                 <span style={{ fontSize: '9px', fontWeight: 800, color: g.priority === 'high' ? '#f87171' : g.priority === 'low' ? MUTED : '#FBBF24', flexShrink: 0 }}>{g.priority.toUpperCase()}</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px' }}>
                 <div>
-                  <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>Base</div>
+                  <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>{tx.base}</div>
                   <div style={{ fontSize: '13px', fontWeight: 700, color: g.baseline_verified ? 'white' : MUTED, fontStyle: g.baseline_verified ? 'normal' : 'italic' }}>
-                    {g.baseline_verified && g.baseline_value != null ? g.baseline_value : 'desconhecido'}
+                    {g.baseline_verified && g.baseline_value != null ? g.baseline_value : tx.unknown}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>Meta</div>
+                  <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>{tx.goal}</div>
                   <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{g.target_value ?? '—'}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>Progresso</div>
+                  <div style={{ fontSize: '9.5px', color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>{tx.progress}</div>
                   <div style={{ fontSize: '13px', fontWeight: 700, color: ORANGE }}>{g.current_progress ?? '—'}</div>
                 </div>
               </div>
@@ -115,6 +156,8 @@ function ObjetivosTab({ companyId, onOpenStrategy }: { companyId: string; onOpen
 export default function BusinessProgressPage() {
   const { company } = useCompany()
   const { session } = useAuth()
+  const { lang } = useLang()
+  const tx = TX[lang]
   const navigate = useNavigate()
   const [data, setData] = useState<ProgressData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -124,7 +167,7 @@ export default function BusinessProgressPage() {
   const [tab, setTab] = useState<'progresso' | 'objetivos'>('progresso')
 
   const companyId = company?.id
-  const businessName = company?.business_name ?? 'seu negócio'
+  const businessName = company?.business_name ?? tx.yourBiz
 
   useEffect(() => {
     if (!companyId) return
@@ -178,11 +221,11 @@ export default function BusinessProgressPage() {
         body: JSON.stringify({ action: 'activate_reward', company_id: companyId, reward_key: rewardKey, agent: 'marketing' }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error ?? 'Falha ao ativar')
-      setToast(json.already ? 'Esse boost já estava ativo.' : `✓ ${json.name ?? 'Boost'} ativado por ${json.duration_hours ?? 24}h!`)
+      if (!res.ok) throw new Error(json.error ?? tx.fail)
+      setToast(json.already ? tx.already : tx.activated(json.name ?? tx.boost, json.duration_hours ?? 24))
       setData(prev => prev ? { ...prev, rewards: prev.rewards.map(r => r.key === rewardKey ? { ...r, unlocked: true, active: true } : r) } : prev)
     } catch (e) {
-      setToast(e instanceof Error ? e.message : 'Erro ao ativar boost')
+      setToast(e instanceof Error ? e.message : tx.errActivate)
     }
     setActivating(null)
     setTimeout(() => setToast(''), 4000)
@@ -190,22 +233,22 @@ export default function BusinessProgressPage() {
 
   const firstName = useMemo(() => businessName.split(' ')[0], [businessName])
 
-  if (!company) return <div style={{ padding: '40px', color: MUTED, fontFamily: D }}>Carregando…</div>
-  if (loading || !data) return <div style={{ padding: '40px', color: MUTED, fontFamily: D }}>Calculando seu progresso…</div>
+  if (!company) return <div style={{ padding: '40px', color: MUTED, fontFamily: D }}>{tx.loading}</div>
+  if (loading || !data) return <div style={{ padding: '40px', color: MUTED, fontFamily: D }}>{tx.calc}</div>
 
   return (
     <div style={{ maxWidth: '1120px', width: '100%', boxSizing: 'border-box', margin: '0 auto', padding: '28px 32px', fontFamily: D, display: 'flex', flexDirection: 'column', gap: '26px' }}>
       {/* Boas-vindas */}
       <div>
-        <div style={{ fontSize: 'clamp(1.6rem, 3vw, 2.2rem)', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.1 }}>🚀 Seu progresso real</div>
+        <div style={{ fontSize: 'clamp(1.6rem, 3vw, 2.2rem)', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{tx.title}</div>
         <div style={{ fontSize: '13.5px', color: MUTED, marginTop: '6px', lineHeight: 1.5 }}>
-          Bem-vindo de volta, <strong style={{ color: 'white' }}>{firstName}</strong>. Ações registradas desde a última visita: <strong style={{ color: 'white' }}>{data.actionsCount == null ? <BlurredValue hint={false} /> : data.actionsCount}</strong>{data.actionsCount == null && <span style={{ fontSize: '10px', marginLeft: '6px' }}>aguardando dados reais</span>}.
+          {tx.welcome}<strong style={{ color: 'white' }}>{firstName}</strong>{tx.actionsSince}<strong style={{ color: 'white' }}>{data.actionsCount == null ? <BlurredValue hint={false} /> : data.actionsCount}</strong>{data.actionsCount == null && <span style={{ fontSize: '10px', marginLeft: '6px' }}>{tx.waiting}</span>}.
         </div>
       </div>
 
       <div style={tabRow}>
-        <TabButton active={tab === 'progresso'} onClick={() => setTab('progresso')} label="🚀 Progresso" />
-        <TabButton active={tab === 'objetivos'} onClick={() => setTab('objetivos')} label="🎯 Objetivos" />
+        <TabButton active={tab === 'progresso'} onClick={() => setTab('progresso')} label={tx.tabProgress} />
+        <TabButton active={tab === 'objetivos'} onClick={() => setTab('objetivos')} label={tx.tabGoals} />
       </div>
 
       {tab === 'objetivos' ? (
@@ -214,7 +257,7 @@ export default function BusinessProgressPage() {
       <>
       {/* Honestidade: só números reais */}
       <div style={{ padding: '11px 15px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6 }}>
-        🔎 <strong>Só números reais.</strong> Tudo aqui vem dos seus dados (conteúdo, oportunidades, avaliações, campanhas, leads e eventos de progresso). O que ainda não tem dado real aparece <strong>embaçado</strong>, com o aviso "aguardando dados reais" — nunca um número inventado.
+        🔎 <strong>{tx.realOnlyA}</strong>{tx.realOnlyB}<strong>{tx.blurred}</strong>{tx.realOnlyC}
       </div>
 
       {/* Nível + Milestone */}
@@ -225,18 +268,18 @@ export default function BusinessProgressPage() {
 
       {/* Progresso: health 72 -> 81 + deltas */}
       <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px', padding: '20px 22px' }}>
-        <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>📈 Seu progresso</div>
+        <div style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>{tx.yourProgress}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: '16px' }}>
           <span style={{ fontSize: '30px', fontWeight: 900, color: MUTED }}>{data.healthFrom == null ? <BlurredValue hint={false} /> : data.healthFrom}</span>
           <span style={{ fontSize: '20px', color: MUTED }}>→</span>
           <span style={{ fontSize: '34px', fontWeight: 900, color: data.healthTo == null || data.healthFrom == null || data.healthTo >= data.healthFrom ? GREEN : '#f87171' }}>{data.healthTo == null ? <BlurredValue hint={false} /> : data.healthTo}</span>
-          <span style={{ fontSize: '12px', color: MUTED }}>Health Score{(data.healthTo == null || data.healthFrom == null) && ' · aguardando dados reais'}</span>
+          <span style={{ fontSize: '12px', color: MUTED }}>Health Score{(data.healthTo == null || data.healthFrom == null) && ` · ${tx.waiting}`}</span>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           {data.deltas.map(dl => (
             <div key={dl.label} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '10px', padding: '9px 13px' }}>
               <span style={{ fontSize: '15px', fontWeight: 800, color: dl.up ? GREEN : '#f87171' }}>{dl.value == null ? <BlurredValue hint={false} /> : dl.value}</span>
-              <span style={{ fontSize: '11px', color: MUTED, marginLeft: '6px' }}>{dl.label}</span>
+              <span style={{ fontSize: '11px', color: MUTED, marginLeft: '6px' }}>{trProgress(lang, dl.label)}</span>
             </div>
           ))}
         </div>
