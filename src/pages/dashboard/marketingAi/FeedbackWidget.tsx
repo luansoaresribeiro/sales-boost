@@ -4,21 +4,34 @@
 // qualquer uma das seções de agente, nunca inventa aprendizado pra preencher
 // espaço — sem sinal real, mostra que ainda não há sinal.
 import { useEffect, useState } from 'react'
+import { useLang } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { CARD, MUTED, BORDER, D, ORANGE, PILLAR_ICON, timeAgo, type Insight } from './shared'
 import type { LogRow } from './strategyTypes'
 
 type Section = 'dados' | 'estrategia' | 'content' | 'conversao'
 
-const SECTION_LABEL: Record<Section, string> = {
-  dados: 'no Agente de Dados', estrategia: 'no Agente de Estratégia',
-  content: 'no Agente de Conteúdo', conversao: 'no Agente de Conversão',
+const SECTION_LABEL: Record<'pt' | 'en', Record<Section, string>> = {
+  pt: {
+    dados: 'no Agente de Dados', estrategia: 'no Agente de Estratégia',
+    content: 'no Agente de Conteúdo', conversao: 'no Agente de Conversão',
+  },
+  en: {
+    dados: 'in the Data Agent', estrategia: 'in the Strategy Agent',
+    content: 'in the Content Agent', conversao: 'in the Conversion Agent',
+  },
 }
+const TX = {
+  pt: { learning: 'O que a IA está aprendendo', noSignal: 'Ainda sem sinal real aqui — assim que houver dado suficiente, a IA começa a aprender com esse agente.', rec: 'RECOMENDAÇÃO' },
+  en: { learning: 'What the AI is learning', noSignal: 'No real signal here yet — as soon as there is enough data, the AI starts learning from this agent.', rec: 'RECOMMENDATION' },
+} as const
 const SECTION_PILLARS: Record<Section, Insight['pillar'][]> = {
   dados: ['tracking', 'competitor'], estrategia: ['strategy'], content: ['content'], conversao: [],
 }
 
 export default function FeedbackWidget({ companyId, section, insights }: { companyId: string; section: Section; insights: Insight[] }) {
+  const { lang } = useLang()
+  const t = TX[lang]
   const [open, setOpen] = useState(false)
   const [log, setLog] = useState<LogRow[]>([])
 
@@ -46,14 +59,14 @@ export default function FeedbackWidget({ companyId, section, insights }: { compa
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '12px' }}>
             <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', fontFamily: D, lineHeight: 1.4 }}>
-              🔁 O que a IA está aprendendo {SECTION_LABEL[section]}
+              🔁 {t.learning} {SECTION_LABEL[lang][section]}
             </div>
             <button onClick={() => setOpen(false)} style={{ background: 'transparent', border: 'none', color: MUTED, cursor: 'pointer', fontSize: '14px', flexShrink: 0, padding: 0 }}>✕</button>
           </div>
 
           {relevantInsights.length === 0 && log.length === 0 ? (
             <div style={{ fontSize: '12px', color: MUTED, lineHeight: 1.55 }}>
-              Ainda sem sinal real aqui — assim que houver dado suficiente, a IA começa a aprender com esse agente.
+              {t.noSignal}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -66,8 +79,8 @@ export default function FeedbackWidget({ companyId, section, insights }: { compa
               {log.map(l => (
                 <div key={l.id} style={{ padding: '10px 12px', background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.15)', borderRadius: '10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginBottom: '3px' }}>
-                    <span style={{ fontSize: '9px', fontWeight: 800, color: '#FBBF24' }}>RECOMENDAÇÃO</span>
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)' }}>{timeAgo(l.created_at)}</span>
+                    <span style={{ fontSize: '9px', fontWeight: 800, color: '#FBBF24' }}>{t.rec}</span>
+                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)' }}>{timeAgo(l.created_at, lang)}</span>
                   </div>
                   <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white', marginBottom: '3px' }}>{l.recommendation}</div>
                   <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>{l.reasoning}</div>

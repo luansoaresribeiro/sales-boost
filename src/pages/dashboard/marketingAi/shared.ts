@@ -177,6 +177,7 @@ export const BRAIN_NODE_ICON: Record<string, string> = {
 
 export const IMPACT_COLOR: Record<string, string> = { high: '#f87171', medium: '#FBBF24', low: MUTED }
 export const IMPACT_LABEL: Record<string, string> = { high: 'Alto impacto', medium: 'Médio impacto', low: 'Baixo impacto' }
+export const IMPACT_LABEL_EN: Record<string, string> = { high: 'High impact', medium: 'Medium impact', low: 'Low impact' }
 export const PILLAR_LABEL: Record<string, string> = { tracking: 'Tracking', content: 'Conteúdo', competitor: 'Concorrentes', strategy: 'Estratégia' }
 export const PILLAR_ICON: Record<string, string> = { tracking: '📈', content: '✍️', competitor: '🔍', strategy: '🧭' }
 export const STATUS_LABEL: Record<string, string> = { idea: 'Ideia', draft: 'Rascunho', approved: 'Aprovado', scheduled: 'Agendado', published: 'Publicado' }
@@ -236,13 +237,14 @@ export const FORMAT_CLASS: Record<string, FormatClass> = {
 export const FUNNEL_LABEL: Record<FunnelStage, string> = { topo: 'Topo', meio: 'Meio', fundo: 'Fundo' }
 export const funnelText = (key: string): string => FORMAT_CLASS[key]?.funnel.map(f => FUNNEL_LABEL[f].toUpperCase()).join(' / ') ?? ''
 
-export function timeAgo(iso: string): string {
+export function timeAgo(iso: string, lang: 'pt' | 'en' = 'pt'): string {
   const diffMs = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diffMs / 60000)
-  if (mins < 1) return 'agora'
-  if (mins < 60) return `${mins}min atrás`
+  const en = lang === 'en'
+  if (mins < 1) return en ? 'now' : 'agora'
+  if (mins < 60) return en ? `${mins}min ago` : `${mins}min atrás`
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h atrás`
+  if (hours < 24) return en ? `${hours}h ago` : `${hours}h atrás`
   const days = Math.floor(hours / 24)
-  return `${days}d atrás`
+  return en ? `${days}d ago` : `${days}d atrás`
 }

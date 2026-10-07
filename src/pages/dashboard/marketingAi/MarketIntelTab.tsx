@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CompanyData } from '../../../contexts/CompanyContext'
+import { useLang } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { CARD, MUTED, BORDER } from './shared'
 import { fmtNum, useDemoMode } from './growthDemo'
@@ -12,8 +13,34 @@ import PartnershipSection from './PartnershipSection'
 
 const ORANGE = '#FF6D29'
 const IMPACT_COLOR: Record<string, string> = { high: '#f87171', medium: '#FBBF24', low: MUTED }
-const IMPACT_LABEL: Record<string, string> = { high: 'Alto', medium: 'Médio', low: 'Baixo' }
-const RELEVANCE_LABEL: Record<string, string> = { high: 'Muito relevante', medium: 'Relevante', low: 'De olho' }
+const TX = {
+  pt: {
+    impact: { high: 'Alto', medium: 'Médio', low: 'Baixo' } as Record<string, string>,
+    relevance: { high: 'Muito relevante', medium: 'Relevante', low: 'De olho' } as Record<string, string>,
+    freq: (d: number) => `~1 post a cada ${d}d`, noFreq: 'Sem dado de frequência ainda', noMove: 'Ainda sem análise dos posts recentes.',
+    followersAbbr: 'seg', eng: 'eng', noEng: 'sem dado de engajamento', impactWord: 'impacto',
+    errComp: 'Erro ao carregar os concorrentes', noComp: 'Sem concorrentes escaneados ainda', errMsg: 'A consulta ao banco falhou — veja o erro abaixo pra saber o que corrigir.',
+    noCompMsg: 'O agente mapeia concorrentes e acha o Instagram deles sozinho, automaticamente. Ligue o Modo demonstração pra ver o layout com um exemplo enquanto isso roda.', seeExample: 'Ver exemplo (modo demonstração)',
+    demoB: 'Modo demonstração.', demoBA: ' O agente monitora o Instagram dos concorrentes — aqui é uma amostra do que ele entrega.',
+    movesTitle: '🔍 Movimentos dos concorrentes', movesSub: 'O que quem disputa o seu público andou fazendo.',
+    errTrends: 'Erro ao carregar tendências/oportunidades', noData: 'Sem dados reais ainda',
+    noTrendsMsg: 'A leitura de tendências, opiniões de clientes e oportunidades do segmento vem da coleta via web (aba Insights) — clique em buscar lá pra trazer dados reais. Ligue o Modo demonstração pra explorar o layout com um exemplo enquanto isso.',
+    trendsTitle: '📈 Tendências e opiniões sobre o segmento', oppTitle: '✨ Novas oportunidades',
+  },
+  en: {
+    impact: { high: 'High', medium: 'Medium', low: 'Low' } as Record<string, string>,
+    relevance: { high: 'Highly relevant', medium: 'Relevant', low: 'Keep an eye' } as Record<string, string>,
+    freq: (d: number) => `~1 post every ${d}d`, noFreq: 'No posting frequency data yet', noMove: 'No analysis of recent posts yet.',
+    followersAbbr: 'followers', eng: 'eng', noEng: 'no engagement data', impactWord: 'impact',
+    errComp: 'Error loading competitors', noComp: 'No competitors scanned yet', errMsg: 'The database query failed — see the error below to know what to fix.',
+    noCompMsg: 'The agent maps competitors and finds their Instagram on its own, automatically. Turn on Demo mode to see the layout with an example while it runs.', seeExample: 'See an example (demo mode)',
+    demoB: 'Demo mode.', demoBA: ' The agent monitors competitors\' Instagram — this is a sample of what it delivers.',
+    movesTitle: '🔍 Competitor moves', movesSub: 'What those competing for your audience have been up to.',
+    errTrends: 'Error loading trends/opportunities', noData: 'No real data yet',
+    noTrendsMsg: 'The reading of trends, customer opinions and segment opportunities comes from web collection (Insights tab) — click search there to bring real data. Turn on Demo mode to explore the layout with an example in the meantime.',
+    trendsTitle: '📈 Segment trends and opinions', oppTitle: '✨ New opportunities',
+  },
+} as const
 
 interface SnapshotRow {
   competitor_id: string; instagram_followers: number | null; instagram_posting_freq_days: number | null
@@ -24,13 +51,14 @@ interface SnapshotRow {
 // pelo menos uma varredura de Instagram com seguidores conhecidos. Sem
 // legenda de posts pra analisar, "move"/"moveType" ficam sem dado em vez de
 // inventados (a IA só classifica quando tem legenda real pra ler).
-function useRealCompetitors(companyId: string | undefined): { items: CompetitorMove[] | null; error: string | null } {
+function useRealCompetitors(companyId: string | undefined, lang: 'pt' | 'en'): { items: CompetitorMove[] | null; error: string | null } {
   const [items, setItems] = useState<CompetitorMove[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!companyId) return
     let alive = true
+    const t = TX[lang]
     supabase.from('competitors').select('id, name').eq('company_id', companyId)
       .then(async ({ data: comps, error: compsErr }) => {
         if (!alive) return
@@ -52,9 +80,9 @@ function useRealCompetitors(companyId: string | undefined): { items: CompetitorM
             return {
               name: c.name,
               followers: s.instagram_followers ?? 0,
-              postingFreq: s.instagram_posting_freq_days ? `~1 post a cada ${s.instagram_posting_freq_days}d` : 'Sem dado de frequência ainda',
+              postingFreq: s.instagram_posting_freq_days ? t.freq(s.instagram_posting_freq_days) : t.noFreq,
               engagement: s.avg_engagement,
-              move: s.latest_move ?? 'Ainda sem análise dos posts recentes.',
+              move: s.latest_move ?? t.noMove,
               moveType: s.latest_move_type as CompetitorMove['moveType'],
             }
           })
@@ -62,7 +90,7 @@ function useRealCompetitors(companyId: string | undefined): { items: CompetitorM
         setItems(mapped)
       })
     return () => { alive = false }
-  }, [companyId])
+  }, [companyId, lang])
 
   return { items, error }
 }
@@ -98,12 +126,13 @@ function useRealTrendsOpportunities(companyId: string): { state: { trends: Marke
 }
 
 function CompetitorCard({ c }: { c: CompetitorMove }) {
+  const t = TX[useLang().lang]
   const m = c.moveType ? MOVE_META[c.moveType] : { icon: '🔍', color: MUTED }
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', padding: '13px 15px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '7px' }}>
         <span style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{c.name}</span>
-        <span style={{ fontSize: '10px', color: MUTED }}>{fmtNum(c.followers)} seg · {c.engagement != null ? `${c.engagement}% eng` : 'sem dado de engajamento'}</span>
+        <span style={{ fontSize: '10px', color: MUTED }}>{fmtNum(c.followers)} {t.followersAbbr} · {c.engagement != null ? `${c.engagement}% ${t.eng}` : t.noEng}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', padding: '9px 11px' }}>
         <span style={{ fontSize: '13px', flexShrink: 0 }}>{m.icon}</span>
@@ -117,11 +146,12 @@ function CompetitorCard({ c }: { c: CompetitorMove }) {
 }
 
 function TrendCard({ t }: { t: MarketTrend }) {
+  const tx = TX[useLang().lang]
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', padding: '13px 15px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
         <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>🔥 {t.title}</span>
-        <span style={{ fontSize: '9px', fontWeight: 700, color: IMPACT_COLOR[t.relevance], flexShrink: 0 }}>{RELEVANCE_LABEL[t.relevance]}</span>
+        <span style={{ fontSize: '9px', fontWeight: 700, color: IMPACT_COLOR[t.relevance], flexShrink: 0 }}>{tx.relevance[t.relevance]}</span>
       </div>
       <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>{t.description}</div>
     </div>
@@ -129,11 +159,12 @@ function TrendCard({ t }: { t: MarketTrend }) {
 }
 
 function OpportunityCard({ o }: { o: MarketOpportunity }) {
+  const tx = TX[useLang().lang]
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', padding: '13px 15px', borderLeft: `3px solid ${ORANGE}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
         <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>💰 {o.title}</span>
-        <span style={{ fontSize: '9px', fontWeight: 700, color: IMPACT_COLOR[o.impact], flexShrink: 0 }}>{IMPACT_LABEL[o.impact]} impacto</span>
+        <span style={{ fontSize: '9px', fontWeight: 700, color: IMPACT_COLOR[o.impact], flexShrink: 0 }}>{tx.impact[o.impact]} {tx.impactWord}</span>
       </div>
       <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>{o.description}</div>
     </div>
@@ -141,8 +172,10 @@ function OpportunityCard({ o }: { o: MarketOpportunity }) {
 }
 
 export default function MarketIntelTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'business_type' | 'city'> }) {
+  const { lang } = useLang()
+  const t = TX[lang]
   const demo = useMemo(() => buildMarketDemo(company), [company])
-  const { items: real, error: competitorsError } = useRealCompetitors(company.id)
+  const { items: real, error: competitorsError } = useRealCompetitors(company.id, lang)
   const hasRealCompetitors = !!real && real.length > 0
   const competitors = hasRealCompetitors ? real : demo.competitors
   const [demoMode, setDemoMode] = useDemoMode(company.id)
@@ -159,18 +192,18 @@ export default function MarketIntelTab({ company }: { company: Pick<CompanyData,
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Movimentos dos concorrentes — real assim que houver concorrente escaneado */}
       <DataVeil mode={competitorsMode}
-        title={competitorsError ? 'Erro ao carregar os concorrentes' : 'Sem concorrentes escaneados ainda'}
-        message={competitorsError ? 'A consulta ao banco falhou — veja o erro abaixo pra saber o que corrigir.' : 'O agente mapeia concorrentes e acha o Instagram deles sozinho, automaticamente. Ligue o Modo demonstração pra ver o layout com um exemplo enquanto isso roda.'}
+        title={competitorsError ? t.errComp : t.noComp}
+        message={competitorsError ? t.errMsg : t.noCompMsg}
         errorDetail={competitorsError}
-        cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+        cta={{ label: t.seeExample, onClick: () => setDemoMode(true) }}>
         <section>
           {!hasRealCompetitors && (
             <div style={{ padding: '12px 16px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '16px' }}>
-              🔵 <strong>Modo demonstração.</strong> O agente monitora o Instagram dos concorrentes — aqui é uma amostra do que ele entrega.
+              🔵 <strong>{t.demoB}</strong>{t.demoBA}
             </div>
           )}
-          <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '4px' }}>🔍 Movimentos dos concorrentes</div>
-          <div style={{ fontSize: '11px', color: MUTED, marginBottom: '13px' }}>O que quem disputa o seu público andou fazendo.</div>
+          <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '4px' }}>{t.movesTitle}</div>
+          <div style={{ fontSize: '11px', color: MUTED, marginBottom: '13px' }}>{t.movesSub}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
             {competitors.map((c, i) => <CompetitorCard key={i} c={c} />)}
           </div>
@@ -180,22 +213,22 @@ export default function MarketIntelTab({ company }: { company: Pick<CompanyData,
       {/* Tendências e oportunidades — real assim que a coleta via Tavily rodar
           (mesma fonte que a aba Insights, dentro de Agente de Dados) */}
       <DataVeil mode={trendsMode}
-        title={trendsError ? 'Erro ao carregar tendências/oportunidades' : 'Sem dados reais ainda'}
-        message={trendsError ? 'A consulta ao banco falhou — veja o erro abaixo pra saber o que corrigir.' : 'A leitura de tendências, opiniões de clientes e oportunidades do segmento vem da coleta via web (aba Insights) — clique em buscar lá pra trazer dados reais. Ligue o Modo demonstração pra explorar o layout com um exemplo enquanto isso.'}
+        title={trendsError ? t.errTrends : t.noData}
+        message={trendsError ? t.errMsg : t.noTrendsMsg}
         errorDetail={trendsError}
-        cta={{ label: 'Ver exemplo (modo demonstração)', onClick: () => setDemoMode(true) }}>
+        cta={{ label: t.seeExample, onClick: () => setDemoMode(true) }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '20px', alignItems: 'start' }}>
           {/* Tendências */}
           <section>
-            <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>📈 Tendências e opiniões sobre o segmento</div>
+            <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>{t.trendsTitle}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
-              {trends.map(t => <TrendCard key={t.id} t={t} />)}
+              {trends.map(tr => <TrendCard key={tr.id} t={tr} />)}
             </div>
           </section>
 
           {/* Oportunidades */}
           <section>
-            <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>✨ Novas oportunidades</div>
+            <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '11px' }}>{t.oppTitle}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
               {opportunities.map(o => <OpportunityCard key={o.id} o={o} />)}
             </div>
