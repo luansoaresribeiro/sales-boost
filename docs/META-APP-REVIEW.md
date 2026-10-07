@@ -345,8 +345,9 @@ cannot show any ad results.
 HOW TO TEST
 1. Go to https://getsaleboost.com/login and sign in with:
    Email: [EMAIL]   Password: [SENHA]
-2. Open "Configurações" (Settings) > "Conexões" (Connections) and click
-   "Conectar Meta Ads". Log in with a Facebook account that has access
+2. Open "Configurações" (Settings) > "Conexões" (Connections) and, in the
+   "Meta Ads Manager" card, click "Conectar" (Connect). Log in with a
+   Facebook account that has access
    to an ad account and select the ad account.
 3. Open "Marketing AI" > "Agente de Conteúdo e Campanha" (Content and
    Campaign Agent) > tab "Campanha" (Campaign) > "Performance". The ad
@@ -365,7 +366,8 @@ portfólio empresarial dele, para ele escolher qual conectar.
 ```text
 HOW WE USE business_management
 Many business owners manage their ad account inside a Meta Business
-portfolio. When the owner clicks "Conectar Meta Ads", we use
+portfolio. When the owner clicks "Conectar" (Connect) in the "Meta Ads Manager"
+card, we use
 business_management only to list the ad accounts that the owner has
 access to, so the owner can select which one to connect to Sales Boost.
 We do not change any business settings, users, permissions or assets.
@@ -378,8 +380,9 @@ their ad results in Sales Boost.
 HOW TO TEST
 1. Go to https://getsaleboost.com/login and sign in with:
    Email: [EMAIL]   Password: [SENHA]
-2. Open "Configurações" (Settings) > "Conexões" (Connections) and click
-   "Conectar Meta Ads". Log in with Facebook. The list of ad accounts
+2. Open "Configurações" (Settings) > "Conexões" (Connections) and, in the
+   "Meta Ads Manager" card, click "Conectar" (Connect). Log in with
+   Facebook. The list of ad accounts
    from your Business portfolio is shown so you can select one.
 3. Open "Marketing AI" > "Agente de Conteúdo e Campanha" > tab
    "Campanha" (Campaign) > "Performance" to see the selected ad
@@ -388,7 +391,7 @@ This permission is requested together with ads_read.
 ```
 
 **O vídeo de anúncios (6 e 7) deve mostrar:** Configurações → Conexões →
-Conectar Meta Ads → login do Facebook → lista de contas de anúncio →
+cartão "Meta Ads Manager" → Conectar → login do Facebook → lista de contas de anúncio →
 escolher → Marketing AI → Agente de Conteúdo e Campanha → Campanha →
 Performance com os números. A conta precisa ter pelo menos
 um anúncio com resultado, senão a aba aparece vazia.
