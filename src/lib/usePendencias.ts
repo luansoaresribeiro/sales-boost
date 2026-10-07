@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { supabase } from './supabase'
 import { useRealtime } from './useRealtime'
 import { useCompany } from '../contexts/CompanyContext'
+import { useLang } from '../contexts/LanguageContext'
 import { bi, fetchCatalogSchema, fetchOnboardingQuestions } from './verticalPlaybook'
 import { catalogMinPhotos, isCatalogItem, itemPhotoCount, unansweredQuestions } from './setupRules'
 
@@ -27,11 +28,47 @@ export interface Pendencia {
   openAdd?: { tab: 'catalogo'; itemId: string } // abre o botão "+" na aba do catálogo
 }
 
+const PT = {
+  pending: (n: number) => `${n} ${n === 1 ? 'coisa esperando' : 'coisas esperando'} sua aprovação`,
+  pendingHint: 'Nada vai ao público sem o seu OK.',
+  approvals: 'Aprovações',
+  connectIg: 'Conectar o Instagram', connectIgHint: 'Sem ele, não dá pra publicar nem medir resultado.',
+  settingsConn: 'Configurações · Conexões',
+  reconnectIg: 'Reconectar o Instagram', reconnectIgHint: 'A conexão venceu — as publicações param até reconectar.',
+  igExpires: (d: number) => `Instagram expira em ${d} ${d === 1 ? 'dia' : 'dias'}`,
+  igExpiresHint: 'Reconecte antes de vencer pra não parar as publicações.',
+  telegram: 'Conectar o Telegram', telegramHint: 'Pra receber avisos e falar com o Hermes pelo celular.',
+  settingsInt: 'Configurações · Integrações',
+  photosHint: (n: number, min: number) => `Faltam fotos: ${n} de ${min}. São elas que viram os posts.`,
+  addPhotos: 'Adicionar fotos',
+  questions: (n: number) => `${n} ${n === 1 ? 'pergunta' : 'perguntas'} do seu negócio sem resposta`,
+  eg: 'Ex.: ', questionsHint: 'Quanto mais o Hermes souber, melhor ele decide.',
+  settingsUnd: 'Configurações · Entendimento do negócio',
+}
+const EN: typeof PT = {
+  pending: (n: number) => `${n} ${n === 1 ? 'item' : 'items'} waiting for your approval`,
+  pendingHint: 'Nothing goes public without your OK.',
+  approvals: 'Approvals',
+  connectIg: 'Connect Instagram', connectIgHint: "Without it, we can't publish or measure results.",
+  settingsConn: 'Settings · Connections',
+  reconnectIg: 'Reconnect Instagram', reconnectIgHint: 'The connection expired — publishing stops until you reconnect.',
+  igExpires: (d: number) => `Instagram expires in ${d} ${d === 1 ? 'day' : 'days'}`,
+  igExpiresHint: 'Reconnect before it expires so publishing keeps running.',
+  telegram: 'Connect Telegram', telegramHint: 'To get alerts and talk to Hermes from your phone.',
+  settingsInt: 'Settings · Integrations',
+  photosHint: (n: number, min: number) => `Missing photos: ${n} of ${min}. They become the posts.`,
+  addPhotos: 'Add photos',
+  questions: (n: number) => `${n} ${n === 1 ? 'question' : 'questions'} about your business unanswered`,
+  eg: 'E.g.: ', questionsHint: 'The more Hermes knows, the better it decides.',
+  settingsUnd: 'Settings · Business understanding',
+}
+
 const EXPIRY_WARN_DAYS = 7
 const DAY_MS = 86_400_000
 
 export function usePendencias() {
   const { company } = useCompany()
+  const { lang } = useLang()
   const location = useLocation()
   const companyId = company?.id ?? null
   const verticalKey = company?.vertical_key ?? 'generico'
@@ -42,6 +79,7 @@ export function usePendencias() {
   const compute = useCallback(async () => {
     if (!companyId) { setItems([]); setApprovalsCount(0); return }
     const run = ++seq.current
+    const t = lang === 'en' ? EN : PT
     const out: Pendencia[] = []
     let approvalsN = 0
 
@@ -56,8 +94,8 @@ export function usePendencias() {
         approvalsN = (a.count ?? 0) + (c.count ?? 0)
         if (approvalsN > 0) out.push({
           id: 'aprovacoes', kind: 'aprovacoes', tone: 'amber',
-          title: `${approvalsN} ${approvalsN === 1 ? 'coisa esperando' : 'coisas esperando'} sua aprovação`,
-          hint: 'Nada vai ao público sem o seu OK.', destino: 'Aprovações', to: '/dashboard/aprovacoes',
+          title: t.pending(approvalsN),
+          hint: t.pendingHint, destino: t.approvals, to: '/dashboard/aprovacoes',
         })
       }
     } catch { /* fonte ignorada */ }
@@ -76,19 +114,19 @@ export function usePendencias() {
 
         const igTo = '/dashboard/settings?tab=conexoes'
         if (!data.instagram_user_id) {
-          out.push({ id: 'ig-conectar', kind: 'instagram', tone: 'red', title: 'Conectar o Instagram', hint: 'Sem ele, não dá pra publicar nem medir resultado.', destino: 'Configurações · Conexões', to: igTo })
+          out.push({ id: 'ig-conectar', kind: 'instagram', tone: 'red', title: t.connectIg, hint: t.connectIgHint, destino: t.settingsConn, to: igTo })
         } else if (expiresAt) {
           const left = new Date(expiresAt).getTime() - Date.now()
           if (Number.isFinite(left)) {
-            if (left < 0) out.push({ id: 'ig-reconectar', kind: 'instagram', tone: 'red', title: 'Reconectar o Instagram', hint: 'A conexão venceu — as publicações param até reconectar.', destino: 'Configurações · Conexões', to: igTo })
+            if (left < 0) out.push({ id: 'ig-reconectar', kind: 'instagram', tone: 'red', title: t.reconnectIg, hint: t.reconnectIgHint, destino: t.settingsConn, to: igTo })
             else if (left <= EXPIRY_WARN_DAYS * DAY_MS) {
               const days = Math.max(1, Math.ceil(left / DAY_MS))
-              out.push({ id: 'ig-expira', kind: 'instagram', tone: 'red', title: `Instagram expira em ${days} ${days === 1 ? 'dia' : 'dias'}`, hint: 'Reconecte antes de vencer pra não parar as publicações.', destino: 'Configurações · Conexões', to: igTo })
+              out.push({ id: 'ig-expira', kind: 'instagram', tone: 'red', title: t.igExpires(days), hint: t.igExpiresHint, destino: t.settingsConn, to: igTo })
             }
           }
         }
         if (!data.telegram_chat_id) {
-          out.push({ id: 'telegram', kind: 'telegram', tone: 'muted', low: true, title: 'Conectar o Telegram', hint: 'Pra receber avisos e falar com o Hermes pelo celular.', destino: 'Configurações · Integrações', to: '/dashboard/settings?tab=integracoes' })
+          out.push({ id: 'telegram', kind: 'telegram', tone: 'muted', low: true, title: t.telegram, hint: t.telegramHint, destino: t.settingsInt, to: '/dashboard/settings?tab=integracoes' })
         }
       }
     } catch { /* fonte ignorada */ }
@@ -106,8 +144,8 @@ export function usePendencias() {
             if (n < min) out.push({
               id: `fotos-${it.id}`, kind: 'fotos', tone: 'orange',
               title: it.title || schema.itemLabel,
-              hint: `Faltam fotos: ${n} de ${min}. São elas que viram os posts.`,
-              destino: 'Adicionar fotos', openAdd: { tab: 'catalogo', itemId: it.id },
+              hint: t.photosHint(n, min),
+              destino: t.addPhotos, openAdd: { tab: 'catalogo', itemId: it.id },
             })
           }
         }
@@ -120,12 +158,12 @@ export function usePendencias() {
         const { questions } = await fetchOnboardingQuestions(verticalKey)
         const missing = unansweredQuestions(questions, answers)
         if (missing.length > 0) {
-          const first = bi(missing[0].label)
+          const first = bi(missing[0].label, lang)
           out.push({
             id: 'ficha', kind: 'ficha', tone: 'orange',
-            title: `${missing.length} ${missing.length === 1 ? 'pergunta' : 'perguntas'} do seu negócio sem resposta`,
-            hint: first ? `Ex.: ${first}` : 'Quanto mais o Hermes souber, melhor ele decide.',
-            destino: 'Configurações · Entendimento do negócio', to: '/dashboard/settings?section=entendimento',
+            title: t.questions(missing.length),
+            hint: first ? `${t.eg}${first}` : t.questionsHint,
+            destino: t.settingsUnd, to: '/dashboard/settings?section=entendimento',
           })
         }
       }
@@ -136,7 +174,7 @@ export function usePendencias() {
     out.sort((x, y) => order.indexOf(x.kind) - order.indexOf(y.kind))
     setApprovalsCount(approvalsN)
     setItems(out)
-  }, [companyId, verticalKey])
+  }, [companyId, verticalKey, lang])
 
   // debounce ~500ms: vários eventos seguidos viram uma leitura só
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)

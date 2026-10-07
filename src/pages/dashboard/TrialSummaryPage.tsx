@@ -7,12 +7,58 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
 import { supabase } from '../../lib/supabase'
-import { getTrialInfo, TRIAL_DAYS, formatExpiresAt } from '../../lib/trialState'
+import { getTrialInfo, TRIAL_DAYS } from '../../lib/trialState'
+import { useLang } from '../../contexts/LanguageContext'
 import TrialVideoPreviews from './TrialVideoPreviews'
 import { CARD, MUTED, BORDER, ORANGE, D, SUPABASE_URL } from './marketingAi/shared'
 
 const PLAN_PRICE_BR = 'R$14,49'
 const PLAN_PRICE_US = '$2.99'
+
+const TX = {
+  pt: {
+    loading: 'Carregando…', checkoutErr: 'Erro ao iniciar assinatura',
+    endedTag: 'Seu trial terminou', firstDays: (n: number) => `🏆 Seus primeiros ${n} dias com o SalesBoost`,
+    h1: 'Seu negócio já começou a progredir.',
+    endedP: 'O trial acabou, mas nada foi apagado — todo o progresso, as descobertas e as conquistas do seu Business Game continuam guardados. É só continuar de onde parou.',
+    activeP: (n: number) => `Veja o que o SalesBoost já fez pelo seu negócio nesses ${n} dias, com dados reais.`,
+    mOpps: 'oportunidades descobertas', mContent: 'conteúdos criados', mComp: 'concorrentes analisados', mActions: 'ações de crescimento', mXp: 'XP ganhos',
+    bStrat: 'Estratégia do Hermes', bAnalysis: 'Análise do negócio e do mercado',
+    analysisN: (n: number) => `${n} ${n === 1 ? 'análise pronta' : 'análises prontas'}`,
+    bComp: 'Concorrentes', compN: (n: number) => `${n} ${n === 1 ? 'concorrente' : 'concorrentes'}`,
+    bIdeas: 'Oportunidades de conteúdo', ideasN: (n: number) => `${n} ${n === 1 ? 'ideia' : 'ideias'}`,
+    bPlan: 'Plano de ação', planN: (n: number) => `${n} ${n === 1 ? 'iniciativa' : 'iniciativas'}`,
+    bTg: 'Inteligência no Telegram', tgOn: 'Conectado', tgOff: 'Ainda não conectado', see: 'Ver →', connect: 'Conectar →',
+    bResults: 'Resultados esperados', resultsV: (total: string, n: number) => `R$ ${total} em ${n} ${n === 1 ? 'oportunidade' : 'oportunidades'}`,
+    estimate: 'Estimativa — não é garantia', waiting: 'O que ainda está esperando por você',
+    contT: 'Continue o progresso do seu negócio', endsOn: (d: string) => `Seu trial termina em ${d}. `,
+    contB1: 'Continue com o SalesBoost por ', perMonth: '/mês',
+    contB2: ' e o Agente segue analisando, criando conteúdo e encontrando oportunidades — sem interrupção no seu progresso.',
+    opening: 'Abrindo checkout...', contBtn: (p: string) => `Continuar com o SalesBoost — ${p}/mês →`,
+    analyzing: 'Hermes ainda está analisando', open: 'Abrir →',
+  },
+  en: {
+    loading: 'Loading…', checkoutErr: 'Error starting subscription',
+    endedTag: 'Your trial has ended', firstDays: (n: number) => `🏆 Your first ${n} days with SalesBoost`,
+    h1: 'Your business has already started to grow.',
+    endedP: 'The trial is over, but nothing was deleted — all your progress, discoveries and Business Game achievements are safe. Just pick up where you left off.',
+    activeP: (n: number) => `See what SalesBoost has already done for your business in these ${n} days, with real data.`,
+    mOpps: 'opportunities found', mContent: 'content pieces created', mComp: 'competitors analyzed', mActions: 'growth actions', mXp: 'XP earned',
+    bStrat: "Hermes' strategy", bAnalysis: 'Business and market analysis',
+    analysisN: (n: number) => `${n} ${n === 1 ? 'analysis ready' : 'analyses ready'}`,
+    bComp: 'Competitors', compN: (n: number) => `${n} ${n === 1 ? 'competitor' : 'competitors'}`,
+    bIdeas: 'Content opportunities', ideasN: (n: number) => `${n} ${n === 1 ? 'idea' : 'ideas'}`,
+    bPlan: 'Action plan', planN: (n: number) => `${n} ${n === 1 ? 'initiative' : 'initiatives'}`,
+    bTg: 'Telegram intelligence', tgOn: 'Connected', tgOff: 'Not connected yet', see: 'View →', connect: 'Connect →',
+    bResults: 'Expected results', resultsV: (total: string, n: number) => `R$ ${total} across ${n} ${n === 1 ? 'opportunity' : 'opportunities'}`,
+    estimate: 'Estimate — not a guarantee', waiting: 'Still waiting for you',
+    contT: "Keep your business's progress going", endsOn: (d: string) => `Your trial ends on ${d}. `,
+    contB1: 'Continue with SalesBoost for ', perMonth: '/month',
+    contB2: ' and the Agent keeps analyzing, creating content and finding opportunities — with no interruption to your progress.',
+    opening: 'Opening checkout...', contBtn: (p: string) => `Continue with SalesBoost — ${p}/month →`,
+    analyzing: 'Hermes is still analyzing', open: 'Open →',
+  },
+} as const
 
 interface Metrics {
   opportunities: number
@@ -34,6 +80,9 @@ interface OpenOpportunity { id: string; title: string; value_estimate: number | 
 
 export default function TrialSummaryPage() {
   const { company } = useCompany()
+  const { lang } = useLang()
+  const tx = TX[lang]
+  const loc = lang === 'en' ? 'en-US' : 'pt-BR'
   const { session } = useAuth()
   const navigate = useNavigate()
   const [metrics, setMetrics] = useState<Metrics | null>(null)
@@ -123,7 +172,7 @@ export default function TrialSummaryPage() {
         }),
       })
       const data = await res.json() as { url?: string; error?: string }
-      if (!res.ok || !data.url) throw new Error(data.error ?? 'Erro ao iniciar assinatura')
+      if (!res.ok || !data.url) throw new Error(data.error ?? tx.checkoutErr)
       window.location.href = data.url
     } catch (e) {
       setCheckoutError(e instanceof Error ? e.message : String(e))
@@ -131,7 +180,7 @@ export default function TrialSummaryPage() {
     }
   }
 
-  if (!company) return <div style={{ padding: '40px', color: MUTED, fontFamily: D }}>Carregando…</div>
+  if (!company) return <div style={{ padding: '40px', color: MUTED, fontFamily: D }}>{tx.loading}</div>
   if (info.state === 'subscribed') {
     navigate('/dashboard', { replace: true })
     return null
@@ -143,38 +192,38 @@ export default function TrialSummaryPage() {
     <div style={{ maxWidth: '820px', margin: '0 auto', padding: '32px 16px', fontFamily: D, display: 'flex', flexDirection: 'column', gap: '22px' }}>
       <div>
         <div style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
-          {isExpired ? 'Seu trial terminou' : `🏆 Seus primeiros ${info.totalDays ?? TRIAL_DAYS} dias com o SalesBoost`}
+          {isExpired ? tx.endedTag : tx.firstDays(info.totalDays ?? TRIAL_DAYS)}
         </div>
         <h1 style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
-          {isExpired ? 'Seu negócio já começou a progredir.' : 'Seu negócio já começou a progredir.'}
+          {tx.h1}
         </h1>
         <p style={{ fontSize: '13.5px', color: MUTED, lineHeight: 1.6, marginTop: '10px', maxWidth: '560px' }}>
           {isExpired
-            ? 'O trial acabou, mas nada foi apagado — todo o progresso, as descobertas e as conquistas do seu Business Game continuam guardados. É só continuar de onde parou.'
-            : `Veja o que o SalesBoost já fez pelo seu negócio nesses ${info.totalDays ?? TRIAL_DAYS} dias, com dados reais.`}
+            ? tx.endedP
+            : tx.activeP(info.totalDays ?? TRIAL_DAYS)}
         </p>
       </div>
 
       {metrics && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
-          <MetricCard icon="💡" value={metrics.opportunities} label="oportunidades descobertas" />
-          <MetricCard icon="✍️" value={metrics.contentCreated} label="conteúdos criados" />
-          <MetricCard icon="🔍" value={metrics.competitorsAnalyzed} label="concorrentes analisados" />
-          <MetricCard icon="⚡" value={metrics.actionsCompleted} label="ações de crescimento" />
-          <MetricCard icon="🟢" value={metrics.gpEarned} label="XP ganhos" color="#4ade80" prefix="+" />
+          <MetricCard icon="💡" value={metrics.opportunities} label={tx.mOpps} />
+          <MetricCard icon="✍️" value={metrics.contentCreated} label={tx.mContent} />
+          <MetricCard icon="🔍" value={metrics.competitorsAnalyzed} label={tx.mComp} />
+          <MetricCard icon="⚡" value={metrics.actionsCompleted} label={tx.mActions} />
+          <MetricCard icon="🟢" value={metrics.gpEarned} label={tx.mXp} color="#4ade80" prefix="+" />
         </div>
       )}
 
       {panel && metrics && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
-          <PanelBlock icon="🧠" title="Estratégia do Hermes" value={panel.strategyName} to="/dashboard/marketing-ai/estrategia" />
-          <PanelBlock icon="📊" title="Análise do negócio e do mercado" value={panel.analysisReports > 0 ? `${panel.analysisReports} ${panel.analysisReports === 1 ? 'análise pronta' : 'análises prontas'}` : null} to="/dashboard/insights" />
-          <PanelBlock icon="🔍" title="Concorrentes" value={metrics.competitorsAnalyzed > 0 ? `${metrics.competitorsAnalyzed} ${metrics.competitorsAnalyzed === 1 ? 'concorrente' : 'concorrentes'}` : null} to="/dashboard/marketing-ai/dados" />
-          <PanelBlock icon="💡" title="Oportunidades de conteúdo" value={panel.ideas > 0 ? `${panel.ideas} ${panel.ideas === 1 ? 'ideia' : 'ideias'}` : null} to="/dashboard/marketing-ai/content" />
-          <PanelBlock icon="✅" title="Plano de ação" value={panel.initiatives > 0 ? `${panel.initiatives} ${panel.initiatives === 1 ? 'iniciativa' : 'iniciativas'}` : null} to="/dashboard/marketing-ai/estrategia" />
-          <PanelBlock icon="✈️" title="Inteligência no Telegram" value={panel.telegramConnected ? 'Conectado' : 'Ainda não conectado'} to="/dashboard/settings?tab=integracoes" cta={panel.telegramConnected ? 'Ver →' : 'Conectar →'} />
+          <PanelBlock icon="🧠" title={tx.bStrat} value={panel.strategyName} to="/dashboard/marketing-ai/estrategia" />
+          <PanelBlock icon="📊" title={tx.bAnalysis} value={panel.analysisReports > 0 ? tx.analysisN(panel.analysisReports) : null} to="/dashboard/insights" />
+          <PanelBlock icon="🔍" title={tx.bComp} value={metrics.competitorsAnalyzed > 0 ? tx.compN(metrics.competitorsAnalyzed) : null} to="/dashboard/marketing-ai/dados" />
+          <PanelBlock icon="💡" title={tx.bIdeas} value={panel.ideas > 0 ? tx.ideasN(panel.ideas) : null} to="/dashboard/marketing-ai/content" />
+          <PanelBlock icon="✅" title={tx.bPlan} value={panel.initiatives > 0 ? tx.planN(panel.initiatives) : null} to="/dashboard/marketing-ai/estrategia" />
+          <PanelBlock icon="✈️" title={tx.bTg} value={panel.telegramConnected ? tx.tgOn : tx.tgOff} to="/dashboard/settings?tab=integracoes" cta={panel.telegramConnected ? tx.see : tx.connect} />
           {panel.estimateTotal != null && (
-            <PanelBlock icon="📈" title="Resultados esperados" value={`R$ ${panel.estimateTotal.toLocaleString('pt-BR')} em ${panel.estimateCount} ${panel.estimateCount === 1 ? 'oportunidade' : 'oportunidades'}`} note="Estimativa — não é garantia" to="/dashboard/oportunidades" />
+            <PanelBlock icon="📈" title={tx.bResults} value={tx.resultsV(panel.estimateTotal.toLocaleString(loc), panel.estimateCount)} note={tx.estimate} to="/dashboard/oportunidades" />
           )}
         </div>
       )}
@@ -183,12 +232,12 @@ export default function TrialSummaryPage() {
 
       {openOpps.length > 0 && (
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '20px 22px' }}>
-          <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white', marginBottom: '12px' }}>O que ainda está esperando por você</div>
+          <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white', marginBottom: '12px' }}>{tx.waiting}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {openOpps.map(o => (
               <div key={o.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', gap: '10px' }}>
                 <span style={{ fontSize: '12.5px', color: 'white' }}>{o.title}</span>
-                {o.value_estimate != null && <span style={{ fontSize: '12px', fontWeight: 700, color: '#4ade80', flexShrink: 0 }}>R$ {o.value_estimate.toLocaleString('pt-BR')}</span>}
+                {o.value_estimate != null && <span style={{ fontSize: '12px', fontWeight: 700, color: '#4ade80', flexShrink: 0 }}>R$ {o.value_estimate.toLocaleString(loc)}</span>}
               </div>
             ))}
           </div>
@@ -196,15 +245,15 @@ export default function TrialSummaryPage() {
       )}
 
       <div style={{ background: `linear-gradient(180deg, ${CARD}, #100b07)`, border: '1px solid rgba(255,109,41,0.3)', borderRadius: '16px', padding: '26px' }}>
-        <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '8px' }}>Continue o progresso do seu negócio</div>
+        <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '8px' }}>{tx.contT}</div>
         <div style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6, marginBottom: '18px' }}>
-          {info.expiresAt && !isExpired && `Seu trial termina em ${formatExpiresAt(info.expiresAt)}. `}
-          Continue com o SalesBoost por <strong style={{ color: 'white' }}>{PLAN_PRICE_BR}/mês</strong> ({PLAN_PRICE_US}/mo) e o Agente segue analisando, criando conteúdo e encontrando oportunidades — sem interrupção no seu progresso.
+          {info.expiresAt && !isExpired && tx.endsOn(info.expiresAt.toLocaleString(loc, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}
+          {tx.contB1}<strong style={{ color: 'white' }}>{PLAN_PRICE_BR}{tx.perMonth}</strong> ({PLAN_PRICE_US}/mo){tx.contB2}
         </div>
         {checkoutError && <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '12px' }}>{checkoutError}</div>}
         <button onClick={startCheckout} disabled={checkoutLoading}
           style={{ padding: '14px 24px', background: ORANGE, color: '#000', fontWeight: 800, fontSize: '13.5px', border: 'none', borderRadius: '11px', cursor: checkoutLoading ? 'wait' : 'pointer' }}>
-          {checkoutLoading ? 'Abrindo checkout...' : `Continuar com o SalesBoost — ${PLAN_PRICE_BR}/mês →`}
+          {checkoutLoading ? tx.opening : tx.contBtn(PLAN_PRICE_BR)}
         </button>
       </div>
     </div>
@@ -223,12 +272,13 @@ function MetricCard({ icon, value, label, color, prefix }: { icon: string; value
 
 function PanelBlock({ icon, title, value, to, note, cta }: { icon: string; title: string; value: string | null; to: string; note?: string; cta?: string }) {
   const navigate = useNavigate()
+  const tx = TX[useLang().lang]
   return (
     <div onClick={() => navigate(to)} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '16px', cursor: 'pointer', minWidth: 0 }}>
       <div style={{ fontSize: '11.5px', fontWeight: 700, color: MUTED, marginBottom: '8px' }}>{icon} {title}</div>
-      <div style={{ fontSize: '14px', fontWeight: 800, color: value ? 'white' : MUTED, lineHeight: 1.35, wordBreak: 'break-word' }}>{value ?? 'Hermes ainda está analisando'}</div>
+      <div style={{ fontSize: '14px', fontWeight: 800, color: value ? 'white' : MUTED, lineHeight: 1.35, wordBreak: 'break-word' }}>{value ?? tx.analyzing}</div>
       {note && <div style={{ fontSize: '10.5px', color: MUTED, marginTop: '4px' }}>{note}</div>}
-      <div style={{ fontSize: '11.5px', fontWeight: 700, color: ORANGE, marginTop: '10px' }}>{cta ?? 'Abrir →'}</div>
+      <div style={{ fontSize: '11.5px', fontWeight: 700, color: ORANGE, marginTop: '10px' }}>{cta ?? tx.open}</div>
     </div>
   )
 }

@@ -4,16 +4,35 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useLang } from '../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, ORANGE, D } from './marketingAi/shared'
 
 interface Props { companyId: string; verticalKey: string | null }
 interface Preview { id: string; title: string; photo: string; format: string | null }
 interface Loaded { previews: Preview[]; hasPhotos: boolean; objective: string | null; hasIdeasOrStrategy: boolean }
 
+const TX = {
+  pt: {
+    soonT: '🎬 Seu vídeo grátis — em breve',
+    soonB: 'Seu teste inclui 1 vídeo real, feito com as fotos do seu imóvel. Ele ainda não está disponível — avisamos quando estiver liberado.',
+    upload: 'Suba as fotos do seu imóvel pra ver suas prévias de vídeo', uploadBtn: 'Subir fotos →',
+    analyzing: 'Hermes ainda está analisando', rec: 'Recomendado pelo Hermes · pronto pra gerar',
+    goal: 'Objetivo: ', fmt: 'Formato: ', full: 'Disponível no plano completo.',
+  },
+  en: {
+    soonT: '🎬 Your free video — coming soon',
+    soonB: "Your trial includes 1 real video, made from your own photos. It isn't available yet — we'll let you know when it's released.",
+    upload: 'Upload your photos to see your video previews', uploadBtn: 'Upload photos →',
+    analyzing: 'Hermes is still analyzing', rec: 'Recommended by Hermes · ready to generate',
+    goal: 'Goal: ', fmt: 'Format: ', full: 'Available on the full plan.',
+  },
+} as const
+
 const humanize = (s: string) => s.replace(/[_-]+/g, ' ').trim()
 
 export default function TrialVideoPreviews({ companyId, verticalKey }: Props) {
   const navigate = useNavigate()
+  const tx = TX[useLang().lang]
   const [data, setData] = useState<Loaded | null>(null)
   const [notice, setNotice] = useState(false)
 
@@ -55,23 +74,23 @@ export default function TrialVideoPreviews({ companyId, verticalKey }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontFamily: D }}>
       <div style={{ background: CARD, border: '1px solid rgba(255,109,41,0.3)', borderRadius: '14px', padding: '18px 20px' }}>
-        <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', marginBottom: '6px' }}>🎬 Seu vídeo grátis — em breve</div>
+        <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', marginBottom: '6px' }}>{tx.soonT}</div>
         <div style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>
-          Seu teste inclui 1 vídeo real, feito com as fotos do seu imóvel. Ele ainda não está disponível — avisamos quando estiver liberado.
+          {tx.soonB}
         </div>
       </div>
 
       {!data.hasPhotos ? (
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '18px 20px' }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '10px' }}>Suba as fotos do seu imóvel pra ver suas prévias de vídeo</div>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '10px' }}>{tx.upload}</div>
           <button onClick={() => navigate('/dashboard/marketing-ai/dados')}
             style={{ padding: '10px 16px', background: ORANGE, color: '#000', fontWeight: 800, fontSize: '12.5px', border: 'none', borderRadius: '10px', cursor: 'pointer' }}>
-            Subir fotos →
+            {tx.uploadBtn}
           </button>
         </div>
       ) : !data.hasIdeasOrStrategy || data.previews.length === 0 ? (
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '18px 20px', fontSize: '13px', color: MUTED }}>
-          Hermes ainda está analisando
+          {tx.analyzing}
         </div>
       ) : (
         <>
@@ -85,14 +104,14 @@ export default function TrialVideoPreviews({ companyId, verticalKey }: Props) {
                 </div>
                 <div style={{ padding: '10px 12px' }}>
                   <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', lineHeight: 1.35, wordBreak: 'break-word' }}>{p.title}</div>
-                  <div style={{ fontSize: '10px', fontWeight: 700, color: ORANGE, marginTop: '6px' }}>Recomendado pelo Hermes · pronto pra gerar</div>
-                  {data.objective && <div style={{ fontSize: '10.5px', color: MUTED, marginTop: '6px', lineHeight: 1.4, wordBreak: 'break-word' }}>Objetivo: {data.objective}</div>}
-                  {p.format && <div style={{ fontSize: '10.5px', color: MUTED, marginTop: '4px' }}>Formato: {p.format}</div>}
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: ORANGE, marginTop: '6px' }}>{tx.rec}</div>
+                  {data.objective && <div style={{ fontSize: '10.5px', color: MUTED, marginTop: '6px', lineHeight: 1.4, wordBreak: 'break-word' }}>{tx.goal}{data.objective}</div>}
+                  {p.format && <div style={{ fontSize: '10.5px', color: MUTED, marginTop: '4px' }}>{tx.fmt}{p.format}</div>}
                 </div>
               </div>
             ))}
           </div>
-          {notice && <div style={{ fontSize: '12px', color: ORANGE, fontWeight: 700 }}>Disponível no plano completo.</div>}
+          {notice && <div style={{ fontSize: '12px', color: ORANGE, fontWeight: 700 }}>{tx.full}</div>}
         </>
       )}
     </div>

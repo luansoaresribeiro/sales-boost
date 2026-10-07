@@ -4,6 +4,24 @@ import { bi, sanitizePlaybookAnswers, type PlaybookQuestion } from '../../lib/ve
 import { hasAnswer } from '../../lib/setupRules'
 import { businessDataValid, phoneDigits, type BusinessData } from '../../lib/useSetupStatus'
 import { SettingsTagInput } from '../dashboard/settings/BusinessUnderstandingCard'
+import { useLang } from '../../contexts/LanguageContext'
+
+const TX = {
+  pt: {
+    done: 'Pronto', errName: 'Informe o nome do negócio.', errCity: 'Informe a cidade.',
+    errPhone: 'Informe o telefone com DDD, ex.: (21) 99999-9999.', errSave: 'Não consegui salvar. Tente de novo.',
+    nameL: 'Nome do negócio', nameP: 'Ex: Imobiliária Silva', cityL: 'Cidade / UF', cityP: 'Ex: Rio de Janeiro, RJ',
+    phoneL: 'Telefone / WhatsApp', saving: 'Salvando...', saveData: 'Salvar dados',
+    select: 'Selecione...', saveAnswers: 'Salvar respostas', answerAll: 'Responda todas pra salvar',
+  },
+  en: {
+    done: 'Done', errName: 'Enter the business name.', errCity: 'Enter the city.',
+    errPhone: 'Enter the phone number with area code, e.g. (21) 99999-9999.', errSave: "Couldn't save. Please try again.",
+    nameL: 'Business name', nameP: 'E.g.: Silva Realty', cityL: 'City / State', cityP: 'E.g.: Rio de Janeiro, RJ',
+    phoneL: 'Phone / WhatsApp', saving: 'Saving...', saveData: 'Save details',
+    select: 'Select...', saveAnswers: 'Save answers', answerAll: 'Answer all to save',
+  },
+} as const
 
 export const ORANGE = '#FF6D29'
 export const BG = '#0E0B0A'
@@ -28,6 +46,7 @@ const primaryBtn = (enabled: boolean): React.CSSProperties => ({
 export function StepShell({ n, title, hint, done, open, onToggle, children }: {
   n: number; title: string; hint: string; done: boolean; open: boolean; onToggle: () => void; children: React.ReactNode
 }) {
+  const tx = TX[useLang().lang]
   return (
     <section style={{ background: CARD, border: `1px solid ${done ? 'rgba(74,222,128,0.35)' : BORDER}`, borderRadius: '16px', overflow: 'hidden', width: '100%', boxSizing: 'border-box' }}>
       <button type="button" onClick={onToggle} aria-expanded={open}
@@ -37,7 +56,7 @@ export function StepShell({ n, title, hint, done, open, onToggle, children }: {
         </span>
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{ display: 'block', fontFamily: D, fontSize: '16px', fontWeight: 800, color: 'white', overflowWrap: 'anywhere' }}>{title}</span>
-          <span style={{ display: 'block', fontSize: '12.5px', color: done ? GREEN : MUTED, marginTop: '2px', lineHeight: 1.4 }}>{done ? 'Pronto' : hint}</span>
+          <span style={{ display: 'block', fontSize: '12.5px', color: done ? GREEN : MUTED, marginTop: '2px', lineHeight: 1.4 }}>{done ? tx.done : hint}</span>
         </span>
         <span style={{ color: MUTED, fontSize: '14px' }}>{open ? '▴' : '▾'}</span>
       </button>
@@ -48,21 +67,22 @@ export function StepShell({ n, title, hint, done, open, onToggle, children }: {
 
 // 1 — Dados do negócio (mesmos campos de Configurações: nome, cidade, telefone).
 export function DadosForm({ companyId, initial, onSaved }: { companyId: string; initial: BusinessData; onSaved: () => void }) {
+  const tx = TX[useLang().lang]
   const [b, setB] = useState<BusinessData>(initial)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const valid = businessDataValid(b)
   const save = async () => {
     setError('')
-    if (b.business_name.trim().length < 2) return setError('Informe o nome do negócio.')
-    if (b.city.trim().length < 2) return setError('Informe a cidade.')
-    if (phoneDigits(b.phone).length < 10) return setError('Informe o telefone com DDD, ex.: (21) 99999-9999.')
+    if (b.business_name.trim().length < 2) return setError(tx.errName)
+    if (b.city.trim().length < 2) return setError(tx.errCity)
+    if (phoneDigits(b.phone).length < 10) return setError(tx.errPhone)
     setSaving(true)
     const { error: e } = await supabase.from('companies').update({
       business_name: b.business_name.trim(), city: b.city.trim(), phone: b.phone.trim(), updated_at: new Date().toISOString(),
     }).eq('id', companyId)
     setSaving(false)
-    if (e) return setError('Não consegui salvar. Tente de novo.')
+    if (e) return setError(tx.errSave)
     onSaved()
   }
   const f = (k: keyof BusinessData, l: string, ph: string, type = 'text') => (
@@ -73,11 +93,11 @@ export function DadosForm({ companyId, initial, onSaved }: { companyId: string; 
   )
   return (
     <div>
-      {f('business_name', 'Nome do negócio', 'Ex: Imobiliária Silva')}
-      {f('city', 'Cidade / UF', 'Ex: Rio de Janeiro, RJ')}
-      {f('phone', 'Telefone / WhatsApp', '(21) 99999-9999', 'tel')}
+      {f('business_name', tx.nameL, tx.nameP)}
+      {f('city', tx.cityL, tx.cityP)}
+      {f('phone', tx.phoneL, '(21) 99999-9999', 'tel')}
       {error && <div style={{ fontSize: '13px', color: '#f87171', marginBottom: '10px' }}>{error}</div>}
-      <button type="button" onClick={save} disabled={saving} style={{ ...primaryBtn(valid && !saving), width: '100%' }}>{saving ? 'Salvando...' : 'Salvar dados'}</button>
+      <button type="button" onClick={save} disabled={saving} style={{ ...primaryBtn(valid && !saving), width: '100%' }}>{saving ? tx.saving : tx.saveData}</button>
     </div>
   )
 }
@@ -87,6 +107,8 @@ export function DadosForm({ companyId, initial, onSaved }: { companyId: string; 
 export function PerguntasForm({ companyId, questions, initial, onSaved }: {
   companyId: string; questions: PlaybookQuestion[]; initial: Record<string, unknown>; onSaved: () => void
 }) {
+  const { lang } = useLang()
+  const tx = TX[lang]
   const [answers, setAnswers] = useState<Record<string, unknown>>(initial)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -98,7 +120,7 @@ export function PerguntasForm({ companyId, questions, initial, onSaved }: {
     const merged = { ...((fresh?.playbook_answers as Record<string, unknown> | null) ?? {}), ...sanitizePlaybookAnswers(answers, questions) }
     const { error: e } = await supabase.from('companies').update({ playbook_answers: merged, updated_at: new Date().toISOString() }).eq('id', companyId)
     setSaving(false)
-    if (e) return setError('Não consegui salvar. Tente de novo.')
+    if (e) return setError(tx.errSave)
     onSaved()
   }
   const set = (k: string, v: unknown) => setAnswers(p => ({ ...p, [k]: v }))
@@ -106,11 +128,11 @@ export function PerguntasForm({ companyId, questions, initial, onSaved }: {
     <div>
       {questions.map(q => (
         <div key={q.key} style={{ marginBottom: '14px' }}>
-          <label style={label}>{bi(q.label)}</label>
+          <label style={label}>{bi(q.label, lang)}</label>
           {q.type === 'select' && (
             <select value={String(answers[q.key] ?? '')} onChange={e => set(q.key, e.target.value)} style={{ ...input, background: '#1a1008', cursor: 'pointer' }}>
-              <option value="">Selecione...</option>
-              {(q.options ?? []).map(o => <option key={o.pt} value={o.pt}>{bi(o)}</option>)}
+              <option value="">{tx.select}</option>
+              {(q.options ?? []).map(o => <option key={o.pt} value={o.pt}>{bi(o, lang)}</option>)}
             </select>
           )}
           {q.type === 'text' && <input value={String(answers[q.key] ?? '')} onChange={e => set(q.key, e.target.value)} style={input} />}
@@ -119,7 +141,7 @@ export function PerguntasForm({ companyId, questions, initial, onSaved }: {
       ))}
       {error && <div style={{ fontSize: '13px', color: '#f87171', marginBottom: '10px' }}>{error}</div>}
       <button type="button" onClick={save} disabled={!complete || saving} style={{ ...primaryBtn(complete && !saving), width: '100%' }}>
-        {saving ? 'Salvando...' : complete ? 'Salvar respostas' : 'Responda todas pra salvar'}
+        {saving ? tx.saving : complete ? tx.saveAnswers : tx.answerAll}
       </button>
     </div>
   )

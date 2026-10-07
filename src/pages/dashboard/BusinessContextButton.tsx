@@ -5,6 +5,32 @@ import CatalogItems from './marketingAi/CatalogItems'
 import { useCompany } from '../../contexts/CompanyContext'
 import { supabase } from '../../lib/supabase'
 import { fetchCatalogSchema, type CatalogSchema } from '../../lib/verticalPlaybook'
+import { useLang } from '../../contexts/LanguageContext'
+
+const TX = {
+  pt: {
+    tabCtx: '🧠 Contexto do negócio', tabCat: '📸 Fotos · ', tabAvatar: '🙂 Meu avatar',
+    subCtx: 'Avise o Agente de Dados de qualquer mudança ou novidade — ele passa a considerar isso nas próximas decisões.',
+    subCat: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
+    subAvatar: 'Um avatar seu apresentando o que você vende. Em breve.',
+    btnTitle: 'Contexto, fotos e avatar — alimente o Sales Boost',
+    modalTitle: 'Alimentar o Sales Boost',
+    soon: 'EM BREVE', avatarTitle: 'Seu avatar apresentando o que você vende',
+    avatarBody: 'Com algumas fotos e um vídeo curto seu, o Sales Boost vai criar vídeos com você apresentando cada item do seu catálogo — sem precisar gravar toda vez. Ainda não está disponível; quando estiver, você envia suas fotos por aqui e aprova antes de qualquer vídeo ir ao ar.',
+    notified: '✓ Você será avisado', notify: 'Quero ser avisado',
+  },
+  en: {
+    tabCtx: '🧠 Business context', tabCat: '📸 Photos · ', tabAvatar: '🙂 My avatar',
+    subCtx: 'Tell the Data Agent about any change or news — it will factor it into upcoming decisions.',
+    subCat: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
+    subAvatar: 'An avatar of you presenting what you sell. Coming soon.',
+    btnTitle: 'Context, photos and avatar — feed Sales Boost',
+    modalTitle: 'Feed Sales Boost',
+    soon: 'COMING SOON', avatarTitle: 'Your avatar presenting what you sell',
+    avatarBody: "With a few photos and a short video of you, Sales Boost will create videos of you presenting each item in your catalog — no need to record every time. It's not available yet; when it is, you'll send your photos here and approve before any video goes live.",
+    notified: "✓ You'll be notified", notify: 'Notify me',
+  },
+} as const
 
 // Botão flutuante global (todo o dashboard) — a entrada rápida do dono pra
 // alimentar o Sales Boost de qualquer tela, sem navegar. Abas:
@@ -19,6 +45,7 @@ type Tab = 'contexto' | 'catalogo' | 'avatar'
 
 export default function BusinessContextButton({ companyId }: { companyId: string }) {
   const { company } = useCompany()
+  const tx = TX[useLang().lang]
   const verticalKey = company?.vertical_key ?? 'generico'
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('contexto')
@@ -43,20 +70,20 @@ export default function BusinessContextButton({ companyId }: { companyId: string
   }, [verticalKey])
 
   const tabs: [Tab, string][] = [
-    ['contexto', '🧠 Contexto do negócio'],
-    ...(catalogSchema ? [['catalogo', `📸 Fotos · ${catalogSchema.catalogLabel}`] as [Tab, string]] : []),
-    ['avatar', '🙂 Meu avatar'],
+    ['contexto', tx.tabCtx],
+    ...(catalogSchema ? [['catalogo', `${tx.tabCat}${catalogSchema.catalogLabel}`] as [Tab, string]] : []),
+    ['avatar', tx.tabAvatar],
   ]
 
   const subtitle = tab === 'contexto'
-    ? 'Avise o Agente de Dados de qualquer mudança ou novidade — ele passa a considerar isso nas próximas decisões.'
+    ? tx.subCtx
     : tab === 'catalogo'
-      ? 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.'
-      : 'Um avatar seu apresentando o que você vende. Em breve.'
+      ? tx.subCat
+      : tx.subAvatar
 
   return (
     <>
-      <button onClick={() => setOpen(true)} title="Contexto, fotos e avatar — alimente o Sales Boost"
+      <button onClick={() => setOpen(true)} title={tx.btnTitle}
         style={{
           position: 'fixed', right: '24px', bottom: '24px', zIndex: 60, width: '52px', height: '52px', borderRadius: '50%',
           background: ORANGE, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -74,7 +101,7 @@ export default function BusinessContextButton({ companyId }: { companyId: string
             onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '14px', marginBottom: '14px' }}>
               <div>
-                <div style={{ fontFamily: D, fontSize: '17px', fontWeight: 800, color: 'white' }}>Alimentar o Sales Boost</div>
+                <div style={{ fontFamily: D, fontSize: '17px', fontWeight: 800, color: 'white' }}>{tx.modalTitle}</div>
                 <div style={{ fontSize: '12px', color: MUTED, marginTop: '3px' }}>{subtitle}</div>
               </div>
               <button onClick={close} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, cursor: 'pointer', fontSize: '15px', padding: '6px 10px', flexShrink: 0, fontFamily: D }}>✕</button>
@@ -97,6 +124,7 @@ export default function BusinessContextButton({ companyId }: { companyId: string
 }
 
 function AvatarSoon({ companyId, verticalKey }: { companyId: string; verticalKey: string }) {
+  const tx = TX[useLang().lang]
   const [toolId, setToolId] = useState<string | null>(null)
   const [interested, setInterested] = useState(false)
 
@@ -121,16 +149,15 @@ function AvatarSoon({ companyId, verticalKey }: { companyId: string; verticalKey
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '22px 20px', textAlign: 'center' }}>
       <div style={{ fontSize: '34px', marginBottom: '8px' }}>🙂</div>
-      <div style={{ display: 'inline-block', fontSize: '10.5px', fontWeight: 800, color: ORANGE, background: 'rgba(255,109,41,0.12)', border: '1px solid rgba(255,109,41,0.35)', borderRadius: '99px', padding: '3px 10px', marginBottom: '10px' }}>EM BREVE</div>
-      <div style={{ fontFamily: D, fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '6px' }}>Seu avatar apresentando o que você vende</div>
+      <div style={{ display: 'inline-block', fontSize: '10.5px', fontWeight: 800, color: ORANGE, background: 'rgba(255,109,41,0.12)', border: '1px solid rgba(255,109,41,0.35)', borderRadius: '99px', padding: '3px 10px', marginBottom: '10px' }}>{tx.soon}</div>
+      <div style={{ fontFamily: D, fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '6px' }}>{tx.avatarTitle}</div>
       <div style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6, maxWidth: '440px', margin: '0 auto 16px' }}>
-        Com algumas fotos e um vídeo curto seu, o Sales Boost vai criar vídeos com você apresentando cada item do seu catálogo — sem precisar gravar toda vez.
-        Ainda não está disponível; quando estiver, você envia suas fotos por aqui e aprova antes de qualquer vídeo ir ao ar.
+        {tx.avatarBody}
       </div>
       {toolId && (
         <button onClick={notify} disabled={interested}
           style={{ padding: '10px 18px', background: interested ? 'transparent' : ORANGE, color: interested ? '#4ade80' : '#000', border: interested ? '1px solid rgba(74,222,128,0.4)' : 'none', borderRadius: '9px', fontWeight: 700, fontSize: '12.5px', cursor: interested ? 'default' : 'pointer', fontFamily: D }}>
-          {interested ? '✓ Você será avisado' : 'Quero ser avisado'}
+          {interested ? tx.notified : tx.notify}
         </button>
       )}
     </div>
