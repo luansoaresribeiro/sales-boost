@@ -392,6 +392,26 @@ BOT_WEBHOOK_SECRET=          # autentica log-bot-event
 HIGGSFIELD_API_KEY=          # ainda não usado em código — ver MEDIA-ENGINE.md
 ```
 
+## Rota `/setup` — fim do cadastro (2026-10-06)
+
+Tela `src/pages/setup/SetupPage.tsx`, atrás do login e **fora** do
+`DashboardLayout`. "Alimentar os dados reais": Instagram em destaque
+(mesma chamada `instagram-oauth-start` das Configurações), cartões
+obrigatórios (dados do negócio, perguntas da ficha, itens do catálogo com
+fotos mínimas — cada um só aparece se existir na ficha) e rodapé "Ir para
+o painel". Status em `src/lib/useSetupStatus.ts`; as regras de "pergunta
+respondida" / "item com fotos suficientes" ficam em `src/lib/setupRules.ts`,
+**compartilhadas com o sino** (`usePendencias`) pra nunca discordarem.
+Config da ficha: `vertical_playbooks.config.setup` (`instagram_required`,
+`min_items`; padrão false/1). Gate em `ClientRoute` (`src/main.tsx`), depois
+de todos os checks de login/empresa/acesso: aplica só se
+`company.created_at >= SETUP_GATE_FROM` e sem assinatura; carregando =
+spinner, incompleto = `/setup`, erro = deixa passar. `/trial` e
+`/access-blocked` ficam fora do gate. Abrir `/setup` já completa mostra a
+tela normal com o botão liberado (não redireciona). Divergência anotada:
+o catálogo no /setup reusa `CatalogItems` em `setupMode` (sem "Gerar
+pacote", pra não gastar IA no cadastro).
+
 ## Estado do trial (atualizado 2026-10-02)
 
 Antes: 3 dias fixos, estados `trial_day_1/2/3`. Agora: o total vem do par

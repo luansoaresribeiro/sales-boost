@@ -23,6 +23,18 @@ export default function BusinessContextButton({ companyId }: { companyId: string
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('contexto')
   const [catalogSchema, setCatalogSchema] = useState<CatalogSchema | null>(null)
+  const [focusItemId, setFocusItemId] = useState<string | null>(null)
+
+  // Atalho vindo do sino de pendências: abre o "+" já na aba (e item) certos.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const d = (e as CustomEvent<{ tab?: Tab; itemId?: string }>).detail ?? {}
+      setTab(d.tab ?? 'contexto'); setFocusItemId(d.itemId ?? null); setOpen(true)
+    }
+    window.addEventListener('sb:open-add', onOpen)
+    return () => window.removeEventListener('sb:open-add', onOpen)
+  }, [])
+  const close = () => { setOpen(false); setFocusItemId(null) }
 
   useEffect(() => {
     let alive = true
@@ -57,7 +69,7 @@ export default function BusinessContextButton({ companyId }: { companyId: string
 
       {open && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
-          onClick={() => setOpen(false)}>
+          onClick={close}>
           <div style={{ background: '#0E0B0A', border: `1px solid ${BORDER}`, borderRadius: '18px', width: '100%', maxWidth: '760px', maxHeight: '88vh', overflowY: 'auto', padding: '22px 20px' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '14px', marginBottom: '14px' }}>
@@ -65,7 +77,7 @@ export default function BusinessContextButton({ companyId }: { companyId: string
                 <div style={{ fontFamily: D, fontSize: '17px', fontWeight: 800, color: 'white' }}>Alimentar o Sales Boost</div>
                 <div style={{ fontSize: '12px', color: MUTED, marginTop: '3px' }}>{subtitle}</div>
               </div>
-              <button onClick={() => setOpen(false)} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, cursor: 'pointer', fontSize: '15px', padding: '6px 10px', flexShrink: 0, fontFamily: D }}>✕</button>
+              <button onClick={close} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, cursor: 'pointer', fontSize: '15px', padding: '6px 10px', flexShrink: 0, fontFamily: D }}>✕</button>
             </div>
 
             <div style={{ display: 'flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '10px', marginBottom: '18px', flexWrap: 'wrap' }}>
@@ -75,7 +87,7 @@ export default function BusinessContextButton({ companyId }: { companyId: string
             </div>
 
             {tab === 'contexto' && <BusinessContextTab company={{ id: companyId }} />}
-            {tab === 'catalogo' && catalogSchema && <CatalogItems companyId={companyId} schema={catalogSchema} verticalKey={verticalKey} />}
+            {tab === 'catalogo' && catalogSchema && <CatalogItems companyId={companyId} schema={catalogSchema} verticalKey={verticalKey} focusItemId={focusItemId} />}
             {tab === 'avatar' && <AvatarSoon companyId={companyId} verticalKey={verticalKey} />}
           </div>
         </div>

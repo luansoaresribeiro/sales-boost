@@ -1,80 +1,91 @@
 // ── Business Progress Game — motor de progresso ──────────────────────────
-// Compõe o payload da experiência a partir de SINAIS REAIS da plataforma
-// (posts, oportunidades, avaliações, campanhas, atividade) + preenchimento
-// determinístico por empresa (seededRng) onde a integração ainda não está
-// ligada — mesmo padrão demo-first do resto do produto. As regras de GP,
-// níveis, pins e rewards ficam no banco (progress_* tables); aqui ficam os
-// PADRÕES espelhados para render imediato/offline.
-import type { CompanyData } from '../../../contexts/CompanyContext'
-import { seededRng } from './growthDemo'
+// Compõe o payload da experiência SÓ com sinais REAIS (tabelas posts,
+// opportunities, reviews, campaigns, leads, progress_events,
+// instagram_performance_snapshots). Métrica sem fonte real = null e a tela
+// mostra <BlurredValue/>. NUNCA sorteio/projeção (regra 5; ver docs/PITFALLS.md).
+import { supabase } from '../../../lib/supabase'
+import { mapStage, relTime } from './salesReal'
 
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary'
 export type HealthStatus = 'growing' | 'stable' | 'at_risk'
 
-// Sinais reais lidos do banco (contagens). Tudo opcional — 0 se não houver.
+// Sinais reais lidos do banco. null = desconhecido (consulta falhou / sem fonte).
 export interface RealSignals {
-  posts: number
-  postsPublished: number
-  opportunities: number
-  reviewsReplied: number
-  campaigns: number
-  activitySinceVisit: number
+  posts: number | null
+  postsPublished: number | null
+  opportunities: number | null
+  reviewsReplied: number | null
+  campaigns: number | null
+  leads: number | null
+  leadsQualified: number | null
+  leadsSales: number | null
+  leadsSinceVisit: number | null
+  totalGp: number | null          // soma de progress_events.gp
+  gpSinceVisit: number | null
+  eventsSinceVisit: number | null // eventos de trabalho desde a última visita
+  workEvents: number | null       // eventos de trabalho no total
+  recentEvents: { event_type: string; gp: number; created_at: string }[]
+  streak: number | null
+  engagementRate: number | null   // último snapshot do Instagram (%)
   daysSinceVisit: number
 }
 
-export interface WhileAwayItem { key: string; icon: string; label: string; count: number; link?: string }
-export interface Delta { label: string; value: string; up: boolean }
+export interface WhileAwayItem { key: string; icon: string; label: string; count: number | null; link?: string }
+export interface Delta { label: string; value: string | null; up: boolean }
 export interface LevelInfo { level: number; key: string; name: string; icon: string; minGp: number; maxGp: number | null; identity: string; color: string }
 export interface JourneyStage { key: string; label: string; state: 'done' | 'current' | 'locked' }
 export interface Pin { key: string; name: string; description: string; icon: string; rarity: Rarity; unlocked: boolean; unlockedAt?: string; rewardKey?: string }
 export interface Reward { key: string; category: string; name: string; description: string; icon: string; durationHours: number | null; unlocked: boolean; active: boolean; expiresLabel?: string }
 export interface TimelineItem { when: string; icon: string; label: string; gp?: number }
-export interface HealthMetric { label: string; value: string; delta: number }
-export interface WeeklyRow { label: string; pct: number }
+export interface HealthMetric { label: string; value: string | null; delta: number | null }
+export interface WeeklyRow { label: string; pct: number | null }
 
 export interface ProgressData {
   lastVisitLabel: string
   whileAway: WhileAwayItem[]
-  actionsCount: number
-  gpEarnedSinceVisit: number
-  totalGp: number
+  actionsCount: number | null
+  gpEarnedSinceVisit: number | null
+  totalGp: number | null
   level: LevelInfo
   nextLevel: LevelInfo | null
   gpToNext: number
   levelPct: number
-  healthFrom: number
-  healthTo: number
+  healthFrom: number | null
+  healthTo: number | null
   deltas: Delta[]
   milestone: { title: string; icon: string; current: number; target: number; pct: number; remaining: number; nextGoal: string }
-  health: { status: HealthStatus; metrics: HealthMetric[] }
+  health: { status: HealthStatus | null; metrics: HealthMetric[] }
   weekly: WeeklyRow[]
   pins: Pin[]
   rewards: Reward[]
   timeline: TimelineItem[]
   nextBestAction: { title: string; cta: string; link: string }
   recovery: { declining: boolean; metrics: { label: string; value: string }[]; causes: string[] } | null
-  streak: number
+  streak: number | null
   journey: JourneyStage[]
-  reachPct: number
-  engagementPct: number
-  contentCreated: number
+  reachPct: number | null
+  engagementPct: number | null
+  contentCreated: number | null
   newAchievement: string | null
+  hasRealData: boolean // false = nenhum dado real de trabalho ainda
 }
 
 // ── Smart Popup: escolhe a variante mais relevante ao abrir a plataforma ────
 export type PopupVariant = 'levelup' | 'while_away' | 'results' | 'almost' | 'streak' | 'status'
 
 export function choosePopup(d: ProgressData, ctx: { daysSinceVisit: number; lastSeenLeague: string | null; lastStreakSeen: number }): PopupVariant {
-  // Subiu de liga desde a última vez que viu → celebra.
+  // Sem dado real de trabalho: só o status honesto (nada de celebrar).
+  if (!d.hasRealData) return 'status'
+  // Subiu de liga (por XP real) desde a última vez que viu → celebra.
   if (ctx.lastSeenLeague && ctx.lastSeenLeague !== d.level.key) {
     const order = LEVELS.map(l => l.key)
     if (order.indexOf(d.level.key) > order.indexOf(ctx.lastSeenLeague)) return 'levelup'
   }
-  if (d.levelPct >= 90 && d.nextLevel) return 'almost'           // quase lá → curiosidade
-  if (ctx.daysSinceVisit >= 2 && d.actionsCount > 0) return 'while_away'
-  if (d.gpEarnedSinceVisit >= 50) return 'results'               // resultado novo relevante
-  if (d.streak >= 7 && d.streak !== ctx.lastStreakSeen) return 'streak'
-  return 'status'                                                // só mostra onde está
+  if (d.levelPct >= 90 && d.nextLevel) return 'almost'
+  if (ctx.daysSinceVisit >= 2 && (d.actionsCount ?? 0) > 0) return 'while_away'
+  if ((d.gpEarnedSinceVisit ?? 0) >= 50) return 'results'
+  if ((d.streak ?? 0) >= 7 && d.streak !== ctx.lastStreakSeen) return 'streak'
+  return 'status'
 }
 
 // Ligas (substituem os níveis numéricos) — XP = Growth Points.
@@ -162,66 +173,99 @@ const FUNIL = '/dashboard/marketing-ai/conversao'
 const ATEND = '/dashboard/marketing-ai/conversao'
 const POSTS = '/dashboard/marketing-ai/content'
 
-// Compõe o payload completo. `real` traz contagens reais; o resto é derivado
-// de forma determinística por empresa (estável entre reloads).
-export function buildProgress(company: Pick<CompanyData, 'id' | 'business_name'>, real: RealSignals): ProgressData {
-  const rng = seededRng((company.id || company.business_name || 'demo') + ':progress')
-  const iB = (min: number, max: number) => Math.round(min + rng() * (max - min))
+// Rótulos dos eventos reais do ledger (progress_events) — espelha progress_gp_rules.
+const EVENT_LABEL: Record<string, { icon: string; label: string }> = {
+  lead_created: { icon: '🔍', label: 'Novo lead capturado' }, lead_qualified: { icon: '🎯', label: 'Lead qualificado' },
+  lead_converted: { icon: '💰', label: 'Conversão' }, lead_recovered: { icon: '♻️', label: 'Lead antigo recuperado' },
+  conversation_handled: { icon: '💬', label: 'Conversa atendida' }, followup_sent: { icon: '📨', label: 'Follow-up enviado' },
+  content_created: { icon: '📝', label: 'Conteúdo criado' }, content_published: { icon: '📱', label: 'Conteúdo publicado' },
+  campaign_created: { icon: '📈', label: 'Campanha criada' }, campaign_optimized: { icon: '📈', label: 'Campanha otimizada' },
+  opportunity_found: { icon: '✨', label: 'Oportunidade identificada' }, review_replied: { icon: '⭐', label: 'Avaliação respondida' },
+  competitor_scanned: { icon: '🕵️', label: 'Concorrente monitorado' }, automation_completed: { icon: '⚡', label: 'Automação concluída' },
+  trial_started: { icon: '🚀', label: 'Teste iniciado' }, trial_completed: { icon: '🏁', label: 'Teste concluído' },
+  discovery_revealed: { icon: '🔓', label: 'Descoberta revelada' }, reward_activated: { icon: '🎁', label: 'Recompensa ativada' },
+  goal_completed: { icon: '🎯', label: 'Meta atingida' }, first_customer: { icon: '🏆', label: 'Primeiro cliente conquistado' },
+}
+// Eventos que não são "trabalho da IA" (não contam como dado real suficiente).
+const NON_WORK_EVENTS = new Set(['trial_started', 'trial_completed', 'reward_activated'])
 
-  // Sinais compostos: reais onde existem, projetados onde a integração não ligou.
-  const leadsNew = iB(6, 20)
-  const leadsQualified = iB(3, 10)
-  const conversations = iB(3, 12)
-  const conversions = iB(0, 3)
-  const contentPublished = Math.max(real.postsPublished, iB(1, 6))
-  const contentCreated = Math.max(real.posts, contentPublished + iB(1, 4))
-  const opportunities = Math.max(real.opportunities, iB(1, 4))
-  const campaigns = Math.max(real.campaigns, iB(0, 2))
-  const automations = iB(8, 30)
+// Lê os sinais REAIS do banco. Qualquer consulta que falhar vira null
+// (desconhecido) — nunca 0 inventado nem sorteio. `sinceIso` = última visita.
+export async function fetchRealSignals(companyId: string, sinceIso: string | null, daysSinceVisit: number): Promise<RealSignals> {
+  const since = sinceIso ?? new Date(Date.now() - 7 * 86400000).toISOString()
+  const cnt = async (q: PromiseLike<{ count: number | null; error: unknown }>): Promise<number | null> => {
+    try { const { count, error } = await q; return error ? null : (count ?? 0) } catch { return null }
+  }
+  const head = (t: string) => supabase.from(t).select('id', { count: 'exact', head: true }).eq('company_id', companyId)
+  const [posts, postsPublished, opportunities, reviewsReplied, campaigns, leadsRes, evRes, snapRes] = await Promise.all([
+    cnt(head('posts')), cnt(head('posts').eq('status', 'publicado')), cnt(head('opportunities')),
+    cnt(head('reviews').not('owner_reply', 'is', null)), cnt(head('campaigns')),
+    supabase.from('leads').select('stage, created_at').eq('company_id', companyId),
+    supabase.from('progress_events').select('event_type, gp, created_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(1000),
+    supabase.from('instagram_performance_snapshots').select('engagement_rate').eq('company_id', companyId).order('captured_for', { ascending: false }).limit(1).maybeSingle(),
+  ])
+  const leadRows = leadsRes.error ? null : (leadsRes.data ?? [])
+  const events = evRes.error ? null : (evRes.data ?? [])
+  const sinceMs = new Date(since).getTime()
+  const evSince = events?.filter(e => new Date(e.created_at).getTime() >= sinceMs) ?? null
 
-  // "Enquanto você estava fora" — clicável leva ao módulo correspondente.
-  const whileAway: WhileAwayItem[] = [
-    { key: 'leads_analyzed', icon: '🔍', label: 'leads analisados', count: leadsNew + iB(2, 8), link: FUNIL },
-    { key: 'leads_qualified', icon: '🎯', label: 'leads qualificados', count: leadsQualified, link: FUNIL },
-    { key: 'content_published', icon: '📱', label: 'conteúdos publicados', count: contentPublished, link: POSTS },
-    { key: 'conversations', icon: '💬', label: 'conversas atendidas', count: conversations, link: ATEND },
-    { key: 'opportunities', icon: '✨', label: 'oportunidades identificadas', count: opportunities, link: '/dashboard/oportunidades' },
-    { key: 'campaigns', icon: '📈', label: 'campanhas otimizadas', count: Math.max(1, campaigns), link: FUNIL },
-  ]
-  const actionsCount = whileAway.reduce((s, w) => s + w.count, 0) + automations
+  // Streak real: dias consecutivos (até hoje/ontem) com algum evento de trabalho.
+  let streak: number | null = null
+  if (events) {
+    const days = new Set(events.filter(e => !NON_WORK_EVENTS.has(e.event_type)).map(e => e.created_at.slice(0, 10)))
+    const d = new Date(); let n = 0
+    if (!days.has(d.toISOString().slice(0, 10))) d.setUTCDate(d.getUTCDate() - 1)
+    while (days.has(d.toISOString().slice(0, 10))) { n++; d.setUTCDate(d.getUTCDate() - 1) }
+    streak = n
+  }
+  return {
+    posts, postsPublished, opportunities, reviewsReplied, campaigns,
+    leads: leadRows ? leadRows.length : null,
+    leadsQualified: leadRows ? leadRows.filter(l => mapStage(l.stage) === 'qualificado').length : null,
+    leadsSales: leadRows ? leadRows.filter(l => mapStage(l.stage) === 'venda').length : null,
+    leadsSinceVisit: leadRows ? leadRows.filter(l => new Date(l.created_at).getTime() >= sinceMs).length : null,
+    totalGp: events ? events.reduce((s, e) => s + (e.gp ?? 0), 0) : null,
+    gpSinceVisit: evSince ? evSince.reduce((s, e) => s + (e.gp ?? 0), 0) : null,
+    eventsSinceVisit: evSince ? evSince.filter(e => !NON_WORK_EVENTS.has(e.event_type)).length : null,
+    workEvents: events ? events.filter(e => !NON_WORK_EVENTS.has(e.event_type)).length : null,
+    recentEvents: events ? events.slice(0, 5).map(e => ({ event_type: e.event_type, gp: e.gp ?? 0, created_at: e.created_at })) : [],
+    streak,
+    engagementRate: snapRes.error ? null : (snapRes.data?.engagement_rate ?? null),
+    daysSinceVisit,
+  }
+}
 
-  // GP acumulado (derivado dos volumes × regra) + GP desde a última visita.
-  const totalGp = Math.round(
-    leadsNew * 4 * GP.lead_created + leadsQualified * 6 * GP.lead_qualified +
-    conversions * 8 * GP.lead_converted + contentPublished * 5 * GP.content_published +
-    campaigns * 4 * GP.campaign_optimized + automations * 3 * GP.automation_completed +
-    opportunities * 5 * GP.opportunity_found + real.reviewsReplied * GP.review_replied,
-  )
-  const gpEarnedSinceVisit =
-    leadsQualified * GP.lead_qualified + conversions * GP.lead_converted +
-    contentPublished * GP.content_published + campaigns * GP.campaign_optimized +
-    conversations * GP.conversation_handled + opportunities * GP.opportunity_found
+const n0 = (v: number | null) => v ?? 0
 
-  const { level, next } = levelForGp(totalGp)
-  const span = (next ? next.minGp : (level.maxGp ?? totalGp + 1)) - level.minGp
-  const into = totalGp - level.minGp
+// Compõe o payload. REGRA (docs/PITFALLS.md): nada aqui é sorteado ou
+// projetado. Métrica sem fonte real = null (a tela mostra BlurredValue).
+export function buildProgress(real: RealSignals): ProgressData {
+  const totalGp = real.totalGp
+  const gpEarnedSinceVisit = real.gpSinceVisit
+  const gp0 = n0(totalGp)
+  const { level, next } = levelForGp(gp0)
+  const span = (next ? next.minGp : (level.maxGp ?? gp0 + 1)) - level.minGp
+  const into = gp0 - level.minGp
   const levelPct = next ? Math.min(100, Math.round((into / Math.max(span, 1)) * 100)) : 100
-  const gpToNext = next ? Math.max(0, next.minGp - totalGp) : 0
+  const gpToNext = next ? Math.max(0, next.minGp - gp0) : 0
 
-  // Saúde: score composto + tendência (determinística).
-  const healthTo = iB(58, 92)
-  const trend = iB(-12, 16)
-  const healthFrom = Math.max(20, Math.min(99, healthTo - trend))
-  const declining = trend < 0
+  const whileAway: WhileAwayItem[] = [
+    { key: 'leads', icon: '🔍', label: 'leads no funil', count: real.leads, link: FUNIL },
+    { key: 'leads_qualified', icon: '🎯', label: 'leads qualificados', count: real.leadsQualified, link: FUNIL },
+    { key: 'content_published', icon: '📱', label: 'conteúdos publicados', count: real.postsPublished, link: POSTS },
+    { key: 'conversations', icon: '💬', label: 'conversas atendidas', count: null, link: ATEND },
+    { key: 'opportunities', icon: '✨', label: 'oportunidades identificadas', count: real.opportunities, link: '/dashboard/oportunidades' },
+    { key: 'campaigns', icon: '📈', label: 'campanhas criadas', count: real.campaigns, link: FUNIL },
+  ]
+  const actionsCount = real.eventsSinceVisit
 
   const deltas: Delta[] = [
-    { label: 'novos leads', value: `+${leadsNew}`, up: true },
-    { label: 'leads qualificados', value: `+${leadsQualified}`, up: true },
-    { label: 'oportunidades', value: `+${opportunities}`, up: true },
-    { label: 'engajamento', value: `${trend >= 0 ? '+' : ''}${trend}%`, up: trend >= 0 },
+    { label: 'novos leads', value: real.leadsSinceVisit == null ? null : `+${real.leadsSinceVisit}`, up: true },
+    { label: 'leads qualificados', value: real.leadsQualified == null ? null : String(real.leadsQualified), up: true },
+    { label: 'oportunidades', value: real.opportunities == null ? null : String(real.opportunities), up: true },
+    { label: 'engajamento', value: real.engagementRate == null ? null : `${real.engagementRate}%`, up: true },
   ]
 
-  // Próximo milestone: o reward/level mais próximo.
   const milestone = {
     title: next ? `Subir para ${next.name}` : 'Ultra Intelligence — 24h',
     icon: next ? next.icon : '🔮',
@@ -229,40 +273,29 @@ export function buildProgress(company: Pick<CompanyData, 'id' | 'business_name'>
     nextGoal: `${Math.max(1, Math.ceil(gpToNext / GP.lead_qualified))} leads qualificados`,
   }
 
-  // Business Health metrics.
-  const status: HealthStatus = trend >= 6 ? 'growing' : trend >= -3 ? 'stable' : 'at_risk'
-  const hm = (label: string, v: string, d: number): HealthMetric => ({ label, value: v, delta: d })
+  // Business Health: sem fonte real de "score"/tendência → status e score null.
+  const conv = real.leads && real.leadsSales != null ? Number(((real.leadsSales / real.leads) * 100).toFixed(1)) : null
+  const hm = (label: string, v: number | string | null): HealthMetric => ({ label, value: v == null ? null : String(v), delta: null })
   const health = {
-    status,
+    status: null as HealthStatus | null,
     metrics: [
-      hm('Leads', String(leadsNew), iB(-10, 30)), hm('Qualificados', String(leadsQualified), iB(-5, 25)),
-      hm('Conversas', String(conversations), iB(-8, 20)), hm('Conversão', `${iB(3, 22)}%`, iB(-6, 14)),
-      hm('Engajamento', `${iB(30, 80)}%`, trend), hm('Conteúdo', String(contentPublished), iB(-5, 40)),
-      hm('Campanhas', String(campaigns), iB(0, 30)), hm('Automação', String(automations), iB(5, 40)),
+      hm('Leads', real.leads), hm('Qualificados', real.leadsQualified), hm('Conversas', null),
+      hm('Conversão', conv == null ? null : `${conv}%`), hm('Engajamento', real.engagementRate == null ? null : `${real.engagementRate}%`),
+      hm('Conteúdo', real.postsPublished), hm('Campanhas', real.campaigns), hm('Automação', null),
     ],
   }
+  // Semanal: sem série histórica real ainda → todas null (barras embaçadas).
+  const weekly: WeeklyRow[] = ['Leads', 'Qualificados', 'Engajamento', 'Conversões', 'Receita'].map(label => ({ label, pct: null }))
 
-  const weekly: WeeklyRow[] = [
-    { label: 'Leads', pct: iB(-10, 30) }, { label: 'Qualificados', pct: iB(-6, 26) },
-    { label: 'Engajamento', pct: trend }, { label: 'Conversões', pct: iB(-8, 20) },
-    { label: 'Receita', pct: iB(-6, 24) },
-  ]
-
-  // Pins — desbloqueio determinístico por marcos atingidos.
+  const streak = real.streak
   const unlockedKeys = new Set<string>()
-  if (conversions >= 1) unlockedKeys.add('growth_starter')
-  if (leadsNew * 4 >= 40) unlockedKeys.add('lead_hunter')
-  if (conversions >= 1) unlockedKeys.add('revenue_builder')
-  if (automations * 3 >= 60) unlockedKeys.add('automation_master')
+  if (n0(real.leadsSales) >= 1) { unlockedKeys.add('growth_starter'); unlockedKeys.add('revenue_builder') }
+  if (n0(real.leads) >= 100) unlockedKeys.add('lead_hunter')
+  if (n0(real.workEvents) >= 100) unlockedKeys.add('automation_master')
   if (level.level >= 3) unlockedKeys.add('ultra_intelligence')
-  const streak = iB(2, 9)
-  if (streak >= 7) unlockedKeys.add('seven_day_streak')
+  if (n0(streak) >= 7) unlockedKeys.add('seven_day_streak')
   if (level.level >= 5) unlockedKeys.add('growth_legend')
-
-  const pins: Pin[] = PIN_DEFS.map(p => ({
-    ...p, unlocked: unlockedKeys.has(p.key),
-    unlockedAt: unlockedKeys.has(p.key) ? ['hoje', 'ontem', 'há 3 dias', 'esta semana'][iB(0, 3)] : undefined,
-  }))
+  const pins: Pin[] = PIN_DEFS.map(p => ({ ...p, unlocked: unlockedKeys.has(p.key) }))
 
   const rewards: Reward[] = REWARD_DEFS.map(r => {
     const unlocked = r.category === 'ai_boost' ? unlockedKeys.has('ultra_intelligence') && r.key === 'ultra_intelligence'
@@ -270,52 +303,33 @@ export function buildProgress(company: Pick<CompanyData, 'id' | 'business_name'>
     return { ...r, unlocked, active: false }
   })
 
-  const timeline: TimelineItem[] = [
-    { when: 'Hoje — 14:32', icon: '🎯', label: 'Lead qualificado', gp: GP.lead_qualified },
-    { when: 'Hoje — 13:21', icon: '📱', label: 'Campanha otimizada', gp: GP.campaign_optimized },
-    { when: 'Hoje — 11:03', icon: '💰', label: 'Nova conversão', gp: GP.lead_converted },
-    { when: 'Ontem — 18:40', icon: '🏆', label: 'Conquista desbloqueada' },
-    { when: 'Ontem — 09:12', icon: '✨', label: `${opportunities} oportunidades encontradas`, gp: opportunities * GP.opportunity_found },
-  ]
+  const timeline: TimelineItem[] = real.recentEvents.map(e => {
+    const meta = EVENT_LABEL[e.event_type] ?? { icon: '✅', label: e.event_type }
+    return { when: relTime(e.created_at), icon: meta.icon, label: meta.label, gp: e.gp > 0 ? e.gp : undefined }
+  })
 
-  const nextBestAction = declining
-    ? { title: `Criar campanha para recuperar o alcance perdido`, cta: 'Abrir Marketing AI', link: '/dashboard/marketing-ai/content' }
-    : leadsQualified > 0
-      ? { title: `Enviar proposta para ${Math.min(3, leadsQualified)} leads qualificados`, cta: 'Abrir Funil', link: FUNIL }
-      : { title: `Fazer follow-up com ${conversations} conversas`, cta: 'Abrir Atendimento', link: ATEND }
-
-  const recovery = declining ? {
-    declining: true,
-    metrics: [
-      { label: 'Leads', value: `${weekly[0].pct}%` },
-      { label: 'Engajamento', value: `${trend}%` },
-      { label: 'Conversões', value: `${weekly[3].pct}%` },
-    ],
-    causes: [
-      'Conteúdo teve menor alcance nos últimos dias.',
-      'Concorrentes aumentaram a frequência de posts.',
-      'Leads estão demorando mais para responder.',
-    ],
-  } : null
+  const q = n0(real.leadsQualified)
+  const nextBestAction = q > 0
+    ? { title: `Enviar proposta para ${Math.min(3, q)} ${Math.min(3, q) === 1 ? 'lead qualificado' : 'leads qualificados'}`, cta: 'Abrir Funil', link: FUNIL }
+    : n0(real.leads) > 0
+      ? { title: 'Fazer follow-up com os leads do funil', cta: 'Abrir Funil', link: FUNIL }
+      : { title: 'Criar o primeiro conteúdo com o Marketing AI', cta: 'Abrir Marketing AI', link: POSTS }
 
   const lastVisitLabel = real.daysSinceVisit <= 0 ? 'hoje'
     : real.daysSinceVisit === 1 ? 'ontem' : `há ${real.daysSinceVisit} dias`
 
-  // Jornada do negócio: acende conforme o XP passa cada estágio.
-  const curIdx = JOURNEY_STAGES.reduce((acc, s, i) => (s.at <= totalGp ? i : acc), 0)
+  const curIdx = JOURNEY_STAGES.reduce((acc, s, i) => (s.at <= gp0 ? i : acc), 0)
   const journey: JourneyStage[] = JOURNEY_STAGES.map((s, i) => ({
     key: s.key, label: s.label, state: i < curIdx ? 'done' : i === curIdx ? 'current' : 'locked',
   }))
 
-  const reachPct = Math.round(iB(-40, 260)) / 10 // ex.: +18.4% (uma casa decimal)
-  const engagementPct = trend
-  const firstUnlocked = pins.find(p => p.unlocked && p.unlockedAt === 'hoje')
-  const newAchievement = firstUnlocked ? firstUnlocked.name : null
+  const hasRealData = [real.posts, real.leads, real.opportunities, real.campaigns, real.reviewsReplied, real.workEvents].some(v => (v ?? 0) > 0)
 
   return {
     lastVisitLabel, whileAway, actionsCount, gpEarnedSinceVisit, totalGp,
-    level, nextLevel: next, gpToNext, levelPct, healthFrom, healthTo, deltas,
-    milestone, health, weekly, pins, rewards, timeline, nextBestAction, recovery, streak,
-    journey, reachPct, engagementPct, contentCreated, newAchievement,
+    level, nextLevel: next, gpToNext, levelPct, healthFrom: null, healthTo: null, deltas,
+    milestone, health, weekly, pins, rewards, timeline, nextBestAction, recovery: null, streak,
+    journey, reachPct: null, engagementPct: real.engagementRate, contentCreated: real.posts,
+    newAchievement: null, hasRealData,
   }
 }

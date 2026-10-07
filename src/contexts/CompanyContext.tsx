@@ -5,6 +5,7 @@ import { identifyCompany, resetAnalytics } from '../lib/analytics'
 
 export interface CompanyData {
   id: string
+  created_at: string | null
   business_name: string
   business_type: string | null
   city: string | null
@@ -67,7 +68,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     if (!user) { setCompany(null); setAccess(null); setLoadError(false); setLoadedFor(null); setLoading(false); resetAnalytics(); return }
     const { data, error } = await supabase
       .from('companies')
-      .select('id, business_name, business_type, city, phone, website_url, instagram_url, facebook_url, google_place_id, google_rating, google_review_count, instagram_user_id, plan, agent_enabled, marketing_ai_enabled, trial_started_at, trial_expires_at, trial_cancelled_at, trial_intro_seen_at, stripe_subscription_id, access_blocked_reason, language, vertical_key, playbook_answers')
+      .select('id, created_at, business_name, business_type, city, phone, website_url, instagram_url, facebook_url, google_place_id, google_rating, google_review_count, instagram_user_id, plan, agent_enabled, marketing_ai_enabled, trial_started_at, trial_expires_at, trial_cancelled_at, trial_intro_seen_at, stripe_subscription_id, access_blocked_reason, language, vertical_key, playbook_answers')
       .eq('user_id', user.id)
       .maybeSingle()
     if (error) {

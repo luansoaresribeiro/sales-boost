@@ -147,6 +147,47 @@
         principalmente `react-hooks/*` e as edge functions
         (`supabase/functions`, mexer = deploy arriscado).
 
+## Próximas etapas pedidas pelo dono (2026-10-06, nesta ordem)
+
+1. **Pendências com bolinha vermelha** — ícone com contador de pendências
+   reais (aprovações, Instagram desconectado, item sem foto, dado da ficha
+   faltando); cada item leva direto à tela/campo certo e some quando
+   resolvido. Só tela + leitura.
+   **FEITO (2026-10-06, só no branch local, sem deploy):** sino no layout
+   (`src/lib/usePendencias.ts` + `PendenciasBell.tsx`). Fontes: aprovações
+   (agent_actions PENDING + marketing_ai_content idea/draft, mesma fila da
+   ApprovalsPage), Instagram (não conectado / vencido / vence em ≤7 dias),
+   fotos abaixo do mínimo por item do catálogo, perguntas da ficha sem
+   resposta, Telegram não conectado (baixa prioridade, não conta na
+   bolinha). Vault ficou de fora por decisão do dono. Tela e código andam
+   juntos: ainda falta publicar o site e conferir no celular/desktop.
+2. **Fim do onboarding com dados e conectores** — frase "Esse é o momento
+   importante de alimentar os dados reais — depois é só relaxar!".
+   Obrigatório: dados do negócio, perguntas da ficha e 1 item com fotos.
+   Instagram em destaque, mas com "conectar depois" (vira pendência do
+   item 1) até o App Review da Meta sair; depois passa a obrigatório.
+   **FEITO (2026-10-06, em PR, só frontend, sem migration/deploy de
+   function):** tela `/setup` (`src/pages/setup/`), hook
+   `src/lib/useSetupStatus.ts`, regras compartilhadas com o sino em
+   `src/lib/setupRules.ts`, gate em `ClientRoute` (`src/lib/setupGate.ts`).
+   Ainda falta: publicar o site e conferir no celular. Ver
+   [DECISIONS.md](DECISIONS.md).
+2b. **Growth Qualification** (próxima, antes do Plano da semana) —
+   diagnóstico com score (Growth Score), acesso grátis (1 vídeo + 1
+   estratégia, sem prazo em dias), popup "seu acesso grátis começou",
+   popup do cupom depois do 1º vídeo (cupom com prazo real de 7 dias a
+   partir da entrega da estratégia), preço novo (R$2.449 mensal; R$1.449
+   anual/cupom de 1º mês — Stripe precisa de 3 itens novos, aprovação do
+   dono) e Business Game pra retenção. Decisão registrada em
+   [DECISIONS.md](DECISIONS.md) (2026-10-06), **não implementada**.
+3. **Plano da semana** — no Calendário da Semana existente: quantos posts,
+   de que tipo (vídeo/carrossel/bastidor), sobre qual item e por quê,
+   calculado por fotos disponíveis, ritmo de aprovação do dono, 80/20,
+   regras da ficha e teto de vídeos. Corrige a divergência tela × código
+   registrada em [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md).
+   Mexe em `creative-generate` (deploy precisa de aprovação). Decisão do
+   dono pendente: teto de vídeos por semana no plano de R$1.449.
+
 ## Fora do código (depende do dono, nenhum agente resolve sozinho)
 
 - App Review / verificação da Meta (desbloqueia contas não-testadoras no
@@ -183,3 +224,19 @@ conforme forem retomados:
       [PRODUCT.md](PRODUCT.md).
 - [ ] Automação de deploy (GitHub Actions) — isso É o P4 acima, mantido
       também aqui pra cross-reference.
+
+## Divergências registradas (etapa 1, pendências)
+
+- **HermesGapsPanel × `usePendencias`:** `HermesGapsPanel.tsx` calcula
+  "lacunas" com condições mais fracas (ex.: só checa se há alguma resposta/
+  foto). O sino usa condições exatas e independentes: foto abaixo do
+  mínimo da ficha por item, cada pergunta da ficha sem resposta, validade
+  do token do Instagram. Os dois podem discordar; o sino é a fonte de
+  verdade pro dono. Unificar é trabalho futuro.
+- **`CatalogItems` agora adiciona fotos a item já existente** (botão
+  "＋ Adicionar fotos" no card; antes só dava pra subir fotos na criação).
+  Atualiza `meta.photos` e `image_url` (se vazio). O card mostra "N/min
+  fotos". Aceita `focusItemId` (vindo do sino via evento global
+  `sb:open-add`, ouvido por `BusinessContextButton`).
+- `useRealtime` ganhou opções `key` (evita colisão de canal com a
+  ApprovalsPage na mesma tabela) e `column` (em `companies` a chave é `id`).

@@ -85,6 +85,24 @@ export async function fetchCatalogSchema(verticalKey: string): Promise<CatalogSc
   } catch { return null }
 }
 
+// Config do /setup (fim do cadastro), lida da ficha: vertical_playbooks.config.setup.
+// Sem a chave (ou ficha 'generico'): instagram opcional e 1 item. Só LÊ — nunca grava.
+export interface SetupConfig { instagramRequired: boolean; minItems: number }
+export const DEFAULT_SETUP_CONFIG: SetupConfig = { instagramRequired: false, minItems: 1 }
+
+export async function fetchSetupConfig(verticalKey: string): Promise<SetupConfig> {
+  if (verticalKey === 'generico') return DEFAULT_SETUP_CONFIG
+  try {
+    const { data } = await supabase.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
+    const s = (data?.config as { setup?: { instagram_required?: unknown; min_items?: unknown } } | undefined)?.setup
+    const n = Number(s?.min_items)
+    return {
+      instagramRequired: s?.instagram_required === true,
+      minItems: Number.isInteger(n) && n >= 1 && n <= 10 ? n : DEFAULT_SETUP_CONFIG.minItems,
+    }
+  } catch { return DEFAULT_SETUP_CONFIG }
+}
+
 // Limpa os valores de campo do catálogo contra o schema real antes de
 // gravar — mesma lógica de sanitizePlaybookAnswers, mas pros campos do
 // catálogo (tipos diferentes: number/url/photos além de text/select).

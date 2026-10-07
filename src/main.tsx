@@ -31,6 +31,9 @@ import ProspectsPage from './pages/owner/ProspectsPage.tsx'
 import LeadDiscoverySettingsPage from './pages/owner/LeadDiscoverySettingsPage.tsx'
 import OwnerSettingsPage from './pages/owner/OwnerSettingsPage.tsx'
 import PlatformHealthPage from './pages/owner/PlatformHealthPage.tsx'
+import SetupPage from './pages/setup/SetupPage.tsx'
+import { setupGateApplies } from './lib/setupGate.ts'
+import { useSetupStatus } from './lib/useSetupStatus.ts'
 import OnboardingPage from './pages/onboarding/OnboardingPage.tsx'
 import DiagnosticoPage from './pages/diagnostico/DiagnosticoPage.tsx'
 import PrivacyPolicyPage from './pages/legal/PrivacyPolicyPage.tsx'
@@ -60,6 +63,16 @@ function DashboardIndex() {
   return <Navigate to={company?.marketing_ai_enabled === false ? '/dashboard/atividades' : '/dashboard/marketing-ai'} replace />
 }
 
+// Gate do /setup: só montado quando a conta é nova e sem assinatura. Avalia
+// UMA vez (sem tempo real, pra não expulsar o dono do painel depois). Erro ao
+// calcular = deixa passar (falha aberta).
+function SetupGate({ companyId, children }: { companyId: string; children: React.ReactNode }) {
+  const status = useSetupStatus(companyId, { live: false })
+  if (status.loading) return <Spinner />
+  if (!status.error && !status.allDone) return <Navigate to="/setup" replace />
+  return <>{children}</>
+}
+
 function ClientRoute({ children }: { children: React.ReactNode }) {
   const { user, role, loading } = useAuth()
   const { company, access, loading: companyLoading, loadError, refreshCompany } = useCompany()
@@ -83,6 +96,13 @@ function ClientRoute({ children }: { children: React.ReactNode }) {
   const exempt = location.pathname.startsWith('/dashboard/trial') || location.pathname.startsWith('/dashboard/settings') || location.pathname.startsWith('/dashboard/access-blocked')
   if (access && !access.granted && !exempt) {
     return <Navigate to={access.source === 'blocked' ? '/dashboard/access-blocked' : '/dashboard/trial'} replace />
+  }
+  // Fim do cadastro (/setup) — DEPOIS de todos os checks acima (não mudar a
+  // ordem: bug "recarreguei e caí no onboarding"). Não se aplica ao próprio
+  // /setup nem às telas de acesso/plano.
+  const accessScreen = location.pathname.startsWith('/dashboard/trial') || location.pathname.startsWith('/dashboard/access-blocked')
+  if (!accessScreen && location.pathname !== '/setup' && setupGateApplies(company)) {
+    return <SetupGate companyId={company.id}>{children}</SetupGate>
   }
   return <>{children}</>
 }
@@ -142,6 +162,8 @@ function RouterRoot() {
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 
+      {/* Fim do cadastro: atrás do login, fora do DashboardLayout */}
+      <Route path="/setup" element={<ClientRoute><SetupPage /></ClientRoute>} />
       <Route path="/onboarding" element={<OnboardingPage />} />
       <Route path="/diagnostico/:id" element={<DiagnosticoPage />} />
       <Route path="/privacidade" element={<PrivacyPolicyPage />} />

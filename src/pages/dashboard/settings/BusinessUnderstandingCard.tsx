@@ -36,7 +36,7 @@ const FIELDS: { key: keyof Understanding; label: string; area?: boolean }[] = [
 
 // Campo "digite e vira pílula" — versão compacta do mesmo componente do
 // onboarding (src/pages/onboarding/OnboardingPage.tsx), pro estilo deste card.
-function SettingsTagInput({ values, onChange, max }: { values: string[]; onChange: (v: string[]) => void; max: number }) {
+export function SettingsTagInput({ values, onChange, max }: { values: string[]; onChange: (v: string[]) => void; max: number }) {
   const [draft, setDraft] = useState('')
   const add = () => {
     const v = draft.trim()

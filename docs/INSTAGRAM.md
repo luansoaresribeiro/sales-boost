@@ -67,3 +67,14 @@ vez de continuar desconectando automaticamente.
 [DECISIONS.md](DECISIONS.md) se a conta em uso está com uso aprovado — se
 não estiver, é esperado que o agente desconecte, e a solução é pedir
 aprovação explícita, não insistir reconectando.
+
+## Conexão pelo /setup (2026-10-06)
+
+O cartão "Conecte seu Instagram" do `/setup` usa o mesmo link das
+Configurações (`instagram-oauth-start?company_id=...`). A volta do OAuth
+(`instagram-oauth-callback`) continua caindo em **Configurações** — a
+function não foi alterada. Se o `/setup` ainda estiver incompleto, o gate
+em `ClientRoute` leva a pessoa de volta pro `/setup`, onde o cartão já
+aparece como conectado. "Conectar depois" não grava nada: o sino de
+pendências continua mostrando "Conectar o Instagram". Pode virar
+obrigatório por ficha com `config.setup.instagram_required = true`.

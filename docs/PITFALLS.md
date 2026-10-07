@@ -137,6 +137,41 @@ dono. Consequências:
 - Em branch de PR a Cloudflare comenta "Deployment successful", mas é só
   versão de prévia — o domínio só muda com push no `main`.
 
+## Popup de boas-vindas mostra números inventados
+
+Achado em 2026-10-06 (teste visual com empresa sintética no ensaio, criada
+na hora e sem nenhum dado): o popup "Bom dia, construtor de negócio"
+(`ProgressPopup.tsx` → `buildProgress` em `progressGame.ts`) mostrou
+"+20.5% alcance", "+15% engajamento", "51 ações da IA". Os números vêm de
+`seededRng` (sorteio fixo por empresa, "demo-first") misturados com dado
+real via `Math.max(real, sorteio)`. Viola a regra 5 (nunca inventar números)
+e a decisão do teste de 7 dias ("não é demo"). ~~Não corrigido ainda —
+depende de decisão do dono.~~
+
+**CORRIGIDO em 2026-10-06 (decisão do dono: só números reais; sem dado real =
+número embaçado).** Nova regra: `buildProgress(real)` em `progressGame.ts` não
+usa mais `seededRng` nem `Math.max(real, sorteio)` (o modo "demo-first" do
+progressGame acabou). Cada métrica vem de `fetchRealSignals()` (tabelas
+`posts`, `opportunities`, `reviews`, `campaigns`, `leads`, `progress_events`,
+`instagram_performance_snapshots`) ou fica `null`, e a tela mostra
+`<BlurredValue/>` (`progressParts.tsx`): placeholder fixo, `blur(6px)`, rótulo
+"aguardando dados reais". Ficam embaçados por falta de fonte: alcance %, saúde
+(score/status), conversas atendidas, automações, semanal (todas as linhas),
+receita. XP/liga vêm da soma de `progress_events.gp` (real). `choosePopup`
+só celebra (liga/streak/resultado) com dado real; sem nenhum dado de trabalho
+cai em "status" com o texto honesto. Ao criar métrica nova nessas telas: se não
+houver fonte real, `null` + `BlurredValue` — nunca estimativa.
+
+## Teste visual local contra o ensaio
+
+Pra ver a tela de verdade sem tocar produção: `vite build` com
+`VITE_SUPABASE_URL/ANON_KEY` do ensaio, `vite preview --open false` (o
+config usa https e tenta abrir navegador — sem `--open false` o processo
+cai), Playwright do `/opt/pw-browsers`. O Chromium não alcança o Supabase
+pelo proxy do ambiente: interceptar `*.supabase.co` com `page.route` e
+repassar via `fetch` do Node. Conta e empresa sintéticas criadas pelo
+service role do ensaio e apagadas no fim.
+
 ## Migrations com cron apontam pra produção
 
 Várias migrations (`010_insights_cron.sql`, `015_find_sales_leads_cron.sql`,
@@ -219,3 +254,11 @@ filhos), o ajuste é trocar `children: childIds` por
 `children: childIds.join(',')` em `createMediaContainer` — mudança de 1
 linha, mas deploy de `agent-actions` é alteração arriscada (lista em
 CLAUDE.md), exige aprovação do dono antes.
+
+## Realtime: dois `useRealtime` na mesma tabela/empresa colidem
+
+O nome do canal era `rt:${table}:${companyId}`; o Supabase reaproveita
+canal de mesmo nome e dá erro ao adicionar callback depois do `subscribe()`.
+Quando mais de um componente escuta a mesma tabela (ex.: sino de pendências
+no layout + ApprovalsPage), passe `{ key: '...' }` como 4º argumento. Em
+`companies` a coluna de filtro é `id`, não `company_id` (`{ column: 'id' }`).
