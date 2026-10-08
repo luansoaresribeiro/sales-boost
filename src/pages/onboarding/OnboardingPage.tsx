@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { fetchBusinessTypes, OTHER_BUSINESS_TYPE } from '../../lib/businessTypes'
 import { fetchVerticalKey, fetchOnboardingQuestions, bi, type PlaybookQuestion } from '../../lib/verticalPlaybook'
 import { useLang } from '../../contexts/LanguageContext'
+import { useAuth } from '../../contexts/AuthContext'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -565,8 +566,27 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   )
 }
 
+// Conta logada SEM empresa (ex.: empresa excluída pelo Owner, cadastro
+// abandonado) cai aqui pelo ClientRoute. Sem esta faixa a pessoa ficava presa:
+// "Entrar" → já logado → /dashboard → sem empresa → /onboarding, sem botão de sair.
 export default function OnboardingPage() {
-  return <DiagnosticFlow />
+  const { user, signOut } = useAuth()
+  const { lang } = useLang()
+  const navigate = useNavigate()
+  return (
+    <>
+      {user?.email && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', flexWrap: 'wrap', padding: '10px 16px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: '13px', color: MUTED, textAlign: 'center' }}>
+          <span style={{ overflowWrap: 'anywhere' }}>{lang === 'en' ? 'Signed in as ' : 'Você está conectado como '}<strong style={{ color: 'white' }}>{user.email}</strong></span>
+          <button onClick={async () => { await signOut(); navigate('/login', { replace: true }) }}
+            style={{ minHeight: 36, padding: '6px 14px', borderRadius: '9px', border: '1px solid rgba(255,255,255,0.18)', background: 'transparent', color: 'white', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}>
+            {lang === 'en' ? 'Sign out and use another account' : 'Sair e entrar com outra conta'}
+          </button>
+        </div>
+      )}
+      <DiagnosticFlow />
+    </>
+  )
 }
 
 function H({ t, s }: { t: string; s: string }) {
