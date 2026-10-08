@@ -342,3 +342,47 @@ Decisões do dono (conversa de 2026-10-08):
   5. **Proibido:** IA de imagem/vídeo gerar o lugar do zero (seria lugar
      falso em anúncio de imóvel) e usar Google Earth/Street View/fotos do
      Google Maps (termos do Google proíbem).
+
+
+## 2026-10-08 — Pagamento (fatia 4): como foi implementado
+
+- **Planos no código:** `create-checkout` recebe `{ plan: 'monthly' | 'annual_commit' }`
+  (o contrato antigo `basic/pro/ultra` e a região `us` foram removidos; só a
+  `TrialSummaryPage` chamava). O preço é buscado no Stripe pelo `lookup_key`
+  (`sb_monthly`, `sb_annual_commit`) — não existem mais `STRIPE_PRICE_*` para
+  estes planos. Na coluna `companies.plan` os dois planos gravam `'pro'`
+  (plano único com tudo; o resto do app lê `plan !== 'free'`);
+  o plano real fica em `companies.billing_plan`.
+- **Cupom `SB_PRIMEIRO_MES`:** aplicado no servidor só se plano = mensal,
+  `companies.coupon_offer_shown_at` existe e tem no máximo 7 dias, e a
+  empresa nunca assinou antes (`billing_plan` nulo — trava contra
+  cancelar e reassinar pra repetir o desconto). Nada grava
+  `coupon_offer_shown_at` ainda (o popup é a fatia 5): sem popup, não há cupom.
+  A tela só mostra a oferta (com o prazo restante real) se a coluna estiver
+  dentro dos 7 dias.
+- **Fidelidade e multa (anual):** `commitment_end_at` = início da
+  assinatura + 12 meses. **Multa = 30% × meses restantes × R$1.449
+  (144.900 centavos)**, com meses restantes = meses de calendário
+  **arredondados pra cima** entre a data efetiva do fim da assinatura e
+  `commitment_end_at` (máx. 12). Calculada no `stripe-webhook` em
+  `customer.subscription.updated` (cancelamento agendado: `cancel_at` ou
+  `cancel_at_period_end`; se o cliente desfaz, a multa é limpa) e em
+  `customer.subscription.deleted`. Gravada em
+  `companies.early_termination_fee_cents` e registrada em `access_audit_log`
+  (`early_termination_fee_recorded`). Exemplo: fim efetivo 5,2 meses antes
+  do fim da fidelidade -> 6 meses -> R$2.608,20.
+- **A multa NÃO é cobrada automaticamente.** Cobrar dinheiro depende de
+  decisão do dono (e da validação do advogado, CDC). Fica visível no painel
+  do Owner (`CompanyDetailPage`: plano, fim da fidelidade e multa devida).
+- **Cláusula antes de pagar:** na tela de planos (cartão anual) e no checkout
+  do Stripe (`custom_text.submit.message`, em português).
+- **Preço falso removido:** sumiu o "R$14,49" da `TrialSummaryPage`, do
+  `TrialStartModal`, do modal da landing (`i18n.ts`/`App.tsx`) e do comando
+  /preco do `vendas-bot` (código do worker; precisa de deploy próprio).
+- **Secrets:** só `STRIPE_SECRET_KEY` (já existe), `STRIPE_WEBHOOK_SECRET`
+  (já existe) e `SITE_URL` (opcional). `STRIPE_PRICE_BASIC/PRO/ULTRA` só
+  seguem sendo lidos pelo caminho legado do webhook (assinaturas antigas).
+- **Divergências:** PRODUCT.md (linhas ~39, 59, 109) ainda cita o plano único
+  de R$1.449 de 2026-10-02 — substituído por esta decisão; mantido como
+  histórico. Itens do Stripe existem só no sandbox; em produção ainda
+  precisam ser criados (com os mesmos `lookup_key` e id de cupom).

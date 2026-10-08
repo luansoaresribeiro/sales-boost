@@ -9,6 +9,33 @@ async function logAccessEvent(admin: ReturnType<typeof createClient>, companyId:
   try { await admin.from('access_audit_log').insert({ company_id: companyId, event, actor: 'stripe', detail }) } catch { /* nunca derruba o webhook por causa do log */ }
 }
 
+// Multa de cancelamento antecipado do plano anual (decisão do dono):
+// 30% × meses restantes × R$1.449. Meses restantes = meses de calendário
+// ARREDONDADOS PRA CIMA entre a data efetiva do fim e commitment_end_at.
+// Só REGISTRA — nunca cobra (cobrança é manual, decisão do dono).
+const MONTHLY_ANNUAL_CENTS = 144900
+function addMonths(d: Date, n: number) { const r = new Date(d); r.setUTCMonth(r.getUTCMonth() + n); return r }
+function earlyTerminationFeeCents(effectiveEnd: Date, commitmentEnd: Date): number {
+  let months = 0
+  while (months < 12 && addMonths(effectiveEnd, months) < commitmentEnd) months++
+  return Math.round(0.3 * months * MONTHLY_ANNUAL_CENTS)
+}
+
+async function applyEarlyTerminationFee(
+  admin: ReturnType<typeof createClient>,
+  company: { id: string; billing_plan: string | null; commitment_end_at: string | null },
+  effectiveEnd: Date,
+  reason: string,
+) {
+  if (company.billing_plan !== 'annual_commit' || !company.commitment_end_at) return
+  const fee = earlyTerminationFeeCents(effectiveEnd, new Date(company.commitment_end_at))
+  await admin.from('companies').update({ early_termination_fee_cents: fee }).eq('id', company.id)
+  if (fee > 0) {
+    await logAccessEvent(admin, company.id, 'early_termination_fee_recorded',
+      `${reason} Multa de cancelamento antecipado registrada: R$ ${(fee / 100).toFixed(2)} (30% das mensalidades restantes). NÃO foi cobrada — cobrança manual.`)
+  }
+}
+
 function planFromPriceId(priceId: string): string {
   const basic = Deno.env.get('STRIPE_PRICE_BASIC')
   const pro = Deno.env.get('STRIPE_PRICE_PRO')
@@ -50,9 +77,14 @@ Deno.serve(async (req) => {
 
         const subscription = await stripe.subscriptions.retrieve(session.subscription as string)
         const priceId = subscription.items.data[0]?.price.id ?? ''
-        const plan = planFromPriceId(priceId)
+        const lookupKey = subscription.items.data[0]?.price.lookup_key ?? ''
+        const billingPlan = lookupKey === 'sb_annual_commit' ? 'annual_commit' : lookupKey === 'sb_monthly' ? 'monthly' : null
+        // Planos novos: plano único com tudo ('pro' na coluna plan, que o resto do app usa).
+        const plan = billingPlan ? 'pro' : planFromPriceId(priceId)
+        const commitmentEndAt = billingPlan === 'annual_commit' ? addMonths(new Date(subscription.start_date * 1000), 12).toISOString() : null
 
         await admin.from('companies').update({
+          ...(billingPlan ? { billing_plan: billingPlan, commitment_end_at: commitmentEndAt, early_termination_fee_cents: null } : {}),
           plan,
           stripe_customer_id: session.customer as string,
           stripe_subscription_id: subscription.id,
@@ -75,7 +107,9 @@ Deno.serve(async (req) => {
         // caso contrário volta pra 'free' — subscription_status é a fonte
         // de verdade do estado real (past_due, unpaid, canceled etc), plan
         // só reflete o que o cliente pode usar.
-        const activePlan = ['active', 'trialing'].includes(status) ? plan : 'free'
+        const lk = sub.items.data[0]?.price.lookup_key
+        const isNewPlan = lk === 'sb_monthly' || lk === 'sb_annual_commit'
+        const activePlan = ['active', 'trialing'].includes(status) ? (isNewPlan ? 'pro' : plan) : 'free'
 
         const { data: company } = await admin.from('companies')
           .update({
@@ -85,8 +119,17 @@ Deno.serve(async (req) => {
             current_period_end: toIso(sub.current_period_end),
           })
           .eq('stripe_subscription_id', sub.id)
-          .select('id').maybeSingle()
-        if (company) await logAccessEvent(admin, company.id, 'subscription_updated', `Status da assinatura no Stripe: ${status}.`)
+          .select('id, billing_plan, commitment_end_at').maybeSingle()
+        if (company) {
+          await logAccessEvent(admin, company.id, 'subscription_updated', `Status da assinatura no Stripe: ${status}.`)
+          // Cancelamento agendado antes do fim da fidelidade -> registra a multa (sem cobrar).
+          // Se o cliente desfez o cancelamento, limpa a multa registrada.
+          const scheduledEnd = sub.cancel_at ?? (sub.cancel_at_period_end ? sub.current_period_end : null)
+          if (company.billing_plan === 'annual_commit' && ['active', 'trialing'].includes(status)) {
+            if (scheduledEnd) await applyEarlyTerminationFee(admin, company, new Date(scheduledEnd * 1000), 'Cancelamento agendado no Stripe.')
+            else await admin.from('companies').update({ early_termination_fee_cents: null }).eq('id', company.id)
+          }
+        }
         break
       }
 
@@ -95,8 +138,11 @@ Deno.serve(async (req) => {
         const { data: company } = await admin.from('companies')
           .update({ plan: 'free', stripe_subscription_id: null, subscription_status: 'canceled', subscription_cancelled_at: new Date().toISOString() })
           .eq('stripe_subscription_id', sub.id)
-          .select('id').maybeSingle()
-        if (company) await logAccessEvent(admin, company.id, 'subscription_cancelled', 'Assinatura cancelada no Stripe.')
+          .select('id, billing_plan, commitment_end_at').maybeSingle()
+        if (company) {
+          await logAccessEvent(admin, company.id, 'subscription_cancelled', 'Assinatura cancelada no Stripe.')
+          await applyEarlyTerminationFee(admin, company, new Date((sub.ended_at ?? sub.canceled_at ?? Math.floor(Date.now() / 1000)) * 1000), 'Assinatura anual encerrada antes do fim da fidelidade.')
+        }
         break
       }
     }
