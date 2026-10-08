@@ -156,24 +156,11 @@ Deno.serve(async (req) => {
         company_id: companyId, event_type: 'trial_started', gp: 10, source: 'trial', dedupe_key: `trial_started:${companyId}`,
       })
 
-      // Hermes independente: empresa nova ganha a 1a estrategia sozinha,
-      // sem precisar abrir o painel e clicar em nada. Em segundo plano
-      // (EdgeRuntime.waitUntil) pra nao atrasar a resposta desta funcao --
-      // strategy-generate ja se auto-gerencia (2 execucoes, nunca trava).
-      // Respeita companies.auto_strategy (default true, ja aplicado no
-      // insert acima via o default da coluna).
-      const cronSecret = Deno.env.get('CRON_SECRET')
-      const { data: hermesCfg } = await serviceClient.from('hermes_config').select('auto_strategy_enabled').eq('id', true).maybeSingle()
-      const globalAutoStrategyOn = !hermesCfg || hermesCfg.auto_strategy_enabled !== false
-      if (cronSecret && globalAutoStrategyOn) {
-        // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
-        EdgeRuntime.waitUntil(
-          fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'generate', company_id: companyId, cron_secret: cronSecret }),
-          }).catch(e => console.error('claim-diagnostic: falha ao disparar 1a estrategia:', e))
-        )
-      }
+      // DECISAO 2026-10-08: NAO dispara mais a 1a estrategia aqui. O acesso
+      // gratis e diagnostico + 1 video; a estrategia so e gerada DEPOIS que o
+      // cliente PAGA o plano (gatilho a ligar no stripe-webhook, em PR
+      // separado). Antes (2026-10-06/07) esta funcao chamava strategy-generate
+      // em segundo plano para empresas novas (EdgeRuntime.waitUntil).
     }
 
     // Link diagnostic to company and user

@@ -6,17 +6,7 @@ export const t = {
       features: 'Funcionalidades',
       how: 'Como funciona',
       pricing: 'Pra quem é',
-      cta: '7 dias grátis',
-    },
-    trialModal: {
-      badge: 'Antes de começar',
-      title: 'Seus 7 dias grátis começam agora',
-      body: 'Teste tudo por 7 dias. Depois, é só um preço simples — e você só é cobrado se decidir continuar:',
-      priceFrom: '',
-      priceTo: 'R$ 14,49',
-      priceNote: '/mês',
-      cta: 'Começar meus 7 dias grátis →',
-      dismiss: 'Fechar',
+      cta: 'Diagnóstico grátis',
     },
     hero: {
       meta: [
@@ -113,7 +103,7 @@ export const t = {
       line1: 'Você define o objetivo.',
       line2: 'A gente traz o cliente.',
       sub: 'Criamos demanda nas redes sociais e tocamos toda a aquisição — da primeira mensagem até a venda fechada. Você aprova cada passo.',
-      cta: 'Ver relatório demo',
+      cta: 'Diagnóstico grátis',
     },
     icp: {
       badge: 'Pra quem é',
@@ -130,7 +120,15 @@ export const t = {
       ],
       secondaryLabel: 'Também atendemos',
       secondaryText: 'Escritórios de advocacia, contabilidade e outros serviços tocados pelo dono que precisam de um fluxo constante de novos clientes vindo das redes sociais.',
-      cta: 'Começar agora',
+      cta: 'Diagnóstico grátis',
+    },
+    diag: {
+      badge: 'Diagnóstico grátis',
+      title1: 'Descubra seu',
+      title2: 'Real Estate Growth Score',
+      sub: 'Responda algumas perguntas e receba uma nota de 0 a 100, seu maior gargalo e sua maior oportunidade. Grátis e sem cartão.',
+      items: ['Nota de 0 a 100', 'Maior gargalo', 'Maior oportunidade'],
+      cta: 'Começar diagnóstico grátis',
     },
     footer: {
       tagline: 'Seu sistema de aquisição de clientes com IA — cria demanda e cuida da venda, no piloto automático.',
@@ -142,17 +140,7 @@ export const t = {
       features: 'Features',
       how: 'How it works',
       pricing: 'Who it’s for',
-      cta: '7 free days',
-    },
-    trialModal: {
-      badge: 'Before you start',
-      title: 'Your 7 free days start now',
-      body: "Try everything for 7 days. After that, it's just one simple price — and you're only charged if you decide to continue:",
-      priceFrom: '',
-      priceTo: '$2.99',
-      priceNote: '/mo',
-      cta: 'Start my 7 free days →',
-      dismiss: 'Close',
+      cta: 'Free diagnosis',
     },
     hero: {
       meta: [
@@ -249,7 +237,7 @@ export const t = {
       line1: 'You set the goal.',
       line2: 'We bring the customer.',
       sub: 'We create demand on social media and handle the full acquisition process — from the first message to the closed sale. You approve every step.',
-      cta: 'See demo report',
+      cta: 'Free diagnosis',
     },
     icp: {
       badge: "Who it's for",
@@ -266,7 +254,15 @@ export const t = {
       ],
       secondaryLabel: 'We also work with',
       secondaryText: 'Owner-led professional service businesses — like law and accounting firms — that need a steady flow of new clients from social media.',
-      cta: 'Start now',
+      cta: 'Free diagnosis',
+    },
+    diag: {
+      badge: 'Free diagnosis',
+      title1: 'Discover your',
+      title2: 'Real Estate Growth Score',
+      sub: 'Answer a few questions and get a score from 0 to 100, your biggest bottleneck and your biggest opportunity. Free, no card.',
+      items: ['Score from 0 to 100', 'Biggest bottleneck', 'Biggest opportunity'],
+      cta: 'Start free diagnosis',
     },
     footer: {
       tagline: 'Your AI-powered customer acquisition system — creates demand and handles the sale, on autopilot.',

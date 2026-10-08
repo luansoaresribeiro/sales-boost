@@ -234,3 +234,36 @@ export function computeGrowthScore(input: GrowthScoreInput, lang: Lang = 'pt'): 
   const band = raw >= 70 ? bands[0] : raw >= 40 ? bands[1] : bands[2]
   return { state: 'scored', score: raw, verdict: band.verdict, verdictLabel: band.label, coverage, rawScore: raw, criteria }
 }
+
+// ── Maior gargalo e maior oportunidade (2026-10-08) ──────────────────────
+// Regra fixa e explicável (sem IA, sem número inventado): o gargalo é o
+// critério do Instagram AVALIADO com a menor fração de pontos; a
+// oportunidade é a ação ligada a ele. Texto genérico (regra 6: nada de setor
+// no código). Se tudo avaliado está cheio, não há gargalo.
+type GapKey = 'frequency' | 'engagement' | 'format' | 'profile'
+const GAP_TEXT: Record<'pt' | 'en', Record<GapKey, { why: string; action: string }>> = {
+  pt: {
+    frequency: { why: 'Você publica pouco: quem te segue quase não vê seu perfil no feed.', action: 'Publicar com constância (a nota considera 8 posts em 30 dias como cheio). O Sales Boost prepara os posts e você só aprova.' },
+    engagement: { why: 'Poucas pessoas interagem com seus posts, então o Instagram mostra menos o seu perfil.', action: 'Posts que puxam conversa (perguntas, bastidores, dicas) e responder rápido cada comentário e mensagem.' },
+    format: { why: 'Você usa pouco vídeo/Reels, o formato que mais leva seu perfil a gente nova.', action: 'Transformar as fotos reais dos seus itens em vídeos curtos. É o vídeo grátis que o Sales Boost gera pra você.' },
+    profile: { why: 'Quem chega no seu perfil não entende rápido o que você oferece nem como falar com você.', action: 'Bio clara (o que você faz e onde atende), link na bio para o WhatsApp e conta profissional.' },
+  },
+  en: {
+    frequency: { why: 'You post rarely: your followers barely see your profile in their feed.', action: 'Post consistently (the score counts 8 posts in 30 days as full). Sales Boost prepares the posts and you just approve.' },
+    engagement: { why: 'Few people interact with your posts, so Instagram shows your profile less.', action: 'Posts that start conversations (questions, behind the scenes, tips) and fast replies to every comment and message.' },
+    format: { why: 'You use little video/Reels, the format that best reaches new people.', action: 'Turn real photos of your listings into short videos. That is the free video Sales Boost generates for you.' },
+    profile: { why: 'People who land on your profile cannot quickly see what you offer or how to reach you.', action: 'A clear bio (what you do and where), a link to WhatsApp in the bio and a professional account.' },
+  },
+}
+
+export interface GapInfo { key: GapKey; label: string; why: string; action: string }
+
+export function biggestGap(result: GrowthScoreResult, lang: Lang = 'pt'): GapInfo | null {
+  const keys: GapKey[] = ['frequency', 'engagement', 'format', 'profile']
+  const ev = result.criteria.filter(c => c.evaluated && (keys as string[]).includes(c.key) && c.weight > 0)
+  if (!ev.length) return null
+  const worst = ev.reduce((a, b) => (b.points / b.weight < a.points / a.weight ? b : a))
+  if (worst.points / worst.weight >= 1) return null
+  const k = worst.key as GapKey
+  return { key: k, label: worst.label, ...GAP_TEXT[lang === 'en' ? 'en' : 'pt'][k] }
+}

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import {
-  computeGrowthScore, CRITERIA_WEIGHTS, CRITERIA_INFO, CRITERIA_INFO_EN, VERDICT_BANDS, VERDICT_BANDS_EN,
+  biggestGap, computeGrowthScore, CRITERIA_WEIGHTS, CRITERIA_INFO, CRITERIA_INFO_EN, VERDICT_BANDS, VERDICT_BANDS_EN,
   type InstagramData, type Verdict, type CriterionKey,
 } from '../../lib/growthScore'
 import { useLang } from '../../contexts/LanguageContext'
@@ -62,12 +62,15 @@ const TX = {
     analyzingIg: 'Analisando seu Instagram…', analyzingSub: 'Isso leva alguns segundos. A tela atualiza sozinha.',
     coverage: 'Cobertura:', coverageTail: 'dos critérios avaliados',
     partialMsg: 'Não conseguimos avaliar critérios suficientes pra dar uma nota. Não inventamos números: o que falta fica de fora.',
+    gapTitle: 'Seu maior gargalo', oppTitle: 'Sua maior oportunidade', noGap: 'Nos critérios que conseguimos avaliar, seu Instagram está forte. Seu próximo passo é transformar essa atenção em clientes.',
     howFormed: 'Como sua nota foi formada', igErr: 'Não conseguimos ler seu Instagram agora (perfil privado ou fora do ar). Os itens dele ficaram sem avaliação.',
     noIg: 'Este diagnóstico não tem a leitura do Instagram.', of: 'de', notEval: 'Não avaliado',
     howCalc: '▸ Como calculamos',
     calc1: 'A nota vem do seu Instagram. Site e Google só somam se existirem. O que não conseguimos ver fica "não avaliado" e sai da conta — nada é inventado nem penaliza você.',
     pts: 'pts', calc2: 'Nota = pontos dos critérios avaliados ÷ pontos possíveis deles × 100. Com menos de 40% dos critérios avaliados, mostramos "Análise parcial", sem veredito.',
-    cta: 'Ativar meu acesso grátis →', ctaSub: 'Sem cartão. Sem prazo em dias. Inclui 1 estratégia.',
+    cta: 'Criar conta e receber meu vídeo grátis →',
+    ctaSub: 'Seu vídeo grátis está em liberação — avisamos quando estiver pronto. Sem cartão.',
+    ctaPlan: 'A estratégia completa faz parte do plano pago.',
   },
   en: {
     notFoundErr: 'Diagnosis not found.', notFound: 'Diagnosis not found', createNew: '← Create new diagnosis',
@@ -75,17 +78,35 @@ const TX = {
     analyzingIg: 'Analyzing your Instagram…', analyzingSub: 'This takes a few seconds. The screen updates by itself.',
     coverage: 'Coverage:', coverageTail: 'of the criteria evaluated',
     partialMsg: 'We could not evaluate enough criteria to give a score. We do not make up numbers: what is missing is left out.',
+    gapTitle: 'Your biggest bottleneck', oppTitle: 'Your biggest opportunity', noGap: 'On the criteria we could evaluate, your Instagram is strong. Your next step is turning that attention into customers.',
     howFormed: 'How your score was formed', igErr: 'We could not read your Instagram right now (private profile or offline). Its items were left unevaluated.',
     noIg: 'This diagnosis has no Instagram reading.', of: 'of', notEval: 'Not evaluated',
     howCalc: '▸ How we calculate',
     calc1: 'The score comes from your Instagram. Website and Google only add if they exist. What we cannot see stays "not evaluated" and is left out of the calculation — nothing is made up and nothing penalizes you.',
     pts: 'pts', calc2: 'Score = points of the evaluated criteria ÷ their possible points × 100. With fewer than 40% of the criteria evaluated, we show "Partial analysis", with no verdict.',
-    cta: 'Activate my free access →', ctaSub: 'No card. No deadline in days. Includes 1 strategy.',
+    cta: 'Create account and get my free video →',
+    ctaSub: 'Your free video is being released — we will let you know when it is ready. No card.',
+    ctaPlan: 'The full strategy is part of the paid plan.',
   },
 }
 
 export default function DiagnosticoPage() {
   const { id } = useParams<{ id: string }>()
+  return (
+    <div style={{ minHeight: '100vh', background: BG, overflowX: 'hidden' }}>
+      <div style={{ padding: '16px', borderBottom: `1px solid ${BORDER}` }}>
+        <a href="/" style={{ fontFamily: D, fontSize: '1.3rem', fontWeight: 900, color: 'white', textDecoration: 'none', letterSpacing: '-0.02em' }}>
+          <span style={{ color: ORANGE }}>Sales</span>Boost
+        </a>
+      </div>
+      {id ? <DiagnosticResult id={id} /> : null}
+    </div>
+  )
+}
+
+// Resultado do diagnóstico (nota, critérios, "como calculamos", CTA). Usado na
+// rota /diagnostico/:id e INLINE na landing (embedded: sem altura de página).
+export function DiagnosticResult({ id, embedded = false }: { id: string; embedded?: boolean }) {
   const navigate = useNavigate()
   const { lang } = useLang()
   const t = TX[lang]
@@ -95,7 +116,6 @@ export default function DiagnosticoPage() {
   const [waited, setWaited] = useState(0)
 
   useEffect(() => {
-    if (!id) return
     let alive = true
     supabase.from('diagnostics').select('*').eq('id', id).single().then(({ data, error: err }) => {
       if (!alive) return
@@ -109,7 +129,7 @@ export default function DiagnosticoPage() {
   // Coleta do Instagram em andamento: recarrega a cada ~5s por até ~90s.
   const collecting = !!diag && !diag.instagram_data && diag.status === 'processing' && waited < POLL_MAX_MS
   useEffect(() => {
-    if (!collecting || !id) return
+    if (!collecting) return
     const t = setTimeout(async () => {
       const { data } = await supabase.from('diagnostics').select('*').eq('id', id).single()
       if (data) setDiag(data as Diagnostic)
@@ -125,14 +145,14 @@ export default function DiagnosticoPage() {
   }, lang) : null, [diag, lang])
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: BG, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ minHeight: embedded ? 200 : '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 40, height: 40, border: '3px solid rgba(255,109,41,0.15)', borderTopColor: ORANGE, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
 
   if (error || !diag || !result) return (
-    <div style={{ minHeight: '100vh', background: BG, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, textAlign: 'center' }}>
+    <div style={{ minHeight: embedded ? 200 : '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, textAlign: 'center' }}>
       <div style={{ color: 'white', fontSize: 18, fontWeight: 700 }}>{t.notFound}</div>
       <Link to="/onboarding" style={{ color: ORANGE, textDecoration: 'none', fontSize: 14 }}>{t.createNew}</Link>
     </div>
@@ -147,14 +167,8 @@ export default function DiagnosticoPage() {
   const bands = lang === 'en' ? VERDICT_BANDS_EN : VERDICT_BANDS
 
   return (
-    <div style={{ minHeight: '100vh', background: BG, overflowX: 'hidden' }}>
-      <div style={{ padding: '16px', borderBottom: `1px solid ${BORDER}` }}>
-        <a href="/" style={{ fontFamily: D, fontSize: '1.3rem', fontWeight: 900, color: 'white', textDecoration: 'none', letterSpacing: '-0.02em' }}>
-          <span style={{ color: ORANGE }}>Sales</span>Boost
-        </a>
-      </div>
-
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '28px 16px 64px' }}>
+    <div style={{ overflowX: 'hidden' }}>
+      <div style={{ maxWidth: 640, margin: '0 auto', padding: embedded ? '8px 0 0' : '28px 16px 64px' }}>
         {/* Fluxo */}
         <ol style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: 6, padding: 0, margin: '0 0 24px', fontSize: 11, fontWeight: 700 }}>
           {FLOW[lang].map((f, i) => (
@@ -204,6 +218,26 @@ export default function DiagnosticoPage() {
             </>
           )}
         </div>
+
+        {/* Maior gargalo e maior oportunidade (regra fixa em growthScore.biggestGap) */}
+        {!noIgYet && result.criteria.some(c => c.evaluated && ['frequency', 'engagement', 'format', 'profile'].includes(c.key)) && (() => {
+          const gap = biggestGap(result, lang)
+          return (
+            <div style={{ background: CARD, border: '1px solid rgba(255,109,41,0.3)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
+              {gap ? (
+                <>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{t.gapTitle}</div>
+                  <div style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 800, color: 'white', marginBottom: 6 }}>{gap.label}</div>
+                  <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, margin: '0 0 14px' }}>{gap.why}</p>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{t.oppTitle}</div>
+                  <p style={{ fontSize: 13, color: 'white', lineHeight: 1.6, margin: 0 }}>{gap.action}</p>
+                </>
+              ) : (
+                <p style={{ fontSize: 13, color: 'white', lineHeight: 1.6, margin: 0 }}>{t.noGap}</p>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Como a nota foi formada */}
         {!noIgYet && (
@@ -270,6 +304,9 @@ export default function DiagnosticoPage() {
         </button>
         <p style={{ textAlign: 'center', fontSize: 13, color: MUTED, margin: '12px 0 0' }}>
           {t.ctaSub}
+        </p>
+        <p style={{ textAlign: 'center', fontSize: 12.5, color: MUTED, margin: '6px 0 0' }}>
+          {t.ctaPlan}
         </p>
       </div>
     </div>
