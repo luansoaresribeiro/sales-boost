@@ -22,12 +22,12 @@ const TOUR_PHOTOS = 6
 const TX = {
   pt: {
     title: '🎬 Seu tour virtual grátis',
-    intro: `Escolha ${TOUR_PHOTOS} fotos reais do imóvel, na ordem da visita (ex.: entrada, sala, cozinha, quarto, banheiro, varanda). A gente transforma num vídeo-tour de ~30 segundos com movimento de câmera — sem inventar nada e sem texto por cima.`,
-    tips: 'Dicas: fotos bem iluminadas, sem pessoas e sem texto escrito por cima. A ordem em que você escolhe é a ordem do vídeo.',
+    intro: `Escolha ${TOUR_PHOTOS} fotos reais do imóvel, na ordem da visita (ex.: entrada, sala, cozinha, quarto, banheiro, varanda). A gente transforma num vídeo-tour de ~30 segundos, como se a câmera andasse de um cômodo pro outro — sem texto por cima.`,
+    tips: 'Dicas: fotos bem iluminadas, sem pessoas e sem texto por cima. Escolha na ordem em que se anda pela casa, de um cômodo pro vizinho — a ordem da escolha é a ordem do vídeo.',
     pick: 'Escolher fotos →', addMore: 'Adicionar fotos', remove: 'Tirar', count: (n: number) => `${n} de ${TOUR_PHOTOS} fotos`,
     create: 'Criar meu tour →', uploading: 'Enviando suas fotos…',
     processing: 'Seu tour está sendo criado. Leva alguns minutos — pode continuar usando o painel, esta tela atualiza sozinha.',
-    progress: (d: number, t: number) => `${d} de ${t} cômodos prontos`,
+    progress: (d: number, t: number) => `${d} de ${t} partes do tour prontas`,
     ready: 'Seu vídeo está pronto!', download: 'Baixar vídeo', seeOffer: 'Ver o que o plano faz por você →',
     cap: 'Os vídeos grátis deste mês acabaram. O seu entra na fila do próximo mês — ou ative o plano e receba agora.',
     failed: 'Não deu certo com essas fotos. Tente de novo, com fotos bem iluminadas e sem texto por cima.',
@@ -45,12 +45,12 @@ const TX = {
   },
   en: {
     title: '🎬 Your free virtual tour',
-    intro: `Choose ${TOUR_PHOTOS} real photos of the property, in visiting order (e.g. entrance, living room, kitchen, bedroom, bathroom, balcony). We turn them into a ~30-second video tour with camera movement — nothing made up and no text on top.`,
-    tips: 'Tips: well-lit photos, no people and no text written on them. The order you pick is the order of the video.',
+    intro: `Choose ${TOUR_PHOTOS} real photos of the property, in visiting order (e.g. entrance, living room, kitchen, bedroom, bathroom, balcony). We turn them into a ~30-second video tour, as if the camera walked from one room to the next — no text on top.`,
+    tips: 'Tips: well-lit photos, no people and no text on them. Pick them in the order you walk through the home, from one room to the next — the order you pick is the order of the video.',
     pick: 'Choose photos →', addMore: 'Add photos', remove: 'Remove', count: (n: number) => `${n} of ${TOUR_PHOTOS} photos`,
     create: 'Create my tour →', uploading: 'Uploading your photos…',
     processing: 'Your tour is being created. It takes a few minutes — keep using the dashboard, this card updates by itself.',
-    progress: (d: number, t: number) => `${d} of ${t} rooms ready`,
+    progress: (d: number, t: number) => `${d} of ${t} parts of the tour ready`,
     ready: 'Your video is ready!', download: 'Download video', seeOffer: 'See what the plan does for you →',
     cap: "This month's free videos are gone. Yours goes to next month's queue — or activate the plan and get it now.",
     failed: "Those photos didn't work. Try again with well-lit photos and no text on them.",
@@ -156,7 +156,7 @@ export default function FreeVideoCard({ companyId }: { companyId: string }) {
       if (status === 429 && data.status === 'cap_reached') { setState('cap'); return }
       if (status === 409) { applyStatus((await callFn({ action: 'status' })).data, false); return }
       if (status >= 400) { setMsg(typeof data.error === 'string' ? data.error : tx.errGeneric); setState('error'); return }
-      setProgress({ done: 0, total: TOUR_PHOTOS }); setState('processing')
+      setProgress({ done: 0, total: typeof data.total === 'number' ? data.total : TOUR_PHOTOS }); setState('processing')
     } catch {
       setMsg(tx.errGeneric); setState('error')
     }

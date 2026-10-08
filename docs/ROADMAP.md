@@ -66,6 +66,12 @@
 - **Status:** ❌ não começado. (Atualização 2026-10-08: 🟡 o tour grátis de 6
   fotos — Kling + Reel único — funciona no ensaio; os 12 tours/mês do plano
   ainda não existem. Ver [DECISIONS.md](DECISIONS.md).)
+- **Próximo (decisão do dono 2026-10-08): ordem automática do tour.** O
+  sistema olha as fotos, reconhece o cômodo de cada uma e o que aparece
+  pelas portas (ex.: a sala vista da entrada) e monta a ordem de caminhada
+  que passa só entre cômodos vizinhos; a sequência típica do setor fica na
+  ficha (regra 6). Critério de pronto: com as 6 fotos do teste, a ordem
+  escolhida não gera nenhuma passagem inventada que o dono reprove.
 - **Decisões de volume (2026-10-08, ver [DECISIONS.md](DECISIONS.md)):**
   12 vídeos/mês por cliente pago, espalhados pela estratégia; extra só com
   aprovação do cliente e dado real; 30 vídeos grátis/mês no diagnóstico.

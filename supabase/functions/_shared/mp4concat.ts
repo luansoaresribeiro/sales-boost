@@ -6,7 +6,8 @@
 // misturar codecs, seja com várias "sample descriptions" ou com SPS/PPS
 // in-band, corrompe o decode.)
 // Recebe o módulo mp4box por parâmetro (Deno usa esm.sh; o teste local usa npm).
-// Testado em 2026-10-08: 6 trechos de 5 s → 30,2 s, ~1 s de CPU.
+// Testado em 2026-10-08: 6 trechos de 5 s → 30,2 s, ~1 s de CPU; 5 trechos de 6 s
+// (33 MB) → 30,2 s.
 
 // deno-lint-ignore no-explicit-any
 type MP4BoxModule = any
@@ -19,43 +20,39 @@ interface Parsed {
   samples: { data: Uint8Array; duration: number; dts: number; cts: number; is_sync: boolean }[]
 }
 
-function toArrayBuffer(buf: Uint8Array): ArrayBuffer & { fileStart?: number } {
-  const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer & { fileStart?: number }
-  ab.fileStart = 0
-  return ab
-}
-
+// Memória (2026-10-08): a função tem ~150 MB. A 1ª versão copiava tudo 4-5x
+// (cópia da entrada, extração das amostras, saída crescendo em dobro, cópia
+// final) e estourou com 33 MB de trechos. Agora: amostras são VISTAS do
+// buffer de entrada (sem cópia) e a saída é pré-alocada no tamanho certo e
+// devolvida sem cópia — pico ≈ entradas + saída.
 function parse(MP4Box: MP4BoxModule, buf: Uint8Array): Parsed {
   const f = MP4Box.createFile()
   // deno-lint-ignore no-explicit-any
   let info: any = null
-  // deno-lint-ignore no-explicit-any
-  const samples: any[] = []
   f.onError = (e: unknown) => { throw new Error(`mp4 inválido: ${String(e)}`) }
   // deno-lint-ignore no-explicit-any
-  f.onReady = (i: any) => {
-    info = i
-    const v = i.videoTracks[0]
-    if (!v) throw new Error('trecho sem vídeo')
-    f.setExtractionOptions(v.id, null, { nbSamples: 1e7 })
-    f.start()
-  }
-  // deno-lint-ignore no-explicit-any
-  f.onSamples = (_id: number, _u: unknown, s: any[]) => { samples.push(...s) }
-  f.appendBuffer(toArrayBuffer(buf))
+  f.onReady = (i: any) => { info = i }
+  const ab = (buf.byteOffset === 0 && buf.byteLength === buf.buffer.byteLength ? buf.buffer : buf.slice().buffer) as ArrayBuffer & { fileStart?: number }
+  ab.fileStart = 0
+  f.appendBuffer(ab)
   f.flush()
   if (!info) throw new Error('mp4 incompleto')
   const v = info.videoTracks[0]
+  if (!v) throw new Error('trecho sem vídeo')
   const trak = f.getTrackById(v.id)
   const avcCBox = trak.mdia.minf.stbl.stsd.entries[0].avcC
   if (!avcCBox) throw new Error('trecho não é H.264')
   const ds = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN)
   avcCBox.write(ds)
   const avcC = new Uint8Array(ds.buffer, 8, ds.getPosition ? ds.getPosition() - 8 : ds.byteLength - 8) // sem o cabeçalho da box
-  return {
-    timescale: v.timescale, width: v.video.width, height: v.video.height, avcC: avcC.slice(),
-    samples: samples.map(s => ({ data: s.data, duration: s.duration, dts: s.dts, cts: s.cts, is_sync: s.is_sync })),
-  }
+  const bytes = new Uint8Array(ab)
+  // deno-lint-ignore no-explicit-any
+  const samples = (trak.samples as any[]).map(s => {
+    if (s.offset + s.size > bytes.length) throw new Error('mp4 incompleto')
+    return { data: bytes.subarray(s.offset, s.offset + s.size), duration: s.duration, dts: s.dts, cts: s.cts, is_sync: s.is_sync }
+  })
+  if (!samples.length) throw new Error('trecho sem quadros')
+  return { timescale: v.timescale, width: v.video.width, height: v.video.height, avcC: avcC.slice(), samples }
 }
 
 const key = (b: Uint8Array) => Array.from(b).join(',')
@@ -68,7 +65,7 @@ export function concatMp4(MP4Box: MP4BoxModule, inputs: Uint8Array[]): Uint8Arra
   const tid = out.addTrack({ timescale: first.timescale, width: first.width, height: first.height, avcDecoderConfigRecord: first.avcC.buffer.slice(first.avcC.byteOffset, first.avcC.byteOffset + first.avcC.byteLength) })
   const firstKey = key(first.avcC)
 
-  let offset = 0
+  let offset = 0, payload = 0, count = 0
   for (const p of parsed) {
     if (key(p.avcC) !== firstKey || p.width !== first.width || p.height !== first.height) {
       throw new Error('trechos com formato de vídeo diferente — não dá pra juntar sem recodificar')
@@ -79,10 +76,14 @@ export function concatMp4(MP4Box: MP4BoxModule, inputs: Uint8Array[]): Uint8Arra
       const dts = Math.round(s.dts * k), cts = Math.round(s.cts * k), dur = Math.max(1, Math.round(s.duration * k))
       out.addSample(tid, s.data, { duration: dur, dts: dts + offset, cts: cts + offset, is_sync: s.is_sync })
       end = Math.max(end, dts + dur)
+      payload += s.data.byteLength; count++
     }
     offset += end
   }
-  const ds = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN)
+  // Pré-aloca: quadros + cabeçalhos (~40 bytes por quadro na tabela + folga).
+  const ds = new MP4Box.DataStream(new ArrayBuffer(payload + count * 40 + 64 * 1024), 0, MP4Box.DataStream.BIG_ENDIAN)
   out.write(ds)
-  return new Uint8Array(ds.buffer, 0, ds.getPosition ? ds.getPosition() : ds.byteLength).slice()
+  const len = ds.getPosition()
+  // _buffer: evita a cópia que o getter .buffer faz pra aparar o tamanho.
+  return new Uint8Array(ds._buffer ?? ds.buffer, 0, len)
 }

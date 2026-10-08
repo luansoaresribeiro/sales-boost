@@ -419,3 +419,27 @@ Decisões do dono (conversa de 2026-10-08), testadas no ensaio:
 - **Formato vertical 9:16** para Reels: decisão adiada (o recorte atual é 4:5).
 - Tabela nova `video_tours` (migration `20261008220000`) e bucket `videos`
   (migration `20261008210000`, só mp4, até 50 MB). Aplicadas só no ensaio.
+
+
+## 2026-10-08 — Tour em modo CAMINHADA (foto de começo + foto de fim)
+
+- Pedido do dono: "parecer que estou andando lá", não fotos se mexendo com
+  corte entre elas. Solução: o Kling 3.0 aceita `last_image_url` (doc da
+  Higgsfield). Cada trecho começa numa foto e termina na seguinte → 6 fotos
+  = **5 caminhadas de 6 s ≈ 30 s**, sem pulo na emenda. Modo novo `walk`
+  (padrão); o antigo continua como `per_photo` (ficha:
+  `config.free_video.mode`, `walk_prompt`). Pedimos sem som (`sound: off`) —
+  o áudio é descartado na colagem.
+- **Ressalva honesta (regra 4):** começo e fim de cada trecho são fotos
+  reais, mas **o caminho do meio é imaginado pela IA**. Entre cômodos
+  vizinhos sai fiel (teste: entrada → sala passou pela porta real); entre
+  cômodos que não se tocam a IA inventa passagem (teste: apareceu uma porta
+  de madeira vazada entre a suíte e o espaço gourmet que não está nas
+  fotos). Por isso a **ordem das fotos** é decisiva.
+- **Decisão do dono:** o sistema descobre a melhor ordem sozinho, sempre
+  (próxima etapa — ver ROADMAP P3).
+- **Bug corrigido no teste:** a colagem de 33 MB estourou a memória da
+  função (erro 546) e o tour ficou preso em "montando". `mp4concat` agora
+  não copia os quadros (pico medido caiu de ~250 MB pra ~100 MB no teste
+  local, com quadros idênticos) e o `status` destrava uma colagem parada há
+  mais de 3 min.
