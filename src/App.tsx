@@ -4,6 +4,8 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
 import { t, type Lang } from './i18n'
+import { DiagnosticFlow } from './pages/onboarding/OnboardingPage'
+import { DiagnosticResult } from './pages/diagnostico/DiagnosticoPage'
 import { useLang } from './contexts/LanguageContext'
 import logo from './assets/logo.png'
 
@@ -82,35 +84,9 @@ function FireCursor() {
 }
 
 /* ══════════════════════════════════════════════════
-   TRIAL MODAL  — shown before sending people to /onboarding
-══════════════════════════════════════════════════ */
-function TrialModal({ lang, open, onClose }: { lang: Lang; open: boolean; onClose: () => void }) {
-  const tx = t[lang].trialModal
-  if (!open) return null
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
-      <div className="relative w-full max-w-md rounded-2xl p-8" style={{ background: CARD, border: '1px solid rgba(255,109,41,0.25)', boxShadow: '0 24px 80px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} aria-label={tx.dismiss} className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center transition-colors" style={{ color: MUTED, background: 'rgba(255,255,255,0.05)' }}>✕</button>
-        <Badge text={tx.badge} />
-        <h3 className="font-black text-white leading-tight mb-4" style={{ fontFamily: D, fontSize: '1.6rem' }}>{tx.title}</h3>
-        <p className="text-sm leading-relaxed mb-6" style={{ color: MUTED }}>{tx.body}</p>
-        {tx.priceTo && <div className="flex items-baseline gap-3 mb-8 p-4 rounded-xl" style={{ background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.2)' }}>
-          <span className="text-sm line-through" style={{ color: 'rgba(255,255,255,0.35)' }}>{tx.priceFrom}</span>
-          <span className="font-black" style={{ fontFamily: D, fontSize: '2rem', color: ORANGE }}>{tx.priceTo}</span>
-          <span className="text-xs" style={{ color: MUTED }}>{tx.priceNote}</span>
-        </div>}
-        <Link to="/onboarding" className="w-full font-bold text-sm px-6 py-4 rounded-xl text-black transition-all text-center" style={{ background: ORANGE, textDecoration: 'none', display: 'block' }}>
-          {tx.cta}
-        </Link>
-      </div>
-    </div>
-  )
-}
-
-/* ══════════════════════════════════════════════════
    NAVBAR  — smooth scroll on anchor clicks
 ══════════════════════════════════════════════════ */
-function Navbar({ lang, setLang, onTrialClick }: { lang: Lang; setLang: (l: Lang) => void; onTrialClick: () => void }) {
+function Navbar({ lang, setLang, onDiagClick }: { lang: Lang; setLang: (l: Lang) => void; onDiagClick: () => void }) {
   const tx = t[lang].nav
   const labels = [tx.features, tx.how, tx.pricing]
 
@@ -121,12 +97,12 @@ function Navbar({ lang, setLang, onTrialClick }: { lang: Lang; setLang: (l: Lang
   }
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', backdropFilter: 'blur(16px)', background: 'rgba(14,11,10,0.85)' }}>
+    <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 px-3 sm:px-6 py-3 sm:py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', backdropFilter: 'blur(16px)', background: 'rgba(14,11,10,0.85)' }}>
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0">
           <img src={logo} alt="Sales Boost" className="w-full h-full object-cover" />
         </div>
-        <span className="font-bold text-white text-lg tracking-tight">SalesBoost</span>
+        <span className="hidden sm:inline font-bold text-white text-lg tracking-tight">SalesBoost</span>
       </div>
       <div className="hidden md:flex items-center gap-8">
         {labels.map((label, i) => (
@@ -135,16 +111,16 @@ function Navbar({ lang, setLang, onTrialClick }: { lang: Lang; setLang: (l: Lang
           </a>
         ))}
       </div>
-      <div className="flex items-center gap-3">
-        <button onClick={() => setLang(lang === 'pt' ? 'en' : 'pt')} className="text-xs font-medium px-3 py-1.5 rounded-full transition-all" style={{ border: '1px solid rgba(255,255,255,0.15)', color: MUTED }}>
+      <div className="flex items-center gap-2 sm:gap-3">
+        <button onClick={() => setLang(lang === 'pt' ? 'en' : 'pt')} className="text-xs font-medium px-3 rounded-full transition-all" style={{ minHeight: 48, border: '1px solid rgba(255,255,255,0.15)', color: MUTED }}>
           {lang === 'pt' ? '🇺🇸 EN' : '🇧🇷 PT'}
         </button>
-        <Link to="/login" className="font-medium text-sm px-4 py-2 rounded-lg transition-all" style={{ color: MUTED, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.12)' }}
+        <Link to="/login" className="font-medium text-xs sm:text-sm px-3 sm:px-4 rounded-lg transition-all flex items-center" style={{ minHeight: 48, color: MUTED, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.12)' }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.28)' }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = MUTED; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)' }}>
           {lang === 'pt' ? 'Entrar' : 'Sign in'}
         </Link>
-        <button onClick={onTrialClick} className="font-semibold text-sm px-4 py-2 rounded-lg transition-all" style={{ background: ORANGE, color: '#000', border: 'none', cursor: 'pointer' }}>
+        <button onClick={onDiagClick} className="font-semibold text-xs sm:text-sm px-3 sm:px-4 rounded-lg transition-all" style={{ minHeight: 48, background: ORANGE, color: '#000', border: 'none', cursor: 'pointer' }}>
           {tx.cta}
         </button>
       </div>
@@ -645,7 +621,7 @@ function ShowcaseSection({ lang }: { lang: Lang }) {
 /* ══════════════════════════════════════════════════
    STATEMENT  — card from below + blob parallax
 ══════════════════════════════════════════════════ */
-function StatementSection({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => void }) {
+function StatementSection({ lang, onDiagClick }: { lang: Lang; onDiagClick: () => void }) {
   const tx = t[lang].statement
   const sectionRef = useRef<HTMLElement>(null)
 
@@ -681,7 +657,7 @@ function StatementSection({ lang, onTrialClick }: { lang: Lang; onTrialClick: ()
           </h2>
           <p className="mb-10 leading-relaxed" style={{ fontSize: '15px', color: MUTED }}>{tx.sub}</p>
           <div className="flex items-center gap-4">
-            <button onClick={onTrialClick} className="flex items-center gap-2 font-bold text-sm px-7 py-3.5 rounded-xl transition-all" style={{ background: ORANGE, color: '#000', boxShadow: '0 8px 24px rgba(255,109,41,0.3)' }}>
+            <button onClick={onDiagClick} className="flex items-center gap-2 font-bold text-sm px-7 py-3.5 rounded-xl transition-all" style={{ background: ORANGE, color: '#000', boxShadow: '0 8px 24px rgba(255,109,41,0.3)' }}>
               {tx.cta} <span>→</span>
             </button>
             <div className="ml-auto w-10 h-10 rounded-full flex items-center justify-center" style={{ border: '1px solid rgba(255,109,41,0.35)', color: ORANGE, fontSize: '18px' }}>⊙</div>
@@ -695,7 +671,7 @@ function StatementSection({ lang, onTrialClick }: { lang: Lang; onTrialClick: ()
 /* ══════════════════════════════════════════════════
    ICP  — "is this for you?" card, replaces pricing
 ══════════════════════════════════════════════════ */
-function IcpSection({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => void }) {
+function IcpSection({ lang, onDiagClick }: { lang: Lang; onDiagClick: () => void }) {
   const tx = t[lang].icp
   const sectionRef = useRef<HTMLElement>(null)
   const checkColor = ORANGE
@@ -746,7 +722,7 @@ function IcpSection({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => vo
                 <h4 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: MUTED }}>{tx.secondaryLabel}</h4>
                 <p className="text-sm leading-relaxed" style={{ color: MUTED }}>{tx.secondaryText}</p>
               </div>
-              <button onClick={onTrialClick} className="w-full py-3.5 rounded-xl font-bold text-sm transition-all" style={{ background: ORANGE, color: '#000', boxShadow: '0 8px 24px rgba(255,109,41,0.25)' }}>
+              <button onClick={onDiagClick} className="w-full py-3.5 rounded-xl font-bold text-sm transition-all" style={{ background: ORANGE, color: '#000', boxShadow: '0 8px 24px rgba(255,109,41,0.25)' }}>
                 {tx.cta}
               </button>
             </div>
@@ -758,9 +734,54 @@ function IcpSection({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => vo
 }
 
 /* ══════════════════════════════════════════════════
+   DIAGNÓSTICO  — seção final: perguntas e resultado INLINE (sem trocar de página)
+══════════════════════════════════════════════════ */
+function DiagnosticSection({ lang }: { lang: Lang }) {
+  const tx = t[lang].diag
+  const ref = useRef<HTMLElement>(null)
+  const [stage, setStage] = useState<'intro' | 'form' | 'result'>('intro')
+  const [diagId, setDiagId] = useState<string | null>(null)
+  const first = useRef(true)
+
+  // Ao abrir as perguntas ou o resultado, volta pro topo da seção.
+  useEffect(() => {
+    if (first.current) { first.current = false; return }
+    if (ref.current) gsap.to(window, { scrollTo: { y: ref.current, offsetY: 64 }, duration: 0.7, ease: 'power2.inOut' })
+  }, [stage])
+
+  return (
+    <section ref={ref} id="diagnostico" className="relative overflow-hidden py-24 px-4 sm:px-6" style={{ background: '#100C0A' }}>
+      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg,transparent,rgba(255,109,41,0.25),transparent)' }} />
+      <Glow w={600} h={400} opacity={0.12} top="40%" left="50%" />
+      <div className="relative z-10 mx-auto" style={{ maxWidth: 640 }}>
+        {stage === 'intro' && (
+          <div className="text-center">
+            <Badge text={tx.badge} />
+            <h2 className="font-black tracking-tight leading-tight mb-4 text-white" style={{ fontFamily: D, fontSize: 'clamp(1.9rem,6vw,3rem)', overflowWrap: 'anywhere' }}>
+              {tx.title1} <span style={{ color: ORANGE }}>{tx.title2}</span>
+            </h2>
+            <p className="leading-relaxed mb-6 mx-auto" style={{ fontSize: '15px', color: MUTED, maxWidth: 480 }}>{tx.sub}</p>
+            <div className="flex flex-wrap justify-center gap-2 mb-8">
+              {tx.items.map(i => (
+                <span key={i} className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,109,41,0.08)', border: '1px solid rgba(255,109,41,0.25)', color: '#fff' }}>{i}</span>
+              ))}
+            </div>
+            <button onClick={() => setStage('form')} className="w-full sm:w-auto font-bold text-base px-8 rounded-xl transition-all" style={{ minHeight: 52, background: ORANGE, color: '#000', border: 'none', cursor: 'pointer', boxShadow: '0 8px 24px rgba(255,109,41,0.3)' }}>
+              {tx.cta}
+            </button>
+          </div>
+        )}
+        {stage === 'form' && <DiagnosticFlow embedded onDone={id => { setDiagId(id); setStage('result') }} />}
+        {stage === 'result' && diagId && <DiagnosticResult id={diagId} embedded />}
+      </div>
+    </section>
+  )
+}
+
+/* ══════════════════════════════════════════════════
    FOOTER
 ══════════════════════════════════════════════════ */
-function SiteFooter({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => void }) {
+function SiteFooter({ lang, onDiagClick }: { lang: Lang; onDiagClick: () => void }) {
   const tx = t[lang].footer
   const ft = FOOTER_TX[lang]
   const nav = t[lang].nav
@@ -793,7 +814,7 @@ function SiteFooter({ lang, onTrialClick }: { lang: Lang; onTrialClick: () => vo
           <div className="flex flex-col justify-between">
             <div>
               <div className="text-xs font-bold uppercase tracking-widest mb-5" style={{ color: 'rgba(255,255,255,0.3)' }}>{ft.start}</div>
-              <button onClick={onTrialClick} className="font-bold text-sm px-6 py-3 rounded-xl text-black transition-all" style={{ background: ORANGE, border: 'none', cursor: 'pointer' }}>
+              <button onClick={onDiagClick} className="font-bold text-sm px-6 py-3 rounded-xl text-black transition-all" style={{ minHeight: 48, background: ORANGE, border: 'none', cursor: 'pointer' }}>
                 {nav.cta}
               </button>
             </div>
@@ -827,20 +848,23 @@ export default function App() {
   // Mesmo idioma do resto do site (salvo em sb_lang): escolher EN na landing
   // já abre login, cadastro e painel em inglês.
   const { lang, setLang } = useLang()
-  const [trialOpen, setTrialOpen] = useState(false)
+  const goDiag = () => {
+    const el = document.querySelector('#diagnostico')
+    if (el) gsap.to(window, { scrollTo: el, duration: 1.1, ease: 'power3.inOut' })
+  }
   return (
     <div style={{ background: BG }}>
       <FireCursor />
-      <Navbar lang={lang} setLang={setLang} onTrialClick={() => setTrialOpen(true)} />
+      <Navbar lang={lang} setLang={setLang} onDiagClick={goDiag} />
       <HeroSection lang={lang} />
       <StatsSection lang={lang} />
       <FeaturesSection lang={lang} />
       <HowItWorksSection lang={lang} />
       <ShowcaseSection lang={lang} />
-      <StatementSection lang={lang} onTrialClick={() => setTrialOpen(true)} />
-      <IcpSection lang={lang} onTrialClick={() => setTrialOpen(true)} />
-      <SiteFooter lang={lang} onTrialClick={() => setTrialOpen(true)} />
-      <TrialModal lang={lang} open={trialOpen} onClose={() => setTrialOpen(false)} />
+      <StatementSection lang={lang} onDiagClick={goDiag} />
+      <IcpSection lang={lang} onDiagClick={goDiag} />
+      <DiagnosticSection lang={lang} />
+      <SiteFooter lang={lang} onDiagClick={goDiag} />
     </div>
   )
 }

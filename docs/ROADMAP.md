@@ -179,7 +179,19 @@
    partir da entrega da estratégia — ajustado em 10-07: conta de quando o cliente VÊ o popup), preço novo (R$2.449 mensal; R$1.449
    anual/cupom de 1º mês — Stripe precisa de 3 itens novos, aprovação do
    dono) e Business Game pra retenção. Decisão registrada em
-   [DECISIONS.md](DECISIONS.md) (2026-10-06 e 2026-10-07). Fatias:
+   [DECISIONS.md](DECISIONS.md) (2026-10-06, 2026-10-07 e **2026-10-08**).
+   **Ajuste de 2026-10-08:** o acesso grátis é **diagnóstico + 1 vídeo**
+   (NÃO inclui estratégia — onde este item diz "1 estratégia", leia como
+   histórico); a estratégia só nasce depois do pagamento. A landing agora
+   tem a seção final `#diagnostico` com perguntas e resultado inline
+   (`DiagnosticFlow` em `OnboardingPage.tsx`, `DiagnosticResult` em
+   `DiagnosticoPage.tsx`; rotas `/onboarding` e `/diagnostico/:id`
+   continuam). **Pendências:** (1) `claim-diagnostic` foi alterado no
+   código (parou de disparar `strategy-generate`) e **precisa de deploy
+   aprovado pelo dono** (function de cliente real); (2) o `stripe-webhook`
+   (PR do pagamento) deve **disparar a 1ª estratégia ao confirmar o
+   pagamento** — até isso entrar, conta nova não recebe estratégia sozinha;
+   (3) publicar o site e conferir a landing no celular (375px). Fatias:
    - **Fatia 1 — Growth Score (código pronto, falta aplicar migration
      `20261007120000_diagnostics_instagram_data.sql` e deployar
      `run-diagnosis`):** nota centrada no Instagram via scraper, site/Google

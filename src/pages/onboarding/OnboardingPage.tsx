@@ -322,7 +322,11 @@ function normalizeInstagram(raw: string): string | null {
   return `https://instagram.com/${v.toLowerCase()}`
 }
 
-export default function OnboardingPage() {
+// Miolo do diagnóstico (perguntas + envio ao run-diagnosis). Usado em dois
+// lugares: na rota /onboarding (página inteira) e INLINE na landing
+// (embedded: sem cabeçalho nem fundo de página inteira; ao terminar chama
+// onDone(id) e quem hospeda mostra o resultado ali mesmo).
+export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolean; onDone?: (diagnosticId: string) => void }) {
   const navigate = useNavigate()
   const { lang } = useLang()
   const t = TX[lang]
@@ -406,8 +410,9 @@ export default function OnboardingPage() {
       const result = await res.json()
       if (!res.ok) throw new Error(result.error ?? t.procErr)
       clearInterval(interval)
-      setDiagnosticId(result.id)
       setSubmitting(false)
+      if (embedded && onDone) onDone(result.id)
+      else setDiagnosticId(result.id)
     } catch (e) {
       clearInterval(interval)
       setError(e instanceof Error ? e.message : String(e))
@@ -415,9 +420,13 @@ export default function OnboardingPage() {
     }
   }
 
+  const shell: React.CSSProperties = embedded
+    ? { background: 'transparent' }
+    : { minHeight: '100vh', background: BG }
+
   if (submitting) {
     return (
-      <div style={{ minHeight: '100vh', background: BG, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div style={{ ...shell, ...(embedded ? { padding: '48px 0' } : { padding: '24px' }), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} role="status">
         <div style={{ marginBottom: '32px', position: 'relative' }}>
           <div style={{ width: '72px', height: '72px', borderRadius: '50%', border: `3px solid rgba(255,109,41,0.15)`, borderTopColor: ORANGE, animation: 'spin 1s linear infinite' }} />
           <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -435,7 +444,7 @@ export default function OnboardingPage() {
   // por conexões reais, feitas em Configurações.
   if (diagnosticId) {
     return (
-      <div style={{ minHeight: '100vh', background: BG, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div style={{ ...shell, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
         <div style={{ width: '100%', maxWidth: '480px', textAlign: 'center' }}>
           <div style={{ fontSize: '48px', marginBottom: '20px' }}>✨</div>
           <h1 style={{ fontFamily: D, fontSize: '1.7rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '10px' }}>
@@ -462,19 +471,21 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: BG, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '20px 32px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <a href="/" style={{ fontFamily: D, fontSize: '1.3rem', fontWeight: 900, color: 'white', textDecoration: 'none', letterSpacing: '-0.02em' }}>
-          <span style={{ color: ORANGE }}>Sales</span>Boost
-        </a>
-        <div style={{ fontSize: '13px', color: MUTED }}>{t.stepOf(step + 1, STEPS.length)}</div>
-      </div>
+    <div style={{ ...shell, display: 'flex', flexDirection: 'column', ...(embedded ? { overflowX: 'hidden' } : {}) }}>
+      {!embedded && (
+        <div style={{ padding: '20px 32px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <a href="/" style={{ fontFamily: D, fontSize: '1.3rem', fontWeight: 900, color: 'white', textDecoration: 'none', letterSpacing: '-0.02em' }}>
+            <span style={{ color: ORANGE }}>Sales</span>Boost
+          </a>
+          <div style={{ fontSize: '13px', color: MUTED }}>{t.stepOf(step + 1, STEPS.length)}</div>
+        </div>
+      )}
 
-      <div style={{ height: '3px', background: 'rgba(255,255,255,0.06)' }}>
+      <div style={{ height: '3px', background: 'rgba(255,255,255,0.06)', borderRadius: embedded ? 2 : 0 }}>
         <div style={{ height: '100%', background: ORANGE, width: `${((step + 1) / STEPS.length) * 100}%`, transition: 'width 0.4s ease', borderRadius: '0 2px 2px 0' }} />
       </div>
 
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 24px' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: embedded ? '24px 0 0' : '48px 24px' }}>
         <div style={{ width: '100%', maxWidth: '540px' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '24px' }}>
             {STEPS.map((s, i) => (
@@ -487,7 +498,7 @@ export default function OnboardingPage() {
             ))}
           </div>
 
-          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '20px', padding: '32px' }}>
+          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '20px', padding: embedded ? '20px' : '32px' }}>
             {step === 0 && (
               <>
                 <H t={t.s0t} s={t.s0s} />
@@ -536,10 +547,10 @@ export default function OnboardingPage() {
             <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
               {step > 0 && (
                 <button onClick={() => setStep(s => s - 1)}
-                  style={{ flex: '0 0 auto', padding: '12px 20px', background: 'transparent', color: MUTED, fontWeight: 600, fontSize: '14px', borderRadius: '12px', border: `1px solid ${BORDER}`, cursor: 'pointer', fontFamily: 'inherit' }}>{t.back}</button>
+                  style={{ flex: '0 0 auto', minHeight: 48, padding: '12px 20px', background: 'transparent', color: MUTED, fontWeight: 600, fontSize: '14px', borderRadius: '12px', border: `1px solid ${BORDER}`, cursor: 'pointer', fontFamily: 'inherit' }}>{t.back}</button>
               )}
               <button onClick={step < STEPS.length - 1 ? () => setStep(s => s + 1) : handleSubmit} disabled={!canNext()}
-                style={{ flex: 1, padding: '13px 24px', background: canNext() ? ORANGE : 'rgba(255,109,41,0.2)', color: canNext() ? '#000' : 'rgba(255,255,255,0.3)', fontWeight: 800, fontSize: '15px', borderRadius: '12px', border: 'none', cursor: canNext() ? 'pointer' : 'not-allowed', fontFamily: D, letterSpacing: '-0.01em', transition: 'all 0.2s', boxShadow: canNext() ? '0 8px 20px rgba(255,109,41,0.3)' : 'none' }}>
+                style={{ flex: 1, minHeight: 48, padding: '13px 24px', background: canNext() ? ORANGE : 'rgba(255,109,41,0.2)', color: canNext() ? '#000' : 'rgba(255,255,255,0.3)', fontWeight: 800, fontSize: '15px', borderRadius: '12px', border: 'none', cursor: canNext() ? 'pointer' : 'not-allowed', fontFamily: D, letterSpacing: '-0.01em', transition: 'all 0.2s', boxShadow: canNext() ? '0 8px 20px rgba(255,109,41,0.3)' : 'none' }}>
                 {step < STEPS.length - 1 ? t.cont : t.create}
               </button>
             </div>
@@ -552,6 +563,10 @@ export default function OnboardingPage() {
       </div>
     </div>
   )
+}
+
+export default function OnboardingPage() {
+  return <DiagnosticFlow />
 }
 
 function H({ t, s }: { t: string; s: string }) {
