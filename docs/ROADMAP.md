@@ -63,7 +63,9 @@
 - **Alteração arriscada?** Sim — gasto novo com provedor pago
   (`HIGGSFIELD_API_KEY`), precisa de aprovação prévia do dono antes de
   qualquer chamada real que gaste crédito.
-- **Status:** ❌ não começado.
+- **Status:** ❌ não começado. (Atualização 2026-10-08: 🟡 o tour grátis de 6
+  fotos — Kling + Reel único — funciona no ensaio; os 12 tours/mês do plano
+  ainda não existem. Ver [DECISIONS.md](DECISIONS.md).)
 - **Decisões de volume (2026-10-08, ver [DECISIONS.md](DECISIONS.md)):**
   12 vídeos/mês por cliente pago, espalhados pela estratégia; extra só com
   aprovação do cliente e dado real; 30 vídeos grátis/mês no diagnóstico.

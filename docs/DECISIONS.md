@@ -386,3 +386,36 @@ Decisões do dono (conversa de 2026-10-08):
   de R$1.449 de 2026-10-02 — substituído por esta decisão; mantido como
   histórico. Itens do Stripe existem só no sandbox; em produção ainda
   precisam ser criados (com os mesmos `lookup_key` e id de cupom).
+
+
+## 2026-10-08 — Vídeo grátis vira TOUR VIRTUAL (Kling, Reel único)
+
+Decisões do dono (conversa de 2026-10-08), testadas no ensaio:
+
+- **Modelo: Kling 3.0 Standard via Higgsfield** (`/kling-video/v3.0/std/image-to-video`).
+  Teste comparativo: DoP turbo (US$ 0,41/5 s) deixou uma mancha branca;
+  Kling (**US$ 0,54 por trecho de 5 s**, medido no painel) saiu limpo, pronto
+  em ~3 min.
+- **O vídeo é um tour virtual**, não 1 foto animada: o cliente envia fotos
+  reais do imóvel **na ordem da visita**; cada foto vira um trecho de 5 s e
+  os trechos são **colados num Reel único** de ~30 s (`_shared/mp4concat.ts`,
+  sem recodificar — só junta trechos do mesmo modelo/tamanho; se vier
+  diferente, recusa em vez de entregar vídeo quebrado). Por isso a tela
+  passa todas as fotos pelo mesmo recorte 4:5 antes de enviar.
+- **Tour grátis = 6 fotos (~30 s, ~US$ 3,24).** Continua 1 por conta e teto
+  de 30/mês. **Correção do custo** da decisão "Volume de vídeo" acima
+  (que dizia "≈ US$ 10" pensando em 1 foto por vídeo): 30 tours/mês ≈
+  **US$ 97**.
+- **Plano pago: 12 tours/mês** (~US$ 39 por cliente), gerados a partir do
+  plano de conteúdo semanal (3 por semana). Ainda não construído.
+- **Seleção de fotos (pipeline do dono, futuro):** recebe ~50 fotos →
+  classifica → agrupa por cômodo → tira duplicadas e ruins → escolhe 6 a 10
+  conforme o tamanho do imóvel → cliente aprova ou troca antes de gerar.
+  Hoje o cliente escolhe as 6 à mão; no teste a seleção foi feita
+  manualmente (6 de 64 fotos).
+- **Teste real (ensaio, conta QA, 2026-10-08):** 6 fotos → 6 trechos em
+  ~2,5 min → Reel de 30,2 s (1108×828, 25 MB), sem erro de decodificação,
+  nenhum cômodo alterado. Fotos do dono ficam só no ensaio (nunca publicar).
+- **Formato vertical 9:16** para Reels: decisão adiada (o recorte atual é 4:5).
+- Tabela nova `video_tours` (migration `20261008220000`) e bucket `videos`
+  (migration `20261008210000`, só mp4, até 50 MB). Aplicadas só no ensaio.

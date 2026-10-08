@@ -124,3 +124,11 @@ function da Parte B deve:
 
 A Parte A (tela `TrialVideoPreviews` no resumo do trial) só lê dados e não
 chama nenhuma API de vídeo.
+
+**Divergência (2026-10-08):** a Parte B foi implementada como **tour
+virtual**: `supabase/functions/trial-video` (ações `start` com 6
+`photo_urls`, `status`, `coupon_seen`) + tabela `video_tours` + colagem em
+`_shared/mp4concat.ts` + tela `FreeVideoCard`. A trava segue a regra acima
+(linha `claimed` antes de chamar a Higgsfield; falha de trecho tenta 1x de
+novo, depois `failed` e a trava é apagada). Ver
+[DECISIONS.md](DECISIONS.md) "Vídeo grátis vira TOUR VIRTUAL".

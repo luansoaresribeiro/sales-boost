@@ -1,6 +1,9 @@
-// Vídeo grátis do acesso grátis (decisões do dono 2026-10-08, docs/DECISIONS.md):
-// o cliente envia UMA foto real → supabase/functions/trial-video anima com a
-// Higgsfield (1 por conta, teto global de 30/mês) → quando fica pronto, abre o
+// Tour virtual grátis do acesso grátis (decisões do dono 2026-10-08, docs/DECISIONS.md):
+// o cliente envia TOUR_PHOTOS fotos reais na ordem da visita → supabase/functions/
+// trial-video gera um trecho de 5 s por foto (Kling via Higgsfield) e cola num Reel
+// único de ~30 s (1 por conta, teto global de 30/mês). Todas as fotos passam pelo
+// mesmo recorte 4:5 (processImageTo4x5) — os trechos precisam ter o mesmo tamanho
+// pra serem colados sem recodificar. Quando fica pronto, abre o
 // popup do cupom (1º mês R$1.449) com o que o plano oferece. A data em que o
 // popup aparece conta os 7 dias do cupom (coupon_offer_shown_at, servidor).
 import { useEffect, useRef, useState } from 'react'
@@ -13,17 +16,21 @@ import { CARD, MUTED, ORANGE, D, SUPABASE_URL } from './marketingAi/shared'
 type State = 'loading' | 'none' | 'uploading' | 'processing' | 'completed' | 'cap' | 'error'
 
 const POLL_MS = 10_000
+// Igual a TOUR_PHOTOS_TRIAL da função trial-video (padrão 6).
+const TOUR_PHOTOS = 6
 
 const TX = {
   pt: {
-    title: '🎬 Seu vídeo grátis',
-    intro: 'Envie UMA foto real do que você vende (ex.: a sala ou a fachada do imóvel). A gente transforma em um vídeo curto com movimento de câmera — sem inventar nada e sem texto por cima.',
-    tips: 'Dicas: foto bem iluminada, sem texto escrito por cima, na horizontal ou vertical.',
-    pick: 'Escolher foto →', uploading: 'Enviando sua foto…',
-    processing: 'Seu vídeo está sendo criado. Leva alguns minutos — pode continuar usando o painel, esta tela atualiza sozinha.',
+    title: '🎬 Seu tour virtual grátis',
+    intro: `Escolha ${TOUR_PHOTOS} fotos reais do imóvel, na ordem da visita (ex.: entrada, sala, cozinha, quarto, banheiro, varanda). A gente transforma num vídeo-tour de ~30 segundos com movimento de câmera — sem inventar nada e sem texto por cima.`,
+    tips: 'Dicas: fotos bem iluminadas, sem pessoas e sem texto escrito por cima. A ordem em que você escolhe é a ordem do vídeo.',
+    pick: 'Escolher fotos →', addMore: 'Adicionar fotos', remove: 'Tirar', count: (n: number) => `${n} de ${TOUR_PHOTOS} fotos`,
+    create: 'Criar meu tour →', uploading: 'Enviando suas fotos…',
+    processing: 'Seu tour está sendo criado. Leva alguns minutos — pode continuar usando o painel, esta tela atualiza sozinha.',
+    progress: (d: number, t: number) => `${d} de ${t} cômodos prontos`,
     ready: 'Seu vídeo está pronto!', download: 'Baixar vídeo', seeOffer: 'Ver o que o plano faz por você →',
     cap: 'Os vídeos grátis deste mês acabaram. O seu entra na fila do próximo mês — ou ative o plano e receba agora.',
-    failed: 'Não deu certo com essa foto. Tente outra foto, sem texto por cima e bem iluminada.',
+    failed: 'Não deu certo com essas fotos. Tente de novo, com fotos bem iluminadas e sem texto por cima.',
     errGeneric: 'Não consegui iniciar seu vídeo agora. Tente de novo em alguns minutos.',
     activate: 'Ativar meu plano →',
     mTitle: 'Gostou? Imagine isso todo mês.',
@@ -37,14 +44,16 @@ const TX = {
     later: 'Agora não', close: 'Fechar',
   },
   en: {
-    title: '🎬 Your free video',
-    intro: 'Upload ONE real photo of what you sell (e.g. the living room or the front of the property). We turn it into a short video with camera movement — nothing made up and no text on top.',
-    tips: 'Tips: well-lit photo, no text written on it, landscape or portrait.',
-    pick: 'Choose photo →', uploading: 'Uploading your photo…',
-    processing: 'Your video is being created. It takes a few minutes — keep using the dashboard, this card updates by itself.',
+    title: '🎬 Your free virtual tour',
+    intro: `Choose ${TOUR_PHOTOS} real photos of the property, in visiting order (e.g. entrance, living room, kitchen, bedroom, bathroom, balcony). We turn them into a ~30-second video tour with camera movement — nothing made up and no text on top.`,
+    tips: 'Tips: well-lit photos, no people and no text written on them. The order you pick is the order of the video.',
+    pick: 'Choose photos →', addMore: 'Add photos', remove: 'Remove', count: (n: number) => `${n} of ${TOUR_PHOTOS} photos`,
+    create: 'Create my tour →', uploading: 'Uploading your photos…',
+    processing: 'Your tour is being created. It takes a few minutes — keep using the dashboard, this card updates by itself.',
+    progress: (d: number, t: number) => `${d} of ${t} rooms ready`,
     ready: 'Your video is ready!', download: 'Download video', seeOffer: 'See what the plan does for you →',
     cap: "This month's free videos are gone. Yours goes to next month's queue — or activate the plan and get it now.",
-    failed: "That photo didn't work. Try another one, well-lit and with no text on it.",
+    failed: "Those photos didn't work. Try again with well-lit photos and no text on them.",
     errGeneric: "I couldn't start your video right now. Try again in a few minutes.",
     activate: 'Activate my plan →',
     mTitle: 'Like it? Imagine this every month.',
@@ -77,12 +86,22 @@ export default function FreeVideoCard({ companyId }: { companyId: string }) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
   const [modal, setModal] = useState(false)
+  // Fotos escolhidas, na ordem da visita (a ordem da escolha é a ordem do vídeo).
+  const [picked, setPicked] = useState<{ file: File; preview: string }[]>([])
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+
+  const pickedRef = useRef(picked)
+  useEffect(() => { pickedRef.current = picked }, [picked])
+  useEffect(() => () => pickedRef.current.forEach(p => URL.revokeObjectURL(p.preview)), [])
 
   const applyStatus = (d: Record<string, unknown>, openModal: boolean) => {
     if (d.status === 'completed' && typeof d.video_url === 'string') {
       setVideoUrl(d.video_url); setState('completed')
       if (openModal) setModal(true)
-    } else if (d.status === 'processing') setState('processing')
+    } else if (d.status === 'processing') {
+      if (typeof d.done === 'number' && typeof d.total === 'number') setProgress({ done: d.done, total: d.total })
+      setState('processing')
+    }
     else if (d.status === 'failed') { setMsg(tx.failed); setState('none') }
     else setState('none')
   }
@@ -108,24 +127,38 @@ export default function FreeVideoCard({ companyId }: { companyId: string }) {
   // Popup aberto = cupom "visto" (o servidor marca só na 1ª vez).
   useEffect(() => { if (modal) void callFn({ action: 'coupon_seen' }).catch(() => {}) }, [modal])
 
-  const onFile = async (file: File | undefined) => {
-    if (!file) return
+  const onFiles = (files: FileList | null) => {
+    if (!files?.length) return
+    setMsg('')
+    const room = TOUR_PHOTOS - picked.length
+    setPicked([...picked, ...Array.from(files).slice(0, room).map(file => ({ file, preview: URL.createObjectURL(file) }))])
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const removeAt = (i: number) => {
+    URL.revokeObjectURL(picked[i].preview)
+    setPicked(picked.filter((_, j) => j !== i))
+  }
+
+  const onCreate = async () => {
+    if (picked.length !== TOUR_PHOTOS) return
     setMsg(''); setState('uploading')
     try {
-      const blob = await processImageTo4x5(file)
-      const path = `renders/${companyId}/trial-src-${crypto.randomUUID()}.jpg`
-      const { error } = await supabase.storage.from('post-images').upload(path, blob, { contentType: 'image/jpeg' })
-      if (error) throw error
-      const photo_url = supabase.storage.from('post-images').getPublicUrl(path).data.publicUrl
-      const { status, data } = await callFn({ action: 'start', photo_url })
+      const batch = crypto.randomUUID()
+      const photo_urls = await Promise.all(picked.map(async ({ file }, i) => {
+        const blob = await processImageTo4x5(file)
+        const path = `renders/${companyId}/trial-tour-${batch}-${i + 1}.jpg`
+        const { error } = await supabase.storage.from('post-images').upload(path, blob, { contentType: 'image/jpeg' })
+        if (error) throw error
+        return supabase.storage.from('post-images').getPublicUrl(path).data.publicUrl
+      }))
+      const { status, data } = await callFn({ action: 'start', photo_urls })
       if (status === 429 && data.status === 'cap_reached') { setState('cap'); return }
       if (status === 409) { applyStatus((await callFn({ action: 'status' })).data, false); return }
       if (status >= 400) { setMsg(typeof data.error === 'string' ? data.error : tx.errGeneric); setState('error'); return }
-      setState('processing')
+      setProgress({ done: 0, total: TOUR_PHOTOS }); setState('processing')
     } catch {
       setMsg(tx.errGeneric); setState('error')
-    } finally {
-      if (fileRef.current) fileRef.current.value = ''
     }
   }
 
@@ -141,10 +174,36 @@ export default function FreeVideoCard({ companyId }: { companyId: string }) {
           <p style={{ fontSize: '13px', color: MUTED, lineHeight: 1.6, margin: '0 0 6px' }}>{tx.intro}</p>
           <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.45)', lineHeight: 1.5, margin: '0 0 14px' }}>{tx.tips}</p>
           {msg && <p style={{ fontSize: '12.5px', color: '#f87171', margin: '0 0 12px' }}>{msg}</p>}
-          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={e => void onFile(e.target.files?.[0])} />
-          <button style={{ ...btn, opacity: state === 'uploading' ? 0.6 : 1, cursor: state === 'uploading' ? 'wait' : 'pointer' }} disabled={state === 'uploading'} onClick={() => fileRef.current?.click()}>
-            {state === 'uploading' ? tx.uploading : tx.pick}
-          </button>
+          <input ref={fileRef} type="file" multiple accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={e => onFiles(e.target.files)} />
+          {picked.length > 0 && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: '8px', marginBottom: '8px', maxWidth: '520px' }}>
+                {picked.map((p, i) => (
+                  <div key={p.preview} style={{ position: 'relative', aspectRatio: '4 / 5', borderRadius: '8px', overflow: 'hidden', background: '#000' }}>
+                    <img src={p.preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    <span style={{ position: 'absolute', top: 4, left: 4, minWidth: 18, height: 18, borderRadius: 9, background: ORANGE, color: '#000', fontSize: '11px', fontWeight: 800, textAlign: 'center', lineHeight: '18px' }}>{i + 1}</span>
+                    {state !== 'uploading' && (
+                      <button onClick={() => removeAt(i)} aria-label={tx.remove}
+                        style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.7)', color: 'white', fontSize: '11px', cursor: 'pointer' }}>✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: '12px', color: MUTED, marginBottom: '12px' }}>{tx.count(picked.length)}</div>
+            </>
+          )}
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            {picked.length < TOUR_PHOTOS && (
+              <button style={picked.length ? { ...btn, background: 'transparent', color: ORANGE, border: '1px solid rgba(255,109,41,0.4)' } : btn} onClick={() => fileRef.current?.click()}>
+                {picked.length ? tx.addMore : tx.pick}
+              </button>
+            )}
+            {picked.length === TOUR_PHOTOS && (
+              <button style={{ ...btn, opacity: state === 'uploading' ? 0.6 : 1, cursor: state === 'uploading' ? 'wait' : 'pointer' }} disabled={state === 'uploading'} onClick={() => void onCreate()}>
+                {state === 'uploading' ? tx.uploading : tx.create}
+              </button>
+            )}
+          </div>
         </>
       )}
 
@@ -152,7 +211,10 @@ export default function FreeVideoCard({ companyId }: { companyId: string }) {
         <div role="status" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ width: 28, height: 28, flexShrink: 0, border: '3px solid rgba(255,109,41,0.15)', borderTopColor: ORANGE, borderRadius: '50%', animation: 'fvspin 1s linear infinite' }} />
           <style>{'@keyframes fvspin{to{transform:rotate(360deg)}}'}</style>
-          <p style={{ fontSize: '13px', color: MUTED, lineHeight: 1.6, margin: 0 }}>{tx.processing}</p>
+          <div>
+            <p style={{ fontSize: '13px', color: MUTED, lineHeight: 1.6, margin: 0 }}>{tx.processing}</p>
+            {progress && <p style={{ fontSize: '12px', color: ORANGE, fontWeight: 700, margin: '4px 0 0' }}>{tx.progress(progress.done, progress.total)}</p>}
+          </div>
         </div>
       )}
 
