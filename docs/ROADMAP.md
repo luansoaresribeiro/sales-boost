@@ -64,6 +64,15 @@
   (`HIGGSFIELD_API_KEY`), precisa de aprovação prévia do dono antes de
   qualquer chamada real que gaste crédito.
 - **Status:** ❌ não começado.
+- **Decisões de volume (2026-10-08, ver [DECISIONS.md](DECISIONS.md)):**
+  12 vídeos/mês por cliente pago, espalhados pela estratégia; extra só com
+  aprovação do cliente e dado real; 30 vídeos grátis/mês no diagnóstico.
+- **Depois do vídeo grátis — posts de bairro:** OpenStreetMap (lugares
+  perto + distância real) → foto da Wikimedia Commons (licença livre,
+  crédito) → post de FOTO (sem vídeo) → corretor aprova; pode subir fotos
+  próprias do bairro. Critério de pronto: imóvel com endereço gera ao
+  menos 1 sugestão de post de bairro com distância real e foto com
+  crédito, sem nenhuma imagem gerada por IA do lugar.
 
 ## P4 — Infra de autonomia
 

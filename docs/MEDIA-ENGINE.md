@@ -82,6 +82,17 @@ texto via `render-format`.
   [ARCHITECTURE.md](ARCHITECTURE.md) etapa 8 — o motor de mídia só
   precisa alimentá-lo com `media[]` no mesmo formato que já usa hoje).
 
+## Posts de bairro (entorno do imóvel) — plano aprovado 2026-10-08
+
+Não usa Higgsfield: é **foto**, não vídeo. Lugares perto via
+OpenStreetMap (distância real), foto real via Wikimedia Commons (licença
+livre + crédito) ou enviada pelo corretor. A IA nunca gera a imagem do
+lugar. Detalhes em [DECISIONS.md](DECISIONS.md) (2026-10-08 — Volume de
+vídeo, teto do grátis e fotos do entorno).
+
+**Volume de vídeo:** 12/mês por cliente pago (espalhados pela estratégia);
+30/mês no total para os vídeos grátis do diagnóstico.
+
 ## Futuro (não fazer agora)
 
 - Avatar do corretor (speech-to-video; exige consentimento explícito).

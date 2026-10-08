@@ -309,3 +309,36 @@ testável em produção.
   Instagram avaliados e incompletos, do mais fraco pro mais forte, cada um
   com "O problema", "Como destravar" e "+N pts". Textos genéricos fixos
   (regra 6). `biggestGap` continua existindo (= 1º de `topGaps`).
+
+## 2026-10-08 — Volume de vídeo, teto do grátis e fotos do entorno
+
+Decisões do dono (conversa de 2026-10-08):
+
+- **Plano pago = 12 vídeos/mês, sempre** (Higgsfield). A estratégia
+  ESPALHA esses 12 pelas semanas (com reserva no fim do mês) pra o crédito
+  não acabar no meio do mês. O volume extra vem de **fotos e criativos
+  estáticos** (custo de centavos), na quantidade que a estratégia pedir.
+- **Passar dos 12 só com aprovação do CLIENTE**, como investimento extra
+  (pacote pago — preço a definir quando o Stripe real estiver ativo). A
+  oferta só aparece com **dado real do próprio cliente** (ex.: Reels dele
+  com mais alcance que as fotos), depois de ~4 semanas e ~6 vídeos
+  publicados. Nunca automático (regra 7) nem com número inventado
+  (regra 5).
+- **Vídeos grátis do diagnóstico: teto de 30/mês** (≈ US$ 10), separado
+  dos 12 dos pagantes. Passou do teto: "seu vídeo entra na fila do
+  próximo mês — ou ative o plano e receba agora".
+- **Fotos do entorno do imóvel (posts de bairro)** — direção aprovada,
+  construir DEPOIS do vídeo grátis + popup do cupom:
+  1. Pelo endereço do imóvel, **OpenStreetMap** (grátis) acha o que está
+     perto com **distância real** (praia, metrô, escola, shopping...). Os
+     tipos de lugar ficam na ficha (`vertical_playbooks`, regra 6).
+  2. Foto do lugar vem da **Wikimedia Commons**, só fotos com localização
+     marcada perto do ponto e licença livre (CC0, domínio público, CC BY),
+     com crédito do fotógrafo na legenda.
+  3. Post de bairro é **FOTO, não vídeo** (não gasta os 12 vídeos). São
+     poucos por mês — quantos, a estratégia decide.
+  4. Corretor **escolhe/recusa** a foto sugerida (nada vai ao ar sem
+     aprovação) e **pode subir fotos próprias do bairro** (opcional).
+  5. **Proibido:** IA de imagem/vídeo gerar o lugar do zero (seria lugar
+     falso em anúncio de imóvel) e usar Google Earth/Street View/fotos do
+     Google Maps (termos do Google proíbem).
