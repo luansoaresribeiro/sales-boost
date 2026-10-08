@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import {
-  biggestGap, computeGrowthScore, CRITERIA_WEIGHTS, CRITERIA_INFO, CRITERIA_INFO_EN, VERDICT_BANDS, VERDICT_BANDS_EN,
+  computeGrowthScore, potentialScore, topGaps, CRITERIA_WEIGHTS, CRITERIA_INFO, CRITERIA_INFO_EN, VERDICT_BANDS, VERDICT_BANDS_EN,
   type InstagramData, type Verdict, type CriterionKey,
 } from '../../lib/growthScore'
 import { useLang } from '../../contexts/LanguageContext'
@@ -62,7 +62,12 @@ const TX = {
     analyzingIg: 'Analisando seu Instagram…', analyzingSub: 'Isso leva alguns segundos. A tela atualiza sozinha.',
     coverage: 'Cobertura:', coverageTail: 'dos critérios avaliados',
     partialMsg: 'Não conseguimos avaliar critérios suficientes pra dar uma nota. Não inventamos números: o que falta fica de fora.',
-    gapTitle: 'Seu maior gargalo', oppTitle: 'Sua maior oportunidade', noGap: 'Nos critérios que conseguimos avaliar, seu Instagram está forte. Seu próximo passo é transformar essa atenção em clientes.',
+    potTitle: 'Seu potencial', potNow: 'hoje', potCan: 'pode chegar a',
+    potLine: 'Corrigindo os pontos abaixo, sua nota pode subir até aqui. Conta feita com a mesma fórmula da sua nota — não é promessa de vendas.',
+    potPartial: 'Corrigindo os pontos abaixo, seu perfil passa a aparecer mais e a converter melhor quem chega nele.',
+    problemsTitle: (n: number) => n === 1 ? 'O ponto que mais trava seu crescimento' : `Os ${n} pontos que mais travam seu crescimento`,
+    whyLabel: 'O problema', fixLabel: 'Como destravar', gain: (g: number) => `+${g} pts`,
+    noGap: 'Nos critérios que conseguimos avaliar, seu Instagram está forte. Seu próximo passo é transformar essa atenção em clientes.',
     howFormed: 'Como sua nota foi formada', igErr: 'Não conseguimos ler seu Instagram agora (perfil privado ou fora do ar). Os itens dele ficaram sem avaliação.',
     noIg: 'Este diagnóstico não tem a leitura do Instagram.', of: 'de', notEval: 'Não avaliado',
     howCalc: '▸ Como calculamos',
@@ -78,7 +83,12 @@ const TX = {
     analyzingIg: 'Analyzing your Instagram…', analyzingSub: 'This takes a few seconds. The screen updates by itself.',
     coverage: 'Coverage:', coverageTail: 'of the criteria evaluated',
     partialMsg: 'We could not evaluate enough criteria to give a score. We do not make up numbers: what is missing is left out.',
-    gapTitle: 'Your biggest bottleneck', oppTitle: 'Your biggest opportunity', noGap: 'On the criteria we could evaluate, your Instagram is strong. Your next step is turning that attention into customers.',
+    potTitle: 'Your potential', potNow: 'today', potCan: 'can reach',
+    potLine: 'Fixing the points below, your score can rise up to here. Calculated with the same formula as your score — not a sales promise.',
+    potPartial: 'Fixing the points below, your profile gets seen more and converts the people who land on it better.',
+    problemsTitle: (n: number) => n === 1 ? 'The point holding back your growth the most' : `The ${n} points holding back your growth the most`,
+    whyLabel: 'The problem', fixLabel: 'How to unlock it', gain: (g: number) => `+${g} pts`,
+    noGap: 'On the criteria we could evaluate, your Instagram is strong. Your next step is turning that attention into customers.',
     howFormed: 'How your score was formed', igErr: 'We could not read your Instagram right now (private profile or offline). Its items were left unevaluated.',
     noIg: 'This diagnosis has no Instagram reading.', of: 'of', notEval: 'Not evaluated',
     howCalc: '▸ How we calculate',
@@ -219,23 +229,55 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
           )}
         </div>
 
-        {/* Maior gargalo e maior oportunidade (regra fixa em growthScore.biggestGap) */}
+        {/* Potencial + principais problemas (regra fixa em growthScore.topGaps) */}
         {!noIgYet && result.criteria.some(c => c.evaluated && ['frequency', 'engagement', 'format', 'profile'].includes(c.key)) && (() => {
-          const gap = biggestGap(result, lang)
-          return (
-            <div style={{ background: CARD, border: '1px solid rgba(255,109,41,0.3)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
-              {gap ? (
-                <>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{t.gapTitle}</div>
-                  <div style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 800, color: 'white', marginBottom: 6 }}>{gap.label}</div>
-                  <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, margin: '0 0 14px' }}>{gap.why}</p>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{t.oppTitle}</div>
-                  <p style={{ fontSize: 13, color: 'white', lineHeight: 1.6, margin: 0 }}>{gap.action}</p>
-                </>
-              ) : (
-                <p style={{ fontSize: 13, color: 'white', lineHeight: 1.6, margin: 0 }}>{t.noGap}</p>
-              )}
+          const gaps = topGaps(result, lang, 3)
+          const pot = potentialScore(result, gaps)
+          if (!gaps.length) return (
+            <div style={{ background: CARD, border: '1px solid rgba(74,222,128,0.3)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
+              <p style={{ fontSize: 13, color: 'white', lineHeight: 1.6, margin: 0 }}>{t.noGap}</p>
             </div>
+          )
+          return (
+            <>
+              <div style={{ background: 'linear-gradient(135deg, rgba(74,222,128,0.12), rgba(255,109,41,0.10))', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>{t.potTitle}</div>
+                {pot !== null && result.score !== null ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, flexWrap: 'wrap', marginBottom: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>{t.potNow}</div>
+                        <div style={{ fontFamily: D, fontSize: 34, fontWeight: 900, color: color, lineHeight: 1 }}>{result.score}</div>
+                      </div>
+                      <div aria-hidden style={{ fontSize: 26, color: MUTED, lineHeight: 1, paddingBottom: 4 }}>→</div>
+                      <div>
+                        <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>{t.potCan}</div>
+                        <div style={{ fontFamily: D, fontSize: 48, fontWeight: 900, color: '#4ade80', lineHeight: 1 }}>{pot}</div>
+                      </div>
+                    </div>
+                    <p style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, margin: 0 }}>{t.potLine}</p>
+                  </>
+                ) : (
+                  <p style={{ fontSize: 14, color: 'white', lineHeight: 1.6, margin: 0 }}>{t.potPartial}</p>
+                )}
+              </div>
+
+              <div style={{ background: CARD, border: '1px solid rgba(255,109,41,0.3)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
+                <h2 style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 800, color: 'white', margin: '0 0 4px' }}>{t.problemsTitle(gaps.length)}</h2>
+                {gaps.map(({ gap, gain }, i) => (
+                  <div key={gap.key} style={{ padding: '14px 0 2px', borderTop: i ? `1px solid ${BORDER}` : 'none' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
+                      <span style={{ fontSize: 14.5, fontWeight: 800, color: 'white' }}>{i + 1}. {gap.label}</span>
+                      {result.score !== null && <span style={{ fontSize: 12, fontWeight: 800, color: '#4ade80', whiteSpace: 'nowrap' }}>{t.gain(gain)}</span>}
+                    </div>
+                    <div style={{ fontSize: 10.5, fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{t.whyLabel}</div>
+                    <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, margin: '0 0 8px' }}>{gap.why}</p>
+                    <div style={{ fontSize: 10.5, fontWeight: 800, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{t.fixLabel}</div>
+                    <p style={{ fontSize: 13, color: 'white', lineHeight: 1.6, margin: '0 0 8px' }}>{gap.action}</p>
+                  </div>
+                ))}
+              </div>
+            </>
           )
         })()}
 
