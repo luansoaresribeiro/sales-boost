@@ -20,8 +20,11 @@ const cors = {
 }
 const HF_BASE = 'https://api.higgsfield.ai'
 const CAP = Number(Deno.env.get('FREE_VIDEO_MONTHLY_CAP') ?? '30') || 30
-const HF_ENDPOINT = Deno.env.get('HF_VIDEO_ENDPOINT') ?? '/v1/image2video/dop'
-const HF_MODEL = Deno.env.get('HF_VIDEO_MODEL') ?? 'dop-turbo'
+// Kling 3.0 Standard (escolha do dono 2026-10-08, depois do teste com o DoP
+// turbo, que deixou uma mancha no vídeo). Troca sem deploy pelos secrets.
+const HF_ENDPOINT = Deno.env.get('HF_VIDEO_ENDPOINT') ?? '/kling-video/v3.0/std/image-to-video'
+const HF_MODEL = Deno.env.get('HF_VIDEO_MODEL') ?? 'dop-turbo' // só pros endpoints /v1 (DoP)
+const HF_DURATION = Number(Deno.env.get('HF_VIDEO_DURATION') ?? '5') || 5
 const DEFAULT_PROMPT = 'Slow, smooth cinematic camera movement through the scene, natural light, calm and premium feeling. ' +
   'Keep every object, wall and piece of furniture exactly as in the photo — do not add, remove or change anything. ' +
   'No people, no text, no logos.'
@@ -134,7 +137,9 @@ Deno.serve(async (req) => {
     // API v1 (/v1/...) recebe { params } e devolve um job-set { id }; a v2
     // recebe o input direto e devolve { request_id }.
     const isV1 = HF_ENDPOINT.startsWith('/v1/')
-    const input = { model: HF_MODEL, prompt, input_images: [{ type: 'image_url', image_url: photo }] }
+    const input = isV1
+      ? { model: HF_MODEL, prompt, input_images: [{ type: 'image_url', image_url: photo }] }
+      : { prompt, image_url: photo, duration: HF_DURATION }
     const res = await fetch(`${HF_BASE}${HF_ENDPOINT}`, {
       method: 'POST', headers, signal: AbortSignal.timeout(30_000),
       body: JSON.stringify(isV1 ? { params: input } : input),
