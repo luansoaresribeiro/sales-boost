@@ -156,6 +156,8 @@
   R$1.449" é honesto. Pendência: a Stripe ainda precisa dos 3 itens (preço
   mensal, preço anual, cupom) — criar exige aprovação do dono. Próxima
   etapa do [ROADMAP.md](ROADMAP.md) (Growth Qualification).
+  **Ajuste 2026-10-08:** o acesso grátis passou a ser diagnóstico + 1
+  vídeo, SEM estratégia (só após pagar) — ver entrada de 2026-10-08.
 
 ## 2026-10-07 — Growth Score centrado no Instagram, acesso grátis e preço anual
 
@@ -191,6 +193,8 @@
 - **(e) Promessa pública por enquanto: "diagnóstico grátis + 1
   estratégia".** "+1 vídeo" só entra no texto quando a geração de vídeo
   existir (fatia 5).
+  **Ajuste 2026-10-08:** a promessa passa a ser "diagnóstico grátis + 1
+  vídeo"; estratégia só após pagar (ver entrada de 2026-10-08).
 
 **Divergências registradas nesta data:** `TrialStartModal` ainda mostra
 "R$14,49" (preço errado no ar; sai na fatia 2). `claim-diagnostic` no
@@ -264,3 +268,28 @@ o formulário antigo (só site, sem Instagram) para não quebrar nada entre o
 deploy da função e o merge da tela nova. Ensaio não tem `APIFY_TOKEN`: lá
 a leitura sempre volta "unavailable" (testado); a leitura real só é
 testável em produção.
+## 2026-10-08 — Landing vira diagnóstico inline; grátis = diagnóstico + 1 vídeo; estratégia só após pagar
+
+- **Landing:** todos os botões de "7 dias grátis" viram **"Diagnóstico
+  grátis"** (EN: "Free diagnosis") e rolam suavemente até a nova seção final
+  `#diagnostico` (antes do rodapé): "Descubra seu Real Estate Growth Score"
+  + botão "Começar diagnóstico grátis". As perguntas abrem **ali mesmo**
+  (sem trocar de página) e o resultado também aparece inline. O modal
+  "Seus 7 dias grátis começam agora" (`TrialModal`) e todos os textos de
+  "7 dias grátis" da landing (PT e EN) foram removidos. As rotas
+  `/onboarding` e `/diagnostico/:id` continuam (links compartilháveis),
+  usando os mesmos componentes (`DiagnosticFlow`, `DiagnosticResult`).
+- **O que é grátis:** o resultado do diagnóstico + a geração de **1
+  vídeo**. A **estratégia só é feita depois que a pessoa PAGA** o plano.
+  Ajusta as entradas de 2026-10-06 ("1 vídeo + 1 estratégia") e 2026-10-07
+  (item e: "diagnóstico grátis + 1 estratégia"), que ficam como histórico:
+  onde dizem "1 estratégia grátis", vale esta entrada.
+- **Resultado do diagnóstico:** CTA "Criar conta e receber meu vídeo grátis"
+  (vai pra `/signup?claim=<id>`) com texto honesto: o vídeo grátis está
+  "em liberação — avisamos quando estiver pronto" (a geração de vídeo ainda
+  não existe; sem prazo prometido). Sem menção a "1 estratégia grátis".
+- **Servidor (escrito, NÃO deployado):** `claim-diagnostic` parou de
+  disparar `strategy-generate` para empresas novas. Precisa de deploy
+  aprovado pelo dono (function de cliente real). O `stripe-webhook` (PR do
+  pagamento) deve disparar a 1ª estratégia ao confirmar o pagamento — até
+  lá, conta nova não ganha estratégia sozinha.

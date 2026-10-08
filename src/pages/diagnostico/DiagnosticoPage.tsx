@@ -67,7 +67,9 @@ const TX = {
     howCalc: '▸ Como calculamos',
     calc1: 'A nota vem do seu Instagram. Site e Google só somam se existirem. O que não conseguimos ver fica "não avaliado" e sai da conta — nada é inventado nem penaliza você.',
     pts: 'pts', calc2: 'Nota = pontos dos critérios avaliados ÷ pontos possíveis deles × 100. Com menos de 40% dos critérios avaliados, mostramos "Análise parcial", sem veredito.',
-    cta: 'Ativar meu acesso grátis →', ctaSub: 'Sem cartão. Sem prazo em dias. Inclui 1 estratégia.',
+    cta: 'Criar conta e receber meu vídeo grátis →',
+    ctaSub: 'Seu vídeo grátis está em liberação — avisamos quando estiver pronto. Sem cartão.',
+    ctaPlan: 'A estratégia completa faz parte do plano pago.',
   },
   en: {
     notFoundErr: 'Diagnosis not found.', notFound: 'Diagnosis not found', createNew: '← Create new diagnosis',
@@ -80,12 +82,29 @@ const TX = {
     howCalc: '▸ How we calculate',
     calc1: 'The score comes from your Instagram. Website and Google only add if they exist. What we cannot see stays "not evaluated" and is left out of the calculation — nothing is made up and nothing penalizes you.',
     pts: 'pts', calc2: 'Score = points of the evaluated criteria ÷ their possible points × 100. With fewer than 40% of the criteria evaluated, we show "Partial analysis", with no verdict.',
-    cta: 'Activate my free access →', ctaSub: 'No card. No deadline in days. Includes 1 strategy.',
+    cta: 'Create account and get my free video →',
+    ctaSub: 'Your free video is being released — we will let you know when it is ready. No card.',
+    ctaPlan: 'The full strategy is part of the paid plan.',
   },
 }
 
 export default function DiagnosticoPage() {
   const { id } = useParams<{ id: string }>()
+  return (
+    <div style={{ minHeight: '100vh', background: BG, overflowX: 'hidden' }}>
+      <div style={{ padding: '16px', borderBottom: `1px solid ${BORDER}` }}>
+        <a href="/" style={{ fontFamily: D, fontSize: '1.3rem', fontWeight: 900, color: 'white', textDecoration: 'none', letterSpacing: '-0.02em' }}>
+          <span style={{ color: ORANGE }}>Sales</span>Boost
+        </a>
+      </div>
+      {id ? <DiagnosticResult id={id} /> : null}
+    </div>
+  )
+}
+
+// Resultado do diagnóstico (nota, critérios, "como calculamos", CTA). Usado na
+// rota /diagnostico/:id e INLINE na landing (embedded: sem altura de página).
+export function DiagnosticResult({ id, embedded = false }: { id: string; embedded?: boolean }) {
   const navigate = useNavigate()
   const { lang } = useLang()
   const t = TX[lang]
@@ -95,7 +114,6 @@ export default function DiagnosticoPage() {
   const [waited, setWaited] = useState(0)
 
   useEffect(() => {
-    if (!id) return
     let alive = true
     supabase.from('diagnostics').select('*').eq('id', id).single().then(({ data, error: err }) => {
       if (!alive) return
@@ -109,7 +127,7 @@ export default function DiagnosticoPage() {
   // Coleta do Instagram em andamento: recarrega a cada ~5s por até ~90s.
   const collecting = !!diag && !diag.instagram_data && diag.status === 'processing' && waited < POLL_MAX_MS
   useEffect(() => {
-    if (!collecting || !id) return
+    if (!collecting) return
     const t = setTimeout(async () => {
       const { data } = await supabase.from('diagnostics').select('*').eq('id', id).single()
       if (data) setDiag(data as Diagnostic)
@@ -125,14 +143,14 @@ export default function DiagnosticoPage() {
   }, lang) : null, [diag, lang])
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: BG, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ minHeight: embedded ? 200 : '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 40, height: 40, border: '3px solid rgba(255,109,41,0.15)', borderTopColor: ORANGE, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
 
   if (error || !diag || !result) return (
-    <div style={{ minHeight: '100vh', background: BG, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, textAlign: 'center' }}>
+    <div style={{ minHeight: embedded ? 200 : '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24, textAlign: 'center' }}>
       <div style={{ color: 'white', fontSize: 18, fontWeight: 700 }}>{t.notFound}</div>
       <Link to="/onboarding" style={{ color: ORANGE, textDecoration: 'none', fontSize: 14 }}>{t.createNew}</Link>
     </div>
@@ -147,14 +165,8 @@ export default function DiagnosticoPage() {
   const bands = lang === 'en' ? VERDICT_BANDS_EN : VERDICT_BANDS
 
   return (
-    <div style={{ minHeight: '100vh', background: BG, overflowX: 'hidden' }}>
-      <div style={{ padding: '16px', borderBottom: `1px solid ${BORDER}` }}>
-        <a href="/" style={{ fontFamily: D, fontSize: '1.3rem', fontWeight: 900, color: 'white', textDecoration: 'none', letterSpacing: '-0.02em' }}>
-          <span style={{ color: ORANGE }}>Sales</span>Boost
-        </a>
-      </div>
-
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '28px 16px 64px' }}>
+    <div style={{ overflowX: 'hidden' }}>
+      <div style={{ maxWidth: 640, margin: '0 auto', padding: embedded ? '8px 0 0' : '28px 16px 64px' }}>
         {/* Fluxo */}
         <ol style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: 6, padding: 0, margin: '0 0 24px', fontSize: 11, fontWeight: 700 }}>
           {FLOW[lang].map((f, i) => (
@@ -270,6 +282,9 @@ export default function DiagnosticoPage() {
         </button>
         <p style={{ textAlign: 'center', fontSize: 13, color: MUTED, margin: '12px 0 0' }}>
           {t.ctaSub}
+        </p>
+        <p style={{ textAlign: 'center', fontSize: 12.5, color: MUTED, margin: '6px 0 0' }}>
+          {t.ctaPlan}
         </p>
       </div>
     </div>
