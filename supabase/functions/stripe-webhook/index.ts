@@ -94,6 +94,25 @@ Deno.serve(async (req) => {
           subscription_cancelled_at: null,
         }).eq('id', companyId)
         await logAccessEvent(admin, companyId, 'payment_confirmed', `Assinatura ${plan} confirmada via Stripe — acesso liberado automaticamente.`)
+
+        // DECISAO 2026-10-08: a estrategia so nasce depois do PAGAMENTO (o
+        // gratis e diagnostico + 1 video). Antes isso ficava no
+        // claim-diagnostic. Dispara a 1a estrategia em segundo plano se a
+        // empresa ainda nao tem uma ativa; respeita o interruptor global.
+        const cronSecret = Deno.env.get('CRON_SECRET')
+        const [{ data: hermesCfg }, { data: activeStrat }] = await Promise.all([
+          admin.from('hermes_config').select('auto_strategy_enabled').eq('id', true).maybeSingle(),
+          admin.from('marketing_ai_strategies').select('id').eq('company_id', companyId).eq('status', 'active').limit(1).maybeSingle(),
+        ])
+        if (cronSecret && !activeStrat && (!hermesCfg || hermesCfg.auto_strategy_enabled !== false)) {
+          // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
+          EdgeRuntime.waitUntil(
+            fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'generate', company_id: companyId, cron_secret: cronSecret }),
+            }).catch(e => console.error('stripe-webhook: falha ao disparar 1a estrategia:', e))
+          )
+        }
         break
       }
 

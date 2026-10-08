@@ -11,6 +11,7 @@ import type { LeadStageKey } from './marketingAi/salesDemo'
 import DataVeil, { veilMode } from './marketingAi/DataVeil'
 import { MUTED, BORDER, D, SUPABASE_URL } from './marketingAi/shared'
 import { useStrategySummary } from './marketingAi/useStrategySummary'
+import FreeVideoCard from './FreeVideoCard'
 
 const ORANGE = '#FF6D29'
 const CARD = '#150E08'
@@ -236,6 +237,11 @@ export default function MarketingAiHubPage() {
           </label>}
         </div>
       </div>
+
+      {/* Vídeo grátis do acesso grátis (some quando a conta assina). */}
+      {(!company.plan || company.plan === 'free') && (
+        <div style={{ margin: '24px 32px 0' }}><FreeVideoCard companyId={company.id} /></div>
+      )}
 
       {/* Receita/ROAS/funil agregados: soma o que já é real em cada peça
           (leads → funil, Instagram → crescimento/engajamento, Meta Ads → ao
