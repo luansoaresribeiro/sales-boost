@@ -259,11 +259,34 @@ const GAP_TEXT: Record<'pt' | 'en', Record<GapKey, { why: string; action: string
 export interface GapInfo { key: GapKey; label: string; why: string; action: string }
 
 export function biggestGap(result: GrowthScoreResult, lang: Lang = 'pt'): GapInfo | null {
+  return topGaps(result, lang, 1)[0]?.gap ?? null
+}
+
+// ── Principais problemas + potencial (2026-10-08) ─────────────────────────
+// Até `max` critérios do Instagram AVALIADOS e incompletos, do mais fraco pro
+// mais forte. `gain` = quantos pontos da NOSSA nota (0-100) aquele critério
+// devolve se ficar cheio — mesma fórmula do computeGrowthScore, nada de
+// número de mercado (regra 5). Potencial = nota atual + ganhos (máx. 100).
+export interface GapWithGain { gap: GapInfo; gain: number }
+
+export function topGaps(result: GrowthScoreResult, lang: Lang = 'pt', max = 3): GapWithGain[] {
   const keys: GapKey[] = ['frequency', 'engagement', 'format', 'profile']
-  const ev = result.criteria.filter(c => c.evaluated && (keys as string[]).includes(c.key) && c.weight > 0)
-  if (!ev.length) return null
-  const worst = ev.reduce((a, b) => (b.points / b.weight < a.points / a.weight ? b : a))
-  if (worst.points / worst.weight >= 1) return null
-  const k = worst.key as GapKey
-  return { key: k, label: worst.label, ...GAP_TEXT[lang === 'en' ? 'en' : 'pt'][k] }
+  const evWeights = result.criteria.filter(c => c.evaluated).reduce((s, c) => s + c.weight, 0)
+  if (evWeights <= 0) return []
+  const text = GAP_TEXT[lang === 'en' ? 'en' : 'pt']
+  return result.criteria
+    .filter(c => c.evaluated && (keys as string[]).includes(c.key) && c.weight > 0 && c.points < c.weight)
+    .sort((a, b) => a.points / a.weight - b.points / b.weight || (b.weight - b.points) - (a.weight - a.points))
+    .slice(0, max)
+    .map(c => ({
+      gap: { key: c.key as GapKey, label: c.label, ...text[c.key as GapKey] },
+      gain: Math.round(((c.weight - c.points) / evWeights) * 100),
+    }))
+    .filter(g => g.gain > 0)
+}
+
+/** Nota possível corrigindo os gargalos de topGaps; null sem nota (análise parcial). */
+export function potentialScore(result: GrowthScoreResult, gaps: GapWithGain[]): number | null {
+  if (result.score === null) return null
+  return Math.min(100, result.score + gaps.reduce((s, g) => s + g.gain, 0))
 }

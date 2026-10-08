@@ -293,3 +293,19 @@ testável em produção.
   aprovado pelo dono (function de cliente real). O `stripe-webhook` (PR do
   pagamento) deve disparar a 1ª estratégia ao confirmar o pagamento — até
   lá, conta nova não ganha estratégia sozinha.
+  **Atualização 2026-10-08 (tarde):** deploy aprovado pelo dono ("pode
+  seguir com 1 e 2") e feito em produção — `claim-diagnostic` v77.
+
+## 2026-10-08 — Resultado do diagnóstico com foco em POTENCIAL
+
+- Pedido do dono: mostrar os principais problemas, "mas principalmente o
+  potencial". Sem custo (nenhuma IA nem API nova).
+- Bloco **"Seu potencial"** logo abaixo da nota: "hoje 42 → pode chegar a
+  88". O número sai da MESMA fórmula da nota (`growthScore.topGaps` +
+  `potentialScore`): é a nota se os gargalos listados ficarem cheios —
+  nunca número de mercado/vendas (regra 5). Em "Análise parcial" não há
+  número, só a frase.
+- **Até 3 problemas** (antes 1 gargalo + 1 oportunidade): critérios do
+  Instagram avaliados e incompletos, do mais fraco pro mais forte, cada um
+  com "O problema", "Como destravar" e "+N pts". Textos genéricos fixos
+  (regra 6). `biggestGap` continua existindo (= 1º de `topGaps`).
