@@ -158,12 +158,20 @@ function HeroSection({ lang }: { lang: Lang }) {
   }, [])
 
   return (
-    <section ref={sectionRef} className="relative overflow-hidden" style={{ height: '100vh', minHeight: '660px', background: 'linear-gradient(158deg,#4E0D02 0%,#8F2400 16%,#BE4A00 32%,#D97215 50%,#E9A840 66%,#F2CC7A 82%,#F8E4B8 100%)' }}>
+    <section ref={sectionRef} className="hero-section relative overflow-hidden" style={{ height: '100vh', minHeight: '660px', background: 'linear-gradient(158deg,#4E0D02 0%,#8F2400 16%,#BE4A00 32%,#D97215 50%,#E9A840 66%,#F2CC7A 82%,#F8E4B8 100%)' }}>
       <div aria-hidden className="hero-bgword absolute bottom-[5%] left-0 right-0 overflow-hidden text-center select-none pointer-events-none z-0">
         <span style={{ fontFamily: D, fontSize: '15vw', fontWeight: 900, color: 'rgba(255,255,255,0.07)', lineHeight: 1, display: 'block', whiteSpace: 'nowrap' }}>{tx.bgWord}</span>
       </div>
 
-      <div className="absolute z-10 flex items-start justify-between w-full px-6" style={{ top: '76px' }}>
+      {/* celular: título acima do celular e sem os textinhos de canto (desktop intacto) */}
+      <style>{`@media (max-width: 767px) {
+        .hero-section { min-height: 780px !important; }
+        .hero-mobile-hide { display: none !important; }
+        .hero-h1 { top: 92px !important; left: 20px !important; right: 20px !important; max-width: none !important; font-size: clamp(2rem, 9vw, 2.6rem) !important; }
+        .hero-phone { top: 470px !important; }
+      }`}</style>
+
+      <div className="hero-mobile-hide absolute z-10 flex items-start justify-between w-full px-6" style={{ top: '76px' }}>
         {tx.meta.map((m) => (
           <div key={m.label} className="hero-meta">
             <div style={{ fontSize: '9px', letterSpacing: '0.14em', color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', fontWeight: 500 }}>{m.label}</div>
@@ -173,20 +181,20 @@ function HeroSection({ lang }: { lang: Lang }) {
         <div className="hero-meta" style={{ fontFamily: D, fontSize: '10px', fontWeight: 900, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.72)', textAlign: 'right', lineHeight: 1.5 }}>SALES<br />BOOST</div>
       </div>
 
-      <h1 className="absolute z-10 text-white leading-none" style={{ fontFamily: D, fontSize: 'clamp(2.6rem,6vw,6.2rem)', fontWeight: 800, letterSpacing: '-0.02em', top: '132px', left: '24px', maxWidth: '44%' }}>
+      <h1 className="hero-h1 absolute z-10 text-white leading-none" style={{ fontFamily: D, fontSize: 'clamp(2.6rem,6vw,6.2rem)', fontWeight: 800, letterSpacing: '-0.02em', top: '132px', left: '24px', maxWidth: '44%' }}>
         {tx.headline.map((line, i) => <span key={i} className="hero-line block">{line}</span>)}
       </h1>
 
-      <div className="absolute z-10" style={{ top: '52%', left: '24px', transform: 'translateY(-24px)' }}>
+      <div className="hero-mobile-hide absolute z-10" style={{ top: '52%', left: '24px', transform: 'translateY(-24px)' }}>
         <div style={{ fontSize: '9px', letterSpacing: '0.13em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>{tx.project[0]}</div>
         <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.52)', fontWeight: 500, marginTop: '3px' }}>{tx.project[1]}</div>
       </div>
-      <div className="absolute z-10" style={{ top: '64%', left: '24px' }}>
+      <div className="hero-mobile-hide absolute z-10" style={{ top: '64%', left: '24px' }}>
         <div style={{ fontSize: '9px', letterSpacing: '0.13em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>{tx.typeLabel}</div>
         <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.52)', fontWeight: 500, marginTop: '3px' }}>{tx.typeValue}</div>
       </div>
 
-      <div className="hero-desc absolute z-10" style={{ top: '144px', right: '86px', maxWidth: '22%' }}>
+      <div className="hero-desc hero-mobile-hide absolute z-10" style={{ top: '144px', right: '86px', maxWidth: '22%' }}>
         <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.65)', lineHeight: 1.72 }}>{tx.sub}</p>
       </div>
 
@@ -231,7 +239,7 @@ function HeroSection({ lang }: { lang: Lang }) {
         </div>
       </div>
 
-      <div className="absolute z-10 flex flex-col" style={{ right: '30px', top: '42%', transform: 'translateY(-50%)', gap: '11px' }}>
+      <div className="hero-mobile-hide absolute z-10 flex flex-col" style={{ right: '30px', top: '42%', transform: 'translateY(-50%)', gap: '11px' }}>
         {tx.sideLabels.map((label) => (
           <div key={label} className="hero-side" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.36)', textAlign: 'right' }}>{label}</div>
         ))}
@@ -245,7 +253,7 @@ function HeroSection({ lang }: { lang: Lang }) {
         ))}
       </div>
 
-      <div className="absolute z-10" style={{ bottom: '28px', left: '24px' }}>
+      <div className="hero-mobile-hide absolute z-10" style={{ bottom: '28px', left: '24px' }}>
         <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.28)', letterSpacing: '0.08em' }}>{tx.location}</div>
         <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', fontWeight: 600, marginTop: '3px' }}>{tx.date} <span style={{ color: 'rgba(255,255,255,0.28)' }}>/</span> {tx.year}</div>
       </div>
