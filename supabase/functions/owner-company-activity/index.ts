@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
     // Fetch company detail + agent messages + telegram conversations + client diary
     const [companyRes, messagesRes, telegramRes, marketingAiRes, activityRes, accessRes, accessLogRes] = await Promise.all([
       admin.from('companies')
-        .select('id, business_name, business_type, city, goal, plan, instagram_url, website_url, google_rating, google_review_count, telegram_chat_id, business_dna, agent_enabled, marketing_ai_enabled, auto_strategy, created_at, trial_started_at, trial_expires_at, trial_cancelled_at, subscription_status, current_period_start, current_period_end, subscription_cancelled_at, manual_access, manual_access_granted_at, manual_access_granted_by, manual_access_reason, access_blocked_at, access_blocked_by, access_blocked_reason, billing_plan, commitment_end_at, early_termination_fee_cents')
+        .select('id, business_name, business_type, city, goal, plan, instagram_url, website_url, google_rating, google_review_count, telegram_chat_id, business_dna, agent_enabled, marketing_ai_enabled, auto_strategy, created_at, trial_started_at, trial_expires_at, trial_cancelled_at, subscription_status, current_period_start, current_period_end, subscription_cancelled_at, manual_access, manual_access_granted_at, manual_access_granted_by, manual_access_reason, access_blocked_at, access_blocked_by, access_blocked_reason')
         .eq('id', company_id)
         .single(),
       admin.from('agent_messages')

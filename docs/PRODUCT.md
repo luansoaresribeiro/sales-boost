@@ -106,8 +106,6 @@ precisar virar especialista em marketing.
 
 ## Modelo de cobrança — DECIDIDO (2026-10-02)
 
-> **Divergência (2026-10-08):** o preço de R$1.449 único abaixo foi substituído por mensal R$2.449 (sem fidelidade) e anual R$1.449/mês (fidelidade 12 meses) — ver [DECISIONS.md](DECISIONS.md#2026-10-08--pagamento-fatia-4-como-foi-implementado). Mantido como histórico.
-
 **Decisão do dono:** plano único **Sales Boost — R$1.449/mês, Full Growth
 Access**, depois de um teste grátis de **7 dias** ("7-Day Growth Preview").
 Posicionamento: não é "pagar por mais gerações de IA", é "seu departamento

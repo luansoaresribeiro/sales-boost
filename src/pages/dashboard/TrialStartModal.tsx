@@ -8,13 +8,18 @@ import { getTrialInfo, TRIAL_DAYS } from '../../lib/trialState'
 import { useLang } from '../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, ORANGE, D } from './marketingAi/shared'
 
+// Mesmo plano/preço já mostrados na home antes do cadastro (Pro — o mais
+// popular) — não inventa número novo, só repete o que já está público.
+const PLAN_PRICE_BR = 'R$14,49'
+const PLAN_PRICE_US = '$2.99'
+
 const TX = {
   pt: {
     tag: '🚀 Trial de Crescimento ativado',
     title: (n: number) => `Seu trial de ${n} dias de Crescimento do Negócio começou.`,
     body: (n: number) => `O SalesBoost vai analisar seu negócio, identificar oportunidades de crescimento e te ajudar a agir — tudo automaticamente, nesses ${n} dias.`,
     day: 'Dia', dayVal: (n: number) => `1 de ${n}`, ends: 'Termina em', today: 'Hoje', after: 'Depois do trial',
-    afterVal: 'Você escolhe o plano',
+    price: (br: string, us: string) => `${br}/mês (${us}/mo)`,
     cancel: 'Você pode cancelar a qualquer momento antes do trial acabar, em Configurações — sem cobrança nenhuma. Nada é cobrado automaticamente ao fim do trial: você decide se quer continuar.',
     wait: 'Só um instante...', go: 'Vamos começar →',
   },
@@ -23,7 +28,7 @@ const TX = {
     title: (n: number) => `Your ${n}-day Business Growth trial has started.`,
     body: (n: number) => `SalesBoost will analyze your business, spot growth opportunities and help you act — all automatically, over these ${n} days.`,
     day: 'Day', dayVal: (n: number) => `1 of ${n}`, ends: 'Ends on', today: 'Today', after: 'After the trial',
-    afterVal: 'You choose the plan',
+    price: (br: string, us: string) => `${br}/month (${us}/mo)`,
     cancel: 'You can cancel any time before the trial ends, in Settings — no charge at all. Nothing is charged automatically when the trial ends: you decide whether to continue.',
     wait: 'Just a moment...', go: "Let's get started →",
   },
@@ -61,7 +66,7 @@ export default function TrialStartModal() {
           <Row label={tx.day} value={tx.dayVal(total)} />
           <Row label={tx.ends} value={info.expiresAt ? info.expiresAt.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''} />
           <Row label={tx.today} value="R$ 0" valueColor="#4ade80" />
-          <Row label={tx.after} value={tx.afterVal} />
+          <Row label={tx.after} value={tx.price(PLAN_PRICE_BR, PLAN_PRICE_US)} />
         </div>
 
         <div style={{ padding: '11px 14px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '10px', fontSize: '11.5px', color: MUTED, lineHeight: 1.6, marginBottom: '22px' }}>

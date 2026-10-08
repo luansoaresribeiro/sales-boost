@@ -51,9 +51,6 @@ interface CompanyDetail {
   access_blocked_at: string | null
   access_blocked_by: string | null
   access_blocked_reason: string | null
-  billing_plan: string | null
-  commitment_end_at: string | null
-  early_termination_fee_cents: number | null
 }
 
 type AccessSource = 'paid' | 'trial' | 'manual' | 'blocked' | 'none'
@@ -364,8 +361,6 @@ export default function CompanyDetailPage() {
               ['Trial expires', detail.trial_expires_at ? new Date(detail.trial_expires_at).toLocaleDateString('pt-BR') : '—'],
               ['Subscription', detail.subscription_status ?? 'No active subscription'],
               ['Renews', detail.current_period_end ? new Date(detail.current_period_end).toLocaleDateString('pt-BR') : '—'],
-              ['Billing plan', detail.billing_plan === 'annual_commit' ? 'Anual (fidelidade 12 meses) · R$1.449/mês' : detail.billing_plan === 'monthly' ? 'Mensal · R$2.449/mês' : '—'],
-              ['Commitment ends', detail.commitment_end_at ? new Date(detail.commitment_end_at).toLocaleDateString('pt-BR') : '—'],
             ].map(([label, val]) => (
               <div key={label}>
                 <div style={{ fontSize: '9.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{label}</div>
@@ -374,11 +369,6 @@ export default function CompanyDetailPage() {
             ))}
           </div>
 
-          {(detail.early_termination_fee_cents ?? 0) > 0 && (
-            <div style={{ padding: '10px 13px', background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: '9px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '14px' }}>
-              🔴 <strong>Multa por cancelamento antecipado: R$ {((detail.early_termination_fee_cents ?? 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong> (30% das mensalidades restantes). Registrada, <strong>não cobrada</strong> — a cobrança é manual e depende de decisão do dono.
-            </div>
-          )}
           {access?.source === 'manual' && (
             <div style={{ padding: '10px 13px', background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '9px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '14px' }}>
               🟡 <strong>Manual access.</strong> Sem assinatura ativa — liberado por {detail.manual_access_granted_by ?? 'um owner'}{detail.manual_access_granted_at ? ` em ${new Date(detail.manual_access_granted_at).toLocaleDateString('pt-BR')}` : ''}.{detail.manual_access_reason ? ` Motivo: "${detail.manual_access_reason}"` : ''}
