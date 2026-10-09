@@ -504,3 +504,31 @@ Aprovado:
 - **Pendente:** a análise das 64 fotos não rodou no ensaio porque falta o
   secret `ANTHROPIC_API_KEY` lá. A conta QA do ensaio está com `plan = 'pro'`
   pra testar o tour do plano (voltar pra `free` pra testar o grátis).
+
+
+## 2026-10-09 — Sai o tour completo: vídeo vira ISCA (partes do imóvel)
+
+Decisão do dono (substitui "1 tour completo por imóvel + recortes" e o
+grátis de 30 s, acima — mantidos como histórico):
+
+- **Corretor não entrega o imóvel de cara.** O vídeo mostra uma PARTE e gera
+  vontade, com chamada pra conversa: "Comente QUERO que eu te mando mais na
+  DM".
+- **Cada vídeo = 1 cômodo, ou no máximo 2 cômodos vizinhos** (caminhada de
+  uma foto até a outra). Quem escolhe as fotos é o corretor — **sai a
+  análise de ordem por IA** (o código da etapa 1 fica no repositório, sem
+  uso, até ser removido ou reaproveitado).
+- **Abertura "de fora":** vídeo que começa do lado de fora do prédio/casa já
+  mostrando a vista. Só com FOTO REAL da fachada/vista enviada pelo
+  corretor (regra 4 — a IA não gera o prédio nem a vista).
+- **Grátis = 2 ou 3 vídeos curtos dos melhores cômodos**, cada um já com a
+  chamada "Comente QUERO".
+- **Resposta na DM:** mensagem pronta montada com os dados CADASTRADOS do
+  imóvel no Sales Boost (nunca inventados — regra 5) + convite pra agendar
+  visita. Envio pela API oficial do Instagram (resposta privada ao
+  comentário): a Meta não cobra por mensagem; limites: 1 mensagem por
+  comentário, até 7 dias depois do comentário, 750/hora por conta; depois
+  que a pessoa responde, abre a janela de 24 h. Depende da aprovação do app
+  na Meta (`instagram_business_manage_messages`, ver META-APP-REVIEW.md).
+- **Em aberto:** aprovar cada DM (regra atual) ou aprovar o modelo uma vez
+  por post e o envio ser automático.
