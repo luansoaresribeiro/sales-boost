@@ -59,6 +59,17 @@ casa (fachada → sala → cozinha → quartos → área externa), sem montagem.
 a API gerar 1 vídeo único a partir de várias fotos, mostrar como opção
 alternativa.
 
+**Divergência / decisão do dono (2026-10-08/09):** o tour virtual virou
+**vídeo único em modo caminhada** (cada trecho vai de uma foto real até a
+seguinte, `last_image_url` do Kling 3.0; ver [DECISIONS.md](DECISIONS.md)),
+não carrossel de clipes soltos. **Esta mesma configuração vale pro plano
+pago** — o grátis é só a versão curta (6 fotos). No plano: o tour usa **todos
+os ambientes** do imóvel (fotos repetidas do mesmo cômodo são descartadas),
+a **ordem é decidida pelo sistema** (cômodos vizinhos; passagem sem prova
+na foto fica marcada "não confirmado") e o **corretor aprova a ordem antes
+de gerar**. Modelo de volume (tour completo por imóvel + recortes, ou N
+tours/mês) ainda em decisão do dono.
+
 **(2) Criativos de anúncio:** visual do Higgsfield a partir da foto real +
 texto via `render-format`.
 
