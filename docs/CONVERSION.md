@@ -62,6 +62,17 @@ em que o lead é criado).
 > isso existir, a atribuição conversa→pilar vem de `engagement_events.media_ref`
 > → `posts.instagram_media_id` → `posts.pillar` (ver [LEARNING.md](LEARNING.md)).
 
+## "Comente QUERO" automático (2026-10-09)
+
+Exceção aprovada pelo dono à regra "dono aprova cada envio": a mensagem do
+QUERO é aprovada UMA VEZ por imóvel (tela "🎬 Vídeos e resposta do QUERO"
+no card do imóvel) e depois é enviada sozinha, como resposta privada ao
+comentário, a quem comentar QUERO em qualquer post daquele imóvel. Texto
+fixo, só com dados cadastrados; também cria o lead. Detalhes em
+[DECISIONS.md](DECISIONS.md). Limites da Meta: 1 mensagem por comentário,
+até 7 dias depois do comentário, 750/hora por conta; sem custo por
+mensagem.
+
 ## Status real (atualizar a cada mudança)
 
 🟡 **Parcial, em construção** — `supabase/functions/instagram-webhook/index.ts`.

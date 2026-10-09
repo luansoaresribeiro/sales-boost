@@ -1,11 +1,11 @@
-// Tour virtual grátis do acesso grátis (decisões do dono 2026-10-08, docs/DECISIONS.md):
-// o cliente envia TOUR_PHOTOS fotos reais na ordem da visita → supabase/functions/
-// trial-video gera um trecho de 5 s por foto (Kling via Higgsfield) e cola num Reel
-// único de ~30 s (1 por conta, teto global de 30/mês). Todas as fotos passam pelo
-// mesmo recorte 4:5 (processImageTo4x5) — os trechos precisam ter o mesmo tamanho
-// pra serem colados sem recodificar. Quando fica pronto, abre o
-// popup do cupom (1º mês R$1.449) com o que o plano oferece. A data em que o
-// popup aparece conta os 7 dias do cupom (coupon_offer_shown_at, servidor).
+// Vídeos grátis do acesso grátis (decisões do dono 2026-10-09, docs/DECISIONS.md):
+// o cliente escolhe TRIAL_PHOTOS fotos dos melhores cômodos → supabase/functions/
+// trial-video gera um vídeo curto de cada (Kling via Higgsfield; 1 kit por conta,
+// teto global de 30/mês). É ISCA, não o imóvel inteiro: cada vídeo vai pro
+// Instagram com "Comente QUERO". Todas as fotos passam pelo mesmo recorte 4:5
+// (processImageTo4x5). Quando ficam prontos, abre o popup do cupom (1º mês
+// R$1.449) com o que o plano oferece. A data em que o popup aparece conta os 7
+// dias do cupom (coupon_offer_shown_at, servidor).
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
@@ -16,52 +16,52 @@ import { CARD, MUTED, ORANGE, D, SUPABASE_URL } from './marketingAi/shared'
 type State = 'loading' | 'none' | 'uploading' | 'processing' | 'completed' | 'cap' | 'error'
 
 const POLL_MS = 10_000
-// Igual a TOUR_PHOTOS_TRIAL da função trial-video (padrão 6).
-const TOUR_PHOTOS = 6
+// Igual a TRIAL_PHOTOS da função trial-video (padrão 3).
+const TOUR_PHOTOS = 3
 
 const TX = {
   pt: {
-    title: '🎬 Seu tour virtual grátis',
-    intro: `Escolha ${TOUR_PHOTOS} fotos reais do imóvel, na ordem da visita (ex.: entrada, sala, cozinha, quarto, banheiro, varanda). A gente transforma num vídeo-tour de ~30 segundos, como se a câmera andasse de um cômodo pro outro — sem texto por cima.`,
-    tips: 'Dicas: fotos bem iluminadas, sem pessoas e sem texto por cima. Escolha na ordem em que se anda pela casa, de um cômodo pro vizinho — a ordem da escolha é a ordem do vídeo.',
+    title: '🎬 Seus vídeos grátis',
+    intro: `Escolha ${TOUR_PHOTOS} fotos reais dos cômodos mais bonitos do imóvel (ex.: a sala com vista, a suíte, a varanda). Cada uma vira um vídeo curto com movimento de câmera — sem inventar nada e sem texto por cima.`,
+    tips: 'Mostre só uma parte do imóvel pra gerar vontade: publique com "Comente QUERO" e o interessado pede o resto na DM. Dica: fotos bem iluminadas e sem pessoas.',
     pick: 'Escolher fotos →', addMore: 'Adicionar fotos', remove: 'Tirar', count: (n: number) => `${n} de ${TOUR_PHOTOS} fotos`,
-    create: 'Criar meu tour →', uploading: 'Enviando suas fotos…',
-    processing: 'Seu tour está sendo criado. Leva alguns minutos — pode continuar usando o painel, esta tela atualiza sozinha.',
-    progress: (d: number, t: number) => `${d} de ${t} partes do tour prontas`,
-    ready: 'Seu vídeo está pronto!', download: 'Baixar vídeo', seeOffer: 'Ver o que o plano faz por você →',
+    create: 'Criar meus vídeos →', uploading: 'Enviando suas fotos…',
+    processing: 'Seus vídeos estão sendo criados. Leva alguns minutos — pode continuar usando o painel, esta tela atualiza sozinha.',
+    progress: (d: number, t: number) => `${d} de ${t} vídeos prontos`,
+    ready: 'Seus vídeos estão prontos!', download: 'Baixar', seeOffer: 'Ver o que o plano faz por você →',
     cap: 'Os vídeos grátis deste mês acabaram. O seu entra na fila do próximo mês — ou ative o plano e receba agora.',
     failed: 'Não deu certo com essas fotos. Tente de novo, com fotos bem iluminadas e sem texto por cima.',
     errGeneric: 'Não consegui iniciar seu vídeo agora. Tente de novo em alguns minutos.',
     activate: 'Ativar meu plano →',
     mTitle: 'Gostou? Imagine isso todo mês.',
     mSub: 'Com o plano, o Sales Boost cuida do seu marketing — e você só aprova.',
-    b1: '🎬 12 vídeos por mês, feitos com as suas fotos reais',
+    b1: '🎬 Vídeos curtos dos seus imóveis toda semana, feitos com as suas fotos reais',
     b2: '📈 Planejamento completo para alavancar a empresa: estratégia, calendário, público e metas',
     b3: '🖼️ Posts e criativos na quantidade que a estratégia pedir',
-    b4: '💬 Respostas a comentários e mensagens, virando contato de cliente',
+    b4: '💬 Quem comentar QUERO recebe os dados do imóvel na DM na hora — e vira contato seu',
     b5: '✅ Nada vai ao ar sem a sua aprovação',
     priceFrom: 'R$2.449/mês', priceTo: 'R$1.449', priceNote: 'no 1º mês com o seu cupom', valid: 'Cupom válido por 7 dias.',
     later: 'Agora não', close: 'Fechar',
   },
   en: {
-    title: '🎬 Your free virtual tour',
-    intro: `Choose ${TOUR_PHOTOS} real photos of the property, in visiting order (e.g. entrance, living room, kitchen, bedroom, bathroom, balcony). We turn them into a ~30-second video tour, as if the camera walked from one room to the next — no text on top.`,
-    tips: 'Tips: well-lit photos, no people and no text on them. Pick them in the order you walk through the home, from one room to the next — the order you pick is the order of the video.',
+    title: '🎬 Your free videos',
+    intro: `Choose ${TOUR_PHOTOS} real photos of the most beautiful rooms (e.g. the living room with a view, the suite, the balcony). Each becomes a short video with camera movement — nothing made up and no text on top.`,
+    tips: 'Show only part of the property to spark interest: post it with "Comment QUERO" and interested people ask for the rest in DMs. Tip: well-lit photos with no people.',
     pick: 'Choose photos →', addMore: 'Add photos', remove: 'Remove', count: (n: number) => `${n} of ${TOUR_PHOTOS} photos`,
-    create: 'Create my tour →', uploading: 'Uploading your photos…',
-    processing: 'Your tour is being created. It takes a few minutes — keep using the dashboard, this card updates by itself.',
-    progress: (d: number, t: number) => `${d} of ${t} parts of the tour ready`,
-    ready: 'Your video is ready!', download: 'Download video', seeOffer: 'See what the plan does for you →',
+    create: 'Create my videos →', uploading: 'Uploading your photos…',
+    processing: 'Your videos are being created. It takes a few minutes — keep using the dashboard, this card updates by itself.',
+    progress: (d: number, t: number) => `${d} of ${t} videos ready`,
+    ready: 'Your videos are ready!', download: 'Download', seeOffer: 'See what the plan does for you →',
     cap: "This month's free videos are gone. Yours goes to next month's queue — or activate the plan and get it now.",
     failed: "Those photos didn't work. Try again with well-lit photos and no text on them.",
     errGeneric: "I couldn't start your video right now. Try again in a few minutes.",
     activate: 'Activate my plan →',
     mTitle: 'Like it? Imagine this every month.',
     mSub: 'With the plan, Sales Boost runs your marketing — you just approve.',
-    b1: '🎬 12 videos a month, made from your real photos',
+    b1: '🎬 Short videos of your properties every week, made from your real photos',
     b2: '📈 A complete plan to grow your business: strategy, calendar, audience and goals',
     b3: '🖼️ Posts and creatives in the amount the strategy calls for',
-    b4: '💬 Replies to comments and messages, turning them into customer contacts',
+    b4: '💬 Whoever comments QUERO gets the property details in DMs right away — and becomes your lead',
     b5: '✅ Nothing goes live without your approval',
     priceFrom: 'R$2,449/month', priceTo: 'R$1,449', priceNote: 'in the 1st month with your coupon', valid: 'Coupon valid for 7 days.',
     later: 'Not now', close: 'Close',
@@ -83,7 +83,8 @@ export default function FreeVideoCard({ companyId }: { companyId: string }) {
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
   const [state, setState] = useState<State>('loading')
-  const [videoUrl, setVideoUrl] = useState<string | null>(null)
+  const [videoUrls, setVideoUrls] = useState<string[]>([])
+  const videoUrl = videoUrls[0] ?? null
   const [msg, setMsg] = useState('')
   const [modal, setModal] = useState(false)
   // Fotos escolhidas, na ordem da visita (a ordem da escolha é a ordem do vídeo).
@@ -95,8 +96,8 @@ export default function FreeVideoCard({ companyId }: { companyId: string }) {
   useEffect(() => () => pickedRef.current.forEach(p => URL.revokeObjectURL(p.preview)), [])
 
   const applyStatus = (d: Record<string, unknown>, openModal: boolean) => {
-    if (d.status === 'completed' && typeof d.video_url === 'string') {
-      setVideoUrl(d.video_url); setState('completed')
+    if (d.status === 'completed' && Array.isArray(d.video_urls) && d.video_urls.length) {
+      setVideoUrls(d.video_urls.map(String)); setState('completed')
       if (openModal) setModal(true)
     } else if (d.status === 'processing') {
       if (typeof d.done === 'number' && typeof d.total === 'number') setProgress({ done: d.done, total: d.total })
@@ -228,11 +229,15 @@ export default function FreeVideoCard({ companyId }: { companyId: string }) {
       {state === 'completed' && videoUrl && (
         <>
           <div style={{ fontSize: '13px', color: '#4ade80', fontWeight: 700, marginBottom: '10px' }}>{tx.ready}</div>
-          <video src={videoUrl} controls playsInline style={{ width: '100%', maxWidth: '360px', borderRadius: '12px', background: '#000', display: 'block' }} />
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px' }}>
-            <a href={videoUrl} download style={{ ...btn, background: 'transparent', color: ORANGE, border: `1px solid rgba(255,109,41,0.4)`, textDecoration: 'none' }}>{tx.download}</a>
-            <button style={btn} onClick={() => setModal(true)}>{tx.seeOffer}</button>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px', maxWidth: '560px' }}>
+            {videoUrls.map(u => (
+              <div key={u}>
+                <video src={u} controls playsInline preload="metadata" style={{ width: '100%', borderRadius: '12px', background: '#000', display: 'block' }} />
+                <a href={u} download style={{ fontSize: '12px', color: ORANGE }}>{tx.download}</a>
+              </div>
+            ))}
           </div>
+          <button style={{ ...btn, marginTop: '12px' }} onClick={() => setModal(true)}>{tx.seeOffer}</button>
         </>
       )}
 

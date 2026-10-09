@@ -532,3 +532,39 @@ grátis de 30 s, acima — mantidos como histórico):
   na Meta (`instagram_business_manage_messages`, ver META-APP-REVIEW.md).
 - **Em aberto:** aprovar cada DM (regra atual) ou aprovar o modelo uma vez
   por post e o envio ser automático.
+
+
+## 2026-10-09 — "Comente QUERO" automático (opção B) e vídeos curtos: como foi feito
+
+- **Decisão do dono: opção B.** O dono aprova a mensagem do QUERO UMA VEZ
+  por imóvel; depois cada "QUERO" num post desse imóvel recebe a DM na hora,
+  sem nova aprovação. É uma exceção consciente à regra 1 (a aprovação
+  continua existindo, só passa a ser feita antes, sobre o texto fixo). A
+  mensagem só tem o texto aprovado — a IA não escreve nada na hora.
+- **Como funciona:** `engagement_automations.item_id` (nova coluna) +
+  `instagram-webhook` acha o imóvel do post comentado (`posts.item_id` pelo
+  `instagram_media_id`) e usa a automação daquele imóvel, que tem
+  `execution_mode = 'automatic'` e `allowed_auto_actions = ['send_dm']`
+  (mecanismo que já existia). Modelo da mensagem na ficha
+  (`config.dm_reply`: palavra QUERO + modelo com {campos}); linha de dado não
+  cadastrado some (`_shared/dmReply.ts`). Também cria o lead.
+- **Vídeos do imóvel (`item-videos` + `ItemVideos.tsx`):** botão "🎬 Vídeos
+  e resposta do QUERO" no card do imóvel: tipo (1 cômodo / 2 cômodos
+  vizinhos / abertura de fora), o corretor escolhe a(s) foto(s), custo
+  estimado e gasto do mês (teto US$ 40), lista dos vídeos prontos, e a caixa
+  da mensagem do QUERO pra revisar/aprovar/desligar.
+- **Grátis (`trial-video` + `FreeVideoCard`):** 3 fotos → 3 vídeos curtos.
+- **Removido:** `tour-plan`, `_shared/tourPlan.ts`, `ItemTour.tsx` (ordem por
+  IA e tour completo) — ficam no histórico do git. A função `tour-plan`
+  continua publicada só no ensaio, sem uso.
+- **Testado no ensaio (sem gerar vídeo novo — reaproveitando trechos já
+  pagos):** grátis com 3 vídeos e vídeo "2 cômodos" do plano, quadros
+  idênticos aos trechos originais; QUERO: desligado → nada; ligado +
+  comentário com QUERO no post do imóvel → envio automático (falhou só
+  porque a conta de teste não tem Instagram conectado, como esperado);
+  QUERO em outro post → nada; comentário sem a palavra → nada.
+- **Atenção (achado):** o `instagram-webhook` não confere a assinatura da
+  Meta (`X-Hub-Signature-256`) — qualquer um que souber o endereço pode
+  mandar um comentário falso. Com o envio automático isso pesa mais.
+  Correção recomendada (mexe em autenticação → pedir aprovação do dono):
+  conferir a assinatura com o segredo do app da Meta.

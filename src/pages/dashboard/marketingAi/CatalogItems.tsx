@@ -6,7 +6,7 @@ import { catalogMinPhotos } from '../../../lib/setupRules'
 import { bi, sanitizeCatalogValues, type CatalogSchema, type CatalogField } from '../../../lib/verticalPlaybook'
 import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL } from './shared'
 import { ImageModal } from './TestingArea'
-import ItemTour from './ItemTour'
+import ItemVideos from './ItemVideos'
 import { useLang } from '../../../contexts/LanguageContext'
 
 const TX = {
@@ -363,7 +363,7 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                       )}
                     </div>
                   )}
-                  {!setupMode && <ItemTour itemId={item.id} />}
+                  {!setupMode && <ItemVideos itemId={item.id} photos={(item.meta?.photos ?? []).map(p => p.url)} />}
                   {!setupMode && <ItemCreationTools itemId={item.id} companyId={companyId} verticalKey={verticalKey} itemLabel={schema.itemLabel} onGenerate={generatePackage} busy={packageBusyId} />}
                 </div>
               </div>

@@ -1,11 +1,12 @@
-// Motor do tour em caminhada (grátis e plano). Decisões do dono 2026-10-08/09
-// em docs/DECISIONS.md. Três partes:
-//  - Higgsfield (Kling 3.0): cada passagem começa numa foto real e termina na
-//    seguinte (last_image_url). Sem som (o áudio não entra no vídeo final).
-//  - Consulta das passagens, com 1 nova tentativa por passagem que falhar.
-//  - Colagem em partes (mp4stream + envio TUS): cada chamada trabalha até um
+// Motor dos vídeos curtos do imóvel (grátis e plano). Decisões do dono
+// 2026-10-08/09 em docs/DECISIONS.md: o vídeo é ISCA — 1 cômodo, no máximo 2
+// cômodos vizinhos (caminhada de uma foto até a outra) ou a abertura "de fora"
+// mostrando a vista. Nunca o imóvel inteiro. Três partes:
+//  - Higgsfield (Kling 3.0): trecho a partir de foto real (com last_image_url
+//    quando são 2 cômodos). Sem som (o áudio não entra no vídeo final).
+//  - Consulta dos trechos, com 1 nova tentativa por trecho que falhar.
+//  - Gravação em partes (mp4stream + envio TUS): cada chamada trabalha até um
 //    prazo e guarda onde parou em video_tours.assembly; a próxima continua.
-//    Gera o vídeo completo e, no plano, os recortes.
 import { buildHeader, clipMeta, streamBytes, type ClipMeta } from './mp4stream.ts'
 import { tusCreate, tusOffset, tusSend } from './tusUpload.ts'
 
@@ -18,11 +19,31 @@ export const COST_PER_SECOND = Number(Deno.env.get('HF_COST_PER_SECOND') ?? '0.1
 export const MAX_ATTEMPTS = 2
 export const VIDEO_BUCKET = 'videos'
 
-export const DEFAULT_WALK_PROMPT = 'Smooth first-person walkthrough of a real place, steady gimbal at eye level, walking pace. ' +
-  'The camera moves forward from the first room into the next room through the natural opening between them (doorway, hallway or stairs) and ends exactly on the final frame. ' +
-  'Keep both rooms exactly as in the photos — do not add, remove or change any furniture, wall, window or object. No people, no text, no logos.'
+// Instruções de câmera padrão (a ficha pode trocar: config.clip_prompts.{room,pair,opening}).
+export const DEFAULT_PROMPTS = {
+  room: 'Slow, smooth cinematic camera movement inside this room, steady gimbal, natural light, calm and premium feeling. ' +
+    'Keep every object, wall, window and piece of furniture exactly as in the photo — do not add, remove or change anything. No people, no text, no logos.',
+  pair: 'Smooth first-person walkthrough of a real place, steady gimbal at eye level, walking pace. ' +
+    'The camera moves forward from the first room into the next room through the natural opening between them and ends exactly on the final frame. ' +
+    'Keep both rooms exactly as in the photos — do not add, remove or change any furniture, wall, window or object. No people, no text, no logos.',
+  opening: 'Cinematic establishing shot from outside, slow smooth camera movement that reveals the view and the surroundings, golden natural light. ' +
+    'Keep the building, the landscape and the view exactly as in the photo — do not add, remove or change anything. No people, no text, no logos.',
+}
+export type ClipKind = keyof typeof DEFAULT_PROMPTS
+// Segundos por trecho: 2 cômodos precisam de um pouco mais pra caminhada.
+export const SECONDS: Record<ClipKind, number> = { room: 5, pair: WALK_SECONDS, opening: 5 }
+export const estimateUsd = (kind: ClipKind) => SECONDS[kind] * COST_PER_SECOND
 
-// from/to: índices das fotos de começo e fim (to ausente = trecho de uma foto só, modo antigo do grátis).
+// Instrução de câmera da ficha do setor (regra 6), com o padrão acima.
+// deno-lint-ignore no-explicit-any
+export async function clipPrompt(admin: any, verticalKey: string | null, kind: ClipKind): Promise<string> {
+  if (!verticalKey) return DEFAULT_PROMPTS[kind]
+  const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
+  const p = ((data?.config ?? {}) as { clip_prompts?: Partial<Record<ClipKind, string>> }).clip_prompts?.[kind]
+  return String(p || DEFAULT_PROMPTS[kind]).slice(0, 1500)
+}
+
+// from/to: índices das fotos de começo e fim (to ausente = trecho de uma foto só).
 export interface Clip { job_ref: string | null; status: string; attempts: number; from: number; to?: number }
 
 export function hfHeaders(): Record<string, string> | null {
@@ -50,12 +71,7 @@ async function clipStatus(headers: Record<string, string>, jobRef: string): Prom
   return { status: String(d.status ?? 'queued'), url: d.video?.url ?? null }
 }
 
-// Plano de passagens: foto i → foto i+1.
-export function walkClips(n: number): Pick<Clip, 'from' | 'to'>[] {
-  return Array.from({ length: Math.max(0, n - 1) }, (_, i) => ({ from: i, to: i + 1 }))
-}
-
-// Manda todas as passagens; a que não subir fica sem job_ref e tenta de novo na consulta.
+// Manda todos os trechos; o que não subir fica sem job_ref e tenta de novo na consulta.
 export async function submitAll(headers: Record<string, string>, prompt: string, photos: string[], plan: Pick<Clip, 'from' | 'to'>[], seconds?: number): Promise<Clip[]> {
   const refs = await Promise.all(plan.map(c => submitClip(headers, prompt, photos[c.from], c.to !== undefined ? photos[c.to] : undefined, seconds)))
   return refs.map((r, i) => ({ job_ref: r, status: 'processing', attempts: 1, ...plan[i] }))
@@ -116,29 +132,6 @@ export async function assembleStep(supabaseUrl: string, key: string, a: Assembly
     if (end === total) o.done = true
   }
   return { a, finished: a.outputs.every(o => o.done) }
-}
-
-// Recortes de 15-30 s: sequências de passagens da mesma zona (zona do ambiente de chegada).
-export function planCuts(steps: { nome: string; zona: string }[], seconds: [number, number] = [15, 30], walk = WALK_SECONDS): { nome: string; from: number; to: number }[] {
-  const minP = Math.max(2, Math.round(seconds[0] / walk)), maxP = Math.max(minP, Math.floor(seconds[1] / walk))
-  const runs: { zona: string; from: number; to: number }[] = []
-  for (let i = 0; i < steps.length - 1; i++) {
-    const z = steps[i + 1].zona, last = runs[runs.length - 1]
-    if (last && last.zona === z) last.to = i + 1; else runs.push({ zona: z, from: i, to: i + 1 })
-  }
-  const cuts: { nome: string; from: number; to: number }[] = []
-  for (const r of runs) {
-    let len = r.to - r.from
-    if (len < minP) continue // curto demais pra virar Reels sozinho; continua no tour completo
-    let from = r.from
-    while (len > 0) {
-      const take = len > maxP ? Math.min(maxP, len - minP >= minP ? maxP : Math.ceil(len / 2)) : len
-      if (take < minP) break
-      cuts.push({ nome: `${steps[from + 1].nome} → ${steps[from + take].nome}`, from, to: from + take })
-      from += take; len -= take
-    }
-  }
-  return cuts
 }
 
 // ---------- avanço de um tour (usado pelo status do grátis e do plano) ----------

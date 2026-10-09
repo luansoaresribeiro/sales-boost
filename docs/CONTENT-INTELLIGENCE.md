@@ -126,6 +126,14 @@ registra em `marketing_ai_tool_interest`, contagem visível no painel Owner
 
 ## Mapa de formatos (aprovado 2026-10-09 — plano, ainda não implementado)
 
+> **Atualização (mesmo dia):** o dono tirou o tour completo e os recortes —
+> o vídeo é ISCA: 1 cômodo, 2 cômodos vizinhos ou abertura de fora com a
+> vista (já implementado: `item-videos`, botão "🎬 Vídeos e resposta do
+> QUERO"). A palavra é QUERO (não TOUR) e a DM leva os dados cadastrados +
+> convite pra visita, não o vídeo inteiro. As linhas "Tour completo",
+> "Recorte do tour" e "Tour como isca na DM" da tabela abaixo ficam como
+> histórico. Ver [DECISIONS.md](DECISIONS.md).
+
 Cada formato novo entra numa peça que já existe; nada de código específico
 de setor (regra 6) — receitas, ganchos e CTAs ficam na ficha
 (`vertical_playbooks.config`). Decisão em [DECISIONS.md](DECISIONS.md).

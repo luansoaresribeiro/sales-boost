@@ -1,21 +1,20 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { advanceTour, DEFAULT_WALK_PROMPT, hfHeaders, submitAll, VIDEO_BUCKET, walkClips, type TourRow } from '../_shared/tourEngine.ts'
+import { advanceTour, clipPrompt, hfHeaders, SECONDS, submitAll, VIDEO_BUCKET, type TourRow } from '../_shared/tourEngine.ts'
 
-// Tour virtual grátis (decisões do dono 2026-10-08, docs/DECISIONS.md):
-// o cliente envia TOUR_PHOTOS fotos reais na ordem da visita → passagens em
-// caminhada (Kling 3.0 via Higgsfield; cada uma começa numa foto e termina na
-// seguinte) → coladas num Reel único (_shared/tourEngine). 1 tour por conta,
-// teto global de FREE_VIDEO_MONTHLY_CAP (30) por mês. A instrução de câmera vem
-// da ficha (vertical_playbooks.config.free_video.walk_prompt, regra 6), com um
-// padrão genérico. Nunca escreve texto no vídeo (regra 4).
+// Vídeos grátis (decisões do dono 2026-10-09, docs/DECISIONS.md): o cliente
+// escolhe TRIAL_PHOTOS fotos dos melhores cômodos → um vídeo curto de cada
+// (Kling 3.0 via Higgsfield, _shared/tourEngine). É ISCA, não o imóvel inteiro:
+// cada vídeo vai pro Instagram com "Comente QUERO". 1 kit por conta, teto
+// global de FREE_VIDEO_MONTHLY_CAP (30) por mês. Instrução de câmera da ficha
+// (config.clip_prompts.room, regra 6). Nunca escreve texto no vídeo (regra 4).
 //
 // Tabelas: trial_video_claims (trava 1 por empresa; job_ref = "tour:<id>") e
-// video_tours (fotos, passagens, colagem, vídeo final). Passagem que falha tenta
-// de novo 1x; falhou de novo → tour 'failed' e a trava é liberada.
+// video_tours (fotos, trechos, gravação). Trecho que falha tenta de novo 1x;
+// falhou de novo → 'failed' e a trava é liberada.
 //
 // actions:
-//  - start {photo_urls: string[]}: valida, reserva e manda as passagens pra Higgsfield
-//  - status: consulta as passagens; quando todas prontas, cola (em partes) e devolve a URL
+//  - start {photo_urls: string[]}: valida, reserva e manda os trechos pra Higgsfield
+//  - status: consulta; quando prontos, grava cada vídeo e devolve as URLs
 //  - coupon_seen: marca companies.coupon_offer_shown_at (1x) — conta os 7 dias do cupom
 
 const cors = {
@@ -23,11 +22,14 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 const CAP = Number(Deno.env.get('FREE_VIDEO_MONTHLY_CAP') ?? '30') || 30
-const TOUR_PHOTOS = Number(Deno.env.get('TOUR_PHOTOS_TRIAL') ?? '6') || 6
+const TRIAL_PHOTOS = Number(Deno.env.get('TRIAL_PHOTOS') ?? '3') || 3
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 }
+
+const outputsFor = (companyId: string, tourId: string, n: number) =>
+  Array.from({ length: n }, (_, i) => ({ path: `trial/${companyId}/${tourId}-${i + 1}.mp4`, from: i, to: i + 1 }))
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -58,28 +60,33 @@ Deno.serve(async (req) => {
       if (!claim || !tourId) return json({ status: 'none' })
       const { data: tour } = await admin.from('video_tours').select('id, status, photos, clips, video_path, assembly, updated_at').eq('id', tourId).maybeSingle()
       if (!tour) return json({ status: 'none' })
-      if (tour.status === 'completed' && tour.video_path) return json({ status: 'completed', video_url: publicVideo(tour.video_path) })
+      const urlsOf = (outs: { path: string }[]) => outs.map(o => publicVideo(o.path))
+      if (tour.status === 'completed' && tour.video_path) {
+        const outs = (tour.assembly?.outputs ?? [{ path: tour.video_path }]) as { path: string }[]
+        return json({ status: 'completed', video_urls: urlsOf(outs) })
+      }
       const headers = hfHeaders()
       if (!headers) return json({ status: 'processing' })
-      const r = await advanceTour(admin, supabaseUrl, serviceKey, headers, await walkPrompt(admin, company.vertical_key), tour as TourRow,
-        () => [{ path: `trial/${company.id}/${tour.id}.mp4`, from: 0, to: (tour.clips as unknown[]).length }])
+      const n = (tour.clips as unknown[]).length
+      const r = await advanceTour(admin, supabaseUrl, serviceKey, headers, await clipPrompt(admin, company.vertical_key, 'room'), tour as TourRow,
+        () => outputsFor(company.id, tour.id, n), SECONDS.room)
       if (r.status === 'failed') {
         await admin.from('trial_video_claims').delete().eq('id', claim.id)
         return json({ status: 'failed', reason: r.reason })
       }
       if (r.status === 'completed') {
         await admin.from('trial_video_claims').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', claim.id)
-        console.log('[trial-video] tour concluído', company.id, tour.id)
-        return json({ status: 'completed', video_url: publicVideo(r.outputs[0].path) })
+        console.log('[trial-video] vídeos prontos', company.id, tour.id, n)
+        return json({ status: 'completed', video_urls: urlsOf(r.outputs) })
       }
       return json(r)
     }
 
     // action 'start'
-    if (company.plan && company.plan !== 'free') return json({ error: 'Seu plano já inclui tours todo mês.' }, 400)
-    if (claim) return json({ error: 'O tour grátis desta conta já foi usado.', status: claim.status }, 409)
+    if (company.plan && company.plan !== 'free') return json({ error: 'Seu plano já inclui vídeos todo mês.' }, 400)
+    if (claim) return json({ error: 'Os vídeos grátis desta conta já foram usados.', status: claim.status }, 409)
     const photos = Array.isArray(body.photo_urls) ? body.photo_urls.map(String) : []
-    if (photos.length !== TOUR_PHOTOS) return json({ error: `Envie exatamente ${TOUR_PHOTOS} fotos.` }, 400)
+    if (photos.length !== TRIAL_PHOTOS) return json({ error: `Escolha exatamente ${TRIAL_PHOTOS} fotos.` }, 400)
     const prefix = `${supabaseUrl}/storage/v1/object/public/post-images/renders/${company.id}/`
     if (photos.some(p => !p.startsWith(prefix) || p.includes('..'))) return json({ error: 'Foto inválida.' }, 400)
     const headers = hfHeaders()
@@ -94,29 +101,22 @@ Deno.serve(async (req) => {
     }
 
     const { data: ins, error: insErr } = await admin.from('trial_video_claims').insert({ company_id: company.id, status: 'claimed' }).select('id').single()
-    if (insErr) return insErr.code === '23505' ? json({ error: 'O tour grátis desta conta já foi usado.' }, 409) : json({ error: insErr.message }, 500)
+    if (insErr) return insErr.code === '23505' ? json({ error: 'Os vídeos grátis desta conta já foram usados.' }, 409) : json({ error: insErr.message }, 500)
 
-    const clips = await submitAll(headers, await walkPrompt(admin, company.vertical_key), photos, walkClips(photos.length))
+    // Um trecho por foto (cômodo), sem caminhada entre eles.
+    const clips = await submitAll(headers, await clipPrompt(admin, company.vertical_key, 'room'), photos, photos.map((_, i) => ({ from: i })), SECONDS.room)
     if (clips.every(c => !c.job_ref)) {
       await admin.from('trial_video_claims').delete().eq('id', ins.id)
-      return json({ error: 'Não consegui iniciar o vídeo agora. Tente de novo em alguns minutos.' }, 502)
+      return json({ error: 'Não consegui iniciar os vídeos agora. Tente de novo em alguns minutos.' }, 502)
     }
     const { data: tour, error: tErr } = await admin.from('video_tours')
       .insert({ company_id: company.id, kind: 'trial', status: 'generating', photos, clips }).select('id').single()
     if (tErr) { await admin.from('trial_video_claims').delete().eq('id', ins.id); return json({ error: tErr.message }, 500) }
     await admin.from('trial_video_claims').update({ job_ref: `tour:${tour.id}`, updated_at: new Date().toISOString() }).eq('id', ins.id)
-    console.log('[trial-video] tour iniciado', company.id, tour.id, clips.filter(c => c.job_ref).length, '/', clips.length)
+    console.log('[trial-video] vídeos iniciados', company.id, tour.id, clips.filter(c => c.job_ref).length, '/', clips.length)
     return json({ status: 'processing', done: 0, total: clips.length })
   } catch (err) {
     console.error('trial-video error:', err)
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)
   }
 })
-
-// Instrução de câmera da ficha (regra 6): config.free_video.walk_prompt.
-// deno-lint-ignore no-explicit-any
-async function walkPrompt(admin: any, verticalKey: string | null): Promise<string> {
-  if (!verticalKey) return DEFAULT_WALK_PROMPT
-  const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
-  return String(((data?.config ?? {}) as { free_video?: { walk_prompt?: string } }).free_video?.walk_prompt || DEFAULT_WALK_PROMPT).slice(0, 1500)
-}

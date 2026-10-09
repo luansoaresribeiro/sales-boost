@@ -76,7 +76,15 @@ Deno.serve(async (req) => {
         // Automações ativas dessa empresa que se aplicam a esse post.
         const { data: autos } = await admin.from('engagement_automations')
           .select('*').eq('company_id', company.id).eq('active', true).eq('trigger_type', 'ig_comment')
-        const candidates = (autos ?? []).filter((a: Any) => !a.media_ref || a.media_ref === mediaId)
+        // Automação ligada a um imóvel (item_id — "Comente QUERO", 2026-10-09) vale pra
+        // qualquer post DESSE imóvel; ela vem antes das automações gerais.
+        const needsItem = (autos ?? []).some((a: Any) => a.item_id)
+        const { data: post } = needsItem && mediaId
+          ? await admin.from('posts').select('item_id').eq('company_id', company.id).eq('instagram_media_id', mediaId).maybeSingle()
+          : { data: null }
+        const candidates = (autos ?? [])
+          .filter((a: Any) => a.item_id ? (!!post?.item_id && a.item_id === post.item_id) : (!a.media_ref || a.media_ref === mediaId))
+          .sort((a: Any, b: Any) => (b.item_id ? 1 : 0) - (a.item_id ? 1 : 0))
         if (candidates.length === 0) continue
 
         // Escolhe a automação e detecta a intenção.
