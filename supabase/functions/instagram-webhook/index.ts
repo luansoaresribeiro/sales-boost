@@ -42,7 +42,14 @@ Deno.serve(async (req) => {
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
     const admin = createClient(supabaseUrl, serviceKey)
 
-    const body = await req.json().catch(() => ({})) as Any
+    // Assinatura da Meta (X-Hub-Signature-256). Sem assinatura válida o evento
+    // ainda é registrado (não perde lead real se o segredo estiver errado),
+    // mas NADA é enviado sozinho: a ação vira pedido de aprovação do dono.
+    const raw = await req.text()
+    const verified = await verifyMetaSignature(raw, req.headers.get('x-hub-signature-256'))
+    if (!verified) console.warn('instagram-webhook: assinatura da Meta ausente ou inválida — envio automático bloqueado neste evento')
+    let body: Any = {}
+    try { body = JSON.parse(raw) } catch { /* corpo inválido → nada a fazer */ }
     for (const entry of body.entry ?? []) {
       const igUserId = String(entry.id ?? '') // conta de IG que recebeu o comentário/mensagem
 
@@ -109,7 +116,7 @@ Deno.serve(async (req) => {
         }).select('id').single()
 
         // Decisão auto vs manual: a AUTOMAÇÃO manda (granular), não um ON/OFF global.
-        const auto = chosen.execution_mode === 'automatic' && (chosen.allowed_auto_actions ?? []).includes(actionType)
+        const auto = verified && chosen.execution_mode === 'automatic' && (chosen.allowed_auto_actions ?? []).includes(actionType)
 
         // Proposta na Central de Approvals (mesmo shape de agent_actions).
         const { data: act } = await admin.from('agent_actions').insert({
@@ -161,6 +168,27 @@ async function fetchIgDisplayName(token: string | null, igsid: string): Promise<
 // DM real do Instagram → vira lead (ou atualiza o existente) + mensagem em
 // lead_messages. Mesmo canal genérico que o WhatsApp/hermes-proxy já usam —
 // é por isso que o Funil de Vendas passa a enxergar esses leads sozinho.
+// Confere o HMAC-SHA256 do corpo com o segredo do app. Aceita qualquer um dos
+// nomes de secret em uso (Instagram Login e app da Meta têm segredos próprios).
+async function verifyMetaSignature(raw: string, header: string | null): Promise<boolean> {
+  const sig = (header ?? '').trim().toLowerCase()
+  if (!sig.startsWith('sha256=')) return false
+  const secrets = ['INSTAGRAM_APP_SECRET', 'META_APP_SECRET', 'FACEBOOK_APP_SECRET']
+    .map(n => (Deno.env.get(n) ?? '').trim()).filter(Boolean)
+  const enc = new TextEncoder()
+  for (const secret of secrets) {
+    const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+    const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(raw)))
+    const hex = 'sha256=' + Array.from(mac, b => b.toString(16).padStart(2, '0')).join('')
+    if (hex.length === sig.length) {
+      let diff = 0
+      for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ sig.charCodeAt(i)
+      if (diff === 0) return true
+    }
+  }
+  return false
+}
+
 async function handleDirectMessage(admin: Any, igUserId: string, m: Any) {
   if (m.message?.is_echo) return // eco da mensagem que a PRÓPRIA empresa mandou — não é um DM recebido
   const senderId = m.sender?.id

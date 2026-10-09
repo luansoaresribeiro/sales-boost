@@ -586,3 +586,22 @@ grátis de 30 s, acima — mantidos como histórico):
   avaliações Google (`reply-google-review`), métricas GSC. A busca de leads
   do painel do Owner (`find-sales-leads`) usa Google Places e para se o
   projeto for suspenso — só afeta o dono, não clientes.
+
+## 2026-10-09 — Webhook do Instagram confere a assinatura da Meta (aprovado pelo dono)
+
+- `instagram-webhook` confere `X-Hub-Signature-256` (HMAC-SHA256 do corpo)
+  com `INSTAGRAM_APP_SECRET` (aceita também `META_APP_SECRET` /
+  `FACEBOOK_APP_SECRET`). Fecha o achado acima.
+- **Sem assinatura válida o evento NÃO é descartado** (não se perde lead
+  real se o segredo estiver trocado): comentário e DM são registrados
+  normalmente, mas **nada é enviado sozinho** — a ação vira pedido de
+  aprovação (PENDING) e o log mostra "assinatura da Meta ausente ou
+  inválida".
+- Testado: conta da assinatura comparada com `openssl` (válida → aceita;
+  maiúsculas → aceita; falsa/ausente → recusa); no ensaio, comentário QUERO
+  sem assinatura e com assinatura falsa → PENDING (antes era envio
+  automático).
+- **Depois de publicar em produção:** olhar o log no primeiro comentário
+  real. Se aparecer o aviso de assinatura inválida em comentário verdadeiro,
+  o segredo cadastrado não é o do app que assina — corrigir o secret (o
+  QUERO só passa a pedir aprovação; nada quebra).
