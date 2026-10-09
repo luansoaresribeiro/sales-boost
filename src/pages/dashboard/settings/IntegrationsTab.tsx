@@ -6,6 +6,12 @@ import { useLang } from '../../../contexts/LanguageContext'
 import { TX } from './IntegrationsTab.i18n'
 import { launchWhatsAppSignup, isWhatsAppSignupConfigured } from '../../../lib/facebookSdk'
 
+// Google fora do produto por enquanto (decisão do dono, 2026-10-09: foco no
+// digital/Instagram; projeto Google Cloud com faturamento vencido). Os cartões
+// de Search Console e Business Profile ficam escondidos — voltar pra true
+// religa as telas sem mais nada.
+const GOOGLE_ENABLED = false
+
 function buildGbpAuthUrl(companyId: string): string {
   const params = new URLSearchParams({
     client_id: import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string,
@@ -354,7 +360,7 @@ export default function IntegrationsTab() {
       </div>
 
       {/* Google Search Console Card */}
-      <div style={{ background: CARD, border: `1px solid ${integration ? 'rgba(74,222,128,0.25)' : BORDER}`, borderRadius: '14px', overflow: 'hidden', marginBottom: '20px' }}>
+      {GOOGLE_ENABLED && (<div style={{ background: CARD, border: `1px solid ${integration ? 'rgba(74,222,128,0.25)' : BORDER}`, borderRadius: '14px', overflow: 'hidden', marginBottom: '20px' }}>
         <div style={{ padding: '20px 24px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: integration ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
@@ -469,7 +475,7 @@ export default function IntegrationsTab() {
             </div>
           </div>
         )}
-      </div>
+      </div>)}
 
       {/* Instagram: publicação com aprovação (2026-10-07: saiu o "Auto-post"
           com botão Ativo/Pausado e frequência — a publicação automática
@@ -630,7 +636,7 @@ export default function IntegrationsTab() {
       </div>
 
       {/* Google Business Profile card */}
-      <div style={{ background: CARD, border: `1px solid ${gbpIntegration ? 'rgba(74,222,128,0.25)' : BORDER}`, borderRadius: '14px', overflow: 'hidden', marginBottom: '20px' }}>
+      {GOOGLE_ENABLED && (<div style={{ background: CARD, border: `1px solid ${gbpIntegration ? 'rgba(74,222,128,0.25)' : BORDER}`, borderRadius: '14px', overflow: 'hidden', marginBottom: '20px' }}>
         <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: gbpIntegration ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>⭐</div>
@@ -679,7 +685,7 @@ export default function IntegrationsTab() {
             </div>
           </div>
         )}
-      </div>
+      </div>)}
 
       {/* Meta Ads card */}
       <div style={{ background: CARD, border: `1px solid ${metaAdsAccount ? 'rgba(255,109,41,0.25)' : BORDER}`, borderRadius: '14px', overflow: 'hidden', marginBottom: '20px' }}>

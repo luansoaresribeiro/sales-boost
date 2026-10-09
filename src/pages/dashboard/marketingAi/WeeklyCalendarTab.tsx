@@ -15,13 +15,13 @@ const DAY_LABELS = {
 const STATUS_LABEL_EN: Record<string, string> = { draft: 'Evaluating', vault: 'In Vault', scheduled: 'Scheduled', adapt: 'Adapting' }
 const TX = {
   pt: {
-    errPlan: 'Erro ao planejar a semana', planned: (n: number) => `✅ Planejado: ${n} peça(s) geradas e avaliadas.`, loading: 'Carregando...', empty: 'vazio',
+    errPlan: 'Erro ao planejar a semana', planned: (n: number) => `✅ Planejado: ${n} peça(s) geradas e avaliadas.`, todo: 'A estratégia também pede nesta semana (você faz no imóvel, no Catálogo):', perWeek: (n: number) => `${n}x`, loading: 'Carregando...', empty: 'vazio',
     title: '🗓️ Calendário da Semana', introA: 'O agente escolhe as melhores ', introB: 'Ideias', introC: ' do backlog abaixo pra cada dia (nunca inventa do zero) e usa o mesmo motor de sempre pra gerar e avaliar — o que sair com nota boa já cai no Vault sozinho.',
     tabCal: 'Calendário', tabIdeas: 'Ideias', autoTitle: 'Planejar sozinho todo domingo às 18h', autoDesc: 'Escolhe entre as Ideias disponíveis e já gera tudo — sem precisar clicar em nada.',
     planning: 'Planejando + gerando...', planNow: '🗓️ Planejar semana agora', thisWeek: 'Esta semana', nextWeek: 'Próxima semana',
   },
   en: {
-    errPlan: 'Error planning the week', planned: (n: number) => `✅ Planned: ${n} piece(s) generated and evaluated.`, loading: 'Loading...', empty: 'empty',
+    errPlan: 'Error planning the week', planned: (n: number) => `✅ Planned: ${n} piece(s) generated and evaluated.`, todo: 'The strategy also asks for this week (you do it on the listing, in the Catalog):', perWeek: (n: number) => `${n}x`, loading: 'Loading...', empty: 'empty',
     title: '🗓️ Weekly Calendar', introA: 'The agent picks the best ', introB: 'Ideas', introC: ' from the backlog below for each day (it never makes things up from scratch) and uses the same engine as always to generate and evaluate — whatever scores well goes to the Vault on its own.',
     tabCal: 'Calendar', tabIdeas: 'Ideas', autoTitle: 'Plan automatically every Sunday at 6 PM', autoDesc: 'Picks from the available Ideas and generates everything — no clicking needed.',
     planning: 'Planning + generating...', planNow: '🗓️ Plan the week now', thisWeek: 'This week', nextWeek: 'Next week',
@@ -56,6 +56,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   const [autoLoaded, setAutoLoaded] = useState(false)
   const [planning, setPlanning] = useState(false)
   const [msg, setMsg] = useState('')
+  const [todo, setTodo] = useState<{ format: string; name: string; per_week: number; purpose: string }[]>([])
   const [err, setErr] = useState('')
   const [sub, setSub] = useState<'calendario' | 'ideias'>('calendario')
 
@@ -94,9 +95,10 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'plan_week' }),
       })
-      const r = await res.json().catch(() => ({})) as { error?: string; planned?: number }
+      const r = await res.json().catch(() => ({})) as { error?: string; planned?: number; todo?: { format: string; name: string; per_week: number; purpose: string }[] }
       if (!res.ok) throw new Error(r.error ?? t.errPlan)
       setMsg(t.planned(r.planned ?? 0))
+      setTodo(Array.isArray(r.todo) ? r.todo : [])
       await load()
     } catch (e) {
       setErr(e instanceof Error ? e.message : t.errPlan)
@@ -187,6 +189,14 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
           </div>
           {err && <div style={{ color: '#f87171', fontSize: '11.5px', marginBottom: '12px' }}>{err}</div>}
           {msg && <div style={{ color: GREEN, fontSize: '11.5px', marginBottom: '12px' }}>{msg}</div>}
+          {todo.length > 0 && (
+            <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '12px', lineHeight: 1.6 }}>
+              {t.todo}
+              <ul style={{ margin: '4px 0 0', paddingLeft: '18px', color: 'white' }}>
+                {todo.map(x => <li key={x.format}>{t.perWeek(x.per_week)} {x.name}{x.purpose ? <span style={{ color: MUTED }}> — {x.purpose}</span> : null}</li>)}
+              </ul>
+            </div>
+          )}
 
           <Week label={t.thisWeek} days={thisWeek} />
           <Week label={t.nextWeek} days={nextWeek} />

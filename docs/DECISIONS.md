@@ -342,3 +342,280 @@ Decisões do dono (conversa de 2026-10-08):
   5. **Proibido:** IA de imagem/vídeo gerar o lugar do zero (seria lugar
      falso em anúncio de imóvel) e usar Google Earth/Street View/fotos do
      Google Maps (termos do Google proíbem).
+
+
+## 2026-10-08 — Pagamento (fatia 4): como foi implementado
+
+- **Planos no código:** `create-checkout` recebe `{ plan: 'monthly' | 'annual_commit' }`
+  (o contrato antigo `basic/pro/ultra` e a região `us` foram removidos; só a
+  `TrialSummaryPage` chamava). O preço é buscado no Stripe pelo `lookup_key`
+  (`sb_monthly`, `sb_annual_commit`) — não existem mais `STRIPE_PRICE_*` para
+  estes planos. Na coluna `companies.plan` os dois planos gravam `'pro'`
+  (plano único com tudo; o resto do app lê `plan !== 'free'`);
+  o plano real fica em `companies.billing_plan`.
+- **Cupom `SB_PRIMEIRO_MES`:** aplicado no servidor só se plano = mensal,
+  `companies.coupon_offer_shown_at` existe e tem no máximo 7 dias, e a
+  empresa nunca assinou antes (`billing_plan` nulo — trava contra
+  cancelar e reassinar pra repetir o desconto). Nada grava
+  `coupon_offer_shown_at` ainda (o popup é a fatia 5): sem popup, não há cupom.
+  A tela só mostra a oferta (com o prazo restante real) se a coluna estiver
+  dentro dos 7 dias.
+- **Fidelidade e multa (anual):** `commitment_end_at` = início da
+  assinatura + 12 meses. **Multa = 30% × meses restantes × R$1.449
+  (144.900 centavos)**, com meses restantes = meses de calendário
+  **arredondados pra cima** entre a data efetiva do fim da assinatura e
+  `commitment_end_at` (máx. 12). Calculada no `stripe-webhook` em
+  `customer.subscription.updated` (cancelamento agendado: `cancel_at` ou
+  `cancel_at_period_end`; se o cliente desfaz, a multa é limpa) e em
+  `customer.subscription.deleted`. Gravada em
+  `companies.early_termination_fee_cents` e registrada em `access_audit_log`
+  (`early_termination_fee_recorded`). Exemplo: fim efetivo 5,2 meses antes
+  do fim da fidelidade -> 6 meses -> R$2.608,20.
+- **A multa NÃO é cobrada automaticamente.** Cobrar dinheiro depende de
+  decisão do dono (e da validação do advogado, CDC). Fica visível no painel
+  do Owner (`CompanyDetailPage`: plano, fim da fidelidade e multa devida).
+- **Cláusula antes de pagar:** na tela de planos (cartão anual) e no checkout
+  do Stripe (`custom_text.submit.message`, em português).
+- **Preço falso removido:** sumiu o "R$14,49" da `TrialSummaryPage`, do
+  `TrialStartModal`, do modal da landing (`i18n.ts`/`App.tsx`) e do comando
+  /preco do `vendas-bot` (código do worker; precisa de deploy próprio).
+- **Secrets:** só `STRIPE_SECRET_KEY` (já existe), `STRIPE_WEBHOOK_SECRET`
+  (já existe) e `SITE_URL` (opcional). `STRIPE_PRICE_BASIC/PRO/ULTRA` só
+  seguem sendo lidos pelo caminho legado do webhook (assinaturas antigas).
+- **Divergências:** PRODUCT.md (linhas ~39, 59, 109) ainda cita o plano único
+  de R$1.449 de 2026-10-02 — substituído por esta decisão; mantido como
+  histórico. Itens do Stripe existem só no sandbox; em produção ainda
+  precisam ser criados (com os mesmos `lookup_key` e id de cupom).
+
+
+## 2026-10-08 — Vídeo grátis vira TOUR VIRTUAL (Kling, Reel único)
+
+Decisões do dono (conversa de 2026-10-08), testadas no ensaio:
+
+- **Modelo: Kling 3.0 Standard via Higgsfield** (`/kling-video/v3.0/std/image-to-video`).
+  Teste comparativo: DoP turbo (US$ 0,41/5 s) deixou uma mancha branca;
+  Kling (**US$ 0,54 por trecho de 5 s**, medido no painel) saiu limpo, pronto
+  em ~3 min.
+- **O vídeo é um tour virtual**, não 1 foto animada: o cliente envia fotos
+  reais do imóvel **na ordem da visita**; cada foto vira um trecho de 5 s e
+  os trechos são **colados num Reel único** de ~30 s (`_shared/mp4concat.ts`,
+  sem recodificar — só junta trechos do mesmo modelo/tamanho; se vier
+  diferente, recusa em vez de entregar vídeo quebrado). Por isso a tela
+  passa todas as fotos pelo mesmo recorte 4:5 antes de enviar.
+- **Tour grátis = 6 fotos (~30 s, ~US$ 3,24).** Continua 1 por conta e teto
+  de 30/mês. **Correção do custo** da decisão "Volume de vídeo" acima
+  (que dizia "≈ US$ 10" pensando em 1 foto por vídeo): 30 tours/mês ≈
+  **US$ 97**.
+- **Plano pago: 12 tours/mês** (~US$ 39 por cliente), gerados a partir do
+  plano de conteúdo semanal (3 por semana). Ainda não construído.
+- **Seleção de fotos (pipeline do dono, futuro):** recebe ~50 fotos →
+  classifica → agrupa por cômodo → tira duplicadas e ruins → escolhe 6 a 10
+  conforme o tamanho do imóvel → cliente aprova ou troca antes de gerar.
+  Hoje o cliente escolhe as 6 à mão; no teste a seleção foi feita
+  manualmente (6 de 64 fotos).
+- **Teste real (ensaio, conta QA, 2026-10-08):** 6 fotos → 6 trechos em
+  ~2,5 min → Reel de 30,2 s (1108×828, 25 MB), sem erro de decodificação,
+  nenhum cômodo alterado. Fotos do dono ficam só no ensaio (nunca publicar).
+- **Formato vertical 9:16** para Reels: decisão adiada (o recorte atual é 4:5).
+- Tabela nova `video_tours` (migration `20261008220000`) e bucket `videos`
+  (migration `20261008210000`, só mp4, até 50 MB). Aplicadas só no ensaio.
+
+
+## 2026-10-08 — Tour em modo CAMINHADA (foto de começo + foto de fim)
+
+- Pedido do dono: "parecer que estou andando lá", não fotos se mexendo com
+  corte entre elas. Solução: o Kling 3.0 aceita `last_image_url` (doc da
+  Higgsfield). Cada trecho começa numa foto e termina na seguinte → 6 fotos
+  = **5 caminhadas de 6 s ≈ 30 s**, sem pulo na emenda. Modo novo `walk`
+  (padrão); o antigo continua como `per_photo` (ficha:
+  `config.free_video.mode`, `walk_prompt`). Pedimos sem som (`sound: off`) —
+  o áudio é descartado na colagem.
+- **Ressalva honesta (regra 4):** começo e fim de cada trecho são fotos
+  reais, mas **o caminho do meio é imaginado pela IA**. Entre cômodos
+  vizinhos sai fiel (teste: entrada → sala passou pela porta real); entre
+  cômodos que não se tocam a IA inventa passagem (teste: apareceu uma porta
+  de madeira vazada entre a suíte e o espaço gourmet que não está nas
+  fotos). Por isso a **ordem das fotos** é decisiva.
+- **Decisão do dono:** o sistema descobre a melhor ordem sozinho, sempre
+  (próxima etapa — ver ROADMAP P3).
+- **Bug corrigido no teste:** a colagem de 33 MB estourou a memória da
+  função (erro 546) e o tour ficou preso em "montando". `mp4concat` agora
+  não copia os quadros (pico medido caiu de ~250 MB pra ~100 MB no teste
+  local, com quadros idênticos) e o `status` destrava uma colagem parada há
+  mais de 3 min.
+
+
+## 2026-10-09 — Formatos de conteúdo do setor de imóveis (aprovado pelo dono)
+
+Aprovado:
+- **Grátis = "kit amostra":** tour de ~30 s em caminhada (6 fotos) + 2 peças
+  paradas feitas com as fotos do próprio cliente (1 criativo bonito + 1 post
+  educativo). O popup do cupom diz que isso é o que o plano faz toda semana.
+- **Vídeo no plano = 1 tour completo por imóvel + recortes.** O tour usa
+  todos os ambientes (sem fotos repetidas), ordem automática aprovada pelo
+  corretor. Os recortes (15-30 s) não geram vídeo novo — custo zero — e
+  viram Reels e Stories ao longo das semanas.
+- **As 7 ideias novas entram todas:** (1) tour como isca na DM ("Comente
+  TOUR"), (2) "isso ou aquilo", (3) Stories diários com recortes do tour,
+  (4) close de 5 s de um detalhe, (5) cartões-postais do bairro, (6) avatar
+  do corretor abrindo o tour, (7) "Vendido!" (prova social).
+- Onde cada uma entra na estrutura (ficha, pacote por imóvel, planejador
+  da semana, conversa na DM) e a ordem de construção: ver
+  [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) "Mapa de formatos" e
+  [ROADMAP.md](ROADMAP.md) P3.
+- **Em aberto:** como os "12 vídeos/mês" (decisão de 2026-10-08) se
+  traduzem agora que recorte não custa geração — proposta: 12+ Reels
+  publicados/mês, com um **teto de custo de geração por cliente em US$**
+  (regra 7) no lugar de contar vídeos.
+
+
+## 2026-10-09 — Etapa 1 do tour do plano: como foi implementado
+
+- **Teto: US$ 40 por cliente por mês** (decisão do dono), somando análise de
+  fotos + geração (`video_tours.cost_usd`, `kind = 'plan'`). A geração é
+  bloqueada antes de gastar se passar do teto (mensagem diz quanto custa e
+  quanto sobra). Preço da passagem é estimado (US$ 0,108/s × 6 s); falta
+  confirmar o valor real cobrado pela Higgsfield pelo trecho de 6 s sem som.
+- **Ordem automática:** `tour-plan` (`analyze`) manda TODAS as fotos do
+  imóvel numa só chamada à IA (Claude Opus 5.5, saída em JSON estruturado):
+  ambiente de cada foto, repetidas juntas, foto ruim fora (pessoa, escura,
+  só detalhe), melhor foto por ambiente, o que cada ambiente "vê" pelas
+  portas e a ordem proposta. O CÓDIGO marca cada passagem como confirmada
+  (um ambiente aparece na foto do outro) ou não confirmada. Vocabulário do
+  setor na ficha (`config.tour`: tipos de ambiente, zonas, sequência
+  típica, máx. 25 ambientes, recortes de 15-30 s) — regra 6.
+- **Aprovação do corretor:** botão "🎬 Tour em vídeo" no card do imóvel
+  (`ItemTour.tsx`): ordem com fotos, aviso amarelo nas passagens não
+  confirmadas (recalcula a cada troca), subir/descer/tirar, devolver
+  ambientes que ficaram fora, custo estimado e gasto do mês. Só gera depois
+  de "Aprovar e gerar".
+- **Recortes:** sequências de 3 a 5 passagens da mesma zona viram vídeos
+  separados (custo zero — mesmas passagens).
+- **Colagem nova (`_shared/mp4stream.ts` + `tusUpload.ts` + `tourEngine.ts`):**
+  substitui o `mp4concat.ts` (mp4box). Lê só a tabela de quadros de cada
+  passagem, monta o cabeçalho e envia em pedaços de 6 MB, retomável entre
+  chamadas — memória de ~1 passagem por vez, sem limite de tamanho. Testado:
+  quadros idênticos aos das passagens originais (comparação quadro a
+  quadro), retomada no meio gera arquivo idêntico, colagem na nuvem igual à
+  local. O tour grátis usa o mesmo motor.
+- **Achados no teste:** (1) a chave de serviço das funções está no formato
+  novo e o envio retomável precisa dela no cabeçalho `apikey` também;
+  (2) a 1ª colagem (mp4box) "perdia" 1 quadro por emenda — a nova não.
+- **Pendente:** a análise das 64 fotos não rodou no ensaio porque falta o
+  secret `ANTHROPIC_API_KEY` lá. A conta QA do ensaio está com `plan = 'pro'`
+  pra testar o tour do plano (voltar pra `free` pra testar o grátis).
+
+
+## 2026-10-09 — Sai o tour completo: vídeo vira ISCA (partes do imóvel)
+
+Decisão do dono (substitui "1 tour completo por imóvel + recortes" e o
+grátis de 30 s, acima — mantidos como histórico):
+
+- **Corretor não entrega o imóvel de cara.** O vídeo mostra uma PARTE e gera
+  vontade, com chamada pra conversa: "Comente QUERO que eu te mando mais na
+  DM".
+- **Cada vídeo = 1 cômodo, ou no máximo 2 cômodos vizinhos** (caminhada de
+  uma foto até a outra). Quem escolhe as fotos é o corretor — **sai a
+  análise de ordem por IA** (o código da etapa 1 fica no repositório, sem
+  uso, até ser removido ou reaproveitado).
+- **Abertura "de fora":** vídeo que começa do lado de fora do prédio/casa já
+  mostrando a vista. Só com FOTO REAL da fachada/vista enviada pelo
+  corretor (regra 4 — a IA não gera o prédio nem a vista).
+- **Grátis = 2 ou 3 vídeos curtos dos melhores cômodos**, cada um já com a
+  chamada "Comente QUERO".
+- **Resposta na DM:** mensagem pronta montada com os dados CADASTRADOS do
+  imóvel no Sales Boost (nunca inventados — regra 5) + convite pra agendar
+  visita. Envio pela API oficial do Instagram (resposta privada ao
+  comentário): a Meta não cobra por mensagem; limites: 1 mensagem por
+  comentário, até 7 dias depois do comentário, 750/hora por conta; depois
+  que a pessoa responde, abre a janela de 24 h. Depende da aprovação do app
+  na Meta (`instagram_business_manage_messages`, ver META-APP-REVIEW.md).
+- **Em aberto:** aprovar cada DM (regra atual) ou aprovar o modelo uma vez
+  por post e o envio ser automático.
+
+
+## 2026-10-09 — "Comente QUERO" automático (opção B) e vídeos curtos: como foi feito
+
+- **Decisão do dono: opção B.** O dono aprova a mensagem do QUERO UMA VEZ
+  por imóvel; depois cada "QUERO" num post desse imóvel recebe a DM na hora,
+  sem nova aprovação. É uma exceção consciente à regra 1 (a aprovação
+  continua existindo, só passa a ser feita antes, sobre o texto fixo). A
+  mensagem só tem o texto aprovado — a IA não escreve nada na hora.
+- **Como funciona:** `engagement_automations.item_id` (nova coluna) +
+  `instagram-webhook` acha o imóvel do post comentado (`posts.item_id` pelo
+  `instagram_media_id`) e usa a automação daquele imóvel, que tem
+  `execution_mode = 'automatic'` e `allowed_auto_actions = ['send_dm']`
+  (mecanismo que já existia). Modelo da mensagem na ficha
+  (`config.dm_reply`: palavra QUERO + modelo com {campos}); linha de dado não
+  cadastrado some (`_shared/dmReply.ts`). Também cria o lead.
+- **Vídeos do imóvel (`item-videos` + `ItemVideos.tsx`):** botão "🎬 Vídeos
+  e resposta do QUERO" no card do imóvel: tipo (1 cômodo / 2 cômodos
+  vizinhos / abertura de fora), o corretor escolhe a(s) foto(s), custo
+  estimado e gasto do mês (teto US$ 40), lista dos vídeos prontos, e a caixa
+  da mensagem do QUERO pra revisar/aprovar/desligar.
+- **Grátis (`trial-video` + `FreeVideoCard`):** 3 fotos → 3 vídeos curtos.
+- **Removido:** `tour-plan`, `_shared/tourPlan.ts`, `ItemTour.tsx` (ordem por
+  IA e tour completo) — ficam no histórico do git. A função `tour-plan`
+  continua publicada só no ensaio, sem uso.
+- **Testado no ensaio (sem gerar vídeo novo — reaproveitando trechos já
+  pagos):** grátis com 3 vídeos e vídeo "2 cômodos" do plano, quadros
+  idênticos aos trechos originais; QUERO: desligado → nada; ligado +
+  comentário com QUERO no post do imóvel → envio automático (falhou só
+  porque a conta de teste não tem Instagram conectado, como esperado);
+  QUERO em outro post → nada; comentário sem a palavra → nada.
+- **Atenção (achado):** o `instagram-webhook` não confere a assinatura da
+  Meta (`X-Hub-Signature-256`) — qualquer um que souber o endereço pode
+  mandar um comentário falso. Com o envio automático isso pesa mais.
+  Correção recomendada (mexe em autenticação → pedir aprovação do dono):
+  conferir a assinatura com o segredo do app da Meta.
+
+## 2026-10-09 — Google fica fora do produto (por enquanto)
+
+- **Decisão do dono:** o foco é o digital (Instagram); o que depende do
+  Google Cloud sai de cena. Motivo imediato: o projeto Google Cloud
+  "SalesBoost" ficou com o faturamento vencido e corre risco de suspensão.
+- **Feito:** em Conexões (`settings/IntegrationsTab.tsx`), os cartões
+  **Google Search Console** e **Google Business Profile** ficam escondidos
+  pela constante `GOOGLE_ENABLED = false` (voltar pra `true` religa). Na
+  data, nenhuma empresa em produção tinha conta Google conectada.
+- **Diagnóstico grátis:** a nota do site (PageSpeed) funciona **sem chave**
+  — o dono disse ter apagado `PAGESPEED_API_KEY` da produção, pra não depender do
+  projeto Google suspenso.
+- **Continua no código, sem tela que leve até lá:** mapa de concorrentes
+  (`map-competitors`), busca do negócio (`find-place`), respostas a
+  avaliações Google (`reply-google-review`), métricas GSC. A busca de leads
+  do painel do Owner (`find-sales-leads`) usa Google Places e para se o
+  projeto for suspenso — só afeta o dono, não clientes.
+
+## 2026-10-09 — Webhook do Instagram confere a assinatura da Meta (aprovado pelo dono)
+
+- `instagram-webhook` confere `X-Hub-Signature-256` (HMAC-SHA256 do corpo)
+  com `INSTAGRAM_APP_SECRET` (aceita também `META_APP_SECRET` /
+  `FACEBOOK_APP_SECRET`). Fecha o achado acima.
+- **Sem assinatura válida o evento NÃO é descartado** (não se perde lead
+  real se o segredo estiver trocado): comentário e DM são registrados
+  normalmente, mas **nada é enviado sozinho** — a ação vira pedido de
+  aprovação (PENDING) e o log mostra "assinatura da Meta ausente ou
+  inválida".
+- Testado: conta da assinatura comparada com `openssl` (válida → aceita;
+  maiúsculas → aceita; falsa/ausente → recusa); no ensaio, comentário QUERO
+  sem assinatura e com assinatura falsa → PENDING (antes era envio
+  automático).
+- **Depois de publicar em produção:** olhar o log no primeiro comentário
+  real. Se aparecer o aviso de assinatura inválida em comentário verdadeiro,
+  o segredo cadastrado não é o do app que assina — corrigir o secret (o
+  QUERO só passa a pedir aprovação; nada quebra).
+
+## 2026-10-09 — Estratégia escolhe os formatos (linha central + mix da semana)
+
+- Pedido do dono: a estratégia precisa ter acesso a todos os formatos de
+  conteúdo pra escolher a estratégia central e a semanal.
+- Feito: catálogo de formatos (ficha `content_formats` + formatos da
+  empresa) entra no prompt da estratégia; ela devolve linha central,
+  formatos-âncora e mix semanal (`marketing_ai_strategies.content_plan`),
+  validados em código; o Calendário da semana segue o mix. Detalhes em
+  [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md).
+- Vídeo e pacote do imóvel **não** são gerados sozinhos pelo calendário
+  (custam/precisam do imóvel) — aparecem como lista "pra fazer".
+- Migration `20261009200000_content_formats.sql` (aplicada no ensaio;
+  produção só com aprovação, junto do PR).

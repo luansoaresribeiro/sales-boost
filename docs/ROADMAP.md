@@ -63,7 +63,29 @@
 - **Alteração arriscada?** Sim — gasto novo com provedor pago
   (`HIGGSFIELD_API_KEY`), precisa de aprovação prévia do dono antes de
   qualquer chamada real que gaste crédito.
-- **Status:** ❌ não começado.
+- **Status:** ❌ não começado. (Atualização 2026-10-08: 🟡 o tour grátis de 6
+  fotos — Kling + Reel único — funciona no ensaio; os 12 tours/mês do plano
+  ainda não existem. Ver [DECISIONS.md](DECISIONS.md).)
+- **Ordem de construção dos formatos (aprovada 2026-10-09, mapa em
+  [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md)):**
+  1. **Base do tour:** tour do plano (todos os ambientes, sem repetidas) +
+     ordem automática + tela do corretor aprovar a ordem + recortes. Pronto
+     quando: imóvel com ~20 ambientes vira tour completo e 3+ recortes, sem
+     passagem que o corretor reprove.
+  2. **Pacote e semana:** ficha nova (receitas acima), kit amostra do
+     grátis, close de 5 s, "isso ou aquilo", educativo/trend, Stories com
+     recorte.
+  3. **Conversa:** "Comente TOUR" → DM com o tour (mexe em
+     `instagram-webhook`, função de cliente — pede aprovação) +
+     cartões-postais do bairro.
+  4. **Rosto e prova:** avatar do corretor (fornecedor + autorização) e
+     "Vendido!".
+- **Próximo (decisão do dono 2026-10-08): ordem automática do tour.** O
+  sistema olha as fotos, reconhece o cômodo de cada uma e o que aparece
+  pelas portas (ex.: a sala vista da entrada) e monta a ordem de caminhada
+  que passa só entre cômodos vizinhos; a sequência típica do setor fica na
+  ficha (regra 6). Critério de pronto: com as 6 fotos do teste, a ordem
+  escolhida não gera nenhuma passagem inventada que o dono reprove.
 - **Decisões de volume (2026-10-08, ver [DECISIONS.md](DECISIONS.md)):**
   12 vídeos/mês por cliente pago, espalhados pela estratégia; extra só com
   aprovação do cliente e dado real; 30 vídeos grátis/mês no diagnóstico.
@@ -215,7 +237,12 @@
      cliente real; exige aprovação antes do deploy.
    - **Fatia 4 — Stripe:** preço mensal R$2.449, anual R$1.449 (fidelidade
      12 meses, cláusula no checkout, validar com advogado), cupom de 1º mês.
-     Exige aprovação do dono.
+     Exige aprovação do dono. **Status 2026-10-08: código pronto em PR
+     (branch `stripe-4`), NADA deployado nem aplicado.** Falta: aprovar/mesclar,
+     aplicar a migration `20261008100000_billing_plans.sql` ANTES de publicar o
+     site e as functions `create-checkout`, `stripe-webhook`,
+     `owner-company-activity`, e criar os itens no Stripe de PRODUÇÃO (hoje só
+     existem no sandbox). Popup que grava `coupon_offer_shown_at` = fatia 5.
    - **Fatia 5 — Vídeo/Higgsfield + popup do cupom:** 1 vídeo real no
      acesso grátis; popup do cupom, com prazo de 7 dias contado de quando o
      cliente vê o popup. Só então a promessa pública inclui "+1 vídeo".

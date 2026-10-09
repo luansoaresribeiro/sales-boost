@@ -114,6 +114,8 @@ Pra `imoveis_rio`:
 | Tool | Status |
 |---|---|
 | `tour_virtual_tool` | `live` — funciona de verdade via `catalog-package` (`only_recipe:'carrossel_tour'`) |
+
+**Divergência de nome (2026-10-09):** `tour_virtual_tool` ("Tour virtual do imóvel — Criar" no card) gera o **carrossel de fotos**, não o vídeo. O vídeo-tour em caminhada é o botão novo "🎬 Tour em vídeo" do mesmo card (`ItemTour.tsx` → `tour-plan`). Renomear a ferramenta antiga pra "Carrossel do imóvel" fica pra etapa 2 (mexe no registro de ferramentas).
 | `criativos_anuncio_tool` | `planned`, `requires_integration:'higgsfield'` |
 | `avatar_corretor_tool` | `planned`, `requires_integration:'heygen'` — **divergência:** [DECISIONS.md](DECISIONS.md) fixa Higgsfield como único provedor; HeyGen foi citado antes de essa decisão existir. Corrigir o `requires_integration` quando o avatar for de fato implementado. |
 | `voz_corretor_tool` | `planned` |
@@ -121,3 +123,75 @@ Pra `imoveis_rio`:
 Tools `planned` mostram "Em breve" + botão "Quero quando lançar" —
 registra em `marketing_ai_tool_interest`, contagem visível no painel Owner
 (`BusinessTypesPanel.tsx`).
+
+## Mapa de formatos (aprovado 2026-10-09 — plano, ainda não implementado)
+
+> **Atualização 2:** a lista de formatos agora vive na ficha
+> (`content_formats`) e a estratégia escolhe dela — ver "Catálogo de
+> formatos → estratégia → calendário" no fim deste doc.
+
+> **Atualização (mesmo dia):** o dono tirou o tour completo e os recortes —
+> o vídeo é ISCA: 1 cômodo, 2 cômodos vizinhos ou abertura de fora com a
+> vista (já implementado: `item-videos`, botão "🎬 Vídeos e resposta do
+> QUERO"). A palavra é QUERO (não TOUR) e a DM leva os dados cadastrados +
+> convite pra visita, não o vídeo inteiro. As linhas "Tour completo",
+> "Recorte do tour" e "Tour como isca na DM" da tabela abaixo ficam como
+> histórico. Ver [DECISIONS.md](DECISIONS.md).
+
+Cada formato novo entra numa peça que já existe; nada de código específico
+de setor (regra 6) — receitas, ganchos e CTAs ficam na ficha
+(`vertical_playbooks.config`). Decisão em [DECISIONS.md](DECISIONS.md).
+
+| Formato | Pilar | Onde nasce | Mídia | Custo de geração |
+|---|---|---|---|---|
+| Tour completo em caminhada | imoveis | pacote do imóvel (1x por imóvel) | `video_tours` kind `plan` | ~US$ 0,65 por passagem (estimativa) |
+| Recorte do tour (Reels 15-30 s) | imoveis | pacote do imóvel, espalhado nas semanas | trecho do tour | zero |
+| Stories com recorte + enquete/caixa (ideia 3) | imoveis | planejador da semana | trecho do tour | zero |
+| Tour como isca na DM (ideia 1) | imoveis | CTA "Comente TOUR" no Reels → DM com o tour inteiro | tour completo | zero (DM com aprovação do modelo de mensagem, regra 1) |
+| Close de 5 s de um detalhe (ideia 4) | imoveis | pacote do imóvel | 1 trecho Kling (modo `per_photo`) | ~US$ 0,54 |
+| Criativo bonito com foto | imoveis | pacote do imóvel (já existe: carrossel, "detalhe") | foto real + `render-format` | centavos |
+| "Isso ou aquilo" (ideia 2) | imoveis | planejador da semana (precisa de 2 imóveis) | 2 fotos reais | centavos |
+| Post educativo / trend | educacao | planejador da semana (receitas novas na ficha; hoje a lista está vazia) | foto real + texto | centavos |
+| Cartão-postal do bairro (ideia 5) | bairro_estilo_vida | pacote do imóvel (endereço) | Wikimedia (licença + crédito) | zero |
+| Avatar do corretor abrindo o tour (ideia 6) | marca_pessoal_prova_social | junto do tour | foto + autorização do corretor | a confirmar (fornecedor) |
+| "Vendido!" (ideia 7) | marca_pessoal_prova_social | quando o imóvel sai do catálogo | foto real + autorização | centavos |
+
+Na ficha `imoveis_rio`: `item_package` troca `reels_tour_fotos_reais` por
+`tour_completo` + `reels_recorte_tour` + `stories_close_detalhe` +
+`post_cartao_postal`; `production_recipes.educacao` ganha
+`carrossel_educativo` e `post_trend`; `marca_pessoal_prova_social` ganha
+`intro_avatar` e `post_vendido`; `ctas`/`hooks_by_pillar` ganham "Comente
+TOUR". Mudar a ficha em produção é SQL de produção (vai num PR).
+
+## Catálogo de formatos → estratégia → calendário (2026-10-09)
+
+Implementado. A estratégia (Hermes, `strategy-generate`) agora enxerga
+**todos os formatos** que o sistema sabe produzir e decide:
+
+1. **Linha central de conteúdo** + 2-4 **formatos-âncora** (parte 1, junto
+   com a tese);
+2. **Mix da semana** — quantas peças de cada formato por semana, cada uma
+   ligada a um objetivo da tese (parte 2 e no refresh mensal).
+
+Fica em `marketing_ai_strategies.content_plan` e aparece na tela da
+Estratégia (bloco "Conteúdo & Campanha").
+
+- **Catálogo** (`_shared/formatCatalog.ts`): ficha do setor
+  (`vertical_playbooks.config.content_formats` — chave, nome, pilar, quem
+  produz, status, custo) + formatos da aba Formatos da empresa + o post
+  genérico com template da marca. Sem código de setor.
+- **Validação em código:** só entra no mix formato que existe no catálogo e
+  "funciona hoje"; máximo 14 peças/semana (regra 1-2/dia).
+- **Calendário da semana** (`planWeekForCompany`): segue o mix — o total de
+  peças geradas mira o pedido pela estratégia e cada post leva o formato e o
+  objetivo da vez (seed). O que não dá pra gerar sozinho (vídeo do imóvel,
+  pacote do item, resposta QUERO) volta como lista "a estratégia também
+  pede nesta semana" na tela do Calendário — nada que custe dinheiro é
+  gerado sem o dono pedir.
+- **Stories separado não entra** (regra do dono, 2026-09): o calendário só
+  tem post orgânico.
+- **Não testado ponta a ponta no ensaio:** o ensaio não tem
+  `ANTHROPIC_API_KEY`, então a geração real da estratégia não rodou lá.
+  Testado: validação do catálogo/mix (casos de chave inventada, "em breve",
+  repetida, acima do teto), compilação das duas functions e a tela com um
+  plano montado a partir do catálogo real (desktop e 390 px, sem erro).

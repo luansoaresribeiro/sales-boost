@@ -59,6 +59,17 @@ casa (fachada → sala → cozinha → quartos → área externa), sem montagem.
 a API gerar 1 vídeo único a partir de várias fotos, mostrar como opção
 alternativa.
 
+**Divergência / decisão do dono (2026-10-08/09):** o tour virtual virou
+**vídeo único em modo caminhada** (cada trecho vai de uma foto real até a
+seguinte, `last_image_url` do Kling 3.0; ver [DECISIONS.md](DECISIONS.md)),
+não carrossel de clipes soltos. **Esta mesma configuração vale pro plano
+pago** — o grátis é só a versão curta (6 fotos). No plano: o tour usa **todos
+os ambientes** do imóvel (fotos repetidas do mesmo cômodo são descartadas),
+a **ordem é decidida pelo sistema** (cômodos vizinhos; passagem sem prova
+na foto fica marcada "não confirmado") e o **corretor aprova a ordem antes
+de gerar**. Modelo de volume (tour completo por imóvel + recortes, ou N
+tours/mês) ainda em decisão do dono.
+
 **(2) Criativos de anúncio:** visual do Higgsfield a partir da foto real +
 texto via `render-format`.
 
@@ -124,3 +135,11 @@ function da Parte B deve:
 
 A Parte A (tela `TrialVideoPreviews` no resumo do trial) só lê dados e não
 chama nenhuma API de vídeo.
+
+**Divergência (2026-10-08):** a Parte B foi implementada como **tour
+virtual**: `supabase/functions/trial-video` (ações `start` com 6
+`photo_urls`, `status`, `coupon_seen`) + tabela `video_tours` + colagem em
+`_shared/mp4concat.ts` + tela `FreeVideoCard`. A trava segue a regra acima
+(linha `claimed` antes de chamar a Higgsfield; falha de trecho tenta 1x de
+novo, depois `failed` e a trava é apagada). Ver
+[DECISIONS.md](DECISIONS.md) "Vídeo grátis vira TOUR VIRTUAL".
