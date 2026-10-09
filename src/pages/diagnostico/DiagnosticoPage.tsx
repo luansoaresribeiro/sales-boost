@@ -6,6 +6,7 @@ import {
   type InstagramData, type Verdict, type CriterionKey,
 } from '../../lib/growthScore'
 import { useLang } from '../../contexts/LanguageContext'
+import MarketSection from './MarketSection'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -336,6 +337,9 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
             ))}
           </div>
         </details>
+
+        {/* Diagnóstico v2: concorrentes + o que está em alta (diagnosis-market) */}
+        {!noIgYet && <MarketSection diagnosticId={diag.id} own={diag.instagram_data} lang={lang} />}
 
         {/* CTA */}
         <button
