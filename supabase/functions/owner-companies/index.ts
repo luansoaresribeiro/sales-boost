@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
 
     const { data: companies } = await admin
       .from('companies')
-      .select('id, user_id, business_name, business_type, city, website_url, plan, active, created_at, trial_expires_at, trial_cancelled_at, stripe_subscription_id, subscription_status, current_period_end, manual_access, access_blocked_at, agent_enabled')
+      .select('id, user_id, business_name, business_type, profile_type, city, website_url, plan, active, created_at, trial_expires_at, trial_cancelled_at, stripe_subscription_id, subscription_status, current_period_end, manual_access, access_blocked_at, agent_enabled')
 
     const companyByUserId = Object.fromEntries((companies ?? []).map(c => [c.user_id, c]))
 
@@ -65,6 +65,7 @@ Deno.serve(async (req) => {
           id: co?.id ?? null,
           business_name: co?.business_name ?? null,
           business_type: co?.business_type ?? null,
+          profile_type: co?.profile_type ?? null,
           city: co?.city ?? null,
           website_url: co?.website_url ?? null,
           plan: co?.plan ?? null,

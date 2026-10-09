@@ -633,3 +633,23 @@ grátis de 30 s, acima — mantidos como histórico):
 - Conferido antes: chave `sk_live` lê os preços reais; cupom
   `SB_PRIMEIRO_MES` existe no Stripe real; chave do Higgsfield aceita.
 - Falta: o dono juntar o PR e publicar o site.
+
+## 2026-10-09 — Perfil pessoal x profissional + conta logada não fica mais travada no cadastro
+
+- **Decisão do dono:** o nome da empresa vira opcional. Sem nome, o perfil é
+  **pessoal**; com nome, **profissional**. É só um rótulo pra organizar — não
+  muda nada no que o produto faz.
+- **Como ficou:** `companies.profile_type` (`profissional` padrão |
+  `pessoal`, migration `20261010100000_profile_type.sql`). Sem nome, o
+  `business_name` vira "Perfil pessoal" (o banco exige um nome). O cadastro
+  (`OnboardingPage`) manda `onboarding_context.profile_type`;
+  `claim-diagnostic` grava na empresa; `run-diagnosis` aceita nome vazio.
+  No `/setup`, apagar o nome volta pra "Perfil pessoal"; escrever um nome
+  vira profissional. O painel do Owner mostra o rótulo na lista.
+- **Correção junto:** quem já tinha conta (logado, sem empresa) terminava o
+  cadastro e o botão mandava criar uma conta NOVA — o diagnóstico não ligava
+  à conta e a pessoa ficava travada. Agora o cadastro liga o diagnóstico na
+  hora (`claim-diagnostic`) e o botão leva pro `/setup`.
+- Testado no ensaio: conta logada, cadastro sem nome → empresa "Perfil
+  pessoal", `profile_type=pessoal`, botão final → `/setup`; empresas antigas
+  ficaram `profissional`.

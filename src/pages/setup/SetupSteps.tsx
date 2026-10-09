@@ -10,14 +10,14 @@ const TX = {
   pt: {
     done: 'Pronto', errName: 'Informe o nome do negócio.', errCity: 'Informe a cidade.',
     errPhone: 'Informe o telefone com DDD, ex.: (21) 99999-9999.', errSave: 'Não consegui salvar. Tente de novo.',
-    nameL: 'Nome do negócio', nameP: 'Ex: Imobiliária Silva', cityL: 'Cidade / UF', cityP: 'Ex: Rio de Janeiro, RJ',
+    nameL: 'Nome da empresa (opcional — em branco fica "Perfil pessoal")', nameP: 'Ex: Imobiliária Silva', cityL: 'Cidade / UF', cityP: 'Ex: Rio de Janeiro, RJ',
     phoneL: 'Telefone / WhatsApp', saving: 'Salvando...', saveData: 'Salvar dados',
     select: 'Selecione...', saveAnswers: 'Salvar respostas', answerAll: 'Responda todas pra salvar',
   },
   en: {
     done: 'Done', errName: 'Enter the business name.', errCity: 'Enter the city.',
     errPhone: 'Enter the phone number with area code, e.g. (21) 99999-9999.', errSave: "Couldn't save. Please try again.",
-    nameL: 'Business name', nameP: 'E.g.: Silva Realty', cityL: 'City / State', cityP: 'E.g.: Rio de Janeiro, RJ',
+    nameL: 'Company name (optional — blank means "Perfil pessoal")', nameP: 'E.g.: Silva Realty', cityL: 'City / State', cityP: 'E.g.: Rio de Janeiro, RJ',
     phoneL: 'Phone / WhatsApp', saving: 'Saving...', saveData: 'Save details',
     select: 'Select...', saveAnswers: 'Save answers', answerAll: 'Answer all to save',
   },
@@ -65,6 +65,8 @@ export function StepShell({ n, title, hint, done, open, onToggle, children }: {
   )
 }
 
+const PERSONAL_PROFILE_NAME = 'Perfil pessoal'
+
 // 1 — Dados do negócio (mesmos campos de Configurações: nome, cidade, telefone).
 export function DadosForm({ companyId, initial, onSaved }: { companyId: string; initial: BusinessData; onSaved: () => void }) {
   const tx = TX[useLang().lang]
@@ -74,12 +76,15 @@ export function DadosForm({ companyId, initial, onSaved }: { companyId: string; 
   const valid = businessDataValid(b)
   const save = async () => {
     setError('')
-    if (b.business_name.trim().length < 2) return setError(tx.errName)
+    // Nome da empresa opcional: em branco = perfil pessoal (só um rótulo).
+    const name = b.business_name.trim() || PERSONAL_PROFILE_NAME
+    if (name.length < 2) return setError(tx.errName)
     if (b.city.trim().length < 2) return setError(tx.errCity)
     if (phoneDigits(b.phone).length < 10) return setError(tx.errPhone)
     setSaving(true)
     const { error: e } = await supabase.from('companies').update({
-      business_name: b.business_name.trim(), city: b.city.trim(), phone: b.phone.trim(), updated_at: new Date().toISOString(),
+      business_name: name, profile_type: name === PERSONAL_PROFILE_NAME ? 'pessoal' : 'profissional',
+      city: b.city.trim(), phone: b.phone.trim(), updated_at: new Date().toISOString(),
     }).eq('id', companyId)
     setSaving(false)
     if (e) return setError(tx.errSave)

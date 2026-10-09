@@ -16,6 +16,7 @@ interface Company {
   business_name: string | null
   user_email: string
   business_type: string | null
+  profile_type?: 'profissional' | 'pessoal' | null
   city: string | null
   website_url: string | null
   plan: string | null
@@ -231,7 +232,10 @@ export default function OwnerPage() {
                     <div style={{ fontSize: '11px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.website_url}</div>
                   )}
                 </div>
-                <div style={{ fontSize: '12px', color: MUTED }}>{c.business_type ?? '—'}</div>
+                <div style={{ fontSize: '12px', color: MUTED }}>
+                  {c.business_type ?? '—'}
+                  {c.profile_type && <div style={{ fontSize: '10.5px', marginTop: '2px', color: c.profile_type === 'pessoal' ? '#a78bfa' : 'rgba(255,255,255,0.55)' }}>{c.profile_type === 'pessoal' ? 'Perfil pessoal' : 'Perfil profissional'}</div>}
+                </div>
                 <div style={{ fontSize: '12px', color: MUTED }}>{c.city ?? '—'}</div>
                 <div>
                   {am ? (

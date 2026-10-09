@@ -82,7 +82,7 @@ const TX = {
     s3t: 'Como você traz clientes hoje?', s3s: 'Marque os canais que usa. O Instagram é a base do seu diagnóstico gratuito.', s3chan: 'Canais atuais', s3ig: 'Instagram do negócio', s3igp: '@seuperfil ou instagram.com/seuperfil',
     s3igBad: '⚠️ Não entendi esse Instagram. Digite assim: @seuperfil', s3igHint: 'Olhamos seus posts, engajamento e perfil pra montar sua nota (só dados públicos).',
     s3site: 'Site (opcional)', s3siteBad: '⚠️ Esse endereço parece errado. Use: https://seunegocio.com.br — ou deixe em branco se não tem site.', s3siteHint: 'Se tiver site, analisamos a velocidade dele também. Não tem? Tudo bem, é só deixar em branco.', s3fb: 'Facebook (opcional)',
-    s4t: 'É isso que entendemos?', s4s: 'Confira o resumo. Depois é só um último passo pra criar seu painel.', s4name: 'Nome do negócio', s4namep: 'Ex: Studio Beleza Carioca', s4city: 'Cidade / UF', s4cityp: 'Ex: Rio de Janeiro, RJ',
+    s4t: 'É isso que entendemos?', s4s: 'Confira o resumo. Depois é só um último passo pra criar seu painel.', s4name: 'Nome da empresa (opcional)', s4namep: 'Ex: Studio Beleza Carioca', s4nameh: 'Sem empresa? Pode deixar em branco — seu perfil fica como pessoal. Não muda nada no que o Sales Boost faz.', s4city: 'Cidade / UF', s4cityp: 'Ex: Rio de Janeiro, RJ',
     s4mail: 'Seu e-mail', s4mailp: 'voce@seunegocio.com.br', s4mailh: 'Usado pra acessar seu painel e receber alertas.', s4phone: 'Telefone / WhatsApp (opcional)',
     back: '← Voltar', cont: 'Continuar →', create: 'Criar meu painel →', priv1: 'Ao continuar, você concorda com nossa', priv2: 'política de privacidade', priv3: '. Seus dados são usados só pra entender seu negócio e gerar o diagnóstico.',
     sum: { biz: 'Negócio', type: 'Tipo', ideal: 'Cliente ideal', goal: 'Objetivo principal', ch: 'Maior desafio', chan: 'Canais atuais', stage: 'Estágio', undef: 'ainda não definidos' },
@@ -104,7 +104,7 @@ const TX = {
     s3t: 'How do you bring in customers today?', s3s: 'Select the channels you use. Instagram is the basis of your free diagnosis.', s3chan: 'Current channels', s3ig: 'Business Instagram', s3igp: '@yourprofile or instagram.com/yourprofile',
     s3igBad: '⚠️ I did not understand this Instagram. Type it like this: @yourprofile', s3igHint: 'We look at your posts, engagement and profile to build your score (public data only).',
     s3site: 'Website (optional)', s3siteBad: '⚠️ This address looks wrong. Use: https://yourbusiness.com — or leave it blank if you have no website.', s3siteHint: 'If you have a website, we also analyze its speed. Do not have one? That is fine, just leave it blank.', s3fb: 'Facebook (optional)',
-    s4t: 'Is this what we understood?', s4s: 'Check the summary. Then there is just one last step to create your dashboard.', s4name: 'Business name', s4namep: 'E.g.: Carioca Beauty Studio', s4city: 'City / State', s4cityp: 'E.g.: Rio de Janeiro, RJ',
+    s4t: 'Is this what we understood?', s4s: 'Check the summary. Then there is just one last step to create your dashboard.', s4name: 'Company name (optional)', s4namep: 'E.g.: Carioca Beauty Studio', s4nameh: 'No company? Leave it blank — your profile is marked as personal. It changes nothing in what Sales Boost does.', s4city: 'City / State', s4cityp: 'E.g.: Rio de Janeiro, RJ',
     s4mail: 'Your email', s4mailp: 'you@yourbusiness.com', s4mailh: 'Used to access your dashboard and receive alerts.', s4phone: 'Phone / WhatsApp (optional)',
     back: '← Back', cont: 'Continue →', create: 'Create my dashboard →', priv1: 'By continuing, you agree to our', priv2: 'privacy policy', priv3: '. Your data is used only to understand your business and generate the diagnosis.',
     sum: { biz: 'Business', type: 'Type', ideal: 'Ideal customer', goal: 'Main goal', ch: 'Biggest challenge', chan: 'Current channels', stage: 'Stage', undef: 'not defined yet' },
@@ -293,6 +293,9 @@ function buildContext(d: OnboardingData) {
     onboarding_summary: summary,
     agent_business_interpretation: interpretation,
     playbook_answers: d.playbook_answers,
+    // Sem nome de empresa = perfil pessoal (só um rótulo pra organizar,
+    // decisão do dono 2026-10-09 — não muda nada no que o produto faz).
+    profile_type: d.business_name.trim() ? 'profissional' : 'pessoal',
   }
 }
 
@@ -345,6 +348,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   const [error, setError] = useState('')
   const [businessTypes, setBusinessTypes] = useState<string[]>([])
   const [diagnosticId, setDiagnosticId] = useState<string | null>(null)
+  const [claimed, setClaimed] = useState(false)
   const [fichaName, setFichaName] = useState('')
   const [fichaQuestions, setFichaQuestions] = useState<PlaybookQuestion[]>([])
 
@@ -385,7 +389,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
     if (step === 1) return !!(data.ideal_customer.trim() && data.business_stage)
     if (step === 2) return !!data.goal
     if (step === 3) return !!normalizeInstagram(data.instagram_url) && !siteInvalid
-    if (step === 4) return !!(data.business_name.trim() && data.city.trim() && data.contact_email.trim())
+    if (step === 4) return !!(data.city.trim() && data.contact_email.trim())
     return false
   }
 
@@ -410,6 +414,17 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error ?? t.procErr)
+      // Quem já está logado (conta criada antes de ter empresa) não passa pelo
+      // cadastro com ?claim= — liga o diagnóstico à conta aqui mesmo, senão o
+      // botão final mandava criar uma conta nova e a pessoa ficava travada.
+      if (session && !embedded) {
+        const claim = await fetch(`${supabaseUrl}/functions/v1/claim-diagnostic`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ diagnostic_id: result.id }),
+        })
+        if (claim.ok) setClaimed(true)
+      }
       clearInterval(interval)
       setSubmitting(false)
       if (embedded && onDone) onDone(result.id)
@@ -462,7 +477,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
               </div>
             ))}
           </div>
-          <button onClick={() => navigate(`/diagnostico/${diagnosticId}`)}
+          <button onClick={() => navigate(claimed ? '/setup' : `/diagnostico/${diagnosticId}`)}
             style={{ width: '100%', padding: '14px 24px', background: ORANGE, color: '#000', fontWeight: 800, fontSize: '15px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontFamily: D, letterSpacing: '-0.01em', boxShadow: '0 8px 20px rgba(255,109,41,0.3)' }}>
             {t.enter}
           </button>
@@ -537,7 +552,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                 <div style={{ background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.18)', borderRadius: '12px', padding: '14px 16px', marginBottom: '20px', fontSize: '12.5px', color: 'white', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                   {displaySummary(data, lang)}
                 </div>
-                <Field label={t.s4name} value={data.business_name} onChange={set('business_name')} placeholder={t.s4namep} required />
+                <Field label={t.s4name} value={data.business_name} onChange={set('business_name')} placeholder={t.s4namep} hint={t.s4nameh} />
                 <Field label={t.s4city} value={data.city} onChange={set('city')} placeholder={t.s4cityp} required />
                 <Field label={t.s4mail} value={data.contact_email} onChange={set('contact_email')} type="email" placeholder={t.s4mailp} required hint={t.s4mailh} />
                 <Field label={t.s4phone} value={data.phone} onChange={set('phone')} placeholder="(21) 99999-9999" />
