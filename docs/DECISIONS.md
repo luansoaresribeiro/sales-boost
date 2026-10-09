@@ -568,3 +568,21 @@ grátis de 30 s, acima — mantidos como histórico):
   mandar um comentário falso. Com o envio automático isso pesa mais.
   Correção recomendada (mexe em autenticação → pedir aprovação do dono):
   conferir a assinatura com o segredo do app da Meta.
+
+## 2026-10-09 — Google fica fora do produto (por enquanto)
+
+- **Decisão do dono:** o foco é o digital (Instagram); o que depende do
+  Google Cloud sai de cena. Motivo imediato: o projeto Google Cloud
+  "SalesBoost" ficou com o faturamento vencido e corre risco de suspensão.
+- **Feito:** em Conexões (`settings/IntegrationsTab.tsx`), os cartões
+  **Google Search Console** e **Google Business Profile** ficam escondidos
+  pela constante `GOOGLE_ENABLED = false` (voltar pra `true` religa). Na
+  data, nenhuma empresa em produção tinha conta Google conectada.
+- **Diagnóstico grátis:** a nota do site (PageSpeed) funciona **sem chave**
+  — o dono disse ter apagado `PAGESPEED_API_KEY` da produção, pra não depender do
+  projeto Google suspenso.
+- **Continua no código, sem tela que leve até lá:** mapa de concorrentes
+  (`map-competitors`), busca do negócio (`find-place`), respostas a
+  avaliações Google (`reply-google-review`), métricas GSC. A busca de leads
+  do painel do Owner (`find-sales-leads`) usa Google Places e para se o
+  projeto for suspenso — só afeta o dono, não clientes.
