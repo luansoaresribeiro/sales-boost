@@ -20,6 +20,7 @@
  *     Testes liga isso, e auto_daily_test_image decide se gera imagem junto.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { weeklyMixPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -713,6 +714,9 @@ function nextWeekDates(): { iso: string; weekday: string }[] {
 // Copywriter marca em cada post (story_worthy/story_note, ver
 // generateForCompany) se aquele post específico também vale a pena repostar
 // nos Stories tal como está — uma anotação, não uma peça duplicada.
+// Mix da estratégia (2026-10-09): quando a estratégia ativa escolheu o mix
+// semanal de formatos (content_plan.weekly_mix), cada peça recebe um seed com
+// o formato/objetivo da vez; sem estratégia, vale o comportamento abaixo.
 // A aba Ideias também fica de fora dessa decisão por enquanto — sem
 // seed/ideaId, cada peça chama generateForCompany "solta", e o Diretor
 // decide o formato sozinho pela rotação automática de sempre (round-robin
@@ -739,21 +743,26 @@ async function fetchWeekPillarOccupancy(admin: SupaClient, companyId: string, da
   return `\nJá existe conteúdo de pacote (ex: imóvel específico) agendado essa semana nestes pilares: ${busy.map(([p, n]) => `${p} (${n})`).join(', ')} — evite empilhar mais conteúdo no mesmo tema, dê espaço pros outros pilares.`
 }
 
-async function planWeekForCompany(admin: SupaClient, anthropicKey: string, company: Company, auth: { bearer: string; isCron: boolean; cronSecret?: string }): Promise<{ planned: number; days: { date: string; posts: number; note: string }[] }> {
+async function planWeekForCompany(admin: SupaClient, anthropicKey: string, company: Company, auth: { bearer: string; isCron: boolean; cronSecret?: string }): Promise<{ planned: number; days: { date: string; posts: number; note: string }[]; todo: { format: string; name: string; per_week: number; purpose: string }[] }> {
   const dates = nextWeekDates()
-  const [{ data: insRows }, { data: pendingRows }, playbookBlock, pillarOccupancyNote] = await Promise.all([
+  const [{ data: insRows }, { data: pendingRows }, playbookBlock, pillarOccupancyNote, { data: stratRow }] = await Promise.all([
     admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(8),
     admin.from('marketing_ai_test_content').select('id').eq('company_id', company.id).eq('status', 'draft').is('quality_score', null),
     fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
     fetchWeekPillarOccupancy(admin, company.id, dates.map(d => d.iso), await fetchPillarWeights(admin, company.vertical_key ?? 'generico')),
+    admin.from('marketing_ai_strategies').select('content_plan').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
   ])
+  // Mix da semana escolhido pela estratégia (Hermes): o calendário segue as
+  // quantidades e os formatos; o que não dá pra gerar sozinho (vídeo, pacote
+  // do item, DM) volta como lista "pra fazer" pro dono.
+  const mix = weeklyMixPlan((stratRow?.content_plan ?? null) as ContentPlan | null)
   const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
   const pendingCount = (pendingRows ?? []).length
 
   const prompt = `Você é o planejador de conteúdo semanal de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
 ${company.business_description ? `O que o negócio faz: ${company.business_description}.` : ''}${playbookBlock}${pillarOccupancyNote}
 
-Monte a CADÊNCIA da PRÓXIMA semana inteira: pra CADA um dos 7 dias, decida entre 1 ou 2 posts orgânicos (nunca 0 — todo dia tem pelo menos 1; nunca mais que 2). Não escolha o tema/ideia aqui — só a cadência (isso é decidido depois, peça por peça, pelo Diretor Criativo). Considere que ${pendingCount} peça(s) recente(s) ainda nem foram avaliadas — se já tem bastante coisa parada, prefira 1 post nos dias mais fracos em vez de 2.
+Monte a CADÊNCIA da PRÓXIMA semana inteira: pra CADA um dos 7 dias, decida entre 1 ou 2 posts orgânicos (nunca 0 — todo dia tem pelo menos 1; nunca mais que 2).${mix.auto.length ? ` A estratégia ativa pede ${mix.autoTotal} peça(s) geradas nesta semana — faça a soma dos 7 dias chegar o mais perto possível disso.` : ''} Não escolha o tema/ideia aqui — só a cadência (isso é decidido depois, peça por peça, pelo Diretor Criativo). Considere que ${pendingCount} peça(s) recente(s) ainda nem foram avaliadas — se já tem bastante coisa parada, prefira 1 post nos dias mais fracos em vez de 2.
 ${insights.length ? `\nInsights abertos (ajudam a priorizar QUAIS dias merecem 2 posts):\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
 
 Dias (use EXATAMENTE estas datas, uma linha por dia, na mesma ordem):
@@ -765,22 +774,25 @@ Retorne APENAS um JSON array, um item por dia, nesta ordem (sempre os 7 dias):
   const raw = await callClaude(anthropicKey, prompt, 900)
   const parsedPlan = (parseArr(raw) as { date?: string; posts?: number; note?: string }[]).slice(0, 7)
 
-  let planned = 0
+  let planned = 0, slot = 0
   const days: { date: string; posts: number; note: string }[] = []
   for (const p of parsedPlan) {
     const postsCount = p.posts === 2 ? 2 : 1
     const date = p.date && /^\d{4}-\d{2}-\d{2}$/.test(p.date) ? p.date : dates[0].iso
     let ok = 0
     for (let i = 0; i < postsCount; i++) {
+      // Com mix da estratégia: cada peça leva o formato/objetivo da vez (fila
+      // intercalada). Sem estratégia: sem seed de propósito — ver comentário acima.
+      const pick = mix.auto.length ? mix.auto[slot++ % mix.auto.length] : null
+      const seed = pick ? { title: pick.name, angle: `Pilar ${pick.pillar}: ${pick.purpose || 'serve a estratégia ativa'}`, format: 'foto' } : null
       try {
-        // Sem seed/ideaId de propósito — ver a regra no comentário acima da função.
-        await generateForCompany(admin, anthropicKey, company, 'organico', { ...auth, plannedFor: date })
+        await generateForCompany(admin, anthropicKey, company, 'organico', { ...auth, plannedFor: date, seed })
         planned++; ok++
       } catch (e) { console.error('planWeekForCompany: falhou pra', company.id, date, e) }
     }
     days.push({ date, posts: ok, note: String(p.note ?? '') })
   }
-  return { planned, days }
+  return { planned, days, todo: mix.todo }
 }
 
 const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language, telegram_chat_id, vertical_key, playbook_answers'

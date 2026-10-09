@@ -605,3 +605,17 @@ grátis de 30 s, acima — mantidos como histórico):
   real. Se aparecer o aviso de assinatura inválida em comentário verdadeiro,
   o segredo cadastrado não é o do app que assina — corrigir o secret (o
   QUERO só passa a pedir aprovação; nada quebra).
+
+## 2026-10-09 — Estratégia escolhe os formatos (linha central + mix da semana)
+
+- Pedido do dono: a estratégia precisa ter acesso a todos os formatos de
+  conteúdo pra escolher a estratégia central e a semanal.
+- Feito: catálogo de formatos (ficha `content_formats` + formatos da
+  empresa) entra no prompt da estratégia; ela devolve linha central,
+  formatos-âncora e mix semanal (`marketing_ai_strategies.content_plan`),
+  validados em código; o Calendário da semana segue o mix. Detalhes em
+  [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md).
+- Vídeo e pacote do imóvel **não** são gerados sozinhos pelo calendário
+  (custam/precisam do imóvel) — aparecem como lista "pra fazer".
+- Migration `20261009200000_content_formats.sql` (aplicada no ensaio;
+  produção só com aprovação, junto do PR).

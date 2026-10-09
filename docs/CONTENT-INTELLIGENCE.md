@@ -126,6 +126,10 @@ registra em `marketing_ai_tool_interest`, contagem visível no painel Owner
 
 ## Mapa de formatos (aprovado 2026-10-09 — plano, ainda não implementado)
 
+> **Atualização 2:** a lista de formatos agora vive na ficha
+> (`content_formats`) e a estratégia escolhe dela — ver "Catálogo de
+> formatos → estratégia → calendário" no fim deste doc.
+
 > **Atualização (mesmo dia):** o dono tirou o tour completo e os recortes —
 > o vídeo é ISCA: 1 cômodo, 2 cômodos vizinhos ou abertura de fora com a
 > vista (já implementado: `item-videos`, botão "🎬 Vídeos e resposta do
@@ -158,3 +162,36 @@ Na ficha `imoveis_rio`: `item_package` troca `reels_tour_fotos_reais` por
 `carrossel_educativo` e `post_trend`; `marca_pessoal_prova_social` ganha
 `intro_avatar` e `post_vendido`; `ctas`/`hooks_by_pillar` ganham "Comente
 TOUR". Mudar a ficha em produção é SQL de produção (vai num PR).
+
+## Catálogo de formatos → estratégia → calendário (2026-10-09)
+
+Implementado. A estratégia (Hermes, `strategy-generate`) agora enxerga
+**todos os formatos** que o sistema sabe produzir e decide:
+
+1. **Linha central de conteúdo** + 2-4 **formatos-âncora** (parte 1, junto
+   com a tese);
+2. **Mix da semana** — quantas peças de cada formato por semana, cada uma
+   ligada a um objetivo da tese (parte 2 e no refresh mensal).
+
+Fica em `marketing_ai_strategies.content_plan` e aparece na tela da
+Estratégia (bloco "Conteúdo & Campanha").
+
+- **Catálogo** (`_shared/formatCatalog.ts`): ficha do setor
+  (`vertical_playbooks.config.content_formats` — chave, nome, pilar, quem
+  produz, status, custo) + formatos da aba Formatos da empresa + o post
+  genérico com template da marca. Sem código de setor.
+- **Validação em código:** só entra no mix formato que existe no catálogo e
+  "funciona hoje"; máximo 14 peças/semana (regra 1-2/dia).
+- **Calendário da semana** (`planWeekForCompany`): segue o mix — o total de
+  peças geradas mira o pedido pela estratégia e cada post leva o formato e o
+  objetivo da vez (seed). O que não dá pra gerar sozinho (vídeo do imóvel,
+  pacote do item, resposta QUERO) volta como lista "a estratégia também
+  pede nesta semana" na tela do Calendário — nada que custe dinheiro é
+  gerado sem o dono pedir.
+- **Stories separado não entra** (regra do dono, 2026-09): o calendário só
+  tem post orgânico.
+- **Não testado ponta a ponta no ensaio:** o ensaio não tem
+  `ANTHROPIC_API_KEY`, então a geração real da estratégia não rodou lá.
+  Testado: validação do catálogo/mix (casos de chave inventada, "em breve",
+  repetida, acima do teto), compilação das duas functions e a tela com um
+  plano montado a partir do catálogo real (desktop e 390 px, sem erro).

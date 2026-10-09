@@ -58,9 +58,15 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { fetchLearning, learningPromptBlock } from '../_shared/learning.ts'
+import { fetchFormatCatalog, formatCatalogBlock, sanitizeContentPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 type SupaClient = ReturnType<typeof createClient>
+
+// Mix semanal de formatos (estratégia → calendário). Validado por
+// sanitizeContentPlan: só chaves do catálogo que funcionam hoje, máx. 14/semana.
+const WEEKLY_MIX_RULES = `- MIX DA SEMANA: escolha no CATÁLOGO DE FORMATOS quantas peças de cada formato entram por semana pra servir a tese (total entre 7 e 14 — o calendário faz 1-2 por dia). Só formatos que "funcionam hoje"; nada "em breve". Formatos de vídeo custam — use com moderação e diga por quê. Cada item diz qual objetivo da tese ele serve.`
+const WEEKLY_MIX_SHAPE = '[{"format":"chave do catálogo","per_week":1,"pillar":"","purpose":"qual parte da tese essa peça serve, 1 frase"}]'
 
 const STALE_GENERATING_MS = 10 * 60 * 1000 // ponto 3: 'generating' há mais de 10min = tratado como 'failed'
 
@@ -321,13 +327,14 @@ async function runStep1(
     const t0 = Date.now()
     const lap = (label: string) => console.log(`TIMING strategy-generate step1[${strategyId}]: ${label} = ${Date.now() - t0}ms`)
 
-    const [{ data: cfgRow }, dataAgentState, baseline, playbookBlock] = await Promise.all([
+    const [{ data: cfgRow }, dataAgentState, baseline, playbookBlock, formats] = await Promise.all([
       admin.from('marketing_ai_config').select('brand_voice, target_audience, content_pillars, marketing_goals').eq('company_id', company.id).maybeSingle(),
       fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'state'),
       fetchRealBaseline(admin, company.id),
       fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
+      fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
     ])
-    lap('data-agent + baseline + playbook (paralelo)')
+    lap('data-agent + baseline + playbook + formatos (paralelo)')
     const cfg = (cfgRow ?? {}) as { brand_voice?: string; target_audience?: string; content_pillars?: string[]; marketing_goals?: string }
 
     let parentContext = ''
@@ -340,7 +347,7 @@ async function runStep1(
 
 Sua fonte de verdade são os 9 domínios do Data Agent (Business/Customer/Market/Competition/Digital/Content/History/Resources/Performance). Não analise os domínios isolados — procure relações entre eles antes de decidir (ex: concorrente compete por preço + cliente reclama de preço + negócio tem margem melhor em serviço premium + histórico mostra que desconto atraiu cliente ruim + performance mostra que cliente premium tem LTV maior ⇒ a resposta não é baixar preço, é reposicionar por valor).
 
-${businessPreamble(company, cfg)}${playbookBlock}
+${businessPreamble(company, cfg)}${playbookBlock}${formatCatalogBlock(formats)}
 ${parentContext}
 
 ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
@@ -358,10 +365,12 @@ REGRAS CRÍTICAS:
 - Cadência de revisão: campanha/tática rápida = "semanal"; estratégia ampla = "2-4 semanas".
 - Horizonte: normalmente 1-6 meses — escolha com base no tipo de negócio/ciclo de venda, nunca um número fixo padrão; justifique.
 - Seja específico ao negócio — nunca genérico ("poste mais", "use hashtags") sem conectar ao que foi dito sobre esse negócio específico.
+- LINHA CENTRAL DE CONTEÚDO: a partir do CATÁLOGO DE FORMATOS acima, decida a linha de conteúdo que carrega a tese e escolha 2-4 formatos-âncora (só chaves do catálogo; prefira os que "funcionam hoje").
 
 Retorne APENAS um JSON:
 {
   "name": "nome curto da estratégia",
+  "content_core": {"central_line": "1-2 frases: a linha central de conteúdo que sustenta a tese", "hero_formats": ["chave do catálogo", "..."], "why": "por que esses formatos, 1-2 frases simples"},
   "thesis": "Porque [evidência], acreditamos [hipótese]. Por isso, vamos [abordagem] por [horizonte] pra alcançar [objetivo].",
   "primary_constraint": "a restrição principal que trava o crescimento agora, com a evidência",
   "strategic_opportunity": "a oportunidade de maior impacto que dá pra perseguir agora",
@@ -405,6 +414,7 @@ Retorne APENAS um JSON:
       active_components: activeComponents,
       success_conditions: parsed1.success_conditions ? String(parsed1.success_conditions) : null,
       failure_conditions: parsed1.failure_conditions ? String(parsed1.failure_conditions) : null,
+      content_plan: sanitizeContentPlan(parsed1.content_core, formats),
       // status continua 'generating' de propósito — só a parte 2 põe 'active'.
       updated_at: new Date().toISOString(),
     }).eq('id', strategyId)
@@ -453,16 +463,18 @@ async function runStep2(admin: SupaClient, supabaseUrl: string, cronSecret: stri
     const company = companyRow as Company | null
     if (!company) { await markFailed('Empresa não encontrada na 2ª etapa.'); return }
 
-    const [dataAgentState, baseline, playbookBlock] = await Promise.all([
+    const [dataAgentState, baseline, playbookBlock, formats] = await Promise.all([
       fetchDataAgentState(supabaseUrl, cronSecret, companyId, 'state'),
       fetchRealBaseline(admin, companyId),
       fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
+      fetchFormatCatalog(admin, company.vertical_key ?? 'generico', companyId),
     ])
-    lap('data-agent + baseline + playbook (2a etapa)')
+    lap('data-agent + baseline + playbook + formatos (2a etapa)')
+    const prevPlan = (row.content_plan ?? null) as Partial<ContentPlan> | null
 
     const prompt = `Você é Hermes, continuando o plano tático de uma estratégia cuja tese já foi decidida (parte 1, já gravada) — não questione a tese, só desdobre em plano tático.
 
-${businessPreamble(company, {})}${playbookBlock}
+${businessPreamble(company, {})}${playbookBlock}${formatCatalogBlock(formats)}
 
 TESE JÁ DECIDIDA:
 Nome: ${row.name}
@@ -473,6 +485,7 @@ Objetivo: ${row.primary_business_objective ?? row.primary_marketing_objective ??
 Foco estratégico: ${row.strategic_focus ?? '—'}
 Componentes ativos: ${Array.isArray(row.active_components) ? (row.active_components as string[]).join(', ') : '—'}
 Horizonte: ${row.horizon ?? '—'}
+Linha central de conteúdo: ${prevPlan?.central_line || '—'}${prevPlan?.hero_formats?.length ? ` (formatos-âncora: ${prevPlan.hero_formats.map(h => h.key).join(', ')})` : ''}
 
 ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
 ${formatDomains(dataAgentState)}
@@ -484,9 +497,11 @@ REGRAS CRÍTICAS:
 - Metas: no máximo 3, "goal_type" sendo um destes: ${GOAL_TYPES.join('|')}. NÃO preencha baseline — isso é calculado à parte com dado real.
 - Orçamento: só proponha valores SE o dono já informou orçamento mensal (${company.marketing_monthly_budget ? `informou: R$ ${company.marketing_monthly_budget}` : 'não informou'}); caso contrário, campos null e explique em "budget_reasoning" que falta essa informação.
 - Seja específico ao negócio e à tese acima — nunca genérico.
+${WEEKLY_MIX_RULES}
 
 Retorne APENAS um JSON:
 {
+  "weekly_mix": ${WEEKLY_MIX_SHAPE},
   "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
   "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}],
   "budget": {"total":null,"currency":"BRL","period":"monthly","paid_ads":null,"organic":null,"creative":null,"other":null,"is_flexible":true,"allocation":[{"channel":"","amount":null,"reason":""}],"budget_reasoning":""},
@@ -498,8 +513,10 @@ Retorne APENAS um JSON:
     // 3200 tokens cortava toda vez no teste real (66-67s, sempre truncado) —
     // subiu pra 4500 (~95-110s medido, ainda com folga dentro dos 150s desta
     // execução) depois de confirmar que a parte 2 (funil/metas/orçamento/
-    // estimativas/campanha) precisa mesmo de mais espaço que isso.
-    const r2 = await callClaudeStep(anthropicKey, prompt, 4500, { allowRetry: false }, 'Parte 2 (plano tático)')
+    // estimativas/campanha) precisa mesmo de mais espaço que isso. 5000
+    // (2026-10-09): + o mix semanal de formatos (~300 tokens) — não medido
+    // ainda; se a parte 2 passar de ~140s no log TIMING, rever.
+    const r2 = await callClaudeStep(anthropicKey, prompt, 5000, { allowRetry: false }, 'Parte 2 (plano tático)')
     lap(`parte 2 concluída, ok=${r2.ok}`)
     if (!r2.ok) { await markFailed(r2.reason); return }
     const parsed2 = r2.parsed
@@ -519,6 +536,7 @@ Retorne APENAS um JSON:
       budget: parsed2.budget && typeof parsed2.budget === 'object' ? parsed2.budget : {},
       estimates: parsed2.estimates && typeof parsed2.estimates === 'object' ? parsed2.estimates : {},
       data_provenance: { baseline_source: baseline ? 'instagram_performance_snapshots' : 'nenhum dado real ainda — metas sem baseline verificado', source: 'data-agent' },
+      content_plan: sanitizeContentPlan({ weekly_mix: parsed2.weekly_mix }, formats, prevPlan) ?? prevPlan,
       status: 'active',
       updated_at: new Date().toISOString(),
     }).eq('id', strategyId)
@@ -634,11 +652,13 @@ async function runRefresh(admin: SupaClient, supabaseUrl: string, cronSecret: st
 
     const { data: goalRows } = await admin.from('marketing_ai_strategy_goals').select('*').eq('strategy_id', strategyId)
     const { data: pastLog } = await admin.from('marketing_ai_strategy_log').select('decision_type, recommendation, status, created_at').eq('strategy_id', strategyId).order('created_at', { ascending: false }).limit(5)
-    const [dataAgentState, baseline, playbookBlock] = await Promise.all([
+    const [dataAgentState, baseline, playbookBlock, formats] = await Promise.all([
       fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'state'),
       fetchRealBaseline(admin, company.id),
       fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
+      fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
     ])
+    const prevPlan = (strategy.content_plan ?? null) as Partial<ContentPlan> | null
 
     // P2: números 80/20 calculados por código (aditivo; se falhar, prompt igual ao de antes).
     let learningBlock = ''
@@ -646,7 +666,7 @@ async function runRefresh(admin: SupaClient, supabaseUrl: string, cronSecret: st
 
     const prompt = `Você é Hermes, ATUALIZANDO uma estratégia ativa (refresh de rotina mensal, ou porque o check-up semanal pediu ajuste) — a TESE principal já está decidida e NÃO deve mudar aqui, só o plano tático (funil/metas/orçamento/prioridades) precisa refletir o que já funcionou até agora + os dados mais recentes.
 
-${businessPreamble(company, {})}${playbookBlock}
+${businessPreamble(company, {})}${playbookBlock}${formatCatalogBlock(formats)}
 
 TESE ATIVA (não mude, só use como base):
 Nome: ${strategy.name}
@@ -658,6 +678,8 @@ PLANO TÁTICO ATUAL:
 Funil: ${JSON.stringify(strategy.funnel_plan ?? [])}
 Metas: ${JSON.stringify((goalRows ?? []).map((g: Record<string, unknown>) => ({ name: g.name, goal_type: g.goal_type, target: g.target_value, progress: g.current_progress })))}
 Orçamento: ${JSON.stringify(strategy.budget ?? {})}
+Linha central de conteúdo: ${prevPlan?.central_line || '—'}
+Mix semanal atual: ${JSON.stringify((prevPlan?.weekly_mix ?? []).map(m => ({ format: m.format, per_week: m.per_week })))}
 
 DECISÕES/RECOMENDAÇÕES PASSADAS (memória — o que já foi tentado/sugerido, pra não repetir o que não funcionou nem descartar o que já provou valor):
 ${(pastLog ?? []).length ? (pastLog ?? []).map((l: Record<string, unknown>) => `- [${l.decision_type}/${l.status}] ${l.recommendation}`).join('\n') : 'Nenhuma recomendação anterior ainda.'}
@@ -668,16 +690,18 @@ ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
 ${formatDomains(dataAgentState)}
 ${learningBlock}
 REGRAS: mantenha a tese intacta; priorize (regra 80/20) manter e reforçar o que os sinais reais mostram que já funciona, reservando só uma fatia menor pra testar algo novo; NUNCA invente métrica que não foi te dada acima; metas no máximo 3 (goal_type: ${GOAL_TYPES.join('|')}), NÃO preencha baseline.
+${WEEKLY_MIX_RULES}
 
 Retorne APENAS um JSON:
 {
   "what_changed": "2-4 frases: o que mudou no plano tático e por quê, citando os sinais reais que motivaram",
+  "weekly_mix": ${WEEKLY_MIX_SHAPE},
   "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
   "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}],
   "budget": {"total":null,"currency":"BRL","period":"monthly","paid_ads":null,"organic":null,"creative":null,"other":null,"is_flexible":true,"allocation":[{"channel":"","amount":null,"reason":""}],"budget_reasoning":""}
 }`
 
-    const r = await callClaudeStep(anthropicKey, prompt, 4500, { allowRetry: false }, 'Refresh (atualização mensal)')
+    const r = await callClaudeStep(anthropicKey, prompt, 5000, { allowRetry: false }, 'Refresh (atualização mensal)')
     if (!r.ok) { await logStrategyCost(admin, company.id, 'refresh', false, r.reason); return }
     const parsed = r.parsed
     const goals = goalsWithBaselineFrom(parsed.goals, baseline)
@@ -685,6 +709,7 @@ Retorne APENAS um JSON:
     await admin.from('marketing_ai_strategies').update({
       funnel_plan: Array.isArray(parsed.funnel_plan) ? parsed.funnel_plan : strategy.funnel_plan,
       budget: parsed.budget && typeof parsed.budget === 'object' ? parsed.budget : strategy.budget,
+      content_plan: sanitizeContentPlan({ weekly_mix: parsed.weekly_mix }, formats, prevPlan) ?? prevPlan,
       last_refreshed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('id', strategyId)

@@ -22,6 +22,9 @@ const TX = {
     reanalyzing: 'Reavaliando...', reanalyze: '↻ Reavaliar com dado atual', noRec: 'Nenhuma recomendação ainda — clique em "Reavaliar" pra a IA comparar a estratégia com o dado real mais recente.',
     logStatus: { proposed: 'PROPOSTO', approved: 'APROVADO', dismissed: 'DISPENSADO', implemented: 'IMPLEMENTADO' } as Record<string, string>,
     alsoIn: 'Essas recomendações também aparecem em Aprendizado (Feedback Loop).',
+    centralLine: 'Linha central de conteúdo', heroFormats: 'Formatos-âncora', weeklyMix: 'Mix da semana', perWeek: (n: number) => `${n}x por semana`,
+    producer: { post: 'o calendário cria sozinho', item_package: 'você gera no imóvel (Catálogo)', item_video: 'vídeo: você pede no imóvel', dm: 'resposta automática do QUERO' } as Record<string, string>,
+    noMix: 'Esta estratégia é anterior à escolha de formatos — peça uma nova ou espere a próxima atualização mensal pra ver o mix da semana.',
   },
   en: {
     periods: { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', campaign: 'Per campaign', custom: 'Custom' } as Record<string, string>,
@@ -35,6 +38,9 @@ const TX = {
     reanalyzing: 'Re-evaluating...', reanalyze: '↻ Re-evaluate with current data', noRec: 'No recommendations yet — click "Re-evaluate" so the AI compares the strategy with the latest real data.',
     logStatus: { proposed: 'PROPOSED', approved: 'APPROVED', dismissed: 'DISMISSED', implemented: 'IMPLEMENTED' } as Record<string, string>,
     alsoIn: 'These recommendations also appear in Learning (Feedback Loop).',
+    centralLine: 'Core content line', heroFormats: 'Anchor formats', weeklyMix: 'Weekly mix', perWeek: (n: number) => `${n}x per week`,
+    producer: { post: 'the calendar creates it', item_package: 'you generate it on the listing (Catalog)', item_video: 'video: you request it on the listing', dm: 'automatic QUERO reply' } as Record<string, string>,
+    noMix: 'This strategy predates the format choice — ask for a new one or wait for the next monthly update to see the weekly mix.',
   },
 } as const
 
@@ -91,9 +97,37 @@ export function FunnelPanel({ strategy }: { strategy: Strategy }) {
   const { lang } = useLang()
   const t = TX[lang]
   const L = strategyLabels(lang)
-  if (!strategy.funnel_plan.length) return <div style={{ fontSize: '12.5px', color: MUTED }}>{t.noFunnel}</div>
+  const cp = strategy.content_plan
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {cp ? (
+        <div style={{ ...cardBox, borderColor: 'rgba(255,109,41,0.3)' }}>
+          {cp.central_line && <>
+            <div style={{ fontSize: '9.5px', fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '5px' }}>{t.centralLine}</div>
+            <div style={{ fontSize: '13px', color: 'white', lineHeight: 1.6, marginBottom: cp.why ? '4px' : '10px' }}>{cp.central_line}</div>
+            {cp.why && <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55, marginBottom: '10px' }}>{cp.why}</div>}
+          </>}
+          {cp.hero_formats.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginBottom: '10px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase' }}>{t.heroFormats}:</span>
+              {cp.hero_formats.map(h => <span key={h.key} style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '99px', padding: '3px 9px' }}>{h.name}</span>)}
+            </div>
+          )}
+          {cp.weekly_mix.length > 0 && <>
+            <div style={{ fontSize: '9.5px', fontWeight: 800, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>{t.weeklyMix}</div>
+            {cp.weekly_mix.map(m => (
+              <div key={m.format} style={{ padding: '7px 0', borderTop: `1px solid ${BORDER}`, fontSize: '12px', lineHeight: 1.5 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                  <strong style={{ color: 'white' }}>{m.name}</strong>
+                  <span style={{ color: ORANGE, fontWeight: 700 }}>{t.perWeek(m.per_week)}</span>
+                </div>
+                <div style={{ color: MUTED, fontSize: '11.5px' }}>{m.purpose}{m.purpose ? ' · ' : ''}{t.producer[m.producer] ?? m.producer}</div>
+              </div>
+            ))}
+          </>}
+        </div>
+      ) : <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55 }}>{t.noMix}</div>}
+      {!strategy.funnel_plan.length && <div style={{ fontSize: '12.5px', color: MUTED }}>{t.noFunnel}</div>}
       {strategy.funnel_plan.map((f, i) => (
         <div key={i} style={cardBox}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>

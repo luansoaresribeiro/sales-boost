@@ -17,6 +17,14 @@ export interface Estimates {
   feasibility_status: 'supports_plan' | 'needs_more_data' | 'needs_adjustment' | 'significant_constraints' | string
   feasibility_reasoning: string
 }
+// Linha central + mix semanal de formatos (strategy-generate, catálogo em
+// supabase/functions/_shared/formatCatalog.ts).
+export interface ContentPlan {
+  central_line: string
+  hero_formats: { key: string; name: string }[]
+  why: string
+  weekly_mix: { format: string; name: string; producer: 'post' | 'item_package' | 'item_video' | 'dm'; per_week: number; pillar: string; purpose: string }[]
+}
 export interface Strategy {
   id: string
   kind: 'main' | 'initiative'
@@ -39,6 +47,7 @@ export interface Strategy {
   failure_conditions: string | null
   reasoning: string | null
   funnel_plan: FunnelStep[]
+  content_plan: ContentPlan | null
   budget: Budget
   estimates: Estimates
   created_by: 'ai' | 'user'
