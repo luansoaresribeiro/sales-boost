@@ -273,3 +273,25 @@ canal de mesmo nome e dá erro ao adicionar callback depois do `subscribe()`.
 Quando mais de um componente escuta a mesma tabela (ex.: sino de pendências
 no layout + ApprovalsPage), passe `{ key: '...' }` como 4º argumento. Em
 `companies` a coluna de filtro é `id`, não `company_id` (`{ column: 'id' }`).
+
+## Site em branco depois do merge — build sem as variáveis `VITE_*` (2026-10-09)
+
+**O que aconteceu:** ao juntar o PR #20, o Cloudflare (Workers Builds, ligado
+ao GitHub) publicou sozinho um build feito **sem** `VITE_SUPABASE_URL` /
+`VITE_SUPABASE_ANON_KEY`. O `npx wrangler deploy` feito em seguida, de um
+container novo cujo `.env.local` não tinha essas variáveis, também saiu sem
+elas. Resultado: site em branco (`supabaseUrl is required.` no console).
+
+**Como foi resolvido:** `npx wrangler rollback` pra última versão boa e,
+depois, build com as variáveis de produção + deploy (nomes de arquivo com
+sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
+
+**Regras:**
+- Antes de `npx wrangler deploy`, conferir que o build tem o endereço do
+  Supabase: `grep -c miwcxakzyforbahpnpst dist/assets/index-*.js` tem que
+  dar mais que 0. Zero = NÃO publicar.
+- Depois do deploy, abrir o site num navegador (não só `curl`, que dá 200
+  mesmo com a página em branco).
+- Enquanto o Workers Builds não tiver as variáveis cadastradas no painel da
+  Cloudflare, **todo merge na main publica um site quebrado**. Cadastrar as
+  variáveis de build lá (ou desligar o build automático) é ação do dono.
