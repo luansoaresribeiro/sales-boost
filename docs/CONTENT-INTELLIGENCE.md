@@ -114,6 +114,8 @@ Pra `imoveis_rio`:
 | Tool | Status |
 |---|---|
 | `tour_virtual_tool` | `live` — funciona de verdade via `catalog-package` (`only_recipe:'carrossel_tour'`) |
+
+**Divergência de nome (2026-10-09):** `tour_virtual_tool` ("Tour virtual do imóvel — Criar" no card) gera o **carrossel de fotos**, não o vídeo. O vídeo-tour em caminhada é o botão novo "🎬 Tour em vídeo" do mesmo card (`ItemTour.tsx` → `tour-plan`). Renomear a ferramenta antiga pra "Carrossel do imóvel" fica pra etapa 2 (mexe no registro de ferramentas).
 | `criativos_anuncio_tool` | `planned`, `requires_integration:'higgsfield'` |
 | `avatar_corretor_tool` | `planned`, `requires_integration:'heygen'` — **divergência:** [DECISIONS.md](DECISIONS.md) fixa Higgsfield como único provedor; HeyGen foi citado antes de essa decisão existir. Corrigir o `requires_integration` quando o avatar for de fato implementado. |
 | `voz_corretor_tool` | `planned` |

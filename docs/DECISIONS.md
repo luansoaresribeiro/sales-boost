@@ -467,3 +467,40 @@ Aprovado:
   traduzem agora que recorte não custa geração — proposta: 12+ Reels
   publicados/mês, com um **teto de custo de geração por cliente em US$**
   (regra 7) no lugar de contar vídeos.
+
+
+## 2026-10-09 — Etapa 1 do tour do plano: como foi implementado
+
+- **Teto: US$ 40 por cliente por mês** (decisão do dono), somando análise de
+  fotos + geração (`video_tours.cost_usd`, `kind = 'plan'`). A geração é
+  bloqueada antes de gastar se passar do teto (mensagem diz quanto custa e
+  quanto sobra). Preço da passagem é estimado (US$ 0,108/s × 6 s); falta
+  confirmar o valor real cobrado pela Higgsfield pelo trecho de 6 s sem som.
+- **Ordem automática:** `tour-plan` (`analyze`) manda TODAS as fotos do
+  imóvel numa só chamada à IA (Claude Opus 5.5, saída em JSON estruturado):
+  ambiente de cada foto, repetidas juntas, foto ruim fora (pessoa, escura,
+  só detalhe), melhor foto por ambiente, o que cada ambiente "vê" pelas
+  portas e a ordem proposta. O CÓDIGO marca cada passagem como confirmada
+  (um ambiente aparece na foto do outro) ou não confirmada. Vocabulário do
+  setor na ficha (`config.tour`: tipos de ambiente, zonas, sequência
+  típica, máx. 25 ambientes, recortes de 15-30 s) — regra 6.
+- **Aprovação do corretor:** botão "🎬 Tour em vídeo" no card do imóvel
+  (`ItemTour.tsx`): ordem com fotos, aviso amarelo nas passagens não
+  confirmadas (recalcula a cada troca), subir/descer/tirar, devolver
+  ambientes que ficaram fora, custo estimado e gasto do mês. Só gera depois
+  de "Aprovar e gerar".
+- **Recortes:** sequências de 3 a 5 passagens da mesma zona viram vídeos
+  separados (custo zero — mesmas passagens).
+- **Colagem nova (`_shared/mp4stream.ts` + `tusUpload.ts` + `tourEngine.ts`):**
+  substitui o `mp4concat.ts` (mp4box). Lê só a tabela de quadros de cada
+  passagem, monta o cabeçalho e envia em pedaços de 6 MB, retomável entre
+  chamadas — memória de ~1 passagem por vez, sem limite de tamanho. Testado:
+  quadros idênticos aos das passagens originais (comparação quadro a
+  quadro), retomada no meio gera arquivo idêntico, colagem na nuvem igual à
+  local. O tour grátis usa o mesmo motor.
+- **Achados no teste:** (1) a chave de serviço das funções está no formato
+  novo e o envio retomável precisa dela no cabeçalho `apikey` também;
+  (2) a 1ª colagem (mp4box) "perdia" 1 quadro por emenda — a nova não.
+- **Pendente:** a análise das 64 fotos não rodou no ensaio porque falta o
+  secret `ANTHROPIC_API_KEY` lá. A conta QA do ensaio está com `plan = 'pro'`
+  pra testar o tour do plano (voltar pra `free` pra testar o grátis).
