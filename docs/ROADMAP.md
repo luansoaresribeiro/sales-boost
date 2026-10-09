@@ -66,6 +66,20 @@
 - **Status:** ❌ não começado. (Atualização 2026-10-08: 🟡 o tour grátis de 6
   fotos — Kling + Reel único — funciona no ensaio; os 12 tours/mês do plano
   ainda não existem. Ver [DECISIONS.md](DECISIONS.md).)
+- **Ordem de construção dos formatos (aprovada 2026-10-09, mapa em
+  [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md)):**
+  1. **Base do tour:** tour do plano (todos os ambientes, sem repetidas) +
+     ordem automática + tela do corretor aprovar a ordem + recortes. Pronto
+     quando: imóvel com ~20 ambientes vira tour completo e 3+ recortes, sem
+     passagem que o corretor reprove.
+  2. **Pacote e semana:** ficha nova (receitas acima), kit amostra do
+     grátis, close de 5 s, "isso ou aquilo", educativo/trend, Stories com
+     recorte.
+  3. **Conversa:** "Comente TOUR" → DM com o tour (mexe em
+     `instagram-webhook`, função de cliente — pede aprovação) +
+     cartões-postais do bairro.
+  4. **Rosto e prova:** avatar do corretor (fornecedor + autorização) e
+     "Vendido!".
 - **Próximo (decisão do dono 2026-10-08): ordem automática do tour.** O
   sistema olha as fotos, reconhece o cômodo de cada uma e o que aparece
   pelas portas (ex.: a sala vista da entrada) e monta a ordem de caminhada

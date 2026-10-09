@@ -121,3 +121,30 @@ Pra `imoveis_rio`:
 Tools `planned` mostram "Em breve" + botão "Quero quando lançar" —
 registra em `marketing_ai_tool_interest`, contagem visível no painel Owner
 (`BusinessTypesPanel.tsx`).
+
+## Mapa de formatos (aprovado 2026-10-09 — plano, ainda não implementado)
+
+Cada formato novo entra numa peça que já existe; nada de código específico
+de setor (regra 6) — receitas, ganchos e CTAs ficam na ficha
+(`vertical_playbooks.config`). Decisão em [DECISIONS.md](DECISIONS.md).
+
+| Formato | Pilar | Onde nasce | Mídia | Custo de geração |
+|---|---|---|---|---|
+| Tour completo em caminhada | imoveis | pacote do imóvel (1x por imóvel) | `video_tours` kind `plan` | ~US$ 0,65 por passagem (estimativa) |
+| Recorte do tour (Reels 15-30 s) | imoveis | pacote do imóvel, espalhado nas semanas | trecho do tour | zero |
+| Stories com recorte + enquete/caixa (ideia 3) | imoveis | planejador da semana | trecho do tour | zero |
+| Tour como isca na DM (ideia 1) | imoveis | CTA "Comente TOUR" no Reels → DM com o tour inteiro | tour completo | zero (DM com aprovação do modelo de mensagem, regra 1) |
+| Close de 5 s de um detalhe (ideia 4) | imoveis | pacote do imóvel | 1 trecho Kling (modo `per_photo`) | ~US$ 0,54 |
+| Criativo bonito com foto | imoveis | pacote do imóvel (já existe: carrossel, "detalhe") | foto real + `render-format` | centavos |
+| "Isso ou aquilo" (ideia 2) | imoveis | planejador da semana (precisa de 2 imóveis) | 2 fotos reais | centavos |
+| Post educativo / trend | educacao | planejador da semana (receitas novas na ficha; hoje a lista está vazia) | foto real + texto | centavos |
+| Cartão-postal do bairro (ideia 5) | bairro_estilo_vida | pacote do imóvel (endereço) | Wikimedia (licença + crédito) | zero |
+| Avatar do corretor abrindo o tour (ideia 6) | marca_pessoal_prova_social | junto do tour | foto + autorização do corretor | a confirmar (fornecedor) |
+| "Vendido!" (ideia 7) | marca_pessoal_prova_social | quando o imóvel sai do catálogo | foto real + autorização | centavos |
+
+Na ficha `imoveis_rio`: `item_package` troca `reels_tour_fotos_reais` por
+`tour_completo` + `reels_recorte_tour` + `stories_close_detalhe` +
+`post_cartao_postal`; `production_recipes.educacao` ganha
+`carrossel_educativo` e `post_trend`; `marca_pessoal_prova_social` ganha
+`intro_avatar` e `post_vendido`; `ctas`/`hooks_by_pillar` ganham "Comente
+TOUR". Mudar a ficha em produção é SQL de produção (vai num PR).

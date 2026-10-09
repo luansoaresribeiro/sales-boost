@@ -443,3 +443,27 @@ Decisões do dono (conversa de 2026-10-08), testadas no ensaio:
   não copia os quadros (pico medido caiu de ~250 MB pra ~100 MB no teste
   local, com quadros idênticos) e o `status` destrava uma colagem parada há
   mais de 3 min.
+
+
+## 2026-10-09 — Formatos de conteúdo do setor de imóveis (aprovado pelo dono)
+
+Aprovado:
+- **Grátis = "kit amostra":** tour de ~30 s em caminhada (6 fotos) + 2 peças
+  paradas feitas com as fotos do próprio cliente (1 criativo bonito + 1 post
+  educativo). O popup do cupom diz que isso é o que o plano faz toda semana.
+- **Vídeo no plano = 1 tour completo por imóvel + recortes.** O tour usa
+  todos os ambientes (sem fotos repetidas), ordem automática aprovada pelo
+  corretor. Os recortes (15-30 s) não geram vídeo novo — custo zero — e
+  viram Reels e Stories ao longo das semanas.
+- **As 7 ideias novas entram todas:** (1) tour como isca na DM ("Comente
+  TOUR"), (2) "isso ou aquilo", (3) Stories diários com recortes do tour,
+  (4) close de 5 s de um detalhe, (5) cartões-postais do bairro, (6) avatar
+  do corretor abrindo o tour, (7) "Vendido!" (prova social).
+- Onde cada uma entra na estrutura (ficha, pacote por imóvel, planejador
+  da semana, conversa na DM) e a ordem de construção: ver
+  [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) "Mapa de formatos" e
+  [ROADMAP.md](ROADMAP.md) P3.
+- **Em aberto:** como os "12 vídeos/mês" (decisão de 2026-10-08) se
+  traduzem agora que recorte não custa geração — proposta: 12+ Reels
+  publicados/mês, com um **teto de custo de geração por cliente em US$**
+  (regra 7) no lugar de contar vídeos.
