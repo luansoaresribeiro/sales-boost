@@ -619,3 +619,17 @@ grátis de 30 s, acima — mantidos como histórico):
   (custam/precisam do imóvel) — aparecem como lista "pra fazer".
 - Migration `20261009200000_content_formats.sql` (aplicada no ensaio;
   produção só com aprovação, junto do PR).
+
+## 2026-10-09 — Parte de trás do PR #20 publicada em produção (aprovado pelo dono)
+
+- Banco de produção: `billing_plans`, `videos_bucket`, `video_tours`
+  (aplicada sem o `drop policy if exists`, que travava a ferramenta —
+  tabela nova, a policy não existia), `item_videos`, `content_formats`.
+- Funções publicadas: `create-checkout`, `stripe-webhook`,
+  `owner-company-activity`, `trial-video` (nova), `item-videos` (nova),
+  `instagram-webhook`, `strategy-generate`, `creative-generate` — mesmo
+  `verify_jwt` de antes; todas respondem (teste sem login → 401 do próprio
+  código).
+- Conferido antes: chave `sk_live` lê os preços reais; cupom
+  `SB_PRIMEIRO_MES` existe no Stripe real; chave do Higgsfield aceita.
+- Falta: o dono juntar o PR e publicar o site.
