@@ -123,6 +123,8 @@ Deno.serve(async (req) => {
         .insert({
           user_id: user.id,
           business_name: diag.business_name,
+          // Rótulo pra organizar (sem empresa no cadastro = pessoal).
+          profile_type: oc.profile_type === 'pessoal' ? 'pessoal' : 'profissional',
           business_type: diag.business_type,
           city: diag.city,
           website_url: diag.website_url,

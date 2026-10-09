@@ -138,15 +138,20 @@ async function collectInstagram(supabase: any, handle: string, igUrl: string, to
   }
 }
 
+const PERSONAL_PROFILE_NAME = 'Perfil pessoal'
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return json('ok', 200)
 
   try {
     const data: OnboardingData = await req.json()
 
-    if (!data.business_name?.trim() || !data.contact_email?.trim()) {
-      return json({ error: 'Campos obrigatórios: business_name, contact_email, instagram_url' }, 400)
+    if (!data.contact_email?.trim()) {
+      return json({ error: 'Campos obrigatórios: contact_email, instagram_url' }, 400)
     }
+    // Nome da empresa é opcional (decisão do dono 2026-10-09): sem nome, o
+    // perfil é "pessoal" — só um rótulo pra organizar, nada muda no produto.
+    const businessName = (data.business_name ?? '').trim().slice(0, 120) || PERSONAL_PROFILE_NAME
 
     // Instagram obrigatório no formulário novo (aceita @usuario ou link).
     // Compatibilidade: o formulário antigo (ainda no ar até o merge) manda
@@ -191,7 +196,7 @@ Deno.serve(async (req) => {
     const { data: row, error: insertErr } = await supabase
       .from('diagnostics')
       .insert({
-        business_name: data.business_name.trim(),
+        business_name: businessName,
         business_type: data.business_type,
         city: data.city,
         website_url: websiteUrl, // '' quando não tem site

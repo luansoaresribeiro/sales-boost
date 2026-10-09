@@ -273,3 +273,26 @@ canal de mesmo nome e dá erro ao adicionar callback depois do `subscribe()`.
 Quando mais de um componente escuta a mesma tabela (ex.: sino de pendências
 no layout + ApprovalsPage), passe `{ key: '...' }` como 4º argumento. Em
 `companies` a coluna de filtro é `id`, não `company_id` (`{ column: 'id' }`).
+
+## Site em branco depois do deploy manual — build sem as variáveis `VITE_*` (2026-10-09)
+
+**O que aconteceu:** depois do merge do PR #20, o Cloudflare (Workers Builds,
+ligado ao GitHub) publicou o site certo — as variáveis de build
+(`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_GOOGLE_OAUTH_CLIENT_ID`)
+estão cadastradas nos dois gatilhos de build. Logo depois, um
+`npx wrangler deploy` manual feito de um container novo (sem essas
+variáveis no `.env.local`) **substituiu** o site por um build sem o endereço
+do Supabase → página em branco (`supabaseUrl is required.`).
+
+**Como foi resolvido:** `npx wrangler rollback` pra última versão boa e,
+depois, build com as variáveis de produção + deploy (nomes de arquivo com
+sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
+
+**Regras:**
+- Merge na `main` já publica sozinho (gatilho "Deploy default branch").
+  Depois do merge, **conferir** o site em vez de publicar de novo por cima.
+- Se precisar de `npx wrangler deploy` manual: antes, conferir que o build
+  tem o endereço do Supabase — `grep -c miwcxakzyforbahpnpst
+  dist/assets/index-*.js` tem que dar mais que 0. Zero = NÃO publicar.
+- Depois de qualquer deploy, abrir o site num navegador (não só `curl`, que
+  dá 200 mesmo com a página em branco).
