@@ -32,7 +32,7 @@ const TX = {
     you: 'Você', followers: 'Seguidores', posts: 'Posts 30d', eng: 'Engaj.', video: '% vídeo', unknown: '—',
     trends: 'O que está em alta no seu nicho (últimos 30 dias)', likes: 'curtidas', comments: 'comentários', reels: 'Reels', photo: 'Foto', open: 'ver post',
     nicheVideo: (n: number) => `${n}% dos posts recentes nas hashtags da sua região são vídeo.`, tags: 'Hashtags mais usadas',
-    finds: '3 descobertas sobre o seu perfil', ideas: 'Ideias de post pra você', base: 'Por quê:',
+    finds: 'O que está te fazendo perder clientes no Instagram', findsRegion: 'Descobertas sobre a concorrência da sua região', ideas: 'Ideias de post pra você', base: 'Por quê:',
   },
   en: {
     title: 'You vs. competitors in your area', sub: 'We just read the strongest profiles and posts in your area on Instagram.', legend: '“Posts 30d” = posts in the last 30 days; “Engag.” = likes + comments per post, as % of followers.',
@@ -40,7 +40,7 @@ const TX = {
     you: 'You', followers: 'Followers', posts: 'Posts 30d', eng: 'Engag.', video: '% video', unknown: '—',
     trends: 'What is trending in your niche (last 30 days)', likes: 'likes', comments: 'comments', reels: 'Reels', photo: 'Photo', open: 'see post',
     nicheVideo: (n: number) => `${n}% of recent posts on your area's hashtags are video.`, tags: 'Most used hashtags',
-    finds: '3 findings about your profile', ideas: 'Post ideas for you', base: 'Why:',
+    finds: 'What is costing you clients on Instagram', findsRegion: 'Findings about competitors in your area', ideas: 'Post ideas for you', base: 'Why:',
   },
 } as const
 
@@ -124,7 +124,7 @@ export default function MarketSection({ diagnosticId, own, lang }: { diagnosticI
 
       {m.insights && m.insights.descobertas.length > 0 && (
         <div style={box}>
-          <h2 style={h2}>{t.finds}</h2>
+          <h2 style={h2}>{me ? t.finds : t.findsRegion}</h2>
           {m.insights.descobertas.map((d, i) => (
             <div key={i} style={{ padding: '10px 0', borderTop: i ? `1px solid ${BORDER}` : 'none' }}>
               <div style={{ fontSize: 13.5, fontWeight: 700, color: 'white', marginBottom: 3 }}>{d.titulo}</div>

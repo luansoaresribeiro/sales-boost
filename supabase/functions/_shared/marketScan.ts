@@ -180,11 +180,15 @@ export async function advanceMarket(m: MarketData, ctx: AdvanceCtx): Promise<Mar
 }
 
 async function writeInsights(m: MarketData, ctx: AdvanceCtx): Promise<MarketData['insights'] | null> {
+  const op: Any[] = ctx.own?.posts ?? []
+  const lastTs = op.map(p => Date.parse(String(p.ts ?? ''))).filter(Number.isFinite).sort((a, b) => b - a)[0]
   const own = ctx.own && !ctx.own.error ? {
-    seguidores: ctx.own.followers, posts_vistos: (ctx.own.posts ?? []).length,
-    posts_30d: (ctx.own.posts ?? []).filter((p: Any) => p.ts && Date.parse(p.ts) >= Date.now() - 30 * DAY).length,
-    video_pct: (ctx.own.posts ?? []).length ? Math.round(100 * (ctx.own.posts ?? []).filter((p: Any) => p.is_video).length / ctx.own.posts.length) : null,
-    curtidas_mais_comentarios_medio: (ctx.own.posts ?? []).length ? Math.round((ctx.own.posts as Any[]).reduce((a, p) => a + (p.likes ?? 0) + (p.comments ?? 0), 0) / ctx.own.posts.length) : null,
+    usuario: ctx.own.username ?? null, seguidores: ctx.own.followers, posts_no_perfil: ctx.own.posts_total ?? null,
+    bio: ctx.own.biography ?? '', link_na_bio: ctx.own.external_url ?? null, conta_comercial: ctx.own.is_business ?? null, destaques: ctx.own.highlights ?? null,
+    posts_vistos: op.length, dias_desde_o_ultimo_post: lastTs ? Math.floor((Date.now() - lastTs) / DAY) : null,
+    posts_30d: op.filter(p => p.ts && Date.parse(p.ts) >= Date.now() - 30 * DAY).length,
+    video_pct: op.length ? Math.round(100 * op.filter(p => p.is_video).length / op.length) : null,
+    curtidas_mais_comentarios_medio: op.length ? Math.round(op.reduce((a, p) => a + (p.likes ?? 0) + (p.comments ?? 0), 0) / op.length) : null,
   } : null
   const data = { negocio: ctx.business, voce: own, concorrentes: m.competitors ?? [], em_alta: { posts: (m.trends?.top ?? []).map(p => ({ dono: p.owner, curtidas: p.likes, comentarios: p.comments, video: p.is_video, legenda: p.caption.slice(0, 160) })), video_pct_de_todos_os_posts_recentes_das_hashtags: m.trends?.video_share_pct, hashtags_mais_usadas: m.trends?.top_hashtags } }
   const prompt = `Você é analista de Instagram de um negócio local. Abaixo estão DADOS REAIS lidos agora do Instagram (o perfil do dono, 3 concorrentes da região e os posts que mais engajaram nas hashtags da região nos últimos 30 dias).
@@ -192,7 +196,8 @@ async function writeInsights(m: MarketData, ctx: AdvanceCtx): Promise<MarketData
 ${JSON.stringify(data)}
 
 Escreva em português simples, pro dono (não especialista):
-- 3 "descobertas": coisas específicas que o dono provavelmente NÃO sabe, comparando ele com os concorrentes e com o que está em alta. Cite os números EXATAMENTE como estão nos dados (nunca invente número, nunca arredonde pra cima, nunca estime). Se um dado não existe, não fale dele.
+- 3 "descobertas": os PONTOS FRACOS do perfil do dono ("voce") que estão fazendo ele perder clientes — o que um cliente vê de errado ao abrir o perfil dele. Olhe frequência (dias desde o último post, posts em 30 dias), formato (vídeo), engajamento, a bio (diz o que ele faz, onde atende e como falar com ele?), link na bio, destaques e conta comercial. Seja direto e honesto, sem ofender: o dono precisa perceber que precisa melhorar. Sempre que der, compare com um concorrente ou com o que está em alta ("você X, enquanto @fulano Y"). Comece pelo ponto mais grave. Se "voce" for null, escreva descobertas sobre a concorrência da região.
+Cite os números EXATAMENTE como estão nos dados (nunca invente número, nunca arredonde pra cima, nunca estime, nunca prometa resultado). Se um dado não existe ou é null, não fale dele. Se o perfil for bom num ponto, não invente defeito.
 - 3 "ideias" de post prontas pra ele, cada uma apoiada em algo que está em alta ou que funciona pros concorrentes (diga em "base" qual dado sustenta a ideia).
 Se os dados forem poucos, faça menos itens — nunca preencha com coisa genérica.
 Tamanhos: "titulo" até 80 caracteres; "texto" até 350; "gancho" é a PRIMEIRA FRASE do post, do jeito que o dono falaria pro cliente (até 120); "base" até 220.
@@ -227,17 +232,18 @@ export async function feedCompany(admin: Any, companyId: string, m: MarketData) 
     const url = `https://instagram.com/${c.username}`
     const { data: ex } = await admin.from('marketing_ai_competitors').select('id').eq('company_id', companyId).eq('instagram_url', url).maybeSingle()
     const row = { company_id: companyId, name: `@${c.username}`, instagram_url: url, followers: c.followers, avg_engagement: c.avg_engagement_pct, posting_frequency_days: c.posts_30d ? Math.round(300 / c.posts_30d) / 10 : null, notes: 'Encontrado no diagnóstico grátis (hashtags da região).', last_analyzed_at: new Date().toISOString() }
-    if (ex) await admin.from('marketing_ai_competitors').update(row).eq('id', ex.id)
-    else await admin.from('marketing_ai_competitors').insert(row)
+    const { error } = ex ? await admin.from('marketing_ai_competitors').update(row).eq('id', ex.id) : await admin.from('marketing_ai_competitors').insert(row)
+    if (error) console.log('[market] concorrente não gravado', c.username, error.message)
   }
   const top = m.trends?.top ?? []
   if (top.length) {
     await admin.from('marketing_ai_trends').delete().eq('company_id', companyId).eq('source', 'diagnostico')
-    await admin.from('marketing_ai_trends').insert(top.slice(0, 5).map(p => ({
+    const { error } = await admin.from('marketing_ai_trends').insert(top.slice(0, 5).map(p => ({
       company_id: companyId, source: 'diagnostico', category: p.is_video ? 'reels' : 'post',
       title: (p.caption.split('\n')[0] || 'Post em alta na região').slice(0, 120),
       description: `${p.likes ?? '?'} curtidas e ${p.comments ?? '?'} comentários${p.owner ? ` (@${p.owner})` : ''}${p.url ? ` — ${p.url}` : ''}`,
-      relevance: 'alta',
+      relevance: 'high', // a tabela só aceita high|medium|low
     })))
+    if (error) console.log('[market] trends não gravadas', error.message)
   }
 }
