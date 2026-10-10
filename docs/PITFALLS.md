@@ -296,3 +296,15 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   dist/assets/index-*.js` tem que dar mais que 0. Zero = NÃO publicar.
 - Depois de qualquer deploy, abrir o site num navegador (não só `curl`, que
   dá 200 mesmo com a página em branco).
+
+## CI vermelho no PR por erro de lint (2026-10-10)
+
+- **O que aconteceu:** o PR #22 ficou com o check "Build" vermelho. O CI
+  (`.github/workflows`) roda `npm ci`, `npm run build` **e** `npm run lint`.
+  Rodei o lint só no arquivo da tela, e o erro estava numa função
+  (`_shared/marketScan.ts`: `\/` desnecessário dentro de `[...]` numa regex
+  → `no-useless-escape`).
+- **Regra (pedido do dono):** todo PR tem que ficar verde. Antes de cada push,
+  rodar no repositório inteiro `npm run build && npm run lint` e conferir que
+  sai **0 errors** (os warnings antigos não reprovam). Depois do push, conferir
+  os checks do PR e não dar a tarefa por concluída enquanto houver vermelho.
