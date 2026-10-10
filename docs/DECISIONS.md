@@ -685,3 +685,14 @@ grátis de 30 s, acima — mantidos como histórico):
   dias", conferido no banco). Custo estimado pelos preços da Apify: até
   60 posts × US$0,0005 + 3 perfis × ~US$0,0026 ≈ US$0,04 + 1 chamada do
   Claude.
+- **2026-10-10 — descobertas viram "pontos fracos" (pedido do dono):** a
+  seção passa a se chamar "O que está te fazendo perder clientes no
+  Instagram". O Claude recebe também a bio, o link na bio, os destaques, a
+  conta comercial e os dias desde o último post, e aponta os pontos fracos do
+  mais grave para o menos grave, comparando com os concorrentes. Não pode
+  inventar defeito nem número. Testado em produção (conta de teste): apontou
+  "31 dias sem postar", "bio sem região nem contato" e "só 3 posts", todos
+  conferidos no banco. Também foi corrigido um erro: a tabela
+  `marketing_ai_trends` só aceita `relevance` high|medium|low, e estava indo
+  "alta". Agora os posts em alta entram na conta junto com os concorrentes
+  (testado: 4 concorrentes e 5 posts em alta gravados).
