@@ -10,7 +10,7 @@ const TX = {
     errMatch: 'As senhas não coincidem.',
     errTerms: 'Você precisa aceitar os Termos de Uso e a Política de Privacidade.',
     title: 'Criar sua conta',
-    subClaim: 'Crie sua conta para salvar seu diagnóstico e ter acesso ao painel.',
+    subClaim: 'Crie sua conta e entre direto no painel pra gerar seus 3 vídeos grátis.',
     sub: 'Comece a entender seus clientes em minutos.',
     claim1: 'Seu ',
     claimB: 'diagnóstico gratuito',
@@ -34,7 +34,7 @@ const TX = {
     errMatch: "Passwords don't match.",
     errTerms: 'You must accept the Terms of Use and the Privacy Policy.',
     title: 'Create your account',
-    subClaim: 'Create your account to save your diagnostic and access the dashboard.',
+    subClaim: 'Create your account and go straight into the dashboard to make your 3 free videos.',
     sub: 'Start understanding your customers in minutes.',
     claim1: 'Your ',
     claimB: 'free diagnostic',
@@ -109,26 +109,26 @@ export default function SignupPage() {
     const { error: signUpErr } = await signUp(email, password)
     if (signUpErr) { setLoading(false); setError(signUpErr); return }
 
-    // If we came from a diagnostic, claim it now (need fresh session)
-    if (claimId) {
-      // Wait a tick for auth state to propagate, then claim
-      await new Promise(r => setTimeout(r, 800))
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
+    // Conta criada → já entra (decisão do dono 2026-10-10: nada de logar de
+    // novo). Se veio do diagnóstico, liga o diagnóstico à conta antes.
+    await new Promise(r => setTimeout(r, 800)) // a sessão nova se propaga
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      if (claimId) {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
         await fetch(`${supabaseUrl}/functions/v1/claim-diagnostic`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-          },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
           body: JSON.stringify({ diagnostic_id: claimId }),
-        })
+        }).catch(() => {})
       }
+      // Recarga completa: a conta (empresa) recém-criada é lida do zero, sem
+      // corrida com a busca que começou antes do diagnóstico ser ligado.
+      // Conta nova sem pagamento cai em /gratis (vídeos grátis).
+      window.location.assign('/dashboard')
+      return
     }
-
-    // Cadastro concluído → sempre leva para o login. Encerra qualquer sessão
-    // criada automaticamente para que a pessoa entre de forma limpa.
+    // Sem sessão (ex.: confirmação de e-mail ligada no Supabase): login normal.
     await signOut()
     setLoading(false)
     navigate('/login?created=1')
