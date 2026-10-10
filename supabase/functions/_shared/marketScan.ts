@@ -42,7 +42,12 @@ const slug = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 export function marketHashtags(templates: string[] | null, businessType: string | null, city: string | null, bairros: unknown): string[] {
   const locals: string[] = []
   for (const b of Array.isArray(bairros) ? bairros.slice(0, 2) : []) { const s = slug(String(b)); if (s.length >= 3) locals.push(s) }
-  const c = slug(String(city ?? '').split(/[/,]/)[0]); if (c.length >= 3) locals.push(c)
+  // Cidade: o nome ("Rio de Janeiro / RJ" → riodejaneiro); se só vier a
+  // sigla ("Rj", "SP"), usa a sigla — #imoveisrj é hashtag comum. Antes, sigla
+  // era descartada e o diagnóstico ficava sem hashtag nenhuma (bug 2026-10-10).
+  const parts = String(city ?? '').split(/[/,\-–|]/).map(x => slug(x)).filter(Boolean)
+  const c = parts.find(x => x.length >= 3) ?? parts.find(x => x.length >= 2)
+  if (c && !locals.includes(c)) locals.push(c)
   const tpls = templates?.length ? templates : [`${slug(String(businessType ?? '').split(/[/\s]/)[0]) || 'negocio'}{local}`]
   const out: string[] = []
   for (const t of tpls) for (const l of locals) { const h = slug(t.replace('{local}', l)); if (h.length >= 4 && !out.includes(h)) out.push(h) }
