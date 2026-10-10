@@ -17,6 +17,11 @@ const PROFILES_ACTOR = 'apify~instagram-profile-scraper' // ~US$ 0,0026 por perf
 const MAX_POSTS = 60
 const MAX_COMPETITORS = 3
 const RUN_TIMEOUT_MS = 4 * 60 * 1000
+// Sonnet: o Haiku era 4x mais rápido, mas no teste real inventou números
+// ("posts com 3-4 curtidas") e citou bio de concorrente que não lemos — fere a
+// regra de nunca inventar número. Pra ganhar tempo, os textos ficaram mais
+// curtos (menos texto = resposta mais rápida). Testado 2026-10-10.
+const INSIGHTS_MODEL = 'claude-sonnet-4-6'
 const DAY = 864e5
 
 export const MARKET_SCAN_MONTHLY_CAP = Number(Deno.env.get('MARKET_SCAN_MONTHLY_CAP') ?? '150') || 150
@@ -28,11 +33,14 @@ export interface MarketData {
   status: 'queued' | 'scanning' | 'profiling' | 'thinking' | 'done' | 'unavailable'
   reason?: string
   hashtags: string[]
-  runs: { posts?: string; posts_started?: string; profiles?: string; profiles_started?: string }
+  runs: { posts?: string; posts_started?: string; profiles?: string; profiles_started?: string; retried?: boolean }
   posts?: MarketPost[]
   competitors?: Competitor[]
   trends?: { top: MarketPost[]; video_share_pct: number | null; top_hashtags: string[] }
   insights?: { descobertas: { titulo: string; texto: string }[]; ideias: { titulo: string; gancho: string; formato: string; base: string }[] }
+  // Quem está tocando a análise agora (diagnosis-market) e até quando — evita
+  // duas chamadas iniciarem a mesma etapa na Apify (custo em dobro).
+  lease_until?: string | null
   updated_at: string
 }
 
@@ -45,9 +53,12 @@ export function marketHashtags(templates: string[] | null, businessType: string 
   // Cidade: o nome ("Rio de Janeiro / RJ" → riodejaneiro); se só vier a
   // sigla ("Rj", "SP"), usa a sigla — #imoveisrj é hashtag comum. Antes, sigla
   // era descartada e o diagnóstico ficava sem hashtag nenhuma (bug 2026-10-10).
+  // Com nome E sigla ("Rio de Janeiro / RJ") usa os dois: #imoveisriodejaneiro
+  // quase não tem post, #imoveisrj tem muitos (teste real 2026-10-10).
   const parts = String(city ?? '').split(/[/,\-–|]/).map(x => slug(x)).filter(Boolean)
-  const c = parts.find(x => x.length >= 3) ?? parts.find(x => x.length >= 2)
-  if (c && !locals.includes(c)) locals.push(c)
+  const name = parts.find(x => x.length >= 3)
+  const uf = parts.find(x => x.length === 2)
+  for (const c of [name, uf]) if (c && !locals.includes(c)) locals.push(c)
   const tpls = templates?.length ? templates : [`${slug(String(businessType ?? '').split(/[/\s]/)[0]) || 'negocio'}{local}`]
   const out: string[] = []
   for (const t of tpls) for (const l of locals) { const h = slug(t.replace('{local}', l)); if (h.length >= 4 && !out.includes(h)) out.push(h) }
@@ -128,8 +139,12 @@ async function apifyStart(actor: string, input: unknown, token: string): Promise
   return (await r.json())?.data?.id ?? null
 }
 
-async function apifyPoll(runId: string, token: string): Promise<{ status: string; items?: Any[] }> {
-  const r = await fetch(`${APIFY}/actor-runs/${runId}?token=${token}`, { signal: AbortSignal.timeout(15_000) })
+// waitForFinish: a Apify segura a resposta até a execução terminar (ou o
+// tempo acabar) — a etapa seguinte começa no mesmo segundo, sem esperar o
+// próximo "terminou?" da página.
+async function apifyPoll(runId: string, token: string, waitSecs = 0): Promise<{ status: string; items?: Any[] }> {
+  const w = Math.max(0, Math.min(50, Math.floor(waitSecs)))
+  const r = await fetch(`${APIFY}/actor-runs/${runId}?token=${token}${w ? `&waitForFinish=${w}` : ''}`, { signal: AbortSignal.timeout((w + 15) * 1000) })
   if (!r.ok) return { status: 'UNKNOWN' }
   const d = (await r.json())?.data
   if (d?.status !== 'SUCCEEDED') return { status: String(d?.status ?? 'UNKNOWN') }
@@ -140,7 +155,12 @@ async function apifyPoll(runId: string, token: string): Promise<{ status: string
 const abort = (runId: string, token: string) => fetch(`${APIFY}/actor-runs/${runId}/abort?token=${token}`, { method: 'POST' }).catch(() => {})
 const tooOld = (iso?: string) => !!iso && Date.now() - Date.parse(iso) > RUN_TIMEOUT_MS
 
-export interface AdvanceCtx { token: string; anthropicKey: string | null; templates: string[] | null; ownHandle: string | null; own: Any; business: string }
+function startPosts(hashtags: string[], token: string) {
+  const until = new Date(Date.now() - 45 * DAY).toISOString().slice(0, 10)
+  return apifyStart(POSTS_ACTOR, { startUrls: hashtags.map(h => `https://www.instagram.com/explore/tags/${h}/`), maxItems: MAX_POSTS, until }, token)
+}
+
+export interface AdvanceCtx { token: string; anthropicKey: string | null; templates: string[] | null; ownHandle: string | null; own: Any; business: string; waitSecs?: number }
 
 // Um passo da máquina de estados. Devolve o próximo estado (o chamador grava
 // com trava otimista por `v`).
@@ -149,18 +169,25 @@ export async function advanceMarket(m: MarketData, ctx: AdvanceCtx): Promise<Mar
   const next = (patch: Partial<MarketData>): MarketData => ({ ...m, ...patch, v: m.v + 1, updated_at: now })
   if (m.status === 'queued') {
     if (!m.hashtags.length) return next({ status: 'unavailable', reason: 'sem_hashtags' })
-    const until = new Date(Date.now() - 45 * DAY).toISOString().slice(0, 10)
-    const id = await apifyStart(POSTS_ACTOR, { startUrls: m.hashtags.map(h => `https://www.instagram.com/explore/tags/${h}/`), maxItems: MAX_POSTS, until }, ctx.token)
+    const id = await startPosts(m.hashtags, ctx.token)
     return id ? next({ status: 'scanning', runs: { ...m.runs, posts: id, posts_started: now } }) : next({ status: 'unavailable', reason: 'apify_start' })
   }
   if (m.status === 'scanning' && m.runs.posts) {
-    const r = await apifyPoll(m.runs.posts, ctx.token)
+    const r = await apifyPoll(m.runs.posts, ctx.token, ctx.waitSecs)
     if (r.status !== 'SUCCEEDED') {
       if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(r.status)) return next({ status: 'unavailable', reason: `posts_${r.status}` })
       if (tooOld(m.runs.posts_started)) { abort(m.runs.posts, ctx.token); return next({ status: 'unavailable', reason: 'posts_timeout' }) }
       return m
     }
     const posts = (r.items ?? []).map(normalizePost).filter(p => p.url || p.owner)
+    console.log('[market] posts lidos', (r.items ?? []).length, 'válidos', posts.length, posts.length ? '' : JSON.stringify((r.items ?? [])[0] ?? null).slice(0, 300))
+    // O raspador às vezes volta só com {"noResults":true} (o Instagram barrou a
+    // leitura naquela hora; minutos antes a mesma busca funcionou). Tenta de
+    // novo UMA vez antes de seguir sem concorrentes (teste real 2026-10-10).
+    if (!posts.length && !m.runs.retried) {
+      const id = await startPosts(m.hashtags, ctx.token)
+      if (id) return next({ runs: { ...m.runs, posts: id, posts_started: now, retried: true } })
+    }
     const trends = buildTrends(posts, ctx.ownHandle)
     const cands = pickCompetitors(posts, ctx.ownHandle)
     if (!cands.length) return next({ status: 'thinking', posts, trends, competitors: [] })
@@ -168,7 +195,7 @@ export async function advanceMarket(m: MarketData, ctx: AdvanceCtx): Promise<Mar
     return next({ status: id ? 'profiling' : 'thinking', posts, trends, competitors: [], runs: { ...m.runs, profiles: id ?? undefined, profiles_started: now } })
   }
   if (m.status === 'profiling' && m.runs.profiles) {
-    const r = await apifyPoll(m.runs.profiles, ctx.token)
+    const r = await apifyPoll(m.runs.profiles, ctx.token, ctx.waitSecs)
     if (r.status !== 'SUCCEEDED') {
       const failed = ['FAILED', 'ABORTED', 'TIMED-OUT'].includes(r.status) || tooOld(m.runs.profiles_started)
       if (failed) { if (tooOld(m.runs.profiles_started)) abort(m.runs.profiles, ctx.token); return next({ status: 'thinking' }) }
@@ -205,13 +232,14 @@ Escreva em português simples, pro dono (não especialista):
 Cite os números EXATAMENTE como estão nos dados (nunca invente número, nunca arredonde pra cima, nunca estime, nunca prometa resultado). Se um dado não existe ou é null, não fale dele. Se o perfil for bom num ponto, não invente defeito.
 - 3 "ideias" de post prontas pra ele, cada uma apoiada em algo que está em alta ou que funciona pros concorrentes (diga em "base" qual dado sustenta a ideia).
 Se os dados forem poucos, faça menos itens — nunca preencha com coisa genérica.
-Tamanhos: "titulo" até 80 caracteres; "texto" até 350; "gancho" é a PRIMEIRA FRASE do post, do jeito que o dono falaria pro cliente (até 120); "base" até 220.
+Só use o que está nos dados: dos concorrentes você tem SÓ seguidores, posts em 30 dias, engajamento e % de vídeo (não leu a bio nem as legendas deles).
+Seja curto. Tamanhos: "titulo" até 70 caracteres; "texto" até 260; "gancho" é a PRIMEIRA FRASE do post, do jeito que o dono falaria pro cliente (até 110); "base" até 160.
 
 Responda SÓ JSON: {"descobertas":[{"titulo":"","texto":""}],"ideias":[{"titulo":"","gancho":"","formato":"reels|carrossel|foto|stories","base":""}]}`
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST', headers: { 'x-api-key': ctx.anthropicKey!, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1200, messages: [{ role: 'user', content: prompt }] }), signal: AbortSignal.timeout(60_000),
+      body: JSON.stringify({ model: INSIGHTS_MODEL, max_tokens: 900, messages: [{ role: 'user', content: prompt }] }), signal: AbortSignal.timeout(60_000),
     })
     if (!r.ok) { console.log('[market] claude', r.status); return null }
     const t = String((await r.json())?.content?.[0]?.text ?? '')
@@ -219,8 +247,8 @@ Responda SÓ JSON: {"descobertas":[{"titulo":"","texto":""}],"ideias":[{"titulo"
     // Corta em fim de palavra (com reticências) se o modelo passar do tamanho pedido.
     const s = (v: unknown, n: number) => { const t = String(v ?? '').trim(); if (t.length <= n) return t; const c = t.slice(0, n - 1); return `${c.slice(0, c.lastIndexOf(' ') > n / 2 ? c.lastIndexOf(' ') : c.length).replace(/[\s,.;:—-]+$/, '')}…` }
     return {
-      descobertas: (Array.isArray(j.descobertas) ? j.descobertas : []).slice(0, 3).map((d: Any) => ({ titulo: s(d.titulo, 100), texto: s(d.texto, 450) })),
-      ideias: (Array.isArray(j.ideias) ? j.ideias : []).slice(0, 3).map((d: Any) => ({ titulo: s(d.titulo, 100), gancho: s(d.gancho, 180), formato: s(d.formato, 20), base: s(d.base, 300) })),
+      descobertas: (Array.isArray(j.descobertas) ? j.descobertas : []).slice(0, 3).map((d: Any) => ({ titulo: s(d.titulo, 90), texto: s(d.texto, 340) })),
+      ideias: (Array.isArray(j.ideias) ? j.ideias : []).slice(0, 3).map((d: Any) => ({ titulo: s(d.titulo, 90), gancho: s(d.gancho, 150), formato: s(d.formato, 20), base: s(d.base, 220) })),
     }
   } catch (e) { console.log('[market] insights falhou', String(e)); return null }
 }

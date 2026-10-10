@@ -696,3 +696,23 @@ grátis de 30 s, acima — mantidos como histórico):
   `marketing_ai_trends` só aceita `relevance` high|medium|low, e estava indo
   "alta". Agora os posts em alta entram na conta junto com os concorrentes
   (testado: 4 concorrentes e 5 posts em alta gravados).
+
+## 2026-10-10 — Diagnóstico: tela de carregamento, ordem da página e velocidade (pedido do dono)
+
+- **Tela de carregamento:** enquanto a análise não termina, a página mostra
+  só a logo do Sales Boost com uma barra de progresso e as 4 etapas (ler o
+  Instagram → buscar concorrentes → comparar → escrever a análise). Nada de
+  resultado pela metade. Tempo máximo de espera na tela: 3 min. Depois disso,
+  ou se a busca não puder rodar, a página aparece sem a parte da concorrência.
+- **Ordem:** nota → potencial → análise (concorrentes, pontos fracos, em
+  alta, ideias) → "pontos que travam" e "como a nota foi formada".
+- **Velocidade:** o `run-diagnosis` dispara a análise (`diagnosis-market`
+  com `drive: true`) assim que cria o diagnóstico, em paralelo com a leitura
+  do Instagram. O servidor emenda uma etapa na outra (a Apify segura a
+  resposta até cada execução terminar). Uma trava (`lease_until`) impede duas
+  chamadas de começarem a mesma etapa (custo em dobro). Medido em produção:
+  ~30-55 s do envio ao resultado (antes, 2 min ou mais).
+- **Modelo da análise:** testamos o Haiku (4x mais rápido), mas ele inventou
+  números ("posts com 3-4 curtidas") e citou bio de concorrente que não lemos.
+  Isso fere a regra de nunca inventar número, então ficou o Sonnet, com textos
+  mais curtos.

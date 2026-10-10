@@ -217,6 +217,17 @@ Deno.serve(async (req) => {
 
     const diagnosticId = row.id
 
+    // 1b. Diagnóstico v2: a busca de concorrentes começa JÁ, em paralelo com a
+    // leitura do Instagram (antes esperava a página abrir — ~30-60 s a mais).
+    // A diagnosis-market responde na hora e continua sozinha; se falhar, a
+    // página do diagnóstico toca a análise do mesmo jeito.
+    fetch(`${supabaseUrl}/functions/v1/diagnosis-market`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseServiceKey}` },
+      body: JSON.stringify({ diagnostic_id: diagnosticId, drive: true }),
+      signal: AbortSignal.timeout(10_000),
+    }).catch(e => console.log('[run-diagnosis] diagnosis-market não disparou', String(e)))
+
     // 2. PageSpeed (só se houver site) e coleta do Instagram, em paralelo
     const categories = ['PERFORMANCE', 'SEO', 'ACCESSIBILITY', 'BEST_PRACTICES']
       .map(c => `category=${c}`)
