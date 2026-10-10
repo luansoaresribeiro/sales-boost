@@ -72,9 +72,6 @@ const TX = {
     loading: ['Entendendo seu negócio...', 'Montando seu perfil...', 'Analisando seu Instagram...', 'Analisando seu segmento...', 'Preparando seu diagnóstico...'],
     steps: ['Seu negócio', 'Seu cliente', 'Objetivo', 'Canais', 'Finalizar'], stepOf: (a: number, b: number) => `Passo ${a} de ${b}`,
     procErr: 'Erro ao processar diagnóstico', analyzingBiz: 'Analisando seu negócio',
-    doneT1: 'Seu negócio foi entendido.', doneT2: 'Vamos te ajudar a crescer.',
-    doneDesc: 'Coletamos as informações iniciais do seu negócio. A partir daqui, o Sales Boost aprende cada vez mais conforme você conecta seus canais — Instagram, WhatsApp, site — pra encontrar oportunidades de verdade.',
-    doneItems: ['Perfil do negócio criado', 'Objetivos registrados', 'Pronto pra conectar seus dados'], enter: 'Entrar no Sales Boost →',
     s0t: 'Vamos começar pelo seu negócio', s0s: 'Descubra o potencial do seu negócio em 2 minutos. Conte com suas palavras — assim o SalesBoost entende quem você é antes de qualquer coisa.',
     s0l: 'O que seu negócio faz?', s0p: 'Ex: Sou um estúdio de beleza que faz cabelo, unha e maquiagem para eventos...', s0h: 'Pode escrever livre. Quanto mais claro, melhores as recomendações.',
     s1t: 'Quem é seu cliente ideal?', s1s: 'Pra quem você mais quer vender? Não precisa de termos técnicos.', s1l: 'Descreva seu cliente ideal', s1p: 'Ex: Mulheres de 25 a 45 anos, no Rio, que valorizam autocuidado...', s1stage: 'Em que fase está seu negócio hoje?',
@@ -94,9 +91,6 @@ const TX = {
     loading: ['Understanding your business...', 'Building your profile...', 'Analyzing your Instagram...', 'Analyzing your segment...', 'Preparing your diagnosis...'],
     steps: ['Your business', 'Your customer', 'Goal', 'Channels', 'Finish'], stepOf: (a: number, b: number) => `Step ${a} of ${b}`,
     procErr: 'Error processing diagnosis', analyzingBiz: 'Analyzing your business',
-    doneT1: 'Your business has been understood.', doneT2: 'Let us help you grow.',
-    doneDesc: 'We collected the initial information about your business. From here on, Sales Boost learns more and more as you connect your channels — Instagram, WhatsApp, website — to find real opportunities.',
-    doneItems: ['Business profile created', 'Goals recorded', 'Ready to connect your data'], enter: 'Enter Sales Boost →',
     s0t: 'Let us start with your business', s0s: 'Discover your business potential in 2 minutes. Tell us in your own words — so SalesBoost understands who you are before anything else.',
     s0l: 'What does your business do?', s0p: 'E.g.: I run a beauty studio that does hair, nails and makeup for events...', s0h: 'Feel free to write. The clearer, the better the recommendations.',
     s1t: 'Who is your ideal customer?', s1s: 'Who do you most want to sell to? No technical terms needed.', s1l: 'Describe your ideal customer', s1p: 'E.g.: Women aged 25 to 45, in Rio, who value self-care...', s1stage: 'What stage is your business at today?',
@@ -347,8 +341,6 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   const [loadingMsg, setLoadingMsg] = useState('')
   const [error, setError] = useState('')
   const [businessTypes, setBusinessTypes] = useState<string[]>([])
-  const [diagnosticId, setDiagnosticId] = useState<string | null>(null)
-  const [claimed, setClaimed] = useState(false)
   const [fichaName, setFichaName] = useState('')
   const [fichaQuestions, setFichaQuestions] = useState<PlaybookQuestion[]>([])
 
@@ -418,17 +410,18 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
       // cadastro com ?claim= — liga o diagnóstico à conta aqui mesmo, senão o
       // botão final mandava criar uma conta nova e a pessoa ficava travada.
       if (session && !embedded) {
-        const claim = await fetch(`${supabaseUrl}/functions/v1/claim-diagnostic`, {
+        await fetch(`${supabaseUrl}/functions/v1/claim-diagnostic`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
           body: JSON.stringify({ diagnostic_id: result.id }),
         })
-        if (claim.ok) setClaimed(true)
       }
       clearInterval(interval)
       setSubmitting(false)
       if (embedded && onDone) onDone(result.id)
-      else setDiagnosticId(result.id)
+      // Direto pro diagnóstico (a tela intermediária "Seu negócio foi entendido"
+      // saiu — decisão do dono 2026-10-10: menos cliques até o vídeo grátis).
+      else navigate(`/diagnostico/${result.id}`)
     } catch (e) {
       clearInterval(interval)
       setError(e instanceof Error ? e.message : String(e))
@@ -449,39 +442,6 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
         </div>
         <div style={{ fontFamily: D, fontSize: '1.4rem', fontWeight: 800, color: 'white', marginBottom: '12px', textAlign: 'center' }}>{t.analyzingBiz}</div>
         <div style={{ fontSize: '14px', color: MUTED, textAlign: 'center', transition: 'opacity 0.5s' }}>{loadingMsg || t.loading[0]}</div>
-      </div>
-    )
-  }
-
-  // Tela final "negócio entendido" — confirma o que foi captado antes de
-  // levar pro diagnóstico, em vez de pular direto pra lá. Deixa claro que é
-  // o PERFIL INICIAL que está pronto, não que a IA já entendeu tudo — o
-  // resto (Instagram, WhatsApp, site, CRM) continua sendo aprendido depois
-  // por conexões reais, feitas em Configurações.
-  if (diagnosticId) {
-    return (
-      <div style={{ ...shell, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-        <div style={{ width: '100%', maxWidth: '480px', textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '20px' }}>✨</div>
-          <h1 style={{ fontFamily: D, fontSize: '1.7rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '10px' }}>
-            {t.doneT1}<br />{t.doneT2}
-          </h1>
-          <p style={{ color: MUTED, fontSize: '14px', lineHeight: 1.6, marginBottom: '28px' }}>
-            {t.doneDesc}
-          </p>
-          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px', padding: '20px 22px', marginBottom: '24px', textAlign: 'left' }}>
-            {t.doneItems.map((item, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 0' }}>
-                <span style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.4)', color: '#4ade80', fontSize: '11px', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✓</span>
-                <span style={{ fontSize: '13.5px', color: 'white' }}>{item}</span>
-              </div>
-            ))}
-          </div>
-          <button onClick={() => navigate(claimed ? '/setup' : `/diagnostico/${diagnosticId}`)}
-            style={{ width: '100%', padding: '14px 24px', background: ORANGE, color: '#000', fontWeight: 800, fontSize: '15px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontFamily: D, letterSpacing: '-0.01em', boxShadow: '0 8px 20px rgba(255,109,41,0.3)' }}>
-            {t.enter}
-          </button>
-        </div>
       </div>
     )
   }

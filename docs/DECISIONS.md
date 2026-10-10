@@ -716,3 +716,28 @@ grátis de 30 s, acima — mantidos como histórico):
   números ("posts com 3-4 curtidas") e citou bio de concorrente que não lemos.
   Isso fere a regra de nunca inventar número, então ficou o Sonnet, com textos
   mais curtos.
+
+## 2026-10-10 — Novo caminho: diagnóstico → criar conta → só vídeos grátis até pagar (decisão do dono)
+
+- **Ordem:** cadastro → diagnóstico (sem a tela intermediária "Seu negócio foi
+  entendido") → botão **"Entrar no painel e criar meus vídeos grátis"** →
+  **só criar conta** → já entra logado, sem passar pelo login.
+  - Se a pessoa já está logada, o botão liga o diagnóstico à conta e entra.
+  - Se o Supabase exigir confirmação de e-mail, a pessoa cai no login normal.
+    Hoje a produção não exige; o ensaio exige.
+- **Antes de pagar ("modo grátis"):** a conta nova só vê a página `/gratis`.
+  Qualquer outra rota do painel leva pra lá. A página conduz aos 3 vídeos
+  grátis e, quando ficam prontos, mostra o que o plano libera e os planos com o
+  cupom do 1º mês.
+  - Regra: `isFreeMode` em `src/lib/setupGate.ts`.
+  - Vale só pra contas criadas a partir de 2026-10-06. Liga dos Sonhos e a
+    conta Sales Boost ficam como estavam.
+- **Dados adicionais (`/setup`):** só depois de pagar. Quem paga volta do
+  checkout, a página espera a confirmação do pagamento e leva pro `/setup`;
+  depois, o painel inteiro.
+- **O que deixou de valer pras contas novas:** os 7 dias de teste com o painel
+  inteiro. O `claim-diagnostic` ainda grava as datas de teste, mas a tela não
+  usa mais. A página de resumo do teste (`/dashboard/trial`) continua só pras
+  contas antigas.
+- Escolha de plano + checkout + cupom foram pra `PlanOffer.tsx`, usado tanto
+  no resumo do teste quanto no `/gratis`.

@@ -33,7 +33,8 @@ import LeadDiscoverySettingsPage from './pages/owner/LeadDiscoverySettingsPage.t
 import OwnerSettingsPage from './pages/owner/OwnerSettingsPage.tsx'
 import PlatformHealthPage from './pages/owner/PlatformHealthPage.tsx'
 import SetupPage from './pages/setup/SetupPage.tsx'
-import { setupGateApplies } from './lib/setupGate.ts'
+import { isFreeMode, setupGateApplies } from './lib/setupGate.ts'
+import FreePage from './pages/free/FreePage.tsx'
 import { useSetupStatus } from './lib/useSetupStatus.ts'
 import OnboardingPage from './pages/onboarding/OnboardingPage.tsx'
 import DiagnosticoPage from './pages/diagnostico/DiagnosticoPage.tsx'
@@ -94,6 +95,15 @@ function ClientRoute({ children }: { children: React.ReactNode }) {
   // access===null só acontece enquanto ainda está carregando (companyLoading
   // já cobre isso) ou se a chamada falhou — nesse caso não bloqueia (falha
   // aberta), pra um erro de rede não trancar um cliente de verdade fora.
+  // Conta nova que ainda não pagou: só a página dos vídeos grátis (/gratis),
+  // que depois mostra o plano e o cupom. Dados adicionais (/setup) e o resto do
+  // painel só depois de pagar (decisão do dono 2026-10-10). Leva o ?query junto
+  // (ex.: volta do checkout com upgrade=success).
+  if (isFreeMode(company, access)) {
+    if (location.pathname !== '/gratis') return <Navigate to={`/gratis${location.search}`} replace />
+    return <>{children}</>
+  }
+  if (location.pathname === '/gratis') return <Navigate to={`/dashboard${location.search}`} replace />
   const exempt = location.pathname.startsWith('/dashboard/trial') || location.pathname.startsWith('/dashboard/settings') || location.pathname.startsWith('/dashboard/access-blocked')
   if (access && !access.granted && !exempt) {
     return <Navigate to={access.source === 'blocked' ? '/dashboard/access-blocked' : '/dashboard/trial'} replace />
@@ -102,7 +112,7 @@ function ClientRoute({ children }: { children: React.ReactNode }) {
   // ordem: bug "recarreguei e caí no onboarding"). Não se aplica ao próprio
   // /setup nem às telas de acesso/plano.
   const accessScreen = location.pathname.startsWith('/dashboard/trial') || location.pathname.startsWith('/dashboard/access-blocked')
-  if (!accessScreen && location.pathname !== '/setup' && setupGateApplies(company)) {
+  if (!accessScreen && location.pathname !== '/setup' && setupGateApplies(company, access)) {
     return <SetupGate companyId={company.id}>{children}</SetupGate>
   }
   return <>{children}</>
@@ -165,6 +175,8 @@ function RouterRoot() {
 
       {/* Fim do cadastro: atrás do login, fora do DashboardLayout */}
       <Route path="/setup" element={<ClientRoute><SetupPage /></ClientRoute>} />
+      {/* Conta nova antes de pagar: só os vídeos grátis + plano/cupom */}
+      <Route path="/gratis" element={<ClientRoute><FreePage /></ClientRoute>} />
       <Route path="/onboarding" element={<OnboardingPage />} />
       <Route path="/diagnostico/:id" element={<DiagnosticoPage />} />
       <Route path="/privacidade" element={<PrivacyPolicyPage />} />

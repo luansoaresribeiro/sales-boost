@@ -49,7 +49,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 // ClientRoute, src/main.tsx). Abrir /setup já completa mostra a tela normal,
 // com o botão liberado (sem redirecionar — evita qualquer loop com o gate).
 export default function SetupPage() {
-  const { company, refreshCompany } = useCompany()
+  const { company, access, refreshCompany } = useCompany()
   const { lang } = useLang()
   const tx = TX[lang]
   const navigate = useNavigate()
@@ -70,7 +70,7 @@ export default function SetupPage() {
     )
   }
 
-  const gated = setupGateApplies(company)
+  const gated = setupGateApplies(company, access)
   // Contas fora do gate (antigas/pagantes) ou erro ao calcular: o botão nunca trava.
   const canGo = status.allDone || !gated || status.error
   const firstPending = status.steps.find(s => !s.done)?.id ?? null

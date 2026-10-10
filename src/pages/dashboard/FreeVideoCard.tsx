@@ -13,7 +13,7 @@ import { processImageTo4x5 } from '../../lib/imageProcessing'
 import { useLang } from '../../contexts/LanguageContext'
 import { CARD, MUTED, ORANGE, D, SUPABASE_URL } from './marketingAi/shared'
 
-type State = 'loading' | 'none' | 'uploading' | 'processing' | 'completed' | 'cap' | 'error'
+export type State = 'loading' | 'none' | 'uploading' | 'processing' | 'completed' | 'cap' | 'error'
 
 const POLL_MS = 10_000
 // Igual a TRIAL_PHOTOS da função trial-video (padrão 3).
@@ -78,7 +78,12 @@ async function callFn(body: Record<string, unknown>): Promise<{ status: number; 
   return { status: res.status, data: await res.json().catch(() => ({})) }
 }
 
-export default function FreeVideoCard({ companyId }: { companyId: string }) {
+// onActivate: o que "Ativar meu plano" faz (padrão: tela do plano do trial
+// antigo). onState: avisa quem hospeda (ex.: /gratis) em que pé estão os vídeos
+// e quando o popup do cupom abriu — pra mostrar a oferta do plano na hora certa.
+export default function FreeVideoCard({ companyId, onActivate, onState }: {
+  companyId: string; onActivate?: () => void; onState?: (s: { state: State; couponShown: boolean }) => void
+}) {
   const tx = TX[useLang().lang]
   const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -90,6 +95,9 @@ export default function FreeVideoCard({ companyId }: { companyId: string }) {
   // Fotos escolhidas, na ordem da visita (a ordem da escolha é a ordem do vídeo).
   const [picked, setPicked] = useState<{ file: File; preview: string }[]>([])
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+
+  const activate = () => { setModal(false); if (onActivate) onActivate(); else navigate('/dashboard/trial') }
+  useEffect(() => { onState?.({ state, couponShown: modal }) }, [state, modal, onState])
 
   const pickedRef = useRef(picked)
   useEffect(() => { pickedRef.current = picked }, [picked])
@@ -222,7 +230,7 @@ export default function FreeVideoCard({ companyId }: { companyId: string }) {
       {state === 'cap' && (
         <>
           <p style={{ fontSize: '13px', color: MUTED, lineHeight: 1.6, margin: '0 0 14px' }}>{tx.cap}</p>
-          <button style={btn} onClick={() => navigate('/dashboard/trial')}>{tx.activate}</button>
+          <button style={btn} onClick={activate}>{tx.activate}</button>
         </>
       )}
 
@@ -260,7 +268,7 @@ export default function FreeVideoCard({ companyId }: { companyId: string }) {
               <span style={{ fontSize: '12px', color: MUTED }}>{tx.priceNote}</span>
             </div>
             <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '14px' }}>{tx.valid}</div>
-            <button style={{ ...btn, width: '100%', padding: '14px' }} onClick={() => navigate('/dashboard/trial')}>{tx.activate}</button>
+            <button style={{ ...btn, width: '100%', padding: '14px' }} onClick={activate}>{tx.activate}</button>
             <button onClick={() => setModal(false)} style={{ display: 'block', width: '100%', marginTop: '8px', padding: '10px', background: 'transparent', border: 'none', color: MUTED, fontSize: '12.5px', cursor: 'pointer', fontFamily: D }}>{tx.later}</button>
           </div>
         </div>

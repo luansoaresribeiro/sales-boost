@@ -74,8 +74,8 @@ const TX = {
     howCalc: '▸ Como calculamos',
     calc1: 'A nota vem do seu Instagram. Site e Google só somam se existirem. O que não conseguimos ver fica "não avaliado" e sai da conta — nada é inventado nem penaliza você.',
     pts: 'pts', calc2: 'Nota = pontos dos critérios avaliados ÷ pontos possíveis deles × 100. Com menos de 40% dos critérios avaliados, mostramos "Análise parcial", sem veredito.',
-    cta: 'Criar conta e receber meu vídeo grátis →',
-    ctaSub: 'Seu vídeo grátis está em liberação — avisamos quando estiver pronto. Sem cartão.',
+    cta: 'Entrar no painel e criar meus vídeos grátis →',
+    ctaSub: 'Crie sua conta em segundos, sem cartão, e gere 3 vídeos grátis do seu imóvel.',
     ctaPlan: 'A estratégia completa faz parte do plano pago.',
   },
   en: {
@@ -95,8 +95,8 @@ const TX = {
     howCalc: '▸ How we calculate',
     calc1: 'The score comes from your Instagram. Website and Google only add if they exist. What we cannot see stays "not evaluated" and is left out of the calculation — nothing is made up and nothing penalizes you.',
     pts: 'pts', calc2: 'Score = points of the evaluated criteria ÷ their possible points × 100. With fewer than 40% of the criteria evaluated, we show "Partial analysis", with no verdict.',
-    cta: 'Create account and get my free video →',
-    ctaSub: 'Your free video is being released — we will let you know when it is ready. No card.',
+    cta: 'Enter the dashboard and create my free videos →',
+    ctaSub: 'Create your account in seconds, no card, and make 3 free videos of your property.',
     ctaPlan: 'The full strategy is part of the paid plan.',
   },
 }
@@ -177,6 +177,20 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
       <Link to="/onboarding" style={{ color: ORANGE, textDecoration: 'none', fontSize: 14 }}>{t.createNew}</Link>
     </div>
   )
+
+  // Botão final (decisão do dono 2026-10-10): leva direto pro painel. Sem
+  // conta → só "criar conta" (e já entra). Já logado → liga o diagnóstico à
+  // conta (se ainda não estiver) e entra.
+  const enterDashboard = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { navigate(`/signup?claim=${diag.id}`); return }
+    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/claim-diagnostic`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ diagnostic_id: diag.id }),
+    }).catch(() => {})
+    window.location.assign('/dashboard')
+  }
 
   const color = VERDICT_COLOR[result.verdict ?? 'partial']
   const partial = result.state === 'partial'
@@ -358,7 +372,7 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
 
         {/* CTA */}
         <button
-          onClick={() => navigate(`/signup?claim=${diag.id}`)}
+          onClick={() => void enterDashboard()}
           style={{ display: 'block', width: '100%', minHeight: 52, padding: '14px 20px', background: ORANGE, color: '#000', fontFamily: D, fontWeight: 900, fontSize: 16, borderRadius: 14, border: 'none', cursor: 'pointer', boxShadow: '0 12px 32px rgba(255,109,41,0.35)' }}
         >
           {t.cta}
