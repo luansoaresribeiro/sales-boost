@@ -195,3 +195,12 @@ Estratégia (bloco "Conteúdo & Campanha").
   Testado: validação do catálogo/mix (casos de chave inventada, "em breve",
   repetida, acima do teto), compilação das duas functions e a tela com um
   plano montado a partir do catálogo real (desktop e 390 px, sem erro).
+
+## Trends de verdade (2026-10-09)
+
+Primeira fonte externa real de "o que está em alta": o diagnóstico grátis
+(`diagnosis-market`, ver [DECISIONS.md](DECISIONS.md)) lê os posts que mais
+engajam nas hashtags da região nos últimos 30 dias e grava os 5 melhores em
+`marketing_ai_trends` (`source='diagnostico'`) quando a conta é criada.
+**Divergência registrada:** o planejador da semana ainda não lê essa tabela
+pra decidir os posts — próximo passo é ligar `post_trend` a ela.

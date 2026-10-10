@@ -653,3 +653,46 @@ grátis de 30 s, acima — mantidos como histórico):
 - Testado no ensaio: conta logada, cadastro sem nome → empresa "Perfil
   pessoal", `profile_type=pessoal`, botão final → `/setup`; empresas antigas
   ficaram `profissional`.
+
+## 2026-10-09 — Diagnóstico grátis v2: concorrentes + o que está em alta (aprovado pelo dono)
+
+- **Pedido do dono:** o diagnóstico grátis tem que ser específico e mostrar
+  valor na hora — comparar com concorrentes e mostrar o que está em alta.
+  "Sempre deve buscar concorrentes e trends" (automático, sem perguntar).
+  Custo: o dono pediu o menor possível e aprovou a Apify agora (centavos por
+  diagnóstico); depois da aprovação do app na Meta, trocar pelas APIs grátis
+  da Meta (Business Discovery + Hashtag Search).
+- **Como ficou:** função nova `diagnosis-market` (+ `_shared/marketScan.ts`).
+  A página `/diagnostico/:id` chama a cada 5 s e cada chamada avança uma
+  etapa: lê até 60 posts recentes das hashtags da região
+  (`apidojo~instagram-scraper`), escolhe os 3 perfis que mais postam ali
+  (`apify~instagram-profile-scraper`) e o Claude escreve 3 descobertas + 3
+  ideias de post usando SÓ os números lidos. Hashtags vêm da ficha
+  (`vertical_playbooks.config.market_hashtags`, ex. `imoveis{local}`) +
+  bairros do cadastro + cidade — nada de setor no código.
+- **Travas de custo:** só começa pra diagnóstico novo (até 30 min);
+  teto mensal `MARKET_SCAN_MONTHLY_CAP` (padrão 150); trava contra abas
+  duplicadas; sem `APIFY_TOKEN` a seção some e o resto do diagnóstico fica
+  igual.
+- **Alimenta a conta:** quando o diagnóstico vira conta (`claim-diagnostic`)
+  ou já está ligado a uma empresa, os concorrentes entram em
+  `marketing_ai_competitors` e os posts em alta em `marketing_ai_trends`
+  (`source='diagnostico'`).
+- **Teste real em produção (conta de teste, @getsaleboost, Botafogo +
+  Copacabana):** pronto em ~1,5 min; achou 3 imobiliárias da região
+  (831, 1.176 e 105 seguidores), 5 posts em alta e as descobertas citaram só
+  números reais (ex.: último post do perfil foi 08/09 → "0 posts em 30
+  dias", conferido no banco). Custo estimado pelos preços da Apify: até
+  60 posts × US$0,0005 + 3 perfis × ~US$0,0026 ≈ US$0,04 + 1 chamada do
+  Claude.
+- **2026-10-10 — descobertas viram "pontos fracos" (pedido do dono):** a
+  seção passa a se chamar "O que está te fazendo perder clientes no
+  Instagram". O Claude recebe também a bio, o link na bio, os destaques, a
+  conta comercial e os dias desde o último post, e aponta os pontos fracos do
+  mais grave para o menos grave, comparando com os concorrentes. Não pode
+  inventar defeito nem número. Testado em produção (conta de teste): apontou
+  "31 dias sem postar", "bio sem região nem contato" e "só 3 posts", todos
+  conferidos no banco. Também foi corrigido um erro: a tabela
+  `marketing_ai_trends` só aceita `relevance` high|medium|low, e estava indo
+  "alta". Agora os posts em alta entram na conta junto com os concorrentes
+  (testado: 4 concorrentes e 5 posts em alta gravados).

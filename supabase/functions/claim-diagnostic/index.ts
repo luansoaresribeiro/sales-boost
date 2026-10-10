@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { feedCompany, type MarketData } from '../_shared/marketScan.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -170,6 +171,14 @@ Deno.serve(async (req) => {
       .from('diagnostics')
       .update({ company_id: companyId, user_id: user.id })
       .eq('id', diagnostic_id)
+
+    // Diagnóstico v2: concorrentes e trends já lidos viram dado do agente de
+    // dados/estratégia. Se a busca ainda não terminou, o diagnosis-market faz
+    // isso ao terminar (ele já enxerga o company_id gravado acima).
+    const market = diag.market_data as MarketData | null
+    if (market?.status === 'done') {
+      try { await feedCompany(serviceClient, companyId, market) } catch (e) { console.error('claim-diagnostic: feedCompany falhou', e) }
+    }
 
     return json({ company_id: companyId, diagnostic_id })
 
