@@ -308,3 +308,18 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   rodar no repositório inteiro `npm run build && npm run lint` e conferir que
   sai **0 errors** (os warnings antigos não reprovam). Depois do push, conferir
   os checks do PR e não dar a tarefa por concluída enquanto houver vermelho.
+
+## Diagnóstico v2 sumia quando a cidade vinha como sigla ("Rj") (2026-10-10)
+
+- **O que aconteceu:** o dono testou com cidade "Rj" e sem bairros. As
+  hashtags da região saem de bairros + cidade, e nomes com menos de 3 letras
+  eram descartados → nenhuma hashtag → `market_data.status = unavailable /
+  sem_hashtags` → a seção some sem aviso. Nos testes usamos sempre "Rio de
+  Janeiro / RJ" com bairros, então não apareceu.
+- **Correção:** a cidade usa o primeiro pedaço com 3+ letras e, se só houver
+  sigla, usa a sigla (`#imoveisrj` é comum). Testado em produção com "Rj" sem
+  bairros: achou 3 concorrentes e 5 posts em alta.
+- **Também:** a seção ficava lá embaixo e demora 1-2 min; o dono não via nem o
+  "Analisando…". Ela foi pra logo abaixo da nota.
+- **Lição:** testar com o jeito que um usuário de verdade preenche (siglas,
+  campos vazios), não só com o caso ideal.

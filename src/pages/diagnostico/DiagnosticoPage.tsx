@@ -230,6 +230,11 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
           )}
         </div>
 
+        {/* Diagnóstico v2: concorrentes + o que está em alta (diagnosis-market).
+            Logo abaixo da nota: leva 1-2 min, e lá embaixo o dono não via
+            nem o "Analisando…" (feedback do dono 2026-10-10). */}
+        {!noIgYet && <MarketSection diagnosticId={diag.id} own={diag.instagram_data} lang={lang} />}
+
         {/* Potencial + principais problemas (regra fixa em growthScore.topGaps) */}
         {!noIgYet && result.criteria.some(c => c.evaluated && ['frequency', 'engagement', 'format', 'profile'].includes(c.key)) && (() => {
           const gaps = topGaps(result, lang, 3)
@@ -337,9 +342,6 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
             ))}
           </div>
         </details>
-
-        {/* Diagnóstico v2: concorrentes + o que está em alta (diagnosis-market) */}
-        {!noIgYet && <MarketSection diagnosticId={diag.id} own={diag.instagram_data} lang={lang} />}
 
         {/* CTA */}
         <button
