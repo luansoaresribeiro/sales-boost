@@ -323,3 +323,15 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   "Analisando…". Ela foi pra logo abaixo da nota.
 - **Lição:** testar com o jeito que um usuário de verdade preenche (siglas,
   campos vazios), não só com o caso ideal.
+
+## Raspador de hashtags às vezes volta `{"noResults":true}` (2026-10-10)
+
+- O `apidojo~instagram-scraper` respondeu só com `{"noResults":true}` em
+  todas as buscas de um intervalo de ~10 min (03:09–03:12 UTC). Às 03:01, a
+  mesma hashtag (#imoveisrj) tinha trazido posts. A causa ainda não está
+  clara: limite do raspador, bloqueio do Instagram ou do plano da Apify.
+- O que o sistema faz: tenta de novo uma vez e, se continuar vazio, segue sem
+  concorrentes. A análise dos pontos fracos do próprio perfil continua
+  saindo. O log `[market] posts lidos N válidos M` mostra quando acontece.
+- Se isso virar rotina: olhar as execuções no painel da Apify, ou trocar pela
+  busca de hashtag gratuita da Meta depois da aprovação do app.

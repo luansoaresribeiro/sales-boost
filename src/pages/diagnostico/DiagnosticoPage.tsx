@@ -6,7 +6,7 @@ import {
   type InstagramData, type Verdict, type CriterionKey,
 } from '../../lib/growthScore'
 import { useLang } from '../../contexts/LanguageContext'
-import MarketSection from './MarketSection'
+import MarketSection, { DiagnosisLoader, useMarket } from './MarketSection'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -155,6 +155,15 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
     pagespeed_desktop: diag.pagespeed_desktop,
   }, lang) : null, [diag, lang])
 
+  // Análise da concorrência: a página só aparece quando ela termina (ou não
+  // vai rodar / passou do tempo) — até lá, logo + barra de progresso.
+  const igReady = !!diag && !(!diag.instagram_data && diag.status === 'processing' && waited < POLL_MAX_MS)
+  const { m: market, settled } = useMarket(id, !!diag)
+
+  if (!loading && diag && (!igReady || !settled)) return (
+    <DiagnosisLoader stage={!igReady ? 'instagram' : (market?.status ?? 'queued')} lang={lang} embedded={embedded} />
+  )
+
   if (loading) return (
     <div style={{ minHeight: embedded ? 200 : '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 40, height: 40, border: '3px solid rgba(255,109,41,0.15)', borderTopColor: ORANGE, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
@@ -173,6 +182,7 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
   const partial = result.state === 'partial'
   const igRow = ['frequency', 'engagement', 'format', 'profile'].map(k => result.criteria.find(c => c.key === k)!)
   const noIgYet = collecting // ainda coletando
+  const showGaps = !noIgYet && result.criteria.some(c => c.evaluated && ['frequency', 'engagement', 'format', 'profile'].includes(c.key))
   const ringLabel = partial ? t.partial : t.score(result.score)
   const info = lang === 'en' ? CRITERIA_INFO_EN : CRITERIA_INFO
   const bands = lang === 'en' ? VERDICT_BANDS_EN : VERDICT_BANDS
@@ -230,19 +240,18 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
           )}
         </div>
 
-        {/* Diagnóstico v2: concorrentes + o que está em alta (diagnosis-market).
-            Logo abaixo da nota: leva 1-2 min, e lá embaixo o dono não via
-            nem o "Analisando…" (feedback do dono 2026-10-10). */}
-        {!noIgYet && <MarketSection diagnosticId={diag.id} own={diag.instagram_data} lang={lang} />}
-
         {/* Potencial + principais problemas (regra fixa em growthScore.topGaps) */}
-        {!noIgYet && result.criteria.some(c => c.evaluated && ['frequency', 'engagement', 'format', 'profile'].includes(c.key)) && (() => {
+        {!showGaps && <MarketSection m={market} own={diag.instagram_data} lang={lang} />}
+        {showGaps && (() => {
           const gaps = topGaps(result, lang, 3)
           const pot = potentialScore(result, gaps)
           if (!gaps.length) return (
-            <div style={{ background: CARD, border: '1px solid rgba(74,222,128,0.3)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
-              <p style={{ fontSize: 13, color: 'white', lineHeight: 1.6, margin: 0 }}>{t.noGap}</p>
-            </div>
+            <>
+              <div style={{ background: CARD, border: '1px solid rgba(74,222,128,0.3)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
+                <p style={{ fontSize: 13, color: 'white', lineHeight: 1.6, margin: 0 }}>{t.noGap}</p>
+              </div>
+              <MarketSection m={market} own={diag.instagram_data} lang={lang} />
+            </>
           )
           return (
             <>
@@ -267,6 +276,10 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
                   <p style={{ fontSize: 14, color: 'white', lineHeight: 1.6, margin: 0 }}>{t.potPartial}</p>
                 )}
               </div>
+
+              {/* Ordem pedida pelo dono (2026-10-10): nota e potencial em cima,
+                  análise (concorrência) e explicação embaixo. */}
+              <MarketSection m={market} own={diag.instagram_data} lang={lang} />
 
               <div style={{ background: CARD, border: '1px solid rgba(255,109,41,0.3)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
                 <h2 style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 800, color: 'white', margin: '0 0 4px' }}>{t.problemsTitle(gaps.length)}</h2>
