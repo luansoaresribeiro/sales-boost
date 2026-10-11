@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
 
     const { data: companies } = await admin
       .from('companies')
-      .select('id, user_id, business_name, business_type, profile_type, city, website_url, plan, active, created_at, trial_expires_at, trial_cancelled_at, stripe_subscription_id, subscription_status, current_period_end, manual_access, access_blocked_at, agent_enabled')
+      .select('id, user_id, business_name, business_type, profile_type, city, website_url, plan, active, created_at, trial_expires_at, trial_cancelled_at, stripe_subscription_id, subscription_status, current_period_end, manual_access, access_blocked_at, agent_enabled, delete_protected')
 
     const companyByUserId = Object.fromEntries((companies ?? []).map(c => [c.user_id, c]))
 
@@ -81,6 +81,12 @@ Deno.serve(async (req) => {
           access_source: source,
           access_status_label: statusLabel,
           agent_enabled: co?.agent_enabled ?? false,
+          // Exclusão em lote (painel do Owner): mesmas travas do owner-delete-company.
+          delete_lock: !co ? null
+            : co.delete_protected ? 'protegida'
+            : (co.stripe_subscription_id || ['active', 'trialing', 'past_due'].includes(co.subscription_status ?? '')) ? 'tem assinatura paga'
+            : co.manual_access ? 'tem acesso manual'
+            : null,
         }
       })
       .sort((a, b) => new Date(b.user_created_at).getTime() - new Date(a.user_created_at).getTime())
