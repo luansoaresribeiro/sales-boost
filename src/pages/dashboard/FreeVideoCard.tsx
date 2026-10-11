@@ -4,8 +4,8 @@
 // conta, teto global de 30/mês). Se a pessoa mandou as fotos no cadastro do
 // diagnóstico, o kit já vem pronto (ou em andamento) aqui. É ISCA, não o imóvel
 // inteiro: vai pro Instagram com "Comente QUERO". Todas as fotos passam pelo
-// mesmo recorte 4:5 (processImageTo4x5). Quando ficam prontos, abre o popup do cupom (1º mês
-// R$1.449) com o que o plano oferece. A data em que o popup aparece conta os 7
+// mesmo recorte 4:5 (processImageTo4x5). Quando ficam prontos, abre o popup do cupom (desconto
+// no 1º mês do mensal, valor por tipo de negócio em lib/pricing.ts) com o que o plano oferece. A data em que o popup aparece conta os 7
 // dias do cupom (coupon_offer_shown_at, servidor).
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -13,6 +13,8 @@ import { supabase } from '../../lib/supabase'
 import { processImageTo4x5 } from '../../lib/imageProcessing'
 import { KIT_PHOTOS, KIT_ROOMS } from '../../lib/giftKit'
 import KitPhotoPicker from '../../components/KitPhotoPicker'
+import { useCompany } from '../../contexts/CompanyContext'
+import { brl, PRICING, usePlanTier } from '../../lib/pricing'
 import { useLang } from '../../contexts/LanguageContext'
 import { CARD, MUTED, ORANGE, D, SUPABASE_URL } from './marketingAi/shared'
 
@@ -42,7 +44,7 @@ const TX = {
     b3: '🖼️ Posts e criativos na quantidade que a estratégia pedir',
     b4: '💬 Quem comentar QUERO recebe os dados do imóvel na DM na hora — e vira contato seu',
     b5: '✅ Nada vai ao ar sem a sua aprovação',
-    priceFrom: 'R$2.449/mês', priceTo: 'R$1.449', priceNote: 'no 1º mês com o seu cupom', valid: 'Cupom válido por 7 dias.',
+    perMonth: '/mês', priceNote: 'no 1º mês do mensal com o seu cupom', valid: 'Cupom válido por 7 dias.', coupon: (v: string) => `🎁 Seu cupom: ${v} de desconto`,
     later: 'Agora não', close: 'Fechar',
   },
   en: {
@@ -66,7 +68,7 @@ const TX = {
     b3: '🖼️ Posts and creatives in the amount the strategy calls for',
     b4: '💬 Whoever comments QUERO gets the property details in DMs right away — and becomes your lead',
     b5: '✅ Nothing goes live without your approval',
-    priceFrom: 'R$2,449/month', priceTo: 'R$1,449', priceNote: 'in the 1st month with your coupon', valid: 'Coupon valid for 7 days.',
+    perMonth: '/month', priceNote: 'in the 1st month of the monthly plan with your coupon', valid: 'Coupon valid for 7 days.', coupon: (v: string) => `🎁 Your coupon: ${v} off`,
     later: 'Not now', close: 'Close',
   },
 }
@@ -87,7 +89,10 @@ async function callFn(body: Record<string, unknown>): Promise<{ status: number; 
 export default function FreeVideoCard({ companyId, onActivate, onState }: {
   companyId: string; onActivate?: () => void; onState?: (s: { state: State; couponShown: boolean }) => void
 }) {
-  const tx = TX[useLang().lang]
+  const { lang } = useLang()
+  const tx = TX[lang]
+  const { company } = useCompany()
+  const price = PRICING[usePlanTier(company?.business_type)]
   const navigate = useNavigate()
   const [state, setState] = useState<State>('loading')
   const [videoUrls, setVideoUrls] = useState<string[]>([])
@@ -251,8 +256,9 @@ export default function FreeVideoCard({ companyId, onActivate, onState }: {
               {[tx.b1, tx.b2, tx.b3, tx.b4, tx.b5].map(b => <li key={b} style={{ fontSize: '13px', color: 'white', lineHeight: 1.45 }}>{b}</li>)}
             </ul>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', padding: '12px 14px', borderRadius: '12px', background: 'rgba(255,109,41,0.07)', border: '1px solid rgba(255,109,41,0.25)', marginBottom: '6px' }}>
-              <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', textDecoration: 'line-through' }}>{tx.priceFrom}</span>
-              <span style={{ fontSize: '26px', fontWeight: 900, color: ORANGE }}>{tx.priceTo}</span>
+              <span style={{ width: '100%', fontSize: '15px', fontWeight: 900, color: '#4ade80' }}>{tx.coupon(brl(price.coupon, lang))}</span>
+              <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)', textDecoration: 'line-through' }}>{brl(price.monthly, lang)}{tx.perMonth}</span>
+              <span style={{ fontSize: '26px', fontWeight: 900, color: ORANGE }}>{brl(price.monthly - price.coupon, lang)}</span>
               <span style={{ fontSize: '12px', color: MUTED }}>{tx.priceNote}</span>
             </div>
             <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '14px' }}>{tx.valid}</div>

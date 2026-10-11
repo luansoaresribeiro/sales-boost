@@ -70,8 +70,9 @@ async function handlePreco(chatId: number, _text: string, env: Record<string, st
     env,
     chatId,
     'Plano SalesBoost:\\n' +
-      '• Mensal: R$ 2.449/mês, sem fidelidade\n' +
-      '• Anual: R$ 1.449/mês, fidelidade de 12 meses (cancelar antes = multa de 30% das mensalidades restantes)\n' +
+      '• Imobiliária — Mensal: R$ 2.449/mês, sem fidelidade · Anual: R$ 1.449/mês, fidelidade de 12 meses\n' +
+      '• Corretor(a) — Mensal: R$ 797/mês, sem fidelidade · Anual: R$ 597/mês, fidelidade de 12 meses\n' +
+      '• No anual, cancelar antes dos 12 meses = multa de 30% das mensalidades restantes\n' +
       '• Diagnóstico grátis pra começar\n\n' +
       'Use /agendar para uma demonstração personalizada.',
   );
