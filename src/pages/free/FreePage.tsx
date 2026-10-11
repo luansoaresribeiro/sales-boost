@@ -1,6 +1,6 @@
 // Página das contas novas ANTES de pagar (decisão do dono 2026-10-10,
-// docs/DECISIONS.md): o painel inteiro fica fechado e tudo leva aos 3 vídeos
-// grátis. Quando os vídeos ficam prontos, mostra o que o plano libera e o
+// docs/DECISIONS.md): o painel inteiro fica fechado e tudo leva ao kit grátis
+// (2 vídeos + 1 criativo, decisão 2026-10-11). Quando o kit fica pronto, mostra o que o plano libera e o
 // cupom do 1º mês. Os dados adicionais (/setup) só são pedidos depois de
 // pagar. Quem decide se a conta cai aqui é isFreeMode (lib/setupGate.ts).
 import { useCallback, useEffect, useState } from 'react'
@@ -23,10 +23,10 @@ const CONFIRM_MAX_MS = 90_000
 const TX = {
   pt: {
     logout: 'Sair', tag: 'Seu acesso grátis',
-    h1: 'Crie seus 3 vídeos grátis', h1Done: 'Seus vídeos grátis estão prontos 🎉',
-    sub: 'Escolha 3 fotos reais do seu imóvel e a IA transforma cada uma num vídeo curto com movimento de câmera — sem inventar nada.',
-    steps: ['Escolha 3 fotos dos cômodos mais bonitos', 'A IA cria os vídeos (leva alguns minutos)', 'Publique com "Comente QUERO" e receba os interessados'],
-    next: 'Depois dos vídeos, você vê tudo o que o Sales Boost faz com o plano — e ganha um cupom pro 1º mês.',
+    h1: 'Seu kit grátis: 2 vídeos + 1 criativo', h1Done: 'Seu kit grátis está pronto 🎉',
+    sub: 'Com fotos reais do seu imóvel: 2 vídeos com movimento de câmera tipo drone e 1 criativo com acabamento profissional — sem inventar nada.',
+    steps: ['Escolha 2 fotos de cômodos e 1 foto de destaque', 'A IA cria o kit (leva alguns minutos)', 'Publique com "Comente QUERO" e receba os interessados'],
+    next: 'Depois do kit, você vê tudo o que o Sales Boost faz com o plano — e ganha um cupom pro 1º mês.',
     unlockT: 'O que o plano libera',
     unlock: [
       '🎬 Vídeos curtos dos seus imóveis toda semana, feitos com as suas fotos reais',
@@ -43,10 +43,10 @@ const TX = {
   },
   en: {
     logout: 'Log out', tag: 'Your free access',
-    h1: 'Create your 3 free videos', h1Done: 'Your free videos are ready 🎉',
-    sub: 'Pick 3 real photos of your property and the AI turns each one into a short video with camera movement — nothing made up.',
-    steps: ['Pick 3 photos of the best rooms', 'The AI creates the videos (takes a few minutes)', 'Post them with "Comment QUERO" and get interested buyers'],
-    next: 'After the videos, you will see everything Sales Boost does with the plan — and get a coupon for the 1st month.',
+    h1: 'Your free kit: 2 videos + 1 creative', h1Done: 'Your free kit is ready 🎉',
+    sub: 'From real photos of your property: 2 videos with drone-like camera movement and 1 creative with a professional finish — nothing made up.',
+    steps: ['Pick 2 room photos and 1 highlight photo', 'The AI creates the kit (takes a few minutes)', 'Post them with "Comment QUERO" and get interested buyers'],
+    next: 'After the kit, you will see everything Sales Boost does with the plan — and get a coupon for the 1st month.',
     unlockT: 'What the plan unlocks',
     unlock: [
       '🎬 Short videos of your properties every week, made from your real photos',

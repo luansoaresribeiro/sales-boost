@@ -12,7 +12,10 @@
 type Any = any
 
 const APIFY = 'https://api.apify.com/v2'
-const POSTS_ACTOR = 'apidojo~instagram-scraper' // US$ 0,0005 por post (2026-10-09)
+// Raspador OFICIAL de hashtags da Apify (~US$ 0,0023 por post). O barato
+// (apidojo~instagram-scraper, US$ 0,0005) passou a voltar só {"noResults":true}
+// desde 2026-10-10 — trocado em 2026-10-11 (docs/PITFALLS.md).
+const POSTS_ACTOR = 'apify~instagram-hashtag-scraper'
 const PROFILES_ACTOR = 'apify~instagram-profile-scraper' // ~US$ 0,0026 por perfil
 const MAX_POSTS = 60
 const MAX_COMPETITORS = 3
@@ -65,10 +68,11 @@ export function marketHashtags(templates: string[] | null, businessType: string 
   return out.slice(0, 4)
 }
 
-const num = (...vs: unknown[]) => { for (const v of vs) if (typeof v === 'number' && Number.isFinite(v)) return v; return null }
+// Curtidas escondidas vêm como -1: vira "sem dado" (null), nunca número inventado.
+const num = (...vs: unknown[]) => { for (const v of vs) if (typeof v === 'number' && Number.isFinite(v)) return v >= 0 ? v : null; return null }
 const str = (...vs: unknown[]) => { for (const v of vs) if (typeof v === 'string' && v) return v; return null }
 
-// Formato dos itens do ator barato não é documentado — lê vários nomes possíveis.
+// Lê vários nomes possíveis de campo (os raspadores mudam o formato sem aviso).
 export function normalizePost(x: Any): MarketPost {
   const cap = typeof x?.caption === 'string' ? x.caption : (x?.caption?.text ?? x?.text ?? '')
   const code = str(x?.shortCode, x?.shortcode, x?.code)
@@ -156,8 +160,8 @@ const abort = (runId: string, token: string) => fetch(`${APIFY}/actor-runs/${run
 const tooOld = (iso?: string) => !!iso && Date.now() - Date.parse(iso) > RUN_TIMEOUT_MS
 
 function startPosts(hashtags: string[], token: string) {
-  const until = new Date(Date.now() - 45 * DAY).toISOString().slice(0, 10)
-  return apifyStart(POSTS_ACTOR, { startUrls: hashtags.map(h => `https://www.instagram.com/explore/tags/${h}/`), maxItems: MAX_POSTS, until }, token)
+  const resultsLimit = Math.ceil(MAX_POSTS / Math.max(1, hashtags.length))
+  return apifyStart(POSTS_ACTOR, { hashtags, resultsLimit, resultsType: 'posts', onlyPostsNewerThan: '45 days' }, token)
 }
 
 export interface AdvanceCtx { token: string; anthropicKey: string | null; templates: string[] | null; ownHandle: string | null; own: Any; business: string; waitSecs?: number }

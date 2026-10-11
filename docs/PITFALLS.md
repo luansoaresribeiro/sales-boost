@@ -335,3 +335,22 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   saindo. O log `[market] posts lidos N válidos M` mostra quando acontece.
 - Se isso virar rotina: olhar as execuções no painel da Apify, ou trocar pela
   busca de hashtag gratuita da Meta depois da aprovação do app.
+- **Atualização 2026-10-11:** virou rotina. Desde 2026-10-10 03:09 UTC o
+  `apidojo` só devolve vazio. Trocado pelo raspador **oficial**
+  `apify~instagram-hashtag-scraper` (~US$ 0,0023 por post, 60 posts por
+  diagnóstico ≈ US$ 0,14). Teste em produção: diagnóstico completo
+  (concorrentes + em alta + descobertas) em 56 s. O texto acima fica como
+  histórico.
+
+## Bucket `post-images` de produção aceita no máximo 5 MB por arquivo (2026-10-11)
+
+- Em produção, `post-images` tem `file_size_limit` de 5 MB e só aceita
+  png/jpeg/webp. No ensaio o limite é outro — um teste que passa no ensaio
+  pode falhar em produção.
+- A foto tratada pela Higgsfield (criativo do kit grátis) vem em PNG
+  1296×1728 (~3,3 MB no teste). Se passar de 5 MB, o `_shared/freeKit.ts` usa
+  o link da própria Higgsfield e o texto é impresso logo em seguida. Se o
+  render falhar 3 vezes, o painel entrega a foto tratada sem texto (nunca
+  fica "carregando" pra sempre).
+- Antes de gravar arquivo grande no Storage, conferir o limite do bucket em
+  produção: `select id, file_size_limit, allowed_mime_types from storage.buckets`.

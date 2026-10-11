@@ -149,6 +149,10 @@ Deno.serve(async (req) => {
     if (!data.contact_email?.trim()) {
       return json({ error: 'Campos obrigatórios: contact_email, instagram_url' }, 400)
     }
+    // E-mail com cara de e-mail (o presente do diagnóstico é 1 por e-mail).
+    if (data.contact_email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(data.contact_email.trim())) {
+      return json({ error: 'Esse e-mail parece incompleto. Confira: voce@exemplo.com' }, 400)
+    }
     // Nome da empresa é opcional (decisão do dono 2026-10-09): sem nome, o
     // perfil é "pessoal" — só um rótulo pra organizar, nada muda no produto.
     const businessName = (data.business_name ?? '').trim().slice(0, 120) || PERSONAL_PROFILE_NAME

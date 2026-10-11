@@ -1,6 +1,6 @@
 // Acesso das contas novas (decisão do dono 2026-10-10, docs/DECISIONS.md):
 //  - Antes de pagar ("modo grátis"): a conta só vê a página /gratis, que leva
-//    aos 3 vídeos grátis e, depois deles, mostra o plano e o cupom.
+//    ao kit grátis (2 vídeos + 1 criativo) e, depois deles, mostra o plano e o cupom.
 //  - Depois de pagar: aí sim pede os dados adicionais (/setup) e libera o
 //    painel inteiro.
 // Vale só pra contas criadas a partir de NEW_FLOW_FROM — as antigas (Liga dos

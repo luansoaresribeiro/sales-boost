@@ -5,6 +5,8 @@ import { fetchBusinessTypes, OTHER_BUSINESS_TYPE } from '../../lib/businessTypes
 import { fetchVerticalKey, fetchOnboardingQuestions, bi, type PlaybookQuestion } from '../../lib/verticalPlaybook'
 import { useLang } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
+import KitPhotoPicker from '../../components/KitPhotoPicker'
+import { giftEnabled, sendDiagnosisGift, KIT_PHOTOS } from '../../lib/giftKit'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -49,6 +51,7 @@ const CHALLENGES = [
   'Poucos clientes novos', 'Vendas baixas', 'Redes sociais fracas', 'Não sei o que postar',
   'Trabalho manual demais', 'Não entendo meus dados', 'Retenção de clientes', 'Concorrência', 'Falta de estratégia', 'Outro',
 ]
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 const CHANNELS = ['Instagram', 'Facebook', 'WhatsApp', 'Google', 'Site', 'Indicações', 'Anúncios pagos', 'E-mail', 'Equipe de vendas', 'Ainda não sei']
 
 // Rótulos EN (só exibição) — os valores salvos continuam sendo os em PT acima.
@@ -80,7 +83,8 @@ const TX = {
     s3igBad: '⚠️ Não entendi esse Instagram. Digite assim: @seuperfil', s3igHint: 'Olhamos seus posts, engajamento e perfil pra montar sua nota (só dados públicos).',
     s3site: 'Site (opcional)', s3siteBad: '⚠️ Esse endereço parece errado. Use: https://seunegocio.com.br — ou deixe em branco se não tem site.', s3siteHint: 'Se tiver site, analisamos a velocidade dele também. Não tem? Tudo bem, é só deixar em branco.', s3fb: 'Facebook (opcional)',
     s4t: 'É isso que entendemos?', s4s: 'Confira o resumo. Depois é só um último passo pra criar seu painel.', s4name: 'Nome da empresa (opcional)', s4namep: 'Ex: Studio Beleza Carioca', s4nameh: 'Sem empresa? Pode deixar em branco — seu perfil fica como pessoal. Não muda nada no que o Sales Boost faz.', s4city: 'Cidade / UF', s4cityp: 'Ex: Rio de Janeiro, RJ',
-    s4mail: 'Seu e-mail', s4mailp: 'voce@seunegocio.com.br', s4mailh: 'Usado pra acessar seu painel e receber alertas.', s4phone: 'Telefone / WhatsApp (opcional)',
+    s4mail: 'Seu e-mail', s4mailp: 'voce@seunegocio.com.br', s4mailh: 'Usado pra acessar seu painel e receber alertas.', s4mailBad: '⚠️ Esse e-mail parece incompleto. Confira: voce@exemplo.com', s4phone: 'Telefone / WhatsApp (opcional)',
+    giftT: '🎁 Um presente pra sua nota começar a subir', giftS: 'Mande 2 fotos dos cômodos mais bonitos e 1 foto de destaque do imóvel. Junto com o diagnóstico, já criamos 2 vídeos com movimento de câmera tipo drone e 1 criativo com acabamento profissional — prontos no seu painel, grátis.', giftNote: 'Fotos reais, bem iluminadas e sem pessoas. Nada é inventado e a IA não escreve na foto. É opcional.', giftPartial: (n: number) => `Faltam ${n} foto(s) pro presente — ou tire todas pra seguir sem ele.`, giftSending: 'Enviando suas fotos pro presente...',
     back: '← Voltar', cont: 'Continuar →', create: 'Criar meu painel →', priv1: 'Ao continuar, você concorda com nossa', priv2: 'política de privacidade', priv3: '. Seus dados são usados só pra entender seu negócio e gerar o diagnóstico.',
     sum: { biz: 'Negócio', type: 'Tipo', ideal: 'Cliente ideal', goal: 'Objetivo principal', ch: 'Maior desafio', chan: 'Canais atuais', stage: 'Estágio', undef: 'ainda não definidos' },
   },
@@ -99,7 +103,8 @@ const TX = {
     s3igBad: '⚠️ I did not understand this Instagram. Type it like this: @yourprofile', s3igHint: 'We look at your posts, engagement and profile to build your score (public data only).',
     s3site: 'Website (optional)', s3siteBad: '⚠️ This address looks wrong. Use: https://yourbusiness.com — or leave it blank if you have no website.', s3siteHint: 'If you have a website, we also analyze its speed. Do not have one? That is fine, just leave it blank.', s3fb: 'Facebook (optional)',
     s4t: 'Is this what we understood?', s4s: 'Check the summary. Then there is just one last step to create your dashboard.', s4name: 'Company name (optional)', s4namep: 'E.g.: Carioca Beauty Studio', s4nameh: 'No company? Leave it blank — your profile is marked as personal. It changes nothing in what Sales Boost does.', s4city: 'City / State', s4cityp: 'E.g.: Rio de Janeiro, RJ',
-    s4mail: 'Your email', s4mailp: 'you@yourbusiness.com', s4mailh: 'Used to access your dashboard and receive alerts.', s4phone: 'Phone / WhatsApp (optional)',
+    s4mail: 'Your email', s4mailp: 'you@yourbusiness.com', s4mailh: 'Used to access your dashboard and receive alerts.', s4mailBad: '⚠️ This email looks incomplete. Check it: you@example.com', s4phone: 'Phone / WhatsApp (optional)',
+    giftT: '🎁 A gift to start raising your score', giftS: 'Send 2 photos of the most beautiful rooms and 1 highlight photo of the property. Along with the diagnosis, we already create 2 videos with drone-like camera movement and 1 creative with a professional finish — ready in your dashboard, free.', giftNote: 'Real, well-lit photos with no people. Nothing is made up and the AI never writes on the photo. Optional.', giftPartial: (n: number) => `${n} photo(s) missing for the gift — or remove them all to continue without it.`, giftSending: 'Uploading your photos for the gift...',
     back: '← Back', cont: 'Continue →', create: 'Create my dashboard →', priv1: 'By continuing, you agree to our', priv2: 'privacy policy', priv3: '. Your data is used only to understand your business and generate the diagnosis.',
     sum: { biz: 'Business', type: 'Type', ideal: 'Ideal customer', goal: 'Main goal', ch: 'Biggest challenge', chan: 'Current channels', stage: 'Stage', undef: 'not defined yet' },
   },
@@ -343,6 +348,9 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   const [businessTypes, setBusinessTypes] = useState<string[]>([])
   const [fichaName, setFichaName] = useState('')
   const [fichaQuestions, setFichaQuestions] = useState<PlaybookQuestion[]>([])
+  // Presente do diagnóstico: só pro setor que tem o criativo na ficha.
+  const [hasGift, setHasGift] = useState(false)
+  const [giftFiles, setGiftFiles] = useState<(File | null)[]>(() => Array(KIT_PHOTOS).fill(null))
 
   useEffect(() => { fetchBusinessTypes().then(setBusinessTypes) }, [])
 
@@ -353,10 +361,10 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   useEffect(() => {
     let alive = true
     setData(d => ({ ...d, playbook_answers: {} }))
-    if (!data.business_type.trim()) { setFichaName(''); setFichaQuestions([]); return }
+    if (!data.business_type.trim()) { setFichaName(''); setFichaQuestions([]); setHasGift(false); return }
     fetchVerticalKey(data.business_type).then(async vk => {
-      const { name, questions } = await fetchOnboardingQuestions(vk)
-      if (alive) { setFichaName(name); setFichaQuestions(questions) }
+      const [{ name, questions }, gift] = await Promise.all([fetchOnboardingQuestions(vk), giftEnabled(vk)])
+      if (alive) { setFichaName(name); setFichaQuestions(questions); setHasGift(gift) }
     })
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -375,13 +383,17 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
 
   const igInvalid = !!data.instagram_url.trim() && !normalizeInstagram(data.instagram_url)
   const siteInvalid = !!data.website_url.trim() && !isValidUrl(data.website_url)
+  const emailInvalid = !!data.contact_email.trim() && !EMAIL_RE.test(data.contact_email.trim())
+  // Presente: as 3 fotos ou nenhuma (sem presente).
+  const giftChosen = hasGift ? giftFiles.filter(Boolean).length : 0
+  const giftPartial = giftChosen > 0 && giftChosen < KIT_PHOTOS
 
   const canNext = () => {
     if (step === 0) return !!(data.business_description.trim() && data.business_type)
     if (step === 1) return !!(data.ideal_customer.trim() && data.business_stage)
     if (step === 2) return !!data.goal
     if (step === 3) return !!normalizeInstagram(data.instagram_url) && !siteInvalid
-    if (step === 4) return !!(data.city.trim() && data.contact_email.trim())
+    if (step === 4) return !!(data.city.trim() && EMAIL_RE.test(data.contact_email.trim())) && !giftPartial
     return false
   }
 
@@ -397,7 +409,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
         business_name: data.business_name, business_type: data.business_type, city: data.city,
         website_url: data.website_url.trim(), instagram_url: normalizeInstagram(data.instagram_url) ?? '', facebook_url: data.facebook_url,
         tiktok_url: data.tiktok_url, google_maps_url: data.google_maps_url, phone: data.phone,
-        contact_email: data.contact_email, goal: data.goal, onboarding_context,
+        contact_email: data.contact_email.trim(), goal: data.goal, onboarding_context,
       }
       const res = await fetch(`${supabaseUrl}/functions/v1/run-diagnosis`, {
         method: 'POST',
@@ -417,6 +429,13 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
         })
       }
       clearInterval(interval)
+      // Presente: manda as fotos e já começa o kit. Se der errado, segue pro
+      // resultado do mesmo jeito (dá pra criar os vídeos depois, no painel).
+      if (giftChosen === KIT_PHOTOS) {
+        setLoadingMsg(t.giftSending)
+        const gift = await sendDiagnosisGift(result.id, giftFiles.filter((f): f is File => !!f))
+        try { sessionStorage.setItem(`gift:${result.id}`, gift) } catch { /* sem sessionStorage: só não lembra */ }
+      }
       setSubmitting(false)
       if (embedded && onDone) onDone(result.id)
       // Direto pro diagnóstico (a tela intermediária "Seu negócio foi entendido"
@@ -514,8 +533,17 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                 </div>
                 <Field label={t.s4name} value={data.business_name} onChange={set('business_name')} placeholder={t.s4namep} hint={t.s4nameh} />
                 <Field label={t.s4city} value={data.city} onChange={set('city')} placeholder={t.s4cityp} required />
-                <Field label={t.s4mail} value={data.contact_email} onChange={set('contact_email')} type="email" placeholder={t.s4mailp} required hint={t.s4mailh} />
+                <Field label={t.s4mail} value={data.contact_email} onChange={set('contact_email')} type="email" placeholder={t.s4mailp} required hint={emailInvalid ? t.s4mailBad : t.s4mailh} />
                 <Field label={t.s4phone} value={data.phone} onChange={set('phone')} placeholder="(21) 99999-9999" />
+                {hasGift && (
+                  <div style={{ background: 'linear-gradient(135deg, rgba(255,109,41,0.12), rgba(74,222,128,0.06))', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '14px', padding: '16px', marginBottom: '16px' }}>
+                    <div style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 900, color: 'white', marginBottom: '6px' }}>{t.giftT}</div>
+                    <p style={{ fontSize: '13px', color: 'white', lineHeight: 1.55, margin: '0 0 6px' }}>{t.giftS}</p>
+                    <p style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.5, margin: '0 0 12px' }}>{t.giftNote}</p>
+                    <KitPhotoPicker files={giftFiles} onChange={setGiftFiles} />
+                    {giftPartial && <p style={{ fontSize: '12px', color: ORANGE, margin: '10px 0 0' }}>{t.giftPartial(KIT_PHOTOS - giftChosen)}</p>}
+                  </div>
+                )}
                 {error && <div style={{ padding: '12px 16px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '10px', fontSize: '13px', color: '#f87171', marginBottom: '16px', lineHeight: 1.5 }}>{error}</div>}
               </>
             )}
