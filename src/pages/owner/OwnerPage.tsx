@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import BulkDeleteDialog, { MAX_BULK_DELETE } from './BulkDeleteDialog'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -28,6 +29,7 @@ interface Company {
   current_period_end: string | null
   access_source: 'paid' | 'trial' | 'manual' | 'blocked' | 'none' | null
   access_status_label: 'Active' | 'Trial' | 'Expired' | 'Suspended' | 'Cancelled' | null
+  delete_lock?: string | null // motivo pra não poder excluir em lote (owner-companies)
 }
 
 const ACCESS_META: Record<string, { color: string; dot: string }> = {
@@ -50,6 +52,9 @@ export default function OwnerPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  // Exclusão em lote: ids marcados + janela de confirmação.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkOpen, setBulkOpen] = useState(false)
 
   useEffect(() => {
     if (!session) return
@@ -83,6 +88,18 @@ export default function OwnerPage() {
     (c.city ?? '').toLowerCase().includes(search.toLowerCase()) ||
     (c.business_type ?? '').toLowerCase().includes(search.toLowerCase())
   )
+
+  const selectable = (c: Company) => !!c.id && !c.delete_lock
+  const toggle = (id: string) => setSelected(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else if (next.size < MAX_BULK_DELETE) next.add(id)
+    return next
+  })
+  const visibleSelectable = filtered.filter(selectable).slice(0, MAX_BULK_DELETE)
+  const allVisibleSelected = visibleSelectable.length > 0 && visibleSelectable.every(c => selected.has(c.id!))
+  const selectedItems = companies.filter(c => c.id && selected.has(c.id)).map(c => ({ id: c.id!, name: c.business_name ?? c.user_email, email: c.user_email }))
+  const COLS = '36px 2fr 1fr 1fr 130px 80px 80px 100px'
 
   return (
     <div style={{ minHeight: '100vh', background: BG }}>
@@ -159,8 +176,8 @@ export default function OwnerPage() {
           ))}
         </div>
 
-        {/* Search */}
-        <div style={{ marginBottom: '20px' }}>
+        {/* Search + exclusão em lote */}
+        <div style={{ marginBottom: '20px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -171,7 +188,21 @@ export default function OwnerPage() {
               borderRadius: '10px', color: 'white', fontSize: '14px', outline: 'none',
             }}
           />
+          {selected.size > 0 && (
+            <>
+              <span style={{ fontSize: '13px', color: 'white' }}>{selected.size} selecionada{selected.size !== 1 ? 's' : ''}{selected.size >= MAX_BULK_DELETE ? ` (máximo ${MAX_BULK_DELETE})` : ''}</span>
+              <button onClick={() => setBulkOpen(true)}
+                style={{ padding: '9px 16px', background: '#dc2626', color: 'white', border: 'none', borderRadius: '9px', fontSize: '13px', fontWeight: 800, cursor: 'pointer' }}>🗑️ Excluir selecionadas</button>
+              <button onClick={() => setSelected(new Set())}
+                style={{ padding: '9px 14px', background: 'transparent', color: MUTED, border: `1px solid ${BORDER}`, borderRadius: '9px', fontSize: '12.5px', cursor: 'pointer' }}>Limpar seleção</button>
+            </>
+          )}
         </div>
+        {bulkOpen && session && (
+          <BulkDeleteDialog items={selectedItems} token={session.access_token}
+            onClose={() => setBulkOpen(false)}
+            onDone={() => { setSelected(new Set()); void loadCompanies() }} />
+        )}
 
         {/* Error */}
         {error && (
@@ -196,7 +227,9 @@ export default function OwnerPage() {
         ) : (
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', overflow: 'hidden' }}>
             {/* Table header */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 130px 80px 80px 100px', gap: '0', padding: '12px 24px', borderBottom: `1px solid ${BORDER}`, fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: '0', padding: '12px 24px', borderBottom: `1px solid ${BORDER}`, fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em', alignItems: 'center' }}>
+              <input type="checkbox" aria-label="Selecionar todas as empresas visíveis que podem ser excluídas" checked={allVisibleSelected} disabled={!visibleSelectable.length}
+                onChange={() => setSelected(allVisibleSelected ? new Set() : new Set(visibleSelectable.map(c => c.id!)))} style={{ width: 16, height: 16, cursor: 'pointer' }} />
               <span>Empresa</span>
               <span>Tipo</span>
               <span>Cidade</span>
@@ -212,10 +245,15 @@ export default function OwnerPage() {
               <div
                 key={c.user_id}
                 onClick={() => c.id && navigate(`/owner/company/${c.id}`, { state: { email: c.user_email } })}
-                style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 130px 80px 80px 100px', gap: '0', padding: '16px 24px', borderBottom: i < filtered.length - 1 ? `1px solid ${BORDER}` : 'none', alignItems: 'center', transition: 'background 0.15s', cursor: c.id ? 'pointer' : 'default' }}
+                style={{ display: 'grid', gridTemplateColumns: COLS, gap: '0', padding: '16px 24px', borderBottom: i < filtered.length - 1 ? `1px solid ${BORDER}` : 'none', alignItems: 'center', transition: 'background 0.15s', cursor: c.id ? 'pointer' : 'default' }}
                 onMouseEnter={e => { if (c.id) e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
                 onMouseLeave={e => { if (c.id) e.currentTarget.style.background = 'transparent' }}
               >
+                <div onClick={e => e.stopPropagation()}>
+                  {c.id && (c.delete_lock
+                    ? <span title={`Não pode ser excluída em lote: ${c.delete_lock}`} style={{ fontSize: '13px', cursor: 'help' }}>🔒</span>
+                    : <input type="checkbox" aria-label={`Selecionar ${c.business_name ?? c.user_email}`} checked={selected.has(c.id)} onChange={() => toggle(c.id!)} style={{ width: 16, height: 16, cursor: 'pointer' }} />)}
+                </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ fontSize: '14px', fontWeight: 700, color: c.business_name ? 'white' : MUTED, fontStyle: c.business_name ? 'normal' : 'italic' }}>{c.business_name ?? c.user_email}</div>

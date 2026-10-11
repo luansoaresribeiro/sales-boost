@@ -807,3 +807,23 @@ grátis de 30 s, acima — mantidos como histórico):
   indisponíveis. Pouco depois, sem mudança de código pra isso, o checkout passou
   a abrir com cartão e Link. Se voltar, conferir a ativação da conta e
   Configurações → Formas de pagamento no painel do Stripe.
+
+## 2026-10-11 — Exclusão de empresas em lote no painel do Owner (pedido do dono)
+
+- Na lista "Todas as Empresas" (`/owner`) cada empresa tem uma caixinha, e há
+  "selecionar todas" pras visíveis. A barra "🗑️ Excluir selecionadas" abre uma
+  janela com a lista e só libera o botão com a frase exata
+  **"EXCLUIR N EMPRESAS"**. A frase não pode ser colada.
+- **Travas, conferidas no servidor (`owner-delete-company`), não só na tela:**
+  - só o dono (`user_roles.role = owner`);
+  - no máximo 25 por vez;
+  - empresas com `companies.delete_protected` nunca são excluídas, nem uma
+    por uma (Liga dos Sonhos e Sales Boost já marcadas — migration
+    `20261011130000_company_delete_protected.sql`);
+  - quem tem assinatura paga ou acesso manual é pulado no lote (aparece 🔒 na
+    lista; pra excluir, usar a página da empresa).
+- O que some: tudo da empresa no painel (72 tabelas em cascata). O diagnóstico
+  fica guardado sem dono e o login da pessoa continua existindo.
+- Testado no ensaio com empresas descartáveis: quem não é dono, frase errada e
+  número errado → recusado; frase certa → excluiu só as comuns e pulou a
+  protegida e a de acesso manual.
