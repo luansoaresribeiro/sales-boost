@@ -778,3 +778,30 @@ grátis de 30 s, acima — mantidos como histórico):
   em ~3 min, foto tratada em ~35 s, fiel ao original.
 - **Também neste trabalho:** e-mail validado no cadastro e no `run-diagnosis`;
   raspador de hashtags trocado pelo oficial da Apify (ver docs/PITFALLS.md).
+
+## 2026-10-11 — Preço do corretor + cupom em destaque antes de comprar (decisão do dono)
+
+- **Dois tipos no cadastro:** "Imobiliária / Corretor" virou **"Imobiliária"** e
+  **"Corretor(a) de imóveis"** (os dois na ficha `imoveis_rio`). A opção antiga
+  saiu do cadastro, mas as contas que já a usam continuam na tabela padrão.
+- **Preços** (faixa em `business_types.plan_tier`; valores em
+  `src/lib/pricing.ts` e no Stripe pelos lookup_keys):
+
+  | | Mensal (sem fidelidade) | Anual (fidelidade 12 meses) | Cupom 1º mês do mensal |
+  |---|---|---|---|
+  | Imobiliária (`padrao`) | R$ 2.449 | R$ 1.449/mês | R$ 1.000 (`SB_PRIMEIRO_MES`) |
+  | Corretor(a) (`corretor`) | R$ 797 (`sb_monthly_corretor`) | R$ 597/mês (`sb_annual_commit_corretor`) | R$ 200 (`SB_PRIMEIRO_MES_CORRETOR`) |
+
+  Nos dois casos, o 1º mês do mensal com cupom sai pelo preço do anual.
+- **Cupom em destaque:** com cupom ativo, o cartão do mensal mostra o selo
+  "🎁 Cupom de R$X OFF no 1º mês" e o botão "Assinar o mensal" abre antes um
+  popup ("Você ganhou R$X de desconto", de/por, "Usar meu cupom e assinar").
+  O popup do kit pronto também mostra o valor do cupom.
+- **Multa do anual:** 30% × meses restantes × a mensalidade do anual da faixa.
+  O `stripe-webhook` lê o valor do preço da assinatura (R$1.449 se não achar).
+- Testado em produção com a conta de teste: checkout do corretor saiu R$ 797 −
+  R$ 200 = R$ 597 no 1º mês e o anual R$ 597 com o texto da multa certo; o da
+  imobiliária saiu R$ 2.449 / R$ 1.449.
+- **Erro "No valid payment method types" (2026-10-11):** era a conta Stripe sem
+  formas de pagamento ativas. Depois de ajustada no painel do Stripe, o checkout
+  abriu com cartão e Link (sem mudança de código pra isso).

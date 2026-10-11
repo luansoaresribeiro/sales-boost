@@ -364,7 +364,7 @@ export default function CompanyDetailPage() {
               ['Trial expires', detail.trial_expires_at ? new Date(detail.trial_expires_at).toLocaleDateString('pt-BR') : '—'],
               ['Subscription', detail.subscription_status ?? 'No active subscription'],
               ['Renews', detail.current_period_end ? new Date(detail.current_period_end).toLocaleDateString('pt-BR') : '—'],
-              ['Billing plan', detail.billing_plan === 'annual_commit' ? 'Anual (fidelidade 12 meses) · R$1.449/mês' : detail.billing_plan === 'monthly' ? 'Mensal · R$2.449/mês' : '—'],
+              ['Billing plan', detail.billing_plan === 'annual_commit' ? 'Anual (fidelidade 12 meses)' : detail.billing_plan === 'monthly' ? 'Mensal' : '—'],
               ['Commitment ends', detail.commitment_end_at ? new Date(detail.commitment_end_at).toLocaleDateString('pt-BR') : '—'],
             ].map(([label, val]) => (
               <div key={label}>
