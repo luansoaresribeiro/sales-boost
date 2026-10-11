@@ -741,3 +741,40 @@ grátis de 30 s, acima — mantidos como histórico):
   contas antigas.
 - Escolha de plano + checkout + cupom foram pra `PlanOffer.tsx`, usado tanto
   no resumo do teste quanto no `/gratis`.
+
+## 2026-10-11 — Presente no diagnóstico: 2 vídeos drone + 1 criativo (decisão do dono)
+
+- **O que é:** no último passo do cadastro do diagnóstico (onde pede cidade e
+  e-mail), um bloco 🎁 pede **2 fotos de cômodos + 1 foto de destaque**.
+  Opcional. Junto com o diagnóstico já começa o kit grátis:
+  - 1 vídeo por cômodo, câmera "tipo drone" (Kling via Higgsfield, 5 s; a
+    instrução de câmera fica na ficha: `config.clip_prompts.drone`);
+  - 1 criativo de design: a foto real tratada pela Higgsfield (Qwen Image 3
+    Edit — luz, cor, nitidez, sem mudar nada do imóvel) + texto impresso pelo
+    nosso `render-format` (regra 4: a IA nunca escreve). O texto vem da ficha
+    (`config.gift_creative`: `{cidade}` / "Seu próximo lar pode estar aqui" /
+    "Comente QUERO"), sem número nenhum (regra 5).
+  - O bloco só aparece pro setor cuja ficha tem `gift_creative` (hoje, imóveis).
+- **Depois do resultado:** aviso discreto do andamento ("1 de 2 vídeos
+  prontos") e o botão vira **"Entrar no painel e ver meu presente"**. Os
+  vídeos e o criativo ficam no painel (`/gratis`), não na página do
+  diagnóstico. O resto do painel continua fechado até pagar.
+- **Quem não mandou fotos** no cadastro cria o mesmo kit no `/gratis` (2
+  cômodos + 1 destaque). Era "3 vídeos"; agora é sempre o kit.
+- **Travas:** 1 presente por e-mail e por Instagram; 1 kit por conta; teto de
+  30 kits por mês somando diagnóstico e painel (`FREE_VIDEO_MONTHLY_CAP`);
+  links de envio das fotos só valem pra diagnóstico com até 30 min; fotos só
+  JPG/PNG/WebP, até 15 MB.
+- **Como foi feito:**
+  - `diagnosis-gift` (nova): `upload_urls` → `start` → `status`. O kit nasce
+    preso ao diagnóstico (`video_tours.diagnostic_id`, sem empresa ainda).
+  - `trial-video`: na primeira consulta da conta, liga o kit do diagnóstico à
+    empresa e imprime o texto do criativo.
+  - Motor comum em `supabase/functions/_shared/freeKit.ts`.
+  - Banco: `20261011100000_diagnosis_gift.sql` (aplicada no ensaio e em
+    produção em 2026-10-11).
+- **Custo por kit:** 2 × US$ 0,54 (vídeos) + o tratamento da foto (preço da
+  Higgsfield ainda a confirmar no painel deles). Teste real no ensaio: vídeos
+  em ~3 min, foto tratada em ~35 s, fiel ao original.
+- **Também neste trabalho:** e-mail validado no cadastro e no `run-diagnosis`;
+  raspador de hashtags trocado pelo oficial da Apify (ver docs/PITFALLS.md).

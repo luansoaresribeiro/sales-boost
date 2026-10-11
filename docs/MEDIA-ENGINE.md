@@ -143,3 +143,10 @@ virtual**: `supabase/functions/trial-video` (ações `start` com 6
 (linha `claimed` antes de chamar a Higgsfield; falha de trecho tenta 1x de
 novo, depois `failed` e a trava é apagada). Ver
 [DECISIONS.md](DECISIONS.md) "Vídeo grátis vira TOUR VIRTUAL".
+**Divergência (2026-10-11):** o grátis virou **kit** (2 vídeos "drone" de
+cômodos + 1 criativo de design com a foto real tratada pela Higgsfield e o
+texto do `render-format`). `trial-video` agora pede 3 `photo_urls` (2 cômodos
++ 1 destaque) e o kit também pode nascer no cadastro do diagnóstico
+(`diagnosis-gift`). Motor em `_shared/freeKit.ts`. Ver
+[DECISIONS.md](DECISIONS.md) "Presente no diagnóstico".
+

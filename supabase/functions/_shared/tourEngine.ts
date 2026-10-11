@@ -19,7 +19,7 @@ export const COST_PER_SECOND = Number(Deno.env.get('HF_COST_PER_SECOND') ?? '0.1
 export const MAX_ATTEMPTS = 2
 export const VIDEO_BUCKET = 'videos'
 
-// Instruções de câmera padrão (a ficha pode trocar: config.clip_prompts.{room,pair,opening}).
+// Instruções de câmera padrão (a ficha pode trocar: config.clip_prompts.{room,pair,opening,drone}).
 export const DEFAULT_PROMPTS = {
   room: 'Slow, smooth cinematic camera movement inside this room, steady gimbal, natural light, calm and premium feeling. ' +
     'Keep every object, wall, window and piece of furniture exactly as in the photo — do not add, remove or change anything. No people, no text, no logos.',
@@ -28,10 +28,13 @@ export const DEFAULT_PROMPTS = {
     'Keep both rooms exactly as in the photos — do not add, remove or change any furniture, wall, window or object. No people, no text, no logos.',
   opening: 'Cinematic establishing shot from outside, slow smooth camera movement that reveals the view and the surroundings, golden natural light. ' +
     'Keep the building, the landscape and the view exactly as in the photo — do not add, remove or change anything. No people, no text, no logos.',
+  // Kit grátis (presente do diagnóstico): câmera "drone" que passeia pelo cômodo.
+  drone: 'Smooth cinematic drone-style camera glide through this exact room, stabilized, slow and steady, revealing the whole space and ending on its best angle. ' +
+    'Keep every object, wall, window and piece of furniture exactly as in the photo — do not add, remove or change anything. No people, no text, no logos.',
 }
 export type ClipKind = keyof typeof DEFAULT_PROMPTS
 // Segundos por trecho: 2 cômodos precisam de um pouco mais pra caminhada.
-export const SECONDS: Record<ClipKind, number> = { room: 5, pair: WALK_SECONDS, opening: 5 }
+export const SECONDS: Record<ClipKind, number> = { room: 5, pair: WALK_SECONDS, opening: 5, drone: 5 }
 export const estimateUsd = (kind: ClipKind) => SECONDS[kind] * COST_PER_SECOND
 
 // Instrução de câmera da ficha do setor (regra 6), com o padrão acima.

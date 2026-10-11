@@ -7,6 +7,7 @@ import {
 } from '../../lib/growthScore'
 import { useLang } from '../../contexts/LanguageContext'
 import MarketSection, { DiagnosisLoader, useMarket } from './MarketSection'
+import GiftNotice, { useGift } from './GiftNotice'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -74,8 +75,9 @@ const TX = {
     howCalc: '▸ Como calculamos',
     calc1: 'A nota vem do seu Instagram. Site e Google só somam se existirem. O que não conseguimos ver fica "não avaliado" e sai da conta — nada é inventado nem penaliza você.',
     pts: 'pts', calc2: 'Nota = pontos dos critérios avaliados ÷ pontos possíveis deles × 100. Com menos de 40% dos critérios avaliados, mostramos "Análise parcial", sem veredito.',
-    cta: 'Entrar no painel e criar meus vídeos grátis →',
-    ctaSub: 'Crie sua conta em segundos, sem cartão, e gere 3 vídeos grátis do seu imóvel.',
+    cta: 'Entrar no painel e criar meus vídeos grátis →', ctaGift: 'Entrar no painel e ver meu presente →',
+    ctaSub: 'Crie sua conta em segundos, sem cartão, e receba 2 vídeos + 1 criativo grátis do seu imóvel.',
+    ctaSubGift: 'Crie sua conta em segundos, sem cartão. Seus vídeos e seu criativo ficam esperando por você lá.',
     ctaPlan: 'A estratégia completa faz parte do plano pago.',
   },
   en: {
@@ -95,8 +97,9 @@ const TX = {
     howCalc: '▸ How we calculate',
     calc1: 'The score comes from your Instagram. Website and Google only add if they exist. What we cannot see stays "not evaluated" and is left out of the calculation — nothing is made up and nothing penalizes you.',
     pts: 'pts', calc2: 'Score = points of the evaluated criteria ÷ their possible points × 100. With fewer than 40% of the criteria evaluated, we show "Partial analysis", with no verdict.',
-    cta: 'Enter the dashboard and create my free videos →',
-    ctaSub: 'Create your account in seconds, no card, and make 3 free videos of your property.',
+    cta: 'Enter the dashboard and create my free videos →', ctaGift: 'Enter the dashboard and see my gift →',
+    ctaSub: 'Create your account in seconds, no card, and get 2 videos + 1 creative of your property for free.',
+    ctaSubGift: 'Create your account in seconds, no card. Your videos and your creative will be waiting for you there.',
     ctaPlan: 'The full strategy is part of the paid plan.',
   },
 }
@@ -159,6 +162,8 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
   // vai rodar / passou do tempo) — até lá, logo + barra de progresso.
   const igReady = !!diag && !(!diag.instagram_data && diag.status === 'processing' && waited < POLL_MAX_MS)
   const { m: market, settled } = useMarket(id, !!diag)
+  const gift = useGift(id)
+  const hasGift = !!gift.view && (gift.view.status === 'processing' || gift.view.status === 'completed')
 
   if (!loading && diag && (!igReady || !settled)) return (
     <DiagnosisLoader stage={!igReady ? 'instagram' : (market?.status ?? 'queued')} lang={lang} embedded={embedded} />
@@ -370,15 +375,16 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
           </div>
         </details>
 
-        {/* CTA */}
+        {/* Presente (fotos do cadastro) + CTA */}
+        <GiftNotice sent={gift.sent} view={gift.view} lang={lang} />
         <button
           onClick={() => void enterDashboard()}
           style={{ display: 'block', width: '100%', minHeight: 52, padding: '14px 20px', background: ORANGE, color: '#000', fontFamily: D, fontWeight: 900, fontSize: 16, borderRadius: 14, border: 'none', cursor: 'pointer', boxShadow: '0 12px 32px rgba(255,109,41,0.35)' }}
         >
-          {t.cta}
+          {hasGift ? t.ctaGift : t.cta}
         </button>
         <p style={{ textAlign: 'center', fontSize: 13, color: MUTED, margin: '12px 0 0' }}>
-          {t.ctaSub}
+          {hasGift ? t.ctaSubGift : t.ctaSub}
         </p>
         <p style={{ textAlign: 'center', fontSize: 12.5, color: MUTED, margin: '6px 0 0' }}>
           {t.ctaPlan}
