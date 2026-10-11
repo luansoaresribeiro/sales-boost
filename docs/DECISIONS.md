@@ -802,6 +802,8 @@ grátis de 30 s, acima — mantidos como histórico):
 - Testado em produção com a conta de teste: checkout do corretor saiu R$ 797 −
   R$ 200 = R$ 597 no 1º mês e o anual R$ 597 com o texto da multa certo; o da
   imobiliária saiu R$ 2.449 / R$ 1.449.
-- **Erro "No valid payment method types" (2026-10-11):** era a conta Stripe sem
-  formas de pagamento ativas. Depois de ajustada no painel do Stripe, o checkout
-  abriu com cartão e Link (sem mudança de código pra isso).
+- **Erro "No valid payment method types" (2026-10-11):** na hora do erro, a
+  conta Stripe (modo real) mostrava todas as formas de pagamento como
+  indisponíveis. Pouco depois, sem mudança de código pra isso, o checkout passou
+  a abrir com cartão e Link. Se voltar, conferir a ativação da conta e
+  Configurações → Formas de pagamento no painel do Stripe.
