@@ -827,3 +827,33 @@ grátis de 30 s, acima — mantidos como histórico):
 - Testado no ensaio com empresas descartáveis: quem não é dono, frase errada e
   número errado → recusado; frase certa → excluiu só as comuns e pulou a
   protegida e a de acesso manual.
+
+## 2026-10-11 — Exclusão apaga o login, leads de imóveis e lista de APIs (pedido do dono)
+
+- **Excluir cadastro apaga empresa + login.** Antes, excluir a empresa
+  deixava o login, e a linha voltava na lista como "sem perfil". Agora
+  `owner-delete-company` apaga os dois, uma por uma ou em lote. Logins que já
+  estavam sem empresa também podem ser marcados e apagados. A frase do lote
+  virou "EXCLUIR N CADASTROS". Nunca apaga login de dono/admin
+  (`user_roles` ≠ client) nem o de quem está excluindo. O diagnóstico grátis
+  fica guardado sem dono (FK `set null`). Testado no ensaio.
+- **Agente de leads do Owner voltado pra imóveis.** Categorias:
+  Imobiliárias, Corretores de imóveis, Aluguel por temporada (Airbnb).
+  Palavras-chave novas em `prospect_search_keywords`; as antigas (moda,
+  beleza, e-commerce, escritórios) ficaram desligadas, não apagadas. Faixas:
+  nota 4,0–5,0, de 5 a 1.000 avaliações, Instagram ativo e telefone
+  obrigatórios. Pesos: Instagram 30, nota 20, telefone 15 e "sem pedido
+  online" 0 (não faz sentido pra imóveis). O texto do perfil ideal de cliente
+  (ICP) foi reescrito na configuração e no prompt do `find-sales-leads`.
+  Migration `20261012101000_leads_icp_imoveis.sql`, aplicada em produção.
+  - **Limite conhecido:** donos de Airbnb pessoa física quase não têm perfil
+    no Google Maps. A busca acha principalmente quem administra imóveis por
+    temporada.
+- **Configurações → APIs.** A lista foi conferida com o que o código usa
+  (`Deno.env.get`):
+  - entraram Higgsfield, Google Places, Meta/Instagram, Telegram e Hermes;
+  - voltaram PageSpeed e Replicate;
+  - saiu DataForSEO, que nenhuma função usa.
+
+  Migration `20261012100000_api_providers_refresh.sql`. A aba "Referências
+  globais" saiu do painel (a tabela e a função continuam no banco).

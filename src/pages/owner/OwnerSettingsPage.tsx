@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import ApiUsagePanel from './ApiUsagePanel'
 import BusinessTypesPanel from './BusinessTypesPanel'
-import GlobalReferences from './GlobalReferences'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -15,7 +14,8 @@ const D = "'Bricolage Grotesque', system-ui, sans-serif"
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 const BOT_USERNAME = 'luansoaresribeirobot'
 
-type Tab = 'avisos' | 'apis' | 'negocios' | 'referencias'
+// A aba "Referências globais" saiu a pedido do dono (2026-10-11).
+type Tab = 'avisos' | 'apis' | 'negocios'
 
 export default function OwnerSettingsPage() {
   const { session, signOut } = useAuth()
@@ -65,7 +65,6 @@ export default function OwnerSettingsPage() {
     { key: 'avisos', label: 'Avisos' },
     { key: 'apis', label: "APIs" },
     { key: 'negocios', label: 'Tipos de negócio' },
-    { key: 'referencias', label: 'Referências globais' },
   ]
 
   return (
@@ -87,7 +86,7 @@ export default function OwnerSettingsPage() {
         </button>
       </div>
 
-      <div style={{ padding: '32px', maxWidth: tab === 'apis' || tab === 'referencias' ? '920px' : '640px' }}>
+      <div style={{ padding: '32px', maxWidth: tab === 'apis' ? '920px' : '640px' }}>
         <div style={{ marginBottom: '20px' }}>
           <h1 style={{ fontFamily: D, fontSize: '1.8rem', fontWeight: 900, color: 'white', letterSpacing: '-0.03em', marginBottom: '4px' }}>Configurações</h1>
           <p style={{ color: MUTED, fontSize: '14px' }}>Avisos, integrações e APIs do painel do dono.</p>
@@ -152,7 +151,6 @@ export default function OwnerSettingsPage() {
 
         {tab === 'negocios' && <BusinessTypesPanel />}
 
-        {tab === 'referencias' && <GlobalReferences />}
       </div>
     </div>
   )

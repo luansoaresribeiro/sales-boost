@@ -38,6 +38,9 @@ Deno.serve(async (req) => {
       .select('id, user_id, business_name, business_type, profile_type, city, website_url, plan, active, created_at, trial_expires_at, trial_cancelled_at, stripe_subscription_id, subscription_status, current_period_end, manual_access, access_blocked_at, agent_enabled, delete_protected')
 
     const companyByUserId = Object.fromEntries((companies ?? []).map(c => [c.user_id, c]))
+    // Logins de dono/admin nunca podem ser excluídos pelo painel.
+    const { data: roles } = await admin.from('user_roles').select('email, role').neq('role', 'client')
+    const staff = new Set((roles ?? []).map(r => String(r.email).toLowerCase()))
 
     // Mesma prioridade de company_access_status (SQL): bloqueio > pago >
     // trial > manual. Calculado aqui em vez de N chamadas RPC porque já
@@ -82,7 +85,7 @@ Deno.serve(async (req) => {
           access_status_label: statusLabel,
           agent_enabled: co?.agent_enabled ?? false,
           // Exclusão em lote (painel do Owner): mesmas travas do owner-delete-company.
-          delete_lock: !co ? null
+          delete_lock: !co ? (staff.has((u.email ?? '').toLowerCase()) ? 'login de dono/admin' : null)
             : co.delete_protected ? 'protegida'
             : (co.stripe_subscription_id || ['active', 'trialing', 'past_due'].includes(co.subscription_status ?? '')) ? 'tem assinatura paga'
             : co.manual_access ? 'tem acesso manual'
