@@ -2,7 +2,9 @@
 // Leads (ProspectsPage) e a página de configuração (LeadDiscoverySettingsPage)
 // — evita duplicar a definição de dados que as duas telas usam.
 
-export const BUSINESS_TYPES = ['Moda & Vestuário', 'Beleza & Cosméticos', 'Acessórios', 'Produtos de Consumo', 'Alimentos & Bebidas', 'E-commerce', 'Serviços Profissionais']
+// Público dos leads (decisão do dono 2026-10-11): o setor piloto é imóveis.
+// As palavras-chave de cada categoria ficam em prospect_search_keywords.
+export const BUSINESS_TYPES = ['Imobiliárias', 'Corretores de imóveis', 'Aluguel por temporada (Airbnb)']
 
 export const STATUS_LABELS: Record<string, string> = { new: 'Novo', contacted: 'Contatado', qualified: 'Qualificado', discarded: 'Descartado', converted: 'Convertido' }
 export const STATUS_COLORS: Record<string, string> = { new: '#FF6D29', contacted: '#60a5fa', qualified: '#4ade80', discarded: '#BABABA', converted: '#4ade80' }
@@ -53,8 +55,10 @@ export interface CandidateLogRow {
 }
 
 export const DEFAULT_WEIGHTS = {
-  rating_in_range: 30, reviews_in_range: 15, instagram_active: 15, has_website: 10,
-  no_online_ordering: 10, has_phone: 10, independent_business: 10, recent_review: 5, likely_chain_penalty: -40,
+  // Imóveis (2026-10-11): Instagram ativo pesa mais (é onde o Sales Boost trabalha);
+  // "sem pedido online" não faz sentido pra imobiliária/corretor → 0.
+  rating_in_range: 20, reviews_in_range: 10, instagram_active: 30, has_website: 10,
+  no_online_ordering: 0, has_phone: 15, independent_business: 10, recent_review: 5, likely_chain_penalty: -40,
 }
 export type ScoringWeights = typeof DEFAULT_WEIGHTS
 export const WEIGHT_LABELS: Record<keyof ScoringWeights, string> = {

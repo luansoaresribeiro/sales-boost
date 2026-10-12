@@ -11,7 +11,7 @@ type SupaClient = ReturnType<typeof createClient>
 // verdade vêm de prospect_search_keywords (configurável, sem precisar mexer
 // aqui pra adicionar uma nova). Usado só como fallback "busca tudo" quando o
 // dono não restringiu nenhuma categoria em Configurações.
-const ALL_BUSINESS_TYPES = ['Moda & Vestuário', 'Beleza & Cosméticos', 'Acessórios', 'Produtos de Consumo', 'Alimentos & Bebidas', 'E-commerce', 'Serviços Profissionais']
+const ALL_BUSINESS_TYPES = ['Imobiliárias', 'Corretores de imóveis', 'Aluguel por temporada (Airbnb)']
 
 interface IcpConfig {
   minRating: number
@@ -194,13 +194,12 @@ Categorias que o próprio Google atribuiu a esse lugar: ${input.googleTypes.leng
 Nota Google: ${input.rating ?? 'sem nota'} (${input.reviewCount ?? 0} avaliações)
 Avaliação mais recente no Google: ${input.daysSinceLastReview != null ? `há ${input.daysSinceLastReview} dias` : 'desconhecido'}
 Tem site: ${input.hasWebsite ? 'sim' : 'não'}
-Pedido online no site (ifood/rappi/cardápio digital): ${input.hasOnlineOrdering ? 'sim' : 'não detectado'}
 Faixa de preço no Google (0=barato a 4=alto padrão): ${input.priceLevel ?? 'não informado'}
 Tem Instagram: ${input.hasInstagram ? 'sim' : 'não'}${input.igFollowers != null ? ` (${input.igFollowers} seguidores, engajamento médio ${input.igAvgEngagement}, último post: ${input.igLastPostDate ?? 'desconhecido'})` : ''}
 Tem Facebook: ${input.hasFacebook ? 'sim' : 'não'}
 Tem WhatsApp visível no site: ${input.hasWhatsapp ? 'sim' : 'não'}
 
-O Sales Boost é um sistema de aquisição de clientes com IA: cria demanda nas redes sociais e cuida de toda a jornada, da atração até a venda. O cliente ideal (ICP principal) é uma marca própria ou e-commerce tocado pelo dono — moda, beleza, acessórios, produtos de consumo ou alimentos & bebidas — pequeno ou médio porte, decisão rápida do dono/fundador, com Instagram ativo e um produto com potencial real de crescimento, mas com conteúdo inconsistente, marketing manual e sem um sistema de aquisição integrado. ICP secundário: serviços profissionais tocados pelo dono (escritórios de advocacia, contabilidade) que precisam de geração de demanda pelas redes e um fluxo constante de clientes novos. O produto NÃO serve bem redes/franquias grandes nem negócios sem dono/decisor acessível — o ideal é um negócio independente, de dono único ou poucas unidades.
+O Sales Boost é um sistema de aquisição de clientes com IA: cria demanda nas redes sociais e cuida de toda a jornada, da atração até a venda. Hoje o Sales Boost atende o setor de imóveis (decisão do dono, 2026-10-11): o cliente ideal (ICP) é uma imobiliária independente ou de poucas unidades, um corretor(a) de imóveis autônomo, ou quem administra imóveis de aluguel por temporada (Airbnb) — com decisão rápida do dono, Instagram ativo e imóveis pra divulgar, mas com conteúdo inconsistente, marketing manual e sem um sistema que transforme seguidores em contatos. O produto NÃO serve bem redes/franquias grandes de imobiliárias, portais, construtoras/incorporadoras grandes, hotéis nem negócios sem dono/decisor acessível.
 ${input.customInstructions ? `\nInstrução adicional do dono do Sales Boost sobre o que priorizar ao pontuar leads:\n"${input.customInstructions}"\n` : ''}
 Responda com um JSON válido, sem markdown, com exatamente estes campos:
 - "icp_confidence" (0-100): o quanto você tem certeza de que esse lugar É DE VERDADE um "${input.targetBusinessType}" (use as categorias do Google e o nome pra decidir — a busca por palavra-chave às vezes traz resultado errado, tipo uma loja de produtos de barbearia aparecendo numa busca por "barbearia"). 100 = com certeza é. 0 = quase certeza que não é.
@@ -291,8 +290,10 @@ async function runScan(admin: SupaClient, logId: string, keys: { googleKey: stri
   const ownerChatId = settingsRow?.telegram_chat_id as string | null
   const customInstructions = (settingsRow?.icp_custom_instructions as string | null) || null
   const weights = (settingsRow?.scoring_weights as ScoringWeights) ?? {
-    rating_in_range: 30, reviews_in_range: 15, instagram_active: 15, has_website: 10,
-    no_online_ordering: 10, has_phone: 10, independent_business: 10, recent_review: 5, likely_chain_penalty: -40,
+    // Imóveis (2026-10-11): Instagram ativo pesa mais (é onde o Sales Boost trabalha);
+    // "sem pedido online" não faz sentido pra imobiliária/corretor → 0.
+    rating_in_range: 20, reviews_in_range: 10, instagram_active: 30, has_website: 10,
+    no_online_ordering: 0, has_phone: 15, independent_business: 10, recent_review: 5, likely_chain_penalty: -40,
   }
   const cities = (settingsRow?.cities ?? []) as string[]
   const businessTypes = ((settingsRow?.business_types ?? []) as string[])

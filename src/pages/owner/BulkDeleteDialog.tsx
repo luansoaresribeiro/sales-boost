@@ -10,9 +10,10 @@ const D = "'Bricolage Grotesque', system-ui, sans-serif"
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 export const MAX_BULK_DELETE = 25
 
-export const bulkPhrase = (n: number) => `EXCLUIR ${n} ${n === 1 ? 'EMPRESA' : 'EMPRESAS'}`
+export const bulkPhrase = (n: number) => `EXCLUIR ${n} ${n === 1 ? 'CADASTRO' : 'CADASTROS'}`
 
-export interface BulkItem { id: string; name: string; email: string }
+// kind 'company' apaga empresa + login; 'login' é cadastro sem empresa ("sem perfil").
+export interface BulkItem { id: string; name: string; email: string; kind: 'company' | 'login' }
 type Result = { deleted: string[]; skipped: { id: string; name: string | null; reason: string }[] }
 
 export default function BulkDeleteDialog({ items, token, onClose, onDone }: {
@@ -32,7 +33,7 @@ export default function BulkDeleteDialog({ items, token, onClose, onDone }: {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/owner-delete-company`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company_ids: items.map(i => i.id), confirm_phrase: typed.trim() }),
+        body: JSON.stringify({ company_ids: items.filter(i => i.kind === 'company').map(i => i.id), user_ids: items.filter(i => i.kind === 'login').map(i => i.id), confirm_phrase: typed.trim() }),
       })
       const data = await res.json().catch(() => ({})) as Partial<Result> & { error?: string }
       if (!res.ok || data.error) throw new Error(data.error ?? 'Erro ao excluir')
@@ -52,7 +53,7 @@ export default function BulkDeleteDialog({ items, token, onClose, onDone }: {
         {result ? (
           <>
             <div style={{ fontSize: 18, fontWeight: 900, color: 'white', marginBottom: 10 }}>
-              {result.deleted.length} {result.deleted.length === 1 ? 'empresa excluída' : 'empresas excluídas'}
+              {result.deleted.length} {result.deleted.length === 1 ? 'cadastro excluído' : 'cadastros excluídos'}
             </div>
             {result.skipped.length > 0 && (
               <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, marginBottom: 12 }}>
@@ -66,14 +67,14 @@ export default function BulkDeleteDialog({ items, token, onClose, onDone }: {
           </>
         ) : (
           <>
-            <div style={{ fontSize: 18, fontWeight: 900, color: RED, marginBottom: 6 }}>⚠️ Excluir {items.length} {items.length === 1 ? 'empresa' : 'empresas'} para sempre</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: RED, marginBottom: 6 }}>⚠️ Excluir {items.length} {items.length === 1 ? 'cadastro' : 'cadastros'} para sempre</div>
             <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, marginBottom: 12 }}>
-              Some tudo dessas empresas no painel: estratégia, posts, vídeos, contatos e conversas. <strong style={{ color: 'white' }}>Não dá pra desfazer.</strong> O diagnóstico grátis fica guardado sem dono, e o login da pessoa continua existindo, mas sem empresa.
+              Some a empresa (estratégia, posts, vídeos, contatos e conversas) <strong style={{ color: 'white' }}>e o login da pessoa</strong> — ela não consegue mais entrar. <strong style={{ color: 'white' }}>Não dá pra desfazer.</strong> O diagnóstico grátis fica guardado sem dono.
             </div>
             <div style={{ maxHeight: 200, overflowY: 'auto', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '8px 12px', marginBottom: 14 }}>
               {items.map(i => (
                 <div key={i.id} style={{ fontSize: 13, color: 'white', padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  {i.name} <span style={{ color: MUTED, fontSize: 11.5 }}>· {i.email}</span>
+                  {i.name} <span style={{ color: MUTED, fontSize: 11.5 }}>· {i.kind === 'login' ? 'login sem empresa' : i.email}</span>
                 </div>
               ))}
             </div>

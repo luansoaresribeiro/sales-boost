@@ -721,7 +721,7 @@ export default function CompanyDetailPage() {
           <div style={{ background: CARD, border: '1px solid rgba(248,113,113,0.3)', borderRadius: '16px', padding: '28px', maxWidth: '440px', width: '100%' }}>
             <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '10px' }}>⚠️ Deletar empresa</div>
             <p style={{ fontSize: '13px', color: MUTED, lineHeight: 1.7, marginBottom: '16px' }}>
-              Isso apaga <strong style={{ color: 'white' }}>{detail.business_name}</strong> e tudo relacionado (posts, avaliações, oportunidades, campanhas, leads, conversas) — pra sempre, sem volta. Pra confirmar, digite o nome exato do negócio abaixo.
+              Isso apaga <strong style={{ color: 'white' }}>{detail.business_name}</strong> e tudo relacionado (posts, avaliações, oportunidades, campanhas, leads, conversas) <strong style={{ color: 'white' }}>e o login da pessoa</strong> — pra sempre, sem volta. Pra confirmar, digite o nome exato do negócio abaixo.
             </p>
             <input value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)} placeholder={detail.business_name} autoFocus
               style={{ width: '100%', padding: '10px 14px', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '9px', color: 'white', fontSize: '14px', outline: 'none', marginBottom: '14px' }} />

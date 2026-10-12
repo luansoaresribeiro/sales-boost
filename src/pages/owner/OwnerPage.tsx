@@ -89,7 +89,9 @@ export default function OwnerPage() {
     (c.business_type ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const selectable = (c: Company) => !!c.id && !c.delete_lock
+  // Linha com empresa → seleciona pela empresa; "sem perfil" → pelo login.
+  const rowKey = (c: Company) => c.id ?? `u:${c.user_id}`
+  const selectable = (c: Company) => !c.delete_lock
   const toggle = (id: string) => setSelected(prev => {
     const next = new Set(prev)
     if (next.has(id)) next.delete(id)
@@ -97,8 +99,10 @@ export default function OwnerPage() {
     return next
   })
   const visibleSelectable = filtered.filter(selectable).slice(0, MAX_BULK_DELETE)
-  const allVisibleSelected = visibleSelectable.length > 0 && visibleSelectable.every(c => selected.has(c.id!))
-  const selectedItems = companies.filter(c => c.id && selected.has(c.id)).map(c => ({ id: c.id!, name: c.business_name ?? c.user_email, email: c.user_email }))
+  const allVisibleSelected = visibleSelectable.length > 0 && visibleSelectable.every(c => selected.has(rowKey(c)))
+  const selectedItems = companies.filter(c => selected.has(rowKey(c))).map(c => c.id
+    ? { id: c.id, name: c.business_name ?? c.user_email, email: c.user_email, kind: 'company' as const }
+    : { id: c.user_id, name: c.user_email, email: c.user_email, kind: 'login' as const })
   const COLS = '36px 2fr 1fr 1fr 130px 80px 80px 100px'
 
   return (
@@ -229,7 +233,7 @@ export default function OwnerPage() {
             {/* Table header */}
             <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: '0', padding: '12px 24px', borderBottom: `1px solid ${BORDER}`, fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em', alignItems: 'center' }}>
               <input type="checkbox" aria-label="Selecionar todas as empresas visíveis que podem ser excluídas" checked={allVisibleSelected} disabled={!visibleSelectable.length}
-                onChange={() => setSelected(allVisibleSelected ? new Set() : new Set(visibleSelectable.map(c => c.id!)))} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                onChange={() => setSelected(allVisibleSelected ? new Set() : new Set(visibleSelectable.map(rowKey)))} style={{ width: 16, height: 16, cursor: 'pointer' }} />
               <span>Empresa</span>
               <span>Tipo</span>
               <span>Cidade</span>
@@ -250,9 +254,9 @@ export default function OwnerPage() {
                 onMouseLeave={e => { if (c.id) e.currentTarget.style.background = 'transparent' }}
               >
                 <div onClick={e => e.stopPropagation()}>
-                  {c.id && (c.delete_lock
-                    ? <span title={`Não pode ser excluída em lote: ${c.delete_lock}`} style={{ fontSize: '13px', cursor: 'help' }}>🔒</span>
-                    : <input type="checkbox" aria-label={`Selecionar ${c.business_name ?? c.user_email}`} checked={selected.has(c.id)} onChange={() => toggle(c.id!)} style={{ width: 16, height: 16, cursor: 'pointer' }} />)}
+                  {c.delete_lock
+                    ? <span title={`Não pode ser excluído: ${c.delete_lock}`} style={{ fontSize: '13px', cursor: 'help' }}>🔒</span>
+                    : <input type="checkbox" aria-label={`Selecionar ${c.business_name ?? c.user_email}`} checked={selected.has(rowKey(c))} onChange={() => toggle(rowKey(c))} style={{ width: 16, height: 16, cursor: 'pointer' }} />}
                 </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
