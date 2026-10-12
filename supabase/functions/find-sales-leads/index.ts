@@ -141,7 +141,7 @@ interface ApifyProfile { followersCount?: number; postsCount?: number; latestPos
 
 async function scanInstagram(apifyToken: string, instagramUrl: string): Promise<{ followers: number; posts: number; avgEngagement: number; lastPostDate: string | null } | null> {
   try {
-    const url = `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${apifyToken}&timeout=60&memory=256`
+    const url = `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${apifyToken}&timeout=40&memory=256`
     const res = await fetch(url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ directUrls: [instagramUrl.replace(/\/$/, '')], resultsType: 'details', resultsLimit: 6 }),
@@ -283,7 +283,15 @@ interface QueryStats {
   found: number; rejected: number; accepted: number; scores: number[]; searchTimeMs: number
 }
 
+// A função tem ~150s de relógio (Supabase); passou disso ela é cortada no meio
+// e o registro ficava "running" pra sempre (aconteceu em 2026-10-12, com o ICP
+// de imóveis: quase todo candidato passa pros passos lentos — Apify + IA).
+// Depois deste prazo não começa candidato novo; o resto fica pra próxima busca.
+const SCAN_BUDGET_MS = 80_000
+const STALE_SCAN_MS = 10 * 60_000
+
 async function runScan(admin: SupaClient, logId: string, keys: { googleKey: string; apifyToken: string; anthropicKey: string; telegramToken?: string }): Promise<{ found: number; error?: string }> {
+  const deadline = Date.now() + SCAN_BUDGET_MS
   const { data: settingsRow } = await admin.from('prospect_settings')
     .select('cities, business_types, max_per_night, min_rating, max_rating, min_reviews, max_reviews, require_active_instagram, require_phone, exclude_chains, telegram_chat_id, icp_custom_instructions, scoring_weights, icp_confidence_threshold')
     .eq('id', true).maybeSingle()
@@ -375,9 +383,9 @@ async function runScan(admin: SupaClient, logId: string, keys: { googleKey: stri
   let processed = 0
 
   for (const { place: candidate, city, businessType, keyword } of candidates) {
-    if (found >= maxPerNight) break
+    if (found >= maxPerNight || Date.now() > deadline) break
     processed++
-    await admin.from('prospect_scan_log').update({ candidates_processed: processed }).eq('id', logId)
+    await admin.from('prospect_scan_log').update({ candidates_processed: processed, found_count: found }).eq('id', logId)
     try {
       // Marca como checado já de cara — pass ou fail, nunca mais reprocessa
       // esse lugar (senão o Google devolve os mesmos resultados toda busca
@@ -558,6 +566,11 @@ Deno.serve(async (req) => {
       const { data: roleRow } = await admin.from('user_roles').select('role').eq('email', user.email!).maybeSingle()
       if (roleRow?.role !== 'owner') return json({ error: 'Forbidden' }, 403)
     }
+
+    // Busca antiga cortada pelo limite de tempo nunca chegou a fechar o registro.
+    await admin.from('prospect_scan_log').update({
+      status: 'error', error_message: 'Interrompida: a função ficou sem tempo no meio da busca.', finished_at: new Date().toISOString(),
+    }).eq('status', 'running').lt('started_at', new Date(Date.now() - STALE_SCAN_MS).toISOString())
 
     const { data: logRow, error: logErr } = await admin.from('prospect_scan_log').insert({ status: 'running' }).select('id').single()
     if (logErr || !logRow) return json({ error: 'Erro ao iniciar a varredura.' }, 500)
