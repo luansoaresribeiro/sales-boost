@@ -64,6 +64,21 @@ async function runCheck(admin: SupaClient, svc: ServiceRow, cfg: Config, env: Re
     return { status: 'ok', latency: null, detail }
   }
 
+  // Estúdio de vídeo na VPS (2026-10-12): só cobra quando o acabamento está ligado.
+  if (t === 'vps_worker') {
+    const { data: flag } = await admin.from('feature_flags').select('enabled').eq('key', 'vps_reel_finish').maybeSingle()
+    if (!(flag as { enabled?: boolean } | null)?.enabled) return { status: 'ok', latency: null, detail: 'Acabamento desligado — vídeos saem do jeito de antes.' }
+    const { data: node } = await admin.from('worker_nodes').select('last_seen_at').eq('status', 'active')
+      .order('last_seen_at', { ascending: false }).limit(1).maybeSingle()
+    const seen = (node as { last_seen_at?: string } | null)?.last_seen_at
+    const min = seen ? Math.round((Date.now() - new Date(seen).getTime()) / 60000) : null
+    if (min === null || min >= 5) return { status: 'down', latency: null, detail: min === null ? 'Nenhum servidor conectado.' : `Servidor sem sinal há ${min} min.` }
+    const { count } = await admin.from('media_jobs').select('id', { count: 'exact', head: true }).eq('status', 'failed')
+      .gte('updated_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
+    if ((count ?? 0) >= 2) return { status: 'degraded', latency: null, detail: `Online, mas ${count} vídeos falharam na última hora.` }
+    return { status: 'ok', latency: null, detail: `Online (último sinal há ${min} min).` }
+  }
+
   // Checks HTTP (edge functions, worker, APIs) e Hermes.
   let url = ''
   let init: RequestInit = { method: 'GET' }
@@ -120,6 +135,11 @@ function diagnose(svc: ServiceRow, r: CheckResult, recurring: number): {
     root_cause = r.detail.includes('401') ? 'Falha de autenticação com a Anthropic (ANTHROPIC_API_KEY inválida/ausente).' : r.detail.includes('429') ? 'Rate limit da Anthropic.' : 'Provedor de IA indisponível ou lento.'
     suggested_fix = r.detail.includes('401') ? 'Revisar a secret ANTHROPIC_API_KEY.' : 'Reduzir a frequência do ciclo temporariamente; tentar novamente.'
     preventive = 'Monitorar custo/limite e usar o modelo mais leve pra tarefas simples.'
+    auto_recoverable = false
+  } else if (svc.check_type === 'vps_worker') {
+    root_cause = down ? 'O estúdio de vídeo na VPS da Hostinger parou de dar sinal (servidor desligado, reiniciando ou sem internet).' : r.detail
+    suggested_fix = 'Os vídeos continuam saindo do jeito de antes, sem acabamento — nada travou. Na Hostinger: VPS → Terminal → `sudo systemctl restart salesboost-worker`. Se não voltar em 2 min: `journalctl -u salesboost-worker -n 50` e mande o resultado pro Claude.'
+    preventive = 'O serviço já reinicia sozinho se cair e liga sozinho quando a VPS reinicia.'
     auto_recoverable = false
   } else if (svc.check_type === 'agent_errors') {
     root_cause = `Taxa alta de falha no agente (${r.detail}). Pode ser dependência externa (Hermes/Apify/IA) ou dado inconsistente.`

@@ -73,3 +73,10 @@ revoke all on function claim_media_job(uuid) from public, anon, authenticated;
 insert into feature_flags (key, label, enabled)
 values ('vps_reel_finish', 'Acabamento de vídeo no servidor (VPS)', false)
 on conflict (key) do nothing;
+
+-- Monitor da plataforma (a cada 10 min, alerta crítico no Telegram do dono):
+-- avisa se o estúdio parar de dar sinal enquanto o acabamento está ligado, e
+-- avisa de novo quando voltar. Com o acabamento desligado, fica sempre "ok".
+insert into platform_services (key, name, category, critical, check_type, target, enabled)
+values ('vps_studio', 'Estúdio de vídeo (VPS Hostinger)', 'integration', true, 'vps_worker', null, true)
+on conflict (key) do nothing;

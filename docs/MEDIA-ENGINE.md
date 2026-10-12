@@ -180,6 +180,12 @@ Fluxo:
 O botão "Testar antes × depois" refaz o vídeo pronto mais recente em
 `vps-test/`, sem mexer no original.
 
+**Vigilância:** o monitor da plataforma (`platform-monitor`, a cada 10 min)
+tem o serviço "Estúdio de vídeo (VPS Hostinger)". Com o acabamento ligado,
+se o servidor ficar 5 min sem sinal, chega "🛡️ INCIDENTE CRÍTICO" no Telegram
+do dono, com o comando pra reiniciar. Quando ele volta, chega "✅ SERVIÇO
+RECUPERADO". Enquanto isso, os vídeos saem do jeito antigo.
+
 Comandos (rodar no terminal da Hostinger):
 - **Instalar:** gerar o comando na tela (Configurações → Servidor).
 - **Atualizar na mão:**
