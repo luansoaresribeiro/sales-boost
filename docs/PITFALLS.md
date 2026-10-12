@@ -354,3 +354,26 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   fica "carregando" pra sempre).
 - Antes de gravar arquivo grande no Storage, conferir o limite do bucket em
   produção: `select id, file_size_limit, allowed_mime_types from storage.buckets`.
+
+## Busca de leads cortada no meio pelo limite de tempo da função (2026-10-12)
+
+- **O que aconteceu:** a primeira busca com o perfil de imóveis começou às
+  06:00 UTC. Ela parou depois de analisar 7 de 79 negócios e o registro
+  ficou "running" pra sempre. A tela mostrava "Em andamento" e o botão de
+  buscar ficava travado.
+- **Por quê:**
+  - `find-sales-leads` roda em segundo plano (`EdgeRuntime.waitUntil`),
+    mas a Supabase corta a função por volta de 150s.
+  - Com restaurantes, quase todo candidato caía cedo nos filtros (nota,
+    avaliações, sem Instagram) e a busca inteira levava ~1 min.
+  - Com imóveis, quase todos passam pros passos lentos (Apify do Instagram +
+    IA), uns 15–35s cada.
+- **Correção:**
+  - Prazo de 80s: depois disso não começa candidato novo. Os que sobram ficam
+    pra próxima busca, porque a lista dos já vistos evita repetir.
+  - Apify com timeout de 40s.
+  - O disparo seguinte fecha como erro qualquer registro "running" com mais
+    de 10 min.
+  - A tela mostra "Interrompida" em vez de "Em andamento".
+- **Ao mexer nessa função:** qualquer passo novo por candidato encurta
+  quantos cabem por busca (hoje cabem uns 3–5 que chegam até a IA).
