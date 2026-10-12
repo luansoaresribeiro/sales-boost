@@ -309,3 +309,38 @@ conforme forem retomados:
   `sb:open-add`, ouvido por `BusinessContextButton`).
 - `useRealtime` ganhou opções `key` (evita colisão de canal com a
   ApprovalsPage na mesma tabela) e `column` (em `companies` a chave é `id`).
+
+## Pedidos do dono (2026-10-12) — próximas frentes
+
+Ainda sem ordem de prioridade fechada. Cada item vira um plano com critério
+de pronto antes de começar.
+
+1. **App Review da Meta:** pedir a aprovação do app (roteiro em
+   [META-APP-REVIEW.md](META-APP-REVIEW.md)). Destrava Instagram obrigatório
+   no onboarding e publicação em conta de cliente sem modo de teste.
+2. **TikTok:** canal novo com **estratégia própria pra esse canal**, não um
+   repost do Instagram (formato, gancho, frequência e métricas do TikTok).
+   Precisa de conexão oficial (API do TikTok) e de aprovação do app deles.
+3. **Novos setores:** e-commerces e lojas de casa (housing/decor stores).
+   Pela regra 6, entram como **ficha nova** em `vertical_playbooks`, nunca
+   como código de setor. O site já mostra "Em breve" pra eles.
+4. **Modelo de negócio (ideias do dono):**
+   - **Desconto por divulgação:** o cliente faz 1 post do Sales Boost no
+     feed da empresa e ganha desconto. A regra 1 vale: o post só sai com a
+     aprovação do cliente.
+   - **Comunidade de influenciadores** do setor.
+   - **Ofertas dentro do território:** workshops, comunidade e conteúdo
+     gratuito.
+5. **UGC pela Higgsfield (em breve):** vídeos no estilo "gente de verdade
+   falando", de preferência o **próprio corretor** (com autorização
+   explícita, ver "Avatar do corretor" em [MEDIA-ENGINE.md](MEDIA-ENGINE.md))
+   ou um criador de UGC. Gasto novo com provedor: precisa de aprovação.
+6. **Vídeo institucional do Sales Boost:** vídeo curto feito com IA
+   (estilo apresentação animada) explicando quem somos, porque confiança
+   pesa muito nesse setor. Pode ir na landing, no diagnóstico e no
+   Instagram do Sales Boost. Regra 4: texto só pelo `render-format`/legenda,
+   nunca escrito pela IA de vídeo.
+7. **Telegram como "amigo":** avisos quando acontece algo importante
+   (lead novo, post que foi bem, algo esperando aprovação) e, se o dono
+   aprovar o plano, **aprovar pelo Telegram** com botão. Mexe em função que
+   publica, então precisa de aprovação antes.

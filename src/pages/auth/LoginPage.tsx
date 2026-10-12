@@ -133,6 +133,13 @@ export default function LoginPage() {
     <div style={{ minHeight: '100vh', background: BG, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: '30%', left: '50%', transform: 'translate(-50%,-50%)', width: '700px', height: '500px', background: 'radial-gradient(ellipse, rgba(255,109,41,0.1) 0%, transparent 70%)', filter: 'blur(60px)', pointerEvents: 'none' }} />
 
+      {/* Sempre dá pra sair daqui (pedido do dono 2026-10-12): volta pra página
+          anterior, ou pro site se a pessoa chegou direto nesta tela. */}
+      <button type="button" onClick={() => ((window.history.state?.idx ?? 0) > 0 ? navigate(-1) : navigate('/'))}
+        style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 2, display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: MUTED, fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+        ← {lang === 'en' ? 'Back' : 'Voltar'}
+      </button>
+
       <div style={{ width: '100%', maxWidth: '420px', position: 'relative', zIndex: 1 }}>
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center', marginBottom: '40px', textDecoration: 'none' }}>
           <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: ORANGE, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -4,6 +4,27 @@
 > de produto, conteúdo ou posicionamento. Decisões com data ficam em
 > [DECISIONS.md](DECISIONS.md); aqui fica o estado atual, não o histórico.
 
+## Quem somos (texto do dono, 2026-10-12)
+
+> **Sales Boost is an AI growth partner that continuously understands a
+> business, builds its digital acquisition strategy, executes it, learns
+> from the results, and adapts to bring the business more customers.**
+
+**Diferencial:** empresas precisam de alguém que pense, execute e aprenda
+continuamente sobre como adquirir clientes digitalmente — sem que o dono
+precise virar especialista em marketing, IA, anúncios e conteúdo.
+
+Frases da marca (usar no site, nos vídeos e na conversa com o cliente):
+- "Não somos uma ferramenta solta, somos um parceiro de crescimento." (EN:
+  "We are not a standalone tool, we are a growth partner.")
+- "Não queremos só likes, queremos que o seu negócio cresça."
+- "Não somos agência, somos seus parceiros."
+- "Não tira férias, não pede aumento e trabalha de madrugada também."
+- "Nós transformamos atenção em negócio."
+
+Onde aparece no site: hero (subtítulo), seção "Quem somos" (logo abaixo da
+hero), seção "Não somos agência" e rodapé — textos em `src/i18n.ts`.
+
 ## Posicionamento
 
 Sales Boost é uma **growth engine** / "AI growth partner": entende o

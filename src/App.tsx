@@ -261,14 +261,13 @@ function StatsSection({ lang }: { lang: Lang }) {
   const sectionRef = useRef<HTMLElement>(null)
   const numRefs = useRef<(HTMLDivElement | null)[]>([])
 
-  // static values to animate toward (same order as i18n)
-  const counters = [
-    { end: 38, suffix: '%', decimals: 0 },
-    { end: 2.4, suffix: '×', decimals: 1 },
-    { end: 24, suffix: 'h', decimals: 0 },
-  ]
-
   useEffect(() => {
+    // Anima até o número do próprio texto (i18n) — o texto é a única fonte,
+    // pra tela nunca mostrar um número diferente do que está escrito.
+    const counters = t[lang].stats.items.map(({ value }) => {
+      const m = value.match(/^(\d+(?:\.(\d+))?)(.*)$/)
+      return m ? { end: Number(m[1]), suffix: m[3], decimals: m[2]?.length ?? 0 } : null
+    })
     const ctx = gsap.context(() => {
       gsap.from('.stats-card', {
         y: 60, opacity: 0, duration: 0.9, ease: 'power3.out',
@@ -280,7 +279,7 @@ function StatsSection({ lang }: { lang: Lang }) {
       })
 
       numRefs.current.forEach((el, i) => {
-        if (!el) return
+        if (!el || !counters[i]) return
         const { end, suffix, decimals } = counters[i]
         const obj = { val: 0 }
         gsap.to(obj, {
@@ -313,7 +312,7 @@ function StatsSection({ lang }: { lang: Lang }) {
             </div>
             <p style={{ fontSize: 'clamp(1rem,2vw,1.2rem)', color: 'white', lineHeight: 1.6 }}>
               {tx.intro.split(' ').map((word, i) =>
-                ['resultados', 'inteligência', 'ações', 'results', 'intelligence', 'actions'].includes(word.toLowerCase().replace(/[.,]/g, ''))
+                ['resultados', 'inteligência', 'ações', 'parceiro', 'results', 'intelligence', 'actions', 'partner'].includes(word.toLowerCase().replace(/[.,]/g, ''))
                   ? <span key={i} style={{ color: ORANGE }}>{word} </span>
                   : <span key={i}>{word} </span>
               )}
