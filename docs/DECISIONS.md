@@ -857,3 +857,42 @@ grátis de 30 s, acima — mantidos como histórico):
 
   Migration `20261012100000_api_providers_refresh.sql`. A aba "Referências
   globais" saiu do painel (a tabela e a função continuam no banco).
+
+## 2026-10-12 — VPS da Hostinger vira "estúdio de vídeo" (decisão do dono)
+
+- **Por quê.** A VPS (KVM 2, `srv1824556`) era usada só como intermediária
+  do raciocínio (Hermes) pro Jarvis e o chat, que o dono não usa. O que só um
+  servidor próprio faz bem é edição de vídeo com `ffmpeg`, sem o limite de
+  ~150 s e de memória das funções da Supabase.
+- **O que faz.** O acabamento dos vídeos do imóvel:
+  - vídeo em pé 1080×1920 com fundo desfocado (nada cortado nem inventado);
+  - entrada e saída suaves, fusão entre trechos;
+  - H.264 + trilha de áudio muda AAC (formato que o Instagram prefere);
+  - capa (JPG).
+- **Como.**
+  - Tabelas `worker_nodes`, `worker_enrollments` e `media_jobs`, mais a
+    função `claim_media_job` (migration `20261013100000_vps_worker.sql`).
+  - Função `vps-worker`.
+  - Trabalhador em `public/vps/worker.mjs` (Node 20 + ffmpeg, sem
+    dependências) e instalador em `public/vps/install.sh`.
+  - Tela: Configurações → Servidor.
+  - `tourEngine.advanceTour` manda a colagem pra VPS quando o interruptor
+    `feature_flags.vps_reel_finish` está ligado e há servidor online.
+- **Segurança.**
+  - A VPS nunca recebe a service role. Entra com um código de 15 min, de uso
+    único, gerado na tela, e recebe um token próprio que fica guardado só
+    como hash.
+  - O resultado sobe por URL assinada, gerada por trabalho.
+  - Só faz pedidos de saída: não abre porta nem mexe em DNS.
+  - O serviço systemd tem limite de 1 CPU e 3 GB, pra não derrubar o Hermes
+    que roda na mesma máquina.
+- **Nunca trava.** Se a VPS não entregar (fila com servidor offline por
+  3 min, falha 3 vezes ou 20 min no total), o tour volta sozinho pra
+  colagem antiga (`mp4stream`).
+- **Fica pra depois (decisão do dono):**
+  - música, que depende de escolher uma biblioteca com licença comercial;
+  - cartão final com a marca do corretor (só quando o "Comente QUERO" do
+    imóvel estiver ligado, pra tela não prometer o que não existe);
+  - desligar o Hermes/Jarvis.
+- **Busca de leads não foi pra VPS.** Não precisa: dá pra resolver
+  retomando a busca na própria Supabase, e isso fica como proposta separada.

@@ -65,7 +65,10 @@
   qualquer chamada real que gaste crédito.
 - **Status:** ❌ não começado. (Atualização 2026-10-08: 🟡 o tour grátis de 6
   fotos — Kling + Reel único — funciona no ensaio; os 12 tours/mês do plano
-  ainda não existem. Ver [DECISIONS.md](DECISIONS.md).)
+  ainda não existem. Ver [DECISIONS.md](DECISIONS.md).) (Atualização
+  2026-10-12: 🟡 acabamento dos vídeos na VPS (vídeo em pé, fusão, capa)
+  pronto e testado no ensaio, aguardando aprovação do dono; ver
+  [MEDIA-ENGINE.md](MEDIA-ENGINE.md#estúdio-de-vídeo-na-vps-2026-10-12).)
 - **Ordem de construção dos formatos (aprovada 2026-10-09, mapa em
   [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md)):**
   1. **Base do tour:** tour do plano (todos os ambientes, sem repetidas) +

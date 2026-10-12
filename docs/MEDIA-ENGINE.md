@@ -112,6 +112,11 @@ vídeo, teto do grátis e fotos do entorno).
 - Imóvel real no fundo do corretor (avatar + cena real combinados).
 - Montagem de Reel com legenda/música (ffmpeg na VPS — risco: a VPS do
   Hermes já é instável hoje, ver [ARCHITECTURE.md](ARCHITECTURE.md)).
+  **Divergência (2026-10-12):**
+  - O **acabamento** já existe: vídeo em pé 1080×1920 com fundo desfocado,
+    entrada e saída suaves, áudio mudo e capa. Ele roda no "estúdio de
+    vídeo" na VPS. Ver a seção abaixo e [DECISIONS.md](DECISIONS.md).
+  - Legenda e música continuam no futuro.
 - Tour 360° (exige câmera 360°/parceiro).
 - `video_blueprint` na ficha (ordem de cenas por setor, generalizando o
   "fachada → sala → cozinha..." pra outros setores).
@@ -150,3 +155,41 @@ texto do `render-format`). `trial-video` agora pede 3 `photo_urls` (2 cômodos
 (`diagnosis-gift`). Motor em `_shared/freeKit.ts`. Ver
 [DECISIONS.md](DECISIONS.md) "Presente no diagnóstico".
 
+
+## Estúdio de vídeo na VPS (2026-10-12)
+
+Peças:
+- **`media_jobs`:** a fila.
+- **`vps-worker`:** a ponte entre a VPS e o sistema.
+- **`public/vps/worker.mjs`:** roda na VPS e é servido pelo próprio site.
+  Se atualiza sozinho a cada hora.
+- **`public/vps/install.sh`:** o instalador.
+
+Fluxo:
+1. `tourEngine.advanceTour` recebe todos os trechos prontos.
+2. Se o interruptor `vps_reel_finish` estiver ligado e houver servidor
+   online, ele cria o trabalho `reel_finish`. O tour fica `assembling` com
+   `assembly.mode = 'vps'`.
+3. A VPS pega o trabalho (`claim`), monta com ffmpeg e sobe o vídeo no
+   mesmo caminho de antes, no bucket `videos`. A capa vai pro
+   `post-images/video-covers/`.
+4. A VPS chama `complete`, que confere o arquivo no Storage e marca o tour
+   `completed`.
+5. Se não der certo, o tour volta pra colagem antiga sozinho.
+
+O botão "Testar antes × depois" refaz o vídeo pronto mais recente em
+`vps-test/`, sem mexer no original.
+
+**Vigilância:** o monitor da plataforma (`platform-monitor`, a cada 10 min)
+tem o serviço "Estúdio de vídeo (VPS Hostinger)". Com o acabamento ligado,
+se o servidor ficar 5 min sem sinal, chega "🛡️ INCIDENTE CRÍTICO" no Telegram
+do dono, com o comando pra reiniciar. Quando ele volta, chega "✅ SERVIÇO
+RECUPERADO". Enquanto isso, os vídeos saem do jeito antigo.
+
+Comandos (rodar no terminal da Hostinger):
+- **Instalar:** gerar o comando na tela (Configurações → Servidor).
+- **Atualizar na mão:**
+  `curl -fsSL https://getsaleboost.com/vps/install.sh | sudo bash -s -- update`
+- **Remover:**
+  `curl -fsSL https://getsaleboost.com/vps/install.sh | sudo bash -s -- uninstall`
+- **Ver o log:** `journalctl -u salesboost-worker -n 50`

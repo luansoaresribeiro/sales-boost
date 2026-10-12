@@ -105,7 +105,30 @@ export async function pollClips(headers: Record<string, string>, prompt: string,
 // ---------- colagem em partes ----------
 
 export interface Output { path: string; from: number; to: number; nome?: string; upload_url?: string; total?: number; done?: boolean }
-export interface Assembly { urls: string[]; metas: (ClipMeta | null)[]; outputs: Output[] }
+// mode 'vps': quem cola é o estúdio de vídeo na VPS (media_jobs.job_id), não esta função.
+export interface Assembly { urls: string[]; metas: (ClipMeta | null)[]; outputs: Output[]; mode?: 'vps'; job_id?: string; vps_since?: string }
+
+// ---------- acabamento na VPS (estúdio de vídeo, decisão do dono 2026-10-12) ----------
+// Com o interruptor ligado e um servidor online, a colagem vai pra VPS: ela
+// recodifica com ffmpeg (vídeo em pé 1080×1920 com fundo desfocado, entrada e
+// saída suaves, áudio mudo AAC, capa). Se a VPS não pegar o trabalho a tempo
+// ou falhar, o tour volta sozinho pra colagem antiga (mp4stream) — nunca trava.
+const VPS_ONLINE_MS = 2 * 60_000
+const VPS_IDLE_FALLBACK_MS = 3 * 60_000 // na fila e nenhum servidor online
+const VPS_MAX_WAIT_MS = 20 * 60_000
+
+// deno-lint-ignore no-explicit-any
+async function vpsOnline(admin: any): Promise<boolean> {
+  const { data } = await admin.from('worker_nodes').select('id').eq('status', 'active')
+    .gt('last_seen_at', new Date(Date.now() - VPS_ONLINE_MS).toISOString()).limit(1).maybeSingle()
+  return !!data
+}
+
+// deno-lint-ignore no-explicit-any
+async function vpsEnabled(admin: any): Promise<boolean> {
+  const { data } = await admin.from('feature_flags').select('enabled').eq('key', 'vps_reel_finish').maybeSingle()
+  return !!data?.enabled && await vpsOnline(admin)
+}
 
 async function download(url: string): Promise<Uint8Array> {
   const r = await fetch(url, { signal: AbortSignal.timeout(60_000) })
@@ -170,6 +193,32 @@ export async function advanceTour(admin: any, supabaseUrl: string, key: string, 
       .eq('id', tour.id).eq('status', 'generating').select('id, updated_at').maybeSingle()
     if (!locked) return { status: 'processing', done, total }
     tour = { ...tour, status: 'assembling', assembly, updated_at: locked.updated_at }
+    if (await vpsEnabled(admin)) {
+      const { data: job } = await admin.from('media_jobs').insert({
+        kind: 'reel_finish', video_tour_id: tour.id,
+        input: { outputs: assembly.outputs.map(o => ({ path: o.path, clips: assembly.urls.slice(o.from, o.to) })) },
+      }).select('id').single()
+      if (job) {
+        await admin.from('video_tours').update({ assembly: { ...assembly, mode: 'vps', job_id: job.id, vps_since: now() }, updated_at: now() }).eq('id', tour.id)
+        return { status: 'processing', done, total }
+      }
+    }
+  } else if (tour.status === 'assembling' && tour.assembly?.mode === 'vps') {
+    const a = tour.assembly
+    const { data: job } = await admin.from('media_jobs').select('status').eq('id', a.job_id).maybeSingle()
+    const waited = Date.now() - new Date(a.vps_since ?? tour.updated_at).getTime()
+    const stuck = !job || job.status === 'failed' || waited > VPS_MAX_WAIT_MS ||
+      (job.status === 'queued' && waited > VPS_IDLE_FALLBACK_MS && !await vpsOnline(admin))
+    if (!stuck) return { status: 'processing', done: total, total }
+    // Volta pra colagem antiga; a VPS não consegue mais entregar este trabalho (complete exige 'running').
+    console.log('[tour] VPS não entregou, voltando pra colagem antiga', tour.id, job?.status ?? 'sem trabalho')
+    if (job && job.status !== 'failed' && job.status !== 'done') {
+      await admin.from('media_jobs').update({ status: 'failed', error: 'tempo esgotado — tour voltou pra colagem antiga', updated_at: now() }).eq('id', a.job_id)
+    }
+    const { mode: _m, job_id: _j, vps_since: _s, ...rest } = a
+    await admin.from('video_tours').update({ assembly: rest, updated_at: new Date(Date.now() - LEASE_MS).toISOString() })
+      .eq('id', tour.id).eq('status', 'assembling')
+    return { status: 'processing', done: total, total }
   } else if (tour.status === 'assembling') {
     // Só continua se ninguém está colando agora (trava otimista pelo updated_at).
     if (Date.now() - new Date(tour.updated_at).getTime() < LEASE_MS) return { status: 'processing', done: total, total }
