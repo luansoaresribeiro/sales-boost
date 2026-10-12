@@ -9,6 +9,7 @@
  * publicar, é preciso repontar o webhook do bot pra esta URL (ver instruções).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { parseButton, verifyButton, pendingKeyboard, confirmKeyboard, tg } from '../_shared/telegramButtons.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -19,8 +20,9 @@ const BOT_USERNAME = 'luansoaresribeirobot'
 type SupaClient = ReturnType<typeof createClient>
 
 interface TelegramChat { id: number; type: string }
-interface TelegramMessage { chat: TelegramChat; text?: string }
-interface TelegramUpdate { message?: TelegramMessage; edited_message?: TelegramMessage }
+interface TelegramMessage { message_id?: number; chat: TelegramChat; text?: string }
+interface TelegramCallback { id: string; from: { id: number }; data?: string; message?: TelegramMessage }
+interface TelegramUpdate { message?: TelegramMessage; edited_message?: TelegramMessage; callback_query?: TelegramCallback }
 
 async function sendMessage(token: string, chatId: number, text: string): Promise<void> {
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -100,6 +102,45 @@ async function handleFreeText(admin: SupaClient, token: string, chatId: number, 
   }
 }
 
+// Toque num botão de aprovação (mensagens do telegram-buddy). Fluxo:
+// "Aprovar" → troca os botões por "Tem certeza?" → "Sim" → agent-actions
+// (que confere a assinatura de novo e só então publica/envia). Só vale em
+// conversa privada e só pra quem recebeu o botão (assinatura presa ao chat).
+async function handleCallback(cb: TelegramCallback, supabaseUrl: string): Promise<void> {
+  const answer = (text: string) => tg('answerCallbackQuery', { callback_query_id: cb.id, text, show_alert: false })
+  const chat = cb.message?.chat
+  const btn = parseButton(cb.data ?? '')
+  if (!btn || !chat || chat.type !== 'private' || cb.from?.id !== chat.id || !cb.message?.message_id) { await answer('Botão inválido.'); return }
+  if (!(await verifyButton(btn.kind, btn.op, btn.id, chat.id, btn.sig))) { await answer('Botão inválido.'); return }
+  const where = { chat_id: chat.id, message_id: cb.message.message_id }
+
+  if (btn.op === 'A') {
+    await tg('editMessageReplyMarkup', { ...where, reply_markup: await confirmKeyboard(btn.kind, btn.id, chat.id) })
+    await answer(btn.kind === 'v' ? 'Tem certeza? Vai pro Instagram de verdade.' : 'Tem certeza? Vai ser enviado de verdade.')
+    return
+  }
+  if (btn.op === 'B') {
+    await tg('editMessageReplyMarkup', { ...where, reply_markup: await pendingKeyboard(btn.kind, btn.id, chat.id) })
+    await answer('Ok, nada foi feito.')
+    return
+  }
+
+  // 'Y' (confirmado) ou 'R' (recusar): quem decide é o agent-actions.
+  // Tira os botões antes, pra ninguém tocar duas vezes enquanto processa.
+  await tg('editMessageReplyMarkup', { ...where, reply_markup: { inline_keyboard: [] } })
+  await answer(btn.op === 'Y' ? 'Processando…' : 'Ok!')
+  let message = '⚠️ Não consegui falar com o servidor agora. Tente pelo painel.'
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/agent-actions`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'telegram_decide', kind: btn.kind, op: btn.op, id: btn.id, chat_id: chat.id, sig: btn.sig }),
+    })
+    const data = await res.json().catch(() => ({})) as { message?: string }
+    if (data.message) message = data.message
+  } catch (e) { console.error('telegram-webhook: agent-actions falhou', e) }
+  await tg('sendMessage', { chat_id: chat.id, text: message, reply_to_message_id: cb.message.message_id })
+}
+
 const COMMANDS = new Set(['/start', '/conectar', '/diagnostico', '/diagnostico_site', '/concorrentes', '/relatorio', 'report'])
 
 async function routeMessage(admin: SupaClient, token: string, chatId: number, chatType: string, text: string, supabaseUrl: string, webhookSecret: string): Promise<void> {
@@ -158,6 +199,15 @@ Deno.serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey)
     const update = await req.json().catch(() => ({})) as TelegramUpdate
+    if (update.callback_query) {
+      // Responde ao Telegram na hora e processa em segundo plano: publicar
+      // pode levar ~30s e, sem resposta, o Telegram reenvia o mesmo toque.
+      const work = handleCallback(update.callback_query, supabaseUrl).catch(e => console.error('telegram-webhook callback:', e))
+      // deno-lint-ignore no-explicit-any
+      const rt = (globalThis as any).EdgeRuntime
+      if (rt?.waitUntil) rt.waitUntil(work); else await work
+      return json({ ok: true })
+    }
     const message = update.message ?? update.edited_message
     if (!message?.text) return json({ ok: true })
 

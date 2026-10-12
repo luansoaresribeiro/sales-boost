@@ -22,6 +22,7 @@ const CHANNELS: { key: Channel; name: string; emoji: string; available: boolean 
 const TX = {
   pt: {
     opts: {
+      telegram_buddy: ['🤝 Telegram amigo (aprovar por aqui)', 'Aviso em poucos minutos quando algo precisa da sua aprovação — com botão pra aprovar direto no Telegram —, quando um post novo fica pronto e quando chega contato novo. Sempre pede confirmação antes de publicar. Silencioso das 22h às 8h.'],
       daily_report: ['Relatório diário', 'Um resumo do dia, enviado toda noite pelo Agente Secretário.'],
       weekly_report: ['Relatório semanal', 'Panorama da semana — só chega se o dono da plataforma tiver ligado essa categoria.'],
       monthly_report: ['Relatório mensal', 'Panorama do mês.'],
@@ -33,12 +34,13 @@ const TX = {
     } as Record<string, string[]>,
     title: 'Notificações', intro: 'Receba um aviso toda vez que o agente encontrar uma oportunidade, gerar um post novo ou precisar da sua aprovação.',
     tgConnected: '✓ Telegram conectado', tgHint: 'Você vai receber os avisos por lá.', disconnecting: 'Desconectando...', disconnect: 'Desconectar',
-    whatToNotify: 'O que avisar', offByPlatform: 'desligado pela plataforma', connectCta: '🔔 Conecte para receber notificações',
+    whatToNotify: 'O que avisar', offByPlatform: 'desligado pela plataforma', onlyPrivate: 'só funciona em conversa privada com o bot', connectCta: '🔔 Conecte para receber notificações',
     pickChannel: 'Escolha por onde quer ser avisado', generating: 'Gerando...', ready: '✓ Pronto', connect: 'Conectar', soon: 'Em breve',
     openTg: 'Abrir Sales Boost no Telegram →',
   },
   en: {
     opts: {
+      telegram_buddy: ['🤝 Telegram buddy (approve from here)', 'A heads-up within minutes when something needs your approval — with a button to approve right in Telegram —, when a new post is ready and when a new contact arrives. Always asks you to confirm before publishing. Quiet from 10pm to 8am.'],
       daily_report: ['Daily report', 'A summary of the day, sent every night by the Secretary Agent.'],
       weekly_report: ['Weekly report', 'Overview of the week — only sent if the platform owner has turned this category on.'],
       monthly_report: ['Monthly report', 'Overview of the month.'],
@@ -50,7 +52,7 @@ const TX = {
     } as Record<string, string[]>,
     title: 'Notifications', intro: 'Get an alert every time the agent finds an opportunity, generates a new post, or needs your approval.',
     tgConnected: '✓ Telegram connected', tgHint: 'You will receive alerts there.', disconnecting: 'Disconnecting...', disconnect: 'Disconnect',
-    whatToNotify: 'What to notify', offByPlatform: 'turned off by the platform', connectCta: '🔔 Connect to receive notifications',
+    whatToNotify: 'What to notify', offByPlatform: 'turned off by the platform', onlyPrivate: 'only works in a private chat with the bot', connectCta: '🔔 Connect to receive notifications',
     pickChannel: 'Choose where you want to be notified', generating: 'Generating...', ready: '✓ Ready', connect: 'Connect', soon: 'Coming soon',
     openTg: 'Open Sales Boost on Telegram →',
   },
@@ -59,11 +61,14 @@ const TX = {
 type NotificationPrefs = {
   opportunities: boolean; negative_reviews: boolean; new_competitor: boolean; agent_actions: boolean
   daily_report: boolean; weekly_report: boolean; monthly_report: boolean; annual_report: boolean
+  // Opt-in (padrão desligado): avisos com botão de aprovar (telegram-buddy).
+  telegram_buddy: boolean; telegram_buddy_since?: string
 }
 
 const DEFAULT_PREFS: NotificationPrefs = {
   opportunities: true, negative_reviews: true, new_competitor: true, agent_actions: true,
   daily_report: true, weekly_report: true, monthly_report: true, annual_report: true,
+  telegram_buddy: false,
 }
 
 // Controle global da plataforma (owner → Telegram & Relatórios). Os relatórios
@@ -71,7 +76,8 @@ const DEFAULT_PREFS: NotificationPrefs = {
 // se o owner desligou uma categoria, ela aparece travada pra o cliente.
 type GlobalReports = { daily_enabled: boolean; weekly_enabled: boolean; monthly_enabled: boolean; annual_enabled: boolean }
 
-const PREF_OPTIONS: { key: keyof NotificationPrefs; label: string; hint: string; globalKey?: keyof GlobalReports }[] = [
+const PREF_OPTIONS: { key: Exclude<keyof NotificationPrefs, 'telegram_buddy_since'>; label: string; hint: string; globalKey?: keyof GlobalReports }[] = [
+  { key: 'telegram_buddy', label: 'Telegram amigo', hint: 'Avisos com botão pra aprovar direto no Telegram.' },
   { key: 'daily_report', label: 'Relatório diário', hint: 'Um resumo do dia, enviado toda noite pelo Agente Secretário.', globalKey: 'daily_enabled' },
   { key: 'weekly_report', label: 'Relatório semanal', hint: 'Panorama da semana — só chega se o dono da plataforma tiver ligado essa categoria.', globalKey: 'weekly_enabled' },
   { key: 'monthly_report', label: 'Relatório mensal', hint: 'Panorama do mês.', globalKey: 'monthly_enabled' },
@@ -113,12 +119,23 @@ export default function NotificationsCard() {
       .then(({ data }) => { if (data) setGlobalReports(data as GlobalReports) })
   }, [user])
 
-  const togglePref = async (key: keyof NotificationPrefs) => {
+  const togglePref = async (key: Exclude<keyof NotificationPrefs, 'telegram_buddy_since'>) => {
     if (!companyId) return
-    const next = { ...prefs, [key]: !prefs[key] }
+    const next: NotificationPrefs = { ...prefs, [key]: !prefs[key] }
+    // Ligou o Telegram amigo: marca a hora (só avisa o que acontecer daqui
+    // pra frente, sem despejar o passado) e manda um "oi" pra confirmar.
+    const buddyOn = key === 'telegram_buddy' && next.telegram_buddy
+    if (buddyOn) next.telegram_buddy_since = new Date().toISOString()
     setPrefs(next)
     setSavingPref(key)
-    await supabase.from('companies').update({ notification_prefs: next }).eq('id', companyId)
+    const { error } = await supabase.from('companies').update({ notification_prefs: next }).eq('id', companyId)
+    if (!error && buddyOn && session) {
+      fetch(`${SUPABASE_URL}/functions/v1/telegram-buddy`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'hello' }),
+      }).catch(() => { /* o aviso de boas-vindas é só um bônus */ })
+    }
     setSavingPref(null)
   }
 
@@ -178,7 +195,10 @@ export default function NotificationsCard() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {PREF_OPTIONS.map(opt => {
+                // Aprovar pelo Telegram só em conversa privada (em grupo, qualquer
+                // pessoa do grupo tocaria no botão) — id de grupo é negativo.
                 const gatedOff = !!(opt.globalKey && globalReports && globalReports[opt.globalKey] === false)
+                  || (opt.key === 'telegram_buddy' && (telegramChatId ?? 0) <= 0)
                 return (
                   <label key={opt.key}
                     style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${BORDER}`, background: 'rgba(255,255,255,0.03)', cursor: gatedOff ? 'not-allowed' : 'pointer', opacity: gatedOff ? 0.55 : 1 }}>
@@ -192,7 +212,7 @@ export default function NotificationsCard() {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '13px', fontWeight: 600, color: 'white' }}>
                         {X.opts[opt.key][0]}
-                        {gatedOff && <span style={{ fontSize: '9.5px', fontWeight: 700, color: '#FBBF24', marginLeft: '8px' }}>{X.offByPlatform}</span>}
+                        {gatedOff && <span style={{ fontSize: '9.5px', fontWeight: 700, color: '#FBBF24', marginLeft: '8px' }}>{opt.key === 'telegram_buddy' ? X.onlyPrivate : X.offByPlatform}</span>}
                       </div>
                       <div style={{ fontSize: '11px', color: MUTED, marginTop: '1px' }}>{X.opts[opt.key][1]}</div>
                     </div>

@@ -263,6 +263,24 @@ Telegram (`notifyMarketing()` → Cloudflare Worker `marketing-bot` →
 - **Avisos automáticos** (`AGENT_ACTION`, `OPPORTUNITY_DETECTED`,
   `STRATEGY_PIVOT` etc.) ainda é o Cloudflare Worker `marketing-bot`, rota
   `/notify` — não migrou pro Supabase.
+  - *Divergência (2026-10-12):* no código atual os avisos passam por
+    `log-bot-event` (Supabase), que grava em `bot_notifications` e manda
+    direto pra API do Telegram — o Worker não aparece mais nesse caminho.
+- **Telegram amigo** (2026-10-12, opt-in por empresa em Configurações →
+  Notificações, `notification_prefs.telegram_buddy`): `telegram-buddy`
+  (pg_cron a cada 10 min, silêncio 22h–8h de Brasília, máx. 3 mensagens
+  por rodada, cada item uma vez só via `telegram_buddy_sent`) avisa
+  pedido de aprovação pendente (`agent_actions`), post novo no Vault e
+  lead novo. Aprovação com botão: 1º toque troca por "Tem certeza?", 2º
+  toque → `telegram-webhook` (`callback_query`) → `agent-actions`
+  `telegram_decide`, que confere de novo a assinatura HMAC do botão (presa
+  a item + chat), o chat do dono, o opt-in e o status ainda pendente
+  (troca condicional: dois toques nunca publicam duas vezes). Interruptor
+  geral: `feature_flags.telegram_buddy`. Só pedido `PENDING` é aprovável
+  pelo Telegram (editado no painel depois do aviso → volta pro painel). O
+  `hermes-lead-alert` só deixa o aviso de lead pro buddy quando ele vai
+  avisar agora (`buddyDeliversNow`); senão avisa ele mesmo e marca o lead
+  como avisado em `telegram_buddy_sent` (nem some, nem duplica).
 - **`vendas-bot`** (Cloudflare Worker) ainda não migrado — mesmo ponto
   cego de logs que `marketing-bot` tinha antes.
 - **`group-manager`** (Cloudflare Worker) cria grupos/convida bots — usa

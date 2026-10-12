@@ -925,3 +925,11 @@ grátis de 30 s, acima — mantidos como histórico):
   vitrine mostram um relatório ilustrativo (nota 87, "+12 pts"). É ilustração
   de tela, não promessa, mas, se o dono preferir, dá pra trocar por algo sem
   número. Não mexi porque é design da hero.
+- **Aprovar pelo Telegram, com dupla confirmação e opt-in** — 2026-10-12.
+  Pedido do dono ("é possível aprovar pelo telegram?"). Cada empresa liga
+  sozinha em Configurações → Notificações (padrão desligado). Aprovar
+  sempre exige 2 toques ("✅ Aprovar" → "✅ Sim, publicar agora"), só em
+  conversa privada com o bot, e o botão é assinado pelo servidor (o
+  webhook do Telegram não tem verificação de origem, então a assinatura é
+  o que impede aprovação forjada). Regra 1 continua valendo: nada sai sem o
+  dono tocar em "Sim". Silêncio das 22h às 8h pra não incomodar.

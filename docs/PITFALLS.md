@@ -406,3 +406,23 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
 - **Prazo de 15 min por trabalho:** um trabalho com muitos vídeos pode
   passar desse prazo e ser pego de novo. Com um servidor só, isso não
   acontece. Rever se um dia houver mais de um servidor.
+
+## Botões do Telegram (aprovar pelo Telegram, 2026-10-12)
+
+- **Limite de 64 bytes no `callback_data`.** Por isso o formato é curto:
+  `tipo|op|uuid|assinatura22` = 63 bytes. Não colocar mais nada aí — o
+  Telegram recusa o teclado inteiro e a mensagem nem sai.
+- **O `telegram-webhook` não sabe se a chamada veio mesmo do Telegram**
+  (registrado sem `secret_token`). Nunca confiar no `chat.id` do corpo
+  sozinho: toda decisão confere a assinatura HMAC do botão (chave derivada
+  da service role, presa a item + chat) — e o `agent-actions` confere de
+  novo, sem confiar em quem chamou.
+- **Dois toques rápidos / Telegram reenviando o mesmo toque** não publicam
+  duas vezes: a aprovação é uma troca condicional de status (só sai de
+  `PENDING`/`EDITED`; post do Vault só sai de `vault` → `publishing`).
+- **Teste:** no ensaio não há bot; o teste usa uma function temporária que
+  assina botões (`tg-sign-probe`, já neutralizada com 410). Em produção,
+  conferir os toques pelos logs do `telegram-webhook`.
+- **Migration com cron:** `20261014100000_telegram_buddy.sql` aponta pra
+  produção — no ensaio aplicar só a tabela e a flag.
+

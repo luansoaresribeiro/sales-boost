@@ -13,10 +13,15 @@
  * (o cron de 5 em 5 min que executa agendamentos vencidos, ver migration
  * 066), sem company_id (varre todas as empresas de uma vez).
  *
+ * 'telegram_decide' também não usa JWT: é o botão "Aprovar" do Telegram,
+ * autenticado por assinatura HMAC do próprio servidor presa ao item e ao
+ * chat do dono (ver telegramDecide e _shared/telegramButtons.ts).
+ *
  * Autenticado por JWT do dono (verifica dono da company). A escrita real é
  * feita com service role — ninguém forja aprovação/execução direto no banco.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { parseButton, verifyButton, type ButtonKind, type ButtonOp } from '../_shared/telegramButtons.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -40,6 +45,9 @@ Deno.serve(async (req) => {
       if (!cronSecretEnv || body.cron_secret !== cronSecretEnv) return json({ error: 'Unauthorized' }, 401)
       return await runScheduled(admin)
     }
+    // Botão "Aprovar" do Telegram: sem JWT, mas com assinatura do próprio
+    // servidor presa ao item + chat do dono (ver _shared/telegramButtons.ts).
+    if (body.action === 'telegram_decide') return await telegramDecide(admin, body)
 
     const bearer = req.headers.get('Authorization') ?? ''
     if (!bearer) return json({ error: 'Unauthorized' }, 401)
@@ -70,6 +78,70 @@ Deno.serve(async (req) => {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)
   }
 })
+
+// Aprovação pelo Telegram (2º toque do "Tem certeza?"). Confere TUDO aqui de
+// novo, sem confiar em quem chamou: interruptor geral + opt-in da empresa,
+// assinatura do botão, chat do dono e item ainda pendente. A troca de status
+// é condicional (só sai de pendente uma vez), então dois toques seguidos
+// nunca publicam duas vezes.
+// deno-lint-ignore no-explicit-any
+async function telegramDecide(admin: Supa, b: any) {
+  const kind = b.kind as ButtonKind, op = b.op as ButtonOp
+  const id = String(b.id ?? ''), chatId = Number(b.chat_id), sig = String(b.sig ?? '')
+  if (!parseButton(`${kind}|${op}|${id}|${sig}`) || (op !== 'Y' && op !== 'R') || !Number.isFinite(chatId)) return json({ ok: false, message: 'Botão inválido.' }, 400)
+  if (!(await verifyButton(kind, op, id, chatId, sig))) return json({ ok: false, message: 'Botão inválido.' }, 401)
+
+  const { data: flag } = await admin.from('feature_flags').select('enabled').eq('key', 'telegram_buddy').maybeSingle()
+  if (flag && flag.enabled === false) return json({ ok: false, message: 'A aprovação pelo Telegram está desligada no momento. Use o painel.' })
+
+  const table = kind === 'a' ? 'agent_actions' : 'marketing_ai_test_content'
+  const { data: item } = await admin.from(table).select('*').eq('id', id).maybeSingle()
+  if (!item) return json({ ok: false, message: 'Não achei esse item — talvez já tenha sido resolvido no painel.' })
+  const { data: company } = await admin.from('companies').select('id, user_id, telegram_chat_id, notification_prefs').eq('id', item.company_id).maybeSingle()
+  if (!company || Number(company.telegram_chat_id) !== chatId) return json({ ok: false, message: 'Esse botão não pertence a esta conversa.' }, 403)
+  if ((company.notification_prefs as Record<string, unknown> | null)?.telegram_buddy !== true) {
+    return json({ ok: false, message: 'A aprovação pelo Telegram está desligada nas suas Configurações → Notificações.' })
+  }
+
+  if (kind === 'a') {
+    const now = new Date().toISOString()
+    const patch = op === 'Y'
+      ? { approval_status: 'APPROVED', approved_at: now, approved_by: company.user_id, execution_status: 'QUEUED', updated_at: now }
+      : { approval_status: 'REJECTED', execution_status: 'NOT_READY', updated_at: now }
+    // Só PENDING: se foi editado no painel depois do aviso, o texto mudou e
+    // o dono não viu a versão nova aqui — aí a decisão volta pro painel.
+    if (item.approval_status === 'EDITED') return json({ ok: false, message: '✏️ Esse pedido foi editado no painel depois do aviso. Confira a versão nova por lá antes de aprovar.' })
+    const { data: claimed } = await admin.from('agent_actions').update(patch)
+      .eq('id', id).eq('approval_status', 'PENDING').select('*').maybeSingle()
+    if (!claimed) return json({ ok: false, message: 'Esse pedido já foi decidido antes (no painel ou aqui).' })
+    if (op === 'R') return json({ ok: true, message: '👍 Recusado. Não vou enviar nada.' })
+    const done = await execute(admin, claimed)
+    return json({ ok: done?.execution_status === 'EXECUTED', message: done?.execution_status === 'EXECUTED' ? '✅ Feito! Já enviei.' : `⚠️ Aprovado, mas não consegui executar: ${done?.execution_error ?? 'erro desconhecido'}. Dá pra tentar de novo no painel.` })
+  }
+
+  // Post do Vault: só "Publicar" (não existe recusar aqui — no painel dá pra
+  // mandar de volta pra testes). Trava o post saindo de 'vault' antes de
+  // propor, pra um segundo toque não publicar de novo.
+  if (op !== 'Y') return json({ ok: false, message: 'Botão inválido.' }, 400)
+  const { data: claimed } = await admin.from('marketing_ai_test_content').update({ status: 'publishing' })
+    .eq('id', id).eq('status', 'vault').select('*').maybeSingle()
+  if (!claimed) return json({ ok: false, message: 'Esse post já saiu do Vault (publicado ou movido no painel).' })
+  const res = await proposeAction(admin, company.id, {
+    agent_key: 'content', agent_name: 'Vault', action_type: 'create_content', channel: 'instagram', source: 'telegram',
+    ref_type: 'marketing_ai_test_content', ref_id: id, title: claimed.idea ?? 'Post do Vault',
+    agent_interpretation: `Aprovado pelo dono no Telegram (nota de qualidade ${claimed.quality_score ?? '—'}).`,
+    payload: { idea: claimed.idea, caption: claimed.caption, hashtags: claimed.hashtags, cta: claimed.cta, image_url: claimed.image_url, media: claimed.media },
+  }, false, true, company.user_id)
+  const out = await res.json().catch(() => ({})) as { action?: { execution_status?: string; execution_error?: string; execution_result?: { published_to_instagram?: boolean } }; error?: string }
+  const a = out.action
+  // Só devolve pro Vault se a ação nem chegou a ser criada. Se foi criada, o
+  // executor já cuidou (virou post, ou falhou e dá pra tentar de novo pela
+  // Central) — devolver aqui arriscaria publicar duas vezes.
+  if (!a) await admin.from('marketing_ai_test_content').update({ status: 'vault' }).eq('id', id).eq('status', 'publishing')
+  if (a?.execution_status === 'EXECUTED' && a.execution_result?.published_to_instagram) return json({ ok: true, message: '🎉 Publicado no Instagram!' })
+  if (a?.execution_status === 'FAILED') return json({ ok: false, message: `⚠️ Aprovado, mas não publicou: ${a.execution_error ?? 'erro desconhecido'}` })
+  return json({ ok: !!a, message: a ? '✅ Aprovado e salvo na aba Posts.' : `⚠️ Não consegui aprovar: ${out.error ?? 'erro desconhecido'}` })
+}
 
 // Roda toda ação AGENDADA cujo horário já venceu — chamada pelo cron de 5 em
 // 5 min (migration 066). Uma falhando não impede as outras.

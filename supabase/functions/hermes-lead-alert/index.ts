@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { runTool, TOOLS_ALL } from '../_shared/tools.ts'
 import type { Company } from '../_shared/tools.ts'
+import { buddyDeliversNow } from '../_shared/telegramButtons.ts'
 
 const OPENAI_TOOLS = TOOLS_ALL.map(t => ({
   type: 'function' as const,
@@ -101,7 +102,17 @@ Deno.serve(async (req) => {
     task_description: `Novo lead: ${lead.name} via ${lead.channel ?? 'manual'}`,
   })
 
-  if (botToken && company.telegram_chat_id) {
+  // Quem ligou o "Telegram amigo" recebe o aviso de lead pelo telegram-buddy
+  // (com botão pro funil). Só deixa pra ele quando ele vai avisar AGORA;
+  // senão avisa aqui e marca como avisado, pra o buddy não repetir depois.
+  const { data: prefsRow } = await admin.from('companies').select('notification_prefs').eq('id', company.id).maybeSingle()
+  const prefs = prefsRow?.notification_prefs as Record<string, unknown> | null
+  const buddyNow = await buddyDeliversNow(admin, prefs, company.telegram_chat_id)
+  if (botToken && company.telegram_chat_id && !buddyNow) {
+    if (prefs?.telegram_buddy === true) {
+      await admin.from('telegram_buddy_sent').insert({ company_id: company.id, kind: 'lead', ref_id: lead.id })
+        .then(({ error }) => { if (error) console.error('hermes-lead-alert: marcar lead avisado:', error.message) })
+    }
     const msg = followupCreated
       ? `\u{1F4AC} Novo lead de ${lead.name}! Preparei um follow-up. Acesse o dashboard para aprovar e enviar.`
       : `\u{1F4AC} Novo lead: ${lead.name} via ${lead.channel ?? 'manual'}. Acesse o dashboard.`
