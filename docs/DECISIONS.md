@@ -896,3 +896,32 @@ grátis de 30 s, acima — mantidos como histórico):
   - desligar o Hermes/Jarvis.
 - **Busca de leads não foi pra VPS.** Não precisa: dá pra resolver
   retomando a busca na própria Supabase, e isso fica como proposta separada.
+
+## 2026-10-12 — "Quem somos" e textos do site (pedido do dono)
+
+- **"Quem somos" oficial em [PRODUCT.md](PRODUCT.md):** "AI growth partner"
+  que entende, monta a estratégia, executa, aprende e se adapta. Frases da
+  marca: parceiro e não ferramenta, não agência; crescimento e não likes;
+  transformamos atenção em negócio.
+- **Site (só textos, sem mudar o design; a hero ficou igual):**
+  - subtítulo da hero e rodapé com o "parceiro de crescimento";
+  - seção logo abaixo da hero virou "Quem somos";
+  - "O produto" virou "Não somos agência / Transformamos atenção em
+    negócio";
+  - "Pra quem é" agora fala de imobiliária, corretor e aluguel por
+    temporada (antes falava de e-commerce e advocacia);
+  - "Também atendemos" virou "Em breve: lojas de casa e e-commerces".
+- **Números inventados removidos (regra 5).** A seção mostrava "38% mais
+  faturamento", "2.4× mais clientes" e "24h primeiro resultado" com o selo
+  "Resultados comprovados", sem dado real por trás. Agora mostra fatos
+  verdadeiros:
+  - 24/7 trabalhando;
+  - 0 férias e pedidos de aumento;
+  - 100% do que vai ao ar aprovado pelo dono.
+
+  A animação dos números passou a ler o próprio texto (`src/App.tsx`), pra
+  não haver número escondido no código.
+- **Divergência que ficou:** o celular de exemplo na hero e o "notebook" da
+  vitrine mostram um relatório ilustrativo (nota 87, "+12 pts"). É ilustração
+  de tela, não promessa, mas, se o dono preferir, dá pra trocar por algo sem
+  número. Não mexi porque é design da hero.
