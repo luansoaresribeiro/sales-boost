@@ -377,3 +377,18 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   - A tela mostra "Interrompida" em vez de "Em andamento".
 - **Ao mexer nessa função:** qualquer passo novo por candidato encurta
   quantos cabem por busca (hoje cabem uns 3–5 que chegam até a IA).
+
+## Estúdio de vídeo na VPS — armadilhas (2026-10-12)
+
+- **O bucket `videos` só aceita vídeo.** Imagem dá `415 invalid_mime_type`.
+  Por isso a capa do vídeo vai pro `post-images/video-covers/`.
+- **Trabalhador morto no meio de um trabalho:** o trabalho fica `running`
+  até o prazo de 15 min vencer e depois volta pra fila (no máximo 3
+  tentativas). Até lá, o tour espera; ele volta pra colagem antiga em no
+  máximo 20 min. Em teste, nunca deixe dois trabalhadores ligados ao mesmo
+  tempo, senão um "rouba" o trabalho do outro.
+- **Testar o instalador neste ambiente da Claude:** a internet passa por um
+  intermediário com certificado próprio que o usuário `sbworker` não
+  consegue ler. Pra testar, use `NODE_EXTRA_CA_CERTS` com uma cópia legível
+  do certificado. Na Hostinger isso não existe. O `systemd` também não roda
+  aqui, então a etapa 5 só é testada de verdade na VPS.

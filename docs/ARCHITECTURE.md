@@ -225,6 +225,11 @@ cada function roda (cron, "vale a pena agir agora"), não AS ETAPAS.
 — só então roda (`runAutonomousCycle`). Disparado por `run-agents` (atalho
 fino que repassa pro `hermes-proxy`).
 
+**Divergência (2026-10-12):** a mesma VPS `srv1824556` (Hostinger KVM 2)
+passa a rodar também o "estúdio de vídeo" (serviço `salesboost-worker`, ver
+[MEDIA-ENGINE.md](MEDIA-ENGINE.md#estúdio-de-vídeo-na-vps-2026-10-12)). O
+Hermes e o timer abaixo continuam como estão.
+
 Dois agendamentos coexistem: (1) VPS `srv1824556`, systemd timer
 `sales-boost-marketing.timer` → `/opt/sales-boost-cron/marketing_cycle.sh`,
 a cada 30 min; (2) pg_cron nativo do Supabase chamando edge functions

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import ApiUsagePanel from './ApiUsagePanel'
 import BusinessTypesPanel from './BusinessTypesPanel'
+import ServerPanel from './ServerPanel'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -15,7 +16,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 const BOT_USERNAME = 'luansoaresribeirobot'
 
 // A aba "Referências globais" saiu a pedido do dono (2026-10-11).
-type Tab = 'avisos' | 'apis' | 'negocios'
+type Tab = 'avisos' | 'apis' | 'negocios' | 'servidor'
 
 export default function OwnerSettingsPage() {
   const { session, signOut } = useAuth()
@@ -65,6 +66,7 @@ export default function OwnerSettingsPage() {
     { key: 'avisos', label: 'Avisos' },
     { key: 'apis', label: "APIs" },
     { key: 'negocios', label: 'Tipos de negócio' },
+    { key: 'servidor', label: 'Servidor' },
   ]
 
   return (
@@ -150,6 +152,8 @@ export default function OwnerSettingsPage() {
         {tab === 'apis' && <ApiUsagePanel />}
 
         {tab === 'negocios' && <BusinessTypesPanel />}
+
+        {tab === 'servidor' && <ServerPanel />}
 
       </div>
     </div>
