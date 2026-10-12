@@ -19,6 +19,11 @@ const FLAG = 'vps_reel_finish'
 const ONLINE_MS = 2 * 60_000
 const CODE_TTL_MS = 15 * 60_000
 const INSTALL_URL = 'https://getsaleboost.com/vps/install.sh'
+// sha256 do public/vps/worker.mjs publicado. O trabalhador só se atualiza
+// sozinho pra um arquivo com exatamente este hash — invadir só o site não
+// basta pra rodar código na VPS. AO MUDAR worker.mjs, ATUALIZAR AQUI
+// (`sha256sum public/vps/worker.mjs`) e publicar esta função depois do merge.
+const WORKER_SHA256 = '35afe7353632b42643267a3aa076f55ebe895c9c456d12fe18b5a788b1bd4ee4'
 const UUID = /^[0-9a-f-]{36}$/i
 // deno-lint-ignore no-explicit-any
 type Any = any
@@ -82,6 +87,8 @@ Deno.serve(async (req) => {
       if (!used) return json({ error: 'Código vencido ou já usado. Gere outro em Configurações → Servidor.' }, 403)
       const token = randomToken()
       const name = String(body.name ?? 'vps').replace(/[^\w.-]/g, '').slice(0, 60) || 'vps'
+      // Reinstalação na mesma máquina: o registro antigo deixa de valer.
+      await admin.from('worker_nodes').update({ status: 'revoked' }).eq('name', name).eq('status', 'active')
       const { error } = await admin.from('worker_nodes').insert({ name, token_hash: await sha256(token), info: cleanInfo(body.info), last_seen_at: new Date().toISOString() })
       if (error) return json({ error: error.message }, 500)
       console.log('[vps-worker] servidor conectado:', name)
@@ -97,7 +104,7 @@ Deno.serve(async (req) => {
 
       if (action === 'heartbeat') {
         await admin.from('worker_nodes').update({ last_seen_at: nowIso, info: cleanInfo(body.info) }).eq('id', node.id)
-        return json({ ok: true })
+        return json({ ok: true, worker_sha256: WORKER_SHA256 })
       }
       if (action === 'claim') {
         await admin.from('worker_nodes').update({ last_seen_at: nowIso }).eq('id', node.id)
@@ -109,7 +116,7 @@ Deno.serve(async (req) => {
           const uploads = await signedUploads(admin, job.input?.outputs ?? [])
           return json({ job: { id: job.id, kind: job.kind, input: job.input, uploads } })
         } catch (e) {
-          await admin.from('media_jobs').update({ status: 'queued', error: String(e).slice(0, 300), updated_at: nowIso }).eq('id', job.id)
+          await admin.from('media_jobs').update({ status: 'queued', attempts: Math.max(0, job.attempts - 1), error: String(e).slice(0, 300), updated_at: nowIso }).eq('id', job.id)
           return json({ job: null })
         }
       }
@@ -177,7 +184,7 @@ Deno.serve(async (req) => {
         enabled: !!flag?.enabled,
         nodes: (nodes ?? []).map((n: Any) => ({ ...n, online: n.status === 'active' && !!n.last_seen_at && Date.now() - new Date(n.last_seen_at).getTime() < ONLINE_MS })),
         jobs: (jobs ?? []).map((j: Any) => ({
-          id: j.id, kind: j.kind, status: j.status, attempts: j.attempts, error: j.error, test: !!j.input?.test,
+          id: j.id, kind: j.kind, status: j.status, attempts: j.attempts, error: j.error, test: !!j.input?.test, sample: !!j.input?.sample,
           created_at: j.created_at, updated_at: j.updated_at,
           before_url: j.input?.outputs?.[0]?.clips?.[0] ?? null,
           after_url: j.status === 'done' && j.input?.outputs?.[0]?.path ? publicUrl(j.input.outputs[0].path) : null,
@@ -201,20 +208,23 @@ Deno.serve(async (req) => {
       await admin.from('feature_flags').upsert({ key: FLAG, label: 'Acabamento de vídeo no servidor (VPS)', enabled, updated_at: new Date().toISOString() })
       return json({ ok: true, enabled })
     }
-    // Teste do dono: refaz o acabamento de um vídeo já pronto numa pasta à parte
-    // (o vídeo original não muda) — pra comparar antes × depois.
+    // Teste do dono: refaz o acabamento numa pasta à parte (o original não muda).
+    // Nunca usa vídeo de cliente (regra 2): só da empresa do próprio dono; sem
+    // nenhum, o servidor gera uma amostra deitada (sample) pra mostrar o antes × depois.
     if (action === 'test') {
-      // Usa o vídeo já guardado no nosso Storage (os links da Higgsfield expiram).
-      const { data: tour } = await admin.from('video_tours').select('id, video_path').eq('status', 'completed')
-        .not('video_path', 'is', null).order('updated_at', { ascending: false }).limit(1).maybeSingle()
-      if (!tour) return json({ error: 'Nenhum vídeo pronto pra testar ainda.' }, 404)
-      const before = admin.storage.from(VIDEO_BUCKET).getPublicUrl(tour.video_path).data.publicUrl
+      const { data: own } = await admin.from('companies').select('id').eq('user_id', user.id)
+      const ownIds = (own ?? []).map((c: { id: string }) => c.id)
+      const { data: tour } = ownIds.length
+        ? await admin.from('video_tours').select('id, video_path').eq('status', 'completed').in('company_id', ownIds)
+          .not('video_path', 'is', null).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+        : { data: null }
+      const before = tour ? admin.storage.from(VIDEO_BUCKET).getPublicUrl(tour.video_path).data.publicUrl : null
       const { data: job, error } = await admin.from('media_jobs').insert({
-        kind: 'reel_finish', video_tour_id: tour.id,
-        input: { test: true, outputs: [{ path: `vps-test/${crypto.randomUUID()}.mp4`, clips: [before] }] },
+        kind: 'reel_finish', video_tour_id: tour?.id ?? null,
+        input: { test: true, sample: !before, outputs: [{ path: `vps-test/${crypto.randomUUID()}.mp4`, clips: before ? [before] : [] }] },
       }).select('id').single()
       if (error) return json({ error: error.message }, 500)
-      return json({ ok: true, job_id: job.id })
+      return json({ ok: true, job_id: job.id, sample: !before })
     }
     return json({ error: 'Ação desconhecida' }, 400)
   } catch (err) {

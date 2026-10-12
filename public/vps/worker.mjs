@@ -126,6 +126,8 @@ async function finishReel(clips, outFile) {
 async function processJob(baseUrl, token, job) {
   const dir = path.join(TMP, job.id)
   await mkdir(dir, { recursive: true })
+  // Continua dando sinal de vida enquanto monta (senão a tela mostra "fora do ar").
+  const beat = setInterval(() => { info().then(i => api(baseUrl, token, 'heartbeat', { info: i })).catch(() => {}) }, HEARTBEAT_MS)
   try {
     if (job.kind !== 'reel_finish') throw new Error(`tipo de trabalho desconhecido: ${job.kind}`)
     const outputs = []
@@ -133,6 +135,12 @@ async function processJob(baseUrl, token, job) {
       const up = job.uploads.find(u => u.path === o.path)
       if (!up) throw new Error(`sem URL de envio pra ${o.path}`)
       const local = []
+      if (job.input.sample) {
+        // Teste sem vídeo de cliente: amostra deitada (16:9) gerada aqui mesmo.
+        const f = path.join(dir, `in-${oi}-amostra.mp4`)
+        await run('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30:duration=5', '-pix_fmt', 'yuv420p', f])
+        local.push(f)
+      }
       for (const [ci, url] of (o.clips ?? []).entries()) {
         const f = path.join(dir, `in-${oi}-${ci}.mp4`)
         await download(url, f)
@@ -154,19 +162,24 @@ async function processJob(baseUrl, token, job) {
     log('falhou', job.id, String(e).slice(0, 300))
     await api(baseUrl, token, 'fail', { job_id: job.id, error: String(e).slice(0, 500) }).catch(() => {})
   } finally {
+    clearInterval(beat)
     await rm(dir, { recursive: true, force: true })
   }
 }
 
-// Atualiza a si mesmo a partir do site (mesma origem do instalador). Sai e o
-// systemd reinicia já com a versão nova.
+// Atualiza a si mesmo a partir do site, mas só se o arquivo baixado tiver
+// exatamente o sha256 que a função vps-worker informa no batimento (invadir só
+// o site não basta). Sai e o systemd reinicia já com a versão nova.
+let expectedSha = null
 async function selfUpdate() {
   try {
+    if (!expectedSha || !/^[a-f0-9]{64}$/.test(expectedSha)) return
+    const current = createHash('sha256').update(await readFile(SELF)).digest('hex')
+    if (current === expectedSha) return
     const res = await fetch(SOURCE_URL, { signal: AbortSignal.timeout(30_000) })
     if (!res.ok) return
     const code = await res.text()
-    if (!code.includes('Estúdio de vídeo do Sales Boost')) return
-    if (code === await readFile(SELF, 'utf8')) return
+    if (createHash('sha256').update(code).digest('hex') !== expectedSha) { log('versão do site não confere com a esperada — não atualizei'); return }
     await writeFile(SELF + '.new', code)
     await rename(SELF + '.new', SELF)
     log('versão nova instalada — reiniciando')
@@ -202,7 +215,11 @@ async function main() {
   let lastBeat = 0, lastUpdate = Date.now()
   for (;;) {
     try {
-      if (Date.now() - lastBeat > HEARTBEAT_MS) { await api(baseUrl, token, 'heartbeat', { info: await info() }); lastBeat = Date.now() }
+      if (Date.now() - lastBeat > HEARTBEAT_MS) {
+        const r = await api(baseUrl, token, 'heartbeat', { info: await info() })
+        expectedSha = r.worker_sha256 ?? null
+        lastBeat = Date.now()
+      }
       const { job } = await api(baseUrl, token, 'claim')
       if (job) { await processJob(baseUrl, token, job); continue }
       if (Date.now() - lastUpdate > UPDATE_MS) { lastUpdate = Date.now(); await selfUpdate() }

@@ -392,3 +392,17 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   consegue ler. Pra testar, use `NODE_EXTRA_CA_CERTS` com uma cópia legível
   do certificado. Na Hostinger isso não existe. O `systemd` também não roda
   aqui, então a etapa 5 só é testada de verdade na VPS.
+- **Mudou o `public/vps/worker.mjs`? Atualize o `WORKER_SHA256`** em
+  `supabase/functions/vps-worker/index.ts` com o resultado de
+  `sha256sum public/vps/worker.mjs` e publique a função depois do merge.
+  A VPS só se atualiza sozinha para um arquivo com exatamente esse hash. Se
+  esquecer, nada quebra: ela só continua na versão antiga.
+- **"Testar antes × depois" nunca usa vídeo de cliente (regra 2).** Ele usa
+  só vídeo da empresa do próprio dono logado. Se não houver nenhum, a VPS
+  gera uma amostra deitada.
+- **Desinstalar a VPS não invalida a chave dela.** Depois do `uninstall`,
+  clique em "Desconectar" na tela. Reinstalar na mesma máquina já invalida
+  sozinho o registro antigo com o mesmo nome.
+- **Prazo de 15 min por trabalho:** um trabalho com muitos vídeos pode
+  passar desse prazo e ser pego de novo. Com um servidor só, isso não
+  acontece. Rever se um dia houver mais de um servidor.

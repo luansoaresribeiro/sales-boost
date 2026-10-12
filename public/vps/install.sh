@@ -31,6 +31,7 @@ if [ "$MODE" = "uninstall" ]; then
   pkill -u sbworker 2>/dev/null || true
   rm -rf "$DIR"; if id sbworker >/dev/null 2>&1; then userdel sbworker || true; fi
   say "Pronto. Nada do Sales Boost ficou nesta máquina (o ffmpeg continua instalado)."
+  say "Falta 1 passo: em Configurações → Servidor, clique em \"Desconectar\" pra invalidar a chave desta máquina."
   exit 0
 fi
 
