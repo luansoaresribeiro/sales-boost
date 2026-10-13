@@ -435,6 +435,15 @@ tela normal com o botão liberado (não redireciona). Divergência anotada:
 o catálogo no /setup reusa `CatalogItems` em `setupMode` (sem "Gerar
 pacote", pra não gastar IA no cadastro).
 
+> **Divergência (2026-10-13):** o `ClientRoute` não prende mais conta nova sem
+> pagamento em `/gratis` ("modo grátis" de 2026-10-10). Ela vira **modo vitrine**:
+> `isShowcaseMode` (`src/lib/setupGate.ts`) navega por todo o `/dashboard/*` em
+> somente visualização (`ShowcaseProvider` + `src/lib/showcaseGuard.ts`) e o
+> servidor barra o que gasta/publica (`supabase/functions/_shared/access.ts`,
+> ver [PITFALLS.md](PITFALLS.md)). O `/setup` segue só depois de pagar e a
+> ordem dos checks do `ClientRoute` não mudou. Detalhes em
+> [DECISIONS.md](DECISIONS.md) (2026-10-13).
+
 ## Estado do trial (atualizado 2026-10-02)
 
 Antes: 3 dias fixos, estados `trial_day_1/2/3`. Agora: o total vem do par

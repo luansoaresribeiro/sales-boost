@@ -426,3 +426,53 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
 - **Migration com cron:** `20261014100000_telegram_buddy.sql` aponta pra
   produção — no ensaio aplicar só a tabela e a flag.
 
+## Functions não checavam pagamento — usar `_shared/access.ts` (2026-10-13)
+
+- **O que era:** o bloqueio de conta sem plano existia só na TELA (`ClientRoute`).
+  Nenhuma edge function conferia pagamento, então quem chamasse a function direto
+  (ou uma tela que dispara sozinha ao abrir) gastava IA/provedor e publicava mesmo
+  sem pagar. Com o "modo vitrine" (conta nova navega por todo o painel antes de
+  pagar) isso virou o risco principal.
+- **Regra:** **toda function nova que gasta IA/provedor pago ou publica/envia, no
+  caminho chamado por usuário (JWT), chama `requirePaidAccess(admin, companyId)`**
+  logo depois de achar a empresa (`if (noPlan) return noPlan`). Todo caminho de
+  cron que varre empresas faz `if (!(await hasPaidAccess(admin, id))) continue`.
+  Mesma regra do frontend (`isShowcaseMode`): empresa criada antes de
+  2026-10-06 sempre passa; consulta com erro passa (falha aberta); conta nova só
+  passa se pagou ou foi liberada à mão (o trial de 7 dias gravado pelo
+  `claim-diagnostic` NÃO conta). Resposta: 402 `{code:'plan_required'}`.
+- **Com o check (2026-10-13):** creative-generate, strategy-generate (generate/
+  reanalyze/refresh + `cron_dispatch`), content-engine, generate-posts,
+  content-image (generate/variations), generate-video, item-videos (create),
+  brand-compose, render-format (só com `generate_bg`), format-fill, content-test
+  (generate/score/regenerate, só no caminho do usuário), catalog-package,
+  marketing-ai, agent-actions (propose/approve/retry), publish-instagram,
+  send-message, draft-reply, reply-google-review, creative-ideas,
+  map-competitors, detect-opportunities, agent-chat, generate-tab-insight,
+  content-intelligence, generate-report, adapt-plan, brand-kit-suggest.
+- **De fora de propósito:** `agent-actions` list/reject/cancel/edit/unschedule/
+  run_scheduled/telegram_decide; trial-video, diagnosis-gift, claim-diagnostic,
+  create-checkout, stripe-webhook, update-company-profile, oauth (start/
+  callback), telegram-*, vps-worker (kit, pagamento e conta continuam livres);
+  generate-image (só service/cron/owner da plataforma chegam nela — cliente toma
+  403 antes); render-format sem `generate_bg` (o kit grátis precisa desenhar o
+  texto do criativo e isso não custa nada).
+- **Espelho na tela:** `PAID_FUNCTIONS` em `src/lib/showcaseGuard.ts` precisa
+  acompanhar essa lista — function nova que gasta entra nos dois lados. Escrita
+  direta nova do supabase client numa tabela que NÃO é dado da empresa é
+  bloqueada em vitrine por padrão (`ALLOWED_WRITE_TABLES`).
+- **Armadilhas da tela:** (1) a tela abrindo e disparando function sozinha (ex.:
+  1ª estratégia, ideias, Kit da Marca) não pode abrir o modal — por isso o guard
+  fica em silêncio nos primeiros 1,5 s depois de trocar de rota e essas telas
+  checam `useShowcase().readOnly` antes de disparar. Efeito novo que chama
+  function paga ao abrir a tela = checar `readOnly`. (2) O `trial-video` chama o
+  `render-format` com o login da pessoa: gate nele quebraria o criativo do kit.
+- **Antes de deployar:** mudar functions de cliente real (`agent-actions`,
+  `strategy-generate`, `creative-generate`) é alteração arriscada — pedir
+  aprovação. A migration `20261015100000_profile_confirmed_at.sql` precisa estar
+  aplicada pro lembrete de 30 dias funcionar (sem ela o item simplesmente não
+  aparece e nada quebra).
+- **Achado à parte:** `publish-instagram` aceita `company_id` do corpo sem
+  conferir quem chama (função deprecada, sem chamadores). O gate de pagamento foi
+  posto nela, mas a falta de autenticação continua — avaliar desligar de vez.
+

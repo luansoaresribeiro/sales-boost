@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { track } from '../../../lib/analytics'
+import { useShowcase } from '../../../contexts/ShowcaseContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 
 const ORANGE = '#FF6D29'
@@ -34,6 +35,7 @@ function TrendCard({ t }: { t: Trend }) {
 // (creative-generate), que cai na Área de Testes. Nada publica sozinho.
 export default function CreativeAgent({ companyId, module }: { companyId: string; module?: string }) {
   const { session } = useAuth()
+  const { readOnly } = useShowcase() // vitrine: não dispara a geração sozinha ao abrir
   const token = session?.access_token ?? ''
   const [ideas, setIdeas] = useState<Idea[]>([])
   const [trends, setTrends] = useState<Trend[]>([])
@@ -59,7 +61,7 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
   // Silencioso; só mostra se conseguiu ou não.
   useEffect(() => {
     load().then(async hasAny => {
-      if (hasAny || !token) return
+      if (hasAny || !token || readOnly) return
       setGenerating(true)
       try {
         const res = await fetch(`${SUPABASE_URL}/functions/v1/creative-ideas`, {

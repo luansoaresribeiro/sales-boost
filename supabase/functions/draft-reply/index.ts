@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -148,6 +149,7 @@ Deno.serve(async (req) => {
       const { data: companies } = await admin.from('companies').select('id, telegram_chat_id, notification_prefs, auto_reply_reviews').eq('active', true)
       let total = 0
       for (const c of companies ?? []) {
+        if (!(await hasPaidAccess(admin, c.id as string))) continue // conta vitrine: o cron não gasta IA
         const r = await draftPendingReviewReplies(admin, anthropicKey, c.id, !!c.auto_reply_reviews, clientId, clientSecret)
         total += r.drafted
         if (r.drafted > 0) {
@@ -187,6 +189,8 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
 
     const { data: opp } = await admin
       .from('opportunities')

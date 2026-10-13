@@ -9,6 +9,8 @@ import TrialStartModal from './TrialStartModal'
 import TrialStatusWidget from './TrialStatusWidget'
 import BusinessContextButton from './BusinessContextButton'
 import PendenciasBell from './PendenciasBell'
+import { ShowcaseProvider, useShowcase } from '../../contexts/ShowcaseContext'
+import { ShowcaseBanner, KitPromoModal } from './ShowcaseUi'
 import { usePendencias } from '../../lib/usePendencias'
 import logo from '../../assets/logo.png'
 
@@ -196,7 +198,8 @@ function SidebarInner({ isMobile, open, onNavigate, onClose, approvalsCount }: {
 // O LanguageProvider fica na raiz (main.tsx), pra login, cadastro e /setup
 // também seguirem o idioma escolhido.
 export default function DashboardLayout() {
-  return <DashboardShell />
+  // ShowcaseProvider: "modo vitrine" (conta nova sem pagamento = somente visualização).
+  return <ShowcaseProvider><DashboardShell /></ShowcaseProvider>
 }
 
 function DashboardShell() {
@@ -204,6 +207,8 @@ function DashboardShell() {
   const { company } = useCompany()
   const isMobile = useIsMobile()
   const pend = usePendencias()
+  // Em vitrine o teste de 7 dias não vale (decisão 2026-10-10): sem boas-vindas/contador de trial.
+  const { readOnly } = useShowcase()
   const [mobileOpen, setMobileOpen] = useState(false)
   useEffect(() => { if (!isMobile) setMobileOpen(false) }, [isMobile])
 
@@ -215,25 +220,31 @@ function DashboardShell() {
         )}
         <SidebarInner isMobile={isMobile} open={!isMobile || mobileOpen} onNavigate={() => setMobileOpen(false)} onClose={() => setMobileOpen(false)} approvalsCount={pend.approvalsCount} />
         <main style={{ flex: 1, marginLeft: isMobile ? 0 : '240px', display: 'flex', flexDirection: 'column', minHeight: '100vh', minWidth: 0, overflowX: 'hidden' }}>
-          {isMobile ? (
-            <div style={{ position: 'sticky', top: 0, zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: '#0E0B0A', borderBottom: `1px solid ${BORDER}` }}>
-              <button onClick={() => setMobileOpen(true)} aria-label={TX[lang].open}
-                style={{ width: '38px', height: '38px', background: SIDEBAR_BG, border: `1px solid ${BORDER}`, borderRadius: '9px', color: 'white', fontSize: '17px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                ☰
-              </button>
-              <PendenciasBell items={pend.items} count={pend.count} isMobile onOpen={() => setMobileOpen(false)} />
-            </div>
-          ) : (
+          {/* Faixa do modo vitrine + barra do celular grudadas no topo juntas. */}
+          <div style={{ position: 'sticky', top: 0, zIndex: 30 }}>
+            <ShowcaseBanner />
+            {isMobile && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: '#0E0B0A', borderBottom: `1px solid ${BORDER}` }}>
+                <button onClick={() => setMobileOpen(true)} aria-label={TX[lang].open}
+                  style={{ width: '38px', height: '38px', background: SIDEBAR_BG, border: `1px solid ${BORDER}`, borderRadius: '9px', color: 'white', fontSize: '17px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  ☰
+                </button>
+                <PendenciasBell items={pend.items} count={pend.count} isMobile onOpen={() => setMobileOpen(false)} />
+              </div>
+            )}
+          </div>
+          {!isMobile && (
             <div style={{ position: 'fixed', top: '14px', right: '20px', zIndex: 55 }}>
               <PendenciasBell items={pend.items} count={pend.count} isMobile={false} />
             </div>
           )}
-          <TrialStatusWidget />
+          {!readOnly && <TrialStatusWidget />}
           <Outlet />
         </main>
       </div>
-      <TrialStartModal />
-      <ProgressPopup />
+      {!readOnly && <TrialStartModal />}
+      {!readOnly && <ProgressPopup />}
+      <KitPromoModal />
       {company && <BusinessContextButton companyId={company.id} />}
     </>
   )

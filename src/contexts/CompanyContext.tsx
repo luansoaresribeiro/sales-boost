@@ -25,6 +25,7 @@ export interface CompanyData {
   trial_cancelled_at: string | null
   trial_intro_seen_at: string | null
   stripe_subscription_id: string | null
+  manual_access?: boolean | null
   access_blocked_reason: string | null
   language: string | null
   vertical_key: string | null
@@ -68,7 +69,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     if (!user) { setCompany(null); setAccess(null); setLoadError(false); setLoadedFor(null); setLoading(false); resetAnalytics(); return }
     const { data, error } = await supabase
       .from('companies')
-      .select('id, created_at, business_name, business_type, city, phone, website_url, instagram_url, facebook_url, google_place_id, google_rating, google_review_count, instagram_user_id, plan, agent_enabled, marketing_ai_enabled, trial_started_at, trial_expires_at, trial_cancelled_at, trial_intro_seen_at, stripe_subscription_id, access_blocked_reason, language, vertical_key, playbook_answers')
+      .select('id, created_at, business_name, business_type, city, phone, website_url, instagram_url, facebook_url, google_place_id, google_rating, google_review_count, instagram_user_id, plan, agent_enabled, marketing_ai_enabled, trial_started_at, trial_expires_at, trial_cancelled_at, trial_intro_seen_at, stripe_subscription_id, manual_access, access_blocked_reason, language, vertical_key, playbook_answers')
       .eq('user_id', user.id)
       .maybeSingle()
     if (error) {

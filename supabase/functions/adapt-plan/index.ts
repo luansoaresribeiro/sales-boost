@@ -5,6 +5,7 @@
  * banner largo pede menos texto). Só TEXTO — custo de imagem = 0.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 
@@ -34,6 +35,10 @@ Deno.serve(async (req) => {
     const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
     const { data: { user } } = await userClient.auth.getUser()
     if (!user) return json({ error: 'Unauthorized' }, 401)
+    const admin = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? anonKey)
+    const { data: comp } = await admin.from('companies').select('id').eq('user_id', user.id).maybeSingle()
+    const noPlan = await requirePaidAccess(admin, comp?.id as string | undefined)
+    if (noPlan) return noPlan
 
     const body = await req.json().catch(() => ({})) as { fields?: Record<string, string>; caption?: string; format?: { name?: string; ratio?: string; placement?: string; w?: number; h?: number } }
     const fields = body.fields ?? {}

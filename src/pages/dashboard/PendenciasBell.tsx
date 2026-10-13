@@ -35,23 +35,44 @@ function KindIcon({ kind }: { kind: Pendencia['kind'] }) {
   if (kind === 'aprovacoes') return <svg {...svgProps} style={s}><path d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
   if (kind === 'instagram') return <svg {...svgProps} style={s}><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.2" cy="6.8" r="0.6" /></svg>
   if (kind === 'fotos') return <svg {...svgProps} style={s}><rect x="3" y="5" width="18" height="14" rx="2.5" /><circle cx="9" cy="10" r="1.6" /><path d="m21 16-5-5-8 8" /></svg>
-  if (kind === 'ficha') return <svg {...svgProps} style={s}><path d="M8 4h8l3 3v13H5V4h3ZM8 11h8M8 15h5" /></svg>
+  if (kind === 'ficha' || kind === 'perfil') return <svg {...svgProps} style={s}><path d="M8 4h8l3 3v13H5V4h3ZM8 11h8M8 15h5" /></svg>
   return <svg {...svgProps} style={s}><path d="m21 4-9.5 9.5M21 4l-6.5 16-3-6.5L5 10.5 21 4Z" /></svg>
 }
 
-function Row({ p, onPick }: { p: Pendencia; onPick: (p: Pendencia) => void }) {
+function Row({ p, onPick, onAction }: { p: Pendencia; onPick: (p: Pendencia) => void; onAction: (a: NonNullable<Pendencia['actions']>[number]) => void }) {
   const t = TONE[p.tone]
-  return (
-    <button onClick={() => onPick(p)}
-      style={{ width: '100%', minHeight: '44px', display: 'flex', alignItems: 'center', gap: '11px', padding: '10px 14px', background: 'transparent', border: 'none', borderTop: `1px solid ${BORDER}`, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+  const body = (
+    <>
       <span style={{ width: '32px', height: '32px', borderRadius: '9px', background: t.bg, color: t.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <KindIcon kind={p.kind} />
       </span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: 'white', lineHeight: 1.3 }}>{p.title}</span>
         <span style={{ display: 'block', fontSize: '11px', color: '#9A8C7E', marginTop: '2px', lineHeight: 1.35 }}>{p.hint}</span>
-        <span style={{ display: 'block', fontSize: '10.5px', color: ORANGE, marginTop: '3px' }}>→ {p.destino}</span>
+        {!p.actions && <span style={{ display: 'block', fontSize: '10.5px', color: ORANGE, marginTop: '3px' }}>→ {p.destino}</span>}
       </span>
+    </>
+  )
+  // Item com botões próprios (ex.: "Suas informações ainda estão atualizadas?").
+  if (p.actions) {
+    return (
+      <div style={{ padding: '10px 14px 12px', borderTop: `1px solid ${BORDER}` }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '11px' }}>{body}</div>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '10px', paddingLeft: '43px', flexWrap: 'wrap' }}>
+          {p.actions.map(a => (
+            <button key={a.label} onClick={() => onAction(a)}
+              style={{ minHeight: '34px', padding: '6px 12px', borderRadius: '9px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: a.primary ? ORANGE : 'transparent', color: a.primary ? '#000' : 'white', border: a.primary ? 'none' : `1px solid ${BORDER}` }}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  return (
+    <button onClick={() => onPick(p)}
+      style={{ width: '100%', minHeight: '44px', display: 'flex', alignItems: 'center', gap: '11px', padding: '10px 14px', background: 'transparent', border: 'none', borderTop: `1px solid ${BORDER}`, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+      {body}
       <span style={{ color: ORANGE, fontSize: '16px', flexShrink: 0 }}>›</span>
     </button>
   )
@@ -72,6 +93,10 @@ export default function PendenciasBell({ items, count, isMobile, onOpen }: { ite
     setOpen(false)
     if (p.openAdd) window.dispatchEvent(new CustomEvent('sb:open-add', { detail: p.openAdd }))
     else if (p.to) navigate(p.to)
+  }
+  const act = async (a: NonNullable<Pendencia['actions']>[number]) => {
+    if (a.run) await a.run()
+    if (a.to) { setOpen(false); navigate(a.to) }
   }
   const visible = showAll ? items : items.slice(0, MAX_LINES)
 
@@ -108,7 +133,7 @@ export default function PendenciasBell({ items, count, isMobile, onOpen }: { ite
               </div>
             ) : (
               <>
-                {visible.map(p => <Row key={p.id} p={p} onPick={pick} />)}
+                {visible.map(p => <Row key={p.id} p={p} onPick={pick} onAction={a => void act(a)} />)}
                 {!showAll && items.length > MAX_LINES && (
                   <button onClick={() => setShowAll(true)}
                     style={{ width: '100%', minHeight: '44px', background: 'transparent', border: 'none', borderTop: `1px solid ${BORDER}`, color: ORANGE, fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>

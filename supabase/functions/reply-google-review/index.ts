@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,6 +36,8 @@ Deno.serve(async (req) => {
       .eq('user_id', user.id)
       .single()
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
 
     const { data: review } = await admin
       .from('reviews')

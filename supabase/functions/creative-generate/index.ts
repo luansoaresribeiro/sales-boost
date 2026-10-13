@@ -21,6 +21,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { weeklyMixPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
+import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -820,6 +821,7 @@ Deno.serve(async (req) => {
           const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', cfg.company_id).maybeSingle()
           const company = companyRow as Company | null
           if (!company) continue
+          if (!(await hasPaidAccess(admin, company.id))) continue // conta vitrine: cron não gasta IA
           const r = await planWeekForCompany(admin, anthropicKey, company, { bearer: '', isCron: true, cronSecret: cronSecretEnv })
           companies++; planned += r.planned
           if (r.planned > 0) {
@@ -843,6 +845,7 @@ Deno.serve(async (req) => {
           const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', cfg.company_id).maybeSingle()
           const company = companyRow as Company | null
           if (!company) continue
+          if (!(await hasPaidAccess(admin, company.id))) continue // conta vitrine: cron não gasta IA
           await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret: cronSecretEnv, skipImage: cfg.auto_daily_test_image === false })
           generated++
           notifyMarketing(company.telegram_chat_id, company.id, 'AGENT_ACTION', {
@@ -862,6 +865,8 @@ Deno.serve(async (req) => {
     const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('user_id', user.id).maybeSingle()
     const company = companyRow as Company | null
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
 
     // Botão manual "Planejar semana agora" (Calendário da Semana) — mesma
     // lógica do cron de domingo, só que na hora, pro dono testar/adiantar.

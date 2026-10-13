@@ -6,6 +6,7 @@ import {
   type InstagramData, type Verdict, type CriterionKey,
 } from '../../lib/growthScore'
 import { useLang } from '../../contexts/LanguageContext'
+import { useAuth } from '../../contexts/AuthContext'
 import MarketSection, { DiagnosisLoader, useMarket } from './MarketSection'
 import GiftNotice, { useGift } from './GiftNotice'
 
@@ -78,6 +79,7 @@ const TX = {
     cta: 'Entrar no painel e criar meus vídeos grátis →', ctaGift: 'Entrar no painel e ver meu presente →',
     ctaSub: 'Crie sua conta em segundos, sem cartão, e receba 2 vídeos + 1 criativo grátis do seu imóvel.',
     ctaSubGift: 'Crie sua conta em segundos, sem cartão. Seus vídeos e seu criativo ficam esperando por você lá.',
+    ctaDirect: 'Entrar no painel →', ctaSubDirect: 'Seu painel já está pronto pra você explorar.',
     ctaPlan: 'A estratégia completa faz parte do plano pago.',
   },
   en: {
@@ -100,6 +102,7 @@ const TX = {
     cta: 'Enter the dashboard and create my free videos →', ctaGift: 'Enter the dashboard and see my gift →',
     ctaSub: 'Create your account in seconds, no card, and get 2 videos + 1 creative of your property for free.',
     ctaSubGift: 'Create your account in seconds, no card. Your videos and your creative will be waiting for you there.',
+    ctaDirect: 'Enter the dashboard →', ctaSubDirect: 'Your dashboard is ready for you to explore.',
     ctaPlan: 'The full strategy is part of the paid plan.',
   },
 }
@@ -163,6 +166,10 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
   const igReady = !!diag && !(!diag.instagram_data && diag.status === 'processing' && waited < POLL_MAX_MS)
   const { m: market, settled } = useMarket(id, !!diag)
   const gift = useGift(id)
+  // Quem criou a conta DIRETO (antes do diagnóstico) não veio do diagnóstico grátis:
+  // sem promessa de kit (decisão do dono 2026-10-13).
+  const { user } = useAuth()
+  const direct = !!user?.created_at && !!diag?.created_at && new Date(user.created_at).getTime() <= new Date(diag.created_at).getTime()
   const hasGift = !!gift.view && (gift.view.status === 'processing' || gift.view.status === 'completed')
 
   if (!loading && diag && (!igReady || !settled)) return (
@@ -381,10 +388,10 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
           onClick={() => void enterDashboard()}
           style={{ display: 'block', width: '100%', minHeight: 52, padding: '14px 20px', background: ORANGE, color: '#000', fontFamily: D, fontWeight: 900, fontSize: 16, borderRadius: 14, border: 'none', cursor: 'pointer', boxShadow: '0 12px 32px rgba(255,109,41,0.35)' }}
         >
-          {hasGift ? t.ctaGift : t.cta}
+          {direct ? t.ctaDirect : hasGift ? t.ctaGift : t.cta}
         </button>
         <p style={{ textAlign: 'center', fontSize: 13, color: MUTED, margin: '12px 0 0' }}>
-          {hasGift ? t.ctaSubGift : t.ctaSub}
+          {direct ? t.ctaSubDirect : hasGift ? t.ctaSubGift : t.ctaSub}
         </p>
         <p style={{ textAlign: 'center', fontSize: 12.5, color: MUTED, margin: '6px 0 0' }}>
           {t.ctaPlan}

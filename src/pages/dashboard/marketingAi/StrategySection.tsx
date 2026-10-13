@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CompanyData } from '../../../contexts/CompanyContext'
 import { useLang } from '../../../contexts/LanguageContext'
 import { useAuth } from '../../../contexts/AuthContext'
+import { useShowcase } from '../../../contexts/ShowcaseContext'
 import { supabase } from '../../../lib/supabase'
 import { CARD, MUTED, BORDER, D, ORANGE, SUPABASE_URL, timeAgo } from './shared'
 import { BudgetPanel, FunnelPanel, EstimatesPanel, InitiativesPanel, MonitoringPanel } from './StrategyPanels'
@@ -32,6 +33,7 @@ const POLL_INTERVAL_MS = 3000
 const ghostBtn: React.CSSProperties = { padding: '9px 14px', background: 'transparent', border: `1px solid ${BORDER}`, color: ORANGE, fontWeight: 700, fontSize: '11.5px', borderRadius: '9px', cursor: 'pointer', fontFamily: D }
 const TX = {
   pt: {
+    profChanged: 'Você atualizou os dados do seu negócio depois que esta estratégia foi criada. Quer que a estratégia leve os novos dados em conta? (Nada muda sozinho — você decide.)', profBtn: 'Atualizar estratégia com os novos dados',
     errGeneric: 'Erro', promptPivot: 'Isso substitui sua estratégia principal atual por uma nova (é um pivô de direção) — a atual fica guardada no histórico, não some.\n\nPor quê? (aparece no aviso do Telegram/Atividades)',
     generatingName: 'Gerando estratégia...', errCreate: 'Erro ao criar estratégia', tooLong: 'Demorou demais e não terminou — tente gerar de novo.', failedGen: 'Não consegui gerar — tente de novo.',
     errReanalyze: 'Erro ao reavaliar', errBudget: 'Erro ao salvar orçamento', errGoal: 'Erro ao salvar meta', loading: 'Carregando...',
@@ -47,6 +49,7 @@ const TX = {
     prio: { high: 'ALTA', medium: 'MÉDIA', low: 'BAIXA' } as Record<string, string>,
   },
   en: {
+    profChanged: 'You updated your business information after this strategy was created. Want the strategy to take the new information into account? (Nothing changes on its own — you decide.)', profBtn: 'Update strategy with the new information',
     errGeneric: 'Error', promptPivot: 'This replaces your current main strategy with a new one (it is a change of direction) — the current one is kept in the history, it does not disappear.\n\nWhy? (shows up in the Telegram/Activity notice)',
     generatingName: 'Generating strategy...', errCreate: 'Error creating strategy', tooLong: 'It took too long and did not finish — try generating again.', failedGen: 'Could not generate — try again.',
     errReanalyze: 'Error re-evaluating', errBudget: 'Error saving budget', errGoal: 'Error saving goal', loading: 'Loading...',
@@ -82,6 +85,7 @@ export default function StrategySection({ company }: { company: CompanyData }) {
   const t = TX[lang]
   const L = strategyLabels(lang)
   const { session } = useAuth()
+  const { readOnly } = useShowcase() // vitrine: não cria a 1ª estratégia sozinha (gasta IA)
   const token = session?.access_token ?? ''
   const [main, setMain] = useState<Strategy | null>(null)
   const [viewingId, setViewingId] = useState<string | null>(null) // quando != null, olhando uma iniciativa
@@ -98,6 +102,13 @@ export default function StrategySection({ company }: { company: CompanyData }) {
   const [localBudget, setLocalBudget] = useState<Budget>(EMPTY_BUDGET)
   const [error, setError] = useState('')
   const autoTried = useRef(false)
+  // Ficha salva depois da estratégia atual → aviso + botão (decisão do dono, nunca automático).
+  const [profileChangedAt, setProfileChangedAt] = useState<string | null>(null)
+  useEffect(() => {
+    // Coluna ausente (migration pendente) = sem aviso.
+    void supabase.from('companies').select('profile_changed_at').eq('id', company.id).maybeSingle()
+      .then(({ data, error }) => { if (!error) setProfileChangedAt((data as { profile_changed_at?: string | null } | null)?.profile_changed_at ?? null) })
+  }, [company.id])
 
   const active = viewing ?? main
 
@@ -180,7 +191,7 @@ export default function StrategySection({ company }: { company: CompanyData }) {
 
   // Primeira estratégia: a IA cria sozinha, sem exigir clique do dono.
   useEffect(() => {
-    if (loading || autoTried.current || main) return
+    if (loading || autoTried.current || main || readOnly) return
     autoTried.current = true
     void createStrategy('main')
   }, [loading, main, createStrategy])
@@ -273,6 +284,13 @@ export default function StrategySection({ company }: { company: CompanyData }) {
       </div>
 
       {error && <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '14px' }}>{error}</div>}
+
+      {main && !viewing && !generating && main.status === 'active' && profileChangedAt && new Date(profileChangedAt).getTime() > new Date(main.created_at).getTime() && (
+        <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', padding: '12px 14px', marginBottom: '16px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: '12px' }}>
+          <span style={{ fontSize: '12.5px', color: 'white', lineHeight: 1.5, flex: '1 1 260px' }}>{t.profChanged}</span>
+          <button onClick={() => createStrategy('main')} disabled={creating} style={{ ...ghostBtn, opacity: creating ? 0.7 : 1 }}>{t.profBtn}</button>
+        </div>
+      )}
 
       {!active && (
         <div style={{ maxWidth: '560px', padding: '40px 32px', textAlign: 'center', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px' }}>

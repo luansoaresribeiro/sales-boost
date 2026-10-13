@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requirePaidAccess } from '../_shared/access.ts'
 import { advanceTour, clipPrompt, estimateUsd, hfHeaders, SECONDS, submitAll, VIDEO_BUCKET, type ClipKind, type TourRow } from '../_shared/tourEngine.ts'
 import { draftReply, type DmReplyConfig } from '../_shared/dmReply.ts'
 
@@ -86,6 +87,8 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === 'create') {
+      const noPlan = await requirePaidAccess(admin, company.id)
+      if (noPlan) return noPlan
       if (!company.plan || company.plan === 'free') return json({ error: 'Os vídeos do imóvel fazem parte do plano.' }, 403)
       const item = await loadItem(body.item_id)
       if (!item) return json({ error: 'Imóvel não encontrado.' }, 404)

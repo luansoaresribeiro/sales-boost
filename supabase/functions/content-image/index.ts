@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -81,6 +82,12 @@ Deno.serve(async (req) => {
       if (!url) return json({ error: 'url obrigatório' }, 400)
       await admin.from('marketing_ai_content').update({ image_url: url, image_options: null, updated_at: new Date().toISOString() }).eq('id', contentId)
       return json({ ok: true, image_url: url })
+    }
+
+    // Imagem por IA gasta provedor pago: só pra quem pagou (service/cron já foram filtrados por quem chama).
+    if (!trusted) {
+      const noPlan = await requirePaidAccess(admin, company.id)
+      if (noPlan) return noPlan
     }
 
     const prompt = imagePrompt(content, company.business_type, company.business_description)

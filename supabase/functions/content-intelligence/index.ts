@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -208,6 +209,7 @@ Deno.serve(async (req) => {
       let created = 0, skipped = 0
       for (const c of (companies ?? [])) {
         try {
+          if (!(await hasPaidAccess(db, c.id as string))) { skipped++; continue } // conta vitrine: cron não gasta IA
           const { data: recentCampaign } = await db.from('campaigns')
             .select('created_at').eq('company_id', c.id)
             .order('created_at', { ascending: false }).limit(1).maybeSingle()
@@ -247,6 +249,8 @@ Deno.serve(async (req) => {
 
     const { data: company } = await db.from('companies').select('id, ai_profile, vertical_key, playbook_answers').eq('user_id', user.id).maybeSingle()
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
+    const noPlan = await requirePaidAccess(db, company.id)
+    if (noPlan) return noPlan
     if (!company.ai_profile) return json({ error: 'Perfil incompleto. Preencha as Configurações primeiro.' }, 400)
     const playbookBlock = await fetchPlaybookBlock(db, (company.vertical_key as string | null) ?? 'generico', company.playbook_answers as Record<string, unknown> | null)
 

@@ -14,6 +14,7 @@
  *   - Authorization: JWT do dono        → roda pra empresa do dono (teste).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 type Supa = ReturnType<typeof createClient>
@@ -72,6 +73,15 @@ Deno.serve(async (req) => {
       const { data: comp } = await admin.from('companies').select('id').eq('user_id', user.id).maybeSingle()
       if (!comp) return json({ error: 'Empresa não encontrada.' }, 404)
       companyIds = [comp.id as string]
+      const noPlan = await requirePaidAccess(admin, comp.id as string)
+      if (noPlan) return noPlan
+    }
+    // Cron: pula conta vitrine (não gasta IA com quem não pagou).
+    if (isCron) {
+      const allowed: string[] = []
+      for (const id of companyIds) if (await hasPaidAccess(admin, id)) allowed.push(id)
+      companyIds = allowed
+      if (allowed.length === 0) return json({ ok: true, cron: true, companies: 0, generated: 0, skipped: 0, failed: 0 })
     }
 
     const ctx = { admin, anthropicKey, supabaseUrl, serviceKey, cronSecret: cronSecret ?? '' }

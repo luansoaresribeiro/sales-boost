@@ -13,6 +13,7 @@
  * removido. Nada aqui publica sozinho — segue a regra human-in-the-loop.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -243,6 +244,12 @@ Deno.serve(async (req) => {
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
 
     const action = String(body.action ?? '')
+    // Só ações que gastam IA, e só no caminho do usuário (o lote/server-a-server
+    // já foi filtrado por quem chamou).
+    if (!isService && ['generate', 'score', 'regenerate'].includes(action)) {
+      const noPlan = await requirePaidAccess(admin, company.id)
+      if (noPlan) return noPlan
+    }
 
     // ── Gerar post de teste ──────────────────────────────────────────────
     if (action === 'generate') {

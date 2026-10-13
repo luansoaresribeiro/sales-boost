@@ -719,13 +719,15 @@ grátis de 30 s, acima — mantidos como histórico):
 
 ## 2026-10-10 — Novo caminho: diagnóstico → criar conta → só vídeos grátis até pagar (decisão do dono)
 
+> **Parcialmente substituída em 2026-10-13:** a conta nova NÃO fica mais presa em `/gratis`; vira "modo vitrine" (painel inteiro em somente visualização). O resto (cadastro pelo diagnóstico, `/setup` só depois de pagar, fim do teste de 7 dias pras contas novas) continua valendo. Ver a decisão de 2026-10-13 no fim deste arquivo.
+
 - **Ordem:** cadastro → diagnóstico (sem a tela intermediária "Seu negócio foi
   entendido") → botão **"Entrar no painel e criar meus vídeos grátis"** →
   **só criar conta** → já entra logado, sem passar pelo login.
   - Se a pessoa já está logada, o botão liga o diagnóstico à conta e entra.
   - Se o Supabase exigir confirmação de e-mail, a pessoa cai no login normal.
     Hoje a produção não exige; o ensaio exige.
-- **Antes de pagar ("modo grátis"):** a conta nova só vê a página `/gratis`.
+- **Antes de pagar ("modo grátis") — substituído em 2026-10-13 (agora "modo vitrine"):** a conta nova só vê a página `/gratis`.
   Qualquer outra rota do painel leva pra lá. A página conduz aos 3 vídeos
   grátis e, quando ficam prontos, mostra o que o plano libera e os planos com o
   cupom do 1º mês.
@@ -755,7 +757,7 @@ grátis de 30 s, acima — mantidos como histórico):
     (`config.gift_creative`: `{cidade}` / "Seu próximo lar pode estar aqui" /
     "Comente QUERO"), sem número nenhum (regra 5).
   - O bloco só aparece pro setor cuja ficha tem `gift_creative` (hoje, imóveis).
-- **Depois do resultado:** aviso discreto do andamento ("1 de 2 vídeos
+- **Depois do resultado ("o resto do painel continua fechado até pagar" — substituído em 2026-10-13: o painel abre em somente visualização):** aviso discreto do andamento ("1 de 2 vídeos
   prontos") e o botão vira **"Entrar no painel e ver meu presente"**. Os
   vídeos e o criativo ficam no painel (`/gratis`), não na página do
   diagnóstico. O resto do painel continua fechado até pagar.
@@ -933,3 +935,77 @@ grátis de 30 s, acima — mantidos como histórico):
   webhook do Telegram não tem verificação de origem, então a assinatura é
   o que impede aprovação forjada). Regra 1 continua valendo: nada sai sem o
   dono tocar em "Sim". Silêncio das 22h às 8h pra não incomodar.
+
+## 2026-10-13 — Cadastro direto + "modo vitrine" + kit só pra quem veio do diagnóstico + lembrete de 30 dias (decisão do dono)
+
+> Substitui a decisão de 2026-10-10 ("conta nova só vê `/gratis`") e a parte de
+> 2026-10-11 que dizia "o resto do painel continua fechado até pagar". As
+> entradas antigas ficam acima como histórico (marcadas "substituída em 2026-10-13").
+
+- **Cadastro direto:** a tela de login ganhou "Não tem conta? Cadastre-se" →
+  `/signup` (sem `?claim`). Fluxo: `/signup` → `/dashboard` → (sem empresa)
+  `/onboarding` → painel. O onboarding de quem está logado **não oferece o
+  presente** (kit) — o bloco de 3 fotos só aparece pra quem faz o diagnóstico
+  sem conta. O botão final do diagnóstico, pra quem criou a conta antes, é só
+  "Entrar no painel →" (sem prometer vídeos).
+  - **Divergência que ficou:** o onboarding continua sendo o próprio
+    diagnóstico (é ele que cria a empresa, via `claim-diagnostic`). Quem entra
+    direto roda um diagnóstico a mais; só não ganha o kit.
+- **Modo vitrine** (`isShowcaseMode` em `src/lib/setupGate.ts`; `isFreeMode` é
+  alias): mesma regra de antes — conta criada a partir de 2026-10-06, sem
+  pagamento nem liberação manual e não bloqueada. Em vez de ser mandada pra
+  `/gratis`, a conta **navega por todo o `/dashboard/*`** em "somente
+  visualização". `/gratis` continua existindo (kit + planos). `/setup` continua
+  só depois de pagar. Contas antigas, bloqueadas e com acesso manual: igual a
+  antes. Voltar do checkout (`?upgrade=success`) ainda cai em `/gratis` pra
+  esperar a confirmação do pagamento.
+- **O que a tela faz em vitrine:** faixa fixa "Você está vendo o painel em modo
+  demonstração — escolha um plano pra usar de verdade" + "Ver planos"
+  (→ `/gratis#plano`); modal único "Disponível no plano". O bloqueio é UM ponto
+  só (`src/lib/showcaseGuard.ts`, ligado pelo `ShowcaseProvider` no layout do
+  painel): embrulha o `fetch`, então vale pra `fetch(.../functions/v1/...)`,
+  `supabase.functions.invoke` e escritas diretas do supabase client — sem
+  interceptar cliques; abas e links nunca bloqueiam. Chamadas logo depois de
+  trocar de tela (a tela abrindo e buscando) bloqueiam em silêncio, sem modal.
+  Telas que disparavam IA sozinhas ao abrir (1ª estratégia, ideias do Creative
+  Agent, Kit da Marca) não disparam em vitrine.
+  - **Liberado em vitrine:** editar dados/ficha da empresa (`companies`,
+    `business_context`), catálogo/fotos (`marketing_ai_knowledge`) e Kit da
+    Marca (`brand_dna`, `marketing_ai_config`) — preencher não gasta nada —,
+    conectar Instagram, kit grátis e pagamento
+    (`trial-video`, `diagnosis-gift`, `claim-diagnostic`, `create-checkout`,
+    cupom), notificações/Telegram/configurações. Sem teste de 7 dias nem
+    boas-vindas do trial em vitrine.
+- **Rede de segurança no servidor (o mais importante):** até aqui NENHUMA
+  function checava pagamento. `supabase/functions/_shared/access.ts`
+  (`requirePaidAccess` / `hasPaidAccess`) usa a mesma regra do banco
+  (`company_access_status`) e devolve **402 `{error:'Disponível no plano',
+  code:'plan_required'}`**. Empresa criada antes de 2026-10-06 passa sempre;
+  consulta com erro libera (falha aberta); conta nova só passa se pagou
+  (`paid`/`stripe_subscription_id`) ou foi liberada à mão (`manual_access`
+  lido direto da empresa: no `company_access_status` o trial vem antes do
+  manual, e a Tespon — liberada à mão com trial gravado — seria trancada) — **o "trial" de 7
+  dias que o `claim-diagnostic` ainda grava NÃO libera conta nova** (senão a
+  trava ficaria aberta por uma semana), e bloqueada = 402. Os cron que varrem
+  empresas pulam conta vitrine. Lista das functions em docs/PITFALLS.md.
+- **Kit grátis só pra quem veio do diagnóstico:** "veio do diagnóstico" = o
+  diagnóstico ligado à empresa (`diagnostics.company_id`) foi criado ANTES da
+  conta (`useKitStatus`, `src/lib/useKitStatus.ts`). **Pop-up do kit:** em
+  vitrine + com direito + kit ainda não criado, aparece TODA vez que entra no
+  painel (por sessão do navegador), com "Ver meu presente" (→ `/gratis`) e
+  "Depois" (fecha só naquela visita). Sem direito: `/gratis` mostra só os planos.
+  - **Divergência que ficou:** a trava do direito é só de tela; o `trial-video`
+    (`start`) não confere o diagnóstico e não foi alterado.
+- **Lembrete "Suas informações ainda estão atualizadas?"** (só no sino, sem
+  pop-up): aparece se `profile_confirmed_at ?? created_at` tem mais de 30
+  dias, ou se existe estratégia criada depois da última confirmação. Botões
+  "Está tudo certo" (grava a data) e "Quero atualizar" (Configurações →
+  entendimento do negócio). Salvar a ficha também conta como confirmação. Não
+  aparece pra conta bloqueada nem pra conta em vitrine sem ficha preenchida.
+  **Nunca refaz a estratégia sozinho (regra 7):** se a ficha foi salva depois da
+  estratégia atual (`companies.profile_changed_at`), a tela de Estratégia mostra
+  um aviso com o botão "Atualizar estratégia com os novos dados", que usa o
+  mesmo fluxo do "Pedir nova estratégia". Migration aditiva
+  `20261015100000_profile_confirmed_at.sql` (duas colunas anuláveis).
+- **Painel do Owner:** selo "Vitrine" na lista e na ficha da empresa (só
+  exibição).

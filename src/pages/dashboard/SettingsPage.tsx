@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { markProfileSaved } from '../../lib/profileConfirm'
 import { useSearchParams } from 'react-router-dom'
 import { useCompany } from '../../contexts/CompanyContext'
 import { useLang } from '../../contexts/LanguageContext'
@@ -389,6 +390,7 @@ export default function SettingsPage() {
         if (data) setCompanyId(data.id)
       }
       setSaved(true)
+      if (companyId) void markProfileSaved(companyId)
       void refreshCompany()
       void triggerAutoSync()
       setTimeout(() => setSaved(false), 2500)

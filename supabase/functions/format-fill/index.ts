@@ -6,6 +6,7 @@
  * cliente (html-to-image) — aqui só entra o texto. Nada publica.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -66,6 +67,8 @@ Deno.serve(async (req) => {
     const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal, business_dna, instagram_url').eq('user_id', user.id).maybeSingle()
     const company = companyRow as { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_dna: { brand_voice?: string; target_audience?: string } | null; instagram_url: string | null } | null
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
 
     const body = await req.json().catch(() => ({})) as { template?: string; fields?: { key: string; label: string }[]; subject?: string; instruction?: string }
     const template = String(body.template ?? 'formato')

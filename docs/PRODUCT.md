@@ -127,6 +127,12 @@ precisar virar especialista em marketing.
 
 ## Modelo de cobrança — DECIDIDO (2026-10-02)
 
+> **Divergência (2026-10-13):** conta nova não tem mais teste de 7 dias com o
+> painel inteiro nem fica presa no "modo grátis": entra em **modo vitrine** (vê
+> o painel todo em somente visualização, com faixa "modo demonstração" e
+> "Disponível no plano" nas ações que gastam/publicam). O kit grátis é só pra
+> quem veio do diagnóstico grátis. Ver [DECISIONS.md](DECISIONS.md) (2026-10-13).
+
 > **Divergência (2026-10-08):** o preço de R$1.449 único abaixo foi substituído por mensal R$2.449 (sem fidelidade) e anual R$1.449/mês (fidelidade 12 meses) — ver [DECISIONS.md](DECISIONS.md#2026-10-08--pagamento-fatia-4-como-foi-implementado). Mantido como histórico.
 
 **Decisão do dono:** plano único **Sales Boost — R$1.449/mês, Full Growth

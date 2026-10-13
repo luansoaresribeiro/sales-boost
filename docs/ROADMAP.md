@@ -238,6 +238,11 @@
    - **Fatia 3 — Corte de IA no servidor (ARRISCADA):** functions de IA
      recusam conta grátis que já gastou a cota. Mexe em functions de
      cliente real; exige aprovação antes do deploy.
+     **Status 2026-10-13: código pronto (PR do modo vitrine), SEM deploy.** Virou
+     `_shared/access.ts` (`requirePaidAccess`): conta nova sem plano toma 402
+     `plan_required` — em vez de "cota gasta", é "não pagou". Falta: aprovar e
+     deployar as functions listadas em PITFALLS.md (as de cliente real
+     `agent-actions`, `strategy-generate`, `creative-generate` pedem aprovação).
    - **Fatia 4 — Stripe:** preço mensal R$2.449, anual R$1.449 (fidelidade
      12 meses, cláusula no checkout, validar com advogado), cupom de 1º mês.
      Exige aprovação do dono. **Status 2026-10-08: código pronto em PR

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { markProfileSaved } from '../../../lib/profileConfirm'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
 import { fetchBusinessTypes, OTHER_BUSINESS_TYPE } from '../../../lib/businessTypes'
@@ -246,6 +247,7 @@ export default function CompanyInfoCard({ companyId }: { companyId: string }) {
       agent_business_interpretation: interpretation, updated_at: new Date().toISOString(),
     }
     await supabase.from('companies').update(payload).eq('id', companyId)
+    void markProfileSaved(companyId)
     setInfo(p => ({ ...p, agent_business_interpretation: interpretation }))
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
   }

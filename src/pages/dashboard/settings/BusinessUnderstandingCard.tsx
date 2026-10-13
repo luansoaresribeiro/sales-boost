@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { markProfileSaved } from '../../../lib/profileConfirm'
 import { useLang } from '../../../contexts/LanguageContext'
 import { fetchOnboardingQuestions, sanitizePlaybookAnswers, bi, type PlaybookQuestion } from '../../../lib/verticalPlaybook'
 
@@ -139,6 +140,7 @@ export default function BusinessUnderstandingCard({ companyId }: { companyId: st
     // Recompõe a interpretação pros agentes a partir do que o dono editou.
     const interpretation = `Negócio "${u.business_description || '—'}". Cliente ideal: ${u.ideal_customer || '—'}. Objetivo: ${u.primary_goals || '—'}. Desafio: ${u.main_challenges || '—'}. Canais: ${u.current_channels || '—'}. Fase: ${u.business_stage || '—'}.`
     await supabase.from('companies').update({ ...u, playbook_answers: sanitized, agent_business_interpretation: interpretation, updated_at: new Date().toISOString() }).eq('id', companyId)
+    void markProfileSaved(companyId)
     setPlaybookAnswers(sanitized)
     setU(p => ({ ...p, agent_business_interpretation: interpretation }))
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)

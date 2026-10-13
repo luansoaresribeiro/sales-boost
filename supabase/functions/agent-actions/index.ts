@@ -22,6 +22,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { parseButton, verifyButton, type ButtonKind, type ButtonOp } from '../_shared/telegramButtons.ts'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -61,6 +62,13 @@ Deno.serve(async (req) => {
 
     const { data: company } = await admin.from('companies').select('id, user_id, agent_automatic_mode').eq('id', company_id).maybeSingle()
     if (!company || company.user_id !== user.id) return json({ error: 'Forbidden' }, 403)
+
+    // Rede de segurança de pagamento: só as ações que criam/aprovam/reexecutam
+    // (publicar/enviar). list/reject/cancel/edit/unschedule seguem livres.
+    if (action === 'propose' || action === 'approve' || action === 'retry') {
+      const noPlan = await requirePaidAccess(admin, company_id)
+      if (noPlan) return noPlan
+    }
 
     switch (action) {
       case 'list': return await listActions(admin, company_id, body.status as string | undefined)

@@ -331,6 +331,7 @@ function normalizeInstagram(raw: string): string | null {
 // onDone(id) e quem hospeda mostra o resultado ali mesmo).
 export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolean; onDone?: (diagnosticId: string) => void }) {
   const navigate = useNavigate()
+  const loggedIn = !!useAuth().user
   const { lang } = useLang()
   const t = TX[lang]
   const STEPS = t.steps
@@ -364,7 +365,10 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
     if (!data.business_type.trim()) { setFichaName(''); setFichaQuestions([]); setHasGift(false); return }
     fetchVerticalKey(data.business_type).then(async vk => {
       const [{ name, questions }, gift] = await Promise.all([fetchOnboardingQuestions(vk), giftEnabled(vk)])
-      if (alive) { setFichaName(name); setFichaQuestions(questions); setHasGift(gift) }
+      // Quem já está LOGADO nesta tela (rota /onboarding, conta sem empresa) criou a
+      // conta direto: sem kit grátis (decisão do dono 2026-10-13). O presente fica só
+      // pra quem faz o diagnóstico sem conta (landing / link do diagnóstico).
+      if (alive) { setFichaName(name); setFichaQuestions(questions); setHasGift(gift && (embedded || !loggedIn)) }
     })
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
