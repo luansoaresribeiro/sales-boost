@@ -344,3 +344,9 @@ de pronto antes de começar.
    (lead novo, post que foi bem, algo esperando aprovação) e, se o dono
    aprovar o plano, **aprovar pelo Telegram** com botão. Mexe em função que
    publica, então precisa de aprovação antes.
+   - *Feito (2026-10-12, PR próprio):* aprovação pendente (com botão),
+     post novo no Vault (com botão Publicar) e lead novo. Opt-in em
+     Configurações → Notificações → "Telegram amigo".
+   - *Falta:* "post que foi bem" — depende de comparar métricas reais do
+     Instagram com a média da própria conta (nunca número inventado);
+     entra quando o aprendizado ([LEARNING.md](LEARNING.md)) tiver essa média pronta.
