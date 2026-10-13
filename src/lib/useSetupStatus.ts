@@ -16,7 +16,10 @@ import { catalogMinPhotos, isCatalogItem, itemHasEnoughPhotos, itemPhotoCount, u
 
 export type SetupStepId = 'dados' | 'perguntas' | 'catalogo'
 
-export interface SetupStep { id: SetupStepId; done: boolean; missing: string }
+// optional: aparece no /setup mas NÃO trava o "Ir para o painel" — o que faltar
+// vira pendência no sino (pedido do dono 2026-10-13: o catálogo não pode ser
+// empecilho antes de entrar no painel).
+export interface SetupStep { id: SetupStepId; done: boolean; missing: string; optional?: boolean }
 
 export interface BusinessData { business_name: string; city: string; phone: string }
 
@@ -122,14 +125,15 @@ export function useSetupStatus(companyId: string | null | undefined, opts: { liv
             missing = m.itemsWith(need, schema.itemLabel.toLowerCase(), minPhotos)
           }
         }
-        steps.push({ id: 'catalogo', done: need === 0, missing })
+        steps.push({ id: 'catalogo', done: need === 0, missing, optional: true })
       }
 
       const instagramConnected = !!c.instagram_user_id
       const instagramRequired = cfg.instagramRequired
-      const required = steps.length + (instagramRequired ? 1 : 0)
-      const doneCount = steps.filter(s => s.done).length + (instagramRequired && instagramConnected ? 1 : 0)
-      const missingParts = steps.filter(s => !s.done).map(s => s.missing)
+      const mandatory = steps.filter(s => !s.optional)
+      const required = mandatory.length + (instagramRequired ? 1 : 0)
+      const doneCount = mandatory.filter(s => s.done).length + (instagramRequired && instagramConnected ? 1 : 0)
+      const missingParts = mandatory.filter(s => !s.done).map(s => s.missing)
       if (instagramRequired && !instagramConnected) missingParts.push(m.connectIg)
 
       if (run !== seq.current) return
