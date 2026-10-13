@@ -1009,3 +1009,11 @@ grátis de 30 s, acima — mantidos como histórico):
   `20261015100000_profile_confirmed_at.sql` (duas colunas anuláveis).
 - **Painel do Owner:** selo "Vitrine" na lista e na ficha da empresa (só
   exibição).
+- **Catálogo opcional no /setup** — 2026-10-13. Pedido do dono: "Seu
+  primeiro imóvel" não pode ser empecilho pra entrar no painel. O passo
+  continua aparecendo no `/setup`, mas marcado "Opcional agora" e fora da
+  contagem de obrigatórios (`SetupStep.optional` em `useSetupStatus.ts`).
+  Se a conta não tiver nenhum item do catálogo, o sino de pendências mostra
+  "Cadastre seu primeiro imóvel" (abre o "+" na aba do catálogo).
+  Substitui a parte da decisão anterior que exigia o mínimo de itens com
+  fotos antes de liberar o painel.

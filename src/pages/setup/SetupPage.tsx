@@ -22,6 +22,7 @@ const TX = {
     catMany: (label: string, n: number) => `${label}: cadastre ${n}`,
     catOne: (item: string) => `Seu primeiro ${item}`,
     catHint: (label: string, p: number, item: string) => `${label} · mínimo de ${p} fotos reais por ${item}`,
+    optional: 'Opcional agora — se pular, fica lembrado no sino de pendências.',
     go: 'Ir para o painel', saved: 'Seu progresso fica salvo.',
   },
   en: {
@@ -38,6 +39,7 @@ const TX = {
     catMany: (label: string, n: number) => `${label}: add ${n}`,
     catOne: (item: string) => `Your first ${item}`,
     catHint: (label: string, p: number, item: string) => `${label} · at least ${p} real photos per ${item}`,
+    optional: "Optional for now — if you skip it, the to-do bell will remind you.",
     go: 'Go to dashboard', saved: 'Your progress is saved.',
   },
 } as const
@@ -73,7 +75,7 @@ export default function SetupPage() {
   const gated = setupGateApplies(company, access)
   // Contas fora do gate (antigas/pagantes) ou erro ao calcular: o botão nunca trava.
   const canGo = status.allDone || !gated || status.error
-  const firstPending = status.steps.find(s => !s.done)?.id ?? null
+  const firstPending = (status.steps.find(s => !s.done && !s.optional) ?? status.steps.find(s => !s.done))?.id ?? null
   const openId = manual !== undefined ? manual : firstPending
   const saved = async (id: SetupStepId) => {
     setManual(undefined) // volta ao automático: abre o próximo pendente
@@ -164,7 +166,7 @@ export default function SetupPage() {
             return (
               <StepShell key={s.id} n={n} done={s.done} open={open} onToggle={() => toggle(s.id)}
                 title={status.minItems > 1 ? tx.catMany(schema.catalogLabel, status.minItems) : tx.catOne(item)}
-                hint={tx.catHint(schema.catalogLabel, status.minPhotos, item)}>
+                hint={s.done ? tx.catHint(schema.catalogLabel, status.minPhotos, item) : `${tx.catHint(schema.catalogLabel, status.minPhotos, item)} · ${tx.optional}`}>
                 <CatalogItems companyId={company.id} schema={schema} verticalKey={status.verticalKey} setupMode onChanged={onChanged} />
               </StepShell>
             )

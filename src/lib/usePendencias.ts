@@ -27,7 +27,7 @@ export interface Pendencia {
   hint: string
   destino: string // texto do "→ destino"
   to?: string // rota
-  openAdd?: { tab: 'catalogo'; itemId: string } // abre o botão "+" na aba do catálogo
+  openAdd?: { tab: 'catalogo'; itemId?: string } // abre o botão "+" na aba do catálogo (itemId: direto no item)
   /** botões próprios no lugar do "toque na linha toda" (ex.: "Está tudo certo" / "Quero atualizar") */
   actions?: { label: string; primary?: boolean; to?: string; run?: () => Promise<void> }[]
 }
@@ -45,6 +45,8 @@ const PT = {
   settingsInt: 'Configurações · Integrações',
   photosHint: (n: number, min: number) => `Faltam fotos: ${n} de ${min}. São elas que viram os posts.`,
   addPhotos: 'Adicionar fotos',
+  firstItem: (item: string) => `Cadastre seu primeiro ${item}`,
+  firstItemHint: (min: number) => `Com pelo menos ${min} fotos reais — são elas que viram os posts e vídeos.`,
   questions: (n: number) => `${n} ${n === 1 ? 'pergunta' : 'perguntas'} do seu negócio sem resposta`,
   eg: 'Ex.: ', questionsHint: 'Quanto mais o Hermes souber, melhor ele decide.',
   settingsUnd: 'Configurações · Entendimento do negócio',
@@ -65,6 +67,8 @@ const EN: typeof PT = {
   settingsInt: 'Settings · Integrations',
   photosHint: (n: number, min: number) => `Missing photos: ${n} of ${min}. They become the posts.`,
   addPhotos: 'Add photos',
+  firstItem: (item: string) => `Add your first ${item}`,
+  firstItemHint: (min: number) => `With at least ${min} real photos — they become the posts and videos.`,
   questions: (n: number) => `${n} ${n === 1 ? 'question' : 'questions'} about your business unanswered`,
   eg: 'E.g.: ', questionsHint: 'The more Hermes knows, the better it decides.',
   settingsUnd: 'Settings · Business understanding',
@@ -150,7 +154,14 @@ export function usePendencias() {
         const min = catalogMinPhotos(schema)
         const { data, error } = await supabase.from('marketing_ai_knowledge').select('id, title, meta').eq('company_id', companyId).eq('module', 'visual').eq('kind', 'product').order('created_at', { ascending: false })
         if (!error) {
-          for (const it of (data ?? []) as { id: string; title: string; meta: { photos?: unknown[]; fields?: unknown } | null }[]) {
+          const rows = (data ?? []) as { id: string; title: string; meta: { photos?: unknown[]; fields?: unknown } | null }[]
+          // Nenhum item do catálogo ainda (o /setup deixa pular): lembra aqui.
+          if (!rows.some(it => isCatalogItem(it.meta))) out.push({
+            id: 'catalogo-primeiro', kind: 'fotos', tone: 'orange',
+            title: t.firstItem(schema.itemLabel.toLowerCase()), hint: t.firstItemHint(min),
+            destino: t.addPhotos, openAdd: { tab: 'catalogo' },
+          })
+          for (const it of rows) {
             if (!isCatalogItem(it.meta)) continue // item antigo, sem estrutura do catálogo
             const n = itemPhotoCount(it.meta)
             if (n < min) out.push({
