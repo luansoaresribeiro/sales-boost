@@ -23,6 +23,8 @@ const TX = {
     magicInfo: 'Vamos enviar um link de acesso direto para o seu e-mail. Sem senha necessária.',
     sending: 'Enviando...',
     sendLink: 'Enviar link de acesso →',
+    noAcc: 'Não tem conta?',
+    signUp: 'Cadastre-se',
   },
   en: {
     noAccount: "We couldn't find an account with that email. Create your account first.",
@@ -43,6 +45,8 @@ const TX = {
     magicInfo: "We'll send a direct sign-in link to your email. No password needed.",
     sending: 'Sending...',
     sendLink: 'Send sign-in link →',
+    noAcc: 'No account?',
+    signUp: 'Sign up',
   },
 } as const
 
@@ -231,6 +235,12 @@ export default function LoginPage() {
             </form>
           )}
         </div>
+
+        {/* Cadastro direto (decisão do dono 2026-10-13): sem diagnóstico, sem ?claim. */}
+        <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '13.5px', color: MUTED }}>
+          {t.noAcc}{' '}
+          <Link to="/signup" style={{ color: ORANGE, fontWeight: 700, textDecoration: 'none' }}>{t.signUp}</Link>
+        </p>
       </div>
     </div>
   )

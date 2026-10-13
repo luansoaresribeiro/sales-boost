@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { initWasm, Resvg } from 'https://esm.sh/@resvg/resvg-wasm@2.6.2'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -93,6 +94,9 @@ Deno.serve(async (req) => {
       const userClient = createClient(env.SUPABASE_URL!, env.ANON!, { global: { headers: { Authorization: bearer } } })
       const { data: { user } } = await userClient.auth.getUser()
       if (!user) return json({ error: 'Unauthorized' }, 401)
+      const { data: comp } = await admin.from('companies').select('id').eq('user_id', user.id).maybeSingle()
+      const noPlan = await requirePaidAccess(admin, comp?.id as string | undefined)
+      if (noPlan) return noPlan
     }
 
     const imageUrl = body.image_url ? String(body.image_url) : null

@@ -59,6 +59,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { fetchLearning, learningPromptBlock } from '../_shared/learning.ts'
 import { fetchFormatCatalog, formatCatalogBlock, sanitizeContentPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
+import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 type SupaClient = ReturnType<typeof createClient>
@@ -793,6 +794,7 @@ Deno.serve(async (req) => {
 
       for (const c of (companies ?? [])) {
         if (dispatched >= ROUND_LIMIT) break
+        if (!(await hasPaidAccess(admin, c.id as string))) continue // conta vitrine: cron não gasta IA
         const { data: activeStrategy } = await admin.from('marketing_ai_strategies')
           .select('id, last_reanalyzed_at, last_refreshed_at')
           .eq('company_id', c.id).eq('kind', 'main').eq('status', 'active').maybeSingle()
@@ -855,6 +857,11 @@ Deno.serve(async (req) => {
       company = companyRow as Company | null
     }
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
+    // Só as ações que gastam IA, e só no caminho do usuário (cron já filtrado no despachante).
+    if (!isCron && ['generate', 'reanalyze', 'refresh'].includes(action)) {
+      const noPlan = await requirePaidAccess(admin, company.id)
+      if (noPlan) return noPlan
+    }
 
     if (action === 'generate') {
       const kind = body.kind === 'initiative' ? 'initiative' : 'main'

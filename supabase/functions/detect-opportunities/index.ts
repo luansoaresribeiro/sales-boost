@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -278,6 +279,7 @@ Deno.serve(async (req) => {
       let total = 0
       for (const company of companies ?? []) {
         try {
+          if (!(await hasPaidAccess(admin, company.id as string))) continue // conta vitrine: cron não roda
           const newOpportunities = await detectForCompany(company as Company, admin)
           total += newOpportunities.length
           // Only sends when something genuinely new shows up — a daily message
@@ -307,6 +309,8 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
 
     const newOpportunities = await detectForCompany(company as Company, admin)
     // ONE consolidated message for whatever is new — no more one message per

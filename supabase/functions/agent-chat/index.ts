@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -227,6 +228,8 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (!company) return json({ error: 'Empresa não encontrada. Complete o onboarding primeiro.' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
 
     // Monthly reset
     const resetAt   = new Date(company.agent_messages_reset_at)

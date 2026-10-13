@@ -20,6 +20,7 @@
  * empilhar mais conteúdo em cima do que o pacote já agendou.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -186,6 +187,8 @@ Deno.serve(async (req) => {
 
     const { data: company } = await admin.from('companies').select('id, vertical_key').eq('user_id', user.id).maybeSingle()
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
 
     const ficha = await fetchFichaConfig(admin, company.vertical_key as string | null)
     if (!ficha) return json({ error: 'Este setor não tem catálogo/pacote de conteúdo configurado.' }, 400)

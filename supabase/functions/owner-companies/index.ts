@@ -82,6 +82,7 @@ Deno.serve(async (req) => {
           has_paid: hasPaid,
           access: source !== 'blocked' && source !== 'none',
           access_source: source,
+          manual_access: !!co?.manual_access,
           access_status_label: statusLabel,
           agent_enabled: co?.agent_enabled ?? false,
           // Exclusão em lote (painel do Owner): mesmas travas do owner-delete-company.

@@ -11,6 +11,7 @@
  * suficientes, não gera nada (fica com o que já existia).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -158,6 +159,7 @@ Deno.serve(async (req) => {
       let generated = 0, skipped = 0
       for (const c of companies ?? []) {
         try {
+          if (!(await hasPaidAccess(admin, c.id as string))) { skipped++; continue } // conta vitrine: cron não gasta IA
           const { data: bd } = await admin.from('brand_dna').select('auto_generated, updated_at').eq('company_id', c.id).maybeSingle()
           if (bd && bd.auto_generated === false) { skipped++; continue } // dono editou manualmente — não mexe mais
           if (bd?.updated_at && bd.updated_at > sevenDaysAgo) { skipped++; continue }
@@ -178,6 +180,8 @@ Deno.serve(async (req) => {
 
     const { data: company } = await admin.from('companies').select('id').eq('user_id', user.id).maybeSingle()
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
 
     const result = await generateAndSave(admin, anthropicKey, company.id)
     if (!result.ok) return json({ error: result.error }, 400)

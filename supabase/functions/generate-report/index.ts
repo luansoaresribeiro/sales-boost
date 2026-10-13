@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -162,6 +163,8 @@ Deno.serve(async (req) => {
     if (companyErr || !company) return json({ error: `Empresa não encontrada: ${companyErr?.message}` }, 404)
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const noPlan = await requirePaidAccess(supabase, company.id)
+    if (noPlan) return noPlan
 
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
     if (!anthropicKey) return json({ error: 'ANTHROPIC_API_KEY não configurada' }, 500)

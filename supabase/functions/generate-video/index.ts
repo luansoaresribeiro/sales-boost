@@ -7,6 +7,7 @@
  * Salva o video_url no post. Nada publica sozinho — é pra teste/QC.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -37,6 +38,8 @@ Deno.serve(async (req) => {
     const { data: companyRow } = await admin.from('companies').select('id').eq('user_id', user.id).maybeSingle()
     const company = companyRow as { id: string } | null
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
 
     const contentId = String(body.content_id ?? '')
     if (!contentId) return json({ error: 'content_id é obrigatório' }, 400)

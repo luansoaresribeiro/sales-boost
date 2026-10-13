@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -371,6 +372,7 @@ Deno.serve(async (req) => {
       let scanned = 0, skipped = 0
       for (const company of (companies ?? []) as CompanyRow[]) {
         try {
+          if (!(await hasPaidAccess(admin, company.id))) { skipped++; continue } // conta vitrine: cron não gasta Google/IA
           const { data: recentSnap } = await admin
             .from('competitor_snapshots')
             .select('collected_at, competitors!inner(company_id)')
@@ -402,6 +404,8 @@ Deno.serve(async (req) => {
     const { data: company } = await admin.from('companies').select('id, business_name, business_type, google_place_id, notification_prefs').eq('user_id', user.id).maybeSingle()
 
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
     if (!company.google_place_id) return json({ error: 'Vincule seu negócio ao Google nas Configurações primeiro.' }, 400)
 
     // Google's Nearby Search caps the radius at 50km (50000m) — requests above

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -156,6 +157,7 @@ Deno.serve(async (req) => {
       const { data: companies } = await admin.from('companies').select(COMPANY_FIELDS).eq('active', true)
       let generated = 0, skipped = 0
       for (const company of (companies ?? []) as CompanyRow[]) {
+        if (!(await hasPaidAccess(admin, company.id))) continue // conta vitrine: cron não gasta IA
         for (const tabKey of ALL_TAB_KEYS) {
           try {
             // Junta o dado-fonte e tira a impressão digital ANTES de chamar a IA.
@@ -188,6 +190,8 @@ Deno.serve(async (req) => {
 
     const { data: company } = await admin.from('companies').select(COMPANY_FIELDS).eq('user_id', user.id).maybeSingle()
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
 
     // Interativo: o usuário clicou em "atualizar", então geramos na hora —
     // mas já guardamos a impressão digital pra o cron não refazer à toa depois.

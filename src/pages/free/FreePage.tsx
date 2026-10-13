@@ -1,15 +1,20 @@
-// Página das contas novas ANTES de pagar (decisão do dono 2026-10-10,
-// docs/DECISIONS.md): o painel inteiro fica fechado e tudo leva ao kit grátis
-// (2 vídeos + 1 criativo, decisão 2026-10-11). Quando o kit fica pronto, mostra o que o plano libera e o
-// cupom do 1º mês. Os dados adicionais (/setup) só são pedidos depois de
-// pagar. Quem decide se a conta cai aqui é isFreeMode (lib/setupGate.ts).
+// Página do kit grátis + planos das contas em "modo vitrine" (conta nova antes de
+// pagar). Desde 2026-10-13 a conta NÃO é mais presa aqui — navega pelo painel em
+// somente visualização (docs/DECISIONS.md) — e esta página é um destino: o
+// pop-up do kit leva pra cá, e "Ver planos" leva pra /gratis#plano.
+//  - Quem veio do diagnóstico grátis tem o kit (2 vídeos + 1 criativo, decisão
+//    2026-10-11); quando fica pronto mostra o que o plano libera e o cupom.
+//  - Quem criou a conta direto não tem kit: vê só os planos.
+// Os dados adicionais (/setup) só são pedidos depois de pagar. Quem decide se a
+// conta é vitrine é isShowcaseMode (lib/setupGate.ts).
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
 import { useLang } from '../../contexts/LanguageContext'
 import FreeVideoCard, { type State as VideoState } from '../dashboard/FreeVideoCard'
 import PlanOffer from '../dashboard/PlanOffer'
+import { useKitStatus } from '../../lib/useKitStatus'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -22,7 +27,8 @@ const CONFIRM_MAX_MS = 90_000
 
 const TX = {
   pt: {
-    logout: 'Sair', tag: 'Seu acesso grátis',
+    logout: 'Sair', back: '← Painel', tag: 'Seu acesso grátis',
+    h1Plan: 'Escolha seu plano', subPlan: 'Com o plano, o Sales Boost cria, publica e aprende por você — e nada vai ao ar sem a sua aprovação.',
     h1: 'Seu kit grátis: 2 vídeos + 1 criativo', h1Done: 'Seu kit grátis está pronto 🎉',
     sub: 'Com fotos reais do seu imóvel: 2 vídeos com movimento de câmera tipo drone e 1 criativo com acabamento profissional — sem inventar nada.',
     steps: ['Escolha 2 fotos de cômodos e 1 foto de destaque', 'A IA cria o kit (leva alguns minutos)', 'Publique com "Comente QUERO" e receba os interessados'],
@@ -42,7 +48,8 @@ const TX = {
     confirmLate: 'Ainda não recebemos a confirmação do pagamento. Se você já pagou, aguarde alguns minutos e recarregue a página.',
   },
   en: {
-    logout: 'Log out', tag: 'Your free access',
+    logout: 'Log out', back: '← Dashboard', tag: 'Your free access',
+    h1Plan: 'Pick your plan', subPlan: 'With the plan, Sales Boost creates, publishes and learns for you — and nothing goes live without your approval.',
     h1: 'Your free kit: 2 videos + 1 creative', h1Done: 'Your free kit is ready 🎉',
     sub: 'From real photos of your property: 2 videos with drone-like camera movement and 1 creative with a professional finish — nothing made up.',
     steps: ['Pick 2 room photos and 1 highlight photo', 'The AI creates the kit (takes a few minutes)', 'Post them with "Comment QUERO" and get interested buyers'],
@@ -70,6 +77,9 @@ export default function FreePage() {
   const { company, refreshCompany } = useCompany()
   const navigate = useNavigate()
   const [params] = useSearchParams()
+  const location = useLocation()
+  const kit = useKitStatus(company?.id, true)
+  const wantsPlan = location.hash === '#plano'
   const [video, setVideo] = useState<{ state: VideoState; couponShown: boolean }>({ state: 'loading', couponShown: false })
   const [couponKey, setCouponKey] = useState(0)
   const [waited, setWaited] = useState(0)
@@ -89,13 +99,22 @@ export default function FreePage() {
     return () => clearTimeout(h)
   }, [confirming, waited, refreshCompany])
 
-  const showPlan = video.state === 'completed' || video.state === 'cap'
+  // Sem direito ao kit (conta direta) ou pediu "Ver planos": mostra o plano já.
+  const noKit = !kit.loading && !kit.entitled
+  const showPlan = video.state === 'completed' || video.state === 'cap' || noKit || wantsPlan
+  useEffect(() => {
+    if (!wantsPlan || kit.loading) return
+    const h = setTimeout(() => document.getElementById('plano')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250)
+    return () => clearTimeout(h)
+  }, [wantsPlan, kit.loading])
   const goPlan = () => document.getElementById('plano')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   return (
     <div style={{ minHeight: '100vh', background: BG, color: 'white', fontFamily: D, overflowX: 'hidden' }}>
       <div style={{ padding: '16px', borderBottom: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <span style={{ fontSize: '1.3rem', fontWeight: 900, letterSpacing: '-0.02em' }}><span style={{ color: ORANGE }}>Sales</span>Boost</span>
+        <button onClick={() => navigate('/dashboard')}
+          style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: 'white', borderRadius: 8, padding: '6px 12px', fontSize: 12.5, cursor: 'pointer', fontFamily: D, marginLeft: 'auto' }}>{t.back}</button>
         <button onClick={async () => { await signOut(); navigate('/') }}
           style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: MUTED, borderRadius: 8, padding: '6px 12px', fontSize: 12.5, cursor: 'pointer', fontFamily: D }}>{t.logout}</button>
       </div>
@@ -109,22 +128,22 @@ export default function FreePage() {
 
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>{t.tag}</div>
-          <h1 style={{ fontSize: 'clamp(1.6rem, 6vw, 2.3rem)', fontWeight: 900, letterSpacing: '-0.03em', margin: '0 0 8px', lineHeight: 1.1 }}>{video.state === 'completed' ? t.h1Done : t.h1}</h1>
-          <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.6, margin: 0 }}>{company?.business_name && company.business_name !== 'Perfil pessoal' ? `${company.business_name} — ` : ''}{t.sub}</p>
+          <h1 style={{ fontSize: 'clamp(1.6rem, 6vw, 2.3rem)', fontWeight: 900, letterSpacing: '-0.03em', margin: '0 0 8px', lineHeight: 1.1 }}>{noKit ? t.h1Plan : video.state === 'completed' ? t.h1Done : t.h1}</h1>
+          <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.6, margin: 0 }}>{company?.business_name && company.business_name !== 'Perfil pessoal' ? `${company.business_name} — ` : ''}{noKit ? t.subPlan : t.sub}</p>
         </div>
 
-        <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
+        {kit.entitled && <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
           {t.steps.map((s, i) => (
             <li key={s} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, color: 'white' }}>
               <span style={{ width: 24, height: 24, flexShrink: 0, borderRadius: '50%', background: 'rgba(255,109,41,0.15)', border: `1px solid ${ORANGE}`, color: ORANGE, fontSize: 12, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
               {s}
             </li>
           ))}
-        </ol>
+        </ol>}
 
-        {company && <FreeVideoCard companyId={company.id} onActivate={goPlan} onState={onState} />}
+        {company && kit.entitled && <FreeVideoCard companyId={company.id} onActivate={goPlan} onState={onState} />}
 
-        {!showPlan && <p style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, margin: 0 }}>{t.next}</p>}
+        {!showPlan && kit.entitled && <p style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, margin: 0 }}>{t.next}</p>}
 
         {showPlan && (
           <>

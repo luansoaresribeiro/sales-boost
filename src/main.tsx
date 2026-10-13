@@ -33,7 +33,7 @@ import LeadDiscoverySettingsPage from './pages/owner/LeadDiscoverySettingsPage.t
 import OwnerSettingsPage from './pages/owner/OwnerSettingsPage.tsx'
 import PlatformHealthPage from './pages/owner/PlatformHealthPage.tsx'
 import SetupPage from './pages/setup/SetupPage.tsx'
-import { isFreeMode, setupGateApplies } from './lib/setupGate.ts'
+import { isShowcaseMode, setupGateApplies } from './lib/setupGate.ts'
 import FreePage from './pages/free/FreePage.tsx'
 import { useSetupStatus } from './lib/useSetupStatus.ts'
 import OnboardingPage from './pages/onboarding/OnboardingPage.tsx'
@@ -95,14 +95,25 @@ function ClientRoute({ children }: { children: React.ReactNode }) {
   // access===null só acontece enquanto ainda está carregando (companyLoading
   // já cobre isso) ou se a chamada falhou — nesse caso não bloqueia (falha
   // aberta), pra um erro de rede não trancar um cliente de verdade fora.
-  // Conta nova que ainda não pagou: só a página dos vídeos grátis (/gratis),
-  // que depois mostra o plano e o cupom. Dados adicionais (/setup) e o resto do
-  // painel só depois de pagar (decisão do dono 2026-10-10). Leva o ?query junto
-  // (ex.: volta do checkout com upgrade=success).
-  if (isFreeMode(company, access)) {
-    if (location.pathname !== '/gratis') return <Navigate to={`/gratis${location.search}`} replace />
+  // Conta nova que ainda não pagou ("modo vitrine", decisão do dono 2026-10-13):
+  // NÃO é mais presa em /gratis — navega por todo o painel em "somente
+  // visualização" (ShowcaseContext) e o servidor barra o que gasta/publica
+  // (_shared/access.ts). /gratis segue existindo (kit grátis + plano). O /setup
+  // continua só depois de pagar. Leva o ?query junto (ex.: volta do checkout).
+  if (isShowcaseMode(company, access)) {
+    // Volta do checkout: a página /gratis espera o pagamento ser confirmado (a conta
+    // ainda aparece como vitrine por alguns segundos) e depois leva pro painel.
+    if (new URLSearchParams(location.search).get('upgrade') === 'success' && location.pathname !== '/gratis') {
+      return <Navigate to={`/gratis${location.search}`} replace />
+    }
+    // Telas de teste/bloqueio/fim de cadastro não existem pra quem está em vitrine.
+    if (location.pathname === '/setup' || location.pathname.startsWith('/dashboard/trial') || location.pathname.startsWith('/dashboard/access-blocked')) {
+      return <Navigate to="/dashboard" replace />
+    }
     return <>{children}</>
   }
+  // Quem NÃO é vitrine (antiga, paga, liberada, bloqueada) não tem o que fazer
+  // em /gratis — volta pro painel.
   if (location.pathname === '/gratis') return <Navigate to={`/dashboard${location.search}`} replace />
   const exempt = location.pathname.startsWith('/dashboard/trial') || location.pathname.startsWith('/dashboard/settings') || location.pathname.startsWith('/dashboard/access-blocked')
   if (access && !access.granted && !exempt) {

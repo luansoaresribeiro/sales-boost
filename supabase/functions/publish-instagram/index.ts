@@ -4,6 +4,7 @@
  * graph.instagram.com (nao graph.facebook.com / Pagina).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -31,6 +32,8 @@ Deno.serve(async (req) => {
       .single()
 
     if (compErr || !company) return json({ error: 'Company not found' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
     if (!company.instagram_user_id || !company.instagram_access_token) {
       return json({ error: 'Instagram not connected. Go to Integrations to connect.' }, 400)
     }

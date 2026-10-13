@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -275,6 +276,7 @@ Deno.serve(async (req) => {
             .eq('status', 'open')
             .in('type', ['no_content', 'stale_draft'])
 
+          if (!(await hasPaidAccess(db, c.id as string))) continue // conta vitrine: cron não gasta IA
           const needsContent = (openOpps ?? []).some(o => o.type === 'no_content')
           const alreadyPilingUp = (openOpps ?? []).some(o => o.type === 'stale_draft')
           if (!needsContent || alreadyPilingUp) continue
@@ -307,6 +309,8 @@ Deno.serve(async (req) => {
 
     const { data: company } = await db.from('companies').select('id, ai_profile, plan').eq('user_id', user.id).maybeSingle()
     if (!company) return json({ error: 'Empresa não encontrada', generated: 0 }, 404)
+    const noPlan = await requirePaidAccess(db, company.id)
+    if (noPlan) return noPlan
 
     if (!company.ai_profile) {
       await buildProfile(db, authHeader, supabaseUrl)

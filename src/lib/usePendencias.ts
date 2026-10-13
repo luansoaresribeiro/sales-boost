@@ -5,6 +5,8 @@ import { useRealtime } from './useRealtime'
 import { useCompany } from '../contexts/CompanyContext'
 import { useLang } from '../contexts/LanguageContext'
 import { bi, fetchCatalogSchema, fetchOnboardingQuestions } from './verticalPlaybook'
+import { isShowcaseMode } from './setupGate'
+import { confirmProfile } from './profileConfirm'
 import { catalogMinPhotos, isCatalogItem, itemPhotoCount, unansweredQuestions } from './setupRules'
 
 // Pendências do dono — tudo que falta pro Sales Boost trabalhar melhor.
@@ -12,7 +14,7 @@ import { catalogMinPhotos, isCatalogItem, itemPhotoCount, unansweredQuestions } 
 // (rede, coluna ausente), ela é ignorada e as outras seguem — nunca mostramos
 // número falso. Montado UMA vez no DashboardLayout.
 
-export type PendenciaKind = 'aprovacoes' | 'instagram' | 'fotos' | 'ficha' | 'telegram'
+export type PendenciaKind = 'aprovacoes' | 'instagram' | 'fotos' | 'ficha' | 'perfil' | 'telegram'
 export type PendenciaTone = 'amber' | 'red' | 'orange' | 'muted'
 
 export interface Pendencia {
@@ -26,6 +28,8 @@ export interface Pendencia {
   destino: string // texto do "→ destino"
   to?: string // rota
   openAdd?: { tab: 'catalogo'; itemId: string } // abre o botão "+" na aba do catálogo
+  /** botões próprios no lugar do "toque na linha toda" (ex.: "Está tudo certo" / "Quero atualizar") */
+  actions?: { label: string; primary?: boolean; to?: string; run?: () => Promise<void> }[]
 }
 
 const PT = {
@@ -44,6 +48,9 @@ const PT = {
   questions: (n: number) => `${n} ${n === 1 ? 'pergunta' : 'perguntas'} do seu negócio sem resposta`,
   eg: 'Ex.: ', questionsHint: 'Quanto mais o Hermes souber, melhor ele decide.',
   settingsUnd: 'Configurações · Entendimento do negócio',
+  profileT: 'Suas informações ainda estão atualizadas?',
+  profileHint: 'Sua estratégia de marketing é baseada nas informações atuais do seu negócio. Quer mudar alguma coisa?',
+  profileOk: 'Está tudo certo', profileEdit: 'Quero atualizar',
 }
 const EN: typeof PT = {
   pending: (n: number) => `${n} ${n === 1 ? 'item' : 'items'} waiting for your approval`,
@@ -61,13 +68,17 @@ const EN: typeof PT = {
   questions: (n: number) => `${n} ${n === 1 ? 'question' : 'questions'} about your business unanswered`,
   eg: 'E.g.: ', questionsHint: 'The more Hermes knows, the better it decides.',
   settingsUnd: 'Settings · Business understanding',
+  profileT: 'Is your business information still up to date?',
+  profileHint: 'Your marketing strategy is based on the information currently available about your business. Anything you would change?',
+  profileOk: 'All good', profileEdit: 'Update',
 }
 
 const EXPIRY_WARN_DAYS = 7
 const DAY_MS = 86_400_000
+const PROFILE_REMIND_DAYS = 30
 
 export function usePendencias() {
-  const { company } = useCompany()
+  const { company, access } = useCompany()
   const { lang } = useLang()
   const location = useLocation()
   const companyId = company?.id ?? null
@@ -75,6 +86,7 @@ export function usePendencias() {
   const [items, setItems] = useState<Pendencia[]>([])
   const [approvalsCount, setApprovalsCount] = useState(0)
   const seq = useRef(0)
+  const computeRef = useRef<() => Promise<void>>(async () => {})
 
   const compute = useCallback(async () => {
     if (!companyId) { setItems([]); setApprovalsCount(0); return }
@@ -169,12 +181,45 @@ export function usePendencias() {
       }
     } catch { /* fonte ignorada */ }
 
+    // e) "Suas informações ainda estão atualizadas?" — só lembra (nunca refaz a
+    // estratégia sozinho, regra 7). Some pra conta bloqueada e pra conta em vitrine
+    // sem ficha preenchida. Coluna ausente (migration pendente) = sem o item.
+    try {
+      const blocked = access?.source === 'blocked'
+      if (!blocked) {
+        const { data: pc, error: pcErr } = await supabase.from('companies')
+          .select('profile_confirmed_at, created_at, business_description, ideal_customer, playbook_answers').eq('id', companyId).maybeSingle()
+        if (!pcErr && pc) {
+          const filled = !!(String(pc.business_description ?? '').trim() || String(pc.ideal_customer ?? '').trim()
+            || Object.values((pc.playbook_answers as Record<string, unknown> | null) ?? {}).some(v => (Array.isArray(v) ? v.length > 0 : !!String(v ?? '').trim())))
+          if (!(isShowcaseMode(company, access) && !filled)) {
+            const base = new Date((pc.profile_confirmed_at ?? pc.created_at ?? '') as string).getTime()
+            const { data: st } = await supabase.from('marketing_ai_strategies').select('created_at')
+              .eq('company_id', companyId).eq('kind', 'main').order('created_at', { ascending: false }).limit(1).maybeSingle()
+            const stratAt = st?.created_at ? new Date(st.created_at as string).getTime() : NaN
+            if (Number.isFinite(base) && (Date.now() - base > PROFILE_REMIND_DAYS * DAY_MS || (Number.isFinite(stratAt) && stratAt > base))) {
+              out.push({
+                id: 'perfil', kind: 'perfil', tone: 'orange', title: t.profileT, hint: t.profileHint, destino: t.settingsUnd,
+                actions: [
+                  { label: t.profileOk, run: async () => { await confirmProfile(companyId); await computeRef.current() } },
+                  { label: t.profileEdit, primary: true, to: '/dashboard/settings?section=entendimento' },
+                ],
+              })
+            }
+          }
+        }
+      }
+    } catch { /* fonte ignorada */ }
+
     if (run !== seq.current) return
-    const order: PendenciaKind[] = ['aprovacoes', 'instagram', 'fotos', 'ficha', 'telegram']
+    const order: PendenciaKind[] = ['aprovacoes', 'instagram', 'fotos', 'ficha', 'perfil', 'telegram']
     out.sort((x, y) => order.indexOf(x.kind) - order.indexOf(y.kind))
     setApprovalsCount(approvalsN)
     setItems(out)
-  }, [companyId, verticalKey, lang])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, verticalKey, lang, access?.source, company?.created_at, company?.stripe_subscription_id])
+
+  useEffect(() => { computeRef.current = compute }, [compute])
 
   // debounce ~500ms: vários eventos seguidos viram uma leitura só
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)

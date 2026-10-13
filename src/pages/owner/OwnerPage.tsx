@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { isShowcaseMode } from '../../lib/setupGate'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import BulkDeleteDialog, { MAX_BULK_DELETE } from './BulkDeleteDialog'
@@ -28,6 +29,7 @@ interface Company {
   trial_expires_at: string | null
   current_period_end: string | null
   access_source: 'paid' | 'trial' | 'manual' | 'blocked' | 'none' | null
+  manual_access?: boolean
   access_status_label: 'Active' | 'Trial' | 'Expired' | 'Suspended' | 'Cancelled' | null
   delete_lock?: string | null // motivo pra não poder excluir em lote (owner-companies)
 }
@@ -263,6 +265,9 @@ export default function OwnerPage() {
                     <div style={{ fontSize: '14px', fontWeight: 700, color: c.business_name ? 'white' : MUTED, fontStyle: c.business_name ? 'normal' : 'italic' }}>{c.business_name ?? c.user_email}</div>
                     {!c.has_company && (
                       <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '99px', background: 'rgba(255,255,255,0.06)', color: MUTED }}>sem perfil</span>
+                    )}
+                    {c.has_company && isShowcaseMode({ created_at: c.created_at, manual_access: c.manual_access }, { granted: c.access_source === 'paid' || c.access_source === 'manual' || c.access_source === 'trial', source: c.access_source ?? 'none', status_label: c.access_status_label ?? 'Expired' }) && (
+                      <span title="Conta nova que ainda não pagou: vê o painel em modo demonstração" style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '99px', background: 'rgba(255,109,41,0.12)', color: ORANGE, border: '1px solid rgba(255,109,41,0.3)' }}>Vitrine</span>
                     )}
                     {c.id && <span style={{ fontSize: '10px', color: 'rgba(255,109,41,0.4)' }}>→</span>}
                   </div>

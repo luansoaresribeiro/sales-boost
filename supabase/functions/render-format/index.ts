@@ -13,6 +13,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { Resvg, initWasm } from 'https://esm.sh/@resvg/resvg-wasm@2.6.2'
 import { encodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 
@@ -352,6 +353,12 @@ Deno.serve(async (req) => {
       const { data: comp } = await admin.from('companies').select('id').eq('user_id', user.id).maybeSingle()
       if (!comp) return json({ error: 'Empresa não encontrada.' }, 404)
       companyId = comp.id as string
+      // Desenhar o card (SVG→PNG) não custa nada e o kit grátis precisa disso pro
+      // texto do criativo; só a imagem de FUNDO gerada por IA gasta provedor pago.
+      if (body.generate_bg) {
+        const noPlan = await requirePaidAccess(admin, companyId)
+        if (noPlan) return noPlan
+      }
     }
 
     const template = String(body.template ?? 'photo')

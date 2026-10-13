@@ -13,6 +13,7 @@
  * cliente não precisa clicar em nada pra ideias novas aparecerem.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -237,6 +238,7 @@ Deno.serve(async (req) => {
       let generated = 0, skipped = 0
       for (const company of (companies ?? []) as (Company & { telegram_chat_id: number | null; notification_prefs: Record<string, boolean> | null })[]) {
         try {
+          if (!(await hasPaidAccess(admin, company.id))) { skipped++; continue } // conta vitrine: cron não gasta IA
           const { data: recent } = await admin.from('marketing_ai_ideas')
             .select('created_at').eq('company_id', company.id)
             .order('created_at', { ascending: false }).limit(1).maybeSingle()
@@ -269,6 +271,8 @@ Deno.serve(async (req) => {
     const { data: companyRow } = await admin.from('companies').select('id, business_name, business_type, city, goal, business_description, ideal_customer, language').eq('user_id', user.id).maybeSingle()
     const company = companyRow as Company | null
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
 
     const focus = ['organico', 'stories', 'campanhas'].includes(String(rawBody.focus_module)) ? String(rawBody.focus_module) : null
     const count = await generateForCompany(admin, anthropicKey, apifyToken, company, focus)

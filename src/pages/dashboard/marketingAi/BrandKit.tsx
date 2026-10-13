@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
+import { useShowcase } from '../../../contexts/ShowcaseContext'
 import { MUTED, BORDER, D, SUPABASE_URL, inputStyle } from './shared'
 
 const ORANGE = '#FF6D29'
@@ -87,6 +88,7 @@ function ColorInput({ label, value, onChange }: { label: string; value: string; 
 // fonts/logo_url planos p/ compatibilidade).
 export default function BrandKit({ companyId }: { companyId: string }) {
   const { session } = useAuth()
+  const { readOnly } = useShowcase() // vitrine: não dispara a sugestão sozinha ao abrir
   const { lang } = useLang()
   const X = TX[lang]
   const [kit, setKit] = useState<Kit>(EMPTY)
@@ -120,7 +122,7 @@ export default function BrandKit({ companyId }: { companyId: string }) {
   // esperar o cron semanal. Silencioso — só mostra se conseguiu ou não.
   useEffect(() => {
     load().then(async existed => {
-      if (existed || !session) return
+      if (existed || !session || readOnly) return
       setAgentBusy(true)
       try {
         const res = await fetch(`${SUPABASE_URL}/functions/v1/brand-kit-suggest`, {

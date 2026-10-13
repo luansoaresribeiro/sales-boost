@@ -28,6 +28,7 @@
  * decide "generate_content" — o resultado é sempre rascunho.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -662,6 +663,7 @@ Deno.serve(async (req) => {
       let processed = 0
       for (const company of (companies ?? []) as Company[]) {
         try {
+          if (!(await hasPaidAccess(admin, company.id))) continue // conta vitrine: cron não gasta IA/Apify
           company.businessContext = await loadBusinessContext(admin, company.id)
           await runPipelineForCompany(admin, company, apifyToken, anthropicKey, replicateKey, hermesUrl, hermesApiKey, disabled)
           processed++
@@ -680,6 +682,8 @@ Deno.serve(async (req) => {
 
     const { data: company } = await admin.from('companies').select('id, business_name, business_type, city, instagram_url, goal').eq('user_id', user.id).maybeSingle()
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
+    const noPlan = await requirePaidAccess(admin, company.id)
+    if (noPlan) return noPlan
     ;(company as Company).businessContext = await loadBusinessContext(admin, company.id)
 
     const action = body.action as string

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -49,6 +50,8 @@ Deno.serve(async (req) => {
     .maybeSingle()
 
   if (!company || company.user_id !== user.id) return json({ error: 'Unauthorized' }, 401)
+  const noPlan = await requirePaidAccess(admin, company.id)
+  if (noPlan) return noPlan
 
   if (msg.channel !== 'email') {
     return json({ error: `Canal '${msg.channel}' ainda não suportado para envio automático. Use 'email'.` }, 400)
