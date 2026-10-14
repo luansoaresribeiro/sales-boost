@@ -14,7 +14,7 @@ const RELEVANCE_META: Record<string, { color: string; label: string }> = {
 interface Idea { id: string; title: string; hook: string | null; angle: string | null; format: string | null; module: string | null; rationale: string | null; status: string; created_at: string }
 interface Trend { id: string; title: string; description: string | null; category: string | null; relevance: string | null; source: string | null; detected_at: string }
 
-function TrendCard({ t }: { t: Trend }) {
+function TrendCard({ t, onDeck, busy }: { t: Trend; onDeck?: () => void; busy?: boolean }) {
   const rel = RELEVANCE_META[t.relevance ?? 'medium'] ?? RELEVANCE_META.medium
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', padding: '12px 14px' }}>
@@ -24,11 +24,17 @@ function TrendCard({ t }: { t: Trend }) {
         <span style={{ fontSize: '9px', fontWeight: 700, color: rel.color, marginLeft: 'auto' }}>{rel.label} relevância</span>
       </div>
       {t.description && <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>{t.description}</div>}
+      {onDeck && (
+        <button onClick={onDeck} disabled={busy} style={{ marginTop: '8px', padding: '6px 10px', background: 'rgba(255,109,41,0.12)', border: '1px solid rgba(255,109,41,0.35)', borderRadius: '7px', color: ORANGE, fontWeight: 700, fontSize: '10.5px', cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
+          {busy ? 'Criando...' : '📑 Fazer carrossel desta trend'}
+        </button>
+      )}
     </div>
   )
 }
 
-// Creative Agent (exibido como "Ideias") — traz IDEIAS de post em cards, com
+// Creative Agent — desde 2026-10-14 é a aba "Ideias e trends" do Agente de
+// Dados (posts do zero, que não saem de um imóvel). Traz IDEIAS de post em cards, com
 // o Trend Agent acima (tendências reais do segmento, escaneadas por hashtag
 // via Apify) alimentando o raciocínio. Roda sozinho (cron semanal); o botão
 // aqui só força uma atualização na hora. Cada ideia vira post de teste
@@ -91,17 +97,20 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
     setGenerating(false)
   }
 
-  const generatePost = async (idea: Idea) => {
-    setBusyId(idea.id); setErr(''); setMsg('')
+  // deck = carrossel de slides (tipo apresentação, só texto da marca) — post
+  // do zero a partir da ideia/trend, sem foto do imóvel (pedido do dono 2026-10-14).
+  const generatePost = async (idea: Pick<Idea, 'id' | 'title' | 'hook' | 'angle' | 'format' | 'module'> & { fromTrend?: boolean }, deck = false) => {
+    const busy = `${idea.id}:${deck ? 'deck' : 'post'}`
+    setBusyId(busy); setErr(''); setMsg('')
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/creative-generate`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: idea.module ?? 'organico', idea_id: idea.id, idea: { title: idea.title, hook: idea.hook, angle: idea.angle, format: idea.format } }),
+        body: JSON.stringify({ kind: idea.module ?? 'organico', ...(idea.fromTrend ? {} : { idea_id: idea.id }), idea: { title: idea.title, hook: idea.hook, angle: idea.angle, format: deck ? 'carrossel' : idea.format }, deck }),
       })
       const r = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(r.error ?? 'Erro ao gerar post')
-      track('content_generated', `Gerou post de uma ideia (${MOD_LABEL[idea.module ?? 'organico'] ?? idea.module})`, { from_idea: idea.id })
-      setMsg(`Post gerado! Está na aba Testes (Biblioteca), esperando sua nota e aprovação.`)
+      track('content_generated', `Gerou ${deck ? 'carrossel de slides' : 'post'} de uma ${idea.fromTrend ? 'trend' : 'ideia'}`, { from_idea: idea.id, deck })
+      setMsg(`${deck ? 'Carrossel' : 'Post'} criado! Está em "Peças avulsas", embaixo do Calendário da semana (Agente de Conteúdo) — clique nele pra ver, aprovar ou agendar.`)
       await load()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Erro ao gerar post')
@@ -120,7 +129,7 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
   return (
     <div>
       <div style={{ padding: '12px 16px', background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.2)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '20px' }}>
-        💡 <strong>Ideias.</strong> Toda semana o agente olha sua marca, os insights reais e o que está viralizando no seu segmento (Trend Agent, abaixo) e traz ideias novas sozinho — você não precisa pedir. Gostou de uma? <strong>Gera o post</strong> com um clique, que cai na aba Testes pra você aprovar. Nada é publicado sozinho.
+        💡 <strong>Ideias e trends.</strong> Nem todo post sai de um imóvel: toda semana o agente olha sua marca e o que está bombando no seu segmento (trends, abaixo) e traz ideias novas sozinho. Gostou de uma? Crie um <strong>post</strong> ou um <strong>carrossel de slides</strong> (tipo apresentação, com a sua marca) com um clique — ele aparece embaixo do Calendário da semana pra você aprovar. Nada é publicado sozinho.
       </div>
 
       {/* Trend Agent — tendências reais do segmento */}
@@ -135,7 +144,7 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
           <div style={{ padding: '18px', textAlign: 'center', color: MUTED, fontSize: '12px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '11px' }}>Nenhuma tendência ainda.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
-            {shownTrends.map(t => <TrendCard key={t.id} t={t} />)}
+            {shownTrends.map(t => <TrendCard key={t.id} t={t} busy={busyId === `${t.id}:deck`} onDeck={readOnly ? undefined : () => generatePost({ id: t.id, title: t.title, hook: null, angle: t.description, format: 'carrossel', module: 'organico', fromTrend: true }, true)} />)}
           </div>
         )}
       </section>
@@ -170,8 +179,11 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
               {i.angle && <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>{i.angle}</div>}
               {i.rationale && <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, fontStyle: 'italic' }}>{i.rationale}</div>}
               <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '6px' }}>
-                <button onClick={() => generatePost(i)} disabled={busyId === i.id || i.status === 'used'} style={{ flex: 1, padding: '7px', background: i.status === 'used' ? 'rgba(255,255,255,0.06)' : ORANGE, color: i.status === 'used' ? MUTED : '#000', fontWeight: 700, fontSize: '11px', borderRadius: '8px', border: 'none', cursor: busyId === i.id || i.status === 'used' ? 'default' : 'pointer', fontFamily: D }}>
-                  {busyId === i.id ? 'Gerando...' : i.status === 'used' ? 'Já gerado' : '✨ Gerar post'}
+                <button onClick={() => generatePost(i)} disabled={!!busyId || i.status === 'used'} style={{ flex: 1, padding: '7px', background: i.status === 'used' ? 'rgba(255,255,255,0.06)' : ORANGE, color: i.status === 'used' ? MUTED : '#000', fontWeight: 700, fontSize: '11px', borderRadius: '8px', border: 'none', cursor: busyId || i.status === 'used' ? 'default' : 'pointer', fontFamily: D }}>
+                  {busyId === `${i.id}:post` ? 'Gerando...' : i.status === 'used' ? 'Já gerado' : '✨ Post'}
+                </button>
+                <button onClick={() => generatePost(i, true)} disabled={!!busyId || i.status === 'used'} title="Carrossel de slides (tipo apresentação)" style={{ flex: 1, padding: '7px', background: 'rgba(255,109,41,0.12)', color: i.status === 'used' ? MUTED : ORANGE, fontWeight: 700, fontSize: '11px', borderRadius: '8px', border: '1px solid rgba(255,109,41,0.35)', cursor: busyId || i.status === 'used' ? 'default' : 'pointer', fontFamily: D }}>
+                  {busyId === `${i.id}:deck` ? 'Gerando...' : '📑 Carrossel'}
                 </button>
                 <button onClick={() => dismiss(i.id)} title="Dispensar" style={{ padding: '7px 10px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '11px', cursor: 'pointer', fontFamily: D }}>✕</button>
               </div>

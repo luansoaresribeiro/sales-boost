@@ -28,13 +28,13 @@ interface ModuleDef { section: string; title: string; desc: string; icon: string
 // cada uma dessas seções com o sinal real daquele agente.
 const MODULES = {
   pt: {
-    data: { section: 'dados', title: 'Agente de Dados', desc: 'O seu produto: as fotos reais de cada item do catálogo — é delas que saem os carrosséis e vídeos. (Avatar em breve.)', icon: '📊' },
+    data: { section: 'dados', title: 'Agente de Dados', desc: 'O seu produto: as fotos reais de cada item do catálogo (é delas que saem os carrosséis e vídeos) — e Ideias e trends, pra posts do zero, como um carrossel de slides.', icon: '📊' },
     strategy: { section: 'estrategia', title: 'Agente de Estratégia', desc: 'Lê o negócio e o dado real, define objetivo, metas, orçamento e prazo — e direciona o Agente de Conteúdo.', icon: '🧭' },
     content: { section: 'content', title: 'Agente de Conteúdo e Campanha', desc: 'Conteúdo: calendário da semana (feed e stories) vindo da estratégia — clique numa peça pra ver a nota e aprovar — e padrão visual. Campanha (em breve): como os conteúdos estão indo, pixel e a campanha ideal.', icon: '✍️' },
     conversion: { section: 'conversao', title: 'Agente de Conversão', desc: 'Funil de vendas, atendimento e engagement (comentários/DMs) — transforma quem chegou até você em cliente.', icon: '🔀' },
   },
   en: {
-    data: { section: 'dados', title: 'Data Agent', desc: 'Your product: real photos of each catalog item — they become the carousels and videos. (Avatar coming soon.)', icon: '📊' },
+    data: { section: 'dados', title: 'Data Agent', desc: 'Your product: real photos of each catalog item (they become the carousels and videos) — plus Ideas & trends, for posts from scratch such as a slide carousel.', icon: '📊' },
     strategy: { section: 'estrategia', title: 'Strategy Agent', desc: 'Reads the business and the real data, sets the goal, targets, budget and timeline — and guides the Content Agent.', icon: '🧭' },
     content: { section: 'content', title: 'Content & Campaign Agent', desc: 'Content: weekly calendar (feed and stories) from the strategy — click a piece to see its score and approve it — and visual pattern. Campaign (coming soon): how content is doing, pixel and the ideal campaign.', icon: '✍️' },
     conversion: { section: 'conversao', title: 'Conversion Agent', desc: 'Sales pipeline, customer service and engagement (comments/DMs) — turns the people who reached you into customers.', icon: '🔀' },

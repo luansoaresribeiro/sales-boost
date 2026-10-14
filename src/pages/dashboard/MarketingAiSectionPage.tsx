@@ -22,6 +22,7 @@ import BusinessContextTab from './marketingAi/BusinessContextTab'
 import StrategySection from './marketingAi/StrategySection'
 import FeedbackWidget from './marketingAi/FeedbackWidget'
 import CatalogItems from './marketingAi/CatalogItems'
+import CreativeAgent from './marketingAi/CreativeAgent'
 import ProductPhotos from './marketingAi/ProductPhotos'
 import { AvatarSoon } from './BusinessContextButton'
 import { fetchCatalogSchema, type CatalogSchema } from '../../lib/verticalPlaybook'
@@ -50,7 +51,7 @@ const TX = {
     notActiveDesc: 'A ativação é feita pela equipe Sales Boost, configurando a marca, o público e os concorrentes. Fale com a gente pra ativar.',
     back: '← Voltar', followers: 'Seguidores', pendingApproval: 'Conteúdo esperando aprovação', newRecs: 'Recomendações novas', competitors: 'Concorrentes monitorados',
     openInsights: 'Insights em aberto', noInsights: 'Nenhum insight aberto agora.', recent: 'Atividade recente', noActivity: 'Nenhuma atividade ainda.',
-    products: 'Produtos', avatar: 'Meu avatar (em breve)', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
+    products: 'Produtos', avatar: 'Meu avatar (em breve)', ideas: 'Ideias e trends', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
     funnel: 'Funil de Vendas', service: 'Atendimento', engagement: 'Engagement',
   },
   en: {
@@ -58,7 +59,7 @@ const TX = {
     notActiveDesc: 'Activation is done by the Sales Boost team, setting up the brand, audience and competitors. Contact us to activate it.',
     back: '← Back', followers: 'Followers', pendingApproval: 'Content awaiting approval', newRecs: 'New recommendations', competitors: 'Competitors monitored',
     openInsights: 'Open insights', noInsights: 'No open insights right now.', recent: 'Recent activity', noActivity: 'No activity yet.',
-    products: 'Products', avatar: 'My avatar (coming soon)', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
+    products: 'Products', avatar: 'My avatar (coming soon)', ideas: 'Ideas & trends', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
     funnel: 'Sales Pipeline', service: 'Customer Service', engagement: 'Engagement',
   },
 } as const
@@ -263,9 +264,10 @@ function SubTabButton({ active, onClick, icon, label }: { active: boolean; onCli
 }
 const subTabsRow: React.CSSProperties = { display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '20px' }
 
-// Agente de Dados — desde 2026-10-14 é só o PRODUTO: as fotos reais dos
-// itens (Catálogo, nome vindo da ficha do setor — ex.: Imóveis) e o Avatar
-// ("em breve"). O botão "+" do dashboard cai aqui (mesma tela, sem modal
+// Agente de Dados — desde 2026-10-14: o PRODUTO (fotos reais dos itens —
+// Catálogo, nome vindo da ficha do setor, ex.: Imóveis — com o Avatar "em
+// breve" dentro dele) e "Ideias e trends" (posts do zero que não saem de um
+// item: post ou carrossel de slides a partir de uma ideia/trend). O botão "+" do dashboard cai aqui (mesma tela, sem modal
 // duplicado); ?item=<id> destaca o item vindo do sino de pendências.
 // Saíram da tela (decisão do dono): Inteligência de Mercado, Estilos e
 // Visuais e Insights — a estratégia e o Higgsfield já se alimentam disso por
@@ -276,10 +278,10 @@ function DadosSection({ company }: { company: CompanyData }) {
   const [params, setParams] = useSearchParams()
   const focusItemId = params.get('item')
   const verticalKey = company.vertical_key ?? 'generico'
-  const [pickedSub, setPickedSub] = useState<'catalogo' | 'avatar'>('catalogo')
+  const [pickedSub, setPickedSub] = useState<'catalogo' | 'ideias'>('catalogo')
   // Vindo do sino (?item=) é sempre o Catálogo; trocar de sub-aba limpa o item.
   const sub = focusItemId ? 'catalogo' : pickedSub
-  const setSub = (k: 'catalogo' | 'avatar') => {
+  const setSub = (k: 'catalogo' | 'ideias') => {
     setPickedSub(k)
     if (focusItemId) { const next = new URLSearchParams(params); next.delete('item'); setParams(next, { replace: true }) }
   }
@@ -294,14 +296,19 @@ function DadosSection({ company }: { company: CompanyData }) {
     <div>
       <div style={subTabsRow}>
         <SubTabButton active={sub === 'catalogo'} onClick={() => setSub('catalogo')} icon="📸" label={catalogLabel} />
-        <SubTabButton active={sub === 'avatar'} onClick={() => setSub('avatar')} icon="🙂" label={t.avatar} />
+        <SubTabButton active={sub === 'ideias'} onClick={() => setSub('ideias')} icon="💡" label={t.ideas} />
       </div>
-      {sub === 'avatar' ? <AvatarSoon companyId={company.id} verticalKey={verticalKey} />
+      {sub === 'ideias' ? <CreativeAgent companyId={company.id} />
         : schema === undefined ? null
         : schema ? (
           <>
             <div style={{ fontSize: '12px', color: MUTED, marginBottom: '14px', maxWidth: '760px', lineHeight: 1.55 }}>{t.catalogSub}</div>
             <CatalogItems companyId={company.id} schema={schema} verticalKey={verticalKey} focusItemId={focusItemId} />
+            {/* Avatar mora dentro dos itens (pedido do dono 2026-10-14). */}
+            <div style={{ marginTop: '22px', maxWidth: '760px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>{t.avatar}</div>
+              <AvatarSoon companyId={company.id} verticalKey={verticalKey} />
+            </div>
           </>
         ) : <ProductPhotos companyId={company.id} />}
     </div>
