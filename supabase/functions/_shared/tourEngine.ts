@@ -11,11 +11,13 @@ import { buildHeader, clipMeta, streamBytes, type ClipMeta } from './mp4stream.t
 import { tusCreate, tusOffset, tusSend } from './tusUpload.ts'
 
 export const HF_BASE = 'https://api.higgsfield.ai'
-// Kling 3.0 Standard (escolha do dono 2026-10-08). US$ 0,54 por 5 s medido no painel.
+// Kling 3.0 Standard (escolha do dono 2026-10-08). Era US$ 0,54 por 5 s no
+// painel em 2026-10-08; o extrato da Higgsfield de 10–11/10 mostra US$ 0,42 por
+// trecho de 5 s (conferido com os kits gerados nesses dias).
 export const HF_ENDPOINT = Deno.env.get('HF_VIDEO_ENDPOINT') ?? '/kling-video/v3.0/std/image-to-video'
 export const WALK_SECONDS = Number(Deno.env.get('HF_WALK_DURATION') ?? '6') || 6
-// Estimativa por segundo (0,54 / 5 s) — usada pro teto mensal antes de gerar.
-export const COST_PER_SECOND = Number(Deno.env.get('HF_COST_PER_SECOND') ?? '0.108') || 0.108
+// Estimativa por segundo (0,42 / 5 s, extrato de 2026-10-11) — usada pro teto mensal antes de gerar.
+export const COST_PER_SECOND = Number(Deno.env.get('HF_COST_PER_SECOND') ?? '0.084') || 0.084
 export const MAX_ATTEMPTS = 2
 export const VIDEO_BUCKET = 'videos'
 

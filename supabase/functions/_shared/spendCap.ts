@@ -9,21 +9,22 @@
 // Texto da IA (Claude) NÃO entra: já tem limite diário próprio (hermes-proxy).
 // O kit grátis também não (é de quem ainda não paga; tem teto global próprio).
 //
-// Preço da edição de foto: a Higgsfield não publica o valor do Qwen Edit numa
-// página que dê pra ler daqui — vem do secret HF_EDIT_COST_USD, medido no
-// painel deles. Sem ele, as edições são CONTADAS (aparecem no relatório), mas
-// valem US$ 0 na soma — nunca inventamos o número (regra 5).
+// Preço da edição de foto: US$ 0,08 por edição, medido no extrato da
+// Higgsfield (2026-10-14: o teste de "mobiliar" do dia saiu US$ 0,08; os
+// tratamentos dos kits de 11/10, também). Medido na resolução 2k; o Vault usa
+// 1k (no máximo o mesmo preço — conta pelo valor maior, a favor do teto). O
+// secret HF_EDIT_COST_USD troca o valor se a Higgsfield mudar o preço.
 // deno-lint-ignore no-explicit-any
 type Any = any
 
 export const CLIENT_MONTHLY_CAP_USD = Number(Deno.env.get('CLIENT_MONTHLY_CAP_USD') ?? Deno.env.get('VIDEO_MONTHLY_CAP_USD') ?? '40') || 40
-const editEnv = Number(Deno.env.get('HF_EDIT_COST_USD') ?? '')
-export const HF_EDIT_COST_USD: number | null = Number.isFinite(editEnv) && editEnv > 0 ? editEnv : null
+const editEnv = Number(Deno.env.get('HF_EDIT_COST_USD') ?? '0.08')
+export const HF_EDIT_COST_USD: number = Number.isFinite(editEnv) && editEnv > 0 ? editEnv : 0.08
 
 export interface MonthSpend {
   total_usd: number; cap_usd: number
   videos_usd: number; images_usd: number
-  edits: number; edits_usd: number; edit_price_known: boolean
+  edits: number; edits_usd: number
 }
 
 const monthStart = () => new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString()
@@ -43,9 +44,9 @@ export async function monthSpend(admin: Any, companyId: string): Promise<MonthSp
   const images = sum(rows.filter(r => r.task_key === 'image_generation'))
   const staged = ((staging ?? []) as { attempts: number | null }[]).reduce((s, r) => s + Math.max(1, Number(r.attempts || 1)), 0)
   const edits = staged + rows.filter(r => r.task_key === 'photo_retouch').length
-  const editsUsd = edits * (HF_EDIT_COST_USD ?? 0)
+  const editsUsd = edits * HF_EDIT_COST_USD
   const total = videos + images + editsUsd
-  return { total_usd: total, cap_usd: CLIENT_MONTHLY_CAP_USD, videos_usd: videos, images_usd: images, edits, edits_usd: editsUsd, edit_price_known: HF_EDIT_COST_USD !== null }
+  return { total_usd: total, cap_usd: CLIENT_MONTHLY_CAP_USD, videos_usd: videos, images_usd: images, edits, edits_usd: editsUsd }
 }
 
 // Cabe mais um gasto de `estimate` dólares neste mês?

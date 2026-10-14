@@ -646,7 +646,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   let realIdx = 0
   const nextReal = () => (realPool.length ? realPool[realIdx++ % realPool.length] : null)
   // Teto único do mês estourado: foto real SEM tratamento (grátis), nunca trava o post.
-  const retouchOk = realPool.length ? (await fitsCap(admin, company.id, HF_EDIT_COST_USD ?? 0)).ok : false
+  const retouchOk = realPool.length ? (await fitsCap(admin, company.id, HF_EDIT_COST_USD)).ok : false
   const pic = async (ev: string, hint?: string): Promise<string | null> => {
     const real = nextReal()
     if (real) return (retouchOk ? await retouchRealPhoto(admin, company.id, real) : null) ?? real

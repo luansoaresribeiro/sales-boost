@@ -1142,3 +1142,18 @@ grátis de 30 s, acima — mantidos como histórico):
     `HF_EDIT_COST_USD` não for configurado, as edições são **contadas** mas
     valem US$ 0 na soma — nunca inventamos o número (regra 5). Medir no
     painel da Higgsfield durante os testes finais e configurar o secret.
+- **Preços reais medidos no extrato da Higgsfield** — 2026-10-14 (print do
+  dono, conferido com o que o sistema gerou em cada dia):
+  - **Edição de foto (Qwen Image 3 Edit, 2k): US$ 0,08.** O teste de
+    "mobiliar" de 14/10 saiu US$ 0,08, e o tratamento de cada kit de 11/10
+    também. Vira o padrão de `HF_EDIT_COST_USD` no código e fecha a
+    divergência do item anterior (as edições agora contam no teto). O Vault
+    usa 1k — conta pelo mesmo valor, a favor do teto.
+  - **Vídeo de 5 s (Kling 3.0 Std): US$ 0,42**, não os US$ 0,54 anotados em
+    2026-10-08 (os 2 vídeos de cada kit de 11/10 saíram US$ 0,42 cada).
+    `HF_COST_PER_SECOND` passou de 0,108 pra 0,084 no código. Antes o teto
+    contava cada vídeo ~29% mais caro do que é.
+  - Kit grátis antigo (2 vídeos + 1 tratamento) custava US$ 0,92; o novo
+    (1 foto → 3 artes) custa **US$ 0,08**.
+  - Com US$ 40/mês, um cliente cabe, por exemplo, ~95 vídeos de 5 s, ou
+    500 edições de foto, ou uma mistura.

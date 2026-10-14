@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString()
       const { count } = await admin.from('virtual_staging').select('id', { count: 'exact', head: true }).eq('company_id', company.id).gte('created_at', monthStart)
       if ((count ?? 0) >= MONTHLY_CAP) return json({ error: `Você já usou as ${MONTHLY_CAP} fotos mobiliadas deste mês.`, code: 'cap' }, 429)
-      const spend = await fitsCap(admin, company.id, HF_EDIT_COST_USD ?? 0)
+      const spend = await fitsCap(admin, company.id, HF_EDIT_COST_USD)
       if (!spend.ok) return json({ error: capMessage(spend.spend.cap_usd), code: 'cap' }, 429)
 
       // Grava ANTES de enviar (e reconta): dois cliques ao mesmo tempo não
