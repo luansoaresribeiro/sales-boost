@@ -72,7 +72,10 @@ export async function submitClip(headers: Record<string, string>, prompt: string
 async function clipStatus(headers: Record<string, string>, jobRef: string): Promise<{ status: string; url: string | null } | null> {
   const res = await fetch(`${HF_BASE}/requests/${encodeURIComponent(jobRef)}/status`, { headers, signal: AbortSignal.timeout(20_000) })
   if (!res.ok) { console.log('[tour] status http', res.status); return null }
-  const d = await res.json() as { status?: string; video?: { url?: string } }
+  const d = await res.json() as { status?: string; video?: { url?: string }; error?: unknown; detail?: unknown }
+  // Falha: registra o motivo que a Higgsfield deu (saldo, moderação, foto…) —
+  // sem isso só sobrava "passagem falhou 2x" (teste de 2026-10-14).
+  if (['failed', 'nsfw', 'canceled'].includes(String(d.status))) console.log('[tour] higgsfield recusou', jobRef, String(d.status), JSON.stringify(d.error ?? d.detail ?? d).slice(0, 400))
   return { status: String(d.status ?? 'queued'), url: d.video?.url ?? null }
 }
 

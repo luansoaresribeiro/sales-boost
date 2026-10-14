@@ -126,7 +126,7 @@ function pickSlot(dates: string[], occ: Occupancy, pillar: string, pillarWeightP
 async function writeCopy(anthropicKey: string, briefing: string): Promise<{ caption: string; hashtags: string; cta: string }> {
   const prompt = `Você é o Content Agent do Sales Boost, especializado em corretores de imóveis no Rio de Janeiro.
 ${briefing}
-Regras inegociáveis: nunca invente preço, m², condomínio ou qualquer dado de mercado além do que foi passado; nunca prometa valorização; tom próximo e carioca, direto nos números reais, sem "oportunidade imperdível".
+Regras inegociáveis: nunca invente preço, m², condomínio ou qualquer dado de mercado além do que foi passado; nunca invente cliente, depoimento, venda fechada nem distância; a legenda é SEMPRE pro público do Instagram — nunca uma mensagem pro corretor pedindo dado (se faltar informação, escreva sem ela); nunca prometa valorização; tom próximo e carioca, direto nos números reais, sem "oportunidade imperdível".
 Responda SÓ em JSON: {"caption":"...","hashtags":"...","cta":"..."}`
   const obj = parseObj(await callClaude(anthropicKey, prompt, 700))
   return { caption: String(obj.caption ?? '').trim(), hashtags: String(obj.hashtags ?? '').trim(), cta: String(obj.cta ?? '').trim() }

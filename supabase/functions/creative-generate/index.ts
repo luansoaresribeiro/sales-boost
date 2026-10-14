@@ -103,6 +103,11 @@ interface Know { kind: string; title: string; content: string; module?: string }
 // configurado (marketing_ai_config fica vazio até o dono/equipe preencher).
 // Sem isso, o agente cai no nome+tipo genérico e inventa um posicionamento
 // que não bate com o negócio de verdade.
+// Regra 5 (nunca inventar) vale pra história também: o teste de 2026-10-14
+// gerou um "depoimento" de cliente que nunca existiu ("Ele me mandou uma
+// mensagem…", "o negócio foi fechado"). Vale pra qualquer setor.
+const HONESTY_RULE = 'REGRA INEGOCIÁVEL: nunca invente cliente, depoimento, conversa, caso, venda/negócio fechado, número, distância ("a 10 minutos de…") ou fato do bairro que não esteja nos dados acima. Pode falar de forma geral ("quem vem de fora costuma…"), nunca como se tivesse acontecido.'
+
 function preamble(config: Config, company: Company, playbookBlock = ''): string {
   const name = config.agent_name?.trim() || 'Agente de Marketing'
   return `Você é ${name}, o agente de marketing de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
@@ -111,7 +116,8 @@ Voz da marca: ${config.brand_voice ?? 'não definida'}. Tom: ${config.tone ?? 'n
 Público-alvo: ${config.target_audience ?? company.ideal_customer ?? 'não definido'}.
 Pilares: ${config.content_pillars.join(', ') || 'não definidos'}.
 Objetivos: ${config.marketing_goals ?? config.business_objectives ?? 'crescer e engajar'}.
-${company.language === 'en' ? 'IMPORTANTE: escreva TODO o conteúdo (legenda, hook, CTA, hashtags) em inglês — este negócio atende clientes que falam inglês.' : ''}${playbookBlock}`
+${company.language === 'en' ? 'IMPORTANTE: escreva TODO o conteúdo (legenda, hook, CTA, hashtags) em inglês — este negócio atende clientes que falam inglês.' : ''}
+${HONESTY_RULE}${playbookBlock}`
 }
 
 function defaultConfig(company: Company): Config {

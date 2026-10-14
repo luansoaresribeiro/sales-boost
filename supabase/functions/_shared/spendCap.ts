@@ -61,6 +61,7 @@ export async function logPhotoRetouch(admin: Any, companyId: string): Promise<vo
     await admin.from('agent_performance').insert({
       company_id: companyId, agent_role: 'imagem', task_key: 'photo_retouch',
       task_description: 'Tratamento de foto real (Higgsfield)', success: true, cost_usd: HF_EDIT_COST_USD,
+      latency_ms: 0, // coluna obrigatória no banco (sem ela o registro falhava calado — achado no teste de 2026-10-14)
     })
   } catch { /* nunca derruba a geração por causa do registro de custo */ }
 }
