@@ -188,22 +188,24 @@ await step('Calendário da semana pela estratégia', async () => {
   // Espera as peças E as notas (a análise roda depois de criar).
   for (let i = 0; i < 36; i++) {
     await sleep(10_000)
-    rows = ((await rest(`marketing_ai_test_content?company_id=eq.${companyId}&planned_for=gte.${days[0]}&planned_for=lte.${days.at(-1)}&select=id,image_url,caption,created_at,item_id,recipe,status,quality_score`)).data ?? [])
+    rows = ((await rest(`marketing_ai_test_content?company_id=eq.${companyId}&planned_for=gte.${days[0]}&planned_for=lte.${days.at(-1)}&select=id,image_url,caption,created_at,item_id,recipe,provider,status,quality_score`)).data ?? [])
       .filter(x => x.created_at >= started)
     if (rows.length >= expected && rows.every(x => x.quality_score != null)) break
   }
   created.content.push(...rows.map(x => x.id))
   const banned = rows.flatMap(x => bannedIn(x.caption))
-  const notReal = rows.filter(x => x.item_id && !['edit', 'free'].includes(imageKind(x.image_url))).length
+  // Só as receitas que mostram o imóvel (provider catalogo_real) têm de usar foto real;
+  // as de bairro usam clima genérico do bairro de propósito (nunca o imóvel).
+  const notReal = rows.filter(x => x.provider === 'catalogo_real' && imageKind(x.image_url) !== 'free' && imageKind(x.image_url) !== 'edit').length
   const ready = rows.filter(x => x.status === 'vault').length
   const review = rows.filter(x => x.status === 'draft' && x.quality_score != null)
   const cost = rows.reduce((s, x) => s + ({ edit: PRICE.edit, image: PRICE.image }[imageKind(x.image_url)] ?? 0), 0)
   const ok = rows.length >= expected && !banned.length && !notReal
   return {
     ok,
-    detail: `${rows.length} de ${expected} peças pedidas pela estratégia (${cleared} antigas não aprovadas limpas) · ${ready} prontas pra aprovar (nota ≥90), ${review.length} em revisão${review.length ? ` (${review.map(x => `${x.recipe ?? 'post'} ${x.quality_score}`).join(', ')})` : ''}${notReal ? ` · ${notReal} peça(s) de imóvel SEM foto real` : ''}${banned.length ? ` · TEXTO PROIBIDO: ${[...new Set(banned)].join(', ')}` : ''}`,
+    detail: `${rows.length} de ${expected} peças pedidas pela estratégia (${cleared} antigas não aprovadas limpas) · ${ready} prontas pra aprovar (passaram na análise), ${review.length} em revisão${review.length ? ` (${review.map(x => `${x.recipe ?? 'post'} ${x.quality_score}`).join(', ')})` : ''}${notReal ? ` · ${notReal} peça(s) de imóvel SEM foto real` : ''}${banned.length ? ` · TEXTO PROIBIDO: ${[...new Set(banned)].join(', ')}` : ''}`,
     cost,
-    extra: rows.map(x => ({ id: x.id, recipe: x.recipe, status: x.status, score: x.quality_score })),
+    extra: rows.map(x => ({ id: x.id, recipe: x.recipe, provider: x.provider, status: x.status, score: x.quality_score })),
   }
 })
 
