@@ -355,3 +355,28 @@ de pronto antes de começar.
    - *Falta:* "post que foi bem" — depende de comparar métricas reais do
      Instagram com a média da própria conta (nunca número inventado);
      entra quando o aprendizado ([LEARNING.md](LEARNING.md)) tiver essa média pronta.
+
+## Agente de Dados ampliado (pedido do dono 2026-10-14) — em etapas
+
+Cada etapa vira um PR próprio, com plano aprovado antes. Tudo que é de setor
+(categorias, perguntas, temas) vive na ficha (`vertical_playbooks`, regra 6).
+Os posts que nascem daqui seguem a regra 1: só saem com aprovação do dono.
+
+1. **Lugares e Programas Próximos.** Busca uma vez por imóvel no
+   OpenStreetMap (grátis), guarda o resultado; distância calculada em linha
+   reta a partir das coordenadas (nunca inventada, regra 5). Vira assunto de
+   post ("o que tem a 5 min deste imóvel").
+2. **Dicas e FAQ** (jurídico, financiamento, documentação). Aprovação pela
+   IA, como decidido em [DECISIONS.md](DECISIONS.md) (2026-10-14):
+   - dica geral, sem número nem regra → aprovada sozinha;
+   - dica com número, prazo, taxa ou regra → a IA confere na web (Tavily)
+     só em fonte oficial (gov.br, Receita, Banco Central, Caixa, cartórios,
+     leis). Confirmou ou corrigiu → selo "✓ Conferida pela IA em [data],
+     fonte: [link]". Não achou fonte oficial → fica "precisa revisar" e só
+     entra com aprovação de uma pessoa;
+   - reconfere a cada 60 dias (lei e taxa mudam);
+   - critério de pronto: nenhuma dica com número aparece em post sem selo
+     ou aprovação humana; o selo mostra data e link de verdade.
+3. **Prova Social + Histórias de sucesso.** Entrada manual (depoimento,
+   imóvel vendido) até o app da Meta ser aprovado; cada item com status de
+   autorização do cliente antes de virar post.

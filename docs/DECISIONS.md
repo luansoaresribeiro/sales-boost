@@ -1236,3 +1236,15 @@ grátis de 30 s, acima — mantidos como histórico):
   - Excluir imóvel: botão "🗑 Remover" visível no cartão e "Excluir imóvel"
     na janela de edição, sempre com confirmação. Posts já criados continuam
     no calendário.
+- **Dicas jurídicas/financeiras: a IA aprova com fonte oficial** —
+  2026-10-14 (pergunta do dono: "sobre as dicas jurídicas, tem como a IA
+  aprovar por a gente?").
+  - Dica geral (sem número nem regra) é aprovada sozinha.
+  - Dica com número, prazo, taxa ou regra: a IA busca na web (Tavily, chave
+    já em `_app_config`) e só aceita fonte oficial. Confirmou ou corrigiu →
+    selo "✓ Conferida pela IA em [data], fonte: [link]". Sem fonte oficial →
+    "precisa revisar", e só uma pessoa libera.
+  - Reconferência a cada 60 dias.
+  - Isso aprova a **dica** como fato; o **post** feito com ela continua
+    precisando da aprovação do dono (regra 1). Implementação na etapa 2 do
+    Agente de Dados ([ROADMAP.md](ROADMAP.md)).
