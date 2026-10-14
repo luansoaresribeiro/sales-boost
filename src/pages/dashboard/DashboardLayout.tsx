@@ -12,6 +12,7 @@ import PendenciasBell from './PendenciasBell'
 import { ShowcaseProvider, useShowcase } from '../../contexts/ShowcaseContext'
 import { ShowcaseBanner, KitPromoModal } from './ShowcaseUi'
 import { usePendencias } from '../../lib/usePendencias'
+import { useSetupStatus } from '../../lib/useSetupStatus'
 import { supabase } from '../../lib/supabase'
 import logo from '../../assets/logo.png'
 
@@ -198,29 +199,35 @@ function SidebarInner({ isMobile, open, onNavigate, onClose, approvalsCount }: {
 
 // O LanguageProvider fica na raiz (main.tsx), pra login, cadastro e /setup
 // também seguirem o idioma escolhido.
-// Cliente não precisa configurar nada (pedido do dono, 2026-10-14): assim que
-// a conta tem plano (não é vitrine), a 1ª estratégia nasce sozinha em
-// QUALQUER tela do painel — antes só nascia ao abrir a aba Estratégia. O
-// strategy-generate já não duplica (devolve a que estiver 'generating'), e
-// aqui só dispara se a empresa não tem estratégia principal nenhuma.
+// Cliente não precisa clicar em nada (pedido do dono, 2026-10-14): com plano
+// (não é vitrine) E os requisitos principais preenchidos — os mesmos do sino
+// de pendências (dados, perguntas da ficha, catálogo com fotos; Instagram se a
+// ficha pedir) — a 1ª estratégia nasce sozinha em QUALQUER tela do painel.
+// Pagar não basta (decisão do dono 2026-10-14: "a estratégia, mesmo após o
+// pagamento, é criada somente após os requisitos principais serem
+// preenchidos"); o strategy-generate recusa do mesmo jeito (setupReady.ts). O
+// status é "ao vivo": assim que o dono completa o último requisito, dispara.
 function useFirstStrategy(companyId: string | null, readOnly: boolean) {
   const { session } = useAuth()
   const token = session?.access_token ?? ''
+  const setup = useSetupStatus(companyId, { key: 'setup-first' })
+  const ready = !setup.loading && !setup.error && setup.readyForStrategy
   useEffect(() => {
-    if (!companyId || !token || readOnly) return
+    if (!companyId || !token || readOnly || !ready) return
     const key = `sb_first_strategy_${companyId}`
-    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1') } catch { /* sem storage: segue */ }
+    try { if (sessionStorage.getItem(key)) return } catch { /* sem storage: segue */ }
     let alive = true
     supabase.from('marketing_ai_strategies').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('kind', 'main')
       .then(({ count, error }) => {
         if (!alive || error || (count ?? 0) > 0) return
+        try { sessionStorage.setItem(key, '1') } catch { /* sem storage */ }
         fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/strategy-generate`, {
           method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'generate', kind: 'main' }),
         }).catch(() => { /* silencioso: a aba Estratégia tenta de novo ao abrir */ })
       })
     return () => { alive = false }
-  }, [companyId, token, readOnly])
+  }, [companyId, token, readOnly, ready])
 }
 
 export default function DashboardLayout() {

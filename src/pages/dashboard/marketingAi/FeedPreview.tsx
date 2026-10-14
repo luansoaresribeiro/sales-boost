@@ -10,12 +10,12 @@ interface Row { id: string; image_url: string | null; planned_for: string | null
 const TX = {
   pt: {
     title: '🔲 Prévia do feed', desc: 'Como o seu perfil vai ficar com as próximas peças (as mais novas em cima, como no Instagram). Cada peça ganha uma nota de "encaixe no padrão" — cores, fontes e clima do seu Kit da marca.',
-    avg: (n: number, a: number) => `${n} de ${a} peças seguem o padrão`, none: 'Ainda não há peças com imagem no Vault ou no calendário.',
+    avg: (n: number, a: number) => `${n} de ${a} peças seguem o padrão`, none: 'Ainda não há peças com imagem no calendário.',
     noKit: 'Preencha o Kit da marca (aba Marca) pra o Sales Boost conseguir medir o padrão.', pending: 'sem nota ainda',
   },
   en: {
     title: '🔲 Feed preview', desc: 'How your profile will look with the next pieces (newest on top, like Instagram). Each piece gets a "fits the pattern" score — colors, fonts and mood from your Brand Kit.',
-    avg: (n: number, a: number) => `${n} of ${a} pieces follow the pattern`, none: 'No pieces with an image in the Vault or calendar yet.',
+    avg: (n: number, a: number) => `${n} of ${a} pieces follow the pattern`, none: 'No pieces with an image in the calendar yet.',
     noKit: 'Fill in the Brand Kit (Brand tab) so Sales Boost can measure the pattern.', pending: 'no score yet',
   },
 } as const

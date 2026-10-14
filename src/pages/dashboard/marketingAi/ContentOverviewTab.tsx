@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useLang } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
-import { CARD, MUTED, BORDER, D, FORMAT_CLASS, FUNNEL_LABEL, type FunnelStage } from './shared'
+import { CARD, MUTED, BORDER, FORMAT_CLASS, FUNNEL_LABEL, type FunnelStage } from './shared'
 import { templateLabel, type TestPost } from './TestingArea'
 
 const ORANGE = '#FF6D29'
@@ -11,16 +11,16 @@ const FUNNEL_LABEL_EN: Record<FunnelStage, string> = { topo: 'Top', meio: 'Middl
 const TX = {
   pt: {
     loading: 'Carregando...', title: '🏠 Overview',
-    introA: 'O resumo de onde o fluxo de conteúdo chegou: o que já está ', introB: 'agendado pra publicar', introC: ', o que está ', introD: 'pronto no Vault esperando agendar', introE: ', e se o ', introF: 'funil está equilibrado', introG: ' (Topo/Meio/Fundo) ou concentrado demais numa etapa só.',
-    scheduledTitle: '📅 Agendados pra publicar', noneA: 'Nada agendado ainda. Agende publicações pelo ', vault: 'Vault',
-    waitingTitle: '⭐ No Vault, esperando agendar', inVault: 'no Vault →', balance: '⚖️ Equilíbrio do funil', noClassified: 'Sem posts classificados por formato ainda no Vault/agendados.',
+    introA: 'O resumo de onde o fluxo de conteúdo chegou: o que já está ', introB: 'agendado pra publicar', introC: ', o que está ', introD: 'pronto esperando sua aprovação', introE: ', e se o ', introF: 'funil está equilibrado', introG: ' (Topo/Meio/Fundo) ou concentrado demais numa etapa só.',
+    scheduledTitle: '📅 Agendados pra publicar', noneA: 'Nada agendado ainda. Clique numa peça do calendário acima pra aprovar ou agendar',
+    waitingTitle: '⭐ Prontas, esperando sua aprovação', inVault: 'no calendário ↑', balance: '⚖️ Equilíbrio do funil', noClassified: 'Sem peças aprovadas/agendadas classificadas por formato ainda.',
     balanced: '✓ Funil equilibrado entre as 3 etapas.', lowA: '⚠️ Pouco conteúdo de ', lowB: ' — considere gerar mais posts nessa etapa.',
   },
   en: {
     loading: 'Loading...', title: '🏠 Overview',
-    introA: 'A summary of where the content flow has got to: what is already ', introB: 'scheduled to publish', introC: ', what is ', introD: 'ready in the Vault waiting to be scheduled', introE: ', and whether the ', introF: 'funnel is balanced', introG: ' (Top/Middle/Bottom) or too concentrated in a single stage.',
-    scheduledTitle: '📅 Scheduled to publish', noneA: 'Nothing scheduled yet. Schedule posts from the ', vault: 'Vault',
-    waitingTitle: '⭐ In the Vault, waiting to be scheduled', inVault: 'in the Vault →', balance: '⚖️ Funnel balance', noClassified: 'No posts classified by format yet in the Vault/scheduled.',
+    introA: 'A summary of where the content flow has got to: what is already ', introB: 'scheduled to publish', introC: ', what is ', introD: 'ready and waiting for your approval', introE: ', and whether the ', introF: 'funnel is balanced', introG: ' (Top/Middle/Bottom) or too concentrated in a single stage.',
+    scheduledTitle: '📅 Scheduled to publish', noneA: 'Nothing scheduled yet. Click a piece on the calendar above to approve or schedule it',
+    waitingTitle: '⭐ Ready, waiting for your approval', inVault: 'on the calendar ↑', balance: '⚖️ Funnel balance', noClassified: 'No approved/scheduled pieces classified by format yet.',
     balanced: '✓ Funnel balanced across the 3 stages.', lowA: '⚠️ Little ', lowB: ' content — consider generating more posts at this stage.',
   },
 } as const
@@ -34,7 +34,7 @@ const fmtWhen = (iso: string, lang: 'pt' | 'en') => new Date(iso).toLocaleString
 // content-test/creative-generate), mas como ABA fica primeiro (mais à
 // esquerda) dentro de Agente de Conteúdo: é o resumo de "o que já está
 // pronto/agendado" antes de entrar em Biblioteca/Campanhas/Calendário.
-export default function ContentOverviewTab({ companyId, onOpenVault }: { companyId: string; onOpenVault: () => void }) {
+export default function ContentOverviewTab({ companyId }: { companyId: string }) {
   const { lang } = useLang()
   const t = TX[lang]
   const funnelLabel = (s: FunnelStage) => (lang === 'en' ? FUNNEL_LABEL_EN[s] : FUNNEL_LABEL[s])
@@ -91,7 +91,7 @@ export default function ContentOverviewTab({ companyId, onOpenVault }: { company
           <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', marginBottom: '10px' }}>{t.scheduledTitle} {scheduled.length > 0 && <span style={{ color: MUTED, fontWeight: 600 }}>({scheduled.length})</span>}</div>
           {scheduled.length === 0 ? (
             <div style={{ padding: '18px', textAlign: 'center', color: MUTED, fontSize: '12px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '11px' }}>
-              {t.noneA}<button onClick={onOpenVault} style={{ background: 'none', border: 'none', color: ORANGE, fontWeight: 700, cursor: 'pointer', fontSize: '12px', padding: 0, fontFamily: D }}>{t.vault}</button>.
+              {t.noneA}.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
@@ -122,7 +122,7 @@ export default function ContentOverviewTab({ companyId, onOpenVault }: { company
                     <div style={{ flex: 1, minWidth: 0, fontSize: '11.5px', fontWeight: 600, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.idea ?? 'Post'}</div>
                   </div>
                 ))}
-                {waiting.length > 6 && <button onClick={onOpenVault} style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: ORANGE, fontWeight: 700, cursor: 'pointer', fontSize: '11.5px', padding: '4px 0', fontFamily: D }}>+{waiting.length - 6} {t.inVault}</button>}
+                {waiting.length > 6 && <div style={{ color: ORANGE, fontWeight: 700, fontSize: '11.5px', padding: '4px 0' }}>+{waiting.length - 6} {t.inVault}</div>}
               </div>
             </div>
           )}

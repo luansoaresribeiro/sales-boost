@@ -32,6 +32,10 @@ export interface SetupStatus {
   required: number // quantos obrigatórios (cartões + Instagram, se obrigatório)
   doneCount: number
   allDone: boolean
+  /** Requisitos principais da 1ª estratégia: TODOS os cartões (inclusive o
+   *  catálogo, que é opcional pra entrar no painel) + Instagram se a ficha
+   *  pedir. Mesma regra do servidor (supabase/functions/_shared/setupReady.ts). */
+  readyForStrategy: boolean
   missingText: string // "Falta: 2 fotos" (vazio quando tudo pronto)
   business: BusinessData
   questions: PlaybookQuestion[]
@@ -72,14 +76,16 @@ function businessMissing(b: BusinessData, lang: Lang): string {
 }
 
 const EMPTY: Omit<SetupStatus, 'refresh' | 'loading' | 'error'> = {
-  steps: [], instagramRequired: false, instagramConnected: false, required: 0, doneCount: 0, allDone: false, missingText: '',
+  steps: [], instagramRequired: false, instagramConnected: false, required: 0, doneCount: 0, allDone: false, readyForStrategy: false, missingText: '',
   business: { business_name: '', city: '', phone: '' }, questions: [], answers: {}, schema: null,
   verticalKey: 'generico', minPhotos: 0, minItems: DEFAULT_SETUP_CONFIG.minItems,
 }
 
 /** `live`: assina mudanças em tempo real (tela /setup). O gate usa live=false: avalia uma vez, sem expulsar o dono do painel depois. */
-export function useSetupStatus(companyId: string | null | undefined, opts: { live?: boolean } = {}): SetupStatus {
+/** `key`: nome do canal ao vivo — cada tela que usa o hook ao mesmo tempo precisa do seu (ver useRealtime). */
+export function useSetupStatus(companyId: string | null | undefined, opts: { live?: boolean; key?: string } = {}): SetupStatus {
   const live = opts.live ?? true
+  const rtKey = opts.key ?? 'setup'
   const { lang } = useLang()
   const [state, setState] = useState<{ loading: boolean; error: boolean; data: Omit<SetupStatus, 'refresh' | 'loading' | 'error'> }>({ loading: true, error: false, data: EMPTY })
   const seq = useRef(0)
@@ -141,6 +147,7 @@ export function useSetupStatus(companyId: string | null | undefined, opts: { liv
         loading: false, error: false,
         data: {
           steps, instagramRequired, instagramConnected, required, doneCount, allDone: doneCount === required,
+          readyForStrategy: steps.every(s => s.done) && (!instagramRequired || instagramConnected),
           missingText: missingParts.length ? `${m.missing}: ${missingParts.join(' · ')}` : '',
           business, questions, answers, schema, verticalKey, minPhotos, minItems: cfg.minItems,
         },
@@ -161,8 +168,8 @@ export function useSetupStatus(companyId: string | null | undefined, opts: { liv
     timer.current = setTimeout(() => { void compute() }, 500)
   }, [compute, live])
   const rtId = live ? companyId : null
-  useRealtime('marketing_ai_knowledge', rtId, debounced, { key: 'setup' })
-  useRealtime('companies', rtId, debounced, { key: 'setup', column: 'id' })
+  useRealtime('marketing_ai_knowledge', rtId, debounced, { key: rtKey })
+  useRealtime('companies', rtId, debounced, { key: rtKey, column: 'id' })
 
   return { loading: state.loading, error: state.error, ...state.data, refresh: compute }
 }

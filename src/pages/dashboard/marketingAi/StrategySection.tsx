@@ -4,6 +4,7 @@ import { useLang } from '../../../contexts/LanguageContext'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useShowcase } from '../../../contexts/ShowcaseContext'
 import { supabase } from '../../../lib/supabase'
+import { useSetupStatus } from '../../../lib/useSetupStatus'
 import { CARD, MUTED, BORDER, D, ORANGE, SUPABASE_URL, timeAgo } from './shared'
 import { BudgetPanel, FunnelPanel, EstimatesPanel, InitiativesPanel, MonitoringPanel } from './StrategyPanels'
 import IntelligenceDomainsPanel from './IntelligenceDomainsPanel'
@@ -41,6 +42,7 @@ const TX = {
     reanalyzing: 'Reavaliando...', reanalyze: '↻ Reavaliar', generating: 'Gerando...', askNew: '↻ Pedir nova estratégia', create: '+ Criar estratégia',
     creatingFirst: 'Criando sua primeira estratégia...', generatingYours: 'Gerando sua estratégia...', couldNot: 'Não consegui gerar a estratégia', none: 'Nenhuma estratégia ainda',
     noneDesc: 'A IA lê o que já sabemos do seu negócio e o dado real disponível, e propõe objetivo, metas, orçamento e prazo — você revisa e edita tudo depois.', retry: 'Tentar de novo',
+    waitSetup: 'Sua estratégia nasce assim que o básico estiver preenchido', waitSetupDesc: 'Ela usa esses dados pra decidir o que postar — por isso espera eles. Assim que completar, ela é criada sozinha.', completeNow: 'Completar agora',
     initFailed: 'Essa iniciativa não terminou de gerar', initGenerating: 'Gerando essa iniciativa...',
     bOverview: '🧭 Visão Geral', bDomains: '🧠 Inteligência do Negócio (9 domínios)', bGoals: '🎯 Metas', bBudget: '💰 Orçamento', bFunnel: '🔀 Conteúdo & Campanha', bEstimates: '⏱️ Prazo & Viabilidade', bInit: '✨ Iniciativas', bMonitor: '📡 Acompanhamento',
     thesis: 'Tese estratégica', why: 'Por que essa estratégia', mainConstraint: 'Restrição principal', opportunity: 'Oportunidade estratégica', bizObj: 'Objetivo de negócio', mktObj: 'Objetivo de marketing', focus: 'Foco estratégico', horizon: 'Horizonte', cadence: 'Cadência de revisão',
@@ -57,6 +59,7 @@ const TX = {
     reanalyzing: 'Re-evaluating...', reanalyze: '↻ Re-evaluate', generating: 'Generating...', askNew: '↻ Ask for a new strategy', create: '+ Create strategy',
     creatingFirst: 'Creating your first strategy...', generatingYours: 'Generating your strategy...', couldNot: 'Could not generate the strategy', none: 'No strategy yet',
     noneDesc: 'The AI reads what we already know about your business and the real data available, and proposes a goal, targets, budget and timeline — you review and edit everything afterwards.', retry: 'Try again',
+    waitSetup: 'Your strategy starts as soon as the basics are filled in', waitSetupDesc: 'It uses this data to decide what to post — that is why it waits for it. Once complete, it is created automatically.', completeNow: 'Complete now',
     initFailed: 'This initiative did not finish generating', initGenerating: 'Generating this initiative...',
     bOverview: '🧭 Overview', bDomains: '🧠 Business Intelligence (9 domains)', bGoals: '🎯 Goals', bBudget: '💰 Budget', bFunnel: '🔀 Content & Campaign', bEstimates: '⏱️ Timeline & Feasibility', bInit: '✨ Initiatives', bMonitor: '📡 Monitoring',
     thesis: 'Strategic thesis', why: 'Why this strategy', mainConstraint: 'Main constraint', opportunity: 'Strategic opportunity', bizObj: 'Business objective', mktObj: 'Marketing objective', focus: 'Strategic focus', horizon: 'Horizon', cadence: 'Review cadence',
@@ -86,6 +89,10 @@ export default function StrategySection({ company }: { company: CompanyData }) {
   const L = strategyLabels(lang)
   const { session } = useAuth()
   const { readOnly } = useShowcase() // vitrine: não cria a 1ª estratégia sozinha (gasta IA)
+  // 1ª estratégia só com os requisitos principais preenchidos (mesmos do sino;
+  // o servidor recusa igual — _shared/setupReady.ts). Decisão do dono 2026-10-14.
+  const setup = useSetupStatus(company.id, { key: 'setup-strat' })
+  const setupReady = !setup.loading && (setup.error || setup.readyForStrategy)
   const token = session?.access_token ?? ''
   const [main, setMain] = useState<Strategy | null>(null)
   const [viewingId, setViewingId] = useState<string | null>(null) // quando != null, olhando uma iniciativa
@@ -191,10 +198,10 @@ export default function StrategySection({ company }: { company: CompanyData }) {
 
   // Primeira estratégia: a IA cria sozinha, sem exigir clique do dono.
   useEffect(() => {
-    if (loading || autoTried.current || main || readOnly) return
+    if (loading || autoTried.current || main || readOnly || !setupReady) return
     autoTried.current = true
     void createStrategy('main')
-  }, [loading, main, createStrategy])
+  }, [loading, main, createStrategy, setupReady])
 
   useEffect(() => {
     if (!main) { setInitiatives([]); return }
@@ -292,7 +299,17 @@ export default function StrategySection({ company }: { company: CompanyData }) {
         </div>
       )}
 
-      {!active && (
+      {!active && !main && !creating && !generating && !setup.loading && !setupReady && (
+        <div style={{ maxWidth: '560px', padding: '40px 32px', textAlign: 'center', background: CARD, border: '1px solid rgba(251,191,36,0.3)', borderRadius: '16px' }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>🧩</div>
+          <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '8px' }}>{t.waitSetup}</div>
+          <p style={{ fontSize: '12.5px', color: '#FBBF24', lineHeight: 1.6, margin: '0 0 6px' }}>{setup.steps.filter(s => !s.done).map(s => s.missing).concat(setup.instagramRequired && !setup.instagramConnected ? ['Instagram'] : []).join(' · ')}</p>
+          <p style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>{t.waitSetupDesc}</p>
+          <a href="/setup" style={{ ...primaryBtn, display: 'inline-block', marginTop: '10px', textDecoration: 'none' }}>{t.completeNow}</a>
+        </div>
+      )}
+
+      {!active && (main || creating || generating || setup.loading || setupReady) && (
         <div style={{ maxWidth: '560px', padding: '40px 32px', textAlign: 'center', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px' }}>
           <div style={{ fontSize: '32px', marginBottom: '12px' }}>{genError ? '⚠️' : '🧭'}</div>
           <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '8px' }}>

@@ -6,6 +6,8 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import { templateLabel, type TestPost } from './TestingArea'
+import CalendarPostModal from './CalendarPostModal'
+import { useRealtime } from '../../../lib/useRealtime'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -13,31 +15,34 @@ const DAY_LABELS = {
   pt: ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'],
   en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
 } as const
-const STATUS_LABEL_EN: Record<string, string> = { draft: 'Evaluating', vault: 'In Vault', scheduled: 'Scheduled', adapt: 'Adapting' }
+const STATUS_LABEL_EN: Record<string, string> = { draft: 'Evaluating', review: 'Low score — review', vault: 'Ready to approve', scheduled: 'Scheduled', adapt: 'Adapting' }
 const TX = {
   pt: {
     errPlan: 'Erro ao planejar a semana', planned: (n: number) => `✅ ${n} peça(s) sendo criadas — aparecem no calendário em alguns minutos (atualize a página).`, todo: 'A estratégia também pede nesta semana (isso depende de você):', perWeek: (n: number) => `${n}x`, loading: 'Carregando...', empty: 'vazio',
-    title: '🗓️ Calendário da Semana', introA: 'Cada dia já vem do ', introB: 'plano da sua estratégia', introC: ' (feed, stories e vídeos). No domingo o Sales Boost cria as peças de cada dia e manda pro Vault — nada vai ao ar sem a sua aprovação.',
+    title: '🗓️ Calendário da Semana', introA: 'Cada dia já vem do ', introB: 'plano da sua estratégia', introC: ' (feed, stories e vídeos). No domingo o Sales Boost cria as peças de cada dia e dá uma nota pra cada uma. Clique numa peça pra ver a análise, aprovar ou agendar — nada vai ao ar sem a sua aprovação.',
     noPlanA: 'Ainda não há estratégia com plano semanal. ', noPlanB: 'Gere a estratégia', noPlanC: ' e o calendário se monta sozinho a partir dela.',
     autoTitle: 'Montar a semana sozinho todo domingo às 18h', autoDesc: 'Segue o plano da estratégia e cria as peças de cada dia — sem precisar clicar em nada.',
     slotAuto: 'Sales Boost cria', slotItem: 'no imóvel', slotVideo: 'você pede (custa)', alsoStory: '↻ Stories também',
     surf: { feed: 'Feed', stories: 'Stories', reels: 'Vídeo', dm: 'DM' } as Record<string, string>, also: 'Também nesta semana:',
+    loose: 'Peças avulsas (fora do calendário)',
     planning: 'Criando as peças...', planNow: '🗓️ Criar as peças da próxima semana agora', thisWeek: 'Esta semana', nextWeek: 'Próxima semana',
   },
   en: {
     errPlan: 'Error planning the week', planned: (n: number) => `✅ ${n} piece(s) being created — they show up on the calendar in a few minutes (refresh the page).`, todo: 'The strategy also asks for this week (this depends on you):', perWeek: (n: number) => `${n}x`, loading: 'Loading...', empty: 'empty',
-    title: '🗓️ Weekly Calendar', introA: 'Each day already comes from ', introB: 'your strategy plan', introC: ' (feed, stories and videos). On Sunday Sales Boost creates each day\'s pieces and sends them to the Vault — nothing goes live without your approval.',
+    title: '🗓️ Weekly Calendar', introA: 'Each day already comes from ', introB: 'your strategy plan', introC: ' (feed, stories and videos). On Sunday Sales Boost creates each day\'s pieces and scores each one. Click a piece to see the review, approve or schedule it — nothing goes live without your approval.',
     noPlanA: 'There is no strategy with a weekly plan yet. ', noPlanB: 'Generate the strategy', noPlanC: ' and the calendar builds itself from it.',
     autoTitle: 'Build the week automatically every Sunday at 6 PM', autoDesc: 'Follows the strategy plan and creates each day\'s pieces — no clicking needed.',
     slotAuto: 'Sales Boost creates', slotItem: 'on the listing', slotVideo: 'you request it (paid)', alsoStory: '↻ Stories too',
     surf: { feed: 'Feed', stories: 'Stories', reels: 'Video', dm: 'DM' } as Record<string, string>, also: 'Also this week:',
+    loose: 'Loose pieces (outside the calendar)',
     planning: 'Creating the pieces...', planNow: '🗓️ Create next week\'s pieces now', thisWeek: 'This week', nextWeek: 'Next week',
   },
 } as const
 const KIND_ICON: Record<string, string> = { organico: '📝', stories: '📖', campanhas: '🎯' }
 const STATUS_META: Record<string, { label: string; color: string }> = {
-  draft: { label: 'Avaliando', color: '#FBBF24' },
-  vault: { label: 'No Vault', color: '#A78BFA' },
+  draft: { label: 'Avaliando', color: MUTED },
+  review: { label: 'Nota baixa — revisar', color: '#FBBF24' },
+  vault: { label: 'Pronta pra aprovar', color: '#A78BFA' },
   scheduled: { label: 'Agendado', color: GREEN },
   adapt: { label: 'Adaptando', color: MUTED },
 }
@@ -70,6 +75,8 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   const [msg, setMsg] = useState('')
   const [todo, setTodo] = useState<{ format: string; name: string; per_week: number; purpose: string }[]>([])
   const [err, setErr] = useState('')
+  const [open, setOpen] = useState<Item | null>(null)
+  const [loose, setLoose] = useState<Item[]>([])
 
   const thisWeekStart = startOfWeek(new Date())
   const nextWeekStart = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate() + 7)
@@ -78,13 +85,17 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
 
   const load = useCallback(async () => {
     const from = toIso(thisWeek[0]), to = toIso(nextWeek[6])
-    const [{ data: posts }, { data: actions }, { data: cfg }, { data: strat }, { data: pb }] = await Promise.all([
+    const [{ data: posts }, { data: actions }, { data: cfg }, { data: strat }, { data: pb }, { data: avulsas }] = await Promise.all([
       supabase.from('marketing_ai_test_content').select('*').eq('company_id', companyId).gte('planned_for', from).lte('planned_for', to),
       supabase.from('agent_actions').select('ref_id').eq('company_id', companyId).eq('ref_type', 'marketing_ai_test_content').eq('execution_status', 'QUEUED').not('scheduled_at', 'is', null),
       supabase.from('marketing_ai_config').select('auto_weekly_calendar').eq('company_id', companyId).maybeSingle(),
       supabase.from('marketing_ai_strategies').select('content_plan').eq('company_id', companyId).eq('kind', 'main').eq('status', 'active').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('vertical_playbooks').select('config').eq('key', company?.vertical_key ?? 'generico').maybeSingle(),
+      // Peças sem dia (feitas à mão no Padrão visual, ou antigas): sem a aba
+      // Vault, ficam aqui embaixo pra não sumirem.
+      supabase.from('marketing_ai_test_content').select('*').eq('company_id', companyId).is('planned_for', null).in('status', ['vault', 'draft']).order('created_at', { ascending: false }).limit(12),
     ])
+    setLoose((avulsas ?? []) as Item[])
     const plan = (strat?.content_plan ?? null) as { weekly_mix?: MixItem[] } | null
     setMix(Array.isArray(plan?.weekly_mix) ? plan!.weekly_mix : [])
     const fm: Record<string, FormatMeta> = {}
@@ -100,6 +111,8 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   }, [companyId, company?.vertical_key]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
+  // Peças nascem em segundo plano (e a nota chega depois): atualiza sozinho.
+  useRealtime('marketing_ai_test_content', companyId, load, { key: 'cal' })
 
   // Mesma regra do cron: liga sozinho só com estratégia + pagamento de verdade.
   const paid = !!company?.stripe_subscription_id || company?.manual_access === true
@@ -174,19 +187,19 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
               {dayItems.length === 0 && open.length === 0 ? (
                 <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>{t.empty}</div>
               ) : dayItems.map(it => {
-                const status = scheduledIds.has(it.id) ? 'scheduled' : it.status
+                const status = scheduledIds.has(it.id) ? 'scheduled' : it.status === 'draft' && it.quality_score != null ? 'review' : it.status
                 const sm = STATUS_META[status] ?? STATUS_META.draft
                 return (
-                  <div key={it.id} style={{ padding: '6px 8px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '8px' }}>
+                  <button key={it.id} onClick={() => setOpen(it)} style={{ textAlign: 'left', width: '100%', cursor: 'pointer', fontFamily: D, padding: '6px 8px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '8px' }}>
                     <div style={{ fontSize: '10.5px', fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {KIND_ICON[it.kind ?? 'organico'] ?? '📝'} {it.idea ?? 'Post'}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
-                      <span style={{ fontSize: '8.5px', fontWeight: 700, color: sm.color }}>● {lang === 'en' ? STATUS_LABEL_EN[status] ?? sm.label : sm.label}</span>
+                      <span style={{ fontSize: '8.5px', fontWeight: 700, color: sm.color }}>● {lang === 'en' ? STATUS_LABEL_EN[status] ?? sm.label : sm.label}{it.quality_score != null ? ` · ${it.quality_score}` : ''}</span>
                       {it.brief?.template && <span style={{ fontSize: '8.5px', color: MUTED }}>· {templateLabel(it.brief.template, lang)}</span>}
                     </div>
                     {it.story_worthy && it.kind !== 'stories' && <div style={{ fontSize: '8.5px', color: '#A78BFA', marginTop: '2px' }}>{t.alsoStory}</div>}
-                  </div>
+                  </button>
                 )
               })}
               {open.map((sl, k) => {
@@ -259,6 +272,27 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
 
           <Week label={t.thisWeek} days={thisWeek} />
           <Week label={t.nextWeek} days={nextWeek} />
+          {loose.length > 0 && (
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>{t.loose}</div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {loose.map(it => {
+                  const status = scheduledIds.has(it.id) ? 'scheduled' : it.status === 'draft' && it.quality_score != null ? 'review' : it.status
+                  const sm = STATUS_META[status] ?? STATUS_META.draft
+                  return (
+                    <button key={it.id} onClick={() => setOpen(it)} style={{ display: 'flex', alignItems: 'center', gap: '8px', maxWidth: '260px', padding: '6px 9px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '9px', cursor: 'pointer', fontFamily: D, textAlign: 'left' }}>
+                      {it.image_url && <img src={it.image_url} alt="" style={{ width: '30px', height: '30px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />}
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.idea ?? 'Post'}</span>
+                        <span style={{ display: 'block', fontSize: '8.5px', fontWeight: 700, color: sm.color }}>● {lang === 'en' ? STATUS_LABEL_EN[status] ?? sm.label : sm.label}{it.quality_score != null ? ` · ${it.quality_score}` : ''}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          {open && <CalendarPostModal post={open} companyId={companyId} onClose={() => setOpen(null)} onChanged={() => { void load() }} />}
         </>
       )}
     </div>
