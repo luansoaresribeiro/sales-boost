@@ -214,7 +214,9 @@ stories e vídeos também, não só foto no feed.
   mexeu) liga sozinho quando há estratégia ativa com mix; `true`/`false` é a
   escolha do dono no interruptor. O cron de domingo 18h segue essa regra e
   continua pulando conta vitrine.
-- Nada vai ao ar sozinho: tudo cai como rascunho → nota → Vault → aprovação.
+- Nada vai ao ar sozinho: tudo cai como rascunho → nota → "Pronta pra aprovar"
+  (status `vault` no banco) → aprovação do dono clicando na peça no calendário
+  (a aba Vault saiu em 2026-10-14 — ver DECISIONS.md).
 - **Se mudar a conta das vagas, mude as duas cópias** — senão a peça gerada
   cai num dia diferente do que a tela mostrou.
 - **Não testado ponta a ponta no ensaio:** o ensaio não tem

@@ -6,7 +6,6 @@ import { BORDER, MUTED, D } from './shared'
 import ContentLibrary from './ContentLibrary'
 import ContentOverviewTab from './ContentOverviewTab'
 import WeeklyCalendarTab from './WeeklyCalendarTab'
-import ContentVault from './ContentVault'
 import PerformanceTab from './PerformanceTab'
 import MetaAdsTab from './MetaAdsTab'
 import CampaignsTab from './CampaignsTab'
@@ -15,32 +14,34 @@ import MetaHealthTab from './MetaHealthTab'
 const ORANGE = '#FF6D29'
 
 type Top = 'conteudo' | 'campanha'
-type ContentSub = 'calendario' | 'vault' | 'padrao'
+type ContentSub = 'calendario' | 'padrao'
 type CampaignSub = 'resultados' | 'ideal' | 'anuncios' | 'saude'
 
 // Agente de Conteúdo e Campanha — reorganizado em 2026-10-14 a pedido do
 // dono em DUAS abas de topo:
 // - Conteúdo: Calendário da semana (o overview: o que sai em cada dia, feed
-//   e stories, + resumo de agendados/Vault/funil), Vault (aprovados prontos
-//   pra publicar) e Padrão visual (marca + formatos).
+//   e stories, + resumo de agendados/funil) e Padrão visual (marca + formatos).
+//   A aba Vault saiu em 2026-10-14 (pedido do dono): a análise e a nota de
+//   cada peça abrem clicando nela na grade do calendário (CalendarPostModal),
+//   com aprovar/agendar ali mesmo.
 // - Campanha ("em breve" pra rodar anúncio pago): como os conteúdos estão
 //   indo (Instagram real), campanha ideal + pixel, anúncios (Meta Ads) e
 //   Saúde da Meta (antes no Agente de Dados).
 // Saíram: Biblioteca (virou Padrão visual + Vault), Testes e a sub-aba
 // Ideias do calendário (o calendário vem da estratégia, não de ideia solta).
-// Deep links antigos: ?tab=biblioteca|vault → Vault; ?tab=campanha[&sub=…].
+// Deep links antigos: ?tab=biblioteca|vault → Calendário; ?tab=campanha[&sub=…].
 const TX = {
   pt: {
-    top: { conteudo: { icon: '✍️', label: 'Conteúdo', sub: 'Calendário da semana, Vault e padrão visual' }, campanha: { icon: '🎯', label: 'Campanha', sub: 'Análise, pixel e campanha ideal' } },
-    content: { calendario: ['🗓️', 'Calendário da semana'], vault: ['⭐', 'Vault'], padrao: ['🎨', 'Padrão visual'] },
+    top: { conteudo: { icon: '✍️', label: 'Conteúdo', sub: 'Calendário da semana e padrão visual' }, campanha: { icon: '🎯', label: 'Campanha', sub: 'Análise, pixel e campanha ideal' } },
+    content: { calendario: ['🗓️', 'Calendário da semana'], padrao: ['🎨', 'Padrão visual'] },
     campaign: { resultados: ['📈', 'Como os conteúdos estão indo'], ideal: ['📣', 'Campanha ideal e pixel'], anuncios: ['💰', 'Anúncios (Meta Ads)'], saude: ['❤️‍🩹', 'Saúde da Meta'] },
     soon: 'EM BREVE', overview: 'Resumo da semana',
     soonTitle: 'Rodar campanhas pagas chega em breve.',
     soonBody: ' Enquanto isso, esta aba já lê como seus conteúdos estão indo e mostra qual campanha valeria a pena rodar. Nenhum anúncio vai ao ar sem a sua aprovação.',
   },
   en: {
-    top: { conteudo: { icon: '✍️', label: 'Content', sub: 'Weekly calendar, Vault and visual pattern' }, campanha: { icon: '🎯', label: 'Campaign', sub: 'Analysis, pixel and ideal campaign' } },
-    content: { calendario: ['🗓️', 'Weekly calendar'], vault: ['⭐', 'Vault'], padrao: ['🎨', 'Visual pattern'] },
+    top: { conteudo: { icon: '✍️', label: 'Content', sub: 'Weekly calendar and visual pattern' }, campanha: { icon: '🎯', label: 'Campaign', sub: 'Analysis, pixel and ideal campaign' } },
+    content: { calendario: ['🗓️', 'Weekly calendar'], padrao: ['🎨', 'Visual pattern'] },
     campaign: { resultados: ['📈', 'How your content is doing'], ideal: ['📣', 'Ideal campaign & pixel'], anuncios: ['💰', 'Ads (Meta Ads)'], saude: ['❤️‍🩹', 'Meta Health'] },
     soon: 'COMING SOON', overview: 'Week summary',
     soonTitle: 'Running paid campaigns is coming soon.',
@@ -56,7 +57,7 @@ export default function ContentSection({ company }: { company: Company }) {
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab')
   const [top, setTop] = useState<Top>(tab === 'campanha' ? 'campanha' : 'conteudo')
-  const [contentSub, setContentSub] = useState<ContentSub>(tab === 'biblioteca' || tab === 'vault' ? 'vault' : 'calendario')
+  const [contentSub, setContentSub] = useState<ContentSub>('calendario')
 
   const pickTop = (k: Top) => {
     setTop(k)
@@ -76,17 +77,16 @@ export default function ContentSection({ company }: { company: Company }) {
 
       {top === 'campanha' ? <CampanhaPanel company={company} /> : (
         <div>
-          <SubTabs items={(['calendario', 'vault', 'padrao'] as const).map(k => [k, ...tx.content[k]] as const)} active={contentSub} onPick={setContentSub} />
+          <SubTabs items={(['calendario', 'padrao'] as const).map(k => [k, ...tx.content[k]] as const)} active={contentSub} onPick={setContentSub} />
           {contentSub === 'calendario' ? (
             <>
               <WeeklyCalendarTab companyId={company.id} />
               <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: '22px', marginTop: '8px' }}>
                 <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px' }}>{tx.overview}</div>
-                <ContentOverviewTab companyId={company.id} onOpenVault={() => setContentSub('vault')} />
+                <ContentOverviewTab companyId={company.id} />
               </div>
             </>
-          ) : contentSub === 'vault' ? <ContentVault companyId={company.id} />
-            : <ContentLibrary companyId={company.id} />}
+          ) : <ContentLibrary companyId={company.id} />}
         </div>
       )}
     </div>

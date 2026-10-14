@@ -1162,3 +1162,31 @@ grátis de 30 s, acima — mantidos como histórico):
   na importação do portal (antes 15 na tela e 20 no `portal-import`) e no
   banco (constraint `marketing_ai_knowledge_photos_cap`). Constante única na
   tela: `MAX_PHOTOS_PER_ITEM` em `src/lib/setupRules.ts`.
+- **Aba Vault removida; a peça abre no calendário** — 2026-10-14 (pedido do
+  dono: "para ver o post clico em cima na grade do calendário … pode apagar
+  a aba Vault"). Clicar numa peça da grade abre `CalendarPostModal` com a
+  imagem, a legenda, a análise e a nota. Nota ≥90 ("Pronta pra aprovar"):
+  🚀 publicar agora ou 📅 agendar (sugere o dia planejado, 18h). Nota baixa
+  ("Nota baixa — revisar"): mostra o porquê; o dono pode liberar mesmo assim
+  ou excluir. O status `vault` continua existindo no banco (só o nome na
+  tela mudou). Peças sem dia (feitas no Padrão visual, ou antigas) aparecem
+  em "Peças avulsas", embaixo do calendário, pra não sumirem.
+- **1ª estratégia só com os requisitos principais preenchidos** — 2026-10-14
+  (decisão do dono: "a estratégia, mesmo após o pagamento, é criada somente
+  após os requisitos principais serem preenchidos, de acordo com as
+  notificações"). Requisitos = os do `/setup` e do sino: dados do negócio,
+  perguntas da ficha, catálogo com o mínimo de itens/fotos da ficha e
+  Instagram **só se a ficha pedir** (`config.setup.instagram_required`; hoje
+  nenhuma ficha pede — o app da Meta ainda está em revisão). Vale no
+  servidor (`_shared/setupReady.ts`, no `strategy-generate` e no cron) e na
+  tela (`useSetupStatus.readyForStrategy`): o pagamento continua chamando a
+  geração, que recusa com "Falta: …" até completar; o painel dispara sozinho
+  assim que o último requisito é preenchido. Quem já tem estratégia segue
+  igual.
+- **Lembrete "Suas informações ainda estão atualizadas?" não acende na 1ª
+  estratégia** — 2026-10-14 (achado no teste da Tespon: o sino mostrava 2 na
+  conta recém-paga, um deles este lembrete, logo depois da estratégia nascer
+  dos dados que o dono acabou de preencher). Agora "estratégia nova" só
+  conta depois de uma confirmação anterior; o lembrete de 30 dias segue.
+- **Teste Final gera só o que a estratégia pede** — 2026-10-14 (pedido do
+  dono). Ver [TESTE-FINAL.md](TESTE-FINAL.md).

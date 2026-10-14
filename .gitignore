@@ -37,3 +37,6 @@ dist-ssr
 supabase/.temp/
 .env.local
 .env.*.local
+
+# Relatórios do Teste Final (scripts/teste-final.mjs)
+qa-relatorios/

@@ -60,6 +60,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { fetchLearning, learningPromptBlock } from '../_shared/learning.ts'
 import { fetchFormatCatalog, formatCatalogBlock, sanitizeContentPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
+import { setupMissing } from '../_shared/setupReady.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 type SupaClient = ReturnType<typeof createClient>
@@ -807,6 +808,8 @@ Deno.serve(async (req) => {
             .select('id, created_at').eq('company_id', c.id).eq('kind', 'main').eq('status', 'generating')
             .order('created_at', { ascending: false }).limit(1).maybeSingle()
           if (generating && (now - new Date(generating.created_at as string).getTime()) < STALE_GENERATING_MS) continue
+          // 1ª estratégia só com os requisitos principais preenchidos (_shared/setupReady.ts).
+          if ((await setupMissing(admin, c.id as string)).length > 0) continue
           targetAction = 'generate'
         } else {
           const lastReanalyzed = activeStrategy.last_reanalyzed_at ? new Date(activeStrategy.last_reanalyzed_at as string).getTime() : 0
@@ -867,6 +870,19 @@ Deno.serve(async (req) => {
       const kind = body.kind === 'initiative' ? 'initiative' : 'main'
       const parentId = body.parent_strategy_id ? String(body.parent_strategy_id) : null
       if (kind === 'initiative' && !parentId) return json({ error: 'Falta a estratégia principal pra vincular essa iniciativa.' }, 400)
+
+      // 1ª estratégia (nenhuma principal ativa ainda): só nasce com os
+      // requisitos principais preenchidos — os mesmos do sino de pendências
+      // (decisão do dono 2026-10-14). Vale pra todo caminho: tela, pagamento
+      // (stripe-webhook) e cron. Quem já tem estratégia segue igual.
+      if (kind === 'main') {
+        const { data: hasActive } = await admin.from('marketing_ai_strategies').select('id')
+          .eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').limit(1).maybeSingle()
+        if (!hasActive) {
+          const missing = await setupMissing(admin, company.id)
+          if (missing.length > 0) return json({ error: `A estratégia nasce assim que o básico estiver preenchido. Falta: ${missing.join(' · ')}.`, code: 'setup_incomplete', missing }, 409)
+        }
+      }
 
       // Ponto 4 — clique duplo: já existe uma geração em andamento (<10min)
       // pra essa empresa+kind? Devolve o id dela em vez de duplicar.

@@ -208,7 +208,12 @@ export function usePendencias() {
             const { data: st } = await supabase.from('marketing_ai_strategies').select('created_at')
               .eq('company_id', companyId).eq('kind', 'main').order('created_at', { ascending: false }).limit(1).maybeSingle()
             const stratAt = st?.created_at ? new Date(st.created_at as string).getTime() : NaN
-            if (Number.isFinite(base) && (Date.now() - base > PROFILE_REMIND_DAYS * DAY_MS || (Number.isFinite(stratAt) && stratAt > base))) {
+            // A 1ª estratégia NÃO acende o lembrete: ela acabou de nascer dos
+            // dados que o dono preencheu (aparecia na conta nova logo depois do
+            // pagamento — achado no teste da Tespon, 2026-10-14). Estratégia
+            // nova só conta depois de uma confirmação anterior.
+            const newerStrategy = !!pc.profile_confirmed_at && Number.isFinite(stratAt) && stratAt > base
+            if (Number.isFinite(base) && (Date.now() - base > PROFILE_REMIND_DAYS * DAY_MS || newerStrategy)) {
               out.push({
                 id: 'perfil', kind: 'perfil', tone: 'orange', title: t.profileT, hint: t.profileHint, destino: t.settingsUnd,
                 actions: [
