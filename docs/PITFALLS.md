@@ -495,3 +495,27 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   dentro de um texto/JSON. Ela espera confirmação de comando perigoso. No
   ensaio deu pra contornar quebrando em comandos menores; em produção, o
   dono pode precisar confirmar na tela.
+
+## Teste final na Tespon (2026-10-14) — o que apareceu
+
+- **`agent_performance.latency_ms` é NOT NULL.** Insert sem ele falha calado
+  (supabase-js devolve `{error}`, não lança). O registro de custo do
+  tratamento do Vault (`logPhotoRetouch`) não gravava e o teto não somava as
+  edições. Corrigido mandando `latency_ms: 0`.
+- **Vídeo do imóvel falhando em < 1 min, 2 tentativas, sem motivo.** O motor
+  só guardava "passagem falhou 2x". Agora o `checkClip` registra o motivo da
+  Higgsfield (`[tour] higgsfield recusou`). Suspeita no dia: saldo baixo
+  (a edição de US$ 0,08 passou, o vídeo de US$ 0,42 não). Vídeo que falha
+  zera `cost_usd` — não conta no teto.
+- **A IA inventava "depoimento" de cliente** no post genérico do Vault e
+  escrevia mensagem pro corretor como legenda quando faltava dado ("Ops!
+  Corretor, me passa…"). Regra de honestidade no `preamble` do
+  `creative-generate` e no `writeCopy` do `catalog-package`. O filtro de
+  qualidade já segurava a peça ruim (nota 12, ficou em rascunho).
+- **Mobiliar acrescentou cobertura no terraço** (e trocou a luz pra fim de
+  tarde). Ficha reforçada (`20261017130000_staging_no_structure.sql`):
+  estrutura nunca muda; pôr do sol pode (decisão do dono). O dono continua
+  aprovando o antes/depois — nenhuma IA garante 100%.
+- **Catálogo aceita número absurdo** (37.372 vagas, 7.373 m² num
+  apartamento) e o post repete o que o dono digitou. Não é invenção, mas
+  precisa de validação de faixa na ficha — ver análise de segurança.
