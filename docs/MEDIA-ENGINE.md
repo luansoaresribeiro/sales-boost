@@ -160,6 +160,11 @@ texto do `render-format`). `trial-video` agora pede 3 `photo_urls` (2 cômodos
 ficam em `creative.final_urls` (uma por variação de
 `config.gift_creative.variants`). Ver [DECISIONS.md](DECISIONS.md) "Kit
 grátis: 1 foto → 3 artes".
+Notas do QA (2026-10-14): tratamento preso há mais de 20 min vira falha (a
+pessoa pode tentar de novo); arte que não imprimir em 6 consultas seguidas
+sai como a foto tratada sem texto. No caminho do diagnóstico, o aviso diz
+"pronto" quando a foto está tratada — as artes são impressas na primeira
+visita ao painel (alguns segundos de "processando").
 
 
 ## Estúdio de vídeo na VPS (2026-10-12)

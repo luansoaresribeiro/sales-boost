@@ -18,6 +18,9 @@ export const KIT_CAP = Number(Deno.env.get('FREE_VIDEO_MONTHLY_CAP') ?? '30') ||
 const CREATIVE_ENDPOINT = '/alibaba/qwen-image-3/edit'
 const CREATIVE_BUCKET = 'post-images'
 const MAX_CREATIVE_ATTEMPTS = 2
+// Tratamento que não termina nunca (job preso na Higgsfield) vira falha: a
+// trava é liberada e a pessoa pode tentar de novo (a tela não espera pra sempre).
+const KIT_MAX_MS = 20 * 60 * 1000
 
 // Tratamento da foto real (testado no ensaio em 2026-10-11: mesmo cômodo,
 // mesmos móveis, só luz/cor/nitidez/verticais).
@@ -29,6 +32,7 @@ const CREATIVE_NEGATIVE = 'added furniture, removed objects, changed layout, ext
 export interface Creative {
   photo: string; job_ref: string | null; status: 'processing' | 'completed' | 'failed'; attempts: number
   enhanced_url?: string | null; render_attempts?: number
+  started_at?: string // kit de artes: quando começou (prazo máximo, ver KIT_MAX_MS)
   final_url?: string | null // kit antigo: 1 arte só
   final_urls?: (string | null)[] // kit de 3 artes (uma por variação da ficha)
 }
@@ -62,7 +66,7 @@ export async function startKit(admin: Any, opts: { photos: string[]; companyId?:
   if (!hero) return { error: 'Falta a foto.', status: 400 }
   const jobRef = await submitCreative(headers, hero)
   if (!jobRef) return { error: 'Não consegui começar agora. Tente de novo em alguns minutos.', status: 502 }
-  const creative: Creative = { photo: hero, job_ref: jobRef, status: 'processing', attempts: 1 }
+  const creative: Creative = { photo: hero, job_ref: jobRef, status: 'processing', attempts: 1, started_at: new Date().toISOString() }
   const { data, error } = await admin.from('video_tours').insert({
     company_id: opts.companyId ?? null, diagnostic_id: opts.diagnosticId ?? null, kind: 'trial', status: 'generating',
     photos: [hero], clips: [], creative,
@@ -123,6 +127,11 @@ export async function advanceKit(admin: Any, supabaseUrl: string, serviceKey: st
   }
   // Kit de 3 artes (sem vídeo): o andamento é o do tratamento da foto.
   if (total === 0) {
+    if (creative?.status === 'processing' && creative.started_at && Date.now() - Date.parse(creative.started_at) > KIT_MAX_MS) {
+      console.log('[kit] tratamento passou do prazo', tour.id)
+      creative = { ...creative, status: 'failed' }
+      await admin.from('video_tours').update({ creative }).eq('id', tour.id)
+    }
     const st = creative?.status ?? 'failed'
     const row = st === 'completed' ? 'completed' : st === 'failed' ? 'failed' : null
     if (row && tour.status !== row) await admin.from('video_tours').update({ status: row }).eq('id', tour.id)

@@ -117,18 +117,21 @@ Deno.serve(async (req) => {
             const enhanced = creative.enhanced_url
             const done = await Promise.all(variants.map(async (v, i) => {
               if (urls[i]) return urls[i]
-              const r = await fetch(`${supabaseUrl}/functions/v1/render-format`, {
-                method: 'POST', headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ template: 'photo', background: enhanced, fields: v.fields, width: v.width, height: v.height, save: false, ...(v.height / v.width > 1.6 ? { safe: storySafe(v.width, v.height) } : {}) }),
-              })
-              const out = await r.json().catch(() => ({})) as { url?: string; error?: string }
-              if (!out.url) console.log('[trial-video] arte: render falhou', i, r.status, out.error ?? '')
-              return out.url ?? null
+              try {
+                const r = await fetch(`${supabaseUrl}/functions/v1/render-format`, {
+                  method: 'POST', headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ template: 'photo', background: enhanced, fields: v.fields, width: v.width, height: v.height, save: false, ...(v.height / v.width > 1.6 ? { safe: storySafe(v.width, v.height) } : {}) }),
+                })
+                const out = await r.json().catch(() => ({})) as { url?: string; error?: string }
+                if (!out.url) console.log('[trial-video] arte: render falhou', i, r.status, out.error ?? '')
+                return out.url ?? null
+              } catch (e) { console.log('[trial-video] arte: render falhou', i, String(e)); return null }
             }))
-            // 3 rodadas com falha: a arte que faltar vira a foto tratada sem texto
-            // (melhor que esperar pra sempre).
+            // 6 rodadas com falha (~1 min de consultas): a arte que faltar vira a
+            // foto tratada sem texto (melhor que esperar pra sempre). Queda de
+            // rede também conta como rodada.
             const tries = (creative.render_attempts ?? 0) + (done.some(u => !u) ? 1 : 0)
-            const final = tries >= 3 ? done.map(u => u ?? enhanced) : done
+            const final = tries >= 6 ? done.map(u => u ?? enhanced) : done
             creative = { ...creative, render_attempts: tries, final_urls: final, ...(final.every(Boolean) ? { final_url: final[0] } : {}) }
           }
           await admin.from('video_tours').update({ creative }).eq('id', tour.id)
