@@ -1194,3 +1194,12 @@ grátis de 30 s, acima — mantidos como histórico):
     `content-test` é nota **≥50** nos dois analistas (texto e imagem), com o
     pedido "SEJA GENEROSO" no prompt — não 90, como textos antigos da tela
     diziam. A tela agora mostra a regra real; subir a régua é decisão do dono.
+- **Imóvel editável depois de cadastrado + descrição** — 2026-10-14 (pedido
+  do dono: "abrir as configurações e editar detalhes, descrição e fotos e ver
+  todas as fotos"). No catálogo, "✏️ Ver fotos e editar" (ou clicar na capa)
+  abre `CatalogItemEditor`: todas as fotos (clique = tela cheia), escolher a
+  capa (★), mudar a ordem, tirar foto (apaga do armazenamento só depois de
+  salvar) e editar todos os dados da ficha. Novo campo opcional
+  `descricao` (texto até 1500, migration `20261017140000`); a importação do
+  portal preenche com a descrição do anúncio, e o pacote do imóvel
+  (`catalog-package`) passa a usar a descrição real do corretor no texto da IA.

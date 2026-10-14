@@ -57,6 +57,7 @@ export interface CatalogField {
   label: Bilingual
   options?: Bilingual[] // só pra 'select'
   min?: number // só pra 'photos' (mínimo de fotos)
+  max?: number // só pra 'text': tamanho máximo (acima de 200 vira caixa grande, ex.: descrição)
 }
 
 export interface CatalogSchema {
@@ -140,7 +141,8 @@ export function sanitizeCatalogValues(raw: unknown, schema: CatalogSchema): Reco
       const allowed = (f.options ?? []).map(o => o.pt)
       if (s && allowed.includes(s)) out[key] = s
     } else {
-      const s = String(value ?? '').trim().slice(0, MAX_TEXT_LEN)
+      const max = f.type === 'text' && f.max ? Math.min(Math.max(f.max, 1), 2000) : MAX_TEXT_LEN
+      const s = String(value ?? '').trim().slice(0, max)
       if (s) out[key] = s
     }
   }
