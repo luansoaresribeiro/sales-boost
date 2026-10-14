@@ -22,7 +22,7 @@ const TX = {
     title: '🗓️ Calendário da Semana', introA: 'Cada dia já vem do ', introB: 'plano da sua estratégia', introC: ' (feed, stories e vídeos). No domingo o Sales Boost cria as peças de cada dia e dá uma nota pra cada uma. Clique numa peça pra ver a análise, aprovar ou agendar — nada vai ao ar sem a sua aprovação.',
     noPlanA: 'Ainda não há estratégia com plano semanal. ', noPlanB: 'Gere a estratégia', noPlanC: ' e o calendário se monta sozinho a partir dela.',
     autoTitle: 'Montar a semana sozinho todo domingo às 18h', autoDesc: 'Segue o plano da estratégia e cria as peças de cada dia — sem precisar clicar em nada.',
-    slotAuto: 'Sales Boost cria', slotItem: 'no imóvel', slotVideo: 'você pede (custa)', alsoStory: '↻ Stories também',
+    slotAuto: 'Sales Boost cria', slotItem: 'no imóvel', slotVideo: 'Sales Boost cria o vídeo', alsoStory: '↻ Stories também',
     surf: { feed: 'Feed', stories: 'Stories', reels: 'Vídeo', dm: 'DM' } as Record<string, string>, also: 'Também nesta semana:',
     loose: 'Peças avulsas (fora do calendário)',
     planning: 'Criando as peças...', planNow: '🗓️ Criar as peças da próxima semana agora', thisWeek: 'Esta semana', nextWeek: 'Próxima semana',
@@ -32,7 +32,7 @@ const TX = {
     title: '🗓️ Weekly Calendar', introA: 'Each day already comes from ', introB: 'your strategy plan', introC: ' (feed, stories and videos). On Sunday Sales Boost creates each day\'s pieces and scores each one. Click a piece to see the review, approve or schedule it — nothing goes live without your approval.',
     noPlanA: 'There is no strategy with a weekly plan yet. ', noPlanB: 'Generate the strategy', noPlanC: ' and the calendar builds itself from it.',
     autoTitle: 'Build the week automatically every Sunday at 6 PM', autoDesc: 'Follows the strategy plan and creates each day\'s pieces — no clicking needed.',
-    slotAuto: 'Sales Boost creates', slotItem: 'on the listing', slotVideo: 'you request it (paid)', alsoStory: '↻ Stories too',
+    slotAuto: 'Sales Boost creates', slotItem: 'on the listing', slotVideo: 'Sales Boost makes the video', alsoStory: '↻ Stories too',
     surf: { feed: 'Feed', stories: 'Stories', reels: 'Video', dm: 'DM' } as Record<string, string>, also: 'Also this week:',
     loose: 'Loose pieces (outside the calendar)',
     planning: 'Creating the pieces...', planNow: '🗓️ Create next week\'s pieces now', thisWeek: 'This week', nextWeek: 'Next week',
@@ -160,7 +160,8 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   const openSlots = (iso: string, dayItems: Item[]): WeekSlot[] => {
     const left = [...dayItems]
     return (slotsByDay[iso] ?? []).filter(sl => {
-      const recipe = formatMeta[sl.format]?.recipe
+      // Vídeo do calendário: a peça nasce com a receita 'video_imovel' (creative-generate).
+      const recipe = sl.producer === 'item_video' ? 'video_imovel' : formatMeta[sl.format]?.recipe
       const i = left.findIndex(it => (recipe && it.recipe === recipe) || (sl.producer === 'post' && !it.item_id))
       if (i >= 0) { left.splice(i, 1); return false }
       return true
@@ -192,7 +193,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                 return (
                   <button key={it.id} onClick={() => setOpen(it)} style={{ textAlign: 'left', width: '100%', cursor: 'pointer', fontFamily: D, padding: '6px 8px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '8px' }}>
                     <div style={{ fontSize: '10.5px', fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {KIND_ICON[it.kind ?? 'organico'] ?? '📝'} {it.idea ?? 'Post'}
+                      {it.recipe === 'video_imovel' ? (it.video_url ? '▶' : '⏳') : KIND_ICON[it.kind ?? 'organico'] ?? '📝'} {it.idea ?? 'Post'}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
                       <span style={{ fontSize: '8.5px', fontWeight: 700, color: sm.color }}>● {lang === 'en' ? STATUS_LABEL_EN[status] ?? sm.label : sm.label}{it.quality_score != null ? ` · ${it.quality_score}` : ''}</span>

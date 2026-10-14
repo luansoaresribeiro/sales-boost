@@ -166,6 +166,7 @@ const nextWeek = (() => {
   const now = new Date(), off = now.getDay() === 0 ? 1 : 8 - now.getDay()
   return Array.from({ length: 7 }, (_, i) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + off + i).toISOString().slice(0, 10))
 })()
+let calendarVideos = []
 await step('Calendário da semana pela estratégia', async () => {
   if (args.has('--sem-calendario')) return { ok: null, detail: 'pulado (--sem-calendario)' }
   if (!mix.length) return { ok: false, detail: 'sem estratégia ativa com mix semanal (a estratégia só nasce com os requisitos do sino preenchidos)' }
@@ -181,9 +182,10 @@ await step('Calendário da semana pela estratégia', async () => {
   if (r.status !== 200) return { ok: false, detail: `falhou (${r.status}) ${JSON.stringify(r.data).slice(0, 160)}` }
   const days = (r.data.days ?? []).map(d => d.date)
   const producerOf = Object.fromEntries(mix.map(m => [m.format, m.producer]))
-  // item_video ("você pede, custa") e DM não nascem sozinhos — ficam de fora da conta.
-  const expected = mix.filter(m => m.producer !== 'dm' && m.producer !== 'item_video').reduce((s, m) => s + (m.per_week | 0), 0)
-    - (r.data.todo ?? []).filter(t => !['dm', 'item_video'].includes(producerOf[t.format])).reduce((s, t) => s + (t.per_week | 0), 0)
+  // DM não é peça do dia (é automação). Vídeo nasce sozinho desde 2026-10-14
+  // (mínimo de 3/semana) e entra na conta.
+  const expected = mix.filter(m => m.producer !== 'dm').reduce((s, m) => s + (m.per_week | 0), 0)
+    - (r.data.todo ?? []).filter(t => producerOf[t.format] !== 'dm').reduce((s, t) => s + (t.per_week | 0), 0)
   let rows = []
   // Espera as peças E as notas (a análise roda depois de criar).
   for (let i = 0; i < 36; i++) {
@@ -199,7 +201,8 @@ await step('Calendário da semana pela estratégia', async () => {
   const notReal = rows.filter(x => x.provider === 'catalogo_real' && imageKind(x.image_url) !== 'free' && imageKind(x.image_url) !== 'edit').length
   const ready = rows.filter(x => x.status === 'vault').length
   const review = rows.filter(x => x.status === 'draft' && x.quality_score != null)
-  const cost = rows.reduce((s, x) => s + ({ edit: PRICE.edit, image: PRICE.image }[imageKind(x.image_url)] ?? 0), 0)
+  const cost = rows.filter(x => x.recipe !== 'video_imovel').reduce((s, x) => s + ({ edit: PRICE.edit, image: PRICE.image }[imageKind(x.image_url)] ?? 0), 0)
+  calendarVideos = rows.filter(x => x.recipe === 'video_imovel').map(x => x.id)
   const ok = rows.length >= expected && !banned.length && !notReal
   return {
     ok,
@@ -209,21 +212,27 @@ await step('Calendário da semana pela estratégia', async () => {
   }
 })
 
-// ── 4. Vídeo do imóvel — só se a estratégia pedir vídeo na semana ─────────────
-await step('Vídeo do imóvel (5 s)', async () => {
+// ── 4. Vídeos da semana (nascem sozinhos no calendário, mínimo da ficha) ─────
+// O vídeo entra na peça quando fica pronto (agendamento a cada 5 min).
+await step('Vídeos da semana', async () => {
   if (args.has('--sem-video')) return { ok: null, detail: 'pulado (--sem-video)' }
-  if (!mix.some(m => m.producer === 'item_video')) return { ok: null, detail: 'a estratégia não pede vídeo nesta semana' }
-  const c = await fn('item-videos', { action: 'create', item_id: item.id, kind: 'room', photos: [qaPhotos[2]], label: 'Teste final' })
-  if (c.status !== 200) return { ok: false, detail: `não começou (${c.status}) ${c.data?.error ?? ''}` }
-  let s = null
-  for (let i = 0; i < 48; i++) {
+  const min = Number(ficha?.content_rules?.min_videos_per_week ?? 0)
+  if (!calendarVideos.length) return { ok: min === 0, detail: min ? `a semana não trouxe vídeo (mínimo da ficha: ${min})` : 'a ficha não pede vídeo' }
+  let rows = []
+  for (let i = 0; i < 90; i++) {
+    rows = (await rest(`marketing_ai_test_content?id=in.(${calendarVideos.join(',')})&select=id,video_url,reasoning`)).data ?? []
+    const failed = rows.filter(x => !x.video_url && /não (saiu|foi feito)/.test(x.reasoning ?? ''))
+    if (rows.every(x => x.video_url || failed.includes(x))) break
     await sleep(10_000)
-    s = await fn('item-videos', { action: 'status', video_id: c.data.video_id })
-    if (s.data?.status === 'completed' || s.data?.status === 'failed') break
   }
-  if (s?.data?.status !== 'completed') return { ok: false, detail: s?.data?.status === 'failed' ? 'falhou — ver o motivo nos registros ("[tour] higgsfield recusou"); costuma ser crédito da Higgsfield' : 'não terminou em 8 min' }
-  const head = await fetch(s.data.video_url, { method: 'HEAD' })
-  return { ok: head.ok, detail: head.ok ? 'pronto e baixável' : `arquivo não abriu (${head.status})`, cost: before?.videoCost?.room ?? 0.42 }
+  const done = rows.filter(x => x.video_url)
+  const why = [...new Set(rows.filter(x => !x.video_url).map(x => x.reasoning).filter(Boolean))]
+  const vc = before?.videoCost?.room ?? 0.42
+  return {
+    ok: done.length === calendarVideos.length && done.length >= min,
+    detail: `${done.length} de ${calendarVideos.length} vídeos prontos no calendário (mínimo da ficha: ${min})${why.length ? ` · ${why.join(' / ')}` : ''}`,
+    cost: done.length * vc,
+  }
 })
 
 // ── 5. Mobiliar — ferramenta do imóvel, fora do calendário: só com --com-mobiliar

@@ -58,7 +58,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { fetchLearning, learningPromptBlock } from '../_shared/learning.ts'
-import { fetchFormatCatalog, formatCatalogBlock, sanitizeContentPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
+import { fetchContentRules, fetchFormatCatalog, formatCatalogBlock, sanitizeContentPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { setupMissing } from '../_shared/setupReady.ts'
 
@@ -67,7 +67,10 @@ type SupaClient = ReturnType<typeof createClient>
 
 // Mix semanal de formatos (estratégia → calendário). Validado por
 // sanitizeContentPlan: só chaves do catálogo que funcionam hoje, máx. 14/semana.
-const WEEKLY_MIX_RULES = `- MIX DA SEMANA: escolha no CATÁLOGO DE FORMATOS quantas peças de cada formato entram por semana pra servir a tese (total entre 7 e 14 — o calendário faz 1-2 por dia). Só formatos que "funcionam hoje"; nada "em breve". Formatos de vídeo custam — use com moderação e diga por quê. Cada item diz qual objetivo da tese ele serve.`
+// Vídeo: mínimo da ficha (content_rules.min_videos_per_week — decisão do dono
+// 2026-10-14: "pelo menos uns 3 vídeos na semana, e a estratégia pode jogar
+// pra cima"). O sanitizeContentPlan completa o mínimo se a IA pedir menos.
+const weeklyMixRules = (minVideos: number) => `- MIX DA SEMANA: escolha no CATÁLOGO DE FORMATOS quantas peças de cada formato entram por semana pra servir a tese (total entre 7 e 14 — o calendário faz 1-2 por dia). Só formatos que "funcionam hoje"; nada "em breve". ${minVideos > 0 ? `VÍDEO: no MÍNIMO ${minVideos} vídeos por semana (regra do setor) — pode pedir mais se a tese pedir; cada vídeo de 5 s custa ~US$ 0,42 do teto mensal de US$ 40, diga por quê quando passar do mínimo.` : 'Formatos de vídeo custam — use com moderação e diga por quê.'} Cada item diz qual objetivo da tese ele serve.`
 const WEEKLY_MIX_SHAPE = '[{"format":"chave do catálogo","per_week":1,"pillar":"","purpose":"qual parte da tese essa peça serve, 1 frase"}]'
 
 const STALE_GENERATING_MS = 10 * 60 * 1000 // ponto 3: 'generating' há mais de 10min = tratado como 'failed'
@@ -471,6 +474,7 @@ async function runStep2(admin: SupaClient, supabaseUrl: string, cronSecret: stri
       fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
       fetchFormatCatalog(admin, company.vertical_key ?? 'generico', companyId),
     ])
+    const rules = await fetchContentRules(admin, company.vertical_key ?? 'generico')
     lap('data-agent + baseline + playbook + formatos (2a etapa)')
     const prevPlan = (row.content_plan ?? null) as Partial<ContentPlan> | null
 
@@ -499,7 +503,7 @@ REGRAS CRÍTICAS:
 - Metas: no máximo 3, "goal_type" sendo um destes: ${GOAL_TYPES.join('|')}. NÃO preencha baseline — isso é calculado à parte com dado real.
 - Orçamento: só proponha valores SE o dono já informou orçamento mensal (${company.marketing_monthly_budget ? `informou: R$ ${company.marketing_monthly_budget}` : 'não informou'}); caso contrário, campos null e explique em "budget_reasoning" que falta essa informação.
 - Seja específico ao negócio e à tese acima — nunca genérico.
-${WEEKLY_MIX_RULES}
+${weeklyMixRules(rules.minVideosPerWeek)}
 
 Retorne APENAS um JSON:
 {
@@ -538,7 +542,7 @@ Retorne APENAS um JSON:
       budget: parsed2.budget && typeof parsed2.budget === 'object' ? parsed2.budget : {},
       estimates: parsed2.estimates && typeof parsed2.estimates === 'object' ? parsed2.estimates : {},
       data_provenance: { baseline_source: baseline ? 'instagram_performance_snapshots' : 'nenhum dado real ainda — metas sem baseline verificado', source: 'data-agent' },
-      content_plan: sanitizeContentPlan({ weekly_mix: parsed2.weekly_mix }, formats, prevPlan) ?? prevPlan,
+      content_plan: sanitizeContentPlan({ weekly_mix: parsed2.weekly_mix }, formats, prevPlan, rules.minVideosPerWeek) ?? prevPlan,
       status: 'active',
       updated_at: new Date().toISOString(),
     }).eq('id', strategyId)
@@ -660,6 +664,7 @@ async function runRefresh(admin: SupaClient, supabaseUrl: string, cronSecret: st
       fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
       fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
     ])
+    const rules = await fetchContentRules(admin, company.vertical_key ?? 'generico')
     const prevPlan = (strategy.content_plan ?? null) as Partial<ContentPlan> | null
 
     // P2: números 80/20 calculados por código (aditivo; se falhar, prompt igual ao de antes).
@@ -692,7 +697,7 @@ ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
 ${formatDomains(dataAgentState)}
 ${learningBlock}
 REGRAS: mantenha a tese intacta; priorize (regra 80/20) manter e reforçar o que os sinais reais mostram que já funciona, reservando só uma fatia menor pra testar algo novo; NUNCA invente métrica que não foi te dada acima; metas no máximo 3 (goal_type: ${GOAL_TYPES.join('|')}), NÃO preencha baseline.
-${WEEKLY_MIX_RULES}
+${weeklyMixRules(rules.minVideosPerWeek)}
 
 Retorne APENAS um JSON:
 {
@@ -711,7 +716,7 @@ Retorne APENAS um JSON:
     await admin.from('marketing_ai_strategies').update({
       funnel_plan: Array.isArray(parsed.funnel_plan) ? parsed.funnel_plan : strategy.funnel_plan,
       budget: parsed.budget && typeof parsed.budget === 'object' ? parsed.budget : strategy.budget,
-      content_plan: sanitizeContentPlan({ weekly_mix: parsed.weekly_mix }, formats, prevPlan) ?? prevPlan,
+      content_plan: sanitizeContentPlan({ weekly_mix: parsed.weekly_mix }, formats, prevPlan, rules.minVideosPerWeek) ?? prevPlan,
       last_refreshed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('id', strategyId)

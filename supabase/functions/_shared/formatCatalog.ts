@@ -43,7 +43,7 @@ const GENERIC: ContentFormat[] = [
 const PRODUCER_LABEL: Record<FormatProducer, string> = {
   post: 'gerado sozinho no calendário',
   item_package: 'sai do pacote de um item do catálogo (botão no item)',
-  item_video: 'vídeo curto a partir das fotos reais de um item (custa — só com o dono pedindo)',
+  item_video: 'vídeo curto a partir de 1 foto real de um item (criado sozinho no calendário; custa ~US$ 0,42 do teto mensal)',
   dm: 'resposta automática na DM (dono aprova a mensagem uma vez)',
 }
 const STATUS_LABEL: Record<FormatStatus, string> = { live: 'funciona hoje', needs_material: 'precisa de material/autorização do dono', planned: 'em breve (não planeje ainda)' }
@@ -82,6 +82,34 @@ export async function fetchFormatCatalog(admin: SupaClient, verticalKey: string,
   return out
 }
 
+// Regras de conteúdo da ficha (regra 6): config.content_rules. Hoje só o
+// mínimo de vídeos por semana (decisão do dono 2026-10-14: "pelo menos uns 3
+// vídeos na semana e a estratégia, dependendo, pode jogar pra cima").
+export interface ContentRules { minVideosPerWeek: number }
+export async function fetchContentRules(admin: SupaClient, verticalKey: string): Promise<ContentRules> {
+  try {
+    const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
+    const n = Number((data?.config as { content_rules?: { min_videos_per_week?: unknown } } | null)?.content_rules?.min_videos_per_week)
+    return { minVideosPerWeek: Number.isInteger(n) && n >= 0 && n <= 7 ? n : 0 }
+  } catch { return { minVideosPerWeek: 0 } }
+}
+
+// Garante o mínimo de vídeos no mix: se a estratégia pediu menos, completa no
+// primeiro formato de vídeo que já está no mix (ou no primeiro que funciona
+// hoje no catálogo). Mais que o mínimo fica como a estratégia pediu.
+export function ensureMinVideos(mix: WeeklyMixItem[], formats: ContentFormat[], min: number): WeeklyMixItem[] {
+  if (min <= 0) return mix
+  const have = mix.filter(m => m.producer === 'item_video').reduce((s, m) => s + (m.per_week | 0), 0)
+  if (have >= min) return mix
+  const out = mix.map(m => ({ ...m }))
+  const cur = out.find(m => m.producer === 'item_video')
+  if (cur) { cur.per_week = Math.min(7, cur.per_week + (min - have)); return out }
+  const f = formats.find(x => x.producer === 'item_video' && x.status === 'live')
+  if (!f) return out
+  out.push({ format: f.key, name: f.name, producer: 'item_video', per_week: Math.min(7, min - have), pillar: f.pillar, purpose: 'Mínimo de vídeos por semana (regra do setor): vídeo curto de uma foto real do imóvel.' })
+  return out
+}
+
 export function formatCatalogBlock(formats: ContentFormat[]): string {
   const line = (f: ContentFormat) => `- ${f.key} — ${f.name} [pilar: ${f.pillar}; ${STATUS_LABEL[f.status]}; ${PRODUCER_LABEL[f.producer]}${f.cost ? `; custo: ${f.cost}` : ''}]${f.notes ? ` (${f.notes})` : ''}`
   return `\n\nCATÁLOGO DE FORMATOS DE CONTEÚDO (tudo o que o Sales Boost sabe produzir pra esta empresa — escolha SÓ por estas chaves):\n${formats.map(line).join('\n')}`
@@ -89,7 +117,7 @@ export function formatCatalogBlock(formats: ContentFormat[]): string {
 
 // Valida a escolha da IA contra o catálogo: só chaves que existem e que
 // funcionam hoje; no máximo 14 peças/semana (regra do calendário: 1-2/dia).
-export function sanitizeContentPlan(raw: unknown, formats: ContentFormat[], prev?: Partial<ContentPlan> | null): ContentPlan | null {
+export function sanitizeContentPlan(raw: unknown, formats: ContentFormat[], prev?: Partial<ContentPlan> | null, minVideos = 0): ContentPlan | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
   const byKey = new Map(formats.map(f => [f.key, f]))
@@ -110,7 +138,8 @@ export function sanitizeContentPlan(raw: unknown, formats: ContentFormat[], prev
   }
   const central = String(r.central_line ?? prev?.central_line ?? '').trim().slice(0, 600)
   if (!central && !mix.length) return null
-  return { central_line: central, hero_formats: hero, why: String(r.why ?? prev?.why ?? '').slice(0, 600), weekly_mix: mix.length ? mix : (prev?.weekly_mix ?? []), updated_at: new Date().toISOString() }
+  const weekly = ensureMinVideos(mix.length ? mix : (prev?.weekly_mix ?? []), formats, minVideos)
+  return { central_line: central, hero_formats: hero, why: String(r.why ?? prev?.why ?? '').slice(0, 600), weekly_mix: weekly, updated_at: new Date().toISOString() }
 }
 
 // Do mix da estratégia pro calendário: `auto` é a fila intercalada (1 slot por
