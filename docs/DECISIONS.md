@@ -1219,3 +1219,20 @@ grátis de 30 s, acima — mantidos como histórico):
     item-videos `tick`) põe o vídeo na peça quando fica pronto; se falhar,
     não conta no teto e a peça diz o motivo. Nada é publicado sem o dono.
   - Antes era "você pede (custa)" — vídeo nunca saía sozinho.
+- **Agente de Dados: "Ideias e trends" + Avatar dentro dos imóveis + excluir
+  imóvel** — 2026-10-14 (pedidos do dono: "os posts não vão vir só do imóvel,
+  às vezes vai ser criado um post do zero tipo PowerPoint só pela ideia que a
+  trend traz… pode ser carrossel"; "meu avatar deve estar dentro de meus
+  imóveis"; "deve ser possível excluir imóveis").
+  - Sub-abas do Agente de Dados: **Imóveis** (catálogo + o card do Avatar "em
+    breve" embaixo) e **Ideias e trends** (o antigo CreativeAgent: trends do
+    segmento + ideias da semana). Cada ideia vira **✨ Post** ou **📑
+    Carrossel** de slides; cada trend tem "Fazer carrossel desta trend".
+  - **Carrossel de slides** (`deck` no `creative-generate`): 4 a 7 slides de
+    texto (gancho → um ponto por slide → chamada), cada um um card do
+    `render-format` com a marca — custo zero, a IA de imagem não escreve
+    texto (regra 4). Também é um formato genérico (`carrossel_slides`) que a
+    estratégia pode pôr no mix da semana.
+  - Excluir imóvel: botão "🗑 Remover" visível no cartão e "Excluir imóvel"
+    na janela de edição, sempre com confirmação. Posts já criados continuam
+    no calendário.

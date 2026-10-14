@@ -435,6 +435,11 @@ interface GenOpts {
   // Calendário da Semana: pra qual dia (YYYY-MM-DD) este post foi planejado —
   // ver planWeekForCompany(). Sem isso (geração avulsa normal) fica null.
   plannedFor?: string | null
+  // Carrossel de slides (tipo apresentação) a partir de uma ideia/trend —
+  // pedido do dono 2026-10-14: "post do zero, tipo PowerPoint, só pela ideia
+  // que a trend traz". Cada slide é um card do render-format (texto nítido da
+  // marca, custo zero); a IA de imagem nunca escreve texto (regra 4).
+  deck?: boolean
 }
 
 // O núcleo da geração — usado tanto pelo modo interativo (1 empresa, o
@@ -562,7 +567,10 @@ Decida o brief. Retorne APENAS um JSON:
   // template permitido mais próximo em vez de deixar vazar algo não suportado.
   if (!allowedFormats.includes(String(brief.format))) brief.format = allowedFormats[0]
   if (!templateKeys.includes(String(brief.template))) brief.template = 'livre'
-  if (forcedTemplate) {
+  if (opts.deck) {
+    brief.format = 'carrossel'
+    brief.template = 'livre'
+  } else if (forcedTemplate) {
     // Escolha manual do dono (ou "aleatório" já sorteado) — sempre vence.
     brief.template = forcedTemplate
     brief.format = 'foto'
@@ -604,7 +612,8 @@ ${visualRefs ? `\nReferências visuais da marca (Layouts & Estilos — inspire-s
 Escreva o post pronto pra publicar. Regras importantes:
 - "caption" é APENAS a legenda que vai no Instagram (texto pro público). NUNCA coloque nela instruções de imagem, descrição de foto nem "Slide 1/2/3".
 - Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
-- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
+${opts.deck ? `- ESTE é um CARROSSEL DE SLIDES (tipo apresentação, só texto na arte — sem foto): "slides" com 4 a 7 itens. Slide 1 = o gancho; do meio = um ponto por slide; último = a chamada pra ação. Cada "text" é UMA frase curta e completa (máx. 160 caracteres, sem emoji, nunca cortada no meio). Deixe "image" vazio.
+` : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
 - Depois de escrever, avalie o PRÓPRIO post: ele é forte/direto o suficiente pra também valer a pena repostar nos Stories tal como está (sem regerar nada)? Se sim, "story_worthy":true e "story_note": 1 frase curta dizendo por quê. Seja seletivo — nem todo post é bom pra Stories (ex: um card com muito texto lido rápido não funciona lá); só marque true quando fizer sentido de verdade.
 ${CARD_FIELD_INSTRUCTIONS[String(brief.template ?? '')] ?? ''}
 Retorne APENAS um JSON array:
@@ -664,7 +673,12 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
     nextReal() ?? generateImage(company.id, company.business_type, ev, hint, brandStyle, company.business_description ?? undefined)
 
   if (!opts.skipImage) {
-    if (fmt === 'carrossel') {
+    if (fmt === 'carrossel' && opts.deck) {
+      const rawSlides = Array.isArray(post.slides) ? (post.slides as { text?: string }[]).filter(x => String(x.text ?? '').trim()).slice(0, 7) : []
+      const urls = await Promise.all(rawSlides.map(x => renderGraphicCard(opts, company.id, 'tweet', { text: capWords(String(x.text ?? ''), 180), name: company.business_name, handle: slugHandle(company.business_name) }, cardBrand)))
+      slides = rawSlides.map((x, i) => ({ text: String(x.text ?? ''), image_prompt: '', image_url: urls[i] }))
+      mainImage = slides.find(x => x.image_url)?.image_url ?? null
+    } else if (fmt === 'carrossel') {
       const rawSlides = Array.isArray(post.slides) ? (post.slides as { text?: string; image?: string }[]).slice(0, 6) : []
       if (rawSlides.length > 0) {
         // Imagens: carrossel gera 1 imagem por slide (paralelo, até 6), cada
@@ -910,7 +924,8 @@ Retorne APENAS um JSON array, um item por dia, nesta ordem (sempre os 7 dias):
 // receita, ou post solto pra vaga de post) é pulada — clicar 2x ou o cron
 // depois do botão não gera de novo nem gasta IA de novo.
 const VIDEO_RECIPE = 'video_imovel'
-interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string }
+const DECK_FORMAT = 'carrossel_slides' // genérico (formatCatalog.ts)
+interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string }
 
 async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: ReturnType<typeof weekSlots>, plan: ContentPlan): Promise<{ planned: number; days: { date: string; posts: number; note: string }[]; todo: { format: string; name: string; per_week: number; purpose: string }[] }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -953,7 +968,7 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
   for (const slot of slots) {
     const recipe = slot.producer === 'item_package' ? recipeOf.get(slot.format) : slot.producer === 'item_video' ? VIDEO_RECIPE : undefined
     if (alreadyFilled(slot.date, recipe, slot.producer)) continue
-    if (slot.producer === 'post') { jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose }); continue }
+    if (slot.producer === 'post') { jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format: slot.format }); continue }
     if (slot.producer === 'item_video') {
       const itemId = pickItem()
       if (!itemId) { addTodo(slot); continue }
@@ -992,7 +1007,7 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
   try {
     if (job.producer === 'post') {
       const seed = { title: job.name, angle: `Pilar ${job.pillar}: ${job.purpose || 'serve a estratégia ativa'}`, format: 'foto' }
-      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date, seed })
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date, seed, deck: job.format === DECK_FORMAT })
       return
     }
     if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }
@@ -1180,7 +1195,7 @@ Deno.serve(async (req) => {
     const templateChoice = body.template ? String(body.template) : null
 
     const result = await generateForCompany(admin, anthropicKey, company, kind, {
-      bearer, isCron: false, seed, ideaId: body.idea_id ? String(body.idea_id) : null, templateChoice,
+      bearer, isCron: false, seed, ideaId: body.idea_id ? String(body.idea_id) : null, templateChoice, deck: body.deck === true,
     })
     return json({ ok: true, ...result })
   } catch (err) {

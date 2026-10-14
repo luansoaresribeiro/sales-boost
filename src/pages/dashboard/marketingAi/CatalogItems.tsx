@@ -13,7 +13,7 @@ import { useLang } from '../../../contexts/LanguageContext'
 
 const TX = {
   pt: {
-    edit: '✏️ Ver fotos e editar', whatToCreate: 'O que criar com este ', create: 'Criar', notifyDone: '✓ Avisar quando lançar', soonNotify: 'Em breve — avisar',
+    edit: '✏️ Ver fotos e editar', confirmRemove: (t: string) => `Excluir "${t}"? As fotos dele são apagadas e não dá pra desfazer. (Posts já criados no calendário continuam lá.)`, whatToCreate: 'O que criar com este ', create: 'Criar', notifyDone: '✓ Avisar quando lançar', soonNotify: 'Em breve — avisar',
     errPackage: 'Erro ao gerar pacote', errUpload: 'Não consegui enviar as fotos. Tente de novo.', errSavePhotos: 'Não consegui salvar as fotos. Tente de novo.',
     info1: 'Cadastre cada ', info2: ' com fotos reais (mínimo ', info3: ') e os dados dele — é a partir daqui que os pacotes de conteúdo são gerados.',
     add: '＋ Adicionar ', newItem: 'Novo ', sending: 'Enviando...', addPhotos: '＋ Adicionar fotos', save: 'Salvar', cancel: 'Cancelar',
@@ -24,7 +24,7 @@ const TX = {
     full: (n: number) => `Limite de ${n} fotos`,
   },
   en: {
-    edit: '✏️ See photos and edit', whatToCreate: 'What to create with this ', create: 'Create', notifyDone: '✓ We will notify you at launch', soonNotify: 'Coming soon — notify me',
+    edit: '✏️ See photos and edit', confirmRemove: (t: string) => `Delete "${t}"? Its photos are deleted and this can't be undone. (Posts already in the calendar stay there.)`, whatToCreate: 'What to create with this ', create: 'Create', notifyDone: '✓ We will notify you at launch', soonNotify: 'Coming soon — notify me',
     errPackage: 'Error generating package', errUpload: "Couldn't upload the photos. Please try again.", errSavePhotos: "Couldn't save the photos. Please try again.",
     info1: 'Add each ', info2: ' with real photos (at least ', info3: ') and its details — this is where content packages are generated from.',
     add: '＋ Add ', newItem: 'New ', sending: 'Uploading...', addPhotos: '＋ Add photos', save: 'Save', cancel: 'Cancel',
@@ -246,11 +246,15 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
     setPhotos([]); setFields({}); setCreating(false); await load()
   }
 
-  const remove = async (item: CatalogItem) => {
+  // Excluir imóvel (pedido do dono 2026-10-14) — sempre pergunta antes: apaga
+  // o item e as fotos dele do armazenamento. Peças já criadas continuam no calendário.
+  const remove = async (item: CatalogItem): Promise<boolean> => {
+    if (!window.confirm(tx.confirmRemove(item.title))) return false
     const paths = [...(item.meta?.photos ?? []), ...(item.meta?.staged_photos ?? [])].map(p => p.path)
     if (paths.length) await supabase.storage.from('post-images').remove(paths).catch(() => {})
     await supabase.from('marketing_ai_knowledge').delete().eq('id', item.id)
     await load()
+    return true
   }
 
   return (
@@ -318,7 +322,7 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                 <div style={{ padding: '10px 11px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                     <span style={{ fontSize: '12px', fontWeight: 700, color: 'white', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</span>
-                    <button onClick={() => remove(item)} title={tx.remove} style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '12px', cursor: 'pointer' }}>🗑</button>
+                    <button onClick={() => remove(item)} title={tx.remove} style={{ background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '6px', color: '#f87171', fontSize: '10.5px', fontWeight: 700, cursor: 'pointer', padding: '3px 7px', fontFamily: D }}>🗑 {tx.remove}</button>
                   </div>
                   <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '8px' }}>
                     <span style={{ color: photoCount < minPhotos ? '#f87171' : MUTED, fontWeight: photoCount < minPhotos ? 700 : 400 }}>{photoCount}/{minPhotos} {tx.photosN}</span>{f.preco ? ` · R$ ${f.preco}` : ''}{f.quartos ? ` · ${f.quartos}${tx.bedrooms}` : ''}
@@ -367,7 +371,7 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
           })}
         </div>
       )}
-      {editing && <CatalogItemEditor item={editing} companyId={companyId} schema={schema} onClose={() => setEditing(null)} onSaved={() => { void load() }} />}
+      {editing && <CatalogItemEditor item={editing} companyId={companyId} schema={schema} onClose={() => setEditing(null)} onSaved={() => { void load() }} onDelete={() => remove(editing)} />}
     </div>
   )
 }

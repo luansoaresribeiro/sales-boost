@@ -13,14 +13,14 @@ const TX = {
     minWarn: (n: number) => `Precisa de pelo menos ${n} fotos.`, required: 'Preencha os campos obrigatórios.',
     save: 'Salvar alterações', saving: 'Salvando...', cancel: 'Cancelar', errSave: 'Não consegui salvar. Tente de novo.',
     hint: 'Clique numa foto pra ver grande. A primeira é a capa. As fotos tiradas daqui somem do imóvel quando você salvar.',
-    details: 'Dados', moveLeft: 'Mover pra esquerda', moveRight: 'Mover pra direita',
+    del: '🗑 Excluir imóvel', details: 'Dados', moveLeft: 'Mover pra esquerda', moveRight: 'Mover pra direita',
   },
   en: {
     select: 'Select...', title: 'Edit', photos: 'Photos', cover: 'Cover', makeCover: 'Use as cover', removePhoto: 'Remove this photo',
     minWarn: (n: number) => `At least ${n} photos are needed.`, required: 'Fill in the required fields.',
     save: 'Save changes', saving: 'Saving...', cancel: 'Cancel', errSave: "Couldn't save. Please try again.",
     hint: 'Click a photo to see it large. The first one is the cover. Photos removed here leave the listing when you save.',
-    details: 'Details', moveLeft: 'Move left', moveRight: 'Move right',
+    del: '🗑 Delete listing', details: 'Details', moveLeft: 'Move left', moveRight: 'Move right',
   },
 } as const
 
@@ -66,7 +66,7 @@ export function FieldInput({ field, value, onChange }: { field: CatalogField; va
 // Ver todas as fotos (clique = tela cheia), escolher a capa, mudar a ordem,
 // tirar foto e editar os dados da ficha. Adicionar foto continua no botão
 // "＋ Adicionar fotos" do cartão (mesmo upload/tratamento de sempre).
-export default function CatalogItemEditor({ item, companyId, schema, onClose, onSaved }: { item: EditableItem; companyId: string; schema: CatalogSchema; onClose: () => void; onSaved: () => void }) {
+export default function CatalogItemEditor({ item, companyId, schema, onClose, onSaved, onDelete }: { item: EditableItem; companyId: string; schema: CatalogSchema; onClose: () => void; onSaved: () => void; onDelete?: () => Promise<boolean> }) {
   const { lang } = useLang()
   const tx = TX[lang]
   const minPhotos = catalogMinPhotos(schema)
@@ -159,6 +159,7 @@ export default function CatalogItemEditor({ item, companyId, schema, onClose, on
           <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
             <button onClick={save} disabled={!canSave} style={{ padding: '10px 18px', background: canSave ? ORANGE : 'rgba(255,255,255,0.08)', color: canSave ? '#000' : MUTED, fontWeight: 700, fontSize: '12.5px', borderRadius: '9px', border: 'none', cursor: canSave ? 'pointer' : 'not-allowed', fontFamily: D }}>{saving ? tx.saving : tx.save}</button>
             <button onClick={onClose} style={{ padding: '10px 16px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '9px', color: MUTED, fontSize: '12.5px', cursor: 'pointer', fontFamily: D }}>{tx.cancel}</button>
+            {onDelete && <button onClick={async () => { if (await onDelete()) onClose() }} style={{ marginLeft: 'auto', padding: '10px 14px', background: 'transparent', border: '1px solid rgba(248,113,113,0.4)', borderRadius: '9px', color: '#f87171', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>{tx.del}</button>}
           </div>
         </div>
       </div>

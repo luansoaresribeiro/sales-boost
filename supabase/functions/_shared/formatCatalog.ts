@@ -38,6 +38,9 @@ const SURFACES: FormatSurface[] = ['feed', 'stories', 'reels', 'dm']
 // post orgânico; o Copywriter marca se o post também vale pros Stories).
 const GENERIC: ContentFormat[] = [
   { key: 'post_card', name: 'Post de foto/card com template da marca', pillar: 'qualquer', producer: 'post', status: 'live', media: 'imagem gerada + template da marca', cost: 'centavos' },
+  // Pedido do dono 2026-10-14: post do zero, tipo apresentação, a partir de
+  // uma ideia/trend (não do item do catálogo). Slides de texto da marca.
+  { key: 'carrossel_slides', name: 'Carrossel de slides (tipo apresentação) a partir de uma ideia ou trend', pillar: 'qualquer', producer: 'post', status: 'live', media: 'slides de texto com a marca (sem foto)', cost: 'centavos' },
 ]
 
 const PRODUCER_LABEL: Record<FormatProducer, string> = {
