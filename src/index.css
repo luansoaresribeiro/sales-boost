@@ -25,6 +25,15 @@ body {
   margin: 0;
 }
 
+/* Celular (pedido do dono, 2026-10-14: "não dar zoom"). Não bloqueamos o
+   zoom de pinça (acessibilidade; o iPhone ignora o bloqueio de qualquer
+   jeito) — tiramos o que incomoda de verdade: (1) o zoom automático do
+   iPhone ao tocar num campo com letra < 16px e (2) o zoom de toque duplo. */
+html, body { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+@media (max-width: 768px) {
+  input, select, textarea { font-size: 16px !important; }
+}
+
 .grain-overlay::after {
   content: '';
   position: absolute;

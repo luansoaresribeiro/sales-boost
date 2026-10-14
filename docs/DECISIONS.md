@@ -1071,3 +1071,23 @@ grátis de 30 s, acima — mantidos como histórico):
   na MESMA chamada — sem custo extra e sem mudar a regra do Vault
   automático. Conteúdo → Padrão visual → "Prévia do feed" mostra a grade
   3×3 das próximas peças com essa nota.
+- **Liga quando paga** — 2026-10-14 (regra do dono: "vai ligar quando o
+  pagamento for feito"). A primeira estratégia é criada sozinha na
+  primeira visita ao painel e o calendário automático de domingo liga
+  sozinho **só** para conta com assinatura (`stripe_subscription_id`) ou
+  acesso liberado à mão (`manual_access`). Conta antiga sem assinatura
+  (que o `hasPaidAccess` ainda trata como paga) não entra — o dono liga o
+  interruptor se quiser. Objetivo: o cliente que pagou não precisa
+  configurar nada.
+- **Vault com foto real + Higgsfield** — 2026-10-14 (pedido do dono: "o
+  vault deve ser ligado ao Higgsfield"). Setor com `real_photo_first` na
+  ficha (imóveis): o post genérico do Vault usa uma foto REAL do catálogo
+  tratada pela Higgsfield (mesmo tratamento do criativo do kit: luz, cor,
+  nitidez — nada é adicionado ou tirado) em vez de imagem inventada pela
+  OpenAI. Slides de carrossel usam a foto real sem tratamento (1 chamada
+  paga por slide sairia caro). Sem foto no catálogo ou Higgsfield fora →
+  foto real crua → fluxo antigo. Custo: 1 edição Higgsfield por post
+  genérico (o mesmo valor do criativo do kit).
+- **Celular sem zoom** — 2026-10-14. Toque duplo não dá zoom e campo de
+  texto não amplia a tela sozinho (fonte de 16px no celular). O zoom de
+  pinça continua liberado (acessibilidade).

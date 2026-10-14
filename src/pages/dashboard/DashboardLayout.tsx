@@ -12,6 +12,7 @@ import PendenciasBell from './PendenciasBell'
 import { ShowcaseProvider, useShowcase } from '../../contexts/ShowcaseContext'
 import { ShowcaseBanner, KitPromoModal } from './ShowcaseUi'
 import { usePendencias } from '../../lib/usePendencias'
+import { supabase } from '../../lib/supabase'
 import logo from '../../assets/logo.png'
 
 const ORANGE = '#FF6D29'
@@ -197,6 +198,31 @@ function SidebarInner({ isMobile, open, onNavigate, onClose, approvalsCount }: {
 
 // O LanguageProvider fica na raiz (main.tsx), pra login, cadastro e /setup
 // também seguirem o idioma escolhido.
+// Cliente não precisa configurar nada (pedido do dono, 2026-10-14): assim que
+// a conta tem plano (não é vitrine), a 1ª estratégia nasce sozinha em
+// QUALQUER tela do painel — antes só nascia ao abrir a aba Estratégia. O
+// strategy-generate já não duplica (devolve a que estiver 'generating'), e
+// aqui só dispara se a empresa não tem estratégia principal nenhuma.
+function useFirstStrategy(companyId: string | null, readOnly: boolean) {
+  const { session } = useAuth()
+  const token = session?.access_token ?? ''
+  useEffect(() => {
+    if (!companyId || !token || readOnly) return
+    const key = `sb_first_strategy_${companyId}`
+    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1') } catch { /* sem storage: segue */ }
+    let alive = true
+    supabase.from('marketing_ai_strategies').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('kind', 'main')
+      .then(({ count, error }) => {
+        if (!alive || error || (count ?? 0) > 0) return
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/strategy-generate`, {
+          method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'generate', kind: 'main' }),
+        }).catch(() => { /* silencioso: a aba Estratégia tenta de novo ao abrir */ })
+      })
+    return () => { alive = false }
+  }, [companyId, token, readOnly])
+}
+
 export default function DashboardLayout() {
   // ShowcaseProvider: "modo vitrine" (conta nova sem pagamento = somente visualização).
   return <ShowcaseProvider><DashboardShell /></ShowcaseProvider>
@@ -209,6 +235,11 @@ function DashboardShell() {
   const pend = usePendencias()
   // Em vitrine o teste de 7 dias não vale (decisão 2026-10-10): sem boas-vindas/contador de trial.
   const { readOnly } = useShowcase()
+  // Só quem PAGOU de verdade (assinatura) ou teve acesso liberado à mão —
+  // conta antiga sem assinatura (ex.: cliente de antes do fluxo novo) não
+  // ganha estratégia/calendário sozinha (regra do dono: "liga quando pagar").
+  const paid = !!company?.stripe_subscription_id || company?.manual_access === true
+  useFirstStrategy(paid ? company?.id ?? null : null, readOnly)
   const [mobileOpen, setMobileOpen] = useState(false)
   useEffect(() => { if (!isMobile) setMobileOpen(false) }, [isMobile])
 

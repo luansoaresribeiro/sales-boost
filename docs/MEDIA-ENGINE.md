@@ -209,3 +209,15 @@ Comandos (rodar no terminal da Hostinger):
 - Teste no ensaio (1 geração, estilo Moderno, foto de corredor quase vazio):
   sofá/almofadas/quadro entraram, porta/espelho/piso iguais. O
   enquadramento muda um pouco (saída 3:4) — documentado como divergência.
+
+## Vault com foto real (2026-10-14)
+
+- `creative-generate` (`generateForCompany`): quando a ficha tem
+  `config.real_photo_first = true` e o catálogo tem fotos, a imagem de
+  cada post genérico vem de uma foto real sorteada do catálogo, tratada
+  pela Higgsfield (`/alibaba/qwen-image-3/edit`, 1k, 3:4) e guardada em
+  `post-images/renders/<empresa>/vault-real-*.png`.
+- Espera até ~75s pelo tratamento; se não vier, usa a foto real crua
+  (nunca trava o post). Carrossel: foto real crua em cada slide.
+- Custo: 1 edição por post genérico. Sem teto próprio ainda — o volume é o
+  do Vault (já limitado pelo plano).

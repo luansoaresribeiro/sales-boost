@@ -101,7 +101,9 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
 
   useEffect(() => { load() }, [load])
 
-  const autoOn = autoPref ?? mix.length > 0
+  // Mesma regra do cron: liga sozinho só com estratégia + pagamento de verdade.
+  const paid = !!company?.stripe_subscription_id || company?.manual_access === true
+  const autoOn = autoPref ?? (mix.length > 0 && paid)
   const toggleAuto = async () => {
     const next = !autoOn
     setAutoPref(next)
