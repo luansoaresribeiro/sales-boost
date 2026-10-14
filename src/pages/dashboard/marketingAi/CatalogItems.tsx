@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { processImageTo4x5 } from '../../../lib/imageProcessing'
-import { catalogMinPhotos } from '../../../lib/setupRules'
+import { catalogMinPhotos, MAX_PHOTOS_PER_ITEM } from '../../../lib/setupRules'
 import { bi, sanitizeCatalogValues, titleFromFields, type CatalogSchema, type CatalogField } from '../../../lib/verticalPlaybook'
 import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL } from './shared'
 import { ImageModal } from './TestingArea'
@@ -20,6 +20,8 @@ const TX = {
     loading: 'Carregando...', none: (item: string) => `Nenhum ${item} cadastrado ainda.`, remove: 'Remover',
     photosN: 'fotos', bedrooms: 'q', generating: 'Gerando...', genPackage: '✨ Gerar pacote',
     pieces: (n: number) => `${n} peça${n === 1 ? '' : 's'} em rascunho, esperando aprovação:`,
+    maxPhotos: (n: number, item: string) => `Máximo de ${n} fotos por ${item}. As fotos a mais não foram enviadas.`,
+    full: (n: number) => `Limite de ${n} fotos`,
   },
   en: {
     select: 'Select...', whatToCreate: 'What to create with this ', create: 'Create', notifyDone: '✓ We will notify you at launch', soonNotify: 'Coming soon — notify me',
@@ -29,6 +31,8 @@ const TX = {
     loading: 'Loading...', none: (item: string) => `No ${item} added yet.`, remove: 'Remove',
     photosN: 'photos', bedrooms: 'bd', generating: 'Generating...', genPackage: '✨ Generate package',
     pieces: (n: number) => `${n} draft piece${n === 1 ? '' : 's'}, waiting for approval:`,
+    maxPhotos: (n: number, item: string) => `Up to ${n} photos per ${item}. The extra photos were not uploaded.`,
+    full: (n: number) => `${n}-photo limit`,
   },
 } as const
 
@@ -188,11 +192,15 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
   // Mesmo upload/processamento/bucket da criação; só acrescenta em meta.photos
   // (e põe a capa se o item ainda não tinha image_url).
   const onAddFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? [])
+    const picked = Array.from(e.target.files ?? [])
     const item = addTargetRef.current
     if (addRef.current) addRef.current.value = ''
-    if (!files.length || !item) return
-    setAddingId(item.id); setAddError(null)
+    if (!picked.length || !item) return
+    // Teto de fotos por item: só envia o que ainda cabe.
+    const room = Math.max(0, MAX_PHOTOS_PER_ITEM - (item.meta?.photos?.length ?? 0))
+    const files = picked.slice(0, room)
+    setAddingId(item.id); setAddError(picked.length > room ? tx.maxPhotos(MAX_PHOTOS_PER_ITEM, schema.itemLabel.toLowerCase()) : null)
+    if (!files.length) { setAddingId(null); return }
     try {
       const uploaded: Photo[] = []
       for (const file of files) {
@@ -208,7 +216,7 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
       // relê o item antes de gravar, pra não sobrescrever fotos adicionadas em outra aba
       const { data: fresh } = await supabase.from('marketing_ai_knowledge').select('image_url, meta').eq('id', item.id).eq('company_id', companyId).maybeSingle()
       const meta = (fresh?.meta ?? item.meta ?? {}) as ItemMeta
-      const patch: Record<string, unknown> = { meta: { ...meta, photos: [...(meta.photos ?? []), ...uploaded] } }
+      const patch: Record<string, unknown> = { meta: { ...meta, photos: [...(meta.photos ?? []), ...uploaded].slice(0, MAX_PHOTOS_PER_ITEM) } }
       if (!(fresh?.image_url ?? item.image_url)) patch.image_url = uploaded[0].url
       const { error } = await supabase.from('marketing_ai_knowledge').update(patch).eq('id', item.id).eq('company_id', companyId)
       if (error) setAddError(tx.errSavePhotos)
@@ -217,9 +225,15 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
     finally { setAddingId(null) }
   }
 
+  const [createMsg, setCreateMsg] = useState<string | null>(null)
   const onFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? [])
-    if (!files.length) return
+    const picked = Array.from(e.target.files ?? [])
+    if (!picked.length) return
+    // Teto de fotos por item: só envia o que ainda cabe.
+    const room = Math.max(0, MAX_PHOTOS_PER_ITEM - photos.length)
+    const files = picked.slice(0, room)
+    setCreateMsg(picked.length > room ? tx.maxPhotos(MAX_PHOTOS_PER_ITEM, schema.itemLabel.toLowerCase()) : null)
+    if (!files.length) { if (fileRef.current) fileRef.current.value = ''; return }
     setUploading(true)
     try {
       const uploaded: Photo[] = []
@@ -232,7 +246,7 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
           uploaded.push({ url: data.publicUrl, path })
         }
       }
-      setPhotos(p => [...p, ...uploaded])
+      setPhotos(p => [...p, ...uploaded].slice(0, MAX_PHOTOS_PER_ITEM))
     } finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
   }
 
@@ -294,9 +308,10 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
               </div>
             )}
             <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} style={{ display: 'none' }} />
-            <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{ padding: '7px 14px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.5)', borderRadius: '8px', color: ORANGE, fontWeight: 700, fontSize: '11.5px', cursor: 'pointer', fontFamily: D }}>
-              {uploading ? tx.sending : tx.addPhotos}
+            <button onClick={() => fileRef.current?.click()} disabled={uploading || photos.length >= MAX_PHOTOS_PER_ITEM} style={{ padding: '7px 14px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.5)', borderRadius: '8px', color: ORANGE, fontWeight: 700, fontSize: '11.5px', cursor: 'pointer', fontFamily: D, opacity: photos.length >= MAX_PHOTOS_PER_ITEM ? 0.5 : 1 }}>
+              {uploading ? tx.sending : photos.length >= MAX_PHOTOS_PER_ITEM ? tx.full(MAX_PHOTOS_PER_ITEM) : tx.addPhotos}
             </button>
+            {createMsg && <div style={{ fontSize: '11px', color: '#FBBF24', marginTop: '6px' }}>{createMsg}</div>}
           </div>
 
           {formFields.map(f => (
@@ -331,9 +346,9 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                   <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '8px' }}>
                     <span style={{ color: photoCount < minPhotos ? '#f87171' : MUTED, fontWeight: photoCount < minPhotos ? 700 : 400 }}>{photoCount}/{minPhotos} {tx.photosN}</span>{f.preco ? ` · R$ ${f.preco}` : ''}{f.quartos ? ` · ${f.quartos}${tx.bedrooms}` : ''}
                   </div>
-                  <button onClick={() => { addTargetRef.current = item; addRef.current?.click() }} disabled={addingId === item.id}
+                  <button onClick={() => { addTargetRef.current = item; addRef.current?.click() }} disabled={addingId === item.id || photoCount >= MAX_PHOTOS_PER_ITEM}
                     style={{ width: '100%', padding: '7px 10px', marginBottom: '6px', background: photoCount < minPhotos ? 'rgba(255,109,41,0.14)' : 'transparent', border: `1px solid ${photoCount < minPhotos ? 'rgba(255,109,41,0.5)' : BORDER}`, borderRadius: '7px', color: photoCount < minPhotos ? ORANGE : MUTED, fontWeight: 700, fontSize: '11px', cursor: addingId === item.id ? 'default' : 'pointer', fontFamily: D }}>
-                    {addingId === item.id ? tx.sending : tx.addPhotos}
+                    {addingId === item.id ? tx.sending : photoCount >= MAX_PHOTOS_PER_ITEM ? tx.full(MAX_PHOTOS_PER_ITEM) : tx.addPhotos}
                   </button>
                   {!setupMode && <button onClick={() => generatePackage(item.id)} disabled={packageBusyId === item.id}
                     style={{ width: '100%', padding: '7px 10px', background: packageBusyId === item.id ? 'rgba(255,255,255,0.06)' : 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '7px', color: ORANGE, fontWeight: 700, fontSize: '11px', cursor: packageBusyId === item.id ? 'default' : 'pointer', fontFamily: D }}>

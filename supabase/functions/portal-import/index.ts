@@ -29,7 +29,7 @@ const cors = {
 const MAX_FEED_BYTES = 25 * 1024 * 1024
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024
 const MAX_LISTINGS = 300
-const MAX_PHOTOS = 20
+const MAX_PHOTOS = 50 // mesmo teto do catálogo (MAX_PHOTOS_PER_ITEM, decisão do dono 2026-10-14)
 
 export interface Listing {
   id: string

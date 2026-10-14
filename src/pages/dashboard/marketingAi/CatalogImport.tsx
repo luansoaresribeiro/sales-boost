@@ -3,11 +3,11 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
 import { processImageTo4x5 } from '../../../lib/imageProcessing'
+import { MAX_PHOTOS_PER_ITEM } from '../../../lib/setupRules'
 import { sanitizeCatalogValues, titleFromFields, type CatalogSchema, type CatalogImportMap } from '../../../lib/verticalPlaybook'
 import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL } from './shared'
 
 const ORANGE = '#FF6D29'
-const MAX_PHOTOS_PER_ITEM = 15
 
 // Mesmo formato que o portal-import devolve (campos neutros).
 interface Listing {
