@@ -471,8 +471,8 @@ Aprovado:
 
 ## 2026-10-09 — Etapa 1 do tour do plano: como foi implementado
 
-- **Teto: US$ 40 por cliente por mês** (decisão do dono; **subiu pra US$ 50
-  em 2026-10-14**, ver o fim deste arquivo), somando análise de
+- **Teto: US$ 40 por cliente por mês** (decisão do dono; confirmado de novo
+  em 2026-10-14, ver o fim deste arquivo), somando análise de
   fotos + geração (`video_tours.cost_usd`, `kind = 'plan'`). A geração é
   bloqueada antes de gastar se passar do teto (mensagem diz quanto custa e
   quanto sobra). Preço da passagem é estimado (US$ 0,108/s × 6 s); falta
@@ -1111,10 +1111,11 @@ grátis de 30 s, acima — mantidos como histórico):
   - Custo por kit: **1 edição Higgsfield** (antes: 2 vídeos × US$ 0,54 + a
     edição). As 3 artes não custam nada.
   - Kits antigos (com vídeos) continuam aparecendo no `/gratis`.
-- **Teto de gasto por cliente: US$ 50/mês** — 2026-10-14 (dono: "o teto de
-  gasto por cliente é 50 dólares por mês"). Substitui os US$ 40. No código
-  vale hoje para os vídeos dos imóveis (`item-videos`,
-  `VIDEO_MONTHLY_CAP_USD`, padrão 50). **Divergência registrada:** o
-  tratamento de foto do Vault e o "mobiliar" ainda não entram nessa soma em
-  dólar — têm limite próprio (mobiliar: 10 fotos/mês). Juntar tudo num teto
-  único em dólar fica como próximo passo.
+- **Teto de gasto por cliente continua US$ 40/mês** — 2026-10-14. O dono
+  chegou a falar em US$ 50 e depois preferiu manter os US$ 40. (Os "US$ 20"
+  da mesma conversa são outra coisa: o dinheiro de uma vez só pros testes
+  finais, não um teto por cliente.) No código o teto vale hoje para os vídeos
+  dos imóveis (`item-videos`, `VIDEO_MONTHLY_CAP_USD`, padrão 40).
+  **Divergência registrada:** o tratamento de foto do Vault e o "mobiliar"
+  ainda não entram nessa soma em dólar — têm limite próprio (mobiliar: 10
+  fotos/mês). Juntar tudo num teto único em dólar fica como próximo passo.
