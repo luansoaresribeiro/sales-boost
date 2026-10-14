@@ -11,6 +11,8 @@ rodada; o que é conferido não muda.
 QA_EMAIL=email-da-conta-de-teste QA_PASSWORD='senha' node scripts/teste-final.mjs
 ```
 
+- Sem guardar senha: dá pra passar `QA_TOKEN` (sessão aberta, vale 1h) ou
+  `QA_REFRESH_TOKEN` no lugar de `QA_EMAIL`/`QA_PASSWORD`.
 - Roda com o **login do cliente de teste**, nunca com chave de administrador.
   Assim o teste também prova que a conta só vê o que é dela.
 - Conta usada hoje: **Tespon** (produção, acesso liberado à mão). Nunca rodar

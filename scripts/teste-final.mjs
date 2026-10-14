@@ -23,8 +23,9 @@ for (const f of ['.env.local', '.env']) {
   }
 }
 const URL_ = process.env.VITE_SUPABASE_URL, ANON = process.env.VITE_SUPABASE_ANON_KEY
-const EMAIL = process.env.QA_EMAIL, PASSWORD = process.env.QA_PASSWORD
-if (!URL_ || !ANON || !EMAIL || !PASSWORD) { console.error('Faltam VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, QA_EMAIL ou QA_PASSWORD.'); process.exit(2) }
+const EMAIL = process.env.QA_EMAIL, PASSWORD = process.env.QA_PASSWORD, REFRESH = process.env.QA_REFRESH_TOKEN, ACCESS = process.env.QA_TOKEN
+// QA_TOKEN (sessão de até 1h) ou QA_REFRESH_TOKEN: alternativas à senha (sessão já aberta da conta de teste) — a senha nunca precisa ficar guardada.
+if (!URL_ || !ANON || (!ACCESS && !REFRESH && (!EMAIL || !PASSWORD))) { console.error('Faltam VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY e QA_EMAIL+QA_PASSWORD (ou QA_REFRESH_TOKEN).'); process.exit(2) }
 
 // Preços medidos (docs/DECISIONS.md, 2026-10-14) — os mesmos do _shared/spendCap.ts.
 const PRICE = { edit: 0.08, image: 0.04 }
@@ -90,7 +91,9 @@ async function spend(itemId) {
 }
 
 // ── 0. Login + conta paga ────────────────────────────────────────────────────
-const login = await call('/auth/v1/token?grant_type=password', { body: { email: EMAIL, password: PASSWORD } })
+const login = ACCESS ? { data: { access_token: ACCESS } } : REFRESH
+  ? await call('/auth/v1/token?grant_type=refresh_token', { body: { refresh_token: REFRESH } })
+  : await call('/auth/v1/token?grant_type=password', { body: { email: EMAIL, password: PASSWORD } })
 if (!login.data?.access_token) { console.error('Login falhou:', login.data?.error_description ?? login.status); process.exit(1) }
 token = login.data.access_token
 
