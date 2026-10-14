@@ -151,7 +151,25 @@ const COHERENCE_BAD_THRESHOLD = 50
 
 interface CatScore { score: number; comment: string }
 type Scores = Record<string, CatScore>
-interface PostShape { idea: string | null; caption: string | null; hashtags: string | null; cta: string | null; format: string | null; imageUrl: string | null }
+interface PostShape { idea: string | null; caption: string | null; hashtags: string | null; cta: string | null; format: string | null; imageUrl: string | null; feedPattern?: string | null }
+
+// Padrão visual do feed (pedido do dono, 2026-10-14: "o feed tem que manter
+// um padrão"). Vem do Kit da marca (brand_dna). Vira uma nota a mais
+// (scores.feed_fit) na MESMA chamada do analista visual — sem custo extra e
+// sem mudar a regra do Vault automático (só informa o dono).
+// deno-lint-ignore no-explicit-any
+async function loadFeedPattern(admin: any, companyId: string): Promise<string | null> {
+  try {
+    const { data } = await admin.from('brand_dna').select('colors, fonts, design_notes').eq('company_id', companyId).maybeSingle()
+    if (!data) return null
+    const parts = [
+      Array.isArray(data.colors) && data.colors.length ? `paleta ${data.colors.slice(0, 6).join(', ')}` : '',
+      data.fonts ? `fontes ${String(data.fonts).slice(0, 120)}` : '',
+      data.design_notes ? `direção de arte: ${String(data.design_notes).slice(0, 400)}` : '',
+    ].filter(Boolean)
+    return parts.length ? parts.join('; ') : null
+  } catch { return null }
+}
 
 function parseJsonLoose<T = Record<string, unknown>>(raw: string): T {
   try { return JSON.parse(raw) as T } catch { /* fall through */ }
@@ -199,11 +217,17 @@ Retorne APENAS um JSON: {"score":0,"comment":"1 frase curta — o que está bom,
 
 Dê nota de 0 a 100. SEJA GENEROSO — a maioria das imagens deve passar fácil. Só dê nota abaixo de ${COHERENCE_BAD_THRESHOLD} em problema visual CLARO: texto cortado/sobreposto/ilegível, elemento quebrado/faltando/fora do lugar, ou texto/faixa/placa na foto com palavras sem sentido/erradas.
 
-Retorne APENAS um JSON: {"score":0,"comment":"1 frase curta — o que está bom, ou o que especificamente está quebrado, se houver"}`
-        const rawV = await callClaudeVision(anthropicKey, visPrompt, img, 300)
-        const parsedV = parseJsonLoose<{ score?: number; comment?: string }>(rawV)
+${post.feedPattern ? `
+SEPARADAMENTE (não mistura com a nota acima): o PADRÃO VISUAL do feed desta marca é: ${post.feedPattern}. Dê também "feed_fit" de 0 a 100 — o quanto esta imagem combina com esse padrão (cores, fontes, clima), pra o feed parecer de uma marca só. Foto real de imóvel sem card conta como encaixe bom se a luz/clima não destoa.
+` : ''}
+Retorne APENAS um JSON: {"score":0,"comment":"1 frase curta — o que está bom, ou o que especificamente está quebrado, se houver"${post.feedPattern ? ',"feed_fit":0,"feed_comment":"1 frase curta — o que destoa do padrão, se algo"' : ''}}`
+        const rawV = await callClaudeVision(anthropicKey, visPrompt, img, 380)
+        const parsedV = parseJsonLoose<{ score?: number; comment?: string; feed_fit?: number; feed_comment?: string }>(rawV)
         const scoreV = Math.max(0, Math.min(100, Math.round(Number(parsedV.score ?? 100))))
         scores.visual_coherence = { score: scoreV, comment: String(parsedV.comment ?? '') }
+        if (post.feedPattern && Number.isFinite(Number(parsedV.feed_fit))) {
+          scores.feed_fit = { score: Math.max(0, Math.min(100, Math.round(Number(parsedV.feed_fit)))), comment: String(parsedV.feed_comment ?? '') }
+        }
       }
     } catch (e) { console.error('scoreContent: analista visual falhou (segue sem essa nota)', e) }
   }
@@ -297,7 +321,7 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       const t = tRow as (PostShape & { id: string; image_url: string | null }) | null
       if (!t) return json({ error: 'Post de teste não encontrado' }, 404)
       const config = await loadConfig(admin, company)
-      const { scores, quality } = await scoreContent(anthropicKey, config, company, { idea: t.idea, caption: t.caption, hashtags: t.hashtags, cta: t.cta, format: t.format, imageUrl: t.image_url })
+      const { scores, quality } = await scoreContent(anthropicKey, config, company, { idea: t.idea, caption: t.caption, hashtags: t.hashtags, cta: t.cta, format: t.format, imageUrl: t.image_url, feedPattern: await loadFeedPattern(admin, company.id) })
       // Fluxo novo (pedido do dono): se os dois analistas (coerência de texto
       // e coerência visual, quando há imagem) vieram BONS, o post já vai
       // direto pro Vault sozinho — sem precisar clicar "Enviar pro Vault".
@@ -339,7 +363,7 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
         // "LIGA OF SCRADS" aconteceu (ver NO_TEXT_RULE acima).
         const url = await generateImage(company.id, company.business_type, t.idea ?? '', company.business_description, true)
         if (url) await admin.from('marketing_ai_test_content').update({ image_url: url }).eq('id', testId)
-        const { scores: ns, quality } = await scoreContent(anthropicKey, config, company, { idea: t.idea, caption: t.caption, hashtags: t.hashtags, cta: t.cta, format: t.format, imageUrl: url ?? t.image_url })
+        const { scores: ns, quality } = await scoreContent(anthropicKey, config, company, { idea: t.idea, caption: t.caption, hashtags: t.hashtags, cta: t.cta, format: t.format, imageUrl: url ?? t.image_url, feedPattern: await loadFeedPattern(admin, company.id) })
         await admin.from('marketing_ai_test_content').update({ scores: ns, quality_score: quality }).eq('id', testId)
         return json({ ok: true, regenerated: 'visual', scores: ns, quality_score: quality })
       }
@@ -371,7 +395,7 @@ Retorne APENAS um JSON: {"idea":"...","caption":"...","hashtags":"#...","cta":".
       const { data: fresh } = await admin.from('marketing_ai_test_content')
         .select('idea, caption, hashtags, cta, format, image_url').eq('id', testId).single()
       const f = fresh as PostShape & { image_url: string | null }
-      const { scores: ns, quality } = await scoreContent(anthropicKey, config, company, { idea: f.idea, caption: f.caption, hashtags: f.hashtags, cta: f.cta, format: f.format, imageUrl: f.image_url })
+      const { scores: ns, quality } = await scoreContent(anthropicKey, config, company, { idea: f.idea, caption: f.caption, hashtags: f.hashtags, cta: f.cta, format: f.format, imageUrl: f.image_url, feedPattern: await loadFeedPattern(admin, company.id) })
       await admin.from('marketing_ai_test_content').update({ scores: ns, quality_score: quality }).eq('id', testId)
       return json({ ok: true, regenerated: 'coherence', scores: ns, quality_score: quality })
     }

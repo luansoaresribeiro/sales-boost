@@ -1017,3 +1017,57 @@ grátis de 30 s, acima — mantidos como histórico):
   "Cadastre seu primeiro imóvel" (abre o "+" na aba do catálogo).
   Substitui a parte da decisão anterior que exigia o mínimo de itens com
   fotos antes de liberar o painel.
+- **Agentes enxutos: Dados = produto; Conteúdo e Campanha em duas abas** —
+  2026-10-14. Pedido do dono (anotações do painel), aprovado com "pode
+  seguir".
+  - **Botão "+"** deixou de abrir um modal (Contexto do negócio / Catálogo /
+    Avatar): agora leva direto ao Agente de Dados → Catálogo, a mesma tela,
+    sem duas telas fazendo a mesma coisa. O sino de pendências cai no item
+    certo via `?item=<id>`. Contexto do negócio continua em Configurações.
+  - **Agente de Dados = só o produto:** Catálogo (fotos reais; nome vem da
+    ficha) + Meu avatar (em breve). Saíram da tela Inteligência de Mercado,
+    Estilos e Visuais e Insights — a estratégia e o Higgsfield já consomem
+    esses dados por trás (as tabelas e os componentes continuam no código,
+    só não aparecem). Os links antigos `/insights` e `/saude-meta`
+    redirecionam.
+  - **Agente de Conteúdo e Campanha** com duas abas de topo:
+    *Conteúdo* (Calendário da semana com o resumo/overview embaixo, Vault,
+    Padrão visual = Kit da marca + Formatos de feed e stories) e *Campanha*
+    (selo "Em breve" pra rodar anúncio pago; já mostra Como os conteúdos
+    estão indo, Campanha ideal e pixel, Anúncios e Saúde da Meta).
+    Saíram: Biblioteca (virou Vault + Padrão visual), Testes e a sub-aba
+    Ideias do calendário (o calendário vem da estratégia).
+  - Divergência registrada: a aba Saúde da Meta e a Campanha ideal ainda
+    são **exemplo** (modo demonstração) — ver
+    [DATA_AUDIT.md](DATA_AUDIT.md); viram dado real quando o Meta Ads for
+    conectado.
+- **Calendário da semana vem da estratégia, com stories e vídeos** —
+  2026-10-14 (aprovado pelo dono: "sim, pode seguir"). Substitui a regra de
+  2026-09 "o calendário só tem post orgânico". Cada dia mostra as vagas do
+  mix da estratégia (feed, stories, vídeo) e o domingo cria as peças de
+  cada vaga — inclusive as que saem de um imóvel do catálogo. Liga sozinho
+  quando há estratégia ativa (o dono pode desligar no interruptor). Vídeo
+  (custa) e DM continuam dependendo do dono. Detalhes em
+  [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md).
+- **Portal de imóveis entra pelo XML do CRM (VRSync), não por API do
+  portal** — 2026-10-14 (pedido do dono: "vamos puxar o portal também").
+  ZAP/VivaReal não têm API pública de leitura; o caminho legítimo e grátis
+  é o mesmo link XML que o CRM do corretor já manda pros portais. Foto
+  sempre a real do anúncio; campo que o anúncio não traz fica vazio (nunca
+  inventa número). O dono escolhe o que importar. Sincronização automática
+  fica pra depois.
+- **Mobiliar virtualmente (virtual staging)** — 2026-10-14 (aprovado: "sim
+  pode seguir" ao teste pago pequeno). Higgsfield Qwen Image 3 Edit sobre a
+  FOTO REAL de um cômodo (só de foto que já está no item). A foto real nunca
+  é trocada: o dono vê o antes/depois e escolhe "usar no imóvel"; a
+  mobiliada vai pra `meta.staged_photos` (vídeos e tour continuam só com as
+  reais). Todo carrossel que usar uma delas leva na legenda o aviso da ficha
+  ("móveis ilustrativos"). Só com plano e teto mensal por empresa
+  (`VIRTUAL_STAGING_MONTHLY_CAP`, padrão 10). Teste no ensaio (1 geração):
+  móveis entraram e a arquitetura ficou; **divergência**: o enquadramento
+  muda um pouco (sai em 3:4 e a tela recorta em 4:5).
+- **Padrão do feed** — 2026-10-14. O analista visual do `content-test`
+  ganhou a nota `feed_fit` (encaixe no Kit da marca: cores, fontes, clima)
+  na MESMA chamada — sem custo extra e sem mudar a regra do Vault
+  automático. Conteúdo → Padrão visual → "Prévia do feed" mostra a grade
+  3×3 das próximas peças com essa nota.

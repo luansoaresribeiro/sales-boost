@@ -1,22 +1,20 @@
 import { useState } from 'react'
 import { MUTED, BORDER, D } from './shared'
 import FormatsLibrary from './FormatsLibrary'
-import TestingArea from './TestingArea'
-import ContentVault from './ContentVault'
+import BrandKit from './BrandKit'
+import FeedPreview from './FeedPreview'
 import { useLang, type Lang } from '../../../contexts/LanguageContext'
 
 const TX = {
   pt: {
-    topFormats: 'Formatos & Testes', topVault: 'Vault', organic: 'Orgânico', stories: 'Stories',
-    title: '📚 Biblioteca do Agente de Conteúdo',
-    d1: 'Formatos', d2: ' (a anatomia de cada imagem), ', d3: 'Testes', d4: ' (controle de qualidade) e ', d5: 'Vault', d6: ' (aprovados, prontos pra publicar). Ideias vive em ',
-    d7: 'Calendário da Semana', d8: ' agora; Estilos e Visuais (Kit da marca) fica na aba ', d9: 'Agente de Dados', d10: '.',
+    topBrand: 'Marca (logo e cores)', topFormats: 'Formatos', topFeed: 'Prévia do feed', organic: 'Feed', stories: 'Stories',
+    title: '🎨 Padrão visual do feed',
+    d1: 'Marca', d2: ' (logo, cores e fontes que todo post usa) e ', d3: 'Formatos', d4: ' (a anatomia de cada imagem, do feed e dos stories). É isso que mantém o feed com cara de uma marca só.',
   },
   en: {
-    topFormats: 'Formats & Tests', topVault: 'Vault', organic: 'Organic', stories: 'Stories',
-    title: '📚 Content Agent Library',
-    d1: 'Formats', d2: ' (the anatomy of each image), ', d3: 'Tests', d4: ' (quality control) and ', d5: 'Vault', d6: ' (approved, ready to publish). Ideas now live in ',
-    d7: 'Weekly Calendar', d8: '; Styles and Visuals (Brand Kit) are in the ', d9: 'Data Agent', d10: ' tab.',
+    topBrand: 'Brand (logo & colors)', topFormats: 'Formats', topFeed: 'Feed preview', organic: 'Feed', stories: 'Stories',
+    title: '🎨 Feed visual pattern',
+    d1: 'Brand', d2: ' (logo, colors and fonts every post uses) and ', d3: 'Formats', d4: ' (the anatomy of each image, for feed and stories). This keeps the feed looking like one brand.',
   },
 } as const
 
@@ -33,16 +31,15 @@ const KIND_LABEL_EN: Record<string, string> = {
 
 const ORANGE = '#FF6D29'
 
-// Abas de topo da Biblioteca — Ideias saiu daqui (mudou pra dentro de
-// Calendário da Semana, é lá que ela orienta o planejamento agora — ver
-// WeeklyCalendarTab.tsx). Formatos e Testes viraram UMA aba só (pedido do
-// dono — gerar o formato e já ver ele passando pelo controle de qualidade,
-// sem trocar de aba no meio do caminho). Vault continua separado.
-// Estilos e Visuais mudou pra aba Agente de Dados — identidade visual/marca é
-// dado de contexto pro agente, não algo que se "testa" ou "publica" daqui.
+// Padrão visual (antes "Biblioteca"). Em 2026-10-14 o dono pediu pra limpar
+// abas soltas do fluxo: o Vault virou aba própria em Conteúdo, Testes saiu
+// (o calendário já mostra cada peça "Avaliando" → "No Vault"), e o Kit da
+// marca veio do antigo Agente de Dados → Estilos e Visuais pra cá — marca e
+// formatos juntos são o que mantém o feed com um padrão só.
 const TOP_TABS = (lang: Lang): { key: string; icon: string; label: string }[] => [
+  { key: 'feed', icon: '🔲', label: TX[lang].topFeed },
+  { key: 'marca', icon: '🏷️', label: TX[lang].topBrand },
   { key: 'formatos', icon: '🧩', label: TX[lang].topFormats },
-  { key: 'vault', icon: '⭐', label: TX[lang].topVault },
 ]
 // Sub-abas de módulo — filtram Formatos e Testes por Orgânico/Stories.
 // Campanhas saiu (mudou pra dentro de Agente de Meta Ads).
@@ -64,12 +61,9 @@ export const KIND_LABEL: Record<string, string> = {
 }
 export const kindLabel = (k: string, lang: Lang = 'pt') => (lang === 'en' ? KIND_LABEL_EN : KIND_LABEL)[k] ?? k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ')
 
-// Biblioteca: Formatos (a anatomia de cada imagem), Testes (QC) e Vault
-// (aprovados) — tudo num lugar só. Ideias mudou pra Calendário da Semana;
-// Estilos e Visuais fica na aba Agente de Dados.
 export default function ContentLibrary({ companyId }: { companyId: string }) {
   const { lang } = useLang(); const tx = TX[lang]
-  const [top, setTop] = useState('formatos')
+  const [top, setTop] = useState('feed')
   const [mod, setMod] = useState<'organico' | 'stories'>('organico')
 
   return (
@@ -77,7 +71,7 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
       <div style={{ marginBottom: '18px' }}>
         <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>{tx.title}</div>
         <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55, maxWidth: '760px' }}>
-          <strong style={{ color: 'white' }}>{tx.d1}</strong>{tx.d2}<strong style={{ color: 'white' }}>{tx.d3}</strong>{tx.d4}<strong style={{ color: 'white' }}>{tx.d5}</strong>{tx.d6}<strong style={{ color: 'white' }}>{tx.d7}</strong>{tx.d8}<strong style={{ color: 'white' }}>{tx.d9}</strong>{tx.d10}
+          <strong style={{ color: 'white' }}>{tx.d1}</strong>{tx.d2}<strong style={{ color: 'white' }}>{tx.d3}</strong>{tx.d4}
         </div>
       </div>
 
@@ -95,8 +89,7 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
         })}
       </div>
 
-      {/* Sub-abas de módulo — Formatos e Testes têm Orgânico/Stories
-          (Vault é da marca/QC como um todo, não por módulo). */}
+      {/* Sub-abas de módulo — Formatos de feed e de stories. */}
       {top === 'formatos' && (
         <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '20px', flexWrap: 'wrap' }}>
           {MODULES(lang).map(m => {
@@ -112,14 +105,7 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
         </div>
       )}
 
-      {top === 'formatos' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-          <FormatsLibrary companyId={companyId} module={mod} />
-          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: '24px' }}>
-            <TestingArea companyId={companyId} kind={mod} />
-          </div>
-        </div>
-      ) : <ContentVault companyId={companyId} />}
+      {top === 'formatos' ? <FormatsLibrary companyId={companyId} module={mod} /> : top === 'feed' ? <FeedPreview companyId={companyId} /> : <BrandKit companyId={companyId} />}
     </div>
   )
 }

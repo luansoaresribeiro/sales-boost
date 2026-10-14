@@ -31,9 +31,9 @@ type SupaClient = ReturnType<typeof createClient>
 const NO_TEXT_RULE = 'CRITICAL: this image must contain ONLY the visual scene — environment, people, products, objects, lighting, composition. Absolutely NO text of any kind anywhere in the image: no headlines, captions, CTAs, logos with text, signs, banners, posters, screens, labels, packaging text, watermarks, or simulated/gibberish lettering. If the scene naturally includes an object that would normally carry text (a sign, menu, screen, clipboard, label), render it completely blank — a clean empty surface. Never attempt to write, spell, or render any character.'
 
 interface Photo { url: string; path: string }
-interface CatalogMeta { photos?: Photo[]; fields?: Record<string, unknown> }
+interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
 interface RecipeGroup { recipes: string[]; fonte_midia: string; descricao: string }
-interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string> }
+interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string }
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -58,7 +58,8 @@ async function fetchFichaConfig(admin: SupaClient, verticalKey: string | null): 
     const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
     const c = (data?.config ?? {}) as Record<string, unknown>
     if (!c.production_recipes) return null
-    return { pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string> }
+    const disclosure = String((c.virtual_staging as { disclosure?: string } | undefined)?.disclosure ?? '').slice(0, 200)
+    return { pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure }
   } catch { return null }
 }
 
@@ -156,11 +157,14 @@ async function generateMoodImage(supabaseUrl: string, serviceKey: string, compan
   } catch { return null }
 }
 
-async function renderTweetCard(supabaseUrl: string, bearer: string, cardText: string): Promise<string | null> {
+// auth: JWT do dono (botão) ou, no modo interno do calendário, cron_secret +
+// company_id (o render-format aceita os dois).
+async function renderTweetCard(supabaseUrl: string, auth: { bearer: string } | { cronSecret: string; companyId: string; serviceKey: string }, cardText: string): Promise<string | null> {
   try {
+    const internal = 'cronSecret' in auth
     const res = await fetch(`${supabaseUrl}/functions/v1/render-format`, {
-      method: 'POST', headers: { Authorization: bearer, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ template: 'tweet', kind: 'stories', fields: { card_text: cardText }, caption: cardText, save: false }),
+      method: 'POST', headers: { Authorization: internal ? `Bearer ${auth.serviceKey}` : auth.bearer, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ template: 'tweet', kind: 'stories', fields: { card_text: cardText }, caption: cardText, save: false, ...(internal ? { cron_secret: auth.cronSecret, company_id: auth.companyId } : {}) }),
     })
     const data = await res.json().catch(() => ({})) as { url?: string }
     return res.ok && data.url ? data.url : null
@@ -176,16 +180,33 @@ Deno.serve(async (req) => {
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!
     const admin = createClient(supabaseUrl, serviceKey)
 
-    const bearer = req.headers.get('Authorization') ?? ''
-    if (!bearer) return json({ error: 'Unauthorized' }, 401)
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
-    const { data: { user } } = await userClient.auth.getUser()
-    if (!user) return json({ error: 'Unauthorized' }, 401)
-
-    const { item_id, only_recipe } = await req.json()
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>
+    const item_id = typeof body.item_id === 'string' ? body.item_id : ''
+    const only_recipe = typeof body.only_recipe === 'string' ? body.only_recipe : null
+    // Dia fixo (modo calendário): a peça cai no dia que a estratégia
+    // reservou, em vez do primeiro espaço livre das próximas 3 semanas.
+    const forcedDate = typeof body.planned_for === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.planned_for) ? body.planned_for : null
     if (!item_id) return json({ error: 'item_id obrigatório' }, 400)
 
-    const { data: company } = await admin.from('companies').select('id, vertical_key').eq('user_id', user.id).maybeSingle()
+    // Duas portas: o dono (JWT, botão "Gerar pacote") ou o Calendário da
+    // semana (creative-generate, cron_secret + company_id — sem usuário
+    // logado no domingo à noite). Nos dois casos o item precisa ser DA
+    // empresa (checado abaixo) e a conta precisa ter plano.
+    const cronSecretEnv = Deno.env.get('CRON_SECRET')
+    const internal = !!cronSecretEnv && body.cron_secret === cronSecretEnv && typeof body.company_id === 'string'
+    const bearer = req.headers.get('Authorization') ?? ''
+    let company: { id: string; vertical_key: string | null } | null = null
+    if (internal) {
+      const { data } = await admin.from('companies').select('id, vertical_key').eq('id', body.company_id as string).maybeSingle()
+      company = data
+    } else {
+      if (!bearer) return json({ error: 'Unauthorized' }, 401)
+      const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
+      const { data: { user } } = await userClient.auth.getUser()
+      if (!user) return json({ error: 'Unauthorized' }, 401)
+      const { data } = await admin.from('companies').select('id, vertical_key').eq('user_id', user.id).maybeSingle()
+      company = data
+    }
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
     const noPlan = await requirePaidAccess(admin, company.id)
     if (noPlan) return noPlan
@@ -228,9 +249,16 @@ Deno.serve(async (req) => {
         let provider = ''
 
         if (recipe === 'carrossel_tour') {
-          media = photos.map(p => ({ url: p.url, type: 'photo' }))
-          const c = await writeCopy(anthropicKey, `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).\n${fieldsLine}`)
-          caption = c.caption; hashtags = c.hashtags; cta = c.cta
+          // Até 2 fotos mobiliadas virtualmente (escolhidas pelo dono) entram
+          // logo depois da capa real — e aí a legenda SEMPRE leva o aviso da
+          // ficha (nunca enganar o comprador sobre o que vem no imóvel).
+          const staged = (meta.staged_photos ?? []).slice(0, 2)
+          const useStaged = staged.length > 0 && !!ficha.stagingDisclosure
+          // Instagram aceita até 10 mídias no carrossel — corta aqui, não na publicação.
+          media = [photos[0], ...(useStaged ? staged : []), ...photos.slice(1)].slice(0, 10).map(p => ({ url: p.url, type: 'photo' }))
+          const c = await writeCopy(anthropicKey, `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
+          caption = useStaged ? `${c.caption}\n\n${ficha.stagingDisclosure}` : c.caption
+          hashtags = c.hashtags; cta = c.cta
           provider = 'catalogo_real'
         } else if (recipe === 'post_detalhe_que_voce_nao_viu') {
           media = [{ url: photos[photos.length - 1].url, type: 'photo' }]
@@ -253,7 +281,7 @@ Deno.serve(async (req) => {
           provider = 'ia_generica'
         } else if (recipe === 'stories_enquete_pagaria') {
           const cardText = `Quanto você pagaria por um ${String(fields.tipo ?? 'imóvel').toLowerCase()} assim em ${fields.bairro ?? 'um bairro como esse'}?`
-          const url = await renderTweetCard(supabaseUrl, bearer, cardText)
+          const url = await renderTweetCard(supabaseUrl, internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }, cardText)
           if (!url) { skipped.push({ recipe, reason: 'Falha ao gerar o card — tente de novo depois.' }); continue }
           media = [{ url, type: 'photo' }]
           caption = cardText; hashtags = ''; cta = 'Comenta aqui embaixo 👇'
@@ -263,7 +291,7 @@ Deno.serve(async (req) => {
           continue // pilar 'educacao' não tem receita ligada a um item específico
         }
 
-        const slot = pickSlot(dates, occ, pillarKey, weight)
+        const slot = forcedDate ? { date: forcedDate, overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
         const { data: row, error } = await admin.from('marketing_ai_test_content').insert({
           company_id: company.id, kind, idea: item.title, caption, hashtags, cta,
           format: media.length > 1 ? 'carrossel' : 'foto', image_url: media[0]?.url ?? null,

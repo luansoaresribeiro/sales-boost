@@ -1,129 +1,63 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
-import BusinessContextTab from './marketingAi/BusinessContextTab'
-import CatalogItems from './marketingAi/CatalogItems'
-import { useCompany } from '../../contexts/CompanyContext'
 import { supabase } from '../../lib/supabase'
-import { fetchCatalogSchema, type CatalogSchema } from '../../lib/verticalPlaybook'
 import { useLang } from '../../contexts/LanguageContext'
 
 const TX = {
   pt: {
-    tabCtx: '🧠 Contexto do negócio', tabCat: '📸 Fotos · ', tabAvatar: '🙂 Meu avatar',
-    subCtx: 'Avise o Agente de Dados de qualquer mudança ou novidade — ele passa a considerar isso nas próximas decisões.',
-    subCat: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
-    subAvatar: 'Um avatar seu apresentando o que você vende. Em breve.',
-    btnTitle: 'Contexto, fotos e avatar — alimente o Sales Boost',
-    modalTitle: 'Alimentar o Sales Boost',
+    btnTitle: 'Subir fotos dos seus itens (Catálogo)',
     soon: 'EM BREVE', avatarTitle: 'Seu avatar apresentando o que você vende',
     avatarBody: 'Com algumas fotos e um vídeo curto seu, o Sales Boost vai criar vídeos com você apresentando cada item do seu catálogo — sem precisar gravar toda vez. Ainda não está disponível; quando estiver, você envia suas fotos por aqui e aprova antes de qualquer vídeo ir ao ar.',
     notified: '✓ Você será avisado', notify: 'Quero ser avisado',
   },
   en: {
-    tabCtx: '🧠 Business context', tabCat: '📸 Photos · ', tabAvatar: '🙂 My avatar',
-    subCtx: 'Tell the Data Agent about any change or news — it will factor it into upcoming decisions.',
-    subCat: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
-    subAvatar: 'An avatar of you presenting what you sell. Coming soon.',
-    btnTitle: 'Context, photos and avatar — feed Sales Boost',
-    modalTitle: 'Feed Sales Boost',
+    btnTitle: 'Upload photos of your items (Catalog)',
     soon: 'COMING SOON', avatarTitle: 'Your avatar presenting what you sell',
     avatarBody: "With a few photos and a short video of you, Sales Boost will create videos of you presenting each item in your catalog — no need to record every time. It's not available yet; when it is, you'll send your photos here and approve before any video goes live.",
     notified: "✓ You'll be notified", notify: 'Notify me',
   },
 } as const
 
-// Botão flutuante global (todo o dashboard) — a entrada rápida do dono pra
-// alimentar o Sales Boost de qualquer tela, sem navegar. Abas:
-// - Contexto do negócio: mudança/novidade pro Agente de Dados (tabela
-//   business_context, ver BusinessContextTab.tsx).
-// - Catálogo (ex.: imóveis): fotos reais dos itens — mesma tela de
-//   "Estilos e Visuais → Arquivo", só que a 1 clique. Só aparece pra quem tem
-//   ficha com catalog_fields (nome da aba vem da ficha, nada de setor no código).
-// - Avatar: "em breve" (integração HeyGen ainda não existe). Não recebe foto
-//   do rosto ainda — só registra interesse (marketing_ai_tool_interest).
-type Tab = 'contexto' | 'catalogo' | 'avatar'
-
-export default function BusinessContextButton({ companyId }: { companyId: string }) {
-  const { company } = useCompany()
+// Botão flutuante global (todo o dashboard) — atalho pro Catálogo do Agente
+// de Dados (fotos reais dos itens). Antes abria um modal com Contexto do
+// negócio / Catálogo / Avatar; o dono pediu (2026-10-14) que o "+" levasse
+// pra MESMA tela do Agente de Dados, sem duas telas fazendo a mesma coisa.
+// Contexto do negócio continua em Configurações; o Avatar ("em breve")
+// mudou pra dentro do Agente de Dados.
+// O sino de pendências dispara 'sb:open-add' com { itemId } pra cair direto
+// no item certo (?item=<id>).
+export default function BusinessContextButton() {
   const tx = TX[useLang().lang]
-  const verticalKey = company?.vertical_key ?? 'generico'
-  const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState<Tab>('contexto')
-  const [catalogSchema, setCatalogSchema] = useState<CatalogSchema | null>(null)
-  const [focusItemId, setFocusItemId] = useState<string | null>(null)
+  const navigate = useNavigate()
 
-  // Atalho vindo do sino de pendências: abre o "+" já na aba (e item) certos.
   useEffect(() => {
     const onOpen = (e: Event) => {
-      const d = (e as CustomEvent<{ tab?: Tab; itemId?: string }>).detail ?? {}
-      setTab(d.tab ?? 'contexto'); setFocusItemId(d.itemId ?? null); setOpen(true)
+      const d = (e as CustomEvent<{ itemId?: string }>).detail ?? {}
+      navigate(`/dashboard/marketing-ai/dados${d.itemId ? `?item=${encodeURIComponent(d.itemId)}` : ''}`)
     }
     window.addEventListener('sb:open-add', onOpen)
     return () => window.removeEventListener('sb:open-add', onOpen)
-  }, [])
-  const close = () => { setOpen(false); setFocusItemId(null) }
-
-  useEffect(() => {
-    let alive = true
-    fetchCatalogSchema(verticalKey).then(s => { if (alive) setCatalogSchema(s) })
-    return () => { alive = false }
-  }, [verticalKey])
-
-  const tabs: [Tab, string][] = [
-    ['contexto', tx.tabCtx],
-    ...(catalogSchema ? [['catalogo', `${tx.tabCat}${catalogSchema.catalogLabel}`] as [Tab, string]] : []),
-    ['avatar', tx.tabAvatar],
-  ]
-
-  const subtitle = tab === 'contexto'
-    ? tx.subCtx
-    : tab === 'catalogo'
-      ? tx.subCat
-      : tx.subAvatar
+  }, [navigate])
 
   return (
-    <>
-      <button onClick={() => setOpen(true)} title={tx.btnTitle}
-        style={{
-          position: 'fixed', right: '24px', bottom: '24px', zIndex: 60, width: '52px', height: '52px', borderRadius: '50%',
-          background: ORANGE, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 8px 24px rgba(255,109,41,0.4)',
-        }}>
-        <svg viewBox="0 0 24 24" style={{ width: 24, height: 24, fill: 'none', stroke: 'white', strokeWidth: 2.4, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-      </button>
-
-      {open && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
-          onClick={close}>
-          <div style={{ background: '#0E0B0A', border: `1px solid ${BORDER}`, borderRadius: '18px', width: '100%', maxWidth: '760px', maxHeight: '88vh', overflowY: 'auto', padding: '22px 20px' }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '14px', marginBottom: '14px' }}>
-              <div>
-                <div style={{ fontFamily: D, fontSize: '17px', fontWeight: 800, color: 'white' }}>{tx.modalTitle}</div>
-                <div style={{ fontSize: '12px', color: MUTED, marginTop: '3px' }}>{subtitle}</div>
-              </div>
-              <button onClick={close} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, cursor: 'pointer', fontSize: '15px', padding: '6px 10px', flexShrink: 0, fontFamily: D }}>✕</button>
-            </div>
-
-            <div style={{ display: 'flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '10px', marginBottom: '18px', flexWrap: 'wrap' }}>
-              {tabs.map(([k, label]) => (
-                <button key={k} onClick={() => setTab(k)} style={{ padding: '7px 12px', background: tab === k ? 'rgba(255,109,41,0.14)' : 'transparent', border: `1px solid ${tab === k ? 'rgba(255,109,41,0.4)' : 'transparent'}`, borderRadius: '7px', color: tab === k ? ORANGE : 'white', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>{label}</button>
-              ))}
-            </div>
-
-            {tab === 'contexto' && <BusinessContextTab company={{ id: companyId }} />}
-            {tab === 'catalogo' && catalogSchema && <CatalogItems companyId={companyId} schema={catalogSchema} verticalKey={verticalKey} focusItemId={focusItemId} />}
-            {tab === 'avatar' && <AvatarSoon companyId={companyId} verticalKey={verticalKey} />}
-          </div>
-        </div>
-      )}
-    </>
+    <button onClick={() => navigate('/dashboard/marketing-ai/dados')} title={tx.btnTitle} aria-label={tx.btnTitle}
+      style={{
+        position: 'fixed', right: '24px', bottom: '24px', zIndex: 60, width: '52px', height: '52px', borderRadius: '50%',
+        background: ORANGE, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 8px 24px rgba(255,109,41,0.4)',
+      }}>
+      <svg viewBox="0 0 24 24" style={{ width: 24, height: 24, fill: 'none', stroke: 'white', strokeWidth: 2.4, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    </button>
   )
 }
 
-function AvatarSoon({ companyId, verticalKey }: { companyId: string; verticalKey: string }) {
+// Avatar "em breve" (integração HeyGen ainda não existe). Não recebe foto do
+// rosto ainda — só registra interesse (marketing_ai_tool_interest). Mora no
+// Agente de Dados.
+export function AvatarSoon({ companyId, verticalKey }: { companyId: string; verticalKey: string }) {
   const tx = TX[useLang().lang]
   const [toolId, setToolId] = useState<string | null>(null)
   const [interested, setInterested] = useState(false)

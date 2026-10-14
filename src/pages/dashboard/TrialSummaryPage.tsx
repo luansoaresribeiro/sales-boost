@@ -186,7 +186,7 @@ export default function TrialSummaryPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
           <PanelBlock icon="🧠" title={tx.bStrat} value={panel.strategyName} to="/dashboard/marketing-ai/estrategia" />
           <PanelBlock icon="📊" title={tx.bAnalysis} value={panel.analysisReports > 0 ? tx.analysisN(panel.analysisReports) : null} to="/dashboard/insights" />
-          <PanelBlock icon="🔍" title={tx.bComp} value={metrics.competitorsAnalyzed > 0 ? tx.compN(metrics.competitorsAnalyzed) : null} to="/dashboard/marketing-ai/dados" />
+          <PanelBlock icon="🔍" title={tx.bComp} value={metrics.competitorsAnalyzed > 0 ? tx.compN(metrics.competitorsAnalyzed) : null} to="/dashboard/marketing-ai/estrategia" />
           <PanelBlock icon="💡" title={tx.bIdeas} value={panel.ideas > 0 ? tx.ideasN(panel.ideas) : null} to="/dashboard/marketing-ai/content" />
           <PanelBlock icon="✅" title={tx.bPlan} value={panel.initiatives > 0 ? tx.planN(panel.initiatives) : null} to="/dashboard/marketing-ai/estrategia" />
           <PanelBlock icon="✈️" title={tx.bTg} value={panel.telegramConnected ? tx.tgOn : tx.tgOff} to="/dashboard/settings?tab=integracoes" cta={panel.telegramConnected ? tx.see : tx.connect} />

@@ -20,7 +20,7 @@
  *     Testes liga isso, e auto_daily_test_image decide se gera imagem junto.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { weeklyMixPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
+import { weeklyMixPlan, weekSlots, fetchFormatCatalog, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 
 const cors = {
@@ -756,7 +756,13 @@ async function planWeekForCompany(admin: SupaClient, anthropicKey: string, compa
   // Mix da semana escolhido pela estratégia (Hermes): o calendário segue as
   // quantidades e os formatos; o que não dá pra gerar sozinho (vídeo, pacote
   // do item, DM) volta como lista "pra fazer" pro dono.
-  const mix = weeklyMixPlan((stratRow?.content_plan ?? null) as ContentPlan | null)
+  const contentPlan = (stratRow?.content_plan ?? null) as ContentPlan | null
+  const mix = weeklyMixPlan(contentPlan)
+  // Estratégia com mix semanal → o calendário é o plano dela, dia a dia
+  // (weekSlots), sem a IA decidir cadência. Sem estratégia, vale o
+  // planejamento antigo abaixo.
+  const slots = weekSlots(contentPlan, dates.map(d => d.iso))
+  if (slots.length) return await planWeekFromStrategy(admin, company, slots, contentPlan!)
   const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
   const pendingCount = (pendingRows ?? []).length
 
@@ -796,6 +802,109 @@ Retorne APENAS um JSON array, um item por dia, nesta ordem (sempre os 7 dias):
   return { planned, days, todo: mix.todo }
 }
 
+// Calendário vindo da estratégia (2026-10-14). Cada vaga do plano vira peça
+// pelo MESMO motor de sempre:
+// - post → generateForCompany (Diretor + Copywriter + imagem + nota);
+// - item_package com receita na ficha → catalog-package do item do catálogo
+//   menos usado nas últimas 3 semanas (só item com ≥5 fotos reais), no dia
+//   da vaga;
+// - vídeo (custa) e o que não tem item/receita → volta como "pra fazer".
+// Nada é publicado: tudo cai como rascunho → nota → Vault, e o dono aprova.
+//
+// Teto de 150s (docs/PITFALLS.md): aqui só DESPACHA — cada vaga é uma
+// chamada nova (`plan_slot`) com relógio próprio, que responde na hora e
+// trabalha em EdgeRuntime.waitUntil. Esperamos só o aceite (2xx).
+// Sem duplicar (QA 2026-10-14): vaga que já tem peça no mesmo dia (mesma
+// receita, ou post solto pra vaga de post) é pulada — clicar 2x ou o cron
+// depois do botão não gera de novo nem gasta IA de novo.
+interface SlotJob { date: string; producer: 'post' | 'item_package'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string }
+
+async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: ReturnType<typeof weekSlots>, plan: ContentPlan): Promise<{ planned: number; days: { date: string; posts: number; note: string }[]; todo: { format: string; name: string; per_week: number; purpose: string }[] }> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const cronSecret = Deno.env.get('CRON_SECRET') ?? ''
+  const since = new Date(Date.now() - 21 * 86400000).toISOString()
+  const dates = [...new Set(slots.map(s => s.date))]
+  const [formats, { data: itemRows }, { data: usedRows }, { data: existingRows }] = await Promise.all([
+    fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
+    admin.from('marketing_ai_knowledge').select('id, meta').eq('company_id', company.id).eq('kind', 'product'),
+    admin.from('marketing_ai_test_content').select('item_id').eq('company_id', company.id).not('item_id', 'is', null).gte('created_at', since),
+    admin.from('marketing_ai_test_content').select('planned_for, item_id, recipe').eq('company_id', company.id).in('planned_for', dates),
+  ])
+  const recipeOf = new Map(formats.map(f => [f.key, f.recipe]))
+  const usage = new Map<string, number>()
+  for (const r of (usedRows ?? []) as { item_id: string }[]) usage.set(r.item_id, (usage.get(r.item_id) ?? 0) + 1)
+  const items = ((itemRows ?? []) as { id: string; meta: { photos?: unknown[] } | null }[])
+    .filter(it => (it.meta?.photos?.length ?? 0) >= 5).map(it => it.id)
+  const pickItem = (): string | null => {
+    if (!items.length) return null
+    const id = [...items].sort((a, b) => (usage.get(a) ?? 0) - (usage.get(b) ?? 0))[0]
+    usage.set(id, (usage.get(id) ?? 0) + 1)
+    return id
+  }
+  const existing = ((existingRows ?? []) as { planned_for: string; item_id: string | null; recipe: string | null }[]).map(r => ({ ...r }))
+  const alreadyFilled = (date: string, recipe: string | undefined, producer: string): boolean => {
+    const i = existing.findIndex(r => r.planned_for === date && ((recipe && r.recipe === recipe) || (producer === 'post' && !r.item_id)))
+    if (i >= 0) { existing.splice(i, 1); return true }
+    return false
+  }
+
+  const todo = new Map<string, { format: string; name: string; per_week: number; purpose: string }>()
+  const addTodo = (s: { format: string; name: string; purpose: string }) => {
+    const cur = todo.get(s.format)
+    todo.set(s.format, { format: s.format, name: s.name, per_week: (cur?.per_week ?? 0) + 1, purpose: s.purpose })
+  }
+  for (const m of plan.weekly_mix ?? []) if (m.producer === 'dm') todo.set(m.format, { format: m.format, name: m.name, per_week: m.per_week, purpose: m.purpose })
+
+  const jobs: SlotJob[] = []
+  for (const slot of slots) {
+    const recipe = slot.producer === 'item_package' ? recipeOf.get(slot.format) : undefined
+    if (alreadyFilled(slot.date, recipe, slot.producer)) continue
+    if (slot.producer === 'post') { jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose }); continue }
+    const itemId = recipe ? pickItem() : null
+    if (!recipe || !itemId) { addTodo(slot); continue }
+    jobs.push({ date: slot.date, producer: 'item_package', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe, item_id: itemId })
+  }
+
+  // Despacho: cada vaga é uma chamada própria; esperamos só o aceite.
+  const perDay = new Map<string, number>()
+  let planned = 0
+  if (cronSecret) {
+    const accepted = await Promise.all(jobs.map(async job => {
+      try {
+        const res = await fetch(`${supabaseUrl}/functions/v1/creative-generate`, {
+          method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'plan_slot', cron_secret: cronSecret, company_id: company.id, slot: job }),
+          signal: AbortSignal.timeout(20_000),
+        })
+        await res.body?.cancel()
+        if (!res.ok) console.error('planWeekFromStrategy: vaga recusada', company.id, job.date, res.status)
+        return res.ok
+      } catch (e) { console.error('planWeekFromStrategy: despacho falhou', company.id, job.date, e); return false }
+    }))
+    accepted.forEach((ok, i) => { if (ok) { planned++; perDay.set(jobs[i].date, (perDay.get(jobs[i].date) ?? 0) + 1) } })
+  } else console.error('planWeekFromStrategy: CRON_SECRET ausente — nada despachado')
+  const days = dates.map(date => ({ date, posts: perDay.get(date) ?? 0, note: 'plano da estratégia' }))
+  return { planned, days, todo: [...todo.values()] }
+}
+
+// Uma vaga do calendário (chamada interna, relógio próprio de 150s).
+async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Company, job: SlotJob, cronSecret: string): Promise<void> {
+  try {
+    if (job.producer === 'post') {
+      const seed = { title: job.name, angle: `Pilar ${job.pillar}: ${job.purpose || 'serve a estratégia ativa'}`, format: 'foto' }
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date, seed })
+      return
+    }
+    const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/catalog-package`, {
+      method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: job.item_id, only_recipe: job.recipe, planned_for: job.date, cron_secret: cronSecret, company_id: company.id }),
+    })
+    const r = await res.json().catch(() => ({})) as { error?: string; generated?: unknown[] }
+    if (!res.ok || !r.generated?.length) console.error('runPlanSlot: catalog-package sem peça', company.id, job.date, job.recipe, res.status, r.error)
+  } catch (e) { console.error('runPlanSlot falhou', company.id, job.date, e) }
+}
+
 const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language, telegram_chat_id, vertical_key, playbook_answers'
 
 Deno.serve(async (req) => {
@@ -811,12 +920,38 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const cronSecretEnv = Deno.env.get('CRON_SECRET')
 
+    // ── Uma vaga do calendário (despachada por planWeekFromStrategy) ──
+    if (cronSecretEnv && body.cron_secret === cronSecretEnv && body.action === 'plan_slot' && typeof body.company_id === 'string') {
+      const job = body.slot as SlotJob | undefined
+      if (!job || !/^\d{4}-\d{2}-\d{2}$/.test(String(job.date)) || !['post', 'item_package'].includes(String(job.producer))) return json({ error: 'vaga inválida' }, 400)
+      const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', body.company_id).maybeSingle()
+      const company = companyRow as Company | null
+      if (!company) return json({ error: 'empresa não encontrada' }, 404)
+      if (!(await hasPaidAccess(admin, company.id))) return json({ error: 'sem plano' }, 402)
+      // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
+      EdgeRuntime.waitUntil(runPlanSlot(admin, anthropicKey, company, job, cronSecretEnv))
+      return json({ ok: true, accepted: true }, 202)
+    }
+
     // ── Calendário da Semana (cron, domingo 18h BRT): planeja + gera a
     // semana inteira pra toda empresa com auto_weekly_calendar ligado.
     if (cronSecretEnv && body.cron_secret === cronSecretEnv && body.action === 'run_weekly_plan' && !body.company_id) {
-      const { data: configs } = await admin.from('marketing_ai_config').select('company_id').eq('auto_weekly_calendar', true)
+      // Quem planeja no domingo: quem ligou o interruptor (true) + quem tem
+      // estratégia ativa com mix semanal e nunca desligou (null/sem linha —
+      // "o calendário já vem da estratégia", 2026-10-14). false = desligado.
+      const [{ data: onRows }, { data: offRows }, { data: stratRows }] = await Promise.all([
+        admin.from('marketing_ai_config').select('company_id').eq('auto_weekly_calendar', true),
+        admin.from('marketing_ai_config').select('company_id').eq('auto_weekly_calendar', false),
+        admin.from('marketing_ai_strategies').select('company_id, content_plan').eq('kind', 'main').eq('status', 'active').not('content_plan', 'is', null),
+      ])
+      const off = new Set(((offRows ?? []) as { company_id: string }[]).map(r => r.company_id))
+      const ids = new Set(((onRows ?? []) as { company_id: string }[]).map(r => r.company_id))
+      for (const r of (stratRows ?? []) as { company_id: string; content_plan: ContentPlan | null }[]) {
+        if (!off.has(r.company_id) && (r.content_plan?.weekly_mix?.length ?? 0) > 0) ids.add(r.company_id)
+      }
+      const configs = [...ids].map(company_id => ({ company_id }))
       let companies = 0, planned = 0, failed = 0
-      for (const cfg of (configs ?? []) as { company_id: string }[]) {
+      for (const cfg of configs) {
         try {
           const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', cfg.company_id).maybeSingle()
           const company = companyRow as Company | null
