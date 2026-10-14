@@ -189,7 +189,34 @@ Estratégia (bloco "Conteúdo & Campanha").
   pede nesta semana" na tela do Calendário — nada que custe dinheiro é
   gerado sem o dono pedir.
 - **Stories separado não entra** (regra do dono, 2026-09): o calendário só
-  tem post orgânico.
+  tem post orgânico. **Substituída em 2026-10-14** — ver abaixo.
+
+### O calendário vem da estratégia (2026-10-14)
+
+Pedido do dono: "o calendário não é gerado, já vem da estratégia", com
+stories e vídeos também, não só foto no feed.
+
+- **Vagas do dia:** `weekSlots` (`_shared/formatCatalog.ts`, com cópia em
+  `src/lib/weekSlots.ts`) espalha TODO o mix da semana (menos DM) pelos 7
+  dias da janela seg–dom: a peça k de N cai no dia `floor(k*7/N)`. A tela
+  mostra essas vagas (pontilhadas) antes de qualquer peça existir, cada uma
+  com onde aparece (Feed / Stories / Vídeo) e quem faz.
+- **Ficha:** cada formato ganhou `surface` (feed | stories | reels | dm) e,
+  quando sai de um item do catálogo, `recipe` (a receita do
+  `catalog-package`). Migration `20261016100000_calendar_from_strategy.sql`.
+- **Geração (`planWeekFromStrategy`):** post → `generateForCompany` no dia
+  da vaga; formato de item com receita → `catalog-package` (modo interno,
+  `cron_secret` + `company_id`, `planned_for` fixo) usando o item com ≥5
+  fotos menos usado nas últimas 3 semanas; vídeo (custa) e DM continuam
+  como "pra fazer". No máximo 3 peças em paralelo. Sem estratégia com mix,
+  vale o planejamento antigo (IA decide 1–2 posts/dia).
+- **Automático:** `auto_weekly_calendar` virou tri-estado — `null` (nunca
+  mexeu) liga sozinho quando há estratégia ativa com mix; `true`/`false` é a
+  escolha do dono no interruptor. O cron de domingo 18h segue essa regra e
+  continua pulando conta vitrine.
+- Nada vai ao ar sozinho: tudo cai como rascunho → nota → Vault → aprovação.
+- **Se mudar a conta das vagas, mude as duas cópias** — senão a peça gerada
+  cai num dia diferente do que a tela mostrou.
 - **Não testado ponta a ponta no ensaio:** o ensaio não tem
   `ANTHROPIC_API_KEY`, então a geração real da estratégia não rodou lá.
   Testado: validação do catálogo/mix (casos de chave inventada, "em breve",

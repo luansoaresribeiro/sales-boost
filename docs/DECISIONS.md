@@ -1041,3 +1041,11 @@ grátis de 30 s, acima — mantidos como histórico):
     são **exemplo** (modo demonstração) — ver
     [DATA_AUDIT.md](DATA_AUDIT.md); viram dado real quando o Meta Ads for
     conectado.
+- **Calendário da semana vem da estratégia, com stories e vídeos** —
+  2026-10-14 (aprovado pelo dono: "sim, pode seguir"). Substitui a regra de
+  2026-09 "o calendário só tem post orgânico". Cada dia mostra as vagas do
+  mix da estratégia (feed, stories, vídeo) e o domingo cria as peças de
+  cada vaga — inclusive as que saem de um imóvel do catálogo. Liga sozinho
+  quando há estratégia ativa (o dono pode desligar no interruptor). Vídeo
+  (custa) e DM continuam dependendo do dono. Detalhes em
+  [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md).

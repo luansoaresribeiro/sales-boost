@@ -9,6 +9,7 @@ type SupaClient = any
 
 export type FormatProducer = 'post' | 'item_package' | 'item_video' | 'dm'
 export type FormatStatus = 'live' | 'needs_material' | 'planned'
+export type FormatSurface = 'feed' | 'stories' | 'reels' | 'dm'
 
 export interface ContentFormat {
   key: string
@@ -19,6 +20,10 @@ export interface ContentFormat {
   media?: string
   cost?: string
   notes?: string
+  // Onde aparece no Instagram e qual receita do catalog-package produz o
+  // formato a partir de um item (os dois vêm da ficha — nada de setor aqui).
+  surface?: FormatSurface
+  recipe?: string
 }
 
 export interface WeeklyMixItem { format: string; name: string; producer: FormatProducer; per_week: number; pillar: string; purpose: string }
@@ -26,6 +31,7 @@ export interface ContentPlan { central_line: string; hero_formats: { key: string
 
 const PRODUCERS: FormatProducer[] = ['post', 'item_package', 'item_video', 'dm']
 const STATUSES: FormatStatus[] = ['live', 'needs_material', 'planned']
+const SURFACES: FormatSurface[] = ['feed', 'stories', 'reels', 'dm']
 
 // Genérico: o que o creative-generate produz pra qualquer negócio. Sem
 // Stories separado de propósito (regra do dono, 2026-09: o calendário só tem
@@ -51,7 +57,9 @@ function clean(raw: unknown): ContentFormat | null {
   const producer = PRODUCERS.includes(f.producer as FormatProducer) ? f.producer as FormatProducer : 'post'
   const status = STATUSES.includes(f.status as FormatStatus) ? f.status as FormatStatus : 'planned'
   const opt = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 200) : undefined)
-  return { key, name: name.slice(0, 120), pillar: String(f.pillar ?? 'qualquer').slice(0, 60), producer, status, media: opt(f.media), cost: opt(f.cost), notes: opt(f.notes) }
+  const surface = SURFACES.includes(f.surface as FormatSurface) ? f.surface as FormatSurface : undefined
+  const recipe = typeof f.recipe === 'string' && /^[a-z0-9_]{2,60}$/.test(f.recipe) ? f.recipe : undefined
+  return { key, name: name.slice(0, 120), pillar: String(f.pillar ?? 'qualquer').slice(0, 60), producer, status, media: opt(f.media), cost: opt(f.cost), notes: opt(f.notes), surface, recipe }
 }
 
 export async function fetchFormatCatalog(admin: SupaClient, verticalKey: string, companyId: string): Promise<ContentFormat[]> {
@@ -117,4 +125,22 @@ export function weeklyMixPlan(plan: ContentPlan | null): { auto: WeeklyMixItem[]
   const todo = mix.filter(m => m.producer !== 'post')
     .map(m => ({ format: m.format, name: m.name, per_week: m.per_week, purpose: m.purpose }))
   return { auto, autoTotal: auto.length, todo }
+}
+
+// Calendário da semana a partir do mix da estratégia (pedido do dono,
+// 2026-10-14: "não é gerado, já vem da estratégia"). Espalha TODAS as peças
+// do mix (menos DM, que é automação e não peça do dia) pelos 7 dias de forma
+// determinística: a peça k de N cai no dia floor(k*7/N). A MESMA conta roda
+// na tela (src/lib/weekSlots.ts — duplicada de propósito, convenção do
+// projeto) pra o dono ver o plano antes de qualquer peça ser gerada, e as
+// peças geradas caírem exatamente nos dias mostrados.
+export interface WeekSlot { date: string; format: string; name: string; producer: FormatProducer; pillar: string; purpose: string }
+export function weekSlots(plan: ContentPlan | null, dates: string[]): WeekSlot[] {
+  const mix = (Array.isArray(plan?.weekly_mix) ? plan!.weekly_mix : []).filter(m => m.producer !== 'dm')
+  const left = mix.map(m => ({ m, n: Math.max(0, m.per_week | 0) }))
+  const queue: WeeklyMixItem[] = []
+  while (left.some(x => x.n > 0)) for (const x of left) if (x.n > 0) { queue.push(x.m); x.n-- }
+  const n = queue.length
+  if (!n || dates.length !== 7) return []
+  return queue.map((m, k) => ({ date: dates[Math.floor((k * 7) / n)], format: m.format, name: m.name, producer: m.producer, pillar: m.pillar, purpose: m.purpose }))
 }
