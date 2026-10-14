@@ -1056,3 +1056,18 @@ grátis de 30 s, acima — mantidos como histórico):
   sempre a real do anúncio; campo que o anúncio não traz fica vazio (nunca
   inventa número). O dono escolhe o que importar. Sincronização automática
   fica pra depois.
+- **Mobiliar virtualmente (virtual staging)** — 2026-10-14 (aprovado: "sim
+  pode seguir" ao teste pago pequeno). Higgsfield Qwen Image 3 Edit sobre a
+  FOTO REAL de um cômodo (só de foto que já está no item). A foto real nunca
+  é trocada: o dono vê o antes/depois e escolhe "usar no imóvel"; a
+  mobiliada vai pra `meta.staged_photos` (vídeos e tour continuam só com as
+  reais). Todo carrossel que usar uma delas leva na legenda o aviso da ficha
+  ("móveis ilustrativos"). Só com plano e teto mensal por empresa
+  (`VIRTUAL_STAGING_MONTHLY_CAP`, padrão 10). Teste no ensaio (1 geração):
+  móveis entraram e a arquitetura ficou; **divergência**: o enquadramento
+  muda um pouco (sai em 3:4 e a tela recorta em 4:5).
+- **Padrão do feed** — 2026-10-14. O analista visual do `content-test`
+  ganhou a nota `feed_fit` (encaixe no Kit da marca: cores, fontes, clima)
+  na MESMA chamada — sem custo extra e sem mudar a regra do Vault
+  automático. Conteúdo → Padrão visual → "Prévia do feed" mostra a grade
+  3×3 das próximas peças com essa nota.

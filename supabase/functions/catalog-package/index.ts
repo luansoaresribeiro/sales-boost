@@ -31,9 +31,9 @@ type SupaClient = ReturnType<typeof createClient>
 const NO_TEXT_RULE = 'CRITICAL: this image must contain ONLY the visual scene — environment, people, products, objects, lighting, composition. Absolutely NO text of any kind anywhere in the image: no headlines, captions, CTAs, logos with text, signs, banners, posters, screens, labels, packaging text, watermarks, or simulated/gibberish lettering. If the scene naturally includes an object that would normally carry text (a sign, menu, screen, clipboard, label), render it completely blank — a clean empty surface. Never attempt to write, spell, or render any character.'
 
 interface Photo { url: string; path: string }
-interface CatalogMeta { photos?: Photo[]; fields?: Record<string, unknown> }
+interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
 interface RecipeGroup { recipes: string[]; fonte_midia: string; descricao: string }
-interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string> }
+interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string }
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -58,7 +58,8 @@ async function fetchFichaConfig(admin: SupaClient, verticalKey: string | null): 
     const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
     const c = (data?.config ?? {}) as Record<string, unknown>
     if (!c.production_recipes) return null
-    return { pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string> }
+    const disclosure = String((c.virtual_staging as { disclosure?: string } | undefined)?.disclosure ?? '').slice(0, 200)
+    return { pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure }
   } catch { return null }
 }
 
@@ -248,9 +249,15 @@ Deno.serve(async (req) => {
         let provider = ''
 
         if (recipe === 'carrossel_tour') {
-          media = photos.map(p => ({ url: p.url, type: 'photo' }))
-          const c = await writeCopy(anthropicKey, `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).\n${fieldsLine}`)
-          caption = c.caption; hashtags = c.hashtags; cta = c.cta
+          // Até 2 fotos mobiliadas virtualmente (escolhidas pelo dono) entram
+          // logo depois da capa real — e aí a legenda SEMPRE leva o aviso da
+          // ficha (nunca enganar o comprador sobre o que vem no imóvel).
+          const staged = (meta.staged_photos ?? []).slice(0, 2)
+          const useStaged = staged.length > 0 && !!ficha.stagingDisclosure
+          media = [photos[0], ...(useStaged ? staged : []), ...photos.slice(1)].map(p => ({ url: p.url, type: 'photo' }))
+          const c = await writeCopy(anthropicKey, `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
+          caption = useStaged ? `${c.caption}\n\n${ficha.stagingDisclosure}` : c.caption
+          hashtags = c.hashtags; cta = c.cta
           provider = 'catalogo_real'
         } else if (recipe === 'post_detalhe_que_voce_nao_viu') {
           media = [{ url: photos[photos.length - 1].url, type: 'photo' }]

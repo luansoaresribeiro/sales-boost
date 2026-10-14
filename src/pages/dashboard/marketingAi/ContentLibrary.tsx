@@ -2,16 +2,17 @@ import { useState } from 'react'
 import { MUTED, BORDER, D } from './shared'
 import FormatsLibrary from './FormatsLibrary'
 import BrandKit from './BrandKit'
+import FeedPreview from './FeedPreview'
 import { useLang, type Lang } from '../../../contexts/LanguageContext'
 
 const TX = {
   pt: {
-    topBrand: 'Marca (logo e cores)', topFormats: 'Formatos', organic: 'Feed', stories: 'Stories',
+    topBrand: 'Marca (logo e cores)', topFormats: 'Formatos', topFeed: 'Prévia do feed', organic: 'Feed', stories: 'Stories',
     title: '🎨 Padrão visual do feed',
     d1: 'Marca', d2: ' (logo, cores e fontes que todo post usa) e ', d3: 'Formatos', d4: ' (a anatomia de cada imagem, do feed e dos stories). É isso que mantém o feed com cara de uma marca só.',
   },
   en: {
-    topBrand: 'Brand (logo & colors)', topFormats: 'Formats', organic: 'Feed', stories: 'Stories',
+    topBrand: 'Brand (logo & colors)', topFormats: 'Formats', topFeed: 'Feed preview', organic: 'Feed', stories: 'Stories',
     title: '🎨 Feed visual pattern',
     d1: 'Brand', d2: ' (logo, colors and fonts every post uses) and ', d3: 'Formats', d4: ' (the anatomy of each image, for feed and stories). This keeps the feed looking like one brand.',
   },
@@ -36,6 +37,7 @@ const ORANGE = '#FF6D29'
 // marca veio do antigo Agente de Dados → Estilos e Visuais pra cá — marca e
 // formatos juntos são o que mantém o feed com um padrão só.
 const TOP_TABS = (lang: Lang): { key: string; icon: string; label: string }[] => [
+  { key: 'feed', icon: '🔲', label: TX[lang].topFeed },
   { key: 'marca', icon: '🏷️', label: TX[lang].topBrand },
   { key: 'formatos', icon: '🧩', label: TX[lang].topFormats },
 ]
@@ -61,7 +63,7 @@ export const kindLabel = (k: string, lang: Lang = 'pt') => (lang === 'en' ? KIND
 
 export default function ContentLibrary({ companyId }: { companyId: string }) {
   const { lang } = useLang(); const tx = TX[lang]
-  const [top, setTop] = useState('marca')
+  const [top, setTop] = useState('feed')
   const [mod, setMod] = useState<'organico' | 'stories'>('organico')
 
   return (
@@ -103,7 +105,7 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
         </div>
       )}
 
-      {top === 'formatos' ? <FormatsLibrary companyId={companyId} module={mod} /> : <BrandKit companyId={companyId} />}
+      {top === 'formatos' ? <FormatsLibrary companyId={companyId} module={mod} /> : top === 'feed' ? <FeedPreview companyId={companyId} /> : <BrandKit companyId={companyId} />}
     </div>
   )
 }

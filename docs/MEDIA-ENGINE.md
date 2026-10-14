@@ -193,3 +193,19 @@ Comandos (rodar no terminal da Hostinger):
 - **Remover:**
   `curl -fsSL https://getsaleboost.com/vps/install.sh | sudo bash -s -- uninstall`
 - **Ver o log:** `journalctl -u salesboost-worker -n 50`
+
+## Mobiliar virtualmente (2026-10-14)
+
+- Function `virtual-staging` (`start` → `status` → `result`), endpoint
+  Higgsfield `/alibaba/qwen-image-3/edit` (o mesmo do criativo do kit).
+- Entrada: só foto REAL que já está em `meta.photos` do item. Instrução por
+  estilo + aviso da legenda ficam na ficha (`config.virtual_staging`).
+- Saída: o dono aprova o antes/depois; a imagem vai pra
+  `meta.staged_photos` (separada). `catalog-package` (carrossel do imóvel)
+  usa até 2 delas logo após a capa e cola o aviso na legenda.
+- Custo: por foto (mesmo modelo do criativo do kit). Teto mensal por
+  empresa `VIRTUAL_STAGING_MONTHLY_CAP` (padrão 10); tabela
+  `virtual_staging` registra cada pedido.
+- Teste no ensaio (1 geração, estilo Moderno, foto de corredor quase vazio):
+  sofá/almofadas/quadro entraram, porta/espelho/piso iguais. O
+  enquadramento muda um pouco (saída 3:4) — documentado como divergência.
