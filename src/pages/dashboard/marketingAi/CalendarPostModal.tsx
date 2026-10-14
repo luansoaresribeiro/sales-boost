@@ -16,7 +16,7 @@ const TX = {
     published: 'Publicado de verdade no Instagram ✓', pubFail: 'Post aprovado, mas não foi possível publicar no Instagram agora.', approvedPosts: 'Aprovado — publique na aba Posts ✓',
     pubErr: 'Erro ao publicar', scheduledFor: 'Agendado pra', schedErr: 'Erro ao agendar', cancelErr: 'Erro ao cancelar',
     ready: (n: number | null) => `✅ Passou na análise${n != null ? ` (nota ${n})` : ''} — pronta pra você aprovar.`,
-    low: (n: number | null) => `⚠️ Não passou na análise${n != null ? ` (nota ${n} de 100; precisa de 90)` : ''}. Veja abaixo o que pesou. Não vai ao ar sozinha.`,
+    low: (n: number | null) => `⚠️ Não passou na análise${n != null ? ` (nota ${n} de 100 — algo ficou claramente ruim)` : ''}. Veja abaixo o que pesou. Não vai ao ar sozinha.`,
     evaluating: '⏳ Sendo avaliada pela IA — a nota aparece em instantes.',
     planned: 'Planejada pra', approveHint: 'Nada vai ao ar sem o seu OK: 🚀 publica agora, 📅 marca o horário.',
     scheduledAt: '🕐 Agendado pra', cancelSched: 'Cancelar agendamento', confirm: 'Confirmar', publish: '🚀 Publicar agora', schedLater: '📅 Agendar',
@@ -28,7 +28,7 @@ const TX = {
     published: 'Actually published on Instagram ✓', pubFail: 'Post approved, but it could not be published on Instagram right now.', approvedPosts: 'Approved — publish from the Posts tab ✓',
     pubErr: 'Error publishing', scheduledFor: 'Scheduled for', schedErr: 'Error scheduling', cancelErr: 'Error cancelling',
     ready: (n: number | null) => `✅ Passed the review${n != null ? ` (score ${n})` : ''} — ready for your approval.`,
-    low: (n: number | null) => `⚠️ Did not pass the review${n != null ? ` (score ${n} of 100; needs 90)` : ''}. See below what weighed in. It never goes live on its own.`,
+    low: (n: number | null) => `⚠️ Did not pass the review${n != null ? ` (score ${n} of 100 — something is clearly off)` : ''}. See below what weighed in. It never goes live on its own.`,
     evaluating: '⏳ Being reviewed by the AI — the score shows up shortly.',
     planned: 'Planned for', approveHint: 'Nothing goes live without your OK: 🚀 publishes now, 📅 picks a time.',
     scheduledAt: '🕐 Scheduled for', cancelSched: 'Cancel schedule', confirm: 'Confirm', publish: '🚀 Publish now', schedLater: '📅 Schedule',
@@ -42,7 +42,8 @@ type Post = TestPost & { kind?: string; planned_for?: string | null }
 
 // Peça do calendário aberta (substitui a antiga aba Vault — decisão do dono
 // 2026-10-14: "pra ver o post clico em cima na grade do calendário"). Mostra a
-// análise e a nota da peça e, quando passou (status 'vault', nota ≥90), os
+// análise e a nota da peça e, quando passou (status 'vault' — hoje: os dois analistas de texto e
+// imagem com nota ≥50, regra do content-test), os
 // botões de aprovar: publicar agora ou agendar. Peça que não passou fica em
 // revisão (status 'draft'): mostra o porquê e o dono decide (liberar mesmo
 // assim ou excluir). Nada vai ao público sem o clique do dono (regra 1).

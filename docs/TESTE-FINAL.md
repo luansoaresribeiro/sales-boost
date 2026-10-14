@@ -11,6 +11,8 @@ rodada; o que é conferido não muda.
 QA_EMAIL=email-da-conta-de-teste QA_PASSWORD='senha' node scripts/teste-final.mjs
 ```
 
+- Sem guardar senha: dá pra passar `QA_TOKEN` (sessão aberta, vale 1h) ou
+  `QA_REFRESH_TOKEN` no lugar de `QA_EMAIL`/`QA_PASSWORD`.
 - Roda com o **login do cliente de teste**, nunca com chave de administrador.
   Assim o teste também prova que a conta só vê o que é dela.
 - Conta usada hoje: **Tespon** (produção, acesso liberado à mão). Nunca rodar
@@ -44,7 +46,7 @@ QA_EMAIL=email-da-conta-de-teste QA_PASSWORD='senha' node scripts/teste-final.mj
      - peça de imóvel usa foto real;
      - nenhum texto proibido aparece (conversa ou depoimento inventado,
        "Ops", recado pro corretor, distância inventada);
-     - quantas peças ficaram prontas pra aprovar (nota ≥ 90) e quantas
+     - quantas peças ficaram prontas pra aprovar (passaram na análise) e quantas
        ficaram em revisão, com a nota de cada uma.
 6. **Vídeo do imóvel.** Só roda se a estratégia pedir vídeo na semana.
 7. **Mobiliar.** Fica fora do calendário, então só roda com
@@ -73,7 +75,7 @@ falha e diz isso.
 Em **Conteúdo → Calendário da semana**, clique numa peça da grade. Abre a
 análise com a nota:
 
-- nota ≥ 90 aparece como "Pronta pra aprovar";
+- passou na análise (hoje: nota ≥ 50 nos dois analistas) aparece como "Pronta pra aprovar";
 - nota baixa aparece como "Nota baixa — revisar", com o motivo.
 
 A aba Vault saiu em 2026-10-14.

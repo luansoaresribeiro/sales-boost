@@ -1165,7 +1165,7 @@ grátis de 30 s, acima — mantidos como histórico):
 - **Aba Vault removida; a peça abre no calendário** — 2026-10-14 (pedido do
   dono: "para ver o post clico em cima na grade do calendário … pode apagar
   a aba Vault"). Clicar numa peça da grade abre `CalendarPostModal` com a
-  imagem, a legenda, a análise e a nota. Nota ≥90 ("Pronta pra aprovar"):
+  imagem, a legenda, a análise e a nota. Passou na análise ("Pronta pra aprovar"):
   🚀 publicar agora ou 📅 agendar (sugere o dia planejado, 18h). Nota baixa
   ("Nota baixa — revisar"): mostra o porquê; o dono pode liberar mesmo assim
   ou excluir. O status `vault` continua existindo no banco (só o nome na
@@ -1190,3 +1190,7 @@ grátis de 30 s, acima — mantidos como histórico):
   conta depois de uma confirmação anterior; o lembrete de 30 dias segue.
 - **Teste Final gera só o que a estratégia pede** — 2026-10-14 (pedido do
   dono). Ver [TESTE-FINAL.md](TESTE-FINAL.md).
+  - **Divergência registrada (2026-10-14, teste final):** a régua real do
+    `content-test` é nota **≥50** nos dois analistas (texto e imagem), com o
+    pedido "SEJA GENEROSO" no prompt — não 90, como textos antigos da tela
+    diziam. A tela agora mostra a regra real; subir a régua é decisão do dono.
