@@ -20,7 +20,7 @@
  *     Testes liga isso, e auto_daily_test_image decide se gera imagem junto.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { weeklyMixPlan, weekSlots, fetchFormatCatalog, type ContentPlan } from '../_shared/formatCatalog.ts'
+import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchContentRules, ensureMinVideos, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
 
@@ -838,7 +838,12 @@ async function planWeekForCompany(admin: SupaClient, anthropicKey: string, compa
   // Mix da semana escolhido pela estratégia (Hermes): o calendário segue as
   // quantidades e os formatos; o que não dá pra gerar sozinho (vídeo, pacote
   // do item, DM) volta como lista "pra fazer" pro dono.
-  const contentPlan = (stratRow?.content_plan ?? null) as ContentPlan | null
+  const storedPlan = (stratRow?.content_plan ?? null) as ContentPlan | null
+  // Mínimo de vídeos da ficha vale também pra estratégia antiga (criada antes
+  // da regra) — sem precisar refazer a estratégia.
+  const contentPlan = storedPlan && Array.isArray(storedPlan.weekly_mix) && storedPlan.weekly_mix.length
+    ? { ...storedPlan, weekly_mix: ensureMinVideos(storedPlan.weekly_mix, await fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id), (await fetchContentRules(admin, company.vertical_key ?? 'generico')).minVideosPerWeek) }
+    : storedPlan
   const mix = weeklyMixPlan(contentPlan)
   // Estratégia com mix semanal → o calendário é o plano dela, dia a dia
   // (weekSlots), sem a IA decidir cadência. Sem estratégia, vale o
@@ -890,7 +895,12 @@ Retorne APENAS um JSON array, um item por dia, nesta ordem (sempre os 7 dias):
 // - item_package com receita na ficha → catalog-package do item do catálogo
 //   menos usado nas últimas 3 semanas (só item com ≥5 fotos reais), no dia
 //   da vaga;
-// - vídeo (custa) e o que não tem item/receita → volta como "pra fazer".
+// - vídeo (item_video, decisão do dono 2026-10-14: mínimo de 3/semana) →
+//   1 foto real do item menos usado vira vídeo de 5 s na Higgsfield
+//   (item-videos, caminho do cron; confere o teto de US$ 40). A peça nasce na
+//   hora com legenda e a foto de capa; o vídeo entra nela quando fica pronto
+//   (action video_tick, a cada 5 min).
+// - o que não tem item/receita → volta como "pra fazer".
 // Nada é publicado: tudo cai como rascunho → nota → Vault, e o dono aprova.
 //
 // Teto de 150s (docs/PITFALLS.md): aqui só DESPACHA — cada vaga é uma
@@ -899,7 +909,8 @@ Retorne APENAS um JSON array, um item por dia, nesta ordem (sempre os 7 dias):
 // Sem duplicar (QA 2026-10-14): vaga que já tem peça no mesmo dia (mesma
 // receita, ou post solto pra vaga de post) é pulada — clicar 2x ou o cron
 // depois do botão não gera de novo nem gasta IA de novo.
-interface SlotJob { date: string; producer: 'post' | 'item_package'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string }
+const VIDEO_RECIPE = 'video_imovel'
+interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string }
 
 async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: ReturnType<typeof weekSlots>, plan: ContentPlan): Promise<{ planned: number; days: { date: string; posts: number; note: string }[]; todo: { format: string; name: string; per_week: number; purpose: string }[] }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -940,9 +951,15 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
 
   const jobs: SlotJob[] = []
   for (const slot of slots) {
-    const recipe = slot.producer === 'item_package' ? recipeOf.get(slot.format) : undefined
+    const recipe = slot.producer === 'item_package' ? recipeOf.get(slot.format) : slot.producer === 'item_video' ? VIDEO_RECIPE : undefined
     if (alreadyFilled(slot.date, recipe, slot.producer)) continue
     if (slot.producer === 'post') { jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose }); continue }
+    if (slot.producer === 'item_video') {
+      const itemId = pickItem()
+      if (!itemId) { addTodo(slot); continue }
+      jobs.push({ date: slot.date, producer: 'item_video', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe: VIDEO_RECIPE, item_id: itemId })
+      continue
+    }
     const itemId = recipe ? pickItem() : null
     if (!recipe || !itemId) { addTodo(slot); continue }
     jobs.push({ date: slot.date, producer: 'item_package', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe, item_id: itemId })
@@ -978,6 +995,7 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
       await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date, seed })
       return
     }
+    if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }
     const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/catalog-package`, {
       method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ item_id: job.item_id, only_recipe: job.recipe, planned_for: job.date, cron_secret: cronSecret, company_id: company.id }),
@@ -985,6 +1003,53 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
     const r = await res.json().catch(() => ({})) as { error?: string; generated?: unknown[] }
     if (!res.ok || !r.generated?.length) console.error('runPlanSlot: catalog-package sem peça', company.id, job.date, job.recipe, res.status, r.error)
   } catch (e) { console.error('runPlanSlot falhou', company.id, job.date, e) }
+}
+
+// Vaga de vídeo: legenda (texto da IA, sem inventar) + peça no calendário com
+// a foto de capa; o item-videos manda a foto pra Higgsfield (confere o teto) e
+// liga o vídeo à peça (plan.piece_id). Se não der pra fazer o vídeo, a peça
+// diz o motivo — nada é cobrado.
+async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Company, job: SlotJob, cronSecret: string): Promise<void> {
+  const { data: item } = await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('id', job.item_id).eq('company_id', company.id).eq('kind', 'product').maybeSingle()
+  const photos = ((item?.meta?.photos ?? []) as { url: string }[]).map(p => p.url).filter(Boolean)
+  if (!item || !photos.length) { console.error('runVideoSlot: item sem fotos', company.id, job.item_id); return }
+  // Foto ainda não usada em vídeo deste item, se houver (senão qualquer uma).
+  const { data: used } = await admin.from('video_tours').select('photos').eq('company_id', company.id).eq('item_id', item.id).eq('kind', 'plan')
+  const usedSet = new Set(((used ?? []) as { photos: string[] | null }[]).flatMap(v => v.photos ?? []))
+  const fresh = photos.filter(u => !usedSet.has(u))
+  const pool = fresh.length ? fresh : photos
+  const photo = pool[Math.floor(Math.random() * pool.length)]
+  const f = (item.meta?.fields ?? {}) as Record<string, unknown>
+  const facts = Object.entries(f).filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '').map(([k, v]) => `${k}: ${String(v).slice(0, 600)}`).join('\n')
+  let cap: Record<string, unknown> = {}
+  try {
+    cap = parseObj(await callClaude(anthropicKey, `Você escreve a legenda de um Reels curto (5 s) de "${company.business_name}" mostrando 1 ambiente deste imóvel real, em movimento de câmera suave.
+Dados reais do imóvel (use só isto):
+${facts || '(sem dados além do título)'}
+Título: ${item.title}
+Objetivo da peça na estratégia: ${job.purpose || job.name}
+${HONESTY_RULE} A legenda é pro público do Instagram — nunca um recado pro corretor.
+Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`, 700))
+  } catch (e) { console.error('runVideoSlot: legenda falhou', company.id, e) }
+  const { data: piece, error } = await admin.from('marketing_ai_test_content').insert({
+    company_id: company.id, kind: 'organico', format: 'reel', idea: `${item.title} — vídeo`,
+    caption: cap.caption ? String(cap.caption) : null, hashtags: cap.hashtags ? String(cap.hashtags) : null, cta: cap.cta ? String(cap.cta) : null,
+    image_url: photo, media: [{ url: photo, type: 'photo' }], item_id: item.id, pillar: job.pillar, recipe: VIDEO_RECIPE, provider: 'higgsfield',
+    planned_for: job.date, reasoning: 'Vídeo sendo feito na Higgsfield a partir de uma foto real — aparece aqui em alguns minutos.',
+  }).select('id').single()
+  if (error || !piece) { console.error('runVideoSlot: peça não gravada', company.id, error?.message); return }
+  try {
+    const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/item-videos`, {
+      method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create', cron_secret: cronSecret, company_id: company.id, item_id: item.id, kind: 'room', photos: [photo], label: 'Calendário', piece_id: piece.id }),
+    })
+    const r = await res.json().catch(() => ({})) as { error?: string }
+    if (!res.ok) await admin.from('marketing_ai_test_content').update({ reasoning: `O vídeo não foi feito: ${r.error ?? `erro ${res.status}`}. Nada foi cobrado.` }).eq('id', piece.id)
+  } catch (e) {
+    await admin.from('marketing_ai_test_content').update({ reasoning: 'O vídeo não foi feito (falha de conexão). Nada foi cobrado.' }).eq('id', piece.id)
+    console.error('runVideoSlot: item-videos falhou', company.id, e)
+  }
+  try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runVideoSlot: nota falhou', e) }
 }
 
 const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language, telegram_chat_id, vertical_key, playbook_answers'
@@ -1002,10 +1067,20 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const cronSecretEnv = Deno.env.get('CRON_SECRET')
 
+    // ── Vídeos do calendário (cron a cada 5 min): o item-videos tem
+    // verify_jwt, então o cron passa por aqui e encaminha com a chave de serviço.
+    if (cronSecretEnv && body.cron_secret === cronSecretEnv && body.action === 'video_tick') {
+      const res = await fetch(`${supabaseUrl}/functions/v1/item-videos`, {
+        method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'tick', cron_secret: cronSecretEnv }),
+      })
+      return json(await res.json().catch(() => ({ error: `item-videos ${res.status}` })), res.ok ? 200 : 502)
+    }
+
     // ── Uma vaga do calendário (despachada por planWeekFromStrategy) ──
     if (cronSecretEnv && body.cron_secret === cronSecretEnv && body.action === 'plan_slot' && typeof body.company_id === 'string') {
       const job = body.slot as SlotJob | undefined
-      if (!job || !/^\d{4}-\d{2}-\d{2}$/.test(String(job.date)) || !['post', 'item_package'].includes(String(job.producer))) return json({ error: 'vaga inválida' }, 400)
+      if (!job || !/^\d{4}-\d{2}-\d{2}$/.test(String(job.date)) || !['post', 'item_package', 'item_video'].includes(String(job.producer))) return json({ error: 'vaga inválida' }, 400)
       const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', body.company_id).maybeSingle()
       const company = companyRow as Company | null
       if (!company) return json({ error: 'empresa não encontrada' }, 404)

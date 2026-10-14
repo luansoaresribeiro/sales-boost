@@ -1203,3 +1203,19 @@ grátis de 30 s, acima — mantidos como histórico):
   `descricao` (texto até 1500, migration `20261017140000`); a importação do
   portal preenche com a descrição do anúncio, e o pacote do imóvel
   (`catalog-package`) passa a usar a descrição real do corretor no texto da IA.
+- **Mínimo de 3 vídeos por semana, criados sozinhos pelo calendário** —
+  2026-10-14 (decisão do dono: "devemos ter pelo menos uns 3 vídeos na semana
+  e a estratégia, dependendo, pode jogar a quantidade pra cima").
+  - Regra na ficha: `content_rules.min_videos_per_week = 3`. A estratégia é
+    avisada no prompt e o `sanitizeContentPlan`/`ensureMinVideos`
+    (`_shared/formatCatalog.ts`) completa o mínimo se ela pedir menos; mais
+    que 3 fica como ela pediu. Estratégias antigas ganharam 3 vídeos no mix
+    (migration `20261017150000`) e o calendário completa sozinho também.
+  - Calendário: cada vaga de vídeo escolhe o imóvel menos usado e uma foto
+    real ainda não usada em vídeo, escreve a legenda (sem inventar) e cria a
+    peça na hora (receita `video_imovel`, capa = a foto). O `item-videos`
+    (caminho do cron) confere o teto de US$ 40 e manda pra Higgsfield (5 s,
+    US$ 0,42). O agendamento `item-videos-tick-5min` (creative-generate →
+    item-videos `tick`) põe o vídeo na peça quando fica pronto; se falhar,
+    não conta no teto e a peça diz o motivo. Nada é publicado sem o dono.
+  - Antes era "você pede (custa)" — vídeo nunca saía sozinho.

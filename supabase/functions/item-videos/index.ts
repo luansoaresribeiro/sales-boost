@@ -21,6 +21,12 @@ import { capMessage, fitsCap, monthSpend } from '../_shared/spendCap.ts'
 //  - create {item_id, kind, photos[], label?}: confere teto e manda o trecho pra Higgsfield
 //  - status {video_id}: avança geração/gravação; no fim devolve a URL
 //  - save_reply {item_id, message, active}: aprova/desliga a resposta automática
+// Caminho do cron (cron_secret no corpo, decisão do dono 2026-10-14: mínimo de
+// 3 vídeos/semana criados sozinhos pelo calendário):
+//  - create {company_id, item_id, kind, photos[], piece_id}: igual ao do dono,
+//    e liga o vídeo à peça do calendário (plan.piece_id);
+//  - tick: avança os vídeos em andamento (sem ninguém com a tela aberta) e,
+//    quando fica pronto, põe o vídeo na peça do calendário.
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -33,6 +39,41 @@ function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 }
 
+// deno-lint-ignore no-explicit-any
+type Admin = any
+interface PlanVideo { id: string; company_id: string; status: string; plan: { kind?: string; label?: string; piece_id?: string } | null; photos: string[]; clips: unknown; video_path: string | null; assembly: unknown; updated_at: string }
+
+// Avança 1 vídeo (Higgsfield → gravação). Pronto: põe na peça do calendário
+// ligada (plan.piece_id). Falhou: não conta no teto e a peça diz o motivo.
+async function advanceVideo(admin: Admin, supabaseUrl: string, serviceKey: string, verticalKey: string | null, v: PlanVideo): Promise<'completed' | 'failed' | 'processing'> {
+  const publicVideo = (path: string) => admin.storage.from(VIDEO_BUCKET).getPublicUrl(path).data.publicUrl
+  const pieceId = v.plan?.piece_id
+  const finish = async (path: string) => {
+    if (pieceId) {
+      const url = publicVideo(path)
+      await admin.from('marketing_ai_test_content').update({ video_url: url, media: [{ url, type: 'video' }], reasoning: null }).eq('id', pieceId).eq('company_id', v.company_id)
+    }
+    return 'completed' as const
+  }
+  if (v.status === 'completed' && v.video_path) return await finish(v.video_path)
+  if (v.status === 'failed') return 'failed'
+  const headers = hfHeaders()
+  if (!headers) return 'processing'
+  const kind = (v.plan?.kind ?? 'room') as ClipKind
+  const r = await advanceTour(admin, supabaseUrl, serviceKey, headers, await clipPrompt(admin, verticalKey, kind), v as unknown as TourRow,
+    () => [{ path: `plan/${v.company_id}/${v.id}.mp4`, from: 0, to: 1 }], SECONDS[kind])
+  if (r.status === 'completed') return await finish(r.outputs[0].path)
+  if (r.status === 'failed') {
+    // Não cobra no teto o que não foi entregue (a Higgsfield devolve crédito de trecho que falha).
+    await admin.from('video_tours').update({ cost_usd: 0 }).eq('id', v.id)
+    if (pieceId) await admin.from('marketing_ai_test_content').update({ reasoning: 'O vídeo não saiu: a Higgsfield recusou (costuma ser falta de crédito). Nada foi cobrado.' }).eq('id', pieceId).eq('company_id', v.company_id)
+    return 'failed'
+  }
+  return 'processing'
+}
+
+const VIDEO_SELECT = 'id, company_id, status, plan, photos, clips, video_path, assembly, updated_at'
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
@@ -40,14 +81,38 @@ Deno.serve(async (req) => {
     if (!authHeader) return json({ error: 'Unauthorized' }, 401)
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } })
-    const { data: { user } } = await userClient.auth.getUser()
-    if (!user) return json({ error: 'Unauthorized' }, 401)
     const admin = createClient(supabaseUrl, serviceKey)
+    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string }
+    const cronSecret = Deno.env.get('CRON_SECRET')
+    const isCron = !!cronSecret && body.cron_secret === cronSecret
 
-    const { data: company } = await admin.from('companies').select('id, plan, vertical_key').eq('user_id', user.id).maybeSingle()
+    // Cron: avança os vídeos em andamento de todas as empresas (até ~100 s).
+    if (isCron && body.action === 'tick') {
+      const { data: rows } = await admin.from('video_tours').select(`${VIDEO_SELECT}, companies(vertical_key)`)
+        .eq('kind', 'plan').in('status', ['generating', 'assembling']).not('plan->>kind', 'is', null)
+        .order('updated_at', { ascending: true }).limit(10)
+      const deadline = Date.now() + 100_000
+      const result: Record<string, number> = { completed: 0, failed: 0, processing: 0 }
+      for (const row of (rows ?? []) as (PlanVideo & { companies: { vertical_key: string | null } | null })[]) {
+        if (Date.now() > deadline) break
+        try { result[await advanceVideo(admin, supabaseUrl, serviceKey, row.companies?.vertical_key ?? null, row)]++ }
+        catch (e) { console.error('[item-videos] tick falhou', row.id, String(e)) }
+      }
+      return json({ ok: true, seen: (rows ?? []).length, ...result })
+    }
+
+    let company: { id: string; plan: string | null; vertical_key: string | null } | null = null
+    if (isCron && body.action === 'create' && typeof body.company_id === 'string') {
+      const { data } = await admin.from('companies').select('id, plan, vertical_key').eq('id', body.company_id).maybeSingle()
+      company = data
+    } else {
+      const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } })
+      const { data: { user } } = await userClient.auth.getUser()
+      if (!user) return json({ error: 'Unauthorized' }, 401)
+      const { data } = await admin.from('companies').select('id, plan, vertical_key').eq('user_id', user.id).maybeSingle()
+      company = data
+    }
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
-    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean }
     const publicVideo = (path: string) => admin.storage.from(VIDEO_BUCKET).getPublicUrl(path).data.publicUrl
 
     const loadItem = async (id: unknown) => {
@@ -99,8 +164,14 @@ Deno.serve(async (req) => {
       const clips = await submitAll(headers, await clipPrompt(admin, company.vertical_key, kind), photos, [kind === 'pair' ? { from: 0, to: 1 } : { from: 0 }], SECONDS[kind])
       if (!clips[0].job_ref) return json({ error: 'Não consegui iniciar o vídeo agora. Tente de novo em alguns minutos.' }, 502)
       const label = String(body.label ?? '').trim().slice(0, 80)
+      // Peça do calendário (só no caminho do cron, e só se for desta empresa).
+      let pieceId: string | undefined
+      if (isCron && typeof body.piece_id === 'string') {
+        const { data: piece } = await admin.from('marketing_ai_test_content').select('id').eq('id', body.piece_id).eq('company_id', company.id).maybeSingle()
+        pieceId = piece?.id
+      }
       const { data: v, error } = await admin.from('video_tours')
-        .insert({ company_id: company.id, kind: 'plan', item_id: item.id, status: 'generating', photos, clips, plan: { kind, label }, cost_usd: estimate })
+        .insert({ company_id: company.id, kind: 'plan', item_id: item.id, status: 'generating', photos, clips, plan: { kind, label, ...(pieceId ? { piece_id: pieceId } : {}) }, cost_usd: estimate })
         .select('id').single()
       if (error) return json({ error: error.message }, 500)
       console.log('[item-videos] vídeo iniciado', company.id, v.id, kind, estimate.toFixed(2), 'USD')
@@ -109,23 +180,15 @@ Deno.serve(async (req) => {
 
     if (body.action === 'status') {
       if (typeof body.video_id !== 'string') return json({ error: 'video_id obrigatório' }, 400)
-      const { data: v } = await admin.from('video_tours').select('id, status, plan, photos, clips, video_path, assembly, updated_at')
+      const { data: v } = await admin.from('video_tours').select(VIDEO_SELECT)
         .eq('id', body.video_id).eq('company_id', company.id).eq('kind', 'plan').maybeSingle()
       if (!v) return json({ error: 'Vídeo não encontrado.' }, 404)
-      if (v.status === 'completed' && v.video_path) return json({ status: 'completed', video_url: publicVideo(v.video_path) })
-      if (v.status === 'failed') return json({ status: 'failed' })
-      const headers = hfHeaders()
-      if (!headers) return json({ status: 'processing' })
-      const kind = (v.plan?.kind ?? 'room') as ClipKind
-      const r = await advanceTour(admin, supabaseUrl, serviceKey, headers, await clipPrompt(admin, company.vertical_key, kind), v as TourRow,
-        () => [{ path: `plan/${company.id}/${v.id}.mp4`, from: 0, to: 1 }], SECONDS[kind])
-      if (r.status === 'completed') return json({ status: 'completed', video_url: publicVideo(r.outputs[0].path) })
-      if (r.status === 'failed') {
-        // Não cobra no teto o que não foi entregue (a Higgsfield devolve crédito de trecho que falha).
-        await admin.from('video_tours').update({ cost_usd: 0 }).eq('id', v.id)
-        return json({ status: 'failed' })
+      const st = await advanceVideo(admin, supabaseUrl, serviceKey, company.vertical_key, v as PlanVideo)
+      if (st === 'completed') {
+        const { data: done } = await admin.from('video_tours').select('video_path').eq('id', v.id).maybeSingle()
+        return json({ status: 'completed', video_url: done?.video_path ? publicVideo(done.video_path) : null })
       }
-      return json({ status: 'processing' })
+      return json({ status: st })
     }
 
     if (body.action === 'save_reply') {

@@ -23,7 +23,7 @@ QA_EMAIL=email-da-conta-de-teste QA_PASSWORD='senha' node scripts/teste-final.mj
   `--sem-limpeza`, `--saida=pasta`.
 - O relatório sai em `qa-relatorios/` (`.md` pra ler, `.json` pra comparar
   rodadas). A pasta fica fora do git.
-- Custo típico: US$ 0,50 a 1. Cada edição de foto custa US$ 0,08 e o vídeo
+- Custo típico: US$ 1,50 a 2 (3 vídeos + edições de foto). Cada edição de foto custa US$ 0,08 e o vídeo
   de 5 s custa US$ 0,42. Tudo entra no teto de US$ 40 da conta.
 
 ## O que ele faz e confere
@@ -48,7 +48,9 @@ QA_EMAIL=email-da-conta-de-teste QA_PASSWORD='senha' node scripts/teste-final.mj
        "Ops", recado pro corretor, distância inventada);
      - quantas peças ficaram prontas pra aprovar (passaram na análise) e quantas
        ficaram em revisão, com a nota de cada uma.
-6. **Vídeo do imóvel.** Só roda se a estratégia pedir vídeo na semana.
+6. **Vídeos da semana.** Os vídeos nascem sozinhos no calendário (mínimo da
+   ficha: 3). O teste espera eles ficarem prontos (até ~15 min) e confere
+   quantos saíram. Cada vídeo de 5 s custa US$ 0,42.
 7. **Mobiliar.** Fica fora do calendário, então só roda com
    `--com-mobiliar`.
 8. **Teto de US$ 40.** Confere se o que o teste gastou é igual ao que o teto

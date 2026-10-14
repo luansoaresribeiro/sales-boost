@@ -38,7 +38,7 @@ const TX = {
 } as const
 const fmtScheduled = (iso: string, lang: Lang) => new Date(iso).toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 
-type Post = TestPost & { kind?: string; planned_for?: string | null }
+type Post = TestPost & { kind?: string; planned_for?: string | null; recipe?: string | null }
 
 // Peça do calendário aberta (substitui a antiga aba Vault — decisão do dono
 // 2026-10-14: "pra ver o post clico em cima na grade do calendário"). Mostra a
@@ -166,6 +166,10 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
             {ready ? tx.ready(item.quality_score) : evaluated ? tx.low(item.quality_score) : tx.evaluating}
           </div>
 
+          {/* Vídeo do calendário ainda sendo feito (ou que não saiu): o motivo vem em reasoning. */}
+          {item.recipe === 'video_imovel' && !item.video_url && item.reasoning && (
+            <div style={{ fontSize: '11.5px', color: '#60a5fa', background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: '9px', padding: '9px 12px', lineHeight: 1.5 }}>🎬 {item.reasoning}</div>
+          )}
           {item.idea && <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{item.idea}</div>}
           {item.caption && <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{item.caption}</div>}
           {item.hashtags && <div style={{ fontSize: '11px', color: '#60a5fa', lineHeight: 1.4 }}>{item.hashtags}</div>}
