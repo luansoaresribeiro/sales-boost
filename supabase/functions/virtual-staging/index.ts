@@ -6,8 +6,9 @@
  * Regras:
  *  - Só a partir de uma foto que já está no item do catálogo (nunca imagem
  *    inventada do zero — regra 4); a instrução proíbe mexer na arquitetura.
- *  - Custa por foto → só com plano (402 na vitrine) e teto mensal por
- *    empresa (VIRTUAL_STAGING_MONTHLY_CAP, padrão 10).
+ *  - Custa por foto → só com plano (402 na vitrine), teto mensal por
+ *    empresa (VIRTUAL_STAGING_MONTHLY_CAP, padrão 10) e o teto ÚNICO de gasto
+ *    do cliente em dólar (_shared/spendCap.ts).
  *  - Nunca grava a foto no item sozinho: a tela mostra o antes/depois e o
  *    dono escolhe "usar no imóvel".
  *
@@ -21,6 +22,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { HF_BASE, hfHeaders } from '../_shared/tourEngine.ts'
+import { capMessage, fitsCap, HF_EDIT_COST_USD } from '../_shared/spendCap.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -83,6 +85,8 @@ Deno.serve(async (req) => {
       const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString()
       const { count } = await admin.from('virtual_staging').select('id', { count: 'exact', head: true }).eq('company_id', company.id).gte('created_at', monthStart)
       if ((count ?? 0) >= MONTHLY_CAP) return json({ error: `Você já usou as ${MONTHLY_CAP} fotos mobiliadas deste mês.`, code: 'cap' }, 429)
+      const spend = await fitsCap(admin, company.id, HF_EDIT_COST_USD)
+      if (!spend.ok) return json({ error: capMessage(spend.spend.cap_usd), code: 'cap' }, 429)
 
       // Grava ANTES de enviar (e reconta): dois cliques ao mesmo tempo não
       // furam o teto do mês.

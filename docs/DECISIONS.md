@@ -471,8 +471,8 @@ Aprovado:
 
 ## 2026-10-09 — Etapa 1 do tour do plano: como foi implementado
 
-- **Teto: US$ 40 por cliente por mês** (decisão do dono; **subiu pra US$ 50
-  em 2026-10-14**, ver o fim deste arquivo), somando análise de
+- **Teto: US$ 40 por cliente por mês** (decisão do dono; confirmado de novo
+  em 2026-10-14, ver o fim deste arquivo), somando análise de
   fotos + geração (`video_tours.cost_usd`, `kind = 'plan'`). A geração é
   bloqueada antes de gastar se passar do teto (mensagem diz quanto custa e
   quanto sobra). Preço da passagem é estimado (US$ 0,108/s × 6 s); falta
@@ -1111,10 +1111,49 @@ grátis de 30 s, acima — mantidos como histórico):
   - Custo por kit: **1 edição Higgsfield** (antes: 2 vídeos × US$ 0,54 + a
     edição). As 3 artes não custam nada.
   - Kits antigos (com vídeos) continuam aparecendo no `/gratis`.
-- **Teto de gasto por cliente: US$ 50/mês** — 2026-10-14 (dono: "o teto de
-  gasto por cliente é 50 dólares por mês"). Substitui os US$ 40. No código
-  vale hoje para os vídeos dos imóveis (`item-videos`,
-  `VIDEO_MONTHLY_CAP_USD`, padrão 50). **Divergência registrada:** o
-  tratamento de foto do Vault e o "mobiliar" ainda não entram nessa soma em
-  dólar — têm limite próprio (mobiliar: 10 fotos/mês). Juntar tudo num teto
-  único em dólar fica como próximo passo.
+- **Teto de gasto por cliente continua US$ 40/mês** — 2026-10-14. O dono
+  chegou a falar em US$ 50 e depois preferiu manter os US$ 40. (Os "US$ 20"
+  da mesma conversa são outra coisa: o dinheiro de uma vez só pros testes
+  finais, não um teto por cliente.) No código o teto vale hoje para os vídeos
+  dos imóveis (`item-videos`, `VIDEO_MONTHLY_CAP_USD`, padrão 40).
+  **Divergência registrada:** o tratamento de foto do Vault e o "mobiliar"
+  ainda não entram nessa soma em dólar — têm limite próprio (mobiliar: 10
+  fotos/mês). Juntar tudo num teto único em dólar fica como próximo passo.
+- **Teto único de US$ 40 por cliente por mês** — 2026-10-14 (dono: "o
+  próximo passo é juntar tudo num único teto de 40 dólares"). Fecha a
+  divergência do item anterior. Tudo que é pago por peça soma no mesmo teto
+  (`_shared/spendCap.ts`):
+  - vídeos dos imóveis (`video_tours` kind `plan`, `cost_usd`);
+  - edições de foto da Higgsfield: "mobiliar" (cada envio, inclusive a nova
+    tentativa automática) + tratamento de foto do Vault (registrado em
+    `agent_performance`, `task_key = 'photo_retouch'`);
+  - imagens da OpenAI (`agent_performance`, `task_key = 'image_generation'`,
+    estimativa do `generate-image`).
+  Fora da soma: texto da IA (já tem limite diário no `hermes-proxy`) e o kit
+  grátis (quem ainda não paga; teto global de 30 kits/mês).
+  - **Ao bater o teto:** vídeo e "mobiliar" são bloqueados com aviso; o Vault
+    não trava — usa a foto real sem tratamento (grátis).
+  - A tela dos vídeos do imóvel mostra "Gasto do mês (vídeos, fotos e
+    imagens): US$ X de US$ 40".
+  - Variáveis: `CLIENT_MONTHLY_CAP_USD` (padrão 40; aceita o antigo
+    `VIDEO_MONTHLY_CAP_USD`) e `HF_EDIT_COST_USD` (preço de 1 edição).
+  - **Divergência registrada:** o preço da edição Higgsfield ainda não está
+    confirmado (não é publicado numa página legível daqui). Enquanto
+    `HF_EDIT_COST_USD` não for configurado, as edições são **contadas** mas
+    valem US$ 0 na soma — nunca inventamos o número (regra 5). Medir no
+    painel da Higgsfield durante os testes finais e configurar o secret.
+- **Preços reais medidos no extrato da Higgsfield** — 2026-10-14 (print do
+  dono, conferido com o que o sistema gerou em cada dia):
+  - **Edição de foto (Qwen Image 3 Edit, 2k): US$ 0,08.** O teste de
+    "mobiliar" de 14/10 saiu US$ 0,08, e o tratamento de cada kit de 11/10
+    também. Vira o padrão de `HF_EDIT_COST_USD` no código e fecha a
+    divergência do item anterior (as edições agora contam no teto). O Vault
+    usa 1k — conta pelo mesmo valor, a favor do teto.
+  - **Vídeo de 5 s (Kling 3.0 Std): US$ 0,42**, não os US$ 0,54 anotados em
+    2026-10-08 (os 2 vídeos de cada kit de 11/10 saíram US$ 0,42 cada).
+    `HF_COST_PER_SECOND` passou de 0,108 pra 0,084 no código. Antes o teto
+    contava cada vídeo ~29% mais caro do que é.
+  - Kit grátis antigo (2 vídeos + 1 tratamento) custava US$ 0,92; o novo
+    (1 foto → 3 artes) custa **US$ 0,08**.
+  - Com US$ 40/mês, um cliente cabe, por exemplo, ~95 vídeos de 5 s, ou
+    500 edições de foto, ou uma mistura.
