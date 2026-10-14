@@ -476,3 +476,22 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   conferir quem chama (função deprecada, sem chamadores). O gate de pagamento foi
   posto nela, mas a falta de autenticação continua — avaliar desligar de vez.
 
+
+## Calendário da estratégia, portal e mobiliar (2026-10-14)
+
+- **Calendário não pode gerar tudo numa chamada só** (teto de 150s): o
+  `planWeekFromStrategy` só despacha; cada vaga é uma chamada `plan_slot`
+  própria que responde 202 e trabalha em `EdgeRuntime.waitUntil`. E pula
+  vaga que já tem peça no mesmo dia — clicar 2x não gasta IA 2x.
+- **`portal-import` checa o endereço só pelo texto** (https, sem IP interno
+  literal, redirects validados). Um domínio que RESOLVE pra IP interno
+  passaria — risco baixo (só conta paga chama e só volta XML/imagem), mas
+  não é proteção completa. Foto só jpg/png/webp/avif/gif (SVG barrado).
+- **Teto do mobiliar:** a linha é gravada antes de enviar à Higgsfield e o
+  teto é reconferido; o reenvio automático de um pedido que falhou (até 2
+  tentativas) não conta no teto — o gasto real pode chegar a ~2× o teto.
+- **Ferramenta MCP do Supabase trava** (timeout de 60s sem chegar no banco)
+  quando o SQL contém palavras como `alter`/`delete`/`drop` — inclusive
+  dentro de um texto/JSON. Ela espera confirmação de comando perigoso. No
+  ensaio deu pra contornar quebrando em comandos menores; em produção, o
+  dono pode precisar confirmar na tela.

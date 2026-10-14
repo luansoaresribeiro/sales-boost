@@ -84,10 +84,21 @@ Deno.serve(async (req) => {
       const { count } = await admin.from('virtual_staging').select('id', { count: 'exact', head: true }).eq('company_id', company.id).gte('created_at', monthStart)
       if ((count ?? 0) >= MONTHLY_CAP) return json({ error: `Você já usou as ${MONTHLY_CAP} fotos mobiliadas deste mês.`, code: 'cap' }, 429)
 
+      // Grava ANTES de enviar (e reconta): dois cliques ao mesmo tempo não
+      // furam o teto do mês.
+      const { data: row, error } = await admin.from('virtual_staging').insert({ company_id: company.id, item_id: item.id, source_url: photoUrl, style }).select('id').single()
+      if (error) return json({ error: 'Não consegui começar agora.' }, 500)
+      const { count: after } = await admin.from('virtual_staging').select('id', { count: 'exact', head: true }).eq('company_id', company.id).gte('created_at', monthStart)
+      if ((after ?? 0) > MONTHLY_CAP) {
+        await admin.from('virtual_staging').update({ status: 'failed' }).eq('id', row.id)
+        return json({ error: `Você já usou as ${MONTHLY_CAP} fotos mobiliadas deste mês.`, code: 'cap' }, 429)
+      }
       const jobRef = await submit(headers, cfg, style, photoUrl)
-      if (!jobRef) return json({ error: 'Não consegui começar agora. Tente de novo em alguns minutos.' }, 502)
-      const { data: row, error } = await admin.from('virtual_staging').insert({ company_id: company.id, item_id: item.id, source_url: photoUrl, style, job_ref: jobRef }).select('id').single()
-      if (error) return json({ error: error.message }, 500)
+      if (!jobRef) {
+        await admin.from('virtual_staging').update({ status: 'failed' }).eq('id', row.id)
+        return json({ error: 'Não consegui começar agora. Tente de novo em alguns minutos.' }, 502)
+      }
+      await admin.from('virtual_staging').update({ job_ref: jobRef }).eq('id', row.id)
       return json({ ok: true, id: row.id })
     }
 

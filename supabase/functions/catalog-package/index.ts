@@ -254,7 +254,8 @@ Deno.serve(async (req) => {
           // ficha (nunca enganar o comprador sobre o que vem no imóvel).
           const staged = (meta.staged_photos ?? []).slice(0, 2)
           const useStaged = staged.length > 0 && !!ficha.stagingDisclosure
-          media = [photos[0], ...(useStaged ? staged : []), ...photos.slice(1)].map(p => ({ url: p.url, type: 'photo' }))
+          // Instagram aceita até 10 mídias no carrossel — corta aqui, não na publicação.
+          media = [photos[0], ...(useStaged ? staged : []), ...photos.slice(1)].slice(0, 10).map(p => ({ url: p.url, type: 'photo' }))
           const c = await writeCopy(anthropicKey, `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
           caption = useStaged ? `${c.caption}\n\n${ficha.stagingDisclosure}` : c.caption
           hashtags = c.hashtags; cta = c.cta

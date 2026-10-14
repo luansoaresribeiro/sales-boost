@@ -28,7 +28,7 @@ const TX = {
     import: (n: number) => `Importar ${n}`, importing: (a: number, b: number) => `Importando ${a} de ${b}...`,
     done: (n: number) => `✅ ${n} imóvel(is) importado(s). Confira os dados de cada um — o que o anúncio não trazia ficou em branco.`,
     close: 'Fechar', planRequired: 'Importar anúncios faz parte do plano. Escolha um plano pra usar.',
-    errGeneric: 'Não consegui ler esse link.', noPhotos: 'sem foto — não dá pra importar',
+    errGeneric: 'Não consegui ler esse link.', noPhotos: 'sem foto — não dá pra importar', few: 'menos de 5 fotos — complete depois pra virar conteúdo',
   },
   en: {
     open: '📥 Import from listing portal',
@@ -40,7 +40,7 @@ const TX = {
     import: (n: number) => `Import ${n}`, importing: (a: number, b: number) => `Importing ${a} of ${b}...`,
     done: (n: number) => `✅ ${n} listing(s) imported. Check each one's details — anything the listing didn't have was left blank.`,
     close: 'Close', planRequired: 'Importing listings is part of the plan. Choose a plan to use it.',
-    errGeneric: "Couldn't read that link.", noPhotos: 'no photos — cannot import',
+    errGeneric: "Couldn't read that link.", noPhotos: 'no photos — cannot import', few: 'fewer than 5 photos — add more later to turn it into content',
   },
 } as const
 
@@ -190,6 +190,7 @@ export default function CatalogImport({ companyId, schema, onImported }: { compa
                     <div style={{ fontSize: '10.5px', color: MUTED }}>
                       {[l.neighborhood, money(l.price), l.photos.length ? tx.photos(l.photos.length) : tx.noPhotos].filter(Boolean).join(' · ')}
                       {imported.has(l.id) && <span style={{ color: '#A78BFA', fontWeight: 700 }}> · {tx.already}</span>}
+                      {l.photos.length > 0 && l.photos.length < 5 && <span style={{ color: '#FBBF24' }}> · {tx.few}</span>}
                     </div>
                   </div>
                 </label>

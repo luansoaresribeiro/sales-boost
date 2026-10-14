@@ -196,7 +196,8 @@ Deno.serve(async (req) => {
       if (!isSafeUrl(url)) return json({ error: 'Link de foto inválido.' }, 400)
       const res = await safeFetch(url, 20000)
       const type = res.headers.get('content-type') ?? ''
-      if (!res.ok || !type.startsWith('image/')) { await res.body?.cancel(); return json({ error: 'Não consegui baixar essa foto.' }, 502) }
+      // Só foto de verdade (jpg/png/webp/avif) — SVG pode carregar script.
+      if (!res.ok || !/^image\/(jpeg|png|webp|avif|gif)/.test(type)) { await res.body?.cancel(); return json({ error: 'Não consegui baixar essa foto.' }, 502) }
       const bytes = await readCapped(res, MAX_PHOTO_BYTES)
       return new Response(bytes, { headers: { ...cors, 'Content-Type': type, 'Cache-Control': 'no-store' } })
     }
@@ -222,7 +223,10 @@ Deno.serve(async (req) => {
     return json({ error: 'Ação inválida' }, 400)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    return json({ error: /timed? ?out|aborted/i.test(msg) ? 'O link demorou demais pra responder. Tente de novo.' : msg }, 500)
+    console.error('portal-import erro:', msg)
+    // Mensagem nossa (link inválido / arquivo grande) passa; erro interno não vaza.
+    const known = /^(Link inválido|Arquivo grande)/.test(msg)
+    return json({ error: /timed? ?out|aborted/i.test(msg) ? 'O link demorou demais pra responder. Tente de novo.' : known ? msg : 'Não consegui ler esse link agora. Tente de novo.' }, 500)
   }
 })
 

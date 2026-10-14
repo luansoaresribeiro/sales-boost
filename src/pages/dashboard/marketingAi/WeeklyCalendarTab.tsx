@@ -16,7 +16,7 @@ const DAY_LABELS = {
 const STATUS_LABEL_EN: Record<string, string> = { draft: 'Evaluating', vault: 'In Vault', scheduled: 'Scheduled', adapt: 'Adapting' }
 const TX = {
   pt: {
-    errPlan: 'Erro ao planejar a semana', planned: (n: number) => `✅ Planejado: ${n} peça(s) geradas e avaliadas.`, todo: 'A estratégia também pede nesta semana (isso depende de você):', perWeek: (n: number) => `${n}x`, loading: 'Carregando...', empty: 'vazio',
+    errPlan: 'Erro ao planejar a semana', planned: (n: number) => `✅ ${n} peça(s) sendo criadas — aparecem no calendário em alguns minutos (atualize a página).`, todo: 'A estratégia também pede nesta semana (isso depende de você):', perWeek: (n: number) => `${n}x`, loading: 'Carregando...', empty: 'vazio',
     title: '🗓️ Calendário da Semana', introA: 'Cada dia já vem do ', introB: 'plano da sua estratégia', introC: ' (feed, stories e vídeos). No domingo o Sales Boost cria as peças de cada dia e manda pro Vault — nada vai ao ar sem a sua aprovação.',
     noPlanA: 'Ainda não há estratégia com plano semanal. ', noPlanB: 'Gere a estratégia', noPlanC: ' e o calendário se monta sozinho a partir dela.',
     autoTitle: 'Montar a semana sozinho todo domingo às 18h', autoDesc: 'Segue o plano da estratégia e cria as peças de cada dia — sem precisar clicar em nada.',
@@ -25,7 +25,7 @@ const TX = {
     planning: 'Criando as peças...', planNow: '🗓️ Criar as peças da próxima semana agora', thisWeek: 'Esta semana', nextWeek: 'Próxima semana',
   },
   en: {
-    errPlan: 'Error planning the week', planned: (n: number) => `✅ Planned: ${n} piece(s) generated and evaluated.`, todo: 'The strategy also asks for this week (this depends on you):', perWeek: (n: number) => `${n}x`, loading: 'Loading...', empty: 'empty',
+    errPlan: 'Error planning the week', planned: (n: number) => `✅ ${n} piece(s) being created — they show up on the calendar in a few minutes (refresh the page).`, todo: 'The strategy also asks for this week (this depends on you):', perWeek: (n: number) => `${n}x`, loading: 'Loading...', empty: 'empty',
     title: '🗓️ Weekly Calendar', introA: 'Each day already comes from ', introB: 'your strategy plan', introC: ' (feed, stories and videos). On Sunday Sales Boost creates each day\'s pieces and sends them to the Vault — nothing goes live without your approval.',
     noPlanA: 'There is no strategy with a weekly plan yet. ', noPlanB: 'Generate the strategy', noPlanC: ' and the calendar builds itself from it.',
     autoTitle: 'Build the week automatically every Sunday at 6 PM', autoDesc: 'Follows the strategy plan and creates each day\'s pieces — no clicking needed.',
@@ -131,10 +131,11 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
 
   const today = new Date()
   const todayIso = toIso(today)
-  // Vagas do plano da estratégia: janela atual (seg–dom) e a próxima — só
-  // de hoje em diante (vaga passada sem peça não ajuda ninguém).
+  // Vagas do plano da estratégia: só a PRÓXIMA janela (seg–dom), que é a que
+  // o domingo e o botão "Criar as peças" geram de fato (nextWeekDates no
+  // creative-generate) — a tela não promete vaga que o servidor não preenche.
   const slotsByDay: Record<string, WeekSlot[]> = {}
-  for (const sl of [...weekSlots(mix, planWindow(0, today)), ...weekSlots(mix, planWindow(1, today))]) {
+  for (const sl of weekSlots(mix, planWindow(1, today))) {
     if (sl.date < todayIso) continue
     ;(slotsByDay[sl.date] ??= []).push(sl)
   }
