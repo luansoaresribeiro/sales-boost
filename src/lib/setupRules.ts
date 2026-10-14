@@ -18,6 +18,10 @@ export function unansweredQuestions(questions: PlaybookQuestion[], answers: Reco
   return questions.filter(q => !hasAnswer(answers?.[q.key]))
 }
 
+/** Máximo de fotos por item do catálogo (decisão do dono 2026-10-14). O banco
+ *  também recusa mais que isso (migration 20261017120000_catalog_photo_cap). */
+export const MAX_PHOTOS_PER_ITEM = 50
+
 /** Mínimo de fotos por item, vindo da ficha (campo do tipo 'photos'). */
 export function catalogMinPhotos(schema: CatalogSchema | null | undefined): number {
   const photosField = schema ? [...schema.required, ...schema.optional].find(f => f.type === 'photos') : undefined

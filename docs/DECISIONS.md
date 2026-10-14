@@ -1157,3 +1157,8 @@ grátis de 30 s, acima — mantidos como histórico):
     (1 foto → 3 artes) custa **US$ 0,08**.
   - Com US$ 40/mês, um cliente cabe, por exemplo, ~95 vídeos de 5 s, ou
     500 edições de foto, ou uma mistura.
+- **Máximo de 50 fotos por imóvel** — 2026-10-14 (decisão do dono). Vale no
+  cadastro à mão (criar e "+ Adicionar fotos": envia só o que cabe e avisa),
+  na importação do portal (antes 15 na tela e 20 no `portal-import`) e no
+  banco (constraint `marketing_ai_knowledge_photos_cap`). Constante única na
+  tela: `MAX_PHOTOS_PER_ITEM` em `src/lib/setupRules.ts`.
