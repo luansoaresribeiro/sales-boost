@@ -1,19 +1,19 @@
-// Kit grátis (decisão do dono 2026-10-11, docs/DECISIONS.md): 2 fotos de
-// cômodos → 1 vídeo "drone" de cada (Kling via Higgsfield, tourEngine) + 1
-// foto de destaque → 1 criativo de design. O criativo é a FOTO REAL tratada
-// pela Higgsfield (Qwen Image 3 Edit: luz, cor, nitidez — sem mudar nada do
-// imóvel) com o texto impresso DEPOIS pelo render-format (regra 4: IA de
-// imagem nunca escreve texto). Usado por:
+// Kit grátis. Hoje (decisão do dono 2026-10-14, docs/DECISIONS.md): 1 foto
+// de destaque → 3 artes. A FOTO REAL é tratada 1 vez pela Higgsfield (Qwen
+// Image 3 Edit: luz, cor, nitidez — sem mudar nada do imóvel) e o nosso
+// render-format imprime 3 artes diferentes por cima (regra 4: IA de imagem
+// nunca escreve texto; os textos e tamanhos vêm da ficha). Antes (2026-10-11)
+// eram 2 vídeos "drone" + 1 criativo — kits antigos com vídeos continuam
+// funcionando aqui. Usado por:
 //  - diagnosis-gift: o kit nasce antes da conta, preso ao diagnóstico;
 //  - trial-video: kit de quem já tem conta + liga o kit do diagnóstico à empresa.
 // Teto mensal único (FREE_VIDEO_MONTHLY_CAP, padrão 30) somando os dois.
-import { advanceTour, clipPrompt, HF_BASE, hfHeaders, SECONDS, submitAll, VIDEO_BUCKET, type TourRow } from './tourEngine.ts'
+import { advanceTour, clipPrompt, HF_BASE, hfHeaders, SECONDS, VIDEO_BUCKET, type TourRow } from './tourEngine.ts'
 
 // deno-lint-ignore no-explicit-any
 type Any = any
 
-export const KIT_ROOMS = 2 // vídeos (1 por cômodo)
-export const KIT_PHOTOS = KIT_ROOMS + 1 // + 1 foto de destaque pro criativo
+export const KIT_PHOTOS = 1 // 1 foto de destaque → 3 artes
 export const KIT_CAP = Number(Deno.env.get('FREE_VIDEO_MONTHLY_CAP') ?? '30') || 30
 const CREATIVE_ENDPOINT = '/alibaba/qwen-image-3/edit'
 const CREATIVE_BUCKET = 'post-images'
@@ -28,7 +28,9 @@ const CREATIVE_NEGATIVE = 'added furniture, removed objects, changed layout, ext
 
 export interface Creative {
   photo: string; job_ref: string | null; status: 'processing' | 'completed' | 'failed'; attempts: number
-  enhanced_url?: string | null; final_url?: string | null; render_attempts?: number
+  enhanced_url?: string | null; render_attempts?: number
+  final_url?: string | null // kit antigo: 1 arte só
+  final_urls?: (string | null)[] // kit de 3 artes (uma por variação da ficha)
 }
 
 export async function monthCount(admin: Any): Promise<number> {
@@ -49,26 +51,24 @@ async function submitCreative(headers: Record<string, string>, photo: string): P
   } catch (e) { console.log('[kit] criativo falhou ao enviar', String(e)); return null }
 }
 
-// Começa o kit: 2 vídeos drone + criativo. Grava a linha em video_tours
-// (company_id OU diagnostic_id). Devolve o id ou um erro pra mostrar.
-export async function startKit(admin: Any, opts: { photos: string[]; verticalKey: string | null; companyId?: string | null; diagnosticId?: string | null }):
+// Começa o kit: trata a foto de destaque (1 chamada paga). Grava a linha em
+// video_tours (company_id OU diagnostic_id), sem trechos de vídeo. Devolve o
+// id ou um erro pra mostrar.
+export async function startKit(admin: Any, opts: { photos: string[]; companyId?: string | null; diagnosticId?: string | null }):
   Promise<{ id: string } | { error: string; status: number }> {
   const headers = hfHeaders()
   if (!headers) return { error: 'Geração indisponível no momento.', status: 503 }
-  const rooms = opts.photos.slice(0, KIT_ROOMS)
-  const hero = opts.photos[KIT_ROOMS]
-  const [clips, jobRef] = await Promise.all([
-    submitAll(headers, await clipPrompt(admin, opts.verticalKey, 'drone'), rooms, rooms.map((_, i) => ({ from: i })), SECONDS.drone),
-    hero ? submitCreative(headers, hero) : Promise.resolve(null),
-  ])
-  if (clips.every(c => !c.job_ref)) return { error: 'Não consegui iniciar os vídeos agora. Tente de novo em alguns minutos.', status: 502 }
-  const creative: Creative | null = hero ? { photo: hero, job_ref: jobRef, status: jobRef ? 'processing' : 'failed', attempts: 1 } : null
+  const hero = opts.photos[0]
+  if (!hero) return { error: 'Falta a foto.', status: 400 }
+  const jobRef = await submitCreative(headers, hero)
+  if (!jobRef) return { error: 'Não consegui começar agora. Tente de novo em alguns minutos.', status: 502 }
+  const creative: Creative = { photo: hero, job_ref: jobRef, status: 'processing', attempts: 1 }
   const { data, error } = await admin.from('video_tours').insert({
     company_id: opts.companyId ?? null, diagnostic_id: opts.diagnosticId ?? null, kind: 'trial', status: 'generating',
-    photos: rooms, clips, creative,
+    photos: [hero], clips: [], creative,
   }).select('id').single()
   if (error) return { error: error.message, status: error.code === '23505' ? 409 : 500 }
-  console.log('[kit] iniciado', data.id, opts.companyId ?? `diag:${opts.diagnosticId}`, clips.filter(c => c.job_ref).length, '/', clips.length, 'criativo:', !!jobRef)
+  console.log('[kit] iniciado', data.id, opts.companyId ?? `diag:${opts.diagnosticId}`)
   return { id: data.id }
 }
 
@@ -105,9 +105,10 @@ async function advanceCreative(admin: Any, headers: Record<string, string>, tour
 
 export type KitView = { status: 'processing' | 'completed' | 'failed'; done: number; total: number; video_urls: string[]; creative: Creative | null }
 
-// Avança o kit inteiro (vídeos + criativo) e devolve o que a tela mostra.
+// Avança o kit inteiro (tratamento da foto + vídeos dos kits antigos) e
+// devolve o que a tela mostra.
 // `prefix` decide a pasta dos vídeos (empresa ou "gift-<diagnóstico>").
-export async function advanceKit(admin: Any, supabaseUrl: string, serviceKey: string, tour: TourRow & { creative: Creative | null },
+export async function advanceKit(admin: Any, supabaseUrl: string, serviceKey: string, tour: TourRow & { creative: Creative | null; video_path?: string | null },
   verticalKey: string | null, prefix: string): Promise<KitView> {
   const publicVideo = (path: string) => admin.storage.from(VIDEO_BUCKET).getPublicUrl(path).data.publicUrl
   const total = tour.clips.length
@@ -119,6 +120,13 @@ export async function advanceKit(admin: Any, supabaseUrl: string, serviceKey: st
       creative = next
       await admin.from('video_tours').update({ creative }).eq('id', tour.id)
     }
+  }
+  // Kit de 3 artes (sem vídeo): o andamento é o do tratamento da foto.
+  if (total === 0) {
+    const st = creative?.status ?? 'failed'
+    const row = st === 'completed' ? 'completed' : st === 'failed' ? 'failed' : null
+    if (row && tour.status !== row) await admin.from('video_tours').update({ status: row }).eq('id', tour.id)
+    return { status: st, done: st === 'completed' ? 1 : 0, total: 1, video_urls: [], creative }
   }
   if (tour.status === 'completed' && tour.video_path) {
     const outs = (tour.assembly?.outputs ?? [{ path: tour.video_path }]) as { path: string }[]

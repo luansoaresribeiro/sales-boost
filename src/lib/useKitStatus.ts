@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { useAuth } from '../contexts/AuthContext'
 
-// O kit grátis (2 vídeos + 1 criativo) é PRESENTE de quem veio do diagnóstico
+// O kit grátis (1 foto → 3 artes) é PRESENTE de quem veio do diagnóstico
 // grátis (decisão do dono 2026-10-13, docs/DECISIONS.md). Quem criou a conta
 // direto não tem direito.
 //

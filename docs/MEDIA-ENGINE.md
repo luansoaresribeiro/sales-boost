@@ -154,6 +154,12 @@ texto do `render-format`). `trial-video` agora pede 3 `photo_urls` (2 cômodos
 + 1 destaque) e o kit também pode nascer no cadastro do diagnóstico
 (`diagnosis-gift`). Motor em `_shared/freeKit.ts`. Ver
 [DECISIONS.md](DECISIONS.md) "Presente no diagnóstico".
+**Divergência (2026-10-14):** o kit virou **1 foto → 3 artes**, sem vídeo.
+`trial-video` pede 1 `photo_urls`; a linha em `video_tours` nasce com
+`clips: []` e o andamento é o do tratamento da foto (`creative`). As artes
+ficam em `creative.final_urls` (uma por variação de
+`config.gift_creative.variants`). Ver [DECISIONS.md](DECISIONS.md) "Kit
+grátis: 1 foto → 3 artes".
 
 
 ## Estúdio de vídeo na VPS (2026-10-12)

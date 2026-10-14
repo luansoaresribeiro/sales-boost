@@ -1,6 +1,6 @@
-// Escolha das fotos do kit grátis: 2 cômodos (viram vídeos "drone") + 1 foto
-// de destaque (vira o criativo de design). Usado no cadastro do diagnóstico e
-// no painel (/gratis). Fotos sempre reais (regra 4).
+// Escolha da foto do kit grátis: 1 foto de destaque → 3 artes (decisão do
+// dono 2026-10-14). Usado no cadastro do diagnóstico e no painel (/gratis).
+// Fotos sempre reais (regra 4).
 import { useEffect, useMemo, useRef } from 'react'
 import { useLang } from '../contexts/LanguageContext'
 import { KIT_PHOTOS } from '../lib/giftKit'
@@ -9,8 +9,8 @@ const ORANGE = '#FF6D29'
 const MUTED = '#BABABA'
 
 const TX = {
-  pt: { slots: ['Cômodo 1', 'Cômodo 2', 'Foto de destaque'], hints: ['vira um vídeo', 'vira um vídeo', 'vira um criativo'], pick: '+ Escolher foto', remove: 'Tirar foto' },
-  en: { slots: ['Room 1', 'Room 2', 'Highlight photo'], hints: ['becomes a video', 'becomes a video', 'becomes a creative'], pick: '+ Choose photo', remove: 'Remove photo' },
+  pt: { slots: ['Foto de destaque'], hints: ['vira 3 artes prontas pra postar'], pick: '+ Escolher foto', remove: 'Tirar foto' },
+  en: { slots: ['Highlight photo'], hints: ['becomes 3 ready-to-post designs'], pick: '+ Choose photo', remove: 'Remove photo' },
 }
 
 export default function KitPhotoPicker({ files, onChange, disabled = false }: {
@@ -28,7 +28,7 @@ export default function KitPhotoPicker({ files, onChange, disabled = false }: {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${KIT_PHOTOS}, minmax(0, 1fr))`, gap: 8, maxWidth: 420 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${KIT_PHOTOS}, minmax(0, 1fr))`, gap: 8, maxWidth: Math.min(420, KIT_PHOTOS * 160) }}>
       {Array.from({ length: KIT_PHOTOS }, (_, i) => (
         <div key={i} style={{ minWidth: 0 }}>
           <input ref={el => { inputs.current[i] = el }} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }}

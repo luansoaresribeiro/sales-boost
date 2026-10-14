@@ -7,7 +7,7 @@ import { draftReply, type DmReplyConfig } from '../_shared/dmReply.ts'
 // 2026-10-09, docs/DECISIONS.md). O vídeo é ISCA: 1 cômodo ('room'), 2 cômodos
 // vizinhos ('pair', caminhada de uma foto até a outra) ou a abertura de fora
 // mostrando a vista ('opening'). O corretor escolhe as fotos. Nunca o imóvel
-// inteiro. Teto de custo por cliente: US$ 40/mês (regra 7).
+// inteiro. Teto de custo por cliente: US$ 50/mês (regra 7; era 40 até 2026-10-14).
 //
 // Junto, a resposta do "Comente QUERO" (opção B do dono): o corretor aprova
 // UMA VEZ a mensagem (modelo da ficha + dados cadastrados) e ela vai na DM de
@@ -24,7 +24,7 @@ const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
-const MONTHLY_CAP_USD = Number(Deno.env.get('VIDEO_MONTHLY_CAP_USD') ?? '40') || 40
+const MONTHLY_CAP_USD = Number(Deno.env.get('VIDEO_MONTHLY_CAP_USD') ?? '50') || 50
 const KINDS: ClipKind[] = ['room', 'pair', 'opening']
 const IG_TEXT_MAX = 1000 // limite de texto de mensagem do Instagram
 

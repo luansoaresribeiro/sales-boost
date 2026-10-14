@@ -1,13 +1,13 @@
-// Kit grátis (decisão do dono 2026-10-11, docs/DECISIONS.md): 2 fotos de
-// cômodos → 1 vídeo "drone" de cada + 1 foto de destaque → 1 criativo de
-// design (foto real tratada + texto do nosso modelo de arte). Pode nascer no
-// cadastro do diagnóstico (diagnosis-gift, antes da conta) ou no painel
-// (trial-video). Mesmo número de fotos que _shared/freeKit.ts.
+// Kit grátis (decisão do dono 2026-10-14, docs/DECISIONS.md): 1 foto de
+// destaque → 3 artes (foto real tratada + textos da ficha impressos pelo nosso
+// modelo de arte). Pode nascer no cadastro do diagnóstico (diagnosis-gift,
+// antes da conta) ou no painel (trial-video). Mesmo número de fotos que
+// _shared/freeKit.ts.
 import { supabase } from './supabase'
 import { processImageTo4x5 } from './imageProcessing'
 
-export const KIT_ROOMS = 2
-export const KIT_PHOTOS = KIT_ROOMS + 1 // + 1 foto de destaque (criativo)
+export const KIT_PHOTOS = 1 // 1 foto de destaque → 3 artes
+export const KIT_ARTS = 3
 
 const FN = `${import.meta.env.VITE_SUPABASE_URL as string}/functions/v1/diagnosis-gift`
 
@@ -33,7 +33,7 @@ async function callGift(body: Record<string, unknown>): Promise<{ status: number
 
 export type GiftStart = 'started' | 'already_used' | 'cap_reached' | 'error'
 
-// Envia as 3 fotos (já recortadas em 4:5, JPEG) por links temporários e começa
+// Envia a foto (já recortada em 4:5, JPEG) por links temporários e começa
 // o kit. Nunca lança erro: quem chama segue pro resultado do diagnóstico.
 export async function sendDiagnosisGift(diagnosticId: string, files: File[]): Promise<GiftStart> {
   if (files.length !== KIT_PHOTOS) return 'error'
@@ -59,5 +59,5 @@ export interface GiftView { status: 'none' | 'processing' | 'completed' | 'faile
 export async function diagnosisGiftStatus(diagnosticId: string): Promise<GiftView> {
   const { data } = await callGift({ action: 'status', diagnostic_id: diagnosticId })
   const status = (['processing', 'completed', 'failed'].includes(String(data.status)) ? data.status : 'none') as GiftView['status']
-  return { status, done: Number(data.done ?? 0), total: Number(data.total ?? KIT_ROOMS) }
+  return { status, done: Number(data.done ?? 0), total: Number(data.total ?? 1) }
 }

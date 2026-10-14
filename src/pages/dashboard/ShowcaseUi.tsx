@@ -18,14 +18,14 @@ const TX = {
     banner: 'Você está vendo o painel em modo demonstração — escolha um plano pra usar de verdade',
     plans: 'Ver planos',
     kitT: '🎁 Seu presente está esperando',
-    kitB: 'Você veio do diagnóstico grátis, então tem direito a 2 vídeos + 1 criativo com as fotos reais do seu imóvel — sem pagar nada. Quer criar agora?',
+    kitB: 'Você veio do diagnóstico grátis, então tem direito a 3 artes prontas pra postar, feitas com a foto real do seu imóvel — sem pagar nada. Quer criar agora?',
     kitGo: 'Ver meu presente', kitLater: 'Depois',
   },
   en: {
     banner: 'You are viewing the dashboard in demo mode — pick a plan to use it for real',
     plans: 'See plans',
     kitT: '🎁 Your gift is waiting',
-    kitB: 'You came from the free diagnostic, so you get 2 videos + 1 creative made from real photos of your property — for free. Want to create them now?',
+    kitB: 'You came from the free diagnostic, so you get 3 ready-to-post designs made from a real photo of your property — for free. Want to create them now?',
     kitGo: 'See my gift', kitLater: 'Later',
   },
 } as const
