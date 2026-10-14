@@ -2,12 +2,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { advanceTour, clipPrompt, estimateUsd, hfHeaders, SECONDS, submitAll, VIDEO_BUCKET, type ClipKind, type TourRow } from '../_shared/tourEngine.ts'
 import { draftReply, type DmReplyConfig } from '../_shared/dmReply.ts'
+import { capMessage, fitsCap, monthSpend } from '../_shared/spendCap.ts'
 
 // Vídeos curtos de um imóvel do catálogo (plano pago — decisões do dono
 // 2026-10-09, docs/DECISIONS.md). O vídeo é ISCA: 1 cômodo ('room'), 2 cômodos
 // vizinhos ('pair', caminhada de uma foto até a outra) ou a abertura de fora
 // mostrando a vista ('opening'). O corretor escolhe as fotos. Nunca o imóvel
-// inteiro. Teto de custo por cliente: US$ 40/mês (regra 7).
+// inteiro. Teto de custo por cliente: US$ 40/mês, ÚNICO pra tudo que é pago
+// por peça (regra 7, _shared/spendCap.ts).
 //
 // Junto, a resposta do "Comente QUERO" (opção B do dono): o corretor aprova
 // UMA VEZ a mensagem (modelo da ficha + dados cadastrados) e ela vai na DM de
@@ -24,21 +26,11 @@ const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
-const MONTHLY_CAP_USD = Number(Deno.env.get('VIDEO_MONTHLY_CAP_USD') ?? '40') || 40
 const KINDS: ClipKind[] = ['room', 'pair', 'opening']
 const IG_TEXT_MAX = 1000 // limite de texto de mensagem do Instagram
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
-}
-
-// deno-lint-ignore no-explicit-any
-type Admin = any
-
-async function monthSpent(admin: Admin, companyId: string): Promise<number> {
-  const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString()
-  const { data } = await admin.from('video_tours').select('cost_usd').eq('company_id', companyId).eq('kind', 'plan').gte('created_at', monthStart)
-  return (data ?? []).reduce((s: number, r: { cost_usd: number | string }) => s + Number(r.cost_usd || 0), 0)
 }
 
 Deno.serve(async (req) => {
@@ -72,7 +64,7 @@ Deno.serve(async (req) => {
           .not('plan->>kind', 'is', null).order('created_at', { ascending: false }).limit(30),
         admin.from('engagement_automations').select('id, keywords, message, active').eq('company_id', company.id).eq('item_id', item.id).maybeSingle(),
         company.vertical_key ? admin.from('vertical_playbooks').select('config').eq('key', company.vertical_key).eq('enabled', true).maybeSingle() : Promise.resolve({ data: null }),
-        monthSpent(admin, company.id),
+        monthSpend(admin, company.id),
       ])
       const draft = draftReply(((pb?.config ?? {}) as { dm_reply?: DmReplyConfig }).dm_reply, item.meta?.fields ?? {})
       return json({
@@ -81,7 +73,7 @@ Deno.serve(async (req) => {
           video_url: v.status === 'completed' && v.video_path ? publicVideo(v.video_path) : null,
         })),
         reply: auto ? { keyword: (auto.keywords ?? [draft.keyword])[0], message: auto.message, active: auto.active, saved: true } : { ...draft, active: false, saved: false },
-        month_spent_usd: spent, month_cap_usd: MONTHLY_CAP_USD,
+        month_spent_usd: spent.total_usd, month_cap_usd: spent.cap_usd,
         cost_usd: Object.fromEntries(KINDS.map(k => [k, estimateUsd(k)])),
       })
     }
@@ -100,10 +92,8 @@ Deno.serve(async (req) => {
         return json({ error: kind === 'pair' ? 'Escolha 2 fotos diferentes deste imóvel.' : 'Escolha 1 foto deste imóvel.' }, 400)
       }
       const estimate = estimateUsd(kind)
-      const spent = await monthSpent(admin, company.id)
-      if (spent + estimate > MONTHLY_CAP_USD) {
-        return json({ error: `O limite de vídeos do mês (US$ ${MONTHLY_CAP_USD.toFixed(0)}) foi atingido. Volta no próximo mês.`, status: 'cap_reached' }, 429)
-      }
+      const cap = await fitsCap(admin, company.id, estimate)
+      if (!cap.ok) return json({ error: capMessage(cap.spend.cap_usd), status: 'cap_reached' }, 429)
       const headers = hfHeaders()
       if (!headers) return json({ error: 'Geração de vídeo indisponível no momento.' }, 503)
       const clips = await submitAll(headers, await clipPrompt(admin, company.vertical_key, kind), photos, [kind === 'pair' ? { from: 0, to: 1 } : { from: 0 }], SECONDS[kind])

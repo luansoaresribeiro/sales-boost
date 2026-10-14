@@ -22,6 +22,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { weeklyMixPlan, weekSlots, fetchFormatCatalog, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
+import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -242,6 +243,7 @@ async function retouchRealPhoto(admin: SupaClient, companyId: string, photo: str
     })
     const out = await res.json().catch(() => ({})) as { request_id?: string }
     if (!res.ok || !out.request_id) { console.log('[vault-real] higgsfield recusou', res.status); return null }
+    await logPhotoRetouch(admin, companyId) // aceito = cobrado (teto único, _shared/spendCap.ts)
     const deadline = Date.now() + 75_000
     while (Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 5000))
@@ -643,9 +645,11 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   const realPool = opts.skipImage ? [] : await fetchRealPhotoPool(admin, company)
   let realIdx = 0
   const nextReal = () => (realPool.length ? realPool[realIdx++ % realPool.length] : null)
+  // Teto único do mês estourado: foto real SEM tratamento (grátis), nunca trava o post.
+  const retouchOk = realPool.length ? (await fitsCap(admin, company.id, HF_EDIT_COST_USD ?? 0)).ok : false
   const pic = async (ev: string, hint?: string): Promise<string | null> => {
     const real = nextReal()
-    if (real) return (await retouchRealPhoto(admin, company.id, real)) ?? real
+    if (real) return (retouchOk ? await retouchRealPhoto(admin, company.id, real) : null) ?? real
     return generateImage(company.id, company.business_type, ev, hint, brandStyle, company.business_description ?? undefined)
   }
   // Slide de carrossel: foto real sem tratamento (1 chamada paga por slide

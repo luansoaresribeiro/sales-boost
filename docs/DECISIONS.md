@@ -1119,3 +1119,26 @@ grátis de 30 s, acima — mantidos como histórico):
   **Divergência registrada:** o tratamento de foto do Vault e o "mobiliar"
   ainda não entram nessa soma em dólar — têm limite próprio (mobiliar: 10
   fotos/mês). Juntar tudo num teto único em dólar fica como próximo passo.
+- **Teto único de US$ 40 por cliente por mês** — 2026-10-14 (dono: "o
+  próximo passo é juntar tudo num único teto de 40 dólares"). Fecha a
+  divergência do item anterior. Tudo que é pago por peça soma no mesmo teto
+  (`_shared/spendCap.ts`):
+  - vídeos dos imóveis (`video_tours` kind `plan`, `cost_usd`);
+  - edições de foto da Higgsfield: "mobiliar" (cada envio, inclusive a nova
+    tentativa automática) + tratamento de foto do Vault (registrado em
+    `agent_performance`, `task_key = 'photo_retouch'`);
+  - imagens da OpenAI (`agent_performance`, `task_key = 'image_generation'`,
+    estimativa do `generate-image`).
+  Fora da soma: texto da IA (já tem limite diário no `hermes-proxy`) e o kit
+  grátis (quem ainda não paga; teto global de 30 kits/mês).
+  - **Ao bater o teto:** vídeo e "mobiliar" são bloqueados com aviso; o Vault
+    não trava — usa a foto real sem tratamento (grátis).
+  - A tela dos vídeos do imóvel mostra "Gasto do mês (vídeos, fotos e
+    imagens): US$ X de US$ 40".
+  - Variáveis: `CLIENT_MONTHLY_CAP_USD` (padrão 40; aceita o antigo
+    `VIDEO_MONTHLY_CAP_USD`) e `HF_EDIT_COST_USD` (preço de 1 edição).
+  - **Divergência registrada:** o preço da edição Higgsfield ainda não está
+    confirmado (não é publicado numa página legível daqui). Enquanto
+    `HF_EDIT_COST_USD` não for configurado, as edições são **contadas** mas
+    valem US$ 0 na soma — nunca inventamos o número (regra 5). Medir no
+    painel da Higgsfield durante os testes finais e configurar o secret.
