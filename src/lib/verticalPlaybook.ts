@@ -58,6 +58,7 @@ export interface CatalogField {
   options?: Bilingual[] // só pra 'select'
   min?: number // só pra 'photos' (mínimo de fotos)
   max?: number // só pra 'text': tamanho máximo (acima de 200 vira caixa grande, ex.: descrição)
+  private?: boolean // só pra busca interna (ex.: endereço) — nunca vai pra legenda
 }
 
 export interface CatalogSchema {
@@ -68,6 +69,8 @@ export interface CatalogSchema {
   // Importar do portal (ficha: config.catalog_import). Sem a chave, a tela
   // não mostra o botão de importar.
   importMap?: CatalogImportMap
+  // Ficha com config.nearby_places → mostra a sub-aba "Lugares perto".
+  nearby: boolean
 }
 export interface CatalogImportMap {
   source: string
@@ -82,7 +85,7 @@ export async function fetchCatalogSchema(verticalKey: string): Promise<CatalogSc
   if (verticalKey === 'generico') return null
   try {
     const { data } = await supabase.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
-    const config = (data?.config ?? {}) as { catalog_fields?: { required?: CatalogField[]; optional?: CatalogField[] }; vocabulary?: { item?: string; catalog?: string }; catalog_import?: CatalogImportMap }
+    const config = (data?.config ?? {}) as { catalog_fields?: { required?: CatalogField[]; optional?: CatalogField[] }; vocabulary?: { item?: string; catalog?: string }; catalog_import?: CatalogImportMap; nearby_places?: { categories?: unknown[] } }
     const required = config.catalog_fields?.required ?? []
     const optional = config.catalog_fields?.optional ?? []
     if (required.length === 0 && optional.length === 0) return null
@@ -91,6 +94,7 @@ export async function fetchCatalogSchema(verticalKey: string): Promise<CatalogSc
       catalogLabel: config.vocabulary?.catalog ?? 'Catálogo',
       required, optional,
       importMap: config.catalog_import?.fields ? config.catalog_import : undefined,
+      nearby: Array.isArray(config.nearby_places?.categories) && config.nearby_places.categories.length > 0,
     }
   } catch { return null }
 }

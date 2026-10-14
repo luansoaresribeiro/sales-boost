@@ -366,6 +366,12 @@ Os posts que nascem daqui seguem a regra 1: só saem com aprovação do dono.
    OpenStreetMap (grátis), guarda o resultado; distância calculada em linha
    reta a partir das coordenadas (nunca inventada, regra 5). Vira assunto de
    post ("o que tem a 5 min deste imóvel").
+   - *Feito (2026-10-14, PR próprio):* sub-aba "📍 Lugares perto" no Agente
+     de Dados (`NearbyPlaces.tsx` → function `nearby-places` →
+     `_shared/nearbyPlaces.ts`); campo opcional "Endereço" (marcado
+     `private` na ficha, nunca vai pra legenda); o "3 coisas perto" do
+     calendário vira carrossel com card dos lugares reais + capa real. Sem
+     endereço, a busca parte do centro do bairro e o post não cita distância.
 2. **Dicas e FAQ** (jurídico, financiamento, documentação). Aprovação pela
    IA, como decidido em [DECISIONS.md](DECISIONS.md) (2026-10-14):
    - dica geral, sem número nem regra → aprovada sozinha;

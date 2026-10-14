@@ -23,6 +23,7 @@ import StrategySection from './marketingAi/StrategySection'
 import FeedbackWidget from './marketingAi/FeedbackWidget'
 import CatalogItems from './marketingAi/CatalogItems'
 import CreativeAgent from './marketingAi/CreativeAgent'
+import NearbyPlaces from './marketingAi/NearbyPlaces'
 import ProductPhotos from './marketingAi/ProductPhotos'
 import { AvatarSoon } from './BusinessContextButton'
 import { fetchCatalogSchema, type CatalogSchema } from '../../lib/verticalPlaybook'
@@ -51,7 +52,7 @@ const TX = {
     notActiveDesc: 'A ativação é feita pela equipe Sales Boost, configurando a marca, o público e os concorrentes. Fale com a gente pra ativar.',
     back: '← Voltar', followers: 'Seguidores', pendingApproval: 'Conteúdo esperando aprovação', newRecs: 'Recomendações novas', competitors: 'Concorrentes monitorados',
     openInsights: 'Insights em aberto', noInsights: 'Nenhum insight aberto agora.', recent: 'Atividade recente', noActivity: 'Nenhuma atividade ainda.',
-    products: 'Produtos', avatar: 'Meu avatar (em breve)', ideas: 'Ideias e trends', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
+    products: 'Produtos', avatar: 'Meu avatar (em breve)', ideas: 'Ideias e trends', nearby: 'Lugares perto', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
     funnel: 'Funil de Vendas', service: 'Atendimento', engagement: 'Engagement',
   },
   en: {
@@ -59,7 +60,7 @@ const TX = {
     notActiveDesc: 'Activation is done by the Sales Boost team, setting up the brand, audience and competitors. Contact us to activate it.',
     back: '← Back', followers: 'Followers', pendingApproval: 'Content awaiting approval', newRecs: 'New recommendations', competitors: 'Competitors monitored',
     openInsights: 'Open insights', noInsights: 'No open insights right now.', recent: 'Recent activity', noActivity: 'No activity yet.',
-    products: 'Products', avatar: 'My avatar (coming soon)', ideas: 'Ideas & trends', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
+    products: 'Products', avatar: 'My avatar (coming soon)', ideas: 'Ideas & trends', nearby: 'Nearby places', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
     funnel: 'Sales Pipeline', service: 'Customer Service', engagement: 'Engagement',
   },
 } as const
@@ -278,10 +279,10 @@ function DadosSection({ company }: { company: CompanyData }) {
   const [params, setParams] = useSearchParams()
   const focusItemId = params.get('item')
   const verticalKey = company.vertical_key ?? 'generico'
-  const [pickedSub, setPickedSub] = useState<'catalogo' | 'ideias'>('catalogo')
+  const [pickedSub, setPickedSub] = useState<'catalogo' | 'ideias' | 'lugares'>('catalogo')
   // Vindo do sino (?item=) é sempre o Catálogo; trocar de sub-aba limpa o item.
   const sub = focusItemId ? 'catalogo' : pickedSub
-  const setSub = (k: 'catalogo' | 'ideias') => {
+  const setSub = (k: 'catalogo' | 'ideias' | 'lugares') => {
     setPickedSub(k)
     if (focusItemId) { const next = new URLSearchParams(params); next.delete('item'); setParams(next, { replace: true }) }
   }
@@ -296,9 +297,11 @@ function DadosSection({ company }: { company: CompanyData }) {
     <div>
       <div style={subTabsRow}>
         <SubTabButton active={sub === 'catalogo'} onClick={() => setSub('catalogo')} icon="📸" label={catalogLabel} />
+        {schema?.nearby && <SubTabButton active={sub === 'lugares'} onClick={() => setSub('lugares')} icon="📍" label={t.nearby} />}
         <SubTabButton active={sub === 'ideias'} onClick={() => setSub('ideias')} icon="💡" label={t.ideas} />
       </div>
       {sub === 'ideias' ? <CreativeAgent companyId={company.id} />
+        : sub === 'lugares' && schema?.nearby ? <NearbyPlaces companyId={company.id} />
         : schema === undefined ? null
         : schema ? (
           <>

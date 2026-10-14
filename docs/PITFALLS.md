@@ -519,3 +519,10 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
 - **Catálogo aceita número absurdo** (37.372 vagas, 7.373 m² num
   apartamento) e o post repete o que o dono digitou. Não é invenção, mas
   precisa de validação de faixa na ficha — ver análise de segurança.
+- **OpenStreetMap (Overpass) recusa pedido "grande" com 504 "too busy"**
+  (achado 2026-10-14). Não é o servidor fora do ar: ele recusa quem declara
+  orçamento alto (`[timeout:25]`) ou usa `around:` em muitos filtros. O que
+  funciona: caixa (`[bbox:…]`) + `[timeout:10][maxsize:16000000]`, um pedido
+  por vez (dois ao mesmo tempo do mesmo IP = 504). Há 2 servidores reserva
+  em `_shared/nearbyPlaces.ts`. No mapa tem lixo (parquinho marcado como
+  praia): por isso o `name_pattern` por categoria na ficha.

@@ -23,6 +23,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchContentRules, ensureMinVideos, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
+import { privateFieldKeys } from '../_shared/nearbyPlaces.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -1035,7 +1036,8 @@ async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Co
   const pool = fresh.length ? fresh : photos
   const photo = pool[Math.floor(Math.random() * pool.length)]
   const f = (item.meta?.fields ?? {}) as Record<string, unknown>
-  const facts = Object.entries(f).filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '').map(([k, v]) => `${k}: ${String(v).slice(0, 600)}`).join('\n')
+  const hidden = await privateFieldKeys(admin, company.vertical_key ?? null)
+  const facts = Object.entries(f).filter(([k, v]) => !hidden.has(k) && v !== null && v !== undefined && String(v).trim() !== '').map(([k, v]) => `${k}: ${String(v).slice(0, 600)}`).join('\n')
   let cap: Record<string, unknown> = {}
   try {
     cap = parseObj(await callClaude(anthropicKey, `Você escreve a legenda de um Reels curto (5 s) de "${company.business_name}" mostrando 1 ambiente deste imóvel real, em movimento de câmera suave.

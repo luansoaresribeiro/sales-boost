@@ -21,6 +21,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
+import { ensureNearby, fetchNearbyConfig, fmtDistance, topPlaces } from '../_shared/nearbyPlaces.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -171,6 +172,20 @@ async function renderTweetCard(supabaseUrl: string, auth: { bearer: string } | {
   } catch { return null }
 }
 
+// Card com lista (template "trend": chamada + itens numerados) — usado no
+// "3 coisas perto" com os lugares reais do OpenStreetMap.
+async function renderListCard(supabaseUrl: string, auth: { bearer: string } | { cronSecret: string; companyId: string; serviceKey: string }, fields: { eyebrow: string; title: string; items: string }): Promise<string | null> {
+  try {
+    const internal = 'cronSecret' in auth
+    const res = await fetch(`${supabaseUrl}/functions/v1/render-format`, {
+      method: 'POST', headers: { Authorization: internal ? `Bearer ${auth.serviceKey}` : auth.bearer, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ template: 'trend', kind: 'organico', fields, caption: fields.title, save: false, ...(internal ? { cron_secret: auth.cronSecret, company_id: auth.companyId } : {}) }),
+    })
+    const data = await res.json().catch(() => ({})) as { url?: string }
+    return res.ok && data.url ? data.url : null
+  } catch { return null }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
@@ -195,16 +210,16 @@ Deno.serve(async (req) => {
     const cronSecretEnv = Deno.env.get('CRON_SECRET')
     const internal = !!cronSecretEnv && body.cron_secret === cronSecretEnv && typeof body.company_id === 'string'
     const bearer = req.headers.get('Authorization') ?? ''
-    let company: { id: string; vertical_key: string | null } | null = null
+    let company: { id: string; vertical_key: string | null; city: string | null } | null = null
     if (internal) {
-      const { data } = await admin.from('companies').select('id, vertical_key').eq('id', body.company_id as string).maybeSingle()
+      const { data } = await admin.from('companies').select('id, vertical_key, city').eq('id', body.company_id as string).maybeSingle()
       company = data
     } else {
       if (!bearer) return json({ error: 'Unauthorized' }, 401)
       const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
       const { data: { user } } = await userClient.auth.getUser()
       if (!user) return json({ error: 'Unauthorized' }, 401)
-      const { data } = await admin.from('companies').select('id, vertical_key').eq('user_id', user.id).maybeSingle()
+      const { data } = await admin.from('companies').select('id, vertical_key, city').eq('user_id', user.id).maybeSingle()
       company = data
     }
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
@@ -230,6 +245,16 @@ Deno.serve(async (req) => {
 
     const generated: { recipe: string; pillar: string; planned_for: string; id: string; over_capacity: boolean }[] = []
     const skipped: { recipe: string; reason: string }[] = []
+
+    // Lugares reais em volta (cache do item; busca 1x se ainda não tem).
+    // Sem ficha de lugares, sem bairro ou se o mapa falhar → as receitas de
+    // bairro seguem como antes (texto genérico, sem nome inventado).
+    let near: { top: ReturnType<typeof topPlaces>; precise: boolean } | null = null
+    const loadNear = async () => {
+      const cfg = await fetchNearbyConfig(admin, company!.vertical_key)
+      const data = cfg ? await ensureNearby(admin, { itemId: item.id as string, companyId: company!.id, verticalKey: company!.vertical_key, city: String(company!.city ?? '') }) : null
+      return { top: topPlaces(data, cfg, 3), precise: data?.precision === 'endereco' }
+    }
 
     for (const [pillarKey, group] of Object.entries(ficha.production_recipes)) {
       const etapaA = group.etapa_a
@@ -266,6 +291,31 @@ Deno.serve(async (req) => {
           const c = await writeCopy(anthropicKey, `Escreva um post de 1 foto destacando um detalhe do imóvel que ninguém repara de cara${detalhe ? ` (o detalhe real é: "${detalhe}")` : ' (fale de algo real do imóvel que só quem visita percebe, sem inventar um detalhe específico que não foi informado — pode ser mais genérico, tipo iluminação natural, silêncio, vista)'}. \n${fieldsLine}`)
           caption = c.caption; hashtags = c.hashtags; cta = c.cta
           provider = 'catalogo_real'
+        } else if ((recipe === 'reels_o_que_compra_no_bairro' || recipe === 'post_3_coisas_perto') && (near ??= await loadNear()).top.length >= (recipe === 'post_3_coisas_perto' ? 3 : 1)) {
+          // Lugares de verdade (OpenStreetMap, aba "Lugares perto"): nome e
+          // distância calculada — nada inventado. "3 coisas perto" vira
+          // carrossel: card com os 3 lugares (texto só pelo render-format,
+          // regra 4) + a capa real do imóvel.
+          const lista = near!.top.map(p => `${p.emoji} ${p.name} (${p.label.toLowerCase()})${near!.precise ? ` — ${fmtDistance(p.distance_m)}` : ''}`)
+          const distRule = near!.precise
+            ? 'As distâncias são em linha reta a partir do imóvel: escreva "a uns X" ou "a X em linha reta", nunca minutos a pé/de carro nem outro número.'
+            : 'Esses lugares ficam no bairro (o endereço exato do imóvel não foi informado): NÃO escreva distância nem minutos, só que ficam no bairro/pertinho.'
+          if (recipe === 'post_3_coisas_perto') {
+            // Card de lista (template "trend" do render-format): sem emoji — a
+            // fonte do card não tem esse glifo.
+            const card = await renderListCard(supabaseUrl, internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }, {
+              eyebrow: `Perto do imóvel em ${String(fields.bairro ?? 'Rio')}`.slice(0, 40),
+              title: '3 coisas perto daqui',
+              items: near!.top.slice(0, 3).map(p => `${p.name}${near!.precise ? ` · ${fmtDistance(p.distance_m)}` : ''}`).join('\n'),
+            })
+            if (!card) { skipped.push({ recipe, reason: 'Falha ao gerar o card dos lugares — tente de novo depois.' }); continue }
+            media = [{ url: card, type: 'photo' }, { url: photos[0].url, type: 'photo' }]
+          } else {
+            media = [{ url: photos[0].url, type: 'photo' }]
+          }
+          const c = await writeCopy(anthropicKey, `${recipe === 'post_3_coisas_perto' ? 'Escreva um post "3 coisas perto" deste imóvel' : `Escreva um post sobre como é morar perto deste imóvel em ${fields.bairro ?? 'no bairro'} — estilo de vida, não o imóvel em si`}. Use SÓ estes lugares reais, com o nome exatamente assim (dados do OpenStreetMap):\n${lista.join('\n')}\n${distRule} Nunca diga o endereço/rua do imóvel.\n${fieldsLine}`)
+          caption = c.caption; hashtags = c.hashtags; cta = c.cta
+          provider = 'lugares_osm'
         } else if (recipe === 'reels_o_que_compra_no_bairro' || recipe === 'post_3_coisas_perto') {
           const evoke = recipe === 'reels_o_que_compra_no_bairro'
             ? `everyday street life and lifestyle amenities of a pleasant Rio de Janeiro neighborhood — cafes, tree-lined sidewalk, local shops`

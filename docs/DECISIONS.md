@@ -1248,3 +1248,20 @@ grátis de 30 s, acima — mantidos como histórico):
   - Isso aprova a **dica** como fato; o **post** feito com ela continua
     precisando da aprovação do dono (regra 1). Implementação na etapa 2 do
     Agente de Dados ([ROADMAP.md](ROADMAP.md)).
+- **Lugares perto pelo OpenStreetMap (grátis)** — 2026-10-14 (dono: "o google
+  cobra por busca, não tem como utilizar outro sistema de graça?").
+  - Nominatim acha o ponto do imóvel; Overpass lista o que tem em volta
+    (com 2 servidores reserva, porque o principal às vezes fica ocupado).
+    Sem chave e sem custo. Crédito "© colaboradores do OpenStreetMap" na tela.
+  - Uma busca por imóvel, guardada em `meta.nearby`; só busca de novo se o
+    endereço/bairro mudar ou o dono pedir (no máximo 1x por minuto).
+  - Distância calculada em linha reta pelas coordenadas, nunca pela IA
+    (regra 5). Sem endereço exato, os posts não citam distância.
+  - Categorias, raio (1,5 km) e tags do OSM na ficha
+    (`config.nearby_places`, regra 6). O campo "Endereço" é `private`: serve
+    só pra busca, nunca vai pro prompt de legenda.
+  - O dono pode esconder um lugar; o post usa só os visíveis.
+  - "3 coisas perto" pega o lugar mais perto de cada categoria **na ordem da
+    ficha** (praia, metrô, parque…), não só o mais perto de todos — senão
+    uma cafeteria ganha da praia. Filtro de nome por categoria
+    (`name_pattern`) tira lixo do mapa (parquinho marcado como praia).

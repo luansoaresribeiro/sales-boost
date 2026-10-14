@@ -67,8 +67,8 @@ inventadas:
 |---|---|---|
 | Carrossel-tour | Fotos reais do catálogo | ✅ produz (`carrossel_tour`) |
 | "O detalhe que você não viu" | Foto real | ✅ produz |
-| Reels "o que R$X compra no bairro" | Imagem genérica de clima (IA) | 🟡 produz como imagem estática — Reels/vídeo de verdade é [MEDIA-ENGINE.md](MEDIA-ENGINE.md) |
-| "3 coisas perto" | Imagem genérica (IA) | ✅ produz |
+| Reels "o que R$X compra no bairro" | Capa real + lugares reais do OpenStreetMap; sem lugares, imagem genérica de clima (IA) | 🟡 produz como imagem estática — Reels/vídeo de verdade é [MEDIA-ENGINE.md](MEDIA-ENGINE.md) |
+| "3 coisas perto" | Card `render-format` com 3 lugares reais (OpenStreetMap, aba "Lugares perto") + capa real; sem lugares, imagem genérica (IA) | ✅ produz (desde 2026-10-14 com lugares reais) |
 | Stories enquete "pagaria R$X?" | Card `render-format` | ✅ produz |
 | Stories caixa de perguntas | Material real do corretor | ❌ skipped — precisa de material/autorização |
 | "POV: pegou a chave" | Material real do corretor | ❌ skipped — precisa de material/autorização |
