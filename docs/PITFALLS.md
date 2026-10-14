@@ -512,8 +512,9 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   Corretor, me passa…"). Regra de honestidade no `preamble` do
   `creative-generate` e no `writeCopy` do `catalog-package`. O filtro de
   qualidade já segurava a peça ruim (nota 12, ficou em rascunho).
-- **Mobiliar acrescentou cobertura no terraço e trocou a luz do dia.** Ficha
-  reforçada (`20261017130000_staging_no_structure.sql`); o dono continua
+- **Mobiliar acrescentou cobertura no terraço** (e trocou a luz pra fim de
+  tarde). Ficha reforçada (`20261017130000_staging_no_structure.sql`):
+  estrutura nunca muda; pôr do sol pode (decisão do dono). O dono continua
   aprovando o antes/depois — nenhuma IA garante 100%.
 - **Catálogo aceita número absurdo** (37.372 vagas, 7.373 m² num
   apartamento) e o post repete o que o dono digitou. Não é invenção, mas
