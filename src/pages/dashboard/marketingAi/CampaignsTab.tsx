@@ -36,7 +36,7 @@ const TX = {
     seeExample: 'Ver exemplo (modo demonstração)',
     intro1: 'O ', introStrong: 'Estrategista de Mídia Paga', intro2: ' monta campanhas com consciência de funil — escolhe a etapa certa, cria ofertas de valor (não desconto) e lê o comportamento do pixel pra decidir o próximo passo. Complementa o Agente de Conteúdo: um cuida do orgânico, o outro do pago.',
     activeCamps: 'Campanhas ativas', drafts: 'Rascunhos', portfolioAvg: 'média do portfólio', avgHealth: 'Saúde média', outOf100: 'de 100 (destas campanhas)', monthlyBudget: 'Orçamento/mês',
-    metaHealth: 'Saúde da Meta:', healthDesc: 'Pixel, Business Manager e verificação — a base de qualquer campanha paga. Ver detalhes em Agente de Dados →', open: 'Abrir →',
+    metaHealth: 'Saúde da Meta:', healthDesc: 'Pixel, Business Manager e verificação — a base de qualquer campanha paga. Ver detalhes em Saúde da Meta →', open: 'Abrir →',
     recsTitle: '🤖 Recomendações do estrategista', recsSub: 'O que a IA sugere agir agora — priorizado por impacto.',
     funnelTitle: '🔀 Distribuição por funil', funnelSub: 'Cada campanha ocupa uma etapa — do frio ao cliente fiel.', campaign: 'campanha', campaigns: 'campanhas',
     campsTitle: '📣 Campanhas', campsSub: 'Clique pra abrir todos os campos — todos editáveis quando for real.',
@@ -58,7 +58,7 @@ const TX = {
     seeExample: 'See an example (demo mode)',
     intro1: 'The ', introStrong: 'Paid Media Strategist', intro2: ' builds funnel-aware campaigns — picks the right stage, creates value offers (not discounts) and reads pixel behavior to decide the next step. It complements the Content Agent: one handles organic, the other paid.',
     activeCamps: 'Active campaigns', drafts: 'Drafts', portfolioAvg: 'portfolio average', avgHealth: 'Average health', outOf100: 'out of 100 (these campaigns)', monthlyBudget: 'Budget/month',
-    metaHealth: 'Meta Health:', healthDesc: 'Pixel, Business Manager and verification — the foundation of any paid campaign. See details in Data Agent →', open: 'Open →',
+    metaHealth: 'Meta Health:', healthDesc: 'Pixel, Business Manager and verification — the foundation of any paid campaign. See details in Meta Health →', open: 'Open →',
     recsTitle: '🤖 Strategist recommendations', recsSub: 'What the AI suggests acting on now — prioritized by impact.',
     funnelTitle: '🔀 Funnel distribution', funnelSub: 'Each campaign takes a stage — from cold to loyal customer.', campaign: 'campaign', campaigns: 'campaigns',
     campsTitle: '📣 Campaigns', campsSub: 'Click to open all fields — all editable once it is real.',
@@ -255,7 +255,7 @@ export default function CampaignsTab({ company }: { company: Pick<CompanyData, '
   const navigate = useNavigate()
   const demo = useMemo(() => buildCampaignDemo(company, lang), [company, lang])
   const { campaigns, recommendations, pixelJourney, pixelReads, creatives, learnings, contentIdeas, storyAds, overview } = demo
-  // Mesmo score que vive em Agente de Dados → Saúde da Meta — aparece aqui
+  // Mesmo score que vive em Campanha → Saúde da Meta — aparece aqui
   // também porque quem roda campanha paga precisa ver isso sem trocar de aba
   // (o Pixel/Business Manager são a base de tudo que acontece em Campanhas).
   const metaHealth = useMemo(() => buildMetaHealthDemo(company, lang), [company, lang])
@@ -302,10 +302,10 @@ export default function CampaignsTab({ company }: { company: Pick<CompanyData, '
         <StatCard label={t.monthlyBudget} value={overview.monthlyBudget} />
       </div>
 
-      {/* Saúde da Meta — mesmo score de Agente de Dados → Saúde da Meta,
+      {/* Saúde da Meta — mesmo score da sub-aba Campanha → Saúde da Meta,
           repetido aqui porque quem roda campanha paga precisa dele sem sair
           da aba (Pixel/Business Manager são a base de qualquer campanha). */}
-      <button onClick={() => navigate('/dashboard/marketing-ai/saude-meta')}
+      <button onClick={() => navigate('/dashboard/marketing-ai/content?tab=campanha&sub=saude')}
         style={{ display: 'flex', alignItems: 'center', gap: '14px', width: '100%', textAlign: 'left', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '13px 16px', marginBottom: '26px', cursor: 'pointer', fontFamily: D }}>
         <span style={{ fontSize: '22px' }}>❤️‍🩹</span>
         <div style={{ flex: 1, minWidth: 0 }}>

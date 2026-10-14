@@ -4,7 +4,6 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import { templateLabel, type TestPost } from './TestingArea'
-import CreativeAgent from './CreativeAgent'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -17,13 +16,13 @@ const TX = {
   pt: {
     errPlan: 'Erro ao planejar a semana', planned: (n: number) => `✅ Planejado: ${n} peça(s) geradas e avaliadas.`, todo: 'A estratégia também pede nesta semana (você faz no imóvel, no Catálogo):', perWeek: (n: number) => `${n}x`, loading: 'Carregando...', empty: 'vazio',
     title: '🗓️ Calendário da Semana', introA: 'O agente escolhe as melhores ', introB: 'Ideias', introC: ' do backlog abaixo pra cada dia (nunca inventa do zero) e usa o mesmo motor de sempre pra gerar e avaliar — o que sair com nota boa já cai no Vault sozinho.',
-    tabCal: 'Calendário', tabIdeas: 'Ideias', autoTitle: 'Planejar sozinho todo domingo às 18h', autoDesc: 'Escolhe entre as Ideias disponíveis e já gera tudo — sem precisar clicar em nada.',
+    autoTitle: 'Planejar sozinho todo domingo às 18h', autoDesc: 'Escolhe entre as Ideias disponíveis e já gera tudo — sem precisar clicar em nada.',
     planning: 'Planejando + gerando...', planNow: '🗓️ Planejar semana agora', thisWeek: 'Esta semana', nextWeek: 'Próxima semana',
   },
   en: {
     errPlan: 'Error planning the week', planned: (n: number) => `✅ Planned: ${n} piece(s) generated and evaluated.`, todo: 'The strategy also asks for this week (you do it on the listing, in the Catalog):', perWeek: (n: number) => `${n}x`, loading: 'Loading...', empty: 'empty',
     title: '🗓️ Weekly Calendar', introA: 'The agent picks the best ', introB: 'Ideas', introC: ' from the backlog below for each day (it never makes things up from scratch) and uses the same engine as always to generate and evaluate — whatever scores well goes to the Vault on its own.',
-    tabCal: 'Calendar', tabIdeas: 'Ideas', autoTitle: 'Plan automatically every Sunday at 6 PM', autoDesc: 'Picks from the available Ideas and generates everything — no clicking needed.',
+    autoTitle: 'Plan automatically every Sunday at 6 PM', autoDesc: 'Picks from the available Ideas and generates everything — no clicking needed.',
     planning: 'Planning + generating...', planNow: '🗓️ Plan the week now', thisWeek: 'This week', nextWeek: 'Next week',
   },
 } as const
@@ -58,7 +57,6 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   const [msg, setMsg] = useState('')
   const [todo, setTodo] = useState<{ format: string; name: string; per_week: number; purpose: string }[]>([])
   const [err, setErr] = useState('')
-  const [sub, setSub] = useState<'calendario' | 'ideias'>('calendario')
 
   const thisWeekStart = startOfWeek(new Date())
   const nextWeekStart = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate() + 7)
@@ -156,20 +154,9 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
         </div>
       </div>
 
-      <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '18px' }}>
-        <button onClick={() => setSub('calendario')}
-          style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 14px', background: sub === 'calendario' ? 'rgba(255,109,41,0.12)' : 'transparent', border: `1px solid ${sub === 'calendario' ? 'rgba(255,109,41,0.35)' : 'transparent'}`, borderRadius: '8px', cursor: 'pointer', fontFamily: D }}>
-          <span style={{ fontSize: '14px' }}>🗓️</span>
-          <span style={{ fontSize: '12.5px', fontWeight: 700, color: sub === 'calendario' ? ORANGE : 'white' }}>{t.tabCal}</span>
-        </button>
-        <button onClick={() => setSub('ideias')}
-          style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 14px', background: sub === 'ideias' ? 'rgba(255,109,41,0.12)' : 'transparent', border: `1px solid ${sub === 'ideias' ? 'rgba(255,109,41,0.35)' : 'transparent'}`, borderRadius: '8px', cursor: 'pointer', fontFamily: D }}>
-          <span style={{ fontSize: '14px' }}>💡</span>
-          <span style={{ fontSize: '12.5px', fontWeight: 700, color: sub === 'ideias' ? ORANGE : 'white' }}>{t.tabIdeas}</span>
-        </button>
-      </div>
-
-      {sub === 'ideias' ? <CreativeAgent companyId={companyId} /> : (
+      {/* A sub-aba Ideias (CreativeAgent) saiu em 2026-10-14: o calendário
+          vem da estratégia, não de ideia solta (pedido do dono). */}
+      {(
         <>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '14px', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${BORDER}`, borderRadius: '10px', marginBottom: '18px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>

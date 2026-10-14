@@ -245,7 +245,7 @@ function DashboardShell() {
       {!readOnly && <TrialStartModal />}
       {!readOnly && <ProgressPopup />}
       <KitPromoModal />
-      {company && <BusinessContextButton companyId={company.id} />}
+      {company && <BusinessContextButton />}
     </>
   )
 }

@@ -1017,3 +1017,27 @@ grátis de 30 s, acima — mantidos como histórico):
   "Cadastre seu primeiro imóvel" (abre o "+" na aba do catálogo).
   Substitui a parte da decisão anterior que exigia o mínimo de itens com
   fotos antes de liberar o painel.
+- **Agentes enxutos: Dados = produto; Conteúdo e Campanha em duas abas** —
+  2026-10-14. Pedido do dono (anotações do painel), aprovado com "pode
+  seguir".
+  - **Botão "+"** deixou de abrir um modal (Contexto do negócio / Catálogo /
+    Avatar): agora leva direto ao Agente de Dados → Catálogo, a mesma tela,
+    sem duas telas fazendo a mesma coisa. O sino de pendências cai no item
+    certo via `?item=<id>`. Contexto do negócio continua em Configurações.
+  - **Agente de Dados = só o produto:** Catálogo (fotos reais; nome vem da
+    ficha) + Meu avatar (em breve). Saíram da tela Inteligência de Mercado,
+    Estilos e Visuais e Insights — a estratégia e o Higgsfield já consomem
+    esses dados por trás (as tabelas e os componentes continuam no código,
+    só não aparecem). Os links antigos `/insights` e `/saude-meta`
+    redirecionam.
+  - **Agente de Conteúdo e Campanha** com duas abas de topo:
+    *Conteúdo* (Calendário da semana com o resumo/overview embaixo, Vault,
+    Padrão visual = Kit da marca + Formatos de feed e stories) e *Campanha*
+    (selo "Em breve" pra rodar anúncio pago; já mostra Como os conteúdos
+    estão indo, Campanha ideal e pixel, Anúncios e Saúde da Meta).
+    Saíram: Biblioteca (virou Vault + Padrão visual), Testes e a sub-aba
+    Ideias do calendário (o calendário vem da estratégia).
+  - Divergência registrada: a aba Saúde da Meta e a Campanha ideal ainda
+    são **exemplo** (modo demonstração) — ver
+    [DATA_AUDIT.md](DATA_AUDIT.md); viram dado real quando o Meta Ads for
+    conectado.

@@ -18,8 +18,8 @@ const CARD = '#150E08'
 
 interface ModuleDef { section: string; title: string; desc: string; icon: string; soon?: boolean }
 
-// O fluxo do Growth OS, de cima pra baixo: Agente de Dados (observa —
-// Performance real + Inteligência de Mercado + Insights + Saúde da Meta) →
+// O fluxo do Growth OS, de cima pra baixo: Agente de Dados (o produto —
+// fotos reais do catálogo; desde 2026-10-14 só isso) →
 // Agente de Estratégia (direciona — lê o negócio e o dado real, define
 // objetivo/orçamento/metas e manda o direcionamento pro Conteúdo) → Agente
 // de Conteúdo (cria) → Agente de Conversão (fecha — Funil de Vendas +
@@ -28,15 +28,15 @@ interface ModuleDef { section: string; title: string; desc: string; icon: string
 // cada uma dessas seções com o sinal real daquele agente.
 const MODULES = {
   pt: {
-    data: { section: 'dados', title: 'Agente de Dados', desc: 'Performance real do Instagram, inteligência de mercado, insights de oportunidades e a Saúde da Meta — o que já funcionou e o que está acontecendo agora.', icon: '📊' },
+    data: { section: 'dados', title: 'Agente de Dados', desc: 'O seu produto: as fotos reais de cada item do catálogo — é delas que saem os carrosséis e vídeos. (Avatar em breve.)', icon: '📊' },
     strategy: { section: 'estrategia', title: 'Agente de Estratégia', desc: 'Lê o negócio e o dado real, define objetivo, metas, orçamento e prazo — e direciona o Agente de Conteúdo.', icon: '🧭' },
-    content: { section: 'content', title: 'Agente de Conteúdo e Campanha', desc: 'Calendário da Semana, Overview, Biblioteca (formatos/testes/vault) e Campanha — o Agente de Meta Ads (performance real + campanhas) mora aqui dentro agora.', icon: '✍️' },
+    content: { section: 'content', title: 'Agente de Conteúdo e Campanha', desc: 'Conteúdo: calendário da semana (feed e stories) vindo da estratégia, Vault e padrão visual. Campanha (em breve): como os conteúdos estão indo, pixel e a campanha ideal.', icon: '✍️' },
     conversion: { section: 'conversao', title: 'Agente de Conversão', desc: 'Funil de vendas, atendimento e engagement (comentários/DMs) — transforma quem chegou até você em cliente.', icon: '🔀' },
   },
   en: {
-    data: { section: 'dados', title: 'Data Agent', desc: 'Real Instagram performance, market intelligence, opportunity insights and Meta Health — what has already worked and what is happening now.', icon: '📊' },
+    data: { section: 'dados', title: 'Data Agent', desc: 'Your product: real photos of each catalog item — they become the carousels and videos. (Avatar coming soon.)', icon: '📊' },
     strategy: { section: 'estrategia', title: 'Strategy Agent', desc: 'Reads the business and the real data, sets the goal, targets, budget and timeline — and guides the Content Agent.', icon: '🧭' },
-    content: { section: 'content', title: 'Content & Campaign Agent', desc: 'Weekly Calendar, Overview, Library (formats/tests/vault) and Campaign — the Meta Ads Agent (real performance + campaigns) now lives in here.', icon: '✍️' },
+    content: { section: 'content', title: 'Content & Campaign Agent', desc: 'Content: weekly calendar (feed and stories) from the strategy, Vault and visual pattern. Campaign (coming soon): how content is doing, pixel and the ideal campaign.', icon: '✍️' },
     conversion: { section: 'conversao', title: 'Conversion Agent', desc: 'Sales pipeline, customer service and engagement (comments/DMs) — turns the people who reached you into customers.', icon: '🔀' },
   },
 } as const satisfies Record<string, Record<string, ModuleDef>>

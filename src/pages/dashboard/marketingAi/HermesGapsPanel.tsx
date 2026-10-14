@@ -43,7 +43,7 @@ export default function HermesGapsPanel({ company }: { company: CompanyData }) {
       list.push({
         key: 'competitors', label: t.competitorsLabel, why: t.competitorsWhy,
         status: (competitorsCount ?? 0) > 0 ? 'ok' : 'gap',
-        actionLabel: t.competitorsAction, actionHref: '/dashboard/marketing-ai/dados',
+        actionLabel: t.competitorsAction, actionHref: '/dashboard/marketing-ai/estrategia',
       })
 
       list.push({

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useParams, useNavigate, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useParams, useNavigate, useSearchParams, Navigate } from 'react-router-dom'
 import type { CompanyData } from '../../contexts/CompanyContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
@@ -8,8 +8,6 @@ import { useMarketingAiData } from './marketingAi/useMarketingAiData'
 import { CARD, MUTED, BORDER, D, PILLAR_ICON, IMPACT_COLOR, IMPACT_LABEL, IMPACT_LABEL_EN, timeAgo, type ActivityLogRow, type Insight, type TrackingSnapshot, type MarketingAiConfig } from './marketingAi/shared'
 import TrackingTab from './marketingAi/TrackingTab'
 import ContentSection from './marketingAi/ContentSection'
-import MarketIntelTab from './marketingAi/MarketIntelTab'
-import PerformanceTab from './marketingAi/PerformanceTab'
 import BrainTab from './marketingAi/BrainTab'
 import TimelineTab from './marketingAi/TimelineTab'
 import ReportsTab from './marketingAi/ReportsTab'
@@ -20,12 +18,13 @@ import FunnelTab from './marketingAi/FunnelTab'
 import WhatsAppTab from './marketingAi/WhatsAppTab'
 import EngagementTab from './marketingAi/EngagementTab'
 import ReviewsAgentTab from './marketingAi/ReviewsAgentTab'
-import InsightsTab from './marketingAi/InsightsTab'
 import BusinessContextTab from './marketingAi/BusinessContextTab'
-import MetaHealthTab from './marketingAi/MetaHealthTab'
-import VisualLibrary from './marketingAi/VisualLibrary'
 import StrategySection from './marketingAi/StrategySection'
 import FeedbackWidget from './marketingAi/FeedbackWidget'
+import CatalogItems from './marketingAi/CatalogItems'
+import ProductPhotos from './marketingAi/ProductPhotos'
+import { AvatarSoon } from './BusinessContextButton'
+import { fetchCatalogSchema, type CatalogSchema } from '../../lib/verticalPlaybook'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
 
 const ORANGE = '#FF6D29'
@@ -51,7 +50,7 @@ const TX = {
     notActiveDesc: 'A ativação é feita pela equipe Sales Boost, configurando a marca, o público e os concorrentes. Fale com a gente pra ativar.',
     back: '← Voltar', followers: 'Seguidores', pendingApproval: 'Conteúdo esperando aprovação', newRecs: 'Recomendações novas', competitors: 'Concorrentes monitorados',
     openInsights: 'Insights em aberto', noInsights: 'Nenhum insight aberto agora.', recent: 'Atividade recente', noActivity: 'Nenhuma atividade ainda.',
-    performance: 'Performance', market: 'Inteligência de Mercado', visual: 'Estilos e Visuais', insights: 'Insights', metaHealth: 'Saúde da Meta',
+    products: 'Produtos', avatar: 'Meu avatar (em breve)', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
     funnel: 'Funil de Vendas', service: 'Atendimento', engagement: 'Engagement',
   },
   en: {
@@ -59,7 +58,7 @@ const TX = {
     notActiveDesc: 'Activation is done by the Sales Boost team, setting up the brand, audience and competitors. Contact us to activate it.',
     back: '← Back', followers: 'Followers', pendingApproval: 'Content awaiting approval', newRecs: 'New recommendations', competitors: 'Competitors monitored',
     openInsights: 'Open insights', noInsights: 'No open insights right now.', recent: 'Recent activity', noActivity: 'No activity yet.',
-    performance: 'Performance', market: 'Market Intelligence', visual: 'Styles & Visuals', insights: 'Insights', metaHealth: 'Meta Health',
+    products: 'Products', avatar: 'My avatar (coming soon)', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
     funnel: 'Sales Pipeline', service: 'Customer Service', engagement: 'Engagement',
   },
 } as const
@@ -99,6 +98,11 @@ export default function MarketingAiSectionPage() {
   if (section === 'competitors') return <Navigate to="/dashboard/marketing-ai/dados" replace />
   if (section === 'funil' || section === 'whatsapp' || section === 'engagement') return <Navigate to="/dashboard/marketing-ai/conversao" replace />
   if (section === 'feedback') return <Navigate to="/dashboard/marketing-ai/dados" replace />
+  // 2026-10-14: Agente de Dados ficou só com o Catálogo (+ Avatar em breve).
+  // Insights saiu da tela (a estratégia já consome isso por trás); Saúde da
+  // Meta mudou pra Conteúdo e Campanha → Campanha.
+  if (section === 'insights') return <Navigate to="/dashboard/marketing-ai/dados" replace />
+  if (section === 'saude-meta') return <Navigate to="/dashboard/marketing-ai/content?tab=campanha&sub=saude" replace />
   if (!section || !SECTION_TITLE[section]) return <Navigate to="/dashboard/marketing-ai" replace />
   // A configuração dos agentes (autonomia/objetivo) foi consolidada em
   // Configurações → Agentes, o lar único de config do cliente. Deep links
@@ -159,12 +163,8 @@ export default function MarketingAiSectionPage() {
         return <ConnectionsTab connections={buildGrowthDemo(company, lang).connections} />
       case 'avaliacoes':
         return <ReviewsAgentTab company={company} />
-      case 'insights':
-        return <DadosSection company={company} initialSub="insights" />
       case 'context':
         return <BusinessContextTab company={company} />
-      case 'saude-meta':
-        return <DadosSection company={company} initialSub="saude-meta" />
       default:
         return null
     }
@@ -208,7 +208,7 @@ function OverviewSection({
         <StatCard label={t.followers} value={latest?.followers ?? '—'} onClick={() => onNavigate('tracking')} />
         <StatCard label={t.pendingApproval} value={pendingContent} onClick={() => onNavigate('content')} highlight={pendingContent > 0} />
         <StatCard label={t.newRecs} value={proposedStrategy} onClick={() => onNavigate('brain')} highlight={proposedStrategy > 0} />
-        <StatCard label={t.competitors} value={config?.competitors.length ?? 0} onClick={() => onNavigate('dados')} />
+        <StatCard label={t.competitors} value={config?.competitors.length ?? 0} onClick={() => onNavigate('estrategia')} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -263,31 +263,47 @@ function SubTabButton({ active, onClick, icon, label }: { active: boolean; onCli
 }
 const subTabsRow: React.CSSProperties = { display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '20px' }
 
-// Agente de Dados — Performance real do Instagram + Inteligência de Mercado
-// (concorrentes/tendências) + Estilos e Visuais (identidade da marca) +
-// Insights (oportunidades de fora) + Saúde da Meta (score do ecossistema) num
-// único lugar, upstream do Agente de Conteúdo no fluxo (Dados → Conteúdo →
-// Conversão → Feedback Loop). Insights e Saúde da Meta mudaram pra cá — são
-// leitura/inteligência que o Agente de Dados consome, não seções soltas.
-function DadosSection({ company, initialSub }: { company: CompanyData; initialSub?: 'insights' | 'saude-meta' }) {
-  const navigate = useNavigate()
+// Agente de Dados — desde 2026-10-14 é só o PRODUTO: as fotos reais dos
+// itens (Catálogo, nome vindo da ficha do setor — ex.: Imóveis) e o Avatar
+// ("em breve"). O botão "+" do dashboard cai aqui (mesma tela, sem modal
+// duplicado); ?item=<id> destaca o item vindo do sino de pendências.
+// Saíram da tela (decisão do dono): Inteligência de Mercado, Estilos e
+// Visuais e Insights — a estratégia e o Higgsfield já se alimentam disso por
+// trás. Performance e Saúde da Meta foram pra Conteúdo e Campanha → Campanha;
+// o Kit da marca foi pra Conteúdo → Padrão visual.
+function DadosSection({ company }: { company: CompanyData }) {
   const t = TX[useLang().lang]
-  const [sub, setSub] = useState<'performance' | 'mercado' | 'visual' | 'insights' | 'saude-meta'>(initialSub ?? 'performance')
+  const [params, setParams] = useSearchParams()
+  const focusItemId = params.get('item')
+  const verticalKey = company.vertical_key ?? 'generico'
+  const [pickedSub, setPickedSub] = useState<'catalogo' | 'avatar'>('catalogo')
+  // Vindo do sino (?item=) é sempre o Catálogo; trocar de sub-aba limpa o item.
+  const sub = focusItemId ? 'catalogo' : pickedSub
+  const setSub = (k: 'catalogo' | 'avatar') => {
+    setPickedSub(k)
+    if (focusItemId) { const next = new URLSearchParams(params); next.delete('item'); setParams(next, { replace: true }) }
+  }
+  const [schema, setSchema] = useState<CatalogSchema | null | undefined>(undefined)
+  useEffect(() => {
+    let alive = true
+    fetchCatalogSchema(verticalKey).then(s => { if (alive) setSchema(s) })
+    return () => { alive = false }
+  }, [verticalKey])
+  const catalogLabel = schema?.catalogLabel ?? t.products
   return (
     <div>
       <div style={subTabsRow}>
-        <SubTabButton active={sub === 'performance'} onClick={() => setSub('performance')} icon="📊" label={t.performance} />
-        <SubTabButton active={sub === 'mercado'} onClick={() => setSub('mercado')} icon="🧭" label={t.market} />
-        <SubTabButton active={sub === 'visual'} onClick={() => setSub('visual')} icon="🎨" label={t.visual} />
-        <SubTabButton active={sub === 'insights'} onClick={() => setSub('insights')} icon="💡" label={t.insights} />
-        <SubTabButton active={sub === 'saude-meta'} onClick={() => setSub('saude-meta')} icon="❤️‍🩹" label={t.metaHealth} />
+        <SubTabButton active={sub === 'catalogo'} onClick={() => setSub('catalogo')} icon="📸" label={catalogLabel} />
+        <SubTabButton active={sub === 'avatar'} onClick={() => setSub('avatar')} icon="🙂" label={t.avatar} />
       </div>
-      {sub === 'performance'
-        ? <PerformanceTab company={company} onCreateContent={() => navigate('/dashboard/marketing-ai/content')} />
-        : sub === 'mercado' ? <MarketIntelTab company={company} />
-        : sub === 'visual' ? <VisualLibrary company={company} />
-        : sub === 'insights' ? <InsightsTab company={company} />
-        : <MetaHealthTab company={company} />}
+      {sub === 'avatar' ? <AvatarSoon companyId={company.id} verticalKey={verticalKey} />
+        : schema === undefined ? null
+        : schema ? (
+          <>
+            <div style={{ fontSize: '12px', color: MUTED, marginBottom: '14px', maxWidth: '760px', lineHeight: 1.55 }}>{t.catalogSub}</div>
+            <CatalogItems companyId={company.id} schema={schema} verticalKey={verticalKey} focusItemId={focusItemId} />
+          </>
+        ) : <ProductPhotos companyId={company.id} />}
     </div>
   )
 }

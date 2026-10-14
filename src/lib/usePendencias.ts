@@ -27,7 +27,7 @@ export interface Pendencia {
   hint: string
   destino: string // texto do "→ destino"
   to?: string // rota
-  openAdd?: { tab: 'catalogo'; itemId?: string } // abre o botão "+" na aba do catálogo (itemId: direto no item)
+  openAdd?: { tab: 'catalogo'; itemId?: string } // abre o Catálogo do Agente de Dados (itemId: direto no item)
   /** botões próprios no lugar do "toque na linha toda" (ex.: "Está tudo certo" / "Quero atualizar") */
   actions?: { label: string; primary?: boolean; to?: string; run?: () => Promise<void> }[]
 }
