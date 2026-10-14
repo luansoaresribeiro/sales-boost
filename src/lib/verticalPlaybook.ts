@@ -64,6 +64,14 @@ export interface CatalogSchema {
   catalogLabel: string // vocabulary.catalog, ex: "Meus imóveis" — nome da aba/menu
   required: CatalogField[]
   optional: CatalogField[]
+  // Importar do portal (ficha: config.catalog_import). Sem a chave, a tela
+  // não mostra o botão de importar.
+  importMap?: CatalogImportMap
+}
+export interface CatalogImportMap {
+  source: string
+  fields: Record<string, string>
+  select: Record<string, { from: string; match: [string, string][] }>
 }
 
 // Busca o schema do catálogo (campos + nomes) da ficha do setor. 'generico'
@@ -73,7 +81,7 @@ export async function fetchCatalogSchema(verticalKey: string): Promise<CatalogSc
   if (verticalKey === 'generico') return null
   try {
     const { data } = await supabase.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
-    const config = (data?.config ?? {}) as { catalog_fields?: { required?: CatalogField[]; optional?: CatalogField[] }; vocabulary?: { item?: string; catalog?: string } }
+    const config = (data?.config ?? {}) as { catalog_fields?: { required?: CatalogField[]; optional?: CatalogField[] }; vocabulary?: { item?: string; catalog?: string }; catalog_import?: CatalogImportMap }
     const required = config.catalog_fields?.required ?? []
     const optional = config.catalog_fields?.optional ?? []
     if (required.length === 0 && optional.length === 0) return null
@@ -81,6 +89,7 @@ export async function fetchCatalogSchema(verticalKey: string): Promise<CatalogSc
       itemLabel: config.vocabulary?.item ?? 'Item',
       catalogLabel: config.vocabulary?.catalog ?? 'Catálogo',
       required, optional,
+      importMap: config.catalog_import?.fields ? config.catalog_import : undefined,
     }
   } catch { return null }
 }
@@ -101,6 +110,15 @@ export async function fetchSetupConfig(verticalKey: string): Promise<SetupConfig
       minItems: Number.isInteger(n) && n >= 1 && n <= 10 ? n : DEFAULT_SETUP_CONFIG.minItems,
     }
   } catch { return DEFAULT_SETUP_CONFIG }
+}
+
+// Título do card do item a partir dos campos (usado no cadastro manual e na
+// importação do portal).
+export function titleFromFields(fields: Record<string, unknown>, fallback: string): string {
+  const tipo = fields.tipo ? String(fields.tipo) : ''
+  const bairro = fields.bairro ? String(fields.bairro) : ''
+  if (tipo && bairro) return `${tipo} em ${bairro}`
+  return tipo || bairro || fallback
 }
 
 // Limpa os valores de campo do catálogo contra o schema real antes de

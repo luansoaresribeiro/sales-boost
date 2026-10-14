@@ -1049,3 +1049,10 @@ grátis de 30 s, acima — mantidos como histórico):
   quando há estratégia ativa (o dono pode desligar no interruptor). Vídeo
   (custa) e DM continuam dependendo do dono. Detalhes em
   [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md).
+- **Portal de imóveis entra pelo XML do CRM (VRSync), não por API do
+  portal** — 2026-10-14 (pedido do dono: "vamos puxar o portal também").
+  ZAP/VivaReal não têm API pública de leitura; o caminho legítimo e grátis
+  é o mesmo link XML que o CRM do corretor já manda pros portais. Foto
+  sempre a real do anúncio; campo que o anúncio não traz fica vazio (nunca
+  inventa número). O dono escolhe o que importar. Sincronização automática
+  fica pra depois.

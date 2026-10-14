@@ -3,10 +3,11 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { processImageTo4x5 } from '../../../lib/imageProcessing'
 import { catalogMinPhotos } from '../../../lib/setupRules'
-import { bi, sanitizeCatalogValues, type CatalogSchema, type CatalogField } from '../../../lib/verticalPlaybook'
+import { bi, sanitizeCatalogValues, titleFromFields, type CatalogSchema, type CatalogField } from '../../../lib/verticalPlaybook'
 import { CARD, MUTED, BORDER, D, inputStyle, SUPABASE_URL } from './shared'
 import { ImageModal } from './TestingArea'
 import ItemVideos from './ItemVideos'
+import CatalogImport from './CatalogImport'
 import { useLang } from '../../../contexts/LanguageContext'
 
 const TX = {
@@ -36,12 +37,6 @@ interface Photo { url: string; path: string }
 interface ItemMeta { photos?: Photo[]; fields?: Record<string, unknown> }
 interface CatalogItem { id: string; title: string; image_url: string | null; meta: ItemMeta | null; created_at: string }
 
-function titleFromFields(fields: Record<string, unknown>, fallback: string): string {
-  const tipo = fields.tipo ? String(fields.tipo) : ''
-  const bairro = fields.bairro ? String(fields.bairro) : ''
-  if (tipo && bairro) return `${tipo} em ${bairro}`
-  return tipo || bairro || fallback
-}
 
 function FieldInput({ field, value, onChange }: { field: CatalogField; value: unknown; onChange: (v: unknown) => void }) {
   const { lang } = useLang()
@@ -273,9 +268,12 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
       </div>}
 
       {!creating ? (
-        <button onClick={() => setCreating(true)} style={{ padding: '9px 18px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12.5px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontFamily: D, marginBottom: '18px' }}>
-          {tx.add}{schema.itemLabel.toLowerCase()}
-        </button>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-start', marginBottom: '18px' }}>
+          <button onClick={() => setCreating(true)} style={{ padding: '9px 18px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12.5px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontFamily: D }}>
+            {tx.add}{schema.itemLabel.toLowerCase()}
+          </button>
+          {!setupMode && schema.importMap && <CatalogImport companyId={companyId} schema={schema} onImported={load} />}
+        </div>
       ) : (
         <div style={{ padding: '16px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', marginBottom: '18px' }}>
           <div style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>{tx.newItem}{schema.itemLabel.toLowerCase()}</div>

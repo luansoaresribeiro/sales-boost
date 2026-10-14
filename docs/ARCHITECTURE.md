@@ -387,6 +387,17 @@ engagement_events (id, company_id, automation_id, channel, ig_user,
   `supabase db query --linked` antes de assumir estrutura.
 - i18n via `src/i18n.ts` (dashboard usa `src/i18n-dash.ts`) — inconsistente
   em componentes mais novos.
+- **Importar do portal (2026-10-14):** `portal-import` lê o XML VRSync
+  (padrão ZAP/VivaReal) que o CRM do corretor já gera pros portais — grátis,
+  sem API paga. Ações `preview` (lista os anúncios e guarda o link em
+  `company_integrations`, type `portal_feed`) e `photo` (proxy da foto,
+  porque o CDN do CRM não libera CORS). Proteção de proxy: só https, sem IP
+  interno, redirect validado, teto de tamanho. O dono escolhe quais anúncios
+  importar em Agente de Dados → Catálogo (`CatalogImport.tsx`); as fotos
+  passam pelo mesmo corte 4:5 do upload manual e o item guarda
+  `meta.source.listing_id` (evita importar 2x). O mapa anúncio → campos fica
+  na ficha (`config.catalog_import`). Conta vitrine recebe 402. Ainda **não
+  sincroniza sozinho** — reimportar é manual.
 
 ## Variáveis de ambiente
 
