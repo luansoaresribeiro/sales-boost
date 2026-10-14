@@ -2,11 +2,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { advanceKit, KIT_CAP, KIT_PHOTOS, monthCount, startKit, type Creative } from '../_shared/freeKit.ts'
 import type { TourRow } from '../_shared/tourEngine.ts'
 
-// Kit grátis da conta (decisões do dono 2026-10-09 e 2026-10-11,
-// docs/DECISIONS.md): 2 fotos de cômodos → 1 vídeo "drone" de cada + 1 foto de
-// destaque → 1 criativo de design (foto real tratada pela Higgsfield + texto
-// do nosso modelo de arte). Motor em _shared/freeKit.ts. 1 kit por conta, teto
-// global FREE_VIDEO_MONTHLY_CAP (30) por mês somando os kits do diagnóstico.
+// Kit grátis da conta (decisões do dono 2026-10-09, 2026-10-11 e 2026-10-14,
+// docs/DECISIONS.md): 1 foto de destaque → foto real tratada pela Higgsfield
+// (1 chamada paga) → 3 artes com o texto e o tamanho de cada variação da ficha
+// (config.gift_creative.variants), impressas pelo nosso render-format. Kits
+// antigos (2 vídeos drone + 1 criativo) continuam aparecendo. Motor em
+// _shared/freeKit.ts. 1 kit por conta, teto global FREE_VIDEO_MONTHLY_CAP
+// (30) por mês somando os kits do diagnóstico.
 //
 // O kit pode ter nascido no DIAGNÓSTICO (diagnosis-gift, antes da conta): na
 // primeira consulta da conta, ele é ligado à empresa aqui.
@@ -15,8 +17,8 @@ import type { TourRow } from '../_shared/tourEngine.ts'
 // video_tours (fotos, trechos, gravação, criativo).
 //
 // actions:
-//  - start {photo_urls: string[3]}: 2 cômodos + 1 destaque; valida, reserva e começa
-//  - status: avança; devolve vídeos e o criativo final quando prontos
+//  - start {photo_urls: string[1]}: a foto de destaque; valida, reserva e começa
+//  - status: avança; devolve as artes (e os vídeos dos kits antigos) quando prontos
 //  - coupon_seen: marca companies.coupon_offer_shown_at (1x) — conta os 7 dias do cupom
 
 const cors = {
@@ -31,13 +33,24 @@ function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 }
 
-// Texto do criativo: da ficha (regra 6), nunca da IA (regra 4), sem números (regra 5).
-async function creativeFields(admin: Any, verticalKey: string | null, city: string | null): Promise<Record<string, string>> {
+// Texto e tamanho de cada arte: da ficha (regra 6), nunca da IA (regra 4), sem
+// números (regra 5). Ficha sem `variants`: 1 arte com o texto antigo.
+// Stories: o Instagram cobre o topo (barra de progresso/perfil) e o rodapé
+// (caixa de resposta) — o texto fica no meio.
+const storySafe = (w: number, h: number) => ({ top: Math.round(h * 0.14), right: Math.round(w * 0.08), bottom: Math.round(h * 0.2), left: Math.round(w * 0.08) })
+interface Variant { fields: Record<string, string>; width: number; height: number }
+async function creativeVariants(admin: Any, verticalKey: string | null, city: string | null): Promise<Variant[]> {
   const { data } = verticalKey ? await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).maybeSingle() : { data: null }
-  const g = ((data?.config ?? {}) as { gift_creative?: Record<string, string> }).gift_creative ?? {}
+  type Raw = { tag?: string; eyebrow?: string; headline?: string; offer?: string; cta?: string; width?: number; height?: number; scale?: number }
+  const g = ((data?.config ?? {}) as { gift_creative?: Raw & { variants?: Raw[] } }).gift_creative ?? {}
   const cidade = String(city ?? '').split(/[/,]/)[0].trim()
-  const fill = (v?: string) => String(v ?? '').replace('{cidade}', cidade).trim()
-  return { eyebrow: fill(g.eyebrow), headline: fill(g.headline), cta: fill(g.cta) }
+  const fill = (v?: string) => String(v ?? '').replace('{cidade}', cidade).replace(/\s+/g, ' ').trim()
+  const size = (v: unknown, d: number) => (Number.isFinite(Number(v)) && Number(v) >= 600 && Number(v) <= 1920 ? Number(v) : d)
+  const raw = Array.isArray(g.variants) && g.variants.length ? g.variants.slice(0, 3) : [g]
+  return raw.map(r => ({
+    fields: { tag: fill(r.tag), eyebrow: fill(r.eyebrow), headline: fill(r.headline), offer: fill(r.offer), cta: fill(r.cta), scale: String(Number(r.scale) || 1) },
+    width: size(r.width, 1080), height: size(r.height, 1350),
+  })).filter(v => v.fields.headline)
 }
 
 Deno.serve(async (req) => {
@@ -90,53 +103,63 @@ Deno.serve(async (req) => {
       const prefix = (tour.assembly?.outputs?.[0]?.path as string | undefined)?.split('/')[1] ?? company.id
       const view = await advanceKit(admin, supabaseUrl, serviceKey, tour as TourRow & { creative: Creative | null }, company.vertical_key, prefix)
 
-      // Criativo: foto tratada pronta → imprime o texto (render-format, com o login da própria pessoa).
+      // Foto tratada pronta → imprime as artes (render-format, com o login da
+      // própria pessoa). Kit antigo (com vídeos) que já tem a arte: nada a fazer.
       let creative = view.creative
+      const artKit = (tour.clips ?? []).length === 0
       if (creative?.status === 'completed' && creative.enhanced_url && !creative.final_url) {
         try {
-          const fields = await creativeFields(admin, company.vertical_key, company.city)
+          const variants = await creativeVariants(admin, company.vertical_key, company.city)
+          const urls = (creative.final_urls ?? []).slice(0, variants.length)
           // Setor sem texto na ficha: entrega a foto tratada sem texto (nada de texto genérico).
-          if (!fields.headline) {
-            creative = { ...creative, final_url: creative.enhanced_url }
-            await admin.from('video_tours').update({ creative }).eq('id', tour.id)
-          } else {
-            const r = await fetch(`${supabaseUrl}/functions/v1/render-format`, {
-              method: 'POST', headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ template: 'photo', background: creative.enhanced_url, fields, width: 1080, height: 1350, save: false }),
-            })
-            const out = await r.json().catch(() => ({})) as { url?: string; error?: string }
-            // 3 falhas seguidas: entrega a foto tratada sem texto (melhor que esperar pra sempre).
-            const tries = (creative.render_attempts ?? 0) + 1
-            if (out.url) creative = { ...creative, final_url: out.url }
-            else {
-              console.log('[trial-video] criativo: render falhou', tries, r.status, out.error ?? '')
-              creative = tries >= 3 ? { ...creative, render_attempts: tries, final_url: creative.enhanced_url } : { ...creative, render_attempts: tries }
-            }
-            await admin.from('video_tours').update({ creative }).eq('id', tour.id)
+          if (!variants.length) creative = { ...creative, final_url: creative.enhanced_url, final_urls: [creative.enhanced_url] }
+          else {
+            const enhanced = creative.enhanced_url
+            const done = await Promise.all(variants.map(async (v, i) => {
+              if (urls[i]) return urls[i]
+              try {
+                const r = await fetch(`${supabaseUrl}/functions/v1/render-format`, {
+                  method: 'POST', headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ template: 'photo', background: enhanced, fields: v.fields, width: v.width, height: v.height, save: false, ...(v.height / v.width > 1.6 ? { safe: storySafe(v.width, v.height) } : {}) }),
+                })
+                const out = await r.json().catch(() => ({})) as { url?: string; error?: string }
+                if (!out.url) console.log('[trial-video] arte: render falhou', i, r.status, out.error ?? '')
+                return out.url ?? null
+              } catch (e) { console.log('[trial-video] arte: render falhou', i, String(e)); return null }
+            }))
+            // 6 rodadas com falha (~1 min de consultas): a arte que faltar vira a
+            // foto tratada sem texto (melhor que esperar pra sempre). Queda de
+            // rede também conta como rodada.
+            const tries = (creative.render_attempts ?? 0) + (done.some(u => !u) ? 1 : 0)
+            const final = tries >= 6 ? done.map(u => u ?? enhanced) : done
+            creative = { ...creative, render_attempts: tries, final_urls: final, ...(final.every(Boolean) ? { final_url: final[0] } : {}) }
           }
-        } catch (e) { console.log('[trial-video] criativo: render falhou', String(e)) }
+          await admin.from('video_tours').update({ creative }).eq('id', tour.id)
+        } catch (e) { console.log('[trial-video] arte: render falhou', String(e)) }
       }
-      const creativeOut = { creative_status: creative?.status ?? null, creative_url: creative?.final_url ?? null }
+      const creativeUrls = creative?.final_url ? ((creative.final_urls?.length ? creative.final_urls : [creative.final_url]).filter(Boolean) as string[]) : []
+      const creativeOut = { creative_status: creative?.status ?? null, creative_url: creativeUrls[0] ?? null, creative_urls: creativeUrls }
 
       if (view.status === 'failed') {
         await admin.from('trial_video_claims').delete().eq('id', claim.id)
         return json({ status: 'failed', reason: 'generation' })
       }
-      if (view.status === 'completed') {
+      // Kit de artes: só fica pronto quando as artes estão impressas.
+      if (view.status === 'completed' && (!artKit || creativeUrls.length)) {
         if (claim.status !== 'completed') {
           await admin.from('trial_video_claims').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', claim.id)
-          console.log('[trial-video] vídeos prontos', company.id, tour.id, view.total)
+          console.log('[trial-video] kit pronto', company.id, tour.id, artKit ? 'artes' : 'vídeos', view.total)
         }
         return json({ status: 'completed', video_urls: view.video_urls, ...creativeOut })
       }
-      return json({ status: 'processing', done: view.done, total: view.total, ...creativeOut })
+      return json({ status: 'processing', done: artKit ? 0 : view.done, total: view.total, ...creativeOut })
     }
 
     // action 'start'
-    if (company.plan && company.plan !== 'free') return json({ error: 'Seu plano já inclui vídeos todo mês.' }, 400)
-    if (claim) return json({ error: 'Os vídeos grátis desta conta já foram usados.', status: claim.status }, 409)
+    if (company.plan && company.plan !== 'free') return json({ error: 'Seu plano já inclui criativos todo mês.' }, 400)
+    if (claim) return json({ error: 'O kit grátis desta conta já foi usado.', status: claim.status }, 409)
     const photos = Array.isArray(body.photo_urls) ? body.photo_urls.map(String) : []
-    if (photos.length !== KIT_PHOTOS) return json({ error: `Escolha exatamente ${KIT_PHOTOS} fotos.` }, 400)
+    if (photos.length !== KIT_PHOTOS) return json({ error: KIT_PHOTOS === 1 ? 'Escolha 1 foto.' : `Escolha exatamente ${KIT_PHOTOS} fotos.` }, 400)
     const prefix = `${supabaseUrl}/storage/v1/object/public/post-images/renders/${company.id}/`
     if (photos.some(p => !p.startsWith(prefix) || p.includes('..'))) return json({ error: 'Foto inválida.' }, 400)
 
@@ -146,11 +169,11 @@ Deno.serve(async (req) => {
     }
 
     const { data: ins, error: insErr } = await admin.from('trial_video_claims').insert({ company_id: company.id, status: 'claimed' }).select('id').single()
-    if (insErr) return insErr.code === '23505' ? json({ error: 'Os vídeos grátis desta conta já foram usados.' }, 409) : json({ error: insErr.message }, 500)
-    const r = await startKit(admin, { photos, verticalKey: company.vertical_key, companyId: company.id })
+    if (insErr) return insErr.code === '23505' ? json({ error: 'O kit grátis desta conta já foi usado.' }, 409) : json({ error: insErr.message }, 500)
+    const r = await startKit(admin, { photos, companyId: company.id })
     if ('error' in r) { await admin.from('trial_video_claims').delete().eq('id', ins.id); return json({ error: r.error }, r.status) }
     await admin.from('trial_video_claims').update({ job_ref: `tour:${r.id}`, updated_at: new Date().toISOString() }).eq('id', ins.id)
-    return json({ status: 'processing', done: 0, total: KIT_PHOTOS - 1 })
+    return json({ status: 'processing', done: 0, total: 1 })
   } catch (err) {
     console.error('trial-video error:', err)
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)

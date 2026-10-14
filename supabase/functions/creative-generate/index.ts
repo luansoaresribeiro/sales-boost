@@ -204,6 +204,65 @@ async function generateImage(companyId: string, businessType: string | null, evo
   } catch (e) { console.error('generateImage error:', e); return null }
 }
 
+// ── Vault com foto REAL + Higgsfield (pedido do dono, 2026-10-14) ──────────
+// Setor cuja ficha pede `real_photo_first` (ex.: imóveis): o post genérico
+// usa uma foto REAL do catálogo, tratada pela Higgsfield (Qwen Image 3 Edit:
+// só luz, cor e nitidez — mesmo tratamento do criativo do kit grátis), em
+// vez de imagem inventada pela OpenAI. Texto continua só via render-format
+// ou legenda (regra 4). Sem foto real cadastrada → cai no fluxo antigo.
+const RETOUCH_ENDPOINT = '/alibaba/qwen-image-3/edit'
+const RETOUCH_PROMPT = 'Professional real-estate photo retouch of this exact place. Improve exposure and white balance, brighten the shadows, ' +
+  'make the natural light warm and inviting, increase clarity and sharpness, straighten vertical lines. Keep everything else identical: ' +
+  'do not add, remove, move or change any furniture, object, wall, floor, window, door, view or architecture. No text, no letters, no logos, no watermark.'
+const RETOUCH_NEGATIVE = 'added furniture, removed objects, changed layout, extra windows, text, letters, logo, watermark, people, distortion'
+
+async function fetchRealPhotoPool(admin: SupaClient, company: Company): Promise<string[]> {
+  try {
+    const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', company.vertical_key ?? 'generico').eq('enabled', true).maybeSingle()
+    if ((pb?.config as { real_photo_first?: boolean } | null)?.real_photo_first !== true) return []
+    const { data } = await admin.from('marketing_ai_knowledge').select('meta').eq('company_id', company.id).eq('kind', 'product')
+    const urls: string[] = []
+    for (const r of (data ?? []) as { meta: { photos?: { url?: string }[] } | null }[]) for (const ph of r.meta?.photos ?? []) if (ph?.url) urls.push(ph.url)
+    for (let k = urls.length - 1; k > 0; k--) { const m = Math.floor(Math.random() * (k + 1)); [urls[k], urls[m]] = [urls[m], urls[k]] }
+    return urls
+  } catch { return [] }
+}
+
+// Trata a foto real na Higgsfield e guarda no nosso Storage (o link deles
+// expira). Espera até ~75s; se não der, devolve null e quem chamou usa a foto
+// real sem tratamento (nunca trava o post).
+async function retouchRealPhoto(admin: SupaClient, companyId: string, photo: string): Promise<string | null> {
+  const cred = (Deno.env.get('HF_CREDENTIALS') ?? '').trim()
+  if (!cred) return null
+  const headers = { Authorization: `Key ${cred}`, 'Content-Type': 'application/json' }
+  try {
+    const res = await fetch(`https://api.higgsfield.ai${RETOUCH_ENDPOINT}`, {
+      method: 'POST', headers, signal: AbortSignal.timeout(30_000),
+      body: JSON.stringify({ prompt: RETOUCH_PROMPT, negative_prompt: RETOUCH_NEGATIVE, image_urls: [photo], resolution: '1k', aspect_ratio: '3:4', enable_thinking: false, prompt_extend: false }),
+    })
+    const out = await res.json().catch(() => ({})) as { request_id?: string }
+    if (!res.ok || !out.request_id) { console.log('[vault-real] higgsfield recusou', res.status); return null }
+    const deadline = Date.now() + 75_000
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 5000))
+      const st = await fetch(`https://api.higgsfield.ai/requests/${encodeURIComponent(out.request_id)}/status`, { headers, signal: AbortSignal.timeout(20_000) })
+      if (!st.ok) continue
+      const d = await st.json() as { status?: string; images?: { url?: string }[] }
+      const url = d.images?.[0]?.url
+      if (d.status === 'completed' && url) {
+        const img = await fetch(url, { signal: AbortSignal.timeout(60_000) })
+        if (!img.ok) return null
+        const path = `renders/${companyId}/vault-real-${crypto.randomUUID()}.png`
+        const { error } = await admin.storage.from('post-images').upload(path, new Uint8Array(await img.arrayBuffer()), { contentType: img.headers.get('content-type') ?? 'image/png', upsert: false })
+        if (error) { console.log('[vault-real] upload falhou', error.message); return null }
+        return admin.storage.from('post-images').getPublicUrl(path).data.publicUrl as string
+      }
+      if (['failed', 'nsfw', 'canceled'].includes(String(d.status))) return null
+    }
+  } catch (e) { console.log('[vault-real] falhou', String(e)) }
+  return null
+}
+
 // Modelos de imagem disponíveis pro Diretor escolher — os MESMOS templates
 // reais de "Gerar imagem de formato" (formatTemplates/render-format), não
 // uma lista solta desconectada ("livre" é o equivalente conceitual de
@@ -580,6 +639,19 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   // que ensina a IA a tentar "escrever" a frase na foto (ver NO_TEXT_RULE).
   const evoke = () => (idea ?? '').slice(0, 400) || 'foto do negócio'
   const conceptHint = PHOTO_HINT[visualSystemTitle]
+  // Foto real primeiro (setor com real_photo_first + catálogo com fotos).
+  const realPool = opts.skipImage ? [] : await fetchRealPhotoPool(admin, company)
+  let realIdx = 0
+  const nextReal = () => (realPool.length ? realPool[realIdx++ % realPool.length] : null)
+  const pic = async (ev: string, hint?: string): Promise<string | null> => {
+    const real = nextReal()
+    if (real) return (await retouchRealPhoto(admin, company.id, real)) ?? real
+    return generateImage(company.id, company.business_type, ev, hint, brandStyle, company.business_description ?? undefined)
+  }
+  // Slide de carrossel: foto real sem tratamento (1 chamada paga por slide
+  // seria caro demais); sem foto real, o fluxo antigo.
+  const slidePic = async (ev: string, hint?: string): Promise<string | null> =>
+    nextReal() ?? generateImage(company.id, company.business_type, ev, hint, brandStyle, company.business_description ?? undefined)
 
   if (!opts.skipImage) {
     if (fmt === 'carrossel') {
@@ -591,7 +663,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
         // Só `s.image` (a descrição visual do slide, escrita pro Copywriter
         // EM INGLÊS especificamente pra isso) ou `idea` — NUNCA `s.text` (é
         // o texto que aparece NO slide, copy de verdade, ver NO_TEXT_RULE).
-        const urls = await Promise.all(rawSlides.map(s => generateImage(company.id, company.business_type, String(s.image ?? idea ?? ''), conceptHint, brandStyle, company.business_description ?? undefined)))
+        const urls = await Promise.all(rawSlides.map(s => slidePic(String(s.image ?? idea ?? ''), conceptHint)))
         slides = rawSlides.map((s, i) => ({ text: String(s.text ?? ''), image_prompt: String(s.image ?? ''), image_url: urls[i] }))
         mainImage = slides.find(s => s.image_url)?.image_url ?? null
       }
@@ -606,33 +678,33 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
         // meio da frase pra caber (era o bug real da imagem quebrada).
         const text = capWords(String(post.card_text ?? caption ?? idea ?? ''), 180)
         mainImage = await renderGraphicCard(opts, company.id, 'tweet', { text, name: company.business_name, handle: slugHandle(company.business_name) }, cardBrand)
-        if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), undefined, brandStyle, company.business_description ?? undefined)
+        if (!mainImage) mainImage = await pic(evoke(), undefined)
       } else if (template === 'product' && product?.image_url) {
         // Produto real já cadastrado — zero geração de imagem, reusa a foto de verdade.
         const ctaText = capWords(String(post.card_cta ?? ''), 28)
         mainImage = await renderGraphicCard(opts, company.id, 'product', {
           productImage: product.image_url, name: product.title, price: '', cta: ctaText,
         }, cardBrand)
-        if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), undefined, brandStyle, company.business_description ?? undefined)
+        if (!mainImage) mainImage = await pic(evoke(), undefined)
       } else if (template === 'problem') {
         mainImage = await renderGraphicCard(opts, company.id, 'problem', {
           problem: capWords(String(post.card_problem ?? ''), 140),
           reframe: capWords(String(post.card_reframe ?? ''), 100),
           insight: capWords(String(post.card_insight ?? ''), 100),
         }, cardBrand)
-        if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), conceptHint, brandStyle, company.business_description ?? undefined)
+        if (!mainImage) mainImage = await pic(evoke(), conceptHint)
       } else if (template === 'faq') {
         mainImage = await renderGraphicCard(opts, company.id, 'faq', {
           question: capWords(String(post.card_question ?? ''), 90),
           answer: capWords(String(post.card_answer ?? ''), 140),
         }, cardBrand)
-        if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), conceptHint, brandStyle, company.business_description ?? undefined)
+        if (!mainImage) mainImage = await pic(evoke(), conceptHint)
       } else if (template === 'trend') {
         const items = String(post.card_items ?? '').split('|').map(s => s.trim()).filter(Boolean).slice(0, 5).join('\n')
         mainImage = await renderGraphicCard(opts, company.id, 'trend', {
           title: capWords(String(post.card_title ?? ''), 60), items,
         }, cardBrand)
-        if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), conceptHint, brandStyle, company.business_description ?? undefined)
+        if (!mainImage) mainImage = await pic(evoke(), conceptHint)
       } else if (template === 'market_watch' && realStat) {
         // Número SEMPRE o real (fetchRealStat) — a IA só escreve headline/insight ao redor dele.
         mainImage = await renderGraphicCard(opts, company.id, 'market_watch', {
@@ -640,21 +712,21 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
           insight: capWords(String(post.card_insight ?? ''), 100),
           value: realStat.value, source: realStat.label,
         }, cardBrand)
-        if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), conceptHint, brandStyle, company.business_description ?? undefined)
+        if (!mainImage) mainImage = await pic(evoke(), conceptHint)
       } else if (template === 'review' && realReview) {
         // Nenhum campo aqui vem da IA — avaliação real (fetchRealReview) direto pro card.
         mainImage = await renderGraphicCard(opts, company.id, 'review', {
           text: realReview.text, author: realReview.author, stars: realReview.stars, source: realReview.source,
         }, cardBrand)
-        if (!mainImage) mainImage = await generateImage(company.id, company.business_type, evoke(), conceptHint, brandStyle, company.business_description ?? undefined)
+        if (!mainImage) mainImage = await pic(evoke(), conceptHint)
       } else {
         // "livre" — foto realista e específica, escolhida com intenção (não é fallback). Legenda conta a história.
-        mainImage = await generateImage(company.id, company.business_type, evoke(), conceptHint, brandStyle, company.business_description ?? undefined)
+        mainImage = await pic(evoke(), conceptHint)
       }
     } else {
       // reel/story (só existe em Campanhas) — ainda 1 imagem estática (não
       // geramos vídeo de verdade), mesmo caminho do "livre".
-      mainImage = await generateImage(company.id, company.business_type, evoke(), conceptHint, brandStyle, company.business_description ?? undefined)
+      mainImage = await pic(evoke(), conceptHint)
     }
   }
   // Rede de segurança final: nunca deixa o post sem imagem NENHUMA. O
@@ -946,8 +1018,14 @@ Deno.serve(async (req) => {
       ])
       const off = new Set(((offRows ?? []) as { company_id: string }[]).map(r => r.company_id))
       const ids = new Set(((onRows ?? []) as { company_id: string }[]).map(r => r.company_id))
-      for (const r of (stratRows ?? []) as { company_id: string; content_plan: ContentPlan | null }[]) {
-        if (!off.has(r.company_id) && (r.content_plan?.weekly_mix?.length ?? 0) > 0) ids.add(r.company_id)
+      // Liga sozinho só pra quem PAGOU (assinatura) ou teve acesso liberado à
+      // mão — conta antiga sem assinatura não entra sem o dono ligar o
+      // interruptor (regra do dono, 2026-10-14: "liga quando pagar").
+      const candidates = ((stratRows ?? []) as { company_id: string; content_plan: ContentPlan | null }[])
+        .filter(r => !off.has(r.company_id) && (r.content_plan?.weekly_mix?.length ?? 0) > 0).map(r => r.company_id)
+      if (candidates.length) {
+        const { data: paidRows } = await admin.from('companies').select('id').in('id', candidates).or('stripe_subscription_id.not.is.null,manual_access.eq.true')
+        for (const r of (paidRows ?? []) as { id: string }[]) ids.add(r.id)
       }
       const configs = [...ids].map(company_id => ({ company_id }))
       let companies = 0, planned = 0, failed = 0

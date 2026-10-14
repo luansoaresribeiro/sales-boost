@@ -154,6 +154,17 @@ texto do `render-format`). `trial-video` agora pede 3 `photo_urls` (2 cômodos
 + 1 destaque) e o kit também pode nascer no cadastro do diagnóstico
 (`diagnosis-gift`). Motor em `_shared/freeKit.ts`. Ver
 [DECISIONS.md](DECISIONS.md) "Presente no diagnóstico".
+**Divergência (2026-10-14):** o kit virou **1 foto → 3 artes**, sem vídeo.
+`trial-video` pede 1 `photo_urls`; a linha em `video_tours` nasce com
+`clips: []` e o andamento é o do tratamento da foto (`creative`). As artes
+ficam em `creative.final_urls` (uma por variação de
+`config.gift_creative.variants`). Ver [DECISIONS.md](DECISIONS.md) "Kit
+grátis: 1 foto → 3 artes".
+Notas do QA (2026-10-14): tratamento preso há mais de 20 min vira falha (a
+pessoa pode tentar de novo); arte que não imprimir em 6 consultas seguidas
+sai como a foto tratada sem texto. No caminho do diagnóstico, o aviso diz
+"pronto" quando a foto está tratada — as artes são impressas na primeira
+visita ao painel (alguns segundos de "processando").
 
 
 ## Estúdio de vídeo na VPS (2026-10-12)
@@ -209,3 +220,15 @@ Comandos (rodar no terminal da Hostinger):
 - Teste no ensaio (1 geração, estilo Moderno, foto de corredor quase vazio):
   sofá/almofadas/quadro entraram, porta/espelho/piso iguais. O
   enquadramento muda um pouco (saída 3:4) — documentado como divergência.
+
+## Vault com foto real (2026-10-14)
+
+- `creative-generate` (`generateForCompany`): quando a ficha tem
+  `config.real_photo_first = true` e o catálogo tem fotos, a imagem de
+  cada post genérico vem de uma foto real sorteada do catálogo, tratada
+  pela Higgsfield (`/alibaba/qwen-image-3/edit`, 1k, 3:4) e guardada em
+  `post-images/renders/<empresa>/vault-real-*.png`.
+- Espera até ~75s pelo tratamento; se não vier, usa a foto real crua
+  (nunca trava o post). Carrossel: foto real crua em cada slide.
+- Custo: 1 edição por post genérico. Sem teto próprio ainda — o volume é o
+  do Vault (já limitado pelo plano).

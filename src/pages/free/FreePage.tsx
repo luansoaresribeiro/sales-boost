@@ -2,8 +2,8 @@
 // pagar). Desde 2026-10-13 a conta NÃO é mais presa aqui — navega pelo painel em
 // somente visualização (docs/DECISIONS.md) — e esta página é um destino: o
 // pop-up do kit leva pra cá, e "Ver planos" leva pra /gratis#plano.
-//  - Quem veio do diagnóstico grátis tem o kit (2 vídeos + 1 criativo, decisão
-//    2026-10-11); quando fica pronto mostra o que o plano libera e o cupom.
+//  - Quem veio do diagnóstico grátis tem o kit (1 foto → 3 artes, decisão
+//    2026-10-14); quando fica pronto mostra o que o plano libera e o cupom.
 //  - Quem criou a conta direto não tem kit: vê só os planos.
 // Os dados adicionais (/setup) só são pedidos depois de pagar. Quem decide se a
 // conta é vitrine é isShowcaseMode (lib/setupGate.ts).
@@ -29,9 +29,9 @@ const TX = {
   pt: {
     logout: 'Sair', back: '← Painel', tag: 'Seu acesso grátis',
     h1Plan: 'Escolha seu plano', subPlan: 'Com o plano, o Sales Boost cria, publica e aprende por você — e nada vai ao ar sem a sua aprovação.',
-    h1: 'Seu kit grátis: 2 vídeos + 1 criativo', h1Done: 'Seu kit grátis está pronto 🎉',
-    sub: 'Com fotos reais do seu imóvel: 2 vídeos com movimento de câmera tipo drone e 1 criativo com acabamento profissional — sem inventar nada.',
-    steps: ['Escolha 2 fotos de cômodos e 1 foto de destaque', 'A IA cria o kit (leva alguns minutos)', 'Publique com "Comente QUERO" e receba os interessados'],
+    h1: 'Seu kit grátis: 3 artes da sua foto', h1Done: 'Seu kit grátis está pronto 🎉',
+    sub: 'Com a foto real do seu imóvel, com acabamento profissional: 2 artes pro feed e 1 pro stories, prontas pra postar — sem inventar nada.',
+    steps: ['Escolha a foto mais bonita do imóvel', 'A IA cria as 3 artes (cerca de 1 minuto)', 'Publique com "Comente QUERO" e receba os interessados'],
     next: 'Depois do kit, você vê tudo o que o Sales Boost faz com o plano — e ganha um cupom pro 1º mês.',
     unlockT: 'O que o plano libera',
     unlock: [
@@ -50,9 +50,9 @@ const TX = {
   en: {
     logout: 'Log out', back: '← Dashboard', tag: 'Your free access',
     h1Plan: 'Pick your plan', subPlan: 'With the plan, Sales Boost creates, publishes and learns for you — and nothing goes live without your approval.',
-    h1: 'Your free kit: 2 videos + 1 creative', h1Done: 'Your free kit is ready 🎉',
-    sub: 'From real photos of your property: 2 videos with drone-like camera movement and 1 creative with a professional finish — nothing made up.',
-    steps: ['Pick 2 room photos and 1 highlight photo', 'The AI creates the kit (takes a few minutes)', 'Post them with "Comment QUERO" and get interested buyers'],
+    h1: 'Your free kit: 3 designs from your photo', h1Done: 'Your free kit is ready 🎉',
+    sub: 'From the real photo of your property, with a professional finish: 2 feed designs and 1 for stories, ready to post — nothing made up.',
+    steps: ['Pick the best photo of the property', 'The AI creates the 3 designs (about 1 minute)', 'Post them with "Comment QUERO" and get interested buyers'],
     next: 'After the kit, you will see everything Sales Boost does with the plan — and get a coupon for the 1st month.',
     unlockT: 'What the plan unlocks',
     unlock: [

@@ -471,7 +471,8 @@ Aprovado:
 
 ## 2026-10-09 — Etapa 1 do tour do plano: como foi implementado
 
-- **Teto: US$ 40 por cliente por mês** (decisão do dono), somando análise de
+- **Teto: US$ 40 por cliente por mês** (decisão do dono; **subiu pra US$ 50
+  em 2026-10-14**, ver o fim deste arquivo), somando análise de
   fotos + geração (`video_tours.cost_usd`, `kind = 'plan'`). A geração é
   bloqueada antes de gastar se passar do teto (mensagem diz quanto custa e
   quanto sobra). Preço da passagem é estimado (US$ 0,108/s × 6 s); falta
@@ -745,6 +746,10 @@ grátis de 30 s, acima — mantidos como histórico):
   no resumo do teste quanto no `/gratis`.
 
 ## 2026-10-11 — Presente no diagnóstico: 2 vídeos drone + 1 criativo (decisão do dono)
+
+> **Substituído em 2026-10-14:** o kit virou **1 foto → 3 artes** (sem
+> vídeos). Ver "Kit grátis: 1 foto → 3 artes" no fim deste arquivo. O texto
+> abaixo fica como registro; kits antigos com vídeos continuam aparecendo.
 
 - **O que é:** no último passo do cadastro do diagnóstico (onde pede cidade e
   e-mail), um bloco 🎁 pede **2 fotos de cômodos + 1 foto de destaque**.
@@ -1071,3 +1076,45 @@ grátis de 30 s, acima — mantidos como histórico):
   na MESMA chamada — sem custo extra e sem mudar a regra do Vault
   automático. Conteúdo → Padrão visual → "Prévia do feed" mostra a grade
   3×3 das próximas peças com essa nota.
+- **Liga quando paga** — 2026-10-14 (regra do dono: "vai ligar quando o
+  pagamento for feito"). A primeira estratégia é criada sozinha na
+  primeira visita ao painel e o calendário automático de domingo liga
+  sozinho **só** para conta com assinatura (`stripe_subscription_id`) ou
+  acesso liberado à mão (`manual_access`). Conta antiga sem assinatura
+  (que o `hasPaidAccess` ainda trata como paga) não entra — o dono liga o
+  interruptor se quiser. Objetivo: o cliente que pagou não precisa
+  configurar nada.
+- **Vault com foto real + Higgsfield** — 2026-10-14 (pedido do dono: "o
+  vault deve ser ligado ao Higgsfield"). Setor com `real_photo_first` na
+  ficha (imóveis): o post genérico do Vault usa uma foto REAL do catálogo
+  tratada pela Higgsfield (mesmo tratamento do criativo do kit: luz, cor,
+  nitidez — nada é adicionado ou tirado) em vez de imagem inventada pela
+  OpenAI. Slides de carrossel usam a foto real sem tratamento (1 chamada
+  paga por slide sairia caro). Sem foto no catálogo ou Higgsfield fora →
+  foto real crua → fluxo antigo. Custo: 1 edição Higgsfield por post
+  genérico (o mesmo valor do criativo do kit).
+- **Celular sem zoom** — 2026-10-14. Toque duplo não dá zoom e campo de
+  texto não amplia a tela sozinho (fonte de 16px no celular). O zoom de
+  pinça continua liberado (acessibilidade).
+- **Kit grátis: 1 foto → 3 artes** — 2026-10-14 (decisão do dono: "caminho
+  A, mas precisa chamar atenção… o kit vira só 1 foto → 3 artes").
+  Substitui o kit de 2026-10-11 (2 vídeos drone + 1 criativo).
+  - O cliente manda **1 foto** (a mais bonita). A Higgsfield trata a foto
+    **1 vez** (luz, cor, nitidez — nada é adicionado ou tirado) e o nosso
+    `render-format` imprime 3 artes por cima: 2 pro feed (1080×1350) e 1 pro
+    stories (1080×1920, texto longe das bordas que o Instagram cobre).
+  - Textos, tamanhos e "letra maior" de cada arte ficam na ficha
+    (`config.gift_creative.variants`, migration
+    `20261017110000_gift_three_arts.sql`), sem número nenhum (regra 5). Pra
+    chamar atenção: selo laranja no topo (`tag`), faixa laranja (`offer`),
+    letras maiores (`scale`) e sombra mais forte embaixo.
+  - Custo por kit: **1 edição Higgsfield** (antes: 2 vídeos × US$ 0,54 + a
+    edição). As 3 artes não custam nada.
+  - Kits antigos (com vídeos) continuam aparecendo no `/gratis`.
+- **Teto de gasto por cliente: US$ 50/mês** — 2026-10-14 (dono: "o teto de
+  gasto por cliente é 50 dólares por mês"). Substitui os US$ 40. No código
+  vale hoje para os vídeos dos imóveis (`item-videos`,
+  `VIDEO_MONTHLY_CAP_USD`, padrão 50). **Divergência registrada:** o
+  tratamento de foto do Vault e o "mobiliar" ainda não entram nessa soma em
+  dólar — têm limite próprio (mobiliar: 10 fotos/mês). Juntar tudo num teto
+  único em dólar fica como próximo passo.

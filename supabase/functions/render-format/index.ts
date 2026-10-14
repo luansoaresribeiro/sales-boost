@@ -164,7 +164,9 @@ interface Safe { top: number; right: number; bottom: number; left: number }
 // areas e RECOMPÕE (não estica) o mesmo conceito. Camadas: fundo (asset/IA) +
 // scrim + componente (sticker) + logo + texto/selo/cta, tudo dentro do safe.
 function svgPhoto(f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
-  const s = W / 1080
+  // `scale` (opcional, 1 a 1,6): letras maiores pra chamar atenção (ex.: kit grátis).
+  const s = (W / 1080) * Math.min(1.6, Math.max(1, Number(f.scale) || 1))
+  const big = s > W / 1080 // letra maior → sombra de baixo mais forte (o texto continua legível)
   const leftX = safe.left, maxW = W - safe.left - safe.right
   const hs = Math.round(84 * s), lh = Math.round(hs * 1.14), es = Math.round(30 * s), ofs = Math.round(46 * s), cs = Math.round(32 * s)
   const hlLines = limitLines(wrap(f.headline || 'Sua chamada principal', hs, maxW), 3)
@@ -172,8 +174,10 @@ function svgPhoto(f: F, b: Brand, bg: string | null, logo: string | null, sticke
   const blocks: { h: number; draw: (y: number) => string }[] = []
   if (f.eyebrow) blocks.push({ h: es + gap, draw: y => block([f.eyebrow.toUpperCase()], leftX, y + es, es, b.primary, 700, 0) })
   blocks.push({ h: hlLines.length * lh + gap, draw: y => block(hlLines, leftX, y + hs, hs, '#ffffff', 700, lh) })
-  if (f.offer) { const oh = Math.round(86 * s), ow = Math.round(f.offer.length * ofs * 0.62 + 70 * s); blocks.push({ h: oh + gap, draw: y => `<rect x="${leftX}" y="${y}" width="${ow}" height="${oh}" rx="${Math.round(18 * s)}" fill="${b.accent || b.primary}"/>` + block([f.offer], leftX + Math.round(36 * s), y + Math.round(oh * 0.66), ofs, '#000', 700, 0) }) }
-  if (f.cta) { const ch = Math.round(72 * s), cw = Math.round(f.cta.length * cs * 0.62 + 130 * s); blocks.push({ h: ch, draw: y => `<rect x="${leftX}" y="${y}" width="${cw}" height="${ch}" rx="${Math.round(ch / 2)}" fill="#ffffff"/>` + block([f.cta], leftX + Math.round(38 * s), y + Math.round(ch * 0.66), cs, '#000', 700, 0) + arrowGlyph(leftX + cw - Math.round(45 * s), y + Math.round(ch * 0.5), Math.round(12 * s), '#000') }) }
+  // Pílulas nunca passam da margem: texto comprido encolhe a letra pra caber.
+  const fit = (t: string, size: number, pad: number) => Math.min(size, Math.floor((maxW - pad) / Math.max(1, t.length * 0.62)))
+  if (f.offer) { const ofs2 = fit(f.offer, ofs, 70 * s), oh = Math.round(86 * s), ow = Math.min(maxW, Math.round(f.offer.length * ofs2 * 0.62 + 70 * s)); blocks.push({ h: oh + gap, draw: y => `<rect x="${leftX}" y="${y}" width="${ow}" height="${oh}" rx="${Math.round(18 * s)}" fill="${b.accent || b.primary}"/>` + block([f.offer], leftX + Math.round(36 * s), y + Math.round(oh * 0.66), ofs2, '#000', 700, 0) }) }
+  if (f.cta) { const cs2 = fit(f.cta, cs, 130 * s), ch = Math.round(72 * s), cw = Math.min(maxW, Math.round(f.cta.length * cs2 * 0.62 + 130 * s)); blocks.push({ h: ch, draw: y => `<rect x="${leftX}" y="${y}" width="${cw}" height="${ch}" rx="${Math.round(ch / 2)}" fill="#ffffff"/>` + block([f.cta], leftX + Math.round(38 * s), y + Math.round(ch * 0.66), cs2, '#000', 700, 0) + arrowGlyph(leftX + cw - Math.round(45 * s), y + Math.round(ch * 0.5), Math.round(12 * s), '#000') }) }
   const total = blocks.reduce((a, bl) => a + bl.h, 0)
   let y = H - safe.bottom - total
   const overlay = blocks.map(bl => { const svg = bl.draw(y); y += bl.h; return svg }).join('')
@@ -181,11 +185,17 @@ function svgPhoto(f: F, b: Brand, bg: string | null, logo: string | null, sticke
   const logoSvg = logo ? `<image href="${logo}" x="${W - safe.right - logoW}" y="${safe.top}" width="${logoW}" height="${logoH}" preserveAspectRatio="xMidYMid meet"/>` : ''
   const stW = Math.round(W * 0.24)
   const stickerSvg = sticker ? `<image href="${sticker}" x="${safe.left}" y="${safe.top}" width="${stW}" height="${stW}" preserveAspectRatio="xMidYMid meet"/>` : ''
+  // Selo no topo (opcional, ex.: kit grátis): pílula na cor da marca pra
+  // chamar atenção no feed. Só sem sticker (os dois ocupam o mesmo canto).
+  const ts = fit(f.tag ?? '', Math.round(28 * s), 64 * s), th = Math.round(64 * s), tw = Math.min(maxW, Math.round((f.tag ?? '').length * ts * 0.66 + 64 * s))
+  const tagSvg = f.tag && !sticker
+    ? `<rect x="${safe.left}" y="${safe.top}" width="${tw}" height="${th}" rx="${Math.round(th / 2)}" fill="${b.primary}"/>` + block([f.tag.toUpperCase()], safe.left + Math.round(32 * s), safe.top + Math.round(th * 0.66), ts, '#000', 700, 0)
+    : ''
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-<defs><linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1"><stop offset="0.35" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.9"/></linearGradient></defs>
+<defs><linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1"><stop offset="${big ? 0.25 : 0.35}" stop-color="#000" stop-opacity="0"/><stop offset="${big ? 0.7 : 1}" stop-color="#000" stop-opacity="${big ? 0.8 : 0.9}"/><stop offset="1" stop-color="#000" stop-opacity="0.9"/></linearGradient></defs>
 ${bg ? `<image href="${bg}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/>` : `<rect width="${W}" height="${H}" fill="${b.bg || '#0E0B0A'}"/>`}
 <rect width="${W}" height="${H}" fill="url(#scrim)"/>
-${logoSvg}${stickerSvg}
+${logoSvg}${stickerSvg}${tagSvg}
 ${overlay}
 </svg>`
   return { svg, w: W, h: H }

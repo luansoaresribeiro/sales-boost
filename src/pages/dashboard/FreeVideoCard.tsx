@@ -1,7 +1,7 @@
-// Kit grátis do acesso grátis (decisões do dono 2026-10-09 e 2026-10-11,
-// docs/DECISIONS.md): 2 fotos de cômodos → 1 vídeo "drone" de cada + 1 foto de
-// destaque → 1 criativo de design (supabase/functions/trial-video; 1 kit por
-// conta, teto global de 30/mês). Se a pessoa mandou as fotos no cadastro do
+// Kit grátis do acesso grátis (decisões do dono 2026-10-09, 2026-10-11 e
+// 2026-10-14, docs/DECISIONS.md): 1 foto de destaque → 3 artes prontas pra
+// postar (supabase/functions/trial-video; 1 kit por conta, teto global de
+// 30/mês). Kits antigos (2 vídeos + 1 criativo) continuam aparecendo. Se a pessoa mandou as fotos no cadastro do
 // diagnóstico, o kit já vem pronto (ou em andamento) aqui. É ISCA, não o imóvel
 // inteiro: vai pro Instagram com "Comente QUERO". Todas as fotos passam pelo
 // mesmo recorte 4:5 (processImageTo4x5). Quando ficam prontos, abre o popup do cupom (desconto
@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { processImageTo4x5 } from '../../lib/imageProcessing'
-import { KIT_PHOTOS, KIT_ROOMS } from '../../lib/giftKit'
+import { KIT_ARTS, KIT_PHOTOS } from '../../lib/giftKit'
 import KitPhotoPicker from '../../components/KitPhotoPicker'
 import { useCompany } from '../../contexts/CompanyContext'
 import { brl, PRICING, usePlanTier } from '../../lib/pricing'
@@ -25,17 +25,18 @@ const POLL_MS = 10_000
 const TX = {
   pt: {
     title: '🎁 Seu kit grátis',
-    intro: `Escolha ${KIT_ROOMS} fotos reais dos cômodos mais bonitos (cada uma vira um vídeo com movimento de câmera tipo drone) e 1 foto de destaque (vira um criativo com acabamento profissional, pronto pra postar). Nada é inventado e a IA não escreve na foto.`,
+    intro: `Escolha 1 foto real do imóvel — a mais bonita. Ela ganha acabamento profissional (luz, cor e nitidez) e vira ${KIT_ARTS} artes prontas pra postar: 2 pro feed e 1 pro stories. Nada é inventado e a IA não escreve na foto.`,
     tips: 'Mostre só uma parte do imóvel pra gerar vontade: publique com "Comente QUERO" e o interessado pede o resto na DM. Dica: fotos bem iluminadas e sem pessoas.',
-    count: (n: number) => `${n} de ${KIT_PHOTOS} fotos`,
-    create: 'Criar meu kit →', uploading: 'Enviando suas fotos…',
-    processing: 'Seus vídeos e seu criativo estão sendo criados. Leva alguns minutos — esta tela atualiza sozinha.',
+    count: (n: number) => (KIT_PHOTOS === 1 ? (n ? 'Foto escolhida' : 'Nenhuma foto escolhida') : `${n} de ${KIT_PHOTOS} fotos`),
+    create: 'Criar minhas artes →', uploading: 'Enviando sua foto…',
+    processing: 'Suas artes estão sendo criadas. Leva cerca de 1 minuto — esta tela atualiza sozinha.',
     progress: (d: number, t: number) => `${d} de ${t} vídeos prontos`,
     ready: 'Seu kit está pronto!', download: 'Baixar', seeOffer: 'Ver o que o plano faz por você →',
     room: (n: number) => `Cômodo ${n}`, creative: 'Criativo de design', creativeWait: 'Seu criativo está ficando pronto…', creativeFail: 'O criativo não ficou bom desta vez — seus vídeos estão aí.',
-    cap: 'Os vídeos grátis deste mês acabaram. O seu entra na fila do próximo mês — ou ative o plano e receba agora.',
-    failed: 'Não deu certo com essas fotos. Tente de novo, com fotos bem iluminadas e sem texto por cima.',
-    errGeneric: 'Não consegui iniciar seu vídeo agora. Tente de novo em alguns minutos.',
+    art: (n: number, story: boolean) => `Arte ${n} — ${story ? 'stories' : 'feed'}`,
+    cap: 'Os kits grátis deste mês acabaram. O seu entra na fila do próximo mês — ou ative o plano e receba agora.',
+    failed: 'Não deu certo com essa foto. Tente de novo, com uma foto bem iluminada e sem texto por cima.',
+    errGeneric: 'Não consegui começar agora. Tente de novo em alguns minutos.',
     activate: 'Ativar meu plano →',
     mTitle: 'Gostou? Imagine isso todo mês.',
     mSub: 'Com o plano, o Sales Boost cuida do seu marketing — e você só aprova.',
@@ -49,17 +50,18 @@ const TX = {
   },
   en: {
     title: '🎁 Your free kit',
-    intro: `Choose ${KIT_ROOMS} real photos of the most beautiful rooms (each becomes a video with drone-like camera movement) and 1 highlight photo (becomes a creative with a professional finish, ready to post). Nothing is made up and the AI never writes on the photo.`,
+    intro: `Choose 1 real photo of the property — the best one. It gets a professional finish (light, color and sharpness) and becomes ${KIT_ARTS} ready-to-post designs: 2 for the feed and 1 for stories. Nothing is made up and the AI never writes on the photo.`,
     tips: 'Show only part of the property to spark interest: post it with "Comment QUERO" and interested people ask for the rest in DMs. Tip: well-lit photos with no people.',
-    count: (n: number) => `${n} of ${KIT_PHOTOS} photos`,
-    create: 'Create my kit →', uploading: 'Uploading your photos…',
-    processing: 'Your videos and your creative are being created. It takes a few minutes — this card updates by itself.',
+    count: (n: number) => (KIT_PHOTOS === 1 ? (n ? 'Photo selected' : 'No photo selected') : `${n} of ${KIT_PHOTOS} photos`),
+    create: 'Create my designs →', uploading: 'Uploading your photo…',
+    processing: 'Your designs are being created. It takes about 1 minute — this card updates by itself.',
     progress: (d: number, t: number) => `${d} of ${t} videos ready`,
     ready: 'Your kit is ready!', download: 'Download', seeOffer: 'See what the plan does for you →',
     room: (n: number) => `Room ${n}`, creative: 'Design creative', creativeWait: 'Your creative is almost ready…', creativeFail: "The creative didn't turn out well this time — your videos are here.",
-    cap: "This month's free videos are gone. Yours goes to next month's queue — or activate the plan and get it now.",
-    failed: "Those photos didn't work. Try again with well-lit photos and no text on them.",
-    errGeneric: "I couldn't start your video right now. Try again in a few minutes.",
+    art: (n: number, story: boolean) => `Design ${n} — ${story ? 'stories' : 'feed'}`,
+    cap: "This month's free kits are gone. Yours goes to next month's queue — or activate the plan and get it now.",
+    failed: "That photo didn't work. Try again with a well-lit photo and no text on it.",
+    errGeneric: "I couldn't start right now. Try again in a few minutes.",
     activate: 'Activate my plan →',
     mTitle: 'Like it? Imagine this every month.',
     mSub: 'With the plan, Sales Boost runs your marketing — you just approve.',
@@ -97,9 +99,13 @@ export default function FreeVideoCard({ companyId, onActivate, onState }: {
   const [state, setState] = useState<State>('loading')
   const [videoUrls, setVideoUrls] = useState<string[]>([])
   const videoUrl = videoUrls[0] ?? null
+  // Kit de artes (sem vídeo): as 3 artes impressas.
+  const [arts, setArts] = useState<string[]>([])
+  const [storyArts, setStoryArts] = useState<Record<string, boolean>>({})
+  const ready = !!videoUrl || arts.length > 0
   const [msg, setMsg] = useState('')
   const [modal, setModal] = useState(false)
-  // 2 cômodos + 1 foto de destaque, cada uma no seu lugar.
+  // A foto de destaque (mesmo componente que já aceitou várias).
   const [files, setFiles] = useState<(File | null)[]>(() => Array(KIT_PHOTOS).fill(null))
   const picked = files.filter((f): f is File => !!f)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
@@ -111,8 +117,9 @@ export default function FreeVideoCard({ companyId, onActivate, onState }: {
 
   const applyStatus = (d: Record<string, unknown>, openModal: boolean) => {
     if ('creative_status' in d) setCreative({ status: typeof d.creative_status === 'string' ? d.creative_status : null, url: typeof d.creative_url === 'string' ? d.creative_url : null })
-    if (d.status === 'completed' && Array.isArray(d.video_urls) && d.video_urls.length) {
-      setVideoUrls(d.video_urls.map(String)); setState('completed')
+    const artUrls = !(Array.isArray(d.video_urls) && d.video_urls.length) && Array.isArray(d.creative_urls) ? d.creative_urls.map(String) : []
+    if (d.status === 'completed' && ((Array.isArray(d.video_urls) && d.video_urls.length) || artUrls.length)) {
+      setVideoUrls(Array.isArray(d.video_urls) ? d.video_urls.map(String) : []); setArts(artUrls); setState('completed')
       if (openModal) setModal(true)
     } else if (d.status === 'processing') {
       if (typeof d.done === 'number' && typeof d.total === 'number') setProgress({ done: d.done, total: d.total })
@@ -163,7 +170,7 @@ export default function FreeVideoCard({ companyId, onActivate, onState }: {
       if (status === 429 && data.status === 'cap_reached') { setState('cap'); return }
       if (status === 409) { applyStatus((await callFn({ action: 'status' })).data, false); return }
       if (status >= 400) { setMsg(typeof data.error === 'string' ? data.error : tx.errGeneric); setState('error'); return }
-      setProgress({ done: 0, total: typeof data.total === 'number' ? data.total : KIT_ROOMS }); setState('processing')
+      setProgress({ done: 0, total: typeof data.total === 'number' ? data.total : 1 }); setState('processing')
     } catch {
       setMsg(tx.errGeneric); setState('error')
     }
@@ -196,7 +203,7 @@ export default function FreeVideoCard({ companyId, onActivate, onState }: {
           <style>{'@keyframes fvspin{to{transform:rotate(360deg)}}'}</style>
           <div>
             <p style={{ fontSize: '13px', color: MUTED, lineHeight: 1.6, margin: 0 }}>{tx.processing}</p>
-            {progress && <p style={{ fontSize: '12px', color: ORANGE, fontWeight: 700, margin: '4px 0 0' }}>{tx.progress(progress.done, progress.total)}</p>}
+            {progress && progress.total > 1 && <p style={{ fontSize: '12px', color: ORANGE, fontWeight: 700, margin: '4px 0 0' }}>{tx.progress(progress.done, progress.total)}</p>}
           </div>
         </div>
       )}
@@ -205,6 +212,26 @@ export default function FreeVideoCard({ companyId, onActivate, onState }: {
         <>
           <p style={{ fontSize: '13px', color: MUTED, lineHeight: 1.6, margin: '0 0 14px' }}>{tx.cap}</p>
           <button style={btn} onClick={activate}>{tx.activate}</button>
+        </>
+      )}
+
+      {state === 'completed' && ready && (
+        <>
+          {arts.length > 0 && <>
+            <div style={{ fontSize: '13px', color: '#4ade80', fontWeight: 700, marginBottom: '10px' }}>{tx.ready}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', maxWidth: '560px', alignItems: 'start' }}>
+              {arts.map((u, i) => (
+                <div key={u + i}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'white', marginBottom: '5px' }}>{tx.art(i + 1, !!storyArts[u])}</div>
+                  <img src={u} alt={tx.art(i + 1, !!storyArts[u])} style={{ width: '100%', height: 'auto', borderRadius: '12px', background: '#000', display: 'block' }}
+                    onLoad={e => { const im = e.currentTarget; if (im.naturalHeight / im.naturalWidth > 1.6) setStoryArts(m => (m[u] ? m : { ...m, [u]: true })) }} />
+                  <a href={u} download target="_blank" rel="noreferrer" style={{ fontSize: '12px', color: ORANGE }}>{tx.download}</a>
+                </div>
+              ))}
+            </div>
+            <p style={{ fontSize: '12px', color: MUTED, lineHeight: 1.5, margin: '10px 0 0' }}>{tx.tips}</p>
+            <button style={{ ...btn, marginTop: '12px' }} onClick={() => setModal(true)}>{tx.seeOffer}</button>
+          </>}
         </>
       )}
 
@@ -242,14 +269,16 @@ export default function FreeVideoCard({ companyId, onActivate, onState }: {
         </>
       )}
 
-      {modal && videoUrl && (
+      {modal && ready && (
         <div role="dialog" aria-modal="true" onClick={() => setModal(false)}
           style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', overflowY: 'auto' }}>
           <div onClick={e => e.stopPropagation()}
             style={{ position: 'relative', width: '100%', maxWidth: '460px', background: CARD, border: '1px solid rgba(255,109,41,0.35)', borderRadius: '18px', padding: '22px', fontFamily: D, boxShadow: '0 24px 80px rgba(0,0,0,0.5)' }}>
             <button onClick={() => setModal(false)} aria-label={tx.close}
               style={{ position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.06)', color: MUTED, cursor: 'pointer' }}>✕</button>
-            <video src={videoUrl} autoPlay muted loop playsInline style={{ width: '100%', maxHeight: '38vh', objectFit: 'cover', borderRadius: '12px', background: '#000', display: 'block', marginBottom: '14px' }} />
+            {videoUrl
+              ? <video src={videoUrl} autoPlay muted loop playsInline style={{ width: '100%', maxHeight: '38vh', objectFit: 'cover', borderRadius: '12px', background: '#000', display: 'block', marginBottom: '14px' }} />
+              : <img src={arts[0]} alt="" style={{ width: '100%', maxHeight: '38vh', objectFit: 'cover', borderRadius: '12px', background: '#000', display: 'block', marginBottom: '14px' }} />}
             <div style={{ fontSize: '19px', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>{tx.mTitle}</div>
             <div style={{ fontSize: '12.5px', color: MUTED, marginBottom: '12px' }}>{tx.mSub}</div>
             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>

@@ -1,18 +1,18 @@
 /**
  * diagnosis-gift — o presente do diagnóstico (decisão do dono 2026-10-11,
- * docs/DECISIONS.md). No cadastro a pessoa manda 2 fotos de cômodos + 1 foto de
- * destaque; junto com o diagnóstico já começamos o kit grátis (2 vídeos drone
- * + 1 criativo de design, _shared/freeKit.ts). A conta ainda não existe: o kit
+ * docs/DECISIONS.md; desde 2026-10-14 o kit é 1 foto → 3 artes). No cadastro
+ * a pessoa manda 1 foto de destaque; junto com o diagnóstico já começamos o
+ * kit grátis (_shared/freeKit.ts). A conta ainda não existe: o kit
  * fica preso ao diagnóstico e o trial-video liga à empresa quando ela é criada.
  *
  * actions (todas com {diagnostic_id}):
- *  - upload_urls: links temporários pra enviar as 3 fotos (gift/<id>/1..3.jpg).
+ *  - upload_urls: links temporários pra enviar a(s) foto(s) (gift/<id>/1.jpg).
  *    Só pra diagnóstico novo (até 30 min) e sem kit ainda.
- *  - start: confere as 3 fotos, as travas (1 presente por e-mail e por
+ *  - start: confere a(s) foto(s), as travas (1 presente por e-mail e por
  *    Instagram, teto do mês) e começa o kit.
  *  - status: avança e devolve {status, done, total, video_urls, creative}.
  *
- * Fotos sempre reais (regra 4); vídeo e tratamento nunca escrevem texto.
+ * Fotos sempre reais (regra 4); o tratamento nunca escreve texto.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { advanceKit, KIT_CAP, KIT_PHOTOS, monthCount, startKit, type Creative } from '../_shared/freeKit.ts'
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     if (action === 'start') {
       if (tour) return json({ status: 'started' })
       if (age > START_MS) return json({ error: 'Este diagnóstico é antigo.' }, 410)
-      // As 3 fotos têm que estar lá (e não podem ser enormes).
+      // A(s) foto(s) têm que estar lá (e não podem ser enormes).
       const { data: files } = await admin.storage.from(BUCKET).list(`gift/${diag.id}`)
       const byName = new Map((files ?? []).map((f: Any) => [f.name, f]))
       for (let i = 0; i < KIT_PHOTOS; i++) {
@@ -84,9 +84,8 @@ Deno.serve(async (req) => {
         if ((count ?? 0) > 0) return json({ status: 'already_used' }, 409)
       }
       if (await monthCount(admin) >= KIT_CAP) { console.log('[diagnosis-gift] teto mensal'); return json({ status: 'cap_reached' }, 429) }
-      const { data: bt } = await admin.from('business_types').select('vertical_key').eq('label', diag.business_type ?? '').maybeSingle()
       const photos = Array.from({ length: KIT_PHOTOS }, (_, i) => admin.storage.from(BUCKET).getPublicUrl(pathOf(diag.id, i)).data.publicUrl)
-      const r = await startKit(admin, { photos, verticalKey: bt?.vertical_key ?? null, diagnosticId: diag.id })
+      const r = await startKit(admin, { photos, diagnosticId: diag.id })
       if ('error' in r) return r.status === 409 ? json({ status: 'started' }) : json({ error: r.error }, r.status)
       return json({ status: 'started' })
     }
