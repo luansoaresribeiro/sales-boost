@@ -8,6 +8,8 @@ import {
   APPROVAL_META, EXECUTION_META, APPROVAL_LABEL_EN, EXECUTION_LABEL_EN, type AgentAction,
 } from '../../lib/agentActions'
 import { useRealtime } from '../../lib/useRealtime'
+import CalendarPostModal from './marketingAi/CalendarPostModal'
+import type { TestPost } from './marketingAi/TestingArea'
 
 const EXEC_LABEL_EN: Record<string, string> = { organico: 'Organic', cliente: 'Reply to customer', campanha: 'Campaign' }
 const RISK_EN: Record<string, string> = { high: 'high', medium: 'medium', low: 'low' }
@@ -164,6 +166,35 @@ function ContentCard({ item, onApprove, onDiscard, busy, lang }: {
   )
 }
 
+// ── Peça do calendário pronta pra aprovar (marketing_ai_test_content 'vault')
+// — a mesma que aparece no Calendário da semana / Peças avulsas. Clicar abre
+// a peça (CalendarPostModal) com publicar agora / agendar / excluir.
+type CalPiece = TestPost & { kind?: string; planned_for?: string | null; recipe?: string | null }
+function PieceCard({ p, onOpen, lang }: { p: CalPiece; onOpen: () => void; lang: 'pt' | 'en' }) {
+  const day = p.planned_for ? new Date(`${p.planned_for}T12:00:00`).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : null
+  const where = day ? (lang === 'en' ? `Calendar · ${day}` : `Calendário · ${day}`) : (lang === 'en' ? 'Loose piece' : 'Peça avulsa')
+  return (
+    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '13px', padding: '16px 18px' }}>
+      <div style={{ display: 'flex', gap: '14px' }}>
+        {p.image_url && <img src={p.image_url} alt="" style={{ width: '72px', height: '72px', borderRadius: '10px', objectFit: 'cover', flexShrink: 0, border: `1px solid ${BORDER}` }} />}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
+            <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{p.recipe === 'video_imovel' ? '🎬' : '📝'} {p.idea ?? 'Post'}</div>
+            <ExecBadge kind="organico" />
+          </div>
+          <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#A78BFA', marginBottom: '6px' }}>
+            ● {lang === 'en' ? 'Ready to approve' : 'Pronta pra aprovar'}{p.quality_score != null ? ` · ${lang === 'en' ? 'score' : 'nota'} ${p.quality_score}` : ''} · {where}
+          </div>
+          {p.caption && <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.82)', lineHeight: 1.55, whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.caption}</div>}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
+        <button onClick={onOpen} style={btn(ORANGE, '#000')}>{lang === 'en' ? 'View and approve' : 'Ver e aprovar'}</button>
+      </div>
+    </div>
+  )
+}
+
 // ── Linha do histórico de execução ──────────────────────────────────────────
 function HistoryRow({ a, busy, onRetry }: { a: AgentAction; busy: boolean; onRetry: () => void }) {
   const { lang } = useLang()
@@ -202,11 +233,12 @@ export default function ApprovalsPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [contentMsg, setContentMsg] = useState('')
+  const [pieces, setPieces] = useState<CalPiece[]>([])
+  const [openPiece, setOpenPiece] = useState<CalPiece | null>(null)
 
   const token = session?.access_token ?? ''
 
   const load = useCallback(async () => {
-    setLoading(true)
     const { data: company } = await supabase.from('companies').select('id').eq('user_id', user!.id).maybeSingle()
     if (!company) { setLoading(false); return }
     setCompanyId(company.id)
@@ -214,6 +246,14 @@ export default function ApprovalsPage() {
       .select('id, idea, caption, hashtags, format, image_url, reasoning, status, created_at')
       .eq('company_id', company.id).in('status', ['idea', 'draft']).order('created_at', { ascending: false })
     setContent((c ?? []) as AiContent[])
+    // Peças do calendário/avulsas com nota boa, ainda sem decisão do dono
+    // (agendada já foi aprovada — sai daqui).
+    const [{ data: v }, { data: q }] = await Promise.all([
+      supabase.from('marketing_ai_test_content').select('*').eq('company_id', company.id).eq('status', 'vault').order('created_at', { ascending: false }).limit(40),
+      supabase.from('agent_actions').select('ref_id').eq('company_id', company.id).eq('ref_type', 'marketing_ai_test_content').eq('execution_status', 'QUEUED').not('scheduled_at', 'is', null),
+    ])
+    const queued = new Set(((q ?? []) as { ref_id: string }[]).map(r => r.ref_id))
+    setPieces(((v ?? []) as CalPiece[]).filter(p => !queued.has(p.id)))
     if (token) {
       try {
         const [p, h] = await Promise.all([
@@ -229,6 +269,7 @@ export default function ApprovalsPage() {
   useEffect(() => { if (user) void load() }, [user, load])
   // Sincronização ao vivo: novas ações/mudanças aparecem sem recarregar.
   useRealtime('agent_actions', companyId, load)
+  useRealtime('marketing_ai_test_content', companyId, load, { key: 'aprov' })
 
   const decide = async (id: string, decision: 'approve' | 'reject') => {
     if (!companyId) return
@@ -281,7 +322,7 @@ export default function ApprovalsPage() {
     setContent(prev => prev.filter(i => i.id !== id)); setBusyId(null)
   }
 
-  const nothing = !loading && pending.length === 0 && content.length === 0
+  const nothing = !loading && pending.length === 0 && content.length === 0 && pieces.length === 0
 
   return (
     <div>
@@ -300,9 +341,9 @@ export default function ApprovalsPage() {
             {/* Lista única — ações universais dos agentes + conteúdo orgânico,
                 combinados por data, cada card já classificado (Orgânico /
                 Responder cliente / Campanha) via ExecBadge. */}
-            {(pending.length > 0 || content.length > 0) && (
+            {(pending.length > 0 || content.length > 0 || pieces.length > 0) && (
               <section style={{ marginBottom: '28px' }}>
-                <SectionTitle label={tx.toApprove} count={pending.length + content.length} />
+                <SectionTitle label={tx.toApprove} count={pending.length + content.length + pieces.length} />
                 {contentMsg && <div style={{ fontSize: '11.5px', color: contentMsg.startsWith('✓') ? GREEN : '#f87171', marginBottom: '10px' }}>{contentMsg}</div>}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {[
@@ -313,6 +354,9 @@ export default function ApprovalsPage() {
                     ...content.map(item => ({ key: `c-${item.id}`, created_at: item.created_at, node: (
                       <ContentCard key={`c-${item.id}`} item={item} busy={busyId === item.id} lang={lang}
                         onApprove={() => approveContent(item)} onDiscard={() => discardContent(item.id)} />
+                    ) })),
+                    ...pieces.map(p => ({ key: `p-${p.id}`, created_at: p.created_at, node: (
+                      <PieceCard key={`p-${p.id}`} p={p} lang={lang} onOpen={() => setOpenPiece(p)} />
                     ) })),
                   ]
                     .sort((x, y) => y.created_at.localeCompare(x.created_at))
@@ -336,6 +380,8 @@ export default function ApprovalsPage() {
                 </div>
               </section>
             )}
+
+            {openPiece && companyId && <CalendarPostModal post={openPiece} companyId={companyId} onClose={() => setOpenPiece(null)} onChanged={() => { void load() }} />}
 
             <div style={{ marginTop: '20px', fontSize: '11.5px', color: MUTED, lineHeight: 1.6, display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ color: GREEN }}>✓</span> {tx.footer}

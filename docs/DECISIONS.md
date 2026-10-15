@@ -1298,3 +1298,16 @@ grátis de 30 s, acima — mantidos como histórico):
     alteração arriscada): reconfere ao abrir a aba e antes de usar no
     calendário. Dica vencida não vai pra post até ser reconferida.
   - Custo: ~1 busca Tavily + 2 chamadas de IA por dica conferida (centavos).
+- **"Gerar agora" nas Peças avulsas + peças prontas em Aprovações** —
+  2026-10-15 (pedido do dono).
+  - Botão "⚡ Gerar uma peça agora" embaixo do calendário: o dono escolhe o
+    tipo de criativo (só os que funcionam hoje na ficha — status `live`, sem
+    DM) e, se for de imóvel, o imóvel (ou "escolher sozinho"). Sai **uma**
+    peça sem dia (`planned_for` nulo), pelo mesmo motor das vagas do
+    calendário (`creative-generate` ações `make_now_options` / `make_now` →
+    `runPlanSlot`; `catalog-package` aceita `loose: true`). Ganha nota igual.
+  - A aba Aprovações lia só a tabela antiga (`marketing_ai_content`) — as
+    peças do calendário/avulsas (`marketing_ai_test_content`, status `vault`)
+    não apareciam lá. Agora aparecem (menos as já agendadas) e o contador do
+    menu soma elas. "Ver e aprovar" abre a mesma janela do calendário
+    (publicar agora / agendar / excluir). Nada vai ao ar sem o clique do dono.

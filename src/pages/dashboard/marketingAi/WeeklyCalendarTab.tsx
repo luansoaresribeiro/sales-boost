@@ -7,6 +7,7 @@ import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import { templateLabel, type TestPost } from './TestingArea'
 import CalendarPostModal from './CalendarPostModal'
+import MakeNowPicker from './MakeNowPicker'
 import { useRealtime } from '../../../lib/useRealtime'
 
 const ORANGE = '#FF6D29'
@@ -273,10 +274,10 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
 
           <Week label={t.thisWeek} days={thisWeek} />
           <Week label={t.nextWeek} days={nextWeek} />
-          {loose.length > 0 && (
-            <div style={{ marginBottom: '20px' }}>
+          <div style={{ marginBottom: '20px' }}>
               <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>{t.loose}</div>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <MakeNowPicker token={token} onRequested={() => { void load() }} />
+              {loose.length > 0 && <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {loose.map(it => {
                   const status = scheduledIds.has(it.id) ? 'scheduled' : it.status === 'draft' && it.quality_score != null ? 'review' : it.status
                   const sm = STATUS_META[status] ?? STATUS_META.draft
@@ -290,9 +291,8 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                     </button>
                   )
                 })}
-              </div>
-            </div>
-          )}
+              </div>}
+          </div>
           {open && <CalendarPostModal post={open} companyId={companyId} onClose={() => setOpen(null)} onChanged={() => { void load() }} />}
         </>
       )}

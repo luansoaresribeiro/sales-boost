@@ -100,14 +100,18 @@ export function usePendencias() {
     let approvalsN = 0
 
     // a) Aprovações — mesma fila da ApprovalsPage (agent_actions PENDING +
-    // marketing_ai_content idea/draft).
+    // marketing_ai_content idea/draft + peças do calendário 'vault' ainda não agendadas).
     try {
-      const [a, c] = await Promise.all([
+      const [a, c, v, q] = await Promise.all([
         supabase.from('agent_actions').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('approval_status', 'PENDING'),
         supabase.from('marketing_ai_content').select('id', { count: 'exact', head: true }).eq('company_id', companyId).in('status', ['idea', 'draft']),
+        supabase.from('marketing_ai_test_content').select('id').eq('company_id', companyId).eq('status', 'vault').limit(40),
+        supabase.from('agent_actions').select('ref_id').eq('company_id', companyId).eq('ref_type', 'marketing_ai_test_content').eq('execution_status', 'QUEUED').not('scheduled_at', 'is', null),
       ])
       if (!a.error && !c.error) {
-        approvalsN = (a.count ?? 0) + (c.count ?? 0)
+        const queued = new Set(((q.data ?? []) as { ref_id: string }[]).map(r => r.ref_id))
+        const ready = ((v.data ?? []) as { id: string }[]).filter(r => !queued.has(r.id)).length
+        approvalsN = (a.count ?? 0) + (c.count ?? 0) + ready
         if (approvalsN > 0) out.push({
           id: 'aprovacoes', kind: 'aprovacoes', tone: 'amber',
           title: t.pending(approvalsN),
@@ -249,6 +253,7 @@ export function usePendencias() {
 
   useRealtime('agent_actions', companyId, refresh, { key: 'pend' })
   useRealtime('marketing_ai_content', companyId, refresh, { key: 'pend' })
+  useRealtime('marketing_ai_test_content', companyId, refresh, { key: 'pend' })
   useRealtime('marketing_ai_knowledge', companyId, refresh, { key: 'pend' })
   useRealtime('companies', companyId, refresh, { key: 'pend', column: 'id' })
 

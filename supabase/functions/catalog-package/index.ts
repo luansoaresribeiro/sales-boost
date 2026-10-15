@@ -188,6 +188,8 @@ Deno.serve(async (req) => {
     // Dia fixo (modo calendário): a peça cai no dia que a estratégia
     // reservou, em vez do primeiro espaço livre das próximas 3 semanas.
     const forcedDate = typeof body.planned_for === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.planned_for) ? body.planned_for : null
+    // Peça avulsa (botão "Gerar agora"): sem dia no calendário.
+    const loose = body.loose === true && !forcedDate
     if (!item_id) return json({ error: 'item_id obrigatório' }, 400)
 
     // Duas portas: o dono (JWT, botão "Gerar pacote") ou o Calendário da
@@ -329,11 +331,11 @@ Deno.serve(async (req) => {
           continue // pilar 'educacao' não tem receita ligada a um item específico
         }
 
-        const slot = forcedDate ? { date: forcedDate, overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
+        const slot = forcedDate || loose ? { date: forcedDate ?? '', overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
         const { data: row, error } = await admin.from('marketing_ai_test_content').insert({
           company_id: company.id, kind, idea: item.title, caption, hashtags, cta,
           format: media.length > 1 ? 'carrossel' : 'foto', image_url: media[0]?.url ?? null,
-          item_id: item.id, media, pillar: pillarKey, recipe, provider, planned_for: slot.date,
+          item_id: item.id, media, pillar: pillarKey, recipe, provider, planned_for: loose ? null : slot.date,
         }).select('id').single()
         if (error) { skipped.push({ recipe, reason: error.message }); continue }
         await scoreTestContent(supabaseUrl, serviceKey, company.id as string, row!.id as string)

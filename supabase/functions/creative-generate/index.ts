@@ -1009,7 +1009,35 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
   return { planned, days, todo: [...todo.values()] }
 }
 
+// Botão "Gerar agora" (Peças avulsas): o dono escolhe o tipo de criativo e
+// sai UMA peça fora do calendário (sem dia — date vazio), pelo mesmo motor
+// das vagas. Só tipos que funcionam hoje (status live) e não-DM. Item: o
+// escolhido pelo dono ou o menos usado com 5+ fotos reais.
+async function makeNowJob(admin: SupaClient, company: Company, formatKey: string, itemId: string | null): Promise<SlotJob | string> {
+  const formats = await fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id)
+  const f = formats.find(x => x.key === formatKey && x.status === 'live' && x.producer !== 'dm')
+  if (!f) return 'Esse tipo de criativo não está disponível agora.'
+  const job: SlotJob = { date: '', producer: f.producer as SlotJob['producer'], name: f.name, pillar: f.pillar, purpose: 'Peça avulsa pedida pelo dono', format: f.key }
+  if (f.producer === 'post') return job
+  const recipe = f.producer === 'item_video' ? VIDEO_RECIPE : f.recipe
+  if (!recipe) return 'Esse tipo de criativo ainda não tem receita pronta.'
+  const { data: rows } = await admin.from('marketing_ai_knowledge').select('id, meta').eq('company_id', company.id).eq('kind', 'product')
+  const ok = ((rows ?? []) as { id: string; meta: { photos?: unknown[] } | null }[]).filter(r => (r.meta?.photos?.length ?? 0) >= 5).map(r => r.id)
+  if (!ok.length) return 'Precisa de um imóvel com pelo menos 5 fotos reais no catálogo.'
+  let pick = itemId && ok.includes(itemId) ? itemId : null
+  if (itemId && !pick) return 'Esse imóvel não foi encontrado ou tem menos de 5 fotos.'
+  if (!pick) {
+    const since = new Date(Date.now() - 21 * 86400000).toISOString()
+    const { data: used } = await admin.from('marketing_ai_test_content').select('item_id').eq('company_id', company.id).in('item_id', ok).gte('created_at', since)
+    const n = new Map<string, number>()
+    for (const r of (used ?? []) as { item_id: string }[]) n.set(r.item_id, (n.get(r.item_id) ?? 0) + 1)
+    pick = [...ok].sort((a, b) => (n.get(a) ?? 0) - (n.get(b) ?? 0))[0]
+  }
+  return { ...job, recipe, item_id: pick }
+}
+
 // Uma vaga do calendário (chamada interna, relógio próprio de 150s).
+// date vazio = peça avulsa (botão "Gerar agora"), sem dia no calendário.
 async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Company, job: SlotJob, cronSecret: string): Promise<void> {
   try {
     if (job.producer === 'post') {
@@ -1017,13 +1045,13 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
       // liberada, sai um carrossel de slides com o mesmo propósito.
       if (job.format === FAQ_FORMAT && await runFaqSlot(admin, anthropicKey, company, job)) return
       const seed = { title: job.name, angle: `Pilar ${job.pillar}: ${job.purpose || 'serve a estratégia ativa'}${job.format === FAQ_FORMAT ? ' — dica GERAL: sem número, prazo, taxa, valor nem nome de lei (nada foi conferido em fonte oficial).' : ''}`, format: 'foto' }
-      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date, seed, deck: job.format === DECK_FORMAT || job.format === FAQ_FORMAT })
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format === DECK_FORMAT || job.format === FAQ_FORMAT })
       return
     }
     if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }
     const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/catalog-package`, {
       method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ item_id: job.item_id, only_recipe: job.recipe, planned_for: job.date, cron_secret: cronSecret, company_id: company.id }),
+      body: JSON.stringify({ item_id: job.item_id, only_recipe: job.recipe, planned_for: job.date || undefined, loose: !job.date, cron_secret: cronSecret, company_id: company.id }),
     })
     const r = await res.json().catch(() => ({})) as { error?: string; generated?: unknown[] }
     if (!res.ok || !r.generated?.length) console.error('runPlanSlot: catalog-package sem peça', company.id, job.date, job.recipe, res.status, r.error)
@@ -1079,7 +1107,7 @@ Responda SÓ em JSON: {"card_question":"...","card_answer":"...","caption":"..."
     company_id: company.id, kind: 'organico', format: 'foto', idea: tip.title.slice(0, 200),
     caption, hashtags: out.hashtags ? String(out.hashtags) : null, cta: out.cta ? String(out.cta) : null,
     image_url: url, media: [{ url, type: 'photo' }], pillar: job.pillar, recipe: FAQ_FORMAT, provider: 'faq_conferida',
-    planned_for: job.date, reasoning: badge,
+    planned_for: job.date || null, reasoning: badge,
   }).select('id').single()
   if (error || !piece) { console.error('runFaqSlot: peça não gravada', company.id, error?.message); return false }
   await admin.from('marketing_ai_knowledge').update({ meta: { ...tip.meta, used_count: (tip.meta?.used_count ?? 0) + 1 } }).eq('id', tip.id)
@@ -1118,7 +1146,7 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`, 700))
     company_id: company.id, kind: 'organico', format: 'reel', idea: `${item.title} — vídeo`,
     caption: cap.caption ? String(cap.caption) : null, hashtags: cap.hashtags ? String(cap.hashtags) : null, cta: cap.cta ? String(cap.cta) : null,
     image_url: photo, media: [{ url: photo, type: 'photo' }], item_id: item.id, pillar: job.pillar, recipe: VIDEO_RECIPE, provider: 'higgsfield',
-    planned_for: job.date, reasoning: 'Vídeo sendo feito na Higgsfield a partir de uma foto real — aparece aqui em alguns minutos.',
+    planned_for: job.date || null, reasoning: 'Vídeo sendo feito na Higgsfield a partir de uma foto real — aparece aqui em alguns minutos.',
   }).select('id').single()
   if (error || !piece) { console.error('runVideoSlot: peça não gravada', company.id, error?.message); return }
   try {
@@ -1251,6 +1279,27 @@ Deno.serve(async (req) => {
 
     // Botão manual "Planejar semana agora" (Calendário da Semana) — mesma
     // lógica do cron de domingo, só que na hora, pro dono testar/adiantar.
+    // Opções do "Gerar agora": só tipos que funcionam hoje (mesmo filtro do make_now).
+    if (body.action === 'make_now_options') {
+      const [formats, { data: rows }] = await Promise.all([
+        fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
+        admin.from('marketing_ai_knowledge').select('id, title, meta').eq('company_id', company.id).eq('kind', 'product').order('created_at', { ascending: false }),
+      ])
+      const items = ((rows ?? []) as { id: string; title: string | null; meta: { photos?: unknown[] } | null }[])
+        .filter(r => (r.meta?.photos?.length ?? 0) >= 5).map(r => ({ id: r.id, title: r.title ?? 'Imóvel' }))
+      const options = formats.filter(f => f.status === 'live' && f.producer !== 'dm' && (f.producer === 'post' || f.producer === 'item_video' || !!f.recipe))
+        .map(f => ({ key: f.key, name: f.name, producer: f.producer, surface: f.surface ?? (f.producer === 'item_video' ? 'reels' : 'feed') }))
+      return json({ ok: true, formats: options, items })
+    }
+
+    if (body.action === 'make_now') {
+      const job = await makeNowJob(admin, company, String(body.format ?? ''), typeof body.item_id === 'string' ? body.item_id : null)
+      if (typeof job === 'string') return json({ error: job }, 400)
+      // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
+      EdgeRuntime.waitUntil(runPlanSlot(admin, anthropicKey, company, job, Deno.env.get('CRON_SECRET') ?? ''))
+      return json({ ok: true, accepted: true, format: job.format, item_id: job.item_id ?? null }, 202)
+    }
+
     if (body.action === 'plan_week') {
       const result = await planWeekForCompany(admin, anthropicKey, company, { bearer, isCron: false })
       return json({ ok: true, ...result })
