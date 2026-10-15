@@ -1360,3 +1360,34 @@ grátis de 30 s, acima — mantidos como histórico):
   - Tela de Leads: selo 🌱 e filtro "Presença fraca".
   - Os 22 já rejeitados saem de `prospect_checked_places` e são reavaliados
     na próxima busca.
+- **ICP do agente de leads: Instagram sem vídeo, flopado ou mal produzido +
+  potencial; busca em lotes por bairro** — 2026-10-15 (dono: "nosso ICP
+  ideal são imobiliárias que têm contas do Instagram sem vídeo postado faz
+  tempo OU flopada OU mal produzido, COM POTENCIAL DE CRESCIMENTO";
+  "prospectar todos de uma vez possíveis e, na próxima rodada, mais").
+  - **Sinais medidos no perfil real** (Apify, 12 últimos posts):
+    - dias desde o último vídeo/Reels;
+    - engajamento médio ÷ seguidores;
+    - nota de produção 0-10 dada pela IA olhando as capas (Haiku com imagem).
+  - **Score = POTENCIAL (até 50) + OPORTUNIDADE (até 50):**
+    - potencial = nota/avaliações/avaliação recente/telefone/independente/
+      público 300+;
+    - oportunidade = sem vídeo 90+ dias (20), engajamento < 1% (15),
+      produção ≤ 6/10 (15), ou sem Instagram/parado (25 — fica abaixo de
+      quem tem Instagram ruim confirmado: "sem Instagram no site" pode só
+      ser link faltando).
+  - **"Instagram já forte" é rejeitado** (menos dor): vídeo nos últimos 30
+    dias + engajamento ≥ 2% + produção ≥ 7.
+  - **Busca:**
+    - `prospect_settings.search_areas` (bairros): "palavra em Bairro,
+      Cidade", 1 página por busca;
+    - fila em `prospect_scan_log.queue`;
+    - a função chama a si mesma (`continue_scan`) até acabar a fila ou bater
+      `max_per_night` (agora "máximo de leads por busca");
+    - sinal de vida em `heartbeat_at`;
+    - botão "Parar busca";
+    - só 1 varredura viva por vez;
+    - a próxima rodada só pega negócio novo (`prospect_checked_places`).
+  - **Custo/limite:** a conta do Apify tem teto de US$ 5/mês (visto em
+    2026-10-15: US$ 0,93 usados). Prospecção em massa depende de subir esse
+    plano — ver medição no PR.
