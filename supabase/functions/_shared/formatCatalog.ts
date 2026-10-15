@@ -72,11 +72,16 @@ export async function fetchFormatCatalog(admin: SupaClient, verticalKey: string,
       admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle(),
       admin.from('marketing_ai_knowledge').select('title, content').eq('company_id', companyId).eq('module', 'formato').order('created_at', { ascending: false }).limit(10),
     ])
-    const list = (pb?.config as { content_formats?: unknown[] } | null)?.content_formats
+    const cfg = pb?.config as { content_formats?: unknown[]; content_rules?: { disabled_formats?: unknown } } | null
+    const list = cfg?.content_formats
     for (const raw of Array.isArray(list) ? list : []) {
       const f = clean(raw)
       if (f && !out.some(o => o.key === f.key)) out.push(f)
     }
+    // Formatos desligados pela ficha (regra 6): ex. imóveis tirou o card
+    // "tipo tweet" genérico (dono, 2026-10-14) — a estratégia nem vê.
+    const off = Array.isArray(cfg?.content_rules?.disabled_formats) ? (cfg!.content_rules!.disabled_formats as unknown[]).map(String) : []
+    if (off.length) out.splice(0, out.length, ...out.filter(f => !off.includes(f.key)))
     for (const [i, row] of ((own ?? []) as { title: string | null; content: string | null }[]).entries()) {
       if (!row.title) continue
       out.push({ key: `proprio_${i + 1}`, name: `${row.title} (formato da própria empresa)`.slice(0, 120), pillar: 'qualquer', producer: 'post', status: 'live', notes: row.content?.slice(0, 200) ?? undefined })

@@ -23,6 +23,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchContentRules, ensureMinVideos, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
+import { privateFieldKeys } from '../_shared/nearbyPlaces.ts'
+import { checkAndSave, fetchFaqConfig, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -387,7 +389,7 @@ interface CardBrand { primary: string; name: string; accent?: string; text?: str
 // cron_secret+company_id (modo lote, sem usuário logado).
 async function renderGraphicCard(
   auth: { bearer: string; isCron: boolean; cronSecret?: string },
-  companyId: string, template: 'tweet' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand,
+  companyId: string, template: 'tweet' | 'slide' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand,
 ): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   if (!supabaseUrl) return null
@@ -675,7 +677,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   if (!opts.skipImage) {
     if (fmt === 'carrossel' && opts.deck) {
       const rawSlides = Array.isArray(post.slides) ? (post.slides as { text?: string }[]).filter(x => String(x.text ?? '').trim()).slice(0, 7) : []
-      const urls = await Promise.all(rawSlides.map(x => renderGraphicCard(opts, company.id, 'tweet', { text: capWords(String(x.text ?? ''), 180), name: company.business_name, handle: slugHandle(company.business_name) }, cardBrand)))
+      const urls = await Promise.all(rawSlides.map((x, i) => renderGraphicCard(opts, company.id, 'slide', { text: capWords(String(x.text ?? ''), 180), name: company.business_name, page: String(i + 1), total: String(rawSlides.length) }, cardBrand)))
       slides = rawSlides.map((x, i) => ({ text: String(x.text ?? ''), image_prompt: '', image_url: urls[i] }))
       mainImage = slides.find(x => x.image_url)?.image_url ?? null
     } else if (fmt === 'carrossel') {
@@ -968,7 +970,12 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
   for (const slot of slots) {
     const recipe = slot.producer === 'item_package' ? recipeOf.get(slot.format) : slot.producer === 'item_video' ? VIDEO_RECIPE : undefined
     if (alreadyFilled(slot.date, recipe, slot.producer)) continue
-    if (slot.producer === 'post') { jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format: slot.format }); continue }
+    if (slot.producer === 'post') {
+      // Formato que a ficha desligou (ex.: card "tipo tweet" em imóveis) e
+      // ainda está numa estratégia antiga → sai como carrossel de slides.
+      const format = formats.some(f => f.key === slot.format) ? slot.format : DECK_FORMAT
+      jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format }); continue
+    }
     if (slot.producer === 'item_video') {
       const itemId = pickItem()
       if (!itemId) { addTodo(slot); continue }
@@ -1006,8 +1013,11 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
 async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Company, job: SlotJob, cronSecret: string): Promise<void> {
   try {
     if (job.producer === 'post') {
-      const seed = { title: job.name, angle: `Pilar ${job.pillar}: ${job.purpose || 'serve a estratégia ativa'}`, format: 'foto' }
-      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date, seed, deck: job.format === DECK_FORMAT })
+      // Vaga de dica: usa uma dica JÁ conferida (aba Dicas e FAQ). Sem dica
+      // liberada, sai um carrossel de slides com o mesmo propósito.
+      if (job.format === FAQ_FORMAT && await runFaqSlot(admin, anthropicKey, company, job)) return
+      const seed = { title: job.name, angle: `Pilar ${job.pillar}: ${job.purpose || 'serve a estratégia ativa'}${job.format === FAQ_FORMAT ? ' — dica GERAL: sem número, prazo, taxa, valor nem nome de lei (nada foi conferido em fonte oficial).' : ''}`, format: 'foto' }
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date, seed, deck: job.format === DECK_FORMAT || job.format === FAQ_FORMAT })
       return
     }
     if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }
@@ -1018,6 +1028,63 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
     const r = await res.json().catch(() => ({})) as { error?: string; generated?: unknown[] }
     if (!res.ok || !r.generated?.length) console.error('runPlanSlot: catalog-package sem peça', company.id, job.date, job.recipe, res.status, r.error)
   } catch (e) { console.error('runPlanSlot falhou', company.id, job.date, e) }
+}
+
+// Vaga "Dica/FAQ conferida": pega a dica liberada menos usada (geral,
+// aprovada pelo dono, ou conferida em fonte oficial dentro do prazo —
+// vencida é reconferida antes), faz o card de pergunta e resposta
+// (render-format "faq") e a legenda só com o que a dica diz. O card nunca
+// pode trazer número que a dica não tem. Devolve false se não tiver dica.
+const FAQ_FORMAT = 'dica_faq'
+async function runFaqSlot(admin: SupaClient, anthropicKey: string, company: Company, job: SlotJob): Promise<boolean> {
+  const cfg = await fetchFaqConfig(admin, company.vertical_key ?? null)
+  if (!cfg) return false
+  const { data } = await admin.from('marketing_ai_knowledge').select('id, title, content, meta').eq('company_id', company.id).eq('module', 'dados').eq('kind', 'faq')
+  const rows = (data ?? []) as FaqRow[]
+  const ctx = { anthropicKey, tavilyKey: Deno.env.get('TAVILY_API_KEY'), cfg, city: company.city ?? '', companyId: company.id }
+  // Vencidas: reconfere (no máximo 2 por vaga) antes de escolher.
+  for (const r of rows.filter(r => isDue(r.meta)).slice(0, 2)) Object.assign(r, await checkAndSave(admin, r, ctx))
+  const tip = rows.filter(r => isPublishable(r.meta)).sort((a, b) => (a.meta?.used_count ?? 0) - (b.meta?.used_count ?? 0))[0]
+  if (!tip) return false
+  const chk = tip.meta!.check!
+  const label = cfg.categories.find(c => c.key === tip.meta?.category)?.label ?? 'Dica'
+  let out: { card_question?: string; card_answer?: string; caption?: string; hashtags?: string; cta?: string } = {}
+  try {
+    out = parseObj(await callClaude(anthropicKey, `Transforme esta dica de imóveis num post de Instagram de "${company.business_name}".
+Pergunta: ${tip.title}
+Resposta (já conferida — é a ÚNICA fonte de fatos): ${tip.content}
+${chk.source_url ? `Fonte oficial: ${chk.source_title ?? ''} (${new URL(chk.source_url).hostname})` : ''}
+
+- "card_question": a pergunta, curta (até 90 caracteres).
+- "card_answer": a resposta resumida pro card (até 130 caracteres). Copie números exatamente como estão; não acrescente nenhum número.
+- "caption": legenda que explica a resposta com calma, sem acrescentar fato, número ou lei que não esteja na resposta.${chk.source_url ? ' Termine com "Fonte: <nome do site oficial>".' : ''}
+${HONESTY_RULE} Sem emoji no card.
+Responda SÓ em JSON: {"card_question":"...","card_answer":"...","caption":"...","hashtags":"#a #b","cta":"..."}`, 900)) as typeof out
+  } catch (e) { console.error('runFaqSlot: texto falhou', company.id, e); return false }
+  const allowed = new Set(numbersIn(`${tip.title} ${tip.content}`))
+  const cardQ = String(out.card_question ?? tip.title).slice(0, 120)
+  let cardA = String(out.card_answer ?? '').slice(0, 160)
+  // Rede de segurança: número no card que a dica não tem → usa a resposta conferida.
+  if (!cardA || numbersIn(`${cardQ} ${cardA}`).some(n => !allowed.has(n))) cardA = tip.content.slice(0, 160)
+  const caption = String(out.caption ?? '').trim()
+  if (!caption || numbersIn(caption).some(n => !allowed.has(n))) { console.error('runFaqSlot: legenda com número fora da dica', company.id, tip.id); return false }
+
+  const { data: bd } = await admin.from('brand_dna').select('colors, kit').eq('company_id', company.id).maybeSingle()
+  const kit = (bd as { colors: string[] | null; kit: { colors?: { primary?: string[]; text?: string; bg?: string } } | null } | null)
+  const brand: CardBrand = { primary: kit?.kit?.colors?.primary?.[0] || kit?.colors?.[0] || '#FF6D29', name: company.business_name, text: kit?.kit?.colors?.text, bg: kit?.kit?.colors?.bg }
+  const url = await renderGraphicCard({ bearer: '', isCron: true, cronSecret: Deno.env.get('CRON_SECRET') ?? '' }, company.id, 'faq', { eyebrow: label, question: cardQ, answer: cardA }, brand)
+  if (!url) { console.error('runFaqSlot: card falhou', company.id); return false }
+  const badge = chk.status === 'geral' ? 'Dica geral (sem número nem regra).' : chk.status === 'aprovada_dono' ? 'Dica aprovada por você.' : `Conferida pela IA em ${new Date(chk.checked_at).toLocaleDateString('pt-BR')} — fonte: ${chk.source_url}`
+  const { data: piece, error } = await admin.from('marketing_ai_test_content').insert({
+    company_id: company.id, kind: 'organico', format: 'foto', idea: tip.title.slice(0, 200),
+    caption, hashtags: out.hashtags ? String(out.hashtags) : null, cta: out.cta ? String(out.cta) : null,
+    image_url: url, media: [{ url, type: 'photo' }], pillar: job.pillar, recipe: FAQ_FORMAT, provider: 'faq_conferida',
+    planned_for: job.date, reasoning: badge,
+  }).select('id').single()
+  if (error || !piece) { console.error('runFaqSlot: peça não gravada', company.id, error?.message); return false }
+  await admin.from('marketing_ai_knowledge').update({ meta: { ...tip.meta, used_count: (tip.meta?.used_count ?? 0) + 1 } }).eq('id', tip.id)
+  try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runFaqSlot: nota falhou', e) }
+  return true
 }
 
 // Vaga de vídeo: legenda (texto da IA, sem inventar) + peça no calendário com
@@ -1035,7 +1102,8 @@ async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Co
   const pool = fresh.length ? fresh : photos
   const photo = pool[Math.floor(Math.random() * pool.length)]
   const f = (item.meta?.fields ?? {}) as Record<string, unknown>
-  const facts = Object.entries(f).filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '').map(([k, v]) => `${k}: ${String(v).slice(0, 600)}`).join('\n')
+  const hidden = await privateFieldKeys(admin, company.vertical_key ?? null)
+  const facts = Object.entries(f).filter(([k, v]) => !hidden.has(k) && v !== null && v !== undefined && String(v).trim() !== '').map(([k, v]) => `${k}: ${String(v).slice(0, 600)}`).join('\n')
   let cap: Record<string, unknown> = {}
   try {
     cap = parseObj(await callClaude(anthropicKey, `Você escreve a legenda de um Reels curto (5 s) de "${company.business_name}" mostrando 1 ambiente deste imóvel real, em movimento de câmera suave.

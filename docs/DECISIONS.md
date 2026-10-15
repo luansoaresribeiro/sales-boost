@@ -1236,3 +1236,65 @@ grátis de 30 s, acima — mantidos como histórico):
   - Excluir imóvel: botão "🗑 Remover" visível no cartão e "Excluir imóvel"
     na janela de edição, sempre com confirmação. Posts já criados continuam
     no calendário.
+- **Dicas jurídicas/financeiras: a IA aprova com fonte oficial** —
+  2026-10-14 (pergunta do dono: "sobre as dicas jurídicas, tem como a IA
+  aprovar por a gente?").
+  - Dica geral (sem número nem regra) é aprovada sozinha.
+  - Dica com número, prazo, taxa ou regra: a IA busca na web (Tavily, chave
+    já em `_app_config`) e só aceita fonte oficial. Confirmou ou corrigiu →
+    selo "✓ Conferida pela IA em [data], fonte: [link]". Sem fonte oficial →
+    "precisa revisar", e só uma pessoa libera.
+  - Reconferência a cada 60 dias.
+  - Isso aprova a **dica** como fato; o **post** feito com ela continua
+    precisando da aprovação do dono (regra 1). Implementação na etapa 2 do
+    Agente de Dados ([ROADMAP.md](ROADMAP.md)).
+- **Lugares perto pelo OpenStreetMap (grátis)** — 2026-10-14 (dono: "o google
+  cobra por busca, não tem como utilizar outro sistema de graça?").
+  - Nominatim acha o ponto do imóvel; Overpass lista o que tem em volta
+    (com 2 servidores reserva, porque o principal às vezes fica ocupado).
+    Sem chave e sem custo. Crédito "© colaboradores do OpenStreetMap" na tela.
+  - Uma busca por imóvel, guardada em `meta.nearby`; só busca de novo se o
+    endereço/bairro mudar ou o dono pedir (no máximo 1x por minuto).
+  - Distância calculada em linha reta pelas coordenadas, nunca pela IA
+    (regra 5). Sem endereço exato, os posts não citam distância.
+  - Categorias, raio (1,5 km) e tags do OSM na ficha
+    (`config.nearby_places`, regra 6). O campo "Endereço" é `private`: serve
+    só pra busca, nunca vai pro prompt de legenda.
+  - O dono pode esconder um lugar; o post usa só os visíveis.
+  - "3 coisas perto" pega o lugar mais perto de cada categoria **na ordem da
+    ficha** (praia, metrô, parque…), não só o mais perto de todos — senão
+    uma cafeteria ganha da praia. Filtro de nome por categoria
+    (`name_pattern`) tira lixo do mapa (parquinho marcado como praia).
+- **Imóveis sem "post tipo tweet" e sem imagem genérica de IA** —
+  2026-10-14 (dono, com print de uma moça andando na calçada: "estamos tendo
+  posts que parecem vir do fluxo antigo, como post tweet e post gerado").
+  - "3 coisas perto" e "o que R$ compra no bairro" não geram mais cena de IA
+    (gente, padaria inventada): usam foto real do imóvel + card com os
+    lugares reais (OpenStreetMap). Sem lugares, só foto real e texto sem
+    nome de lugar.
+  - A ficha de imóveis desliga o card genérico `post_card` (o "tweet") via
+    `content_rules.disabled_formats`; as vagas dele na estratégia viraram
+    carrossel de slides (migration `20261018110000`). Estratégia antiga que
+    ainda tiver um formato desligado sai como carrossel de slides.
+  - O carrossel de slides tem template próprio (`slide` no render-format):
+    fundo da marca, frase grande, "2/5" e barra de progresso — antes cada
+    slide era um "print de tweet".
+  - O template tweet imprimia "128 Retuítes · 1.204 Curtidas · 14:22" quando
+    o campo vinha vazio — número inventado (regra 5). Agora só aparece se o
+    dono preencher (render-format e prévia da tela).
+- **Como a IA confere as dicas (implementação)** — 2026-10-15.
+  - Fonte oficial = domínio da lista da ficha (`config.faq.official_domains`:
+    gov.br, jus.br, leg.br, prefeitura.rio, carioca.rio, Caixa, Banco Central,
+    cartórios…). A busca (Tavily, chave que já existia) só pede esses sites e
+    o código confere o domínio de novo.
+  - A IA tem que copiar um trecho da fonte que sustente o veredito; se o
+    trecho não estiver no texto da fonte, a dica fica "precisa revisar"
+    (não confia na palavra da IA sem prova).
+  - Corrigida: a resposta é trocada pela versão da fonte e a antiga fica
+    visível riscada pro dono ver o que mudou.
+  - No post: o card resumido e a legenda não podem ter número que a dica
+    conferida não tenha (checagem no código); se tiverem, a peça não sai.
+  - Reconferir a cada 60 dias **sem agendamento novo** (agendamento é
+    alteração arriscada): reconfere ao abrir a aba e antes de usar no
+    calendário. Dica vencida não vai pra post até ser reconferida.
+  - Custo: ~1 busca Tavily + 2 chamadas de IA por dica conferida (centavos).
