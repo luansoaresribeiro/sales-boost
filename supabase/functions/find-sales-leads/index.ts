@@ -240,7 +240,11 @@ async function runScan(admin: SupaClient, logId: string, keys: Keys, resume: boo
     if (icp.requirePhone && !details.formatted_phone_number) { await logRejection(c, 'Sem telefone público disponível'); return 'rejected' }
     if (!details.formatted_address) { await logRejection(c, 'Sem endereço físico'); return 'rejected' }
 
-    const signals: SiteSignals = details.website
+    // Corretor muitas vezes cadastra o próprio Instagram como "site" no Google.
+    const igAsSite = details.website?.match(/https?:\/\/(?:www\.)?instagram\.com\/[a-zA-Z0-9_.]+/)?.[0] ?? null
+    const signals: SiteSignals = igAsSite
+      ? { instagram_url: igAsSite, facebook_url: null, has_whatsapp: false, has_online_ordering: false }
+      : details.website
       ? await scanWebsite(details.website)
       : { instagram_url: null, facebook_url: null, has_whatsapp: false, has_online_ordering: false }
     if (icp.requireActiveInstagram && !signals.instagram_url) { await logRejection(c, 'Sem Instagram vinculado no site'); return 'rejected' }

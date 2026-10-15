@@ -10,7 +10,7 @@
 //
 // Bairros (prospect_settings.search_areas): com lista, busca "palavra em
 // Bairro, Cidade" (1 página do Google por busca, a mais generalista das
-// palavras de cada categoria) — cobre a cidade inteira em vez dos 60
+// palavras de cada categoria, ou todas se só há 1 categoria) — cobre a cidade inteira em vez dos 60
 // resultados que o Google dá pra "Rio de Janeiro" inteiro.
 import type { IgSignals } from './igSignals.ts'
 
@@ -31,9 +31,11 @@ export function buildSearches(cities: string[], areas: string[], types: string[]
       const kws = keywordsByType.get(businessType) ?? []
       if (!kws.length) continue
       if (areas.length) {
-        // Bairro a bairro: só a palavra mais curta (mais genérica) da categoria.
-        const kw = [...kws].sort((a, b) => a.length - b.length)[0]
-        for (const area of areas) out.push({ city, area, businessType, keyword: kw })
+        // Bairro a bairro. Com 1 categoria só (hoje: corretores), usa todas as
+        // palavras dela ("corretor", "corretora", "consultor imobiliário"); com
+        // várias, só a mais curta de cada — senão o nº de buscas explode.
+        const use = types.length === 1 ? kws : [[...kws].sort((a, b) => a.length - b.length)[0]]
+        for (const area of areas) for (const kw of use) out.push({ city, area, businessType, keyword: kw })
       } else {
         for (const keyword of kws) out.push({ city, area: null, businessType, keyword })
       }

@@ -1,8 +1,8 @@
 // Diagnóstico do lead (IA) + pontuação (código, pesos configuráveis).
-// ICP (dono, 2026-10-15): imobiliária com Instagram SEM VÍDEO há tempo, OU
+// ICP (dono, 2026-10-15): CORRETOR(A) DE IMÓVEIS com Instagram SEM VÍDEO há tempo, OU
 // FLOPADO, OU MAL PRODUZIDO — COM potencial de crescimento. Score = metade
 // "potencial" (até 50) + metade "oportunidade" (até 50). A IA só julga o
-// qualitativo (é imobiliária mesmo? é rede? a produção é boa?); os números
+// qualitativo (é corretor mesmo? é rede? a produção é boa?); os números
 // vêm do Google e do Instagram reais.
 import { CONTENT_RULES, contentFacts, type IgSignals } from './igSignals.ts'
 
@@ -50,7 +50,7 @@ export async function auditLead(anthropicKey: string, input: {
   weakPresence: WeakPresence
 }): Promise<LeadAudit | null> {
   const ig = input.ig
-  const prompt = `Você é um analista de vendas do Sales Boost, uma plataforma de marketing com IA pra imobiliárias no Brasil.
+  const prompt = `Você é um analista de vendas do Sales Boost, uma plataforma de marketing com IA pra corretores de imóveis no Brasil.
 
 Avalie este negócio com base nos sinais reais coletados (nunca invente dado que não foi passado):
 
@@ -64,7 +64,7 @@ Faixa de preço no Google (0-4): ${input.priceLevel ?? 'não informado'}
 Instagram: ${!input.hasInstagram ? 'nenhum ligado ao site' : ig ? contentFacts(ig) : 'tem link, mas não deu pra ler o perfil'}
 ${input.thumbs.length ? `As ${input.thumbs.length} imagens acima são as capas dos posts mais recentes desse Instagram.` : ''}
 
-CLIENTE IDEAL do Sales Boost (decisão do dono, 2026-10-15): imobiliária independente (ou corretor/administrador de temporada) que TEM imóveis e clientes mas cujo Instagram está SEM VÍDEO há tempo, OU FLOPADO (pouco engajamento pro tamanho), OU MAL PRODUZIDO (foto escura/torta/de celular sem cuidado, arte amadora, só texto, sem padrão) — e com POTENCIAL de crescer (negócio ativo, bem avaliado, com público). Pouca presença digital também é ideal: o Sales Boost faz o marketing por ele. Instagram já forte (vídeo frequente, bom engajamento, produção profissional) tem menos dor. NÃO serve: redes/franquias grandes, portais, construtoras/incorporadoras grandes, hotéis.${input.weakPresence ? `\nESTE negócio tem presença digital fraca (${input.weakPresence === 'sem_instagram' ? 'nenhum Instagram ligado ao site' : 'Instagram sem post há mais de 120 dias'}) — trate como a oportunidade, sem tom de crítica. Se não há Instagram no site, sugira confirmar na ligação se existe um perfil.` : ''}
+CLIENTE IDEAL do Sales Boost (decisão do dono, 2026-10-15): CORRETOR(A) DE IMÓVEIS — autônomo(a) ou com equipe pequena, que decide sozinho(a) — que TEM imóveis e clientes mas cujo Instagram está SEM VÍDEO há tempo, OU FLOPADO (pouco engajamento pro tamanho), OU MAL PRODUZIDO (foto escura/torta/de celular sem cuidado, arte amadora, só texto, sem padrão) — e com POTENCIAL de crescer (negócio ativo, bem avaliado, com público). Pouca presença digital também é ideal: o Sales Boost faz o marketing por ele. Instagram já forte (vídeo frequente, bom engajamento, produção profissional) tem menos dor. Imobiliária com marca e equipe de marketing NÃO é o foco agora (o foco é a pessoa do corretor). NÃO serve: redes/franquias grandes, portais, construtoras/incorporadoras grandes, hotéis.${input.weakPresence ? `\nESTE negócio tem presença digital fraca (${input.weakPresence === 'sem_instagram' ? 'nenhum Instagram ligado ao site' : 'Instagram sem post há mais de 120 dias'}) — trate como a oportunidade, sem tom de crítica. Se não há Instagram no site, sugira confirmar na ligação se existe um perfil.` : ''}
 ${input.customInstructions ? `\nInstrução adicional do dono do Sales Boost:\n"${input.customInstructions}"\n` : ''}
 Responda SÓ com um JSON válido, sem markdown:
 - "icp_confidence" (0-100): certeza de que o lugar É DE VERDADE um "${input.targetBusinessType}" (use categorias do Google e nome).
@@ -73,7 +73,7 @@ Responda SÓ com um JSON válido, sem markdown:
 - "content_quality": ${input.thumbs.length ? 'nota 0-10 da PRODUÇÃO visual das capas (0 = amador/ruim, 10 = profissional). Avalie só o que vê: luz, enquadramento, nitidez, padrão visual, se a arte parece feita às pressas.' : 'null (não há imagens pra avaliar)'}
 - "content_issues": ${input.thumbs.length ? '1 frase com os problemas de produção que você VÊ nas capas (ou "produção boa" se estiver bom).' : 'null'}
 - "ai_summary": 2-3 frases: diagnóstico do Instagram (vídeo, engajamento, produção) e do potencial, com os números acima.
-- "ai_cold_call_notes": 2-3 frases práticas pra abordar essa imobiliária, usando a dor específica dela (ex.: "faz 7 meses sem Reels").
+- "ai_cold_call_notes": 2-3 frases práticas pra abordar esse(a) corretor(a), usando a dor específica dele(a) (ex.: "faz 7 meses sem Reels").
 
 {"icp_confidence": 0, "icp_reasons": ["..."], "is_likely_chain": false, "content_quality": null, "content_issues": null, "ai_summary": "...", "ai_cold_call_notes": "..."}`
 

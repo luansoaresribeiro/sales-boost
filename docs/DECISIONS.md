@@ -1360,8 +1360,13 @@ grátis de 30 s, acima — mantidos como histórico):
   - Tela de Leads: selo 🌱 e filtro "Presença fraca".
   - Os 22 já rejeitados saem de `prospect_checked_places` e são reavaliados
     na próxima busca.
-- **ICP do agente de leads: Instagram sem vídeo, flopado ou mal produzido +
-  potencial; busca em lotes por bairro** — 2026-10-15 (dono: "nosso ICP
+- **ICP do agente de leads: CORRETOR DE IMÓVEIS com Instagram sem vídeo,
+  flopado ou mal produzido + potencial; busca em lotes por bairro** —
+  2026-10-15. Primeiro o dono pediu imobiliárias; no mesmo dia trocou: "ao
+  invés de imobiliária deveríamos procurar corretores de imóveis, a
+  princípio com as mesmas métricas" (`business_types` = só "Corretores de
+  imóveis"; com 1 categoria a busca por bairro usa todas as palavras dela;
+  Instagram cadastrado como "site" no Google conta como Instagram). (Dono: "nosso ICP
   ideal são imobiliárias que têm contas do Instagram sem vídeo postado faz
   tempo OU flopada OU mal produzido, COM POTENCIAL DE CRESCIMENTO";
   "prospectar todos de uma vez possíveis e, na próxima rodada, mais").

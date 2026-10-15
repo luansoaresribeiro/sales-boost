@@ -1,4 +1,4 @@
--- Agente de leads — ICP novo (dono, 2026-10-15): imobiliária com Instagram
+-- Agente de leads — ICP novo (dono, 2026-10-15): CORRETOR DE IMÓVEIS com Instagram
 -- SEM VÍDEO há tempo, OU FLOPADO, OU MAL PRODUZIDO, com potencial de crescer.
 -- Varredura em lotes (continua sozinha até acabar) e busca por bairro.
 
@@ -29,3 +29,7 @@ update prospect_settings
 update prospect_settings
    set scoring_weights = '{"rating_in_range":15,"reviews_in_range":10,"recent_review":5,"has_phone":5,"independent_business":10,"has_audience":5,"no_recent_video":20,"low_engagement":15,"poor_quality":15,"weak_presence_opportunity":25,"likely_chain_penalty":-40,"instagram_active":0,"has_website":0,"no_online_ordering":0}'::jsonb
  where id = true;
+
+-- Foco em corretores de imóveis (dono, 2026-10-15: "ao invés de imobiliária
+-- deveríamos procurar corretores de imóveis, com as mesmas métricas").
+update prospect_settings set business_types = array['Corretores de imóveis'] where id = true;
