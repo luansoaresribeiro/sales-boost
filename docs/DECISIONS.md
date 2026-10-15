@@ -1282,3 +1282,19 @@ grátis de 30 s, acima — mantidos como histórico):
   - O template tweet imprimia "128 Retuítes · 1.204 Curtidas · 14:22" quando
     o campo vinha vazio — número inventado (regra 5). Agora só aparece se o
     dono preencher (render-format e prévia da tela).
+- **Como a IA confere as dicas (implementação)** — 2026-10-15.
+  - Fonte oficial = domínio da lista da ficha (`config.faq.official_domains`:
+    gov.br, jus.br, leg.br, prefeitura.rio, carioca.rio, Caixa, Banco Central,
+    cartórios…). A busca (Tavily, chave que já existia) só pede esses sites e
+    o código confere o domínio de novo.
+  - A IA tem que copiar um trecho da fonte que sustente o veredito; se o
+    trecho não estiver no texto da fonte, a dica fica "precisa revisar"
+    (não confia na palavra da IA sem prova).
+  - Corrigida: a resposta é trocada pela versão da fonte e a antiga fica
+    visível riscada pro dono ver o que mudou.
+  - No post: o card resumido e a legenda não podem ter número que a dica
+    conferida não tenha (checagem no código); se tiverem, a peça não sai.
+  - Reconferir a cada 60 dias **sem agendamento novo** (agendamento é
+    alteração arriscada): reconfere ao abrir a aba e antes de usar no
+    calendário. Dica vencida não vai pra post até ser reconferida.
+  - Custo: ~1 busca Tavily + 2 chamadas de IA por dica conferida (centavos).
