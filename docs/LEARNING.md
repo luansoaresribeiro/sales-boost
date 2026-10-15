@@ -86,6 +86,35 @@ e `fetchLearning` (lê `posts` com pilar/receita/formato,
 - Limite conhecido: "DMs" ainda não têm fonte — só existem comentários
   com intenção em `engagement_events`; DMs recebidas não são gravadas.
 
+## Memória do Agente de Conteúdo (implementado 2026-10-15)
+
+Aprende com o que **não agradou** — não depende de métrica do Instagram.
+
+- **Sinais:**
+  - peça excluída com motivo (botões: repetido, texto ruim, foto ruim,
+    informação errada, não tem a cara da marca, outro + nota opcional);
+  - legenda editada pelo dono (antes/depois);
+  - motivo das notas < 60 do avaliador (`content-test`, `scores.*.comment`).
+- **Onde mora:** `agent_memory`, `agent_role = 'conteudo_licoes'`:
+  - `fb:<peça>` (fact) = sinal;
+  - `licao:<n>` (rule) = até 8 lições em vigor;
+  - `apagada:<…>` (preference) = lição que o dono apagou e não volta.
+  - Sem tabela nova.
+- **Quando reescreve:** `creative-generate` `action: 'relearn'` logo depois de
+  um sinal; e antes do plano da semana (só se chegou sinal novo).
+  `_shared/contentLessons.ts`.
+- **Quem usa:** todo criador de peça recebe as lições no pedido à IA:
+  - `catalog-package` (legendas do pacote do imóvel);
+  - carrossel de slides / post (`generateForCompany`);
+  - dica conferida;
+  - legenda de vídeo.
+- **Onde o dono vê:** círculo 🔁 "O que a IA está aprendendo" no Agente de
+  Conteúdo — lista as lições, cada uma com 🗑.
+- **Cuidado conhecido:** o avaliador às vezes erra fato (ex.: disse que a
+  estação Antero de Quental não existe — existe). Por isso a lição só pode
+  ser sobre *como* criar (estilo, repetição, foto, tom), nunca um fato, nome
+  de lugar ou número.
+
 ## Relatório semanal (alvo, não construído)
 
 Relatório simples pro corretor no formato "seus posts geraram X

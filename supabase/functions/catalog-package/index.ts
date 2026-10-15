@@ -19,6 +19,7 @@
  * por planWeekForCompany em creative-generate, pra o cron semanal não
  * empilhar mais conteúdo em cima do que o pacote já agendou.
  */
+import { loadLessons, lessonsBlock } from '../_shared/contentLessons.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { ensureNearby, fetchNearbyConfig, fmtDistance, topPlaces } from '../_shared/nearbyPlaces.ts'
@@ -147,12 +148,25 @@ async function scoreTestContent(supabaseUrl: string, serviceKey: string, company
 
 // auth: JWT do dono (botão) ou, no modo interno do calendário, cron_secret +
 // company_id (o render-format aceita os dois).
-async function renderTweetCard(supabaseUrl: string, auth: { bearer: string } | { cronSecret: string; companyId: string; serviceKey: string }, cardText: string): Promise<string | null> {
+// Kit da Marca da empresa (cores do logo, nome, logo) — os cards saem na
+// identidade dela, não no laranja padrão do Sales Boost.
+interface CardBrand { primary: string; name: string; accent?: string; text?: string; bg?: string; logoUrl?: string }
+async function loadBrand(admin: SupaClient, companyId: string, name: string): Promise<CardBrand> {
+  const { data } = await admin.from('brand_dna').select('colors, kit, logo_url').eq('company_id', companyId).maybeSingle()
+  const bd = data as { colors: string[] | null; kit: { colors?: { primary?: string[]; accent?: string[]; text?: string; bg?: string } } | null; logo_url: string | null } | null
+  const c = bd?.kit?.colors
+  return { primary: c?.primary?.[0] || bd?.colors?.[0] || '#FF6D29', accent: c?.accent?.[0], text: c?.text, bg: c?.bg, name: name || 'Marca', logoUrl: bd?.logo_url ?? undefined }
+}
+
+// Stories "pagaria R$X?": foto REAL do imóvel com a pergunta por cima
+// (template "photo"). Antes era o card "tipo tweet" — fluxo antigo (dono,
+// 2026-10-15).
+async function renderPollCard(supabaseUrl: string, auth: { bearer: string } | { cronSecret: string; companyId: string; serviceKey: string }, photoUrl: string, fields: { eyebrow: string; headline: string; cta: string }, brand: CardBrand): Promise<string | null> {
   try {
     const internal = 'cronSecret' in auth
     const res = await fetch(`${supabaseUrl}/functions/v1/render-format`, {
       method: 'POST', headers: { Authorization: internal ? `Bearer ${auth.serviceKey}` : auth.bearer, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ template: 'tweet', kind: 'stories', fields: { card_text: cardText }, caption: cardText, save: false, ...(internal ? { cron_secret: auth.cronSecret, company_id: auth.companyId } : {}) }),
+      body: JSON.stringify({ template: 'photo', kind: 'stories', background: photoUrl, fields, brand, caption: fields.headline, save: false, ...(internal ? { cron_secret: auth.cronSecret, company_id: auth.companyId } : {}) }),
     })
     const data = await res.json().catch(() => ({})) as { url?: string }
     return res.ok && data.url ? data.url : null
@@ -161,12 +175,12 @@ async function renderTweetCard(supabaseUrl: string, auth: { bearer: string } | {
 
 // Card com lista (template "trend": chamada + itens numerados) — usado no
 // "3 coisas perto" com os lugares reais do OpenStreetMap.
-async function renderListCard(supabaseUrl: string, auth: { bearer: string } | { cronSecret: string; companyId: string; serviceKey: string }, fields: { eyebrow: string; title: string; items: string }): Promise<string | null> {
+async function renderListCard(supabaseUrl: string, auth: { bearer: string } | { cronSecret: string; companyId: string; serviceKey: string }, fields: { eyebrow: string; title: string; items: string }, brand: CardBrand): Promise<string | null> {
   try {
     const internal = 'cronSecret' in auth
     const res = await fetch(`${supabaseUrl}/functions/v1/render-format`, {
       method: 'POST', headers: { Authorization: internal ? `Bearer ${auth.serviceKey}` : auth.bearer, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ template: 'trend', kind: 'organico', fields, caption: fields.title, save: false, ...(internal ? { cron_secret: auth.cronSecret, company_id: auth.companyId } : {}) }),
+      body: JSON.stringify({ template: 'trend', kind: 'organico', fields, brand, caption: fields.title, save: false, ...(internal ? { cron_secret: auth.cronSecret, company_id: auth.companyId } : {}) }),
     })
     const data = await res.json().catch(() => ({})) as { url?: string }
     return res.ok && data.url ? data.url : null
@@ -188,6 +202,8 @@ Deno.serve(async (req) => {
     // Dia fixo (modo calendário): a peça cai no dia que a estratégia
     // reservou, em vez do primeiro espaço livre das próximas 3 semanas.
     const forcedDate = typeof body.planned_for === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.planned_for) ? body.planned_for : null
+    // Peça avulsa (botão "Gerar agora"): sem dia no calendário.
+    const loose = body.loose === true && !forcedDate
     if (!item_id) return json({ error: 'item_id obrigatório' }, 400)
 
     // Duas portas: o dono (JWT, botão "Gerar pacote") ou o Calendário da
@@ -197,16 +213,16 @@ Deno.serve(async (req) => {
     const cronSecretEnv = Deno.env.get('CRON_SECRET')
     const internal = !!cronSecretEnv && body.cron_secret === cronSecretEnv && typeof body.company_id === 'string'
     const bearer = req.headers.get('Authorization') ?? ''
-    let company: { id: string; vertical_key: string | null; city: string | null } | null = null
+    let company: { id: string; vertical_key: string | null; city: string | null; business_name: string | null } | null = null
     if (internal) {
-      const { data } = await admin.from('companies').select('id, vertical_key, city').eq('id', body.company_id as string).maybeSingle()
+      const { data } = await admin.from('companies').select('id, vertical_key, city, business_name').eq('id', body.company_id as string).maybeSingle()
       company = data
     } else {
       if (!bearer) return json({ error: 'Unauthorized' }, 401)
       const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
       const { data: { user } } = await userClient.auth.getUser()
       if (!user) return json({ error: 'Unauthorized' }, 401)
-      const { data } = await admin.from('companies').select('id, vertical_key, city').eq('user_id', user.id).maybeSingle()
+      const { data } = await admin.from('companies').select('id, vertical_key, city, business_name').eq('user_id', user.id).maybeSingle()
       company = data
     }
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
@@ -236,6 +252,11 @@ Deno.serve(async (req) => {
     // Lugares reais em volta (cache do item; busca 1x se ainda não tem).
     // Sem ficha de lugares, sem bairro ou se o mapa falhar → as receitas de
     // bairro seguem como antes (texto genérico, sem nome inventado).
+    // Memória do Agente de Conteúdo: lições do que o dono não gostou.
+    const lessonsTxt = lessonsBlock(await loadLessons(admin, company.id))
+    // Kit da Marca: carregado 1x, só se alguma receita desenhar card.
+    let brandCache: CardBrand | null = null
+    const getBrand = async () => brandCache ??= await loadBrand(admin, company!.id, String(company!.business_name ?? ''))
     let near: { top: ReturnType<typeof topPlaces>; precise: boolean } | null = null
     const loadNear = async () => {
       const cfg = await fetchNearbyConfig(admin, company!.vertical_key)
@@ -268,14 +289,14 @@ Deno.serve(async (req) => {
           const useStaged = staged.length > 0 && !!ficha.stagingDisclosure
           // Instagram aceita até 10 mídias no carrossel — corta aqui, não na publicação.
           media = [photos[0], ...(useStaged ? staged : []), ...photos.slice(1)].slice(0, 10).map(p => ({ url: p.url, type: 'photo' }))
-          const c = await writeCopy(anthropicKey, `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
+          const c = await writeCopy(anthropicKey, lessonsTxt + `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
           caption = useStaged ? `${c.caption}\n\n${ficha.stagingDisclosure}` : c.caption
           hashtags = c.hashtags; cta = c.cta
           provider = 'catalogo_real'
         } else if (recipe === 'post_detalhe_que_voce_nao_viu') {
           media = [{ url: photos[photos.length - 1].url, type: 'photo' }]
           const detalhe = fields.detalhe_que_ninguem_percebe ? String(fields.detalhe_que_ninguem_percebe) : null
-          const c = await writeCopy(anthropicKey, `Escreva um post de 1 foto destacando um detalhe do imóvel que ninguém repara de cara${detalhe ? ` (o detalhe real é: "${detalhe}")` : ' (fale de algo real do imóvel que só quem visita percebe, sem inventar um detalhe específico que não foi informado — pode ser mais genérico, tipo iluminação natural, silêncio, vista)'}. \n${fieldsLine}`)
+          const c = await writeCopy(anthropicKey, lessonsTxt + `Escreva um post de 1 foto destacando um detalhe do imóvel que ninguém repara de cara${detalhe ? ` (o detalhe real é: "${detalhe}")` : ' (fale de algo real do imóvel que só quem visita percebe, sem inventar um detalhe específico que não foi informado — pode ser mais genérico, tipo iluminação natural, silêncio, vista)'}. \n${fieldsLine}`)
           caption = c.caption; hashtags = c.hashtags; cta = c.cta
           provider = 'catalogo_real'
         } else if ((recipe === 'reels_o_que_compra_no_bairro' || recipe === 'post_3_coisas_perto') && (near ??= await loadNear()).top.length >= (recipe === 'post_3_coisas_perto' ? 3 : 1)) {
@@ -296,13 +317,13 @@ Deno.serve(async (req) => {
               // "Metrô · Antero de Quental" — a categoria entra quando o nome
               // sozinho não diz o que é (ex.: estação de metrô).
               items: near!.top.slice(0, 3).map(p => `${p.label.toLowerCase().split(/\s+/).some(w => w.length > 3 && p.name.toLowerCase().includes(w)) ? '' : `${p.label.split(' ')[0]} · `}${p.name}${near!.precise ? ` · ${fmtDistance(p.distance_m)}` : ''}`).join('\n'),
-            })
+            }, await getBrand())
             if (!card) { skipped.push({ recipe, reason: 'Falha ao gerar o card dos lugares — tente de novo depois.' }); continue }
             media = [{ url: card, type: 'photo' }, { url: photos[0].url, type: 'photo' }]
           } else {
             media = [{ url: photos[0].url, type: 'photo' }]
           }
-          const c = await writeCopy(anthropicKey, `${recipe === 'post_3_coisas_perto' ? 'Escreva um post "3 coisas perto" deste imóvel' : `Escreva um post sobre como é morar perto deste imóvel em ${fields.bairro ?? 'no bairro'} — estilo de vida, não o imóvel em si`}. Use SÓ estes lugares reais, com o nome exatamente assim (dados do OpenStreetMap):\n${lista.join('\n')}\n${distRule} Nunca diga o endereço/rua do imóvel.\n${fieldsLine}`)
+          const c = await writeCopy(anthropicKey, lessonsTxt + `${recipe === 'post_3_coisas_perto' ? 'Escreva um post "3 coisas perto" deste imóvel' : `Escreva um post sobre como é morar perto deste imóvel em ${fields.bairro ?? 'no bairro'} — estilo de vida, não o imóvel em si`}. Use SÓ estes lugares reais, com o nome exatamente assim (dados do OpenStreetMap):\n${lista.join('\n')}\n${distRule} Nunca diga o endereço/rua do imóvel.\n${fieldsLine}`)
           caption = c.caption; hashtags = c.hashtags; cta = c.cta
           provider = 'lugares_osm'
         } else if (recipe === 'reels_o_que_compra_no_bairro' || recipe === 'post_3_coisas_perto') {
@@ -314,12 +335,12 @@ Deno.serve(async (req) => {
           const briefing = recipe === 'reels_o_que_compra_no_bairro'
             ? `Escreva um post sobre como é morar no bairro "${fields.bairro ?? 'da região'}" — estilo de vida, sem citar nome de estabelecimento nem número que não esteja nos dados. A foto é do imóvel real.`
             : `Escreva um post "o que tem perto" do imóvel${fields.perto_de ? ` — use SÓ isto que o corretor informou: ${fields.perto_de}` : ' — fale de forma geral do bairro, sem inventar nome de lugar nem distância'}. A foto é do imóvel real.`
-          const c = await writeCopy(anthropicKey, `${briefing}\n${fieldsLine}`)
+          const c = await writeCopy(anthropicKey, lessonsTxt + `${briefing}\n${fieldsLine}`)
           caption = c.caption; hashtags = c.hashtags; cta = c.cta
           provider = 'catalogo_real'
         } else if (recipe === 'stories_enquete_pagaria') {
           const cardText = `Quanto você pagaria por um ${String(fields.tipo ?? 'imóvel').toLowerCase()} assim em ${fields.bairro ?? 'um bairro como esse'}?`
-          const url = await renderTweetCard(supabaseUrl, internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }, cardText)
+          const url = await renderPollCard(supabaseUrl, internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }, photos[0].url, { eyebrow: fields.bairro ? `Enquete · ${fields.bairro}` : 'Enquete', headline: cardText, cta: 'Vote na enquete' }, await getBrand())
           if (!url) { skipped.push({ recipe, reason: 'Falha ao gerar o card — tente de novo depois.' }); continue }
           media = [{ url, type: 'photo' }]
           caption = cardText; hashtags = ''; cta = 'Comenta aqui embaixo 👇'
@@ -329,11 +350,11 @@ Deno.serve(async (req) => {
           continue // pilar 'educacao' não tem receita ligada a um item específico
         }
 
-        const slot = forcedDate ? { date: forcedDate, overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
+        const slot = forcedDate || loose ? { date: forcedDate ?? '', overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
         const { data: row, error } = await admin.from('marketing_ai_test_content').insert({
           company_id: company.id, kind, idea: item.title, caption, hashtags, cta,
           format: media.length > 1 ? 'carrossel' : 'foto', image_url: media[0]?.url ?? null,
-          item_id: item.id, media, pillar: pillarKey, recipe, provider, planned_for: slot.date,
+          item_id: item.id, media, pillar: pillarKey, recipe, provider, planned_for: loose ? null : slot.date,
         }).select('id').single()
         if (error) { skipped.push({ recipe, reason: error.message }); continue }
         await scoreTestContent(supabaseUrl, serviceKey, company.id as string, row!.id as string)

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
-import { CARD, MUTED, BORDER, D } from './shared'
+import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import { ScoreBreakdown, BriefBlock, PostMedia, VideoScript, templateLabel, type TestPost } from './TestingArea'
 import { useLang, type Lang } from '../../../contexts/LanguageContext'
 import AdaptModal, { type VaultPost } from './AdaptModal'
@@ -22,6 +22,9 @@ const TX = {
     scheduledAt: '🕐 Agendado pra', cancelSched: 'Cancelar agendamento', confirm: 'Confirmar', publish: '🚀 Publicar agora', schedLater: '📅 Agendar',
     releaseAnyway: 'Liberar mesmo assim', toReview: 'Voltar pra revisão', del: 'Excluir', close: 'Fechar',
     adaptContent: '✨ Adaptar Conteúdo', adaptations: 'Adaptações', approvePub: 'Aprovar/Publicar',
+    why: 'Por que excluir? O agente aprende com isso pra não repetir.', notePh: 'Quer explicar? (opcional)', delNoReason: 'Excluir sem motivo', cancel: 'Cancelar',
+    reasons: { repetido: 'Repetido', texto: 'Texto ruim', foto: 'Foto ruim', errado: 'Informação errada', tom: 'Não tem a cara da marca', outro: 'Outro' } as Record<string, string>,
+    editCap: '✏️ Editar legenda', saveCap: 'Salvar legenda', capSaved: 'Legenda salva — o agente vai aprender com a sua mudança ✓',
   },
   en: {
     kind: { organico: 'Feed', stories: 'Stories', campanhas: 'Campaign' } as Record<string, string>,
@@ -34,6 +37,9 @@ const TX = {
     scheduledAt: '🕐 Scheduled for', cancelSched: 'Cancel schedule', confirm: 'Confirm', publish: '🚀 Publish now', schedLater: '📅 Schedule',
     releaseAnyway: 'Release anyway', toReview: 'Back to review', del: 'Delete', close: 'Close',
     adaptContent: '✨ Adapt Content', adaptations: 'Adaptations', approvePub: 'Approve/Publish',
+    why: 'Why delete it? The agent learns from this so it does not repeat it.', notePh: 'Want to explain? (optional)', delNoReason: 'Delete without a reason', cancel: 'Cancel',
+    reasons: { repetido: 'Repetitive', texto: 'Bad text', foto: 'Bad photo', errado: 'Wrong information', tom: 'Not our brand style', outro: 'Other' } as Record<string, string>,
+    editCap: '✏️ Edit caption', saveCap: 'Save caption', capSaved: 'Caption saved — the agent will learn from your change ✓',
   },
 } as const
 const fmtScheduled = (iso: string, lang: Lang) => new Date(iso).toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -141,6 +147,43 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
     if (id === item.id) { onChanged(); onClose() } else await done()
   }
 
+  // Memória do Agente de Conteúdo: excluir pergunta "por quê?" e editar a
+  // legenda guarda antes/depois (agent_memory, role conteudo_licoes); depois
+  // o creative-generate (relearn) reescreve as lições que todo criador lê.
+  const [asking, setAsking] = useState(false)
+  const [reason, setReason] = useState('')
+  const [note, setNote] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [draftCap, setDraftCap] = useState('')
+  const relearnSoon = () => {
+    void fetch(`${SUPABASE_URL}/functions/v1/creative-generate`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'relearn' }), keepalive: true,
+    }).catch(() => { /* aprende no próximo domingo */ })
+  }
+  const remember = async (value: Record<string, unknown>) => {
+    await supabase.from('agent_memory').upsert({
+      company_id: companyId, agent_role: 'conteudo_licoes', key: `fb:${item.id}`, type: 'fact', updated_at: new Date().toISOString(),
+      value: JSON.stringify({ idea: item.idea, recipe: item.recipe ?? null, ...value }),
+    }, { onConflict: 'company_id,agent_role,key' })
+  }
+  const confirmDelete = async (withReason: boolean) => {
+    if (withReason && reason) {
+      await remember({ kind: 'delete', reason: tx.reasons[reason] ?? reason, note: note.trim() || undefined })
+      relearnSoon()
+    }
+    await discard(item.id)
+  }
+  const saveCaption = async () => {
+    const before = item.caption ?? ''
+    const after = draftCap.trim()
+    setBusy(item.id); setError('')
+    await supabase.from('marketing_ai_test_content').update({ caption: after }).eq('id', item.id)
+    if (after !== before.trim()) { await remember({ kind: 'edit', before, after }); relearnSoon() }
+    setEditing(false); setOkMsg(tx.capSaved)
+    await done()
+    setBusy(null)
+  }
+
   const isBusy = busy === item.id
   const ready = item.status === 'vault'
   const evaluated = item.quality_score != null
@@ -171,7 +214,21 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
             <div style={{ fontSize: '11.5px', color: '#60a5fa', background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: '9px', padding: '9px 12px', lineHeight: 1.5 }}>🎬 {item.reasoning}</div>
           )}
           {item.idea && <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{item.idea}</div>}
-          {item.caption && <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{item.caption}</div>}
+          {editing ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <textarea value={draftCap} onChange={e => setDraftCap(e.target.value)} rows={6}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '9px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '9px', color: 'white', fontSize: '12px', lineHeight: 1.5, fontFamily: D, resize: 'vertical' }} />
+              <div style={{ display: 'flex', gap: '7px' }}>
+                <button onClick={saveCaption} disabled={isBusy || !draftCap.trim()} style={btn(GREEN, 'rgba(74,222,128,0.12)')}>{isBusy ? '...' : tx.saveCap}</button>
+                <button onClick={() => setEditing(false)} style={ghost}>{tx.cancel}</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {item.caption && <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{item.caption}</div>}
+              {!scheduled && <button onClick={() => { setDraftCap(item.caption ?? ''); setEditing(true) }} style={{ alignSelf: 'flex-start', background: 'transparent', border: 'none', color: ORANGE, fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D, padding: 0 }}>{tx.editCap}</button>}
+            </>
+          )}
           {item.hashtags && <div style={{ fontSize: '11px', color: '#60a5fa', lineHeight: 1.4 }}>{item.hashtags}</div>}
 
           <BriefBlock post={item} />
@@ -204,7 +261,7 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
                   <button onClick={() => publish(item)} disabled={isBusy} style={{ ...btn(GREEN, 'rgba(74,222,128,0.14)'), flex: 1 }}>{isBusy ? '...' : tx.publish}</button>
                   <button onClick={() => setScheduling(true)} disabled={isBusy} style={btn('#60a5fa', 'transparent')}>{tx.schedLater}</button>
                   <button onClick={() => setStatus('draft')} disabled={isBusy} title={tx.toReview} style={ghost}>↩︎</button>
-                  <button onClick={() => discard(item.id)} disabled={isBusy} title={tx.del} style={ghost}>🗑</button>
+                  <button onClick={() => setAsking(true)} disabled={isBusy} title={tx.del} style={ghost}>🗑</button>
                 </div>
               )}
               <button onClick={() => setAdaptOpen(true)} style={btn(ORANGE, 'rgba(255,109,41,0.1)')}>{tx.adaptContent}</button>
@@ -212,9 +269,27 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
           ) : evaluated ? (
             <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' }}>
               <button onClick={() => setStatus('vault')} disabled={isBusy} style={{ ...btn(AMBER, 'rgba(251,191,36,0.1)'), flex: 1 }}>{isBusy ? '...' : tx.releaseAnyway}</button>
-              <button onClick={() => discard(item.id)} disabled={isBusy} style={ghost}>🗑 {tx.del}</button>
+              <button onClick={() => setAsking(true)} disabled={isBusy} style={ghost}>🗑 {tx.del}</button>
             </div>
           ) : null}
+
+          {asking && (
+            <div style={{ padding: '11px 12px', border: `1px solid ${BORDER}`, borderRadius: '10px', background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ fontSize: '11.5px', fontWeight: 700, color: 'white' }}>{tx.why}</div>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {Object.entries(tx.reasons).map(([k, label]) => (
+                  <button key={k} onClick={() => setReason(k)} style={{ padding: '5px 10px', borderRadius: '99px', border: `1px solid ${reason === k ? 'rgba(255,109,41,0.6)' : BORDER}`, background: reason === k ? 'rgba(255,109,41,0.14)' : 'transparent', color: reason === k ? ORANGE : 'white', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>{label}</button>
+                ))}
+              </div>
+              <input value={note} onChange={e => setNote(e.target.value)} placeholder={tx.notePh} maxLength={200}
+                style={{ padding: '8px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '8px', color: 'white', fontSize: '12px', fontFamily: D }} />
+              <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' }}>
+                <button onClick={() => confirmDelete(true)} disabled={isBusy || !reason} style={btn('#f87171', 'rgba(248,113,113,0.1)')}>{isBusy ? '...' : `🗑 ${tx.del}`}</button>
+                <button onClick={() => confirmDelete(false)} disabled={isBusy} style={ghost}>{tx.delNoReason}</button>
+                <button onClick={() => { setAsking(false); setReason(''); setNote('') }} style={ghost}>{tx.cancel}</button>
+              </div>
+            </div>
+          )}
 
           {adapts.length > 0 && (
             <div>

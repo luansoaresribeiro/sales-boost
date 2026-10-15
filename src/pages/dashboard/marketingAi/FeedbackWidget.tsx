@@ -22,8 +22,12 @@ const SECTION_LABEL: Record<'pt' | 'en', Record<Section, string>> = {
   },
 }
 const TX = {
-  pt: { learning: 'O que a IA está aprendendo', noSignal: 'Ainda sem sinal real aqui — assim que houver dado suficiente, a IA começa a aprender com esse agente.', rec: 'RECOMENDAÇÃO' },
-  en: { learning: 'What the AI is learning', noSignal: 'No real signal here yet — as soon as there is enough data, the AI starts learning from this agent.', rec: 'RECOMMENDATION' },
+  pt: { learning: 'O que a IA está aprendendo', noSignal: 'Ainda sem sinal real aqui — assim que houver dado suficiente, a IA começa a aprender com esse agente.', rec: 'RECOMENDAÇÃO',
+    memTitle: 'MEMÓRIA — o agente segue isto ao criar', forget: 'Apagar esta lição (o agente não volta a usá-la)',
+    memEmpty: 'Ainda sem lições. Quando você excluir uma peça dizendo o porquê, ou editar uma legenda, o agente aprende e passa a seguir aqui.' },
+  en: { learning: 'What the AI is learning', noSignal: 'No real signal here yet — as soon as there is enough data, the AI starts learning from this agent.', rec: 'RECOMMENDATION',
+    memTitle: 'MEMORY — the agent follows this when creating', forget: 'Delete this lesson (the agent will not use it again)',
+    memEmpty: 'No lessons yet. When you delete a piece saying why, or edit a caption, the agent learns and starts following it here.' },
 } as const
 const SECTION_PILLARS: Record<Section, Insight['pillar'][]> = {
   dados: ['tracking', 'competitor'], estrategia: ['strategy'], content: ['content'], conversao: [],
@@ -34,6 +38,21 @@ export default function FeedbackWidget({ companyId, section, insights }: { compa
   const t = TX[lang]
   const [open, setOpen] = useState(false)
   const [log, setLog] = useState<LogRow[]>([])
+  // Memória do Agente de Conteúdo (agent_memory, role conteudo_licoes —
+  // ver supabase/functions/_shared/contentLessons.ts).
+  const [lessons, setLessons] = useState<{ id: string; value: string }[]>([])
+  useEffect(() => {
+    if (section !== 'content') return
+    let cancelled = false
+    supabase.from('agent_memory').select('id, value').eq('company_id', companyId).eq('agent_role', 'conteudo_licoes').eq('type', 'rule').order('key')
+      .then(({ data }) => { if (!cancelled) setLessons((data ?? []) as { id: string; value: string }[]) })
+    return () => { cancelled = true }
+  }, [companyId, section, open])
+  const forget = async (l: { id: string; value: string }) => {
+    setLessons(prev => prev.filter(x => x.id !== l.id))
+    await supabase.from('agent_memory').delete().eq('id', l.id)
+    await supabase.from('agent_memory').insert({ company_id: companyId, agent_role: 'conteudo_licoes', key: `apagada:${crypto.randomUUID()}`, type: 'preference', value: l.value })
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -45,7 +64,7 @@ export default function FeedbackWidget({ companyId, section, insights }: { compa
 
   const pillars = SECTION_PILLARS[section]
   const relevantInsights = insights.filter(i => i.status === 'open' && pillars.includes(i.pillar)).slice(0, 3)
-  const count = relevantInsights.length + log.length
+  const count = relevantInsights.length + log.length + lessons.length
 
   return (
     <>
@@ -64,7 +83,23 @@ export default function FeedbackWidget({ companyId, section, insights }: { compa
             <button onClick={() => setOpen(false)} style={{ background: 'transparent', border: 'none', color: MUTED, cursor: 'pointer', fontSize: '14px', flexShrink: 0, padding: 0 }}>✕</button>
           </div>
 
-          {relevantInsights.length === 0 && log.length === 0 ? (
+          {section === 'content' && (
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ fontSize: '9px', fontWeight: 800, color: '#A78BFA', letterSpacing: '0.04em', marginBottom: '6px' }}>🧠 {t.memTitle}</div>
+              {lessons.length === 0 ? <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>{t.memEmpty}</div> : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {lessons.map(l => (
+                    <div key={l.id} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '8px 10px', background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: '9px' }}>
+                      <span style={{ flex: 1, fontSize: '11.5px', color: 'white', lineHeight: 1.45 }}>{l.value}</span>
+                      <button onClick={() => forget(l)} title={t.forget} aria-label={t.forget} style={{ background: 'transparent', border: 'none', color: MUTED, cursor: 'pointer', fontSize: '12px', padding: 0, flexShrink: 0 }}>🗑</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {relevantInsights.length === 0 && log.length === 0 ? (section === 'content' ? null :
             <div style={{ fontSize: '12px', color: MUTED, lineHeight: 1.55 }}>
               {t.noSignal}
             </div>

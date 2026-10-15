@@ -131,6 +131,18 @@ Deno.serve(async (req) => {
       .eq('id', companyId)
     if (updateErr) throw new Error(updateErr.message)
 
+    // Logo automático (dono, 2026-10-15): a foto de perfil vira o logo do Kit
+    // da Marca na hora (e as cores saem dele). Em segundo plano — não atrasa
+    // a volta pra tela; se falhar, o Kit da Marca tenta de novo ao abrir.
+    const cronSecret = Deno.env.get('CRON_SECRET')
+    if (cronSecret) {
+      // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
+      EdgeRuntime.waitUntil(fetch(`${supabaseUrl}/functions/v1/brand-kit-suggest`, {
+        method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'on_connect', cron_secret: cronSecret, company_id: companyId }),
+      }).then(r => r.body?.cancel()).catch(e => console.error('logo automático falhou', e)))
+    }
+
     return htmlRedirect('/dashboard/settings?tab=conexoes&instagram=connected')
   } catch (err) {
     console.error('Instagram OAuth error:', err)
