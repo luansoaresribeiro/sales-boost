@@ -33,6 +33,8 @@ export interface Prospect {
   score_breakdown: ScoreBreakdownItem[] | null
   ai_summary: string | null
   ai_cold_call_notes: string | null
+  // 'ativa' | 'sem_instagram' | 'instagram_parado' (null = lead antigo)
+  digital_presence: string | null
   status: string
   discovered_at: string
 }
@@ -59,6 +61,8 @@ export const DEFAULT_WEIGHTS = {
   // "sem pedido online" não faz sentido pra imobiliária/corretor → 0.
   rating_in_range: 20, reviews_in_range: 10, instagram_active: 30, has_website: 10,
   no_online_ordering: 0, has_phone: 15, independent_business: 10, recent_review: 5, likely_chain_penalty: -40,
+  // Presença digital fraca = oportunidade (dono, 2026-10-15) — mesmo peso do Instagram ativo.
+  weak_presence_opportunity: 30,
 }
 export type ScoringWeights = typeof DEFAULT_WEIGHTS
 export const WEIGHT_LABELS: Record<keyof ScoringWeights, string> = {
@@ -71,6 +75,13 @@ export const WEIGHT_LABELS: Record<keyof ScoringWeights, string> = {
   independent_business: 'Parece negócio independente',
   recent_review: 'Avaliação recente (60 dias)',
   likely_chain_penalty: 'Penalidade se parecer rede/franquia',
+  weak_presence_opportunity: 'Presença digital fraca (oportunidade)',
+}
+
+// Selo do lead com pouca presença digital — é oportunidade, não defeito.
+export const WEAK_PRESENCE_LABEL: Record<string, string> = {
+  sem_instagram: '🌱 Sem Instagram no site — oportunidade',
+  instagram_parado: '🌱 Instagram parado — oportunidade',
 }
 
 export function scoreColor(s: number) {

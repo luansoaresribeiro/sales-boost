@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import {
-  STATUS_LABELS, STATUS_COLORS, scoreColor, recommendationTier,
+  STATUS_LABELS, STATUS_COLORS, scoreColor, recommendationTier, WEAK_PRESENCE_LABEL,
   type Prospect, type Activity, type ScanLog, type QueryLogRow, type CandidateLogRow,
 } from './prospectShared'
 
@@ -137,7 +137,8 @@ export default function ProspectsPage() {
     if (next && lastScan) void loadHistory(lastScan.id)
   }
 
-  const filtered = statusFilter === 'all' ? prospects : prospects.filter(p => p.status === statusFilter)
+  const isWeak = (p: Prospect) => !!p.digital_presence && !!WEAK_PRESENCE_LABEL[p.digital_presence]
+  const filtered = statusFilter === 'all' ? prospects : statusFilter === 'weak' ? prospects.filter(isWeak) : prospects.filter(p => p.status === statusFilter)
   const totalQualified = prospects.filter(p => p.status === 'qualified' || p.status === 'converted').length
 
   return (
@@ -313,13 +314,19 @@ export default function ProspectsPage() {
         </div>
 
         {/* Status filter */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
           {['all', 'new', 'contacted', 'qualified', 'converted', 'discarded'].map(s => (
             <button key={s} onClick={() => setStatusFilter(s)}
               style={{ padding: '6px 14px', borderRadius: '99px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600, background: statusFilter === s ? 'rgba(255,109,41,0.2)' : 'rgba(255,255,255,0.05)', color: statusFilter === s ? ORANGE : MUTED }}>
               {s === 'all' ? 'Todos' : STATUS_LABELS[s]} {s !== 'all' ? `(${prospects.filter(p => p.status === s).length})` : `(${prospects.length})`}
             </button>
           ))}
+          {prospects.some(isWeak) && (
+            <button onClick={() => setStatusFilter('weak')}
+              style={{ padding: '6px 14px', borderRadius: '99px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 600, background: statusFilter === 'weak' ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.05)', color: statusFilter === 'weak' ? '#A78BFA' : MUTED }}>
+              🌱 Presença fraca ({prospects.filter(isWeak).length})
+            </button>
+          )}
         </div>
 
         {/* List */}
@@ -347,6 +354,7 @@ export default function ProspectsPage() {
                       <div style={{ marginTop: '4px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <span style={{ fontSize: '10.5px', fontWeight: 700, color: recommendationTier(p.lead_score).color }}>{recommendationTier(p.lead_score).label}</span>
                         {p.icp_confidence != null && <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)' }}>confiança ICP: {p.icp_confidence}%</span>}
+                        {p.digital_presence && WEAK_PRESENCE_LABEL[p.digital_presence] && <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#A78BFA' }}>{WEAK_PRESENCE_LABEL[p.digital_presence]}</span>}
                       </div>
                     )}
                   </div>
