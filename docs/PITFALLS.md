@@ -536,3 +536,12 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   2026-10-15; do banco, via pg_net, funcionava). O endereço é achado pelo
   Photon (photon.komoot.io), outro geocodificador grátis do OpenStreetMap.
   O Overpass vai por POST com 4 servidores na fila (`_shared/nearbyPlaces.ts`).
+- **`npx wrangler deploy` daqui da sessão publica o site QUEBRADO** (achado
+  2026-10-15, ~4 min fora do ar): o build local não tem `.env` com
+  `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` (e os outros `VITE_*`), então
+  o bundle sai com `undefined/functions/v1/...` e login/dados param. O site
+  certo é o que o Cloudflare (Workers Builds) gera sozinho quando o PR entra
+  na main. Sem esses `VITE_*` no ambiente, **não rodar `wrangler deploy`**:
+  esperar o build do merge e conferir a palavra nova no bundle publicado.
+  Se acontecer: `npx wrangler deployments list` e `npx wrangler rollback
+  <versão anterior>`.
