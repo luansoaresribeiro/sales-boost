@@ -1396,3 +1396,18 @@ grátis de 30 s, acima — mantidos como histórico):
   - **Custo/limite:** a conta do Apify tem teto de US$ 5/mês (visto em
     2026-10-15: US$ 0,93 usados). Prospecção em massa depende de subir esse
     plano — ver medição no PR.
+  - **Teste com corretores (2026-10-15) — achado:** buscando "corretor de
+    imóveis / corretora / consultor imobiliário" por bairro, o Google Maps
+    devolve quase só imobiliárias. Sem filtro, a IA aceitou 10 (9 eram
+    imobiliárias). Com a regra "só a PESSOA do corretor", 0 de 45 passaram:
+    os poucos corretores individuais que aparecem têm 1-4 avaliações e caem
+    no mínimo de avaliações (5). O Google Maps não é boa fonte pra
+    corretor autônomo — ele vive no Instagram. Próximo passo em aberto
+    (decisão do dono): afrouxar os filtros do Google pra corretor e/ou
+    buscar direto no Instagram (bio com "corretor"/CRECI, hashtags).
+  - **Correções vistas no teste:**
+    - a lista de "já analisados" passou de 1000 e o banco só devolve 1000
+      por leitura, então a busca reanalisava (e pagava de novo) gente já
+      vista. Agora lê em páginas;
+    - "Parar busca" gravava um status que o banco não aceita (`stopped`).
+      Agora grava `done` com a nota "Parada por você".
