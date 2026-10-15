@@ -1345,3 +1345,18 @@ grátis de 30 s, acima — mantidos como histórico):
     - custo: 1 chamada Haiku por logo.
   - **Memória do Agente de Conteúdo:** ver
     [LEARNING.md](LEARNING.md#memória-do-agente-de-conteúdo-implementado-2026-10-15).
+- **Leads com presença digital fraca entram como oportunidade** —
+  2026-10-15 (pedido do dono: "muitos leads que ficaram de fora eram bons;
+  empresa sem muita presença digital é ideal pra gente também").
+  - Antes: na busca de imóveis, 22 de 28 negócios achados foram rejeitados
+    só por isso (18 com Instagram parado há 120+ dias, 4 sem Instagram no
+    site).
+  - Agora "Só quem já tem Instagram ativo" vem desligado:
+    - esses entram marcados (`sales_prospects.digital_presence` =
+      `sem_instagram` | `instagram_parado` | `ativa`);
+    - ganham o ponto "Presença digital fraca (oportunidade)" (peso 30, o
+      mesmo do Instagram ativo — um não vale menos que o outro);
+    - o diagnóstico/abordagem da IA trata isso como a oportunidade.
+  - Tela de Leads: selo 🌱 e filtro "Presença fraca".
+  - Os 22 já rejeitados saem de `prospect_checked_places` e são reavaliados
+    na próxima busca.

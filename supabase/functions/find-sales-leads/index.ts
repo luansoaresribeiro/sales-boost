@@ -34,6 +34,9 @@ interface ScoringWeights {
   independent_business: number
   recent_review: number
   likely_chain_penalty: number
+  // Presença digital fraca (sem Instagram ou parado) = oportunidade, não
+  // defeito (dono, 2026-10-15). Opcional: config antiga não tem → 30.
+  weak_presence_opportunity?: number
 }
 
 interface PlaceCandidate {
@@ -182,6 +185,7 @@ async function auditLead(anthropicKey: string, input: {
   hasOnlineOrdering: boolean; priceLevel: number | null; daysSinceLastReview: number | null
   igFollowers: number | null; igAvgEngagement: number | null; igLastPostDate: string | null
   customInstructions: string | null
+  weakPresence: WeakPresence
 }): Promise<LeadAudit | null> {
   const prompt = `Você é um analista de vendas do Sales Boost, uma plataforma de marketing/vendas automatizado por IA pra pequenos negócios locais no Brasil.
 
@@ -199,7 +203,7 @@ Tem Instagram: ${input.hasInstagram ? 'sim' : 'não'}${input.igFollowers != null
 Tem Facebook: ${input.hasFacebook ? 'sim' : 'não'}
 Tem WhatsApp visível no site: ${input.hasWhatsapp ? 'sim' : 'não'}
 
-O Sales Boost é um sistema de aquisição de clientes com IA: cria demanda nas redes sociais e cuida de toda a jornada, da atração até a venda. Hoje o Sales Boost atende o setor de imóveis (decisão do dono, 2026-10-11): o cliente ideal (ICP) é uma imobiliária independente ou de poucas unidades, um corretor(a) de imóveis autônomo, ou quem administra imóveis de aluguel por temporada (Airbnb) — com decisão rápida do dono, Instagram ativo e imóveis pra divulgar, mas com conteúdo inconsistente, marketing manual e sem um sistema que transforme seguidores em contatos. O produto NÃO serve bem redes/franquias grandes de imobiliárias, portais, construtoras/incorporadoras grandes, hotéis nem negócios sem dono/decisor acessível.
+O Sales Boost é um sistema de aquisição de clientes com IA: cria demanda nas redes sociais e cuida de toda a jornada, da atração até a venda. Hoje o Sales Boost atende o setor de imóveis (decisão do dono, 2026-10-11): o cliente ideal (ICP) é uma imobiliária independente ou de poucas unidades, um corretor(a) de imóveis autônomo, ou quem administra imóveis de aluguel por temporada (Airbnb) — com decisão rápida do dono, Instagram ativo e imóveis pra divulgar, mas com conteúdo inconsistente, marketing manual e sem um sistema que transforme seguidores em contatos. Negócio com POUCA presença digital (sem Instagram, ou Instagram parado há meses) também é ICP — às vezes o melhor: tem imóveis e clientes, mas ninguém fazendo o marketing; o Sales Boost faz por ele (decisão do dono, 2026-10-15). O produto NÃO serve bem redes/franquias grandes de imobiliárias, portais, construtoras/incorporadoras grandes, hotéis nem negócios sem dono/decisor acessível.${input.weakPresence ? `\nESTE negócio tem presença digital fraca (${input.weakPresence === 'sem_instagram' ? 'nenhum Instagram ligado ao site' : 'Instagram sem post há mais de 120 dias'}) — no diagnóstico e na abordagem, trate isso como a oportunidade (o Sales Boost cuida do Instagram por ele), sem tom de crítica. Se não há Instagram no site, diga pra confirmar na ligação se existe um perfil.` : ''}
 ${input.customInstructions ? `\nInstrução adicional do dono do Sales Boost sobre o que priorizar ao pontuar leads:\n"${input.customInstructions}"\n` : ''}
 Responda com um JSON válido, sem markdown, com exatamente estes campos:
 - "icp_confidence" (0-100): o quanto você tem certeza de que esse lugar É DE VERDADE um "${input.targetBusinessType}" (use as categorias do Google e o nome pra decidir — a busca por palavra-chave às vezes traz resultado errado, tipo uma loja de produtos de barbearia aparecendo numa busca por "barbearia"). 100 = com certeza é. 0 = quase certeza que não é.
@@ -246,7 +250,10 @@ interface ScoreInput {
   hasPhone: boolean
   isLikelyChain: boolean
   daysSinceLastReview: number | null
+  weakPresence: WeakPresence
 }
+
+type WeakPresence = 'sem_instagram' | 'instagram_parado' | null
 
 interface ScoreBreakdownItem { label: string; points: number; passed: boolean }
 
@@ -260,6 +267,7 @@ function computeLeadScore(input: ScoreInput, weights: ScoringWeights): { score: 
     { label: 'Telefone público disponível', points: weights.has_phone, passed: input.hasPhone },
     { label: 'Parece negócio independente (não rede/franquia)', points: weights.independent_business, passed: !input.isLikelyChain },
     { label: 'Avaliação recente no Google (últimos 60 dias)', points: weights.recent_review, passed: input.daysSinceLastReview != null && input.daysSinceLastReview <= 60 },
+    { label: 'Presença digital fraca — precisa de quem faça o marketing (oportunidade)', points: weights.weak_presence_opportunity ?? 30, passed: !!input.weakPresence },
   ]
   if (input.isLikelyChain && weights.likely_chain_penalty < 0) {
     breakdown.push({ label: 'Penalidade: parece rede/franquia grande', points: weights.likely_chain_penalty, passed: true })
@@ -311,7 +319,7 @@ async function runScan(admin: SupaClient, logId: string, keys: { googleKey: stri
     maxRating: (settingsRow?.max_rating as number) ?? 4.8,
     minReviews: (settingsRow?.min_reviews as number) ?? 50,
     maxReviews: (settingsRow?.max_reviews as number) ?? 500,
-    requireActiveInstagram: (settingsRow?.require_active_instagram as boolean) ?? true,
+    requireActiveInstagram: (settingsRow?.require_active_instagram as boolean) ?? false,
     requirePhone: (settingsRow?.require_phone as boolean) ?? true,
     excludeChains: (settingsRow?.exclude_chains as boolean) ?? true,
     confidenceThreshold: (settingsRow?.icp_confidence_threshold as number) ?? 60,
@@ -420,17 +428,21 @@ async function runScan(admin: SupaClient, logId: string, keys: { googleKey: stri
         ? await scanWebsite(details.website)
         : { instagram_url: null, facebook_url: null, has_whatsapp: false, has_online_ordering: false }
 
-      // Must have: Instagram ativo — sem link nenhum já reprova antes de gastar Apify.
+      // Instagram: com "só Instagram ativo" ligado, reprova (comportamento
+      // antigo). Desligado (padrão desde 2026-10-15), presença fraca vira
+      // OPORTUNIDADE — o lead entra marcado e ganha ponto por isso.
       if (icp.requireActiveInstagram && !signals.instagram_url) {
         await logRejection(candidate, city, businessType, keyword, 'Sem Instagram vinculado no site')
         continue
       }
 
       const igStats = signals.instagram_url ? await scanInstagram(keys.apifyToken, signals.instagram_url) : null
-      if (icp.requireActiveInstagram && igStats?.lastPostDate && daysSinceIso(igStats.lastPostDate) > 120) {
+      const igStale = !!igStats?.lastPostDate && daysSinceIso(igStats.lastPostDate) > 120
+      if (icp.requireActiveInstagram && igStale) {
         await logRejection(candidate, city, businessType, keyword, 'Instagram parece abandonado (sem post há mais de 120 dias)')
         continue
       }
+      const weakPresence: WeakPresence = !signals.instagram_url ? 'sem_instagram' : igStale ? 'instagram_parado' : null
 
       const daysSinceLastReview = daysSinceLatestReview(details.reviews)
 
@@ -441,7 +453,7 @@ async function runScan(admin: SupaClient, logId: string, keys: { googleKey: stri
         hasWhatsapp: signals.has_whatsapp, hasOnlineOrdering: signals.has_online_ordering,
         priceLevel: details.price_level ?? null, daysSinceLastReview,
         igFollowers: igStats?.followers ?? null, igAvgEngagement: igStats?.avgEngagement ?? null, igLastPostDate: igStats?.lastPostDate ?? null,
-        customInstructions,
+        customInstructions, weakPresence,
       })
       if (!audit) { await logRejection(candidate, city, businessType, keyword, 'Falha ao gerar diagnóstico com IA'); continue }
 
@@ -465,12 +477,12 @@ async function runScan(admin: SupaClient, logId: string, keys: { googleKey: stri
       const { score: leadScore, breakdown } = computeLeadScore({
         ratingInRange: true, // já passou no must-have acima
         reviewsInRange: true,
-        instagramActive: !!igStats,
+        instagramActive: !!igStats && !igStale,
         hasWebsite: !!details.website,
         hasOnlineOrdering: signals.has_online_ordering,
         hasPhone: !!details.formatted_phone_number,
         isLikelyChain: audit.is_likely_chain,
-        daysSinceLastReview,
+        daysSinceLastReview, weakPresence,
       }, weights)
 
       await admin.from('sales_prospects').upsert({
@@ -496,6 +508,7 @@ async function runScan(admin: SupaClient, logId: string, keys: { googleKey: stri
         score_breakdown: breakdown,
         ai_summary: audit.ai_summary,
         ai_cold_call_notes: audit.ai_cold_call_notes,
+        digital_presence: weakPresence ?? 'ativa',
         updated_at: new Date().toISOString(),
       }, { onConflict: 'google_place_id' })
 

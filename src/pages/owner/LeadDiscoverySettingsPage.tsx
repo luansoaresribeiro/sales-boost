@@ -19,7 +19,7 @@ const D = "'Bricolage Grotesque', system-ui, sans-serif"
 // padrão" pra restaurar.
 const FACTORY_DEFAULTS = {
   maxPerNight: 10, minRating: 4.0, maxRating: 4.8, minReviews: 50, maxReviews: 500,
-  requireActiveInstagram: true, requirePhone: true, excludeChains: true,
+  requireActiveInstagram: false, requirePhone: true, excludeChains: true,
   customInstructions: '', weights: DEFAULT_WEIGHTS, confidenceThreshold: 60,
 }
 
@@ -93,7 +93,7 @@ export default function LeadDiscoverySettingsPage() {
       setRequirePhone(settingsData.require_phone ?? FACTORY_DEFAULTS.requirePhone)
       setExcludeChains(settingsData.exclude_chains ?? FACTORY_DEFAULTS.excludeChains)
       setCustomInstructions(settingsData.icp_custom_instructions ?? FACTORY_DEFAULTS.customInstructions)
-      setWeights((settingsData.scoring_weights as ScoringWeights) ?? FACTORY_DEFAULTS.weights)
+      setWeights({ ...FACTORY_DEFAULTS.weights, ...((settingsData.scoring_weights as Partial<ScoringWeights>) ?? {}) })
       setConfidenceThreshold(settingsData.icp_confidence_threshold ?? FACTORY_DEFAULTS.confidenceThreshold)
     }
     setKeywords((keywordData ?? []) as SearchKeyword[])
@@ -259,7 +259,7 @@ export default function LeadDiscoverySettingsPage() {
               <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginBottom: '20px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '12.5px', color: MUTED, cursor: 'pointer' }}>
                   <input type="checkbox" checked={requireActiveInstagram} onChange={e => setRequireActiveInstagram(e.target.checked)} />
-                  Instagram ativo
+                  Só quem já tem Instagram ativo (desligado: quem tem pouca presença digital entra como oportunidade)
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '12.5px', color: MUTED, cursor: 'pointer' }}>
                   <input type="checkbox" checked={requirePhone} onChange={e => setRequirePhone(e.target.checked)} />
