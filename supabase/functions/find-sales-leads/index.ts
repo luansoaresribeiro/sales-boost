@@ -157,6 +157,22 @@ const STALE_SCAN_MS = 10 * 60_000
 
 type Keys = { googleKey: string; apifyToken: string; anthropicKey: string; telegramToken?: string }
 
+// O banco só aceita running/done/error no status — "parada pelo dono" vira done + esta nota.
+const STOPPED_NOTE = 'Parada por você'
+
+// O banco devolve no máx. 1000 linhas por leitura — e a lista de "já analisados"
+// passou disso (2026-10-15: 1236), o que fazia a busca reanalisar (e pagar de novo)
+// quem já tinha visto. Lê em páginas até acabar.
+async function allPlaceIds(admin: SupaClient, table: string): Promise<string[]> {
+  const out: string[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await admin.from(table).select('google_place_id').not('google_place_id', 'is', null).order('google_place_id').range(from, from + 999)
+    if (error) throw new Error(`Falha ao ler ${table}: ${error.message}`)
+    out.push(...((data ?? []) as { google_place_id: string }[]).map(r => r.google_place_id))
+    if (!data || data.length < 1000) return out
+  }
+}
+
 // Uma chamada da varredura (ver scan.ts). resume=true continua a fila salva.
 async function runScan(admin: SupaClient, logId: string, keys: Keys, resume: boolean): Promise<{ found: number; done: boolean; error?: string }> {
   const deadline = Date.now() + SCAN_BUDGET_MS
@@ -186,19 +202,15 @@ async function runScan(admin: SupaClient, logId: string, keys: Keys, resume: boo
   }
   const typesToSearch = businessTypes.length > 0 ? businessTypes : ALL_BUSINESS_TYPES
 
-  const [{ data: logRow }, { data: existingProspects }, { data: existingCompanies }, { data: checkedPlaces }, { data: keywordRows }] = await Promise.all([
+  const [{ data: logRow }, existingProspects, existingCompanies, checkedPlaces, { data: keywordRows }] = await Promise.all([
     admin.from('prospect_scan_log').select('status, queue, found_count, candidates_processed').eq('id', logId).single(),
-    admin.from('sales_prospects').select('google_place_id'),
-    admin.from('companies').select('google_place_id').not('google_place_id', 'is', null),
-    admin.from('prospect_checked_places').select('google_place_id'),
+    allPlaceIds(admin, 'sales_prospects'),
+    allPlaceIds(admin, 'companies'),
+    allPlaceIds(admin, 'prospect_checked_places'),
     admin.from('prospect_search_keywords').select('business_type, keyword').eq('active', true).in('business_type', typesToSearch),
   ])
   if (logRow?.status !== 'running') return { found: logRow?.found_count ?? 0, done: true }
-  const known = new Set<string>([
-    ...(existingProspects ?? []).map((p: { google_place_id: string }) => p.google_place_id),
-    ...(existingCompanies ?? []).map((c: { google_place_id: string }) => c.google_place_id),
-    ...(checkedPlaces ?? []).map((c: { google_place_id: string }) => c.google_place_id),
-  ])
+  const known = new Set<string>([...existingProspects, ...existingCompanies, ...checkedPlaces])
   let queue: ScanQueue
   if (resume && logRow?.queue) {
     queue = logRow.queue as ScanQueue
@@ -417,7 +429,7 @@ Deno.serve(async (req) => {
 
       // Botão "Parar busca": a próxima chamada da fila vê o status e para.
       if (body.action === 'stop') {
-        await admin.from('prospect_scan_log').update({ status: 'stopped', finished_at: new Date().toISOString(), queue: null }).eq('status', 'running')
+        await admin.from('prospect_scan_log').update({ status: 'done', error_message: STOPPED_NOTE, finished_at: new Date().toISOString(), queue: null }).eq('status', 'running')
         return json({ ok: true, stopped: true })
       }
     }

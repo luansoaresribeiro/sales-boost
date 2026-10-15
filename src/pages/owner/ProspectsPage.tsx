@@ -212,7 +212,7 @@ export default function ProspectsPage() {
               <div style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>
                 {new Date(lastScan.started_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                 <div style={{ color: lastScan.status === 'error' || lastScan.status === 'interrupted' ? '#f87171' : lastScan.status === 'running' ? '#FBBF24' : '#4ade80', fontWeight: 700, marginTop: '2px' }}>
-                  {lastScan.status === 'running' ? `Em andamento · ${lastScan.found_count} encontrados` : lastScan.status === 'interrupted' ? 'Interrompida' : lastScan.status === 'error' ? 'Erro' : lastScan.status === 'stopped' ? `Parada · ${lastScan.found_count} encontrados` : `${lastScan.found_count} encontrados`}
+                  {lastScan.status === 'running' ? `Em andamento · ${lastScan.found_count} encontrados` : lastScan.status === 'interrupted' ? 'Interrompida' : lastScan.status === 'error' ? 'Erro' : lastScan.error_message === 'Parada por você' ? `Parada · ${lastScan.found_count} encontrados` : `${lastScan.found_count} encontrados`}
                 </div>
               </div>
             ) : <div style={{ fontSize: '12.5px', color: MUTED }}>Nenhuma ainda</div>}
