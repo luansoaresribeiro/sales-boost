@@ -66,29 +66,52 @@ function haversine(aLat: number, aLon: number, bLat: number, bLon: number): numb
   return Math.round(2 * R * Math.asin(Math.sqrt(h)))
 }
 
+// Nominatim recusa (403) pedidos vindos dos servidores das functions
+// (achado 2026-10-15); Photon é outro geocodificador grátis com os mesmos
+// dados do OpenStreetMap. Tenta os dois, nessa ordem.
 async function geocode(query: string): Promise<{ lat: number; lon: number } | null> {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(query)}`
-  const res = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'pt-BR' }, signal: AbortSignal.timeout(15000) })
-  if (!res.ok) throw new Error(`Nominatim ${res.status}`)
-  const arr = await res.json() as { lat: string; lon: string }[]
-  if (!arr.length) return null
-  const lat = Number(arr[0].lat), lon = Number(arr[0].lon)
-  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null
+  const ok = (lat: number, lon: number) => Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null
+  const errors: string[] = []
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(query)}`, { headers: { 'User-Agent': UA, 'Accept-Language': 'pt-BR' }, signal: AbortSignal.timeout(10000) })
+    if (res.ok) {
+      const arr = await res.json() as { lat: string; lon: string }[]
+      return arr.length ? ok(Number(arr[0].lat), Number(arr[0].lon)) : null
+    }
+    errors.push(`Nominatim ${res.status}`)
+  } catch (e) { errors.push(`Nominatim ${e instanceof Error ? e.message : e}`) }
+  try {
+    // bbox do Brasil, pra "Leblon" não cair em outro país.
+    const res = await fetch(`https://photon.komoot.io/api/?limit=1&bbox=-74,-34,-34,6&q=${encodeURIComponent(query)}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) })
+    if (res.ok) {
+      const data = await res.json() as { features?: { geometry?: { coordinates?: [number, number] } }[] }
+      const c = data.features?.[0]?.geometry?.coordinates
+      return c ? ok(Number(c[1]), Number(c[0])) : null
+    }
+    errors.push(`Photon ${res.status}`)
+  } catch (e) { errors.push(`Photon ${e instanceof Error ? e.message : e}`) }
+  throw new Error(errors.join(' · '))
 }
 
 // Servidores públicos do Overpass (grátis). Se um estiver ocupado (429/504),
 // tenta o próximo.
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter']
+const OVERPASS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+]
 async function overpass(q: string): Promise<Response> {
-  let last = 'sem resposta'
+  const errors: string[] = []
   for (const base of OVERPASS) {
     try {
-      const res = await fetch(`${base}?data=${encodeURIComponent(q)}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20000) })
+      // POST (form) é o jeito que o Overpass recomenda pra consulta grande.
+      const res = await fetch(base, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: `data=${encodeURIComponent(q)}`, signal: AbortSignal.timeout(25000) })
       if (res.ok) return res
-      last = `${base} ${res.status}`
-    } catch (e) { last = `${base} ${e instanceof Error ? e.message : e}` }
+      errors.push(`${new URL(base).hostname} ${res.status} ${(await res.text().catch(() => '')).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 120)}`)
+    } catch (e) { errors.push(`${new URL(base).hostname} ${e instanceof Error ? e.message : e}`) }
   }
-  throw new Error(`Overpass: ${last}`)
+  throw new Error(`Overpass: ${errors.join(' | ')}`)
 }
 
 function tagFilter(tag: string): string {

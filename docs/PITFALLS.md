@@ -526,3 +526,22 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   por vez (dois ao mesmo tempo do mesmo IP = 504). Há 2 servidores reserva
   em `_shared/nearbyPlaces.ts`. No mapa tem lixo (parquinho marcado como
   praia): por isso o `name_pattern` por categoria na ficha.
+- **Limite de functions do Supabase** (achado 2026-10-15): criar function
+  nova deu "Max number of functions reached for project". Subir de plano
+  custa dinheiro e apagar function velha é remover funcionalidade (precisa
+  do dono). Por isso "Dicas e FAQ" atende pela mesma function de "Lugares
+  perto" (`nearby-places`, `{ area: 'faq' }`). Antes de planejar function
+  nova, contar as que existem (`list_edge_functions`) ou reaproveitar uma.
+- **Nominatim recusa (403) pedidos vindos das edge functions** (achado
+  2026-10-15; do banco, via pg_net, funcionava). O endereço é achado pelo
+  Photon (photon.komoot.io), outro geocodificador grátis do OpenStreetMap.
+  O Overpass vai por POST com 4 servidores na fila (`_shared/nearbyPlaces.ts`).
+- **`npx wrangler deploy` daqui da sessão publica o site QUEBRADO** (achado
+  2026-10-15, ~4 min fora do ar): o build local não tem `.env` com
+  `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` (e os outros `VITE_*`), então
+  o bundle sai com `undefined/functions/v1/...` e login/dados param. O site
+  certo é o que o Cloudflare (Workers Builds) gera sozinho quando o PR entra
+  na main. Sem esses `VITE_*` no ambiente, **não rodar `wrangler deploy`**:
+  esperar o build do merge e conferir a palavra nova no bundle publicado.
+  Se acontecer: `npx wrangler deployments list` e `npx wrangler rollback
+  <versão anterior>`.

@@ -293,7 +293,9 @@ Deno.serve(async (req) => {
             const card = await renderListCard(supabaseUrl, internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }, {
               eyebrow: `Perto do imóvel em ${String(fields.bairro ?? 'Rio')}`.slice(0, 40),
               title: '3 coisas perto daqui',
-              items: near!.top.slice(0, 3).map(p => `${p.name}${near!.precise ? ` · ${fmtDistance(p.distance_m)}` : ''}`).join('\n'),
+              // "Metrô · Antero de Quental" — a categoria entra quando o nome
+              // sozinho não diz o que é (ex.: estação de metrô).
+              items: near!.top.slice(0, 3).map(p => `${p.label.toLowerCase().split(/\s+/).some(w => w.length > 3 && p.name.toLowerCase().includes(w)) ? '' : `${p.label.split(' ')[0]} · `}${p.name}${near!.precise ? ` · ${fmtDistance(p.distance_m)}` : ''}`).join('\n'),
             })
             if (!card) { skipped.push({ recipe, reason: 'Falha ao gerar o card dos lugares — tente de novo depois.' }); continue }
             media = [{ url: card, type: 'photo' }, { url: photos[0].url, type: 'photo' }]

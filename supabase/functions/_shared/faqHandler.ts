@@ -1,18 +1,19 @@
-/**
- * faq-agent — Agente de Dados → "Dicas e FAQ" (etapa 2, 2026-10-14).
- * A IA sugere dicas (ou o dono escreve) e confere cada uma: geral passa
- * sozinha; com número/regra só passa com fonte OFICIAL (selo com data e
- * link); sem fonte fica "precisa revisar" até o dono aprovar. Lógica em
- * _shared/faqCheck.ts. Guardado em marketing_ai_knowledge (module 'dados',
- * kind 'faq': title = pergunta, content = resposta, meta.check = selo).
- *
- * Ações (JWT do dono): suggest {count?}, add {question, answer, category},
- * update {id, question, answer, category?}, verify {id}, approve {id},
- * recheck_due. Apagar é direto pela tela (RLS do dono).
- */
+// Dicas e FAQ — Agente de Dados (etapa 2, 2026-10-14). A IA sugere dicas
+// (ou o dono escreve) e confere cada uma: geral passa sozinha; com
+// número/regra só passa com fonte OFICIAL (selo com data e link); sem fonte
+// fica "precisa revisar" até o dono aprovar. Lógica de conferência em
+// faqCheck.ts. Guardado em marketing_ai_knowledge (module 'dados', kind
+// 'faq': title = pergunta, content = resposta, meta.check = selo).
+//
+// Atende pela function `nearby-places` com { area: 'faq', action } — o
+// projeto bateu o limite de functions do plano do Supabase (2026-10-15),
+// então as duas abas novas do Agente de Dados dividem a mesma function.
+// Ações (JWT do dono): suggest {count?}, add {question, answer, category},
+// update {id, question, answer, category?}, verify {id}, approve {id},
+// recheck_due. Apagar é direto pela tela (RLS do dono).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { requirePaidAccess } from '../_shared/access.ts'
-import { callClaude, checkAndSave, fetchFaqConfig, isDue, parseJson, type FaqMeta, type FaqRow } from '../_shared/faqCheck.ts'
+import { requirePaidAccess } from './access.ts'
+import { callClaude, checkAndSave, fetchFaqConfig, getTavilyKey, isDue, parseJson, type FaqMeta, type FaqRow } from './faqCheck.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -21,13 +22,11 @@ const cors = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const clean = (v: unknown, max: number) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+export async function handleFaq(req: Request, body: Record<string, unknown>): Promise<Response> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const admin = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!
-    const tavilyKey = Deno.env.get('TAVILY_API_KEY')
     const bearer = req.headers.get('Authorization') ?? ''
     if (!bearer) return json({ error: 'Unauthorized' }, 401)
     const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: bearer } } })
@@ -41,10 +40,9 @@ Deno.serve(async (req) => {
     const noPlan = await requirePaidAccess(admin, company.id as string)
     if (noPlan) return noPlan
 
-    const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const action = String(body.action ?? '')
     const city = String(company.city ?? '')
-    const ctx = { anthropicKey, tavilyKey, cfg, city, companyId: company.id as string }
+    const ctx = { anthropicKey, tavilyKey: await getTavilyKey(admin), cfg, city, companyId: company.id as string }
     const catKeys = new Set(cfg.categories.map(c => c.key))
     const cat = (v: unknown) => (catKeys.has(String(v)) ? String(v) : cfg.categories[0]?.key ?? 'geral')
 
@@ -124,10 +122,10 @@ Responda SÓ um array JSON: [{"category": "...", "question": "...", "answer": ".
 
     return json({ error: 'Ação desconhecida.' }, 400)
   } catch (err) {
-    console.error('faq-agent', err)
+    console.error('faq (nearby-places)', err)
     return json({ error: 'Não consegui fazer isso agora. Tente de novo.' }, 500)
   }
-})
+}
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type': 'application/json' } })

@@ -384,7 +384,9 @@ Os posts que nascem daqui seguem a regra 1: só saem com aprovação do dono.
    - critério de pronto: nenhuma dica com número aparece em post sem selo
      ou aprovação humana; o selo mostra data e link de verdade.
    - *Feito (2026-10-15, mesmo PR da etapa 1):* sub-aba "❓ Dicas e FAQ"
-     (`FaqTips.tsx` → function `faq-agent` → `_shared/faqCheck.ts`), dados em
+     (`FaqTips.tsx` → function `nearby-places` com `area: 'faq'` →
+     `_shared/faqHandler.ts` + `_shared/faqCheck.ts`; a function `faq-agent`
+     do PR original não pôde ser criada, ver PITFALLS), dados em
      `marketing_ai_knowledge` (module `dados`, kind `faq`). Vaga semanal
      `dica_faq` no calendário (card de pergunta e resposta do render-format)
      usa só dica liberada; sem dica liberada, vira carrossel de slides com
