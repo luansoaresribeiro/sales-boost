@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { track } from '../../../lib/analytics'
 import { useShowcase } from '../../../contexts/ShowcaseContext'
+import { useCompany } from '../../../contexts/CompanyContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 
 const ORANGE = '#FF6D29'
@@ -50,6 +51,17 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
   const [busyId, setBusyId] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
+  const { company } = useCompany()
+  // Setor que desligou o card genérico (post_card — fluxo antigo de imagem de
+  // IA/tweet) só tem o carrossel de slides aqui; o servidor faz a mesma regra.
+  const [postCardOff, setPostCardOff] = useState(false)
+  useEffect(() => {
+    if (!company?.vertical_key) return
+    supabase.from('vertical_playbooks').select('config').eq('key', company.vertical_key).maybeSingle().then(({ data }) => {
+      const off = (data?.config as { content_rules?: { disabled_formats?: unknown } } | null)?.content_rules?.disabled_formats
+      setPostCardOff(Array.isArray(off) && off.map(String).includes('post_card'))
+    })
+  }, [company?.vertical_key])
 
   const load = useCallback(async () => {
     const [{ data: i }, { data: t }] = await Promise.all([
@@ -179,9 +191,9 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
               {i.angle && <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>{i.angle}</div>}
               {i.rationale && <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, fontStyle: 'italic' }}>{i.rationale}</div>}
               <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '6px' }}>
-                <button onClick={() => generatePost(i)} disabled={!!busyId || i.status === 'used'} style={{ flex: 1, padding: '7px', background: i.status === 'used' ? 'rgba(255,255,255,0.06)' : ORANGE, color: i.status === 'used' ? MUTED : '#000', fontWeight: 700, fontSize: '11px', borderRadius: '8px', border: 'none', cursor: busyId || i.status === 'used' ? 'default' : 'pointer', fontFamily: D }}>
+                {!postCardOff && <button onClick={() => generatePost(i)} disabled={!!busyId || i.status === 'used'} style={{ flex: 1, padding: '7px', background: i.status === 'used' ? 'rgba(255,255,255,0.06)' : ORANGE, color: i.status === 'used' ? MUTED : '#000', fontWeight: 700, fontSize: '11px', borderRadius: '8px', border: 'none', cursor: busyId || i.status === 'used' ? 'default' : 'pointer', fontFamily: D }}>
                   {busyId === `${i.id}:post` ? 'Gerando...' : i.status === 'used' ? 'Já gerado' : '✨ Post'}
-                </button>
+                </button>}
                 <button onClick={() => generatePost(i, true)} disabled={!!busyId || i.status === 'used'} title="Carrossel de slides (tipo apresentação)" style={{ flex: 1, padding: '7px', background: 'rgba(255,109,41,0.12)', color: i.status === 'used' ? MUTED : ORANGE, fontWeight: 700, fontSize: '11px', borderRadius: '8px', border: '1px solid rgba(255,109,41,0.35)', cursor: busyId || i.status === 'used' ? 'default' : 'pointer', fontFamily: D }}>
                   {busyId === `${i.id}:deck` ? 'Gerando...' : '📑 Carrossel'}
                 </button>

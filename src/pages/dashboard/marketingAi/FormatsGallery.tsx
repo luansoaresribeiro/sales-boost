@@ -5,10 +5,10 @@ import { STANDARD_FORMATS, type FormatDef } from './formats'
 import { useLang } from '../../../contexts/LanguageContext'
 
 const TX = {
-  pt: { title: '📐 Formatos & Dimensões', d1: 'Tamanhos e placements por plataforma. O criativo é adaptado pra cada formato pelo renderizador (recompõe, não estica) — ', d2: 'trocar formato não gera nova imagem de IA', d3: '. Escolha o formato no Studio ao gerar.',
+  pt: { title: '📐 Formatos & Dimensões', d1: 'Tamanhos e placements por plataforma. O criativo é adaptado pra cada formato pelo renderizador (recompõe, não estica) — ', d2: 'trocar formato não gera nova imagem de IA', d3: '. Usado quando você adapta uma peça pra outro tamanho (botão Adaptar, dentro da peça).',
     loading: 'Carregando...', deactivate: 'Desativar', activate: 'Ativar', remove: 'Remover', custom: '+ Formato custom:', name: 'Nome', width: 'Largura', height: 'Altura', save: 'Salvar',
     presets: '🎯 Presets (campanhas multi-formato)', presetPh: 'Nome do preset (ex: Campanha Instagram)', savePreset: 'Salvar preset' },
-  en: { title: '📐 Formats & Dimensions', d1: 'Sizes and placements per platform. The creative is adapted to each format by the renderer (recomposes, does not stretch) — ', d2: 'switching format does not generate a new AI image', d3: '. Pick the format in the Studio when generating.',
+  en: { title: '📐 Formats & Dimensions', d1: 'Sizes and placements per platform. The creative is adapted to each format by the renderer (recomposes, does not stretch) — ', d2: 'switching format does not generate a new AI image', d3: '. Used when you adapt a piece to another size (Adapt button, inside the piece).',
     loading: 'Loading...', deactivate: 'Deactivate', activate: 'Activate', remove: 'Remove', custom: '+ Custom format:', name: 'Name', width: 'Width', height: 'Height', save: 'Save',
     presets: '🎯 Presets (multi-format campaigns)', presetPh: 'Preset name (e.g. Instagram Campaign)', savePreset: 'Save preset' },
 } as const

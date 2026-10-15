@@ -1311,3 +1311,37 @@ grátis de 30 s, acima — mantidos como histórico):
     não apareciam lá. Agora aparecem (menos as já agendadas) e o contador do
     menu soma elas. "Ver e aprovar" abre a mesma janela do calendário
     (publicar agora / agendar / excluir). Nada vai ao ar sem o clique do dono.
+- **Nada preso ao fluxo antigo + marca a partir do logo + memória do
+  conteúdo** — 2026-10-15 (pedido do dono).
+  - **Aba Formatos (Padrão visual):**
+    - saíram o "motor de imagem" manual (Print de Tweet, Post com Foto com
+      fundo de IA…) e o catálogo de formatos próprios (`module='formato'`,
+      zero cadastrados) — geravam pelo caminho antigo;
+    - agora a aba lista os tipos de criativo da ficha (os mesmos da
+      estratégia), com status e "⚡ Gerar agora"; ficou "Formatos &
+      Dimensões" (tamanhos, usado no Adaptar).
+  - **Portas fechadas no servidor:**
+    - `fetchFormatCatalog` não lê mais formatos próprios;
+    - `generateForCompany` vira carrossel de slides sempre que a ficha
+      desliga `post_card` (cobre botão "✨ Post" das Ideias, cron diário
+      antigo, estratégia antiga);
+    - vaga de post que não seja `post_card` vira slides;
+    - o botão "✨ Post" some das Ideias quando a ficha desliga o card.
+  - **Enquete dos Stories ("pagaria R$X?"):** era o card "tipo tweet"; agora
+    é a foto real do imóvel com a pergunta por cima (template `photo`).
+  - **Cores da empresa nos cards:** os cards do `catalog-package` ("3 coisas
+    perto", enquete) saíam no laranja padrão do Sales Boost — agora usam o
+    Kit da Marca (cores, nome, logo).
+  - **Logo:**
+    - ao conectar o Instagram (`instagram-oauth-callback`), a foto de perfil
+      vira o logo na hora (`brand-kit-suggest` `on_connect`);
+    - nunca troca logo enviado pelo dono (só troca logo que também veio do
+      Instagram — arquivo `logo-ig-*`).
+  - **Cores a partir do logo:**
+    - logo novo (enviado, colado ou do Instagram) → a IA lê o logo e preenche
+      as cores (`brand-kit-suggest` `from_logo`), com "Desfazer" na tela;
+    - na conexão do Instagram, as cores só mudam sozinhas se o dono nunca
+      salvou o kit à mão;
+    - custo: 1 chamada Haiku por logo.
+  - **Memória do Agente de Conteúdo:** ver
+    [LEARNING.md](LEARNING.md#memória-do-agente-de-conteúdo-implementado-2026-10-15).

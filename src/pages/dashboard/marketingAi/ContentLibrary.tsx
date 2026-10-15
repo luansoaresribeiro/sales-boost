@@ -7,14 +7,14 @@ import { useLang, type Lang } from '../../../contexts/LanguageContext'
 
 const TX = {
   pt: {
-    topBrand: 'Marca (logo e cores)', topFormats: 'Formatos', topFeed: 'Prévia do feed', organic: 'Feed', stories: 'Stories',
+    topBrand: 'Marca (logo e cores)', topFormats: 'Formatos', topFeed: 'Prévia do feed', 
     title: '🎨 Padrão visual do feed',
-    d1: 'Marca', d2: ' (logo, cores e fontes que todo post usa) e ', d3: 'Formatos', d4: ' (a anatomia de cada imagem, do feed e dos stories). É isso que mantém o feed com cara de uma marca só.',
+    d1: 'Marca', d2: ' (logo, cores e fontes que todo post usa) e ', d3: 'Formatos', d4: ' (os tipos de criativo do seu setor, os mesmos que a estratégia usa). É isso que mantém o feed com cara de uma marca só.',
   },
   en: {
-    topBrand: 'Brand (logo & colors)', topFormats: 'Formats', topFeed: 'Feed preview', organic: 'Feed', stories: 'Stories',
+    topBrand: 'Brand (logo & colors)', topFormats: 'Formats', topFeed: 'Feed preview', 
     title: '🎨 Feed visual pattern',
-    d1: 'Brand', d2: ' (logo, colors and fonts every post uses) and ', d3: 'Formats', d4: ' (the anatomy of each image, for feed and stories). This keeps the feed looking like one brand.',
+    d1: 'Brand', d2: ' (logo, colors and fonts every post uses) and ', d3: 'Formats', d4: ' (the creative types for your industry, the same ones the strategy uses). This keeps the feed looking like one brand.',
   },
 } as const
 
@@ -41,13 +41,6 @@ const TOP_TABS = (lang: Lang): { key: string; icon: string; label: string }[] =>
   { key: 'marca', icon: '🏷️', label: TX[lang].topBrand },
   { key: 'formatos', icon: '🧩', label: TX[lang].topFormats },
 ]
-// Sub-abas de módulo — filtram Formatos e Testes por Orgânico/Stories.
-// Campanhas saiu (mudou pra dentro de Agente de Meta Ads).
-const MODULES = (lang: Lang): { key: 'organico' | 'stories'; icon: string; label: string }[] => [
-  { key: 'organico', icon: '✍️', label: TX[lang].organic },
-  { key: 'stories', icon: '📖', label: TX[lang].stories },
-]
-
 // Continuam exportados — usados por ModuleLibrary.tsx e ContentVault.tsx.
 export const KIND_LABEL: Record<string, string> = {
   personality: 'Personalidades', framework: 'Frameworks de copy', hook: 'Hooks', cta: 'CTAs', visual_system: 'Sistemas visuais',
@@ -64,7 +57,6 @@ export const kindLabel = (k: string, lang: Lang = 'pt') => (lang === 'en' ? KIND
 export default function ContentLibrary({ companyId }: { companyId: string }) {
   const { lang } = useLang(); const tx = TX[lang]
   const [top, setTop] = useState('feed')
-  const [mod, setMod] = useState<'organico' | 'stories'>('organico')
 
   return (
     <div>
@@ -89,23 +81,7 @@ export default function ContentLibrary({ companyId }: { companyId: string }) {
         })}
       </div>
 
-      {/* Sub-abas de módulo — Formatos de feed e de stories. */}
-      {top === 'formatos' && (
-        <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '11px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          {MODULES(lang).map(m => {
-            const active = mod === m.key
-            return (
-              <button key={m.key} onClick={() => setMod(m.key)}
-                style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 13px', background: active ? 'rgba(255,109,41,0.12)' : 'transparent', border: `1px solid ${active ? 'rgba(255,109,41,0.35)' : 'transparent'}`, borderRadius: '8px', cursor: 'pointer', fontFamily: D }}>
-                <span style={{ fontSize: '14px' }}>{m.icon}</span>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: active ? ORANGE : 'white' }}>{m.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      {top === 'formatos' ? <FormatsLibrary companyId={companyId} module={mod} /> : top === 'feed' ? <FeedPreview companyId={companyId} /> : <BrandKit companyId={companyId} />}
+      {top === 'formatos' ? <FormatsLibrary companyId={companyId} /> : top === 'feed' ? <FeedPreview companyId={companyId} /> : <BrandKit companyId={companyId} />}
     </div>
   )
 }

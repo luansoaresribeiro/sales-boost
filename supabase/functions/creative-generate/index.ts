@@ -24,6 +24,7 @@ import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchContentRules, ensure
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
 import { privateFieldKeys } from '../_shared/nearbyPlaces.ts'
+import { loadLessons, lessonsBlock, relearn } from '../_shared/contentLessons.ts'
 import { checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 
 const cors = {
@@ -447,6 +448,11 @@ interface GenOpts {
 // O núcleo da geração — usado tanto pelo modo interativo (1 empresa, o
 // dono clicou) quanto pelo lote diário (várias empresas, cron).
 async function generateForCompany(admin: SupaClient, anthropicKey: string, company: Company, kind: string, opts: GenOpts) {
+  // Fluxo antigo fechado (dono, 2026-10-15): se a ficha do setor desligou o
+  // card genérico (post_card — imagem de IA/tweet), QUALQUER pedido de post
+  // solto (botão de ideia, cron diário antigo, estratégia antiga) sai como
+  // carrossel de slides da marca.
+  if (!opts.deck && !(await fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id)).some(f => f.key === 'post_card')) opts = { ...opts, deck: true }
   const [{ data: cfgRow }, { data: insRows }, { data: libRows }, { data: visRows }, { data: fmtRows }, { data: bdRow }, { data: recentRows }, { data: productRows }, realReview, realStat, playbookBlock] = await Promise.all([
     admin.from('marketing_ai_config').select('agent_name, brand_voice, tone, target_audience, content_pillars, marketing_goals, business_objectives, allow_carrossel').eq('company_id', company.id).maybeSingle(),
     admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(6),
@@ -610,7 +616,7 @@ ${frameworkContent ? `\nUse este framework de copy:\n${frameworkContent}` : ''}
 ${visualContent ? `\nConceito visual a evocar:\n${visualContent}` : ''}
 
 Boas práticas do formato ${modLabel} (siga-as):\n${moduleKnow}
-${visualRefs ? `\nReferências visuais da marca (Layouts & Estilos — inspire-se no estilo quando fizer sentido):\n${visualRefs}\n` : ''}
+${visualRefs ? `\nReferências visuais da marca (Layouts & Estilos — inspire-se no estilo quando fizer sentido):\n${visualRefs}\n` : ''}${lessonsBlock(await loadLessons(admin, company.id))}
 Escreva o post pronto pra publicar. Regras importantes:
 - "caption" é APENAS a legenda que vai no Instagram (texto pro público). NUNCA coloque nela instruções de imagem, descrição de foto nem "Slide 1/2/3".
 - Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
@@ -844,6 +850,9 @@ async function fetchWeekPillarOccupancy(admin: SupaClient, companyId: string, da
 
 async function planWeekForCompany(admin: SupaClient, anthropicKey: string, company: Company, auth: { bearer: string; isCron: boolean; cronSecret?: string }): Promise<{ planned: number; days: { date: string; posts: number; note: string }[]; todo: { format: string; name: string; per_week: number; purpose: string }[] }> {
   const dates = nextWeekDates()
+  // Memória do conteúdo: antes de criar a semana, atualiza as lições se
+  // chegou sinal novo (peça excluída/editada, nota baixa). Sem sinal, sem IA.
+  try { await relearn(admin, anthropicKey, company.id, { onlyIfStale: true }) } catch (e) { console.error('relearn (semana) falhou', e) }
   const [{ data: insRows }, { data: pendingRows }, playbookBlock, pillarOccupancyNote, { data: stratRow }] = await Promise.all([
     admin.from('marketing_ai_insights').select('pillar, title, description').eq('company_id', company.id).eq('status', 'open').order('created_at', { ascending: false }).limit(8),
     admin.from('marketing_ai_test_content').select('id').eq('company_id', company.id).eq('status', 'draft').is('quality_score', null),
@@ -1045,7 +1054,10 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
       // liberada, sai um carrossel de slides com o mesmo propósito.
       if (job.format === FAQ_FORMAT && await runFaqSlot(admin, anthropicKey, company, job)) return
       const seed = { title: job.name, angle: `Pilar ${job.pillar}: ${job.purpose || 'serve a estratégia ativa'}${job.format === FAQ_FORMAT ? ' — dica GERAL: sem número, prazo, taxa, valor nem nome de lei (nada foi conferido em fonte oficial).' : ''}`, format: 'foto' }
-      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format === DECK_FORMAT || job.format === FAQ_FORMAT })
+      // Só o card genérico (post_card, em setor que não desligou) usa o
+      // caminho de imagem+template; qualquer outro formato de post — inclusive
+      // um antigo que ficou numa estratégia — sai como carrossel de slides.
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card' })
       return
     }
     if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }
@@ -1086,7 +1098,7 @@ ${chk.source_url ? `Fonte oficial: ${chk.source_title ?? ''} (${new URL(chk.sour
 - "card_question": a pergunta, curta (até 90 caracteres).
 - "card_answer": a resposta resumida pro card (até 130 caracteres). Copie números exatamente como estão; não acrescente nenhum número.
 - "caption": legenda que explica a resposta com calma, sem acrescentar fato, número ou lei que não esteja na resposta.${chk.source_url ? ' Termine com "Fonte: <nome do site oficial>".' : ''}
-${HONESTY_RULE} Sem emoji no card.
+${HONESTY_RULE} Sem emoji no card.${lessonsBlock(await loadLessons(admin, company.id))}
 Responda SÓ em JSON: {"card_question":"...","card_answer":"...","caption":"...","hashtags":"#a #b","cta":"..."}`, 900)) as typeof out
   } catch (e) { console.error('runFaqSlot: texto falhou', company.id, e); return false }
   const allowed = new Set(numbersIn(`${tip.title} ${tip.content}`))
@@ -1139,7 +1151,7 @@ Dados reais do imóvel (use só isto):
 ${facts || '(sem dados além do título)'}
 Título: ${item.title}
 Objetivo da peça na estratégia: ${job.purpose || job.name}
-${HONESTY_RULE} A legenda é pro público do Instagram — nunca um recado pro corretor.
+${HONESTY_RULE} A legenda é pro público do Instagram — nunca um recado pro corretor.${lessonsBlock(await loadLessons(admin, company.id))}
 Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`, 700))
   } catch (e) { console.error('runVideoSlot: legenda falhou', company.id, e) }
   const { data: piece, error } = await admin.from('marketing_ai_test_content').insert({
@@ -1279,6 +1291,13 @@ Deno.serve(async (req) => {
 
     // Botão manual "Planejar semana agora" (Calendário da Semana) — mesma
     // lógica do cron de domingo, só que na hora, pro dono testar/adiantar.
+    // Memória do Agente de Conteúdo: a tela chama depois que o dono exclui
+    // uma peça com motivo ou edita a legenda. Devolve as lições atuais.
+    if (body.action === 'relearn') {
+      const r = await relearn(admin, anthropicKey, company.id)
+      return json({ ok: true, ...r })
+    }
+
     // Opções do "Gerar agora": só tipos que funcionam hoje (mesmo filtro do make_now).
     if (body.action === 'make_now_options') {
       const [formats, { data: rows }] = await Promise.all([
@@ -1287,9 +1306,11 @@ Deno.serve(async (req) => {
       ])
       const items = ((rows ?? []) as { id: string; title: string | null; meta: { photos?: unknown[] } | null }[])
         .filter(r => (r.meta?.photos?.length ?? 0) >= 5).map(r => ({ id: r.id, title: r.title ?? 'Imóvel' }))
-      const options = formats.filter(f => f.status === 'live' && f.producer !== 'dm' && (f.producer === 'post' || f.producer === 'item_video' || !!f.recipe))
-        .map(f => ({ key: f.key, name: f.name, producer: f.producer, surface: f.surface ?? (f.producer === 'item_video' ? 'reels' : 'feed') }))
-      return json({ ok: true, formats: options, items })
+      const canMake = (f: typeof formats[number]) => f.status === 'live' && f.producer !== 'dm' && (f.producer === 'post' || f.producer === 'item_video' || !!f.recipe)
+      const view = (f: typeof formats[number]) => ({ key: f.key, name: f.name, producer: f.producer, status: f.status, can_make: canMake(f), media: f.media ?? null, surface: f.surface ?? (f.producer === 'item_video' ? 'reels' : f.producer === 'dm' ? 'dm' : 'feed') })
+      // formats = o que dá pra gerar agora; all = a lista inteira da ficha
+      // (aba Formatos do Padrão visual mostra tudo, com o status de cada um).
+      return json({ ok: true, formats: formats.filter(canMake).map(view), all: formats.map(view), items })
     }
 
     if (body.action === 'make_now') {

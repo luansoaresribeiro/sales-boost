@@ -96,6 +96,56 @@ Retorne SOMENTE um JSON:
   return null
 }
 
+// Cores a partir do LOGO (pedido do dono, 2026-10-15): entrou logo novo
+// (enviado à mão ou puxado do Instagram) → a IA lê o logo e devolve o sistema
+// de cores. Só cores que estão no logo (+ texto/fundo com contraste). SVG ou
+// link quebrado → null (fica o que já existia).
+type Colors = Suggestion['colors']
+const HEX = /^#[0-9a-fA-F]{6}$/
+async function colorsFromLogo(anthropicKey: string, logoUrl: string): Promise<Colors | null> {
+  if (!/^https:\/\//.test(logoUrl) || /\.svg(\?|$)/i.test(logoUrl)) return null
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001', max_tokens: 300,
+        messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'url', url: logoUrl } }, { type: 'text', text: `Este é o logo de uma empresa. Extraia o sistema de cores DA MARCA a partir dele (não invente cor que não está no logo; ignore fundo branco/transparente de foto, a não ser que o logo seja só preto e branco).
+Responda SÓ em JSON: {"primary":["#hex","#hex"],"accent":["#hex","#hex"],"text":"#hex","bg":"#hex"}
+- "primary": as 2 cores principais do logo (se só tiver 1, repita uma versão mais escura dela).
+- "accent": 2 cores secundárias do logo (se não houver, tons da principal).
+- "text" e "bg": texto e fundo de post com bom contraste, combinando com o logo.` }] }],
+      }),
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (!res.ok) { console.error('colorsFromLogo: IA recusou', res.status); return null }
+    const data = await res.json()
+    const raw = String(data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+    const c = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)) as Partial<Colors>
+    const two = (a: unknown) => Array.isArray(a) ? a.map(String).filter(x => HEX.test(x)).slice(0, 2) : []
+    const primary = two(c.primary), accent = two(c.accent)
+    if (!primary.length || !HEX.test(String(c.text)) || !HEX.test(String(c.bg))) return null
+    while (primary.length < 2) primary.push(primary[0])
+    while (accent.length < 2) accent.push(accent[0] ?? primary[1])
+    return { primary, accent, text: String(c.text), bg: String(c.bg) }
+  } catch (e) { console.error('colorsFromLogo falhou', e); return null }
+}
+
+// Salva só as cores no kit (preserva tipografia/composição) e devolve as
+// anteriores, pra tela oferecer "desfazer".
+async function saveColors(admin: ReturnType<typeof createClient>, companyId: string, colors: Colors, extra: Record<string, unknown> = {}): Promise<Colors | null> {
+  const { data: bd } = await admin.from('brand_dna').select('kit').eq('company_id', companyId).maybeSingle()
+  const prevKit = (bd?.kit ?? {}) as Record<string, unknown> & { colors?: Colors }
+  const kit = { typography: { heading: 'Bricolage Grotesque', body: 'Bricolage Grotesque' }, composition: '', ...prevKit, colors }
+  await admin.from('brand_dna').upsert({ company_id: companyId, kit, colors: [...colors.primary, ...colors.accent], updated_at: new Date().toISOString(), ...extra }, { onConflict: 'company_id' })
+  return prevKit.colors ?? null
+}
+
+// Logo puxado do Instagram mora em renders/<empresa>/logo-ig-*; enviado à
+// mão é logo-<uuid> (ou um link colado). Só o do Instagram pode ser trocado
+// sozinho — o do dono nunca.
+const isIgLogo = (url: string | null | undefined) => !url || /\/logo-ig-/.test(url)
+
 // Decide e SALVA — o dono só revisa depois, não precisa clicar em nada pra
 // o kit existir. Preserva tipografia/voz já definidas (a IA não vê isso em
 // foto); mexe em cores + composição, e agora também no logo (busca sozinho
@@ -114,7 +164,10 @@ async function generateAndSave(admin: ReturnType<typeof createClient>, anthropic
   }
 
   const urls = await gatherRealPhotoUrls(admin, companyId)
-  const suggestion = urls.length >= 2 ? await askClaude(anthropicKey, urls) : null
+  let suggestion = urls.length >= 2 ? await askClaude(anthropicKey, urls) : null
+  // Logo novo do Instagram: as cores da marca saem do logo (fotos só dão a composição).
+  const logoColors = logoSet && logoUrl ? await colorsFromLogo(anthropicKey, logoUrl) : null
+  if (logoColors) suggestion = { colors: logoColors, composition: suggestion?.composition ?? '' }
 
   if (!suggestion && !logoSet) {
     return { ok: false, error: urls.length < 2 ? 'Ainda não há fotos reais suficientes (Instagram ou Produtos) pra decidir um kit.' : 'A IA não conseguiu ler as cores das fotos.' }
@@ -151,6 +204,22 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const isCron = cronSecretEnv && body.cron_secret === cronSecretEnv
 
+    // Instagram acabou de conectar (instagram-oauth-callback): foto de perfil
+    // vira o logo na hora — só se não há logo ou se o atual também veio do
+    // Instagram. Cores saem do logo, a não ser que o dono já tenha salvo o
+    // kit à mão (aí só o logo muda; ele pode puxar as cores pelo botão).
+    if (isCron && body.action === 'on_connect' && typeof body.company_id === 'string') {
+      const companyId = body.company_id
+      const { data: bd } = await admin.from('brand_dna').select('logo_url, auto_generated').eq('company_id', companyId).maybeSingle()
+      if (!isIgLogo(bd?.logo_url as string | null)) return json({ ok: true, skipped: 'logo do dono' })
+      const logoUrl = await fetchInstagramLogo(admin, companyId)
+      if (!logoUrl) return json({ ok: false, error: 'sem foto de perfil' })
+      const colors = bd?.auto_generated === false ? null : await colorsFromLogo(anthropicKey, logoUrl)
+      if (colors) await saveColors(admin, companyId, colors, { logo_url: logoUrl, auto_generated: true })
+      else await admin.from('brand_dna').upsert({ company_id: companyId, logo_url: logoUrl, updated_at: new Date().toISOString() }, { onConflict: 'company_id' })
+      return json({ ok: true, logo_set: true, colors_set: !!colors })
+    }
+
     // Modo cron: decide sozinho, uma vez por semana, só pra quem ainda não
     // teve o kit editado manualmente (auto_generated=true ou nunca gerado).
     if (isCron) {
@@ -182,6 +251,18 @@ Deno.serve(async (req) => {
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
     const noPlan = await requirePaidAccess(admin, company.id)
     if (noPlan) return noPlan
+
+    // Logo novo (enviado à mão ou colado) → cores a partir dele. Devolve as
+    // anteriores pra tela mostrar "desfazer".
+    if (body.action === 'from_logo') {
+      const { data: bd } = await admin.from('brand_dna').select('logo_url').eq('company_id', company.id).maybeSingle()
+      const logoUrl = bd?.logo_url as string | null
+      if (!logoUrl) return json({ error: 'Envie o logo primeiro.' }, 400)
+      const colors = await colorsFromLogo(anthropicKey, logoUrl)
+      if (!colors) return json({ error: 'Não consegui ler as cores desse logo (use PNG ou JPG).' }, 400)
+      const prev = await saveColors(admin, company.id, colors)
+      return json({ ok: true, colors, prev })
+    }
 
     const result = await generateAndSave(admin, anthropicKey, company.id)
     if (!result.ok) return json({ error: result.error }, 400)
