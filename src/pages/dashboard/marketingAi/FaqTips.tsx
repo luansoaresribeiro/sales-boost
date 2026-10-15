@@ -5,7 +5,8 @@ import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 
 // Agente de Dados → "Dicas e FAQ" (etapa 2, decisão do dono 2026-10-14).
-// A IA sugere dicas (ou o dono escreve) e o `faq-agent` confere: geral passa
+// A IA sugere dicas (ou o dono escreve) e o servidor (`nearby-places`, área
+// faq → _shared/faqHandler.ts) confere: geral passa
 // sozinha; com número/regra só com fonte OFICIAL (selo com data e link);
 // sem fonte fica "precisa revisar" até o dono aprovar. O post feito com a
 // dica continua esperando a aprovação do dono no calendário (regra 1).
@@ -63,8 +64,9 @@ export default function FaqTips({ companyId, categories }: { companyId: string; 
     if (!session) return false
     setErr(null)
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/faq-agent`, {
-        method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      // Dicas e FAQ divide a function com "Lugares perto" (limite de functions do plano).
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/nearby-places`, {
+        method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ area: 'faq', ...body }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setErr(data.error ?? tx.err); return false }

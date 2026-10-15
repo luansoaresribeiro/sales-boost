@@ -7,9 +7,14 @@
  * Body: { item_id, refresh?: boolean }. Só o dono da empresa (JWT).
  * A lógica mora em _shared/nearbyPlaces.ts (o catalog-package usa a mesma
  * pra escrever o post "3 coisas perto" com lugares de verdade).
+ *
+ * Também atende a aba "Dicas e FAQ" ({ area: 'faq', action, ... } →
+ * _shared/faqHandler.ts): o projeto bateu o limite de functions do plano
+ * do Supabase (2026-10-15), então as duas abas novas dividem esta function.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { ensureNearby, fetchNearbyConfig } from '../_shared/nearbyPlaces.ts'
+import { handleFaq } from '../_shared/faqHandler.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +25,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>
+    if (body.area === 'faq') return await handleFaq(req, body)
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const admin = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     const bearer = req.headers.get('Authorization') ?? ''
@@ -28,7 +35,6 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser()
     if (!user) return json({ error: 'Unauthorized' }, 401)
 
-    const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const itemId = typeof body.item_id === 'string' && UUID.test(body.item_id) ? body.item_id : ''
     if (!itemId) return json({ error: 'item_id obrigatório' }, 400)
 

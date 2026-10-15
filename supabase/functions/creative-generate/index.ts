@@ -24,7 +24,7 @@ import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchContentRules, ensure
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
 import { privateFieldKeys } from '../_shared/nearbyPlaces.ts'
-import { checkAndSave, fetchFaqConfig, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
+import { checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -1041,7 +1041,7 @@ async function runFaqSlot(admin: SupaClient, anthropicKey: string, company: Comp
   if (!cfg) return false
   const { data } = await admin.from('marketing_ai_knowledge').select('id, title, content, meta').eq('company_id', company.id).eq('module', 'dados').eq('kind', 'faq')
   const rows = (data ?? []) as FaqRow[]
-  const ctx = { anthropicKey, tavilyKey: Deno.env.get('TAVILY_API_KEY'), cfg, city: company.city ?? '', companyId: company.id }
+  const ctx = { anthropicKey, tavilyKey: await getTavilyKey(admin), cfg, city: company.city ?? '', companyId: company.id }
   // Vencidas: reconfere (no máximo 2 por vaga) antes de escolher.
   for (const r of rows.filter(r => isDue(r.meta)).slice(0, 2)) Object.assign(r, await checkAndSave(admin, r, ctx))
   const tip = rows.filter(r => isPublishable(r.meta)).sort((a, b) => (a.meta?.used_count ?? 0) - (b.meta?.used_count ?? 0))[0]

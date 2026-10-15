@@ -526,3 +526,13 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   por vez (dois ao mesmo tempo do mesmo IP = 504). Há 2 servidores reserva
   em `_shared/nearbyPlaces.ts`. No mapa tem lixo (parquinho marcado como
   praia): por isso o `name_pattern` por categoria na ficha.
+- **Limite de functions do Supabase** (achado 2026-10-15): criar function
+  nova deu "Max number of functions reached for project". Subir de plano
+  custa dinheiro e apagar function velha é remover funcionalidade (precisa
+  do dono). Por isso "Dicas e FAQ" atende pela mesma function de "Lugares
+  perto" (`nearby-places`, `{ area: 'faq' }`). Antes de planejar function
+  nova, contar as que existem (`list_edge_functions`) ou reaproveitar uma.
+- **Nominatim recusa (403) pedidos vindos das edge functions** (achado
+  2026-10-15; do banco, via pg_net, funcionava). O endereço é achado pelo
+  Photon (photon.komoot.io), outro geocodificador grátis do OpenStreetMap.
+  O Overpass vai por POST com 4 servidores na fila (`_shared/nearbyPlaces.ts`).

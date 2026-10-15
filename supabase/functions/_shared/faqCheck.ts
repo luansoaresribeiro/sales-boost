@@ -97,6 +97,17 @@ async function searchOfficial(tavilyKey: string, query: string, domains: string[
     .filter(h => isOfficial(h.url, domains))
 }
 
+// Chave da Tavily: secret do ambiente ou, se não tiver, o _app_config (mesmo
+// fallback do insights-collect — em produção ela mora só no _app_config).
+export async function getTavilyKey(admin: Admin): Promise<string | undefined> {
+  const env = Deno.env.get('TAVILY_API_KEY')
+  if (env) return env
+  try {
+    const { data } = await admin.from('_app_config').select('value').eq('key', 'tavily_api_key').maybeSingle()
+    return data?.value ? String(data.value) : undefined
+  } catch { return undefined }
+}
+
 const addDays = (d: number) => new Date(Date.now() + d * 86400000).toISOString()
 
 // Confere uma dica. Nunca lança: falha vira "revisar" com o motivo.
