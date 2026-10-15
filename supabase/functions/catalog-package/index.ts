@@ -6,9 +6,9 @@
  * publishToInstagram). Nunca publica sozinho.
  *
  * Só produz hoje as receitas cuja mídia já dá pra montar sem depender de
- * material que ainda não existe: fotos reais do catálogo, imagem genérica
- * de clima/ambiente (nunca fingindo ser o lugar real) ou card de
- * texto/gráfico. Receitas que precisam de material E autorização do
+ * material que ainda não existe: fotos reais do catálogo, lugares reais
+ * do OpenStreetMap ou card de texto/gráfico (sem imagem genérica de IA
+ * desde 2026-10-14). Receitas que precisam de material E autorização do
  * cliente (prova social/marca pessoal) ficam de fora — não tem como
  * "Gerar pacote" preencher isso sozinho (ver ficha, campo `descricao`).
  *
@@ -29,7 +29,6 @@ const cors = {
 }
 type SupaClient = ReturnType<typeof createClient>
 
-const NO_TEXT_RULE = 'CRITICAL: this image must contain ONLY the visual scene — environment, people, products, objects, lighting, composition. Absolutely NO text of any kind anywhere in the image: no headlines, captions, CTAs, logos with text, signs, banners, posters, screens, labels, packaging text, watermarks, or simulated/gibberish lettering. If the scene naturally includes an object that would normally carry text (a sign, menu, screen, clipboard, label), render it completely blank — a clean empty surface. Never attempt to write, spell, or render any character.'
 
 interface Photo { url: string; path: string }
 interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
@@ -144,18 +143,6 @@ async function scoreTestContent(supabaseUrl: string, serviceKey: string, company
       body: JSON.stringify({ action: 'score', test_id: testId, company_id: companyId }),
     })
   } catch (e) { console.error('catalog-package: scoreTestContent falhou', testId, e) }
-}
-
-async function generateMoodImage(supabaseUrl: string, serviceKey: string, companyId: string, evoke: string): Promise<string | null> {
-  try {
-    const prompt = `Professional lifestyle photo evoking the general atmosphere of a residential neighborhood in Rio de Janeiro, Brazil — NOT a specific identifiable real location, just a generic mood/climate scene. Warm natural lighting, polished commercial photography. ${NO_TEXT_RULE} Scene to evoke: ${evoke}`
-    const res = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
-      method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, size: '1024x1024', company_id: companyId, force_new: true }),
-    })
-    const data = await res.json().catch(() => ({})) as { url?: string }
-    return res.ok && data.url ? data.url : null
-  } catch { return null }
 }
 
 // auth: JWT do dono (botão) ou, no modo interno do calendário, cron_secret +
@@ -317,18 +304,17 @@ Deno.serve(async (req) => {
           caption = c.caption; hashtags = c.hashtags; cta = c.cta
           provider = 'lugares_osm'
         } else if (recipe === 'reels_o_que_compra_no_bairro' || recipe === 'post_3_coisas_perto') {
-          const evoke = recipe === 'reels_o_que_compra_no_bairro'
-            ? `everyday street life and lifestyle amenities of a pleasant Rio de Janeiro neighborhood — cafes, tree-lined sidewalk, local shops`
-            : `a few lifestyle amenities near a residence — a bakery, a park, a gym, generic and welcoming`
-          const url = await generateMoodImage(supabaseUrl, serviceKey, company.id as string, evoke)
-          if (!url) { skipped.push({ recipe, reason: 'Falha ao gerar a imagem genérica do bairro — tente de novo depois.' }); continue }
-          media = [{ url, type: 'photo' }]
+          // Sem lugares reais (mapa sem resultado ou sem bairro): foto REAL do
+          // imóvel e texto sem nome de lugar. Antes saía uma imagem genérica de
+          // IA (gente na calçada, padaria inventada) — o dono pediu pra
+          // tirar (2026-10-14): parecia post "do fluxo antigo".
+          media = [{ url: (photos[1] ?? photos[0]).url, type: 'photo' }]
           const briefing = recipe === 'reels_o_que_compra_no_bairro'
-            ? `Escreva um post sobre o que se compra/vive morando no bairro "${fields.bairro ?? 'da região'}" — estilo de vida, não o imóvel em si. Imagem já existe (clima genérico do bairro), escreva só o texto. Nota: idealmente isso seria um vídeo/Reels — por enquanto sai como imagem estática (etapa futura adiciona vídeo).`
-            : `Escreva um post "3 coisas perto" do imóvel${fields.perto_de ? ` — use isso que o corretor informou: ${fields.perto_de}` : ' — fale de forma genérica sobre tipo de comércio/lazer que costuma ter por perto (padaria, academia, parque), sem inventar um nome específico de estabelecimento que não foi informado'}.`
-          const c = await writeCopy(anthropicKey, briefing)
+            ? `Escreva um post sobre como é morar no bairro "${fields.bairro ?? 'da região'}" — estilo de vida, sem citar nome de estabelecimento nem número que não esteja nos dados. A foto é do imóvel real.`
+            : `Escreva um post "o que tem perto" do imóvel${fields.perto_de ? ` — use SÓ isto que o corretor informou: ${fields.perto_de}` : ' — fale de forma geral do bairro, sem inventar nome de lugar nem distância'}. A foto é do imóvel real.`
+          const c = await writeCopy(anthropicKey, `${briefing}\n${fieldsLine}`)
           caption = c.caption; hashtags = c.hashtags; cta = c.cta
-          provider = 'ia_generica'
+          provider = 'catalogo_real'
         } else if (recipe === 'stories_enquete_pagaria') {
           const cardText = `Quanto você pagaria por um ${String(fields.tipo ?? 'imóvel').toLowerCase()} assim em ${fields.bairro ?? 'um bairro como esse'}?`
           const url = await renderTweetCard(supabaseUrl, internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }, cardText)

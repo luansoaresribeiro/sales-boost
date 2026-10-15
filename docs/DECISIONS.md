@@ -1265,3 +1265,20 @@ grátis de 30 s, acima — mantidos como histórico):
     ficha** (praia, metrô, parque…), não só o mais perto de todos — senão
     uma cafeteria ganha da praia. Filtro de nome por categoria
     (`name_pattern`) tira lixo do mapa (parquinho marcado como praia).
+- **Imóveis sem "post tipo tweet" e sem imagem genérica de IA** —
+  2026-10-14 (dono, com print de uma moça andando na calçada: "estamos tendo
+  posts que parecem vir do fluxo antigo, como post tweet e post gerado").
+  - "3 coisas perto" e "o que R$ compra no bairro" não geram mais cena de IA
+    (gente, padaria inventada): usam foto real do imóvel + card com os
+    lugares reais (OpenStreetMap). Sem lugares, só foto real e texto sem
+    nome de lugar.
+  - A ficha de imóveis desliga o card genérico `post_card` (o "tweet") via
+    `content_rules.disabled_formats`; as vagas dele na estratégia viraram
+    carrossel de slides (migration `20261018110000`). Estratégia antiga que
+    ainda tiver um formato desligado sai como carrossel de slides.
+  - O carrossel de slides tem template próprio (`slide` no render-format):
+    fundo da marca, frase grande, "2/5" e barra de progresso — antes cada
+    slide era um "print de tweet".
+  - O template tweet imprimia "128 Retuítes · 1.204 Curtidas · 14:22" quando
+    o campo vinha vazio — número inventado (regra 5). Agora só aparece se o
+    dono preencher (render-format e prévia da tela).

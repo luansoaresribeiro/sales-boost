@@ -124,9 +124,31 @@ ${avatar}
 ${block([f.name || 'Nome'], 226, 172, 36, fg, 700, 0)}
 ${block(['@' + (f.handle || 'usuario')], 226, 214, 30, muted, 400, 0)}
 ${block(tl, 90, bodyY, 44, fg, 500, 60)}
-${block([`${f.time || '14:22'} · ${f.date || 'hoje'}`], 90, afterBody, 26, muted, 400, 0)}
-<rect x="90" y="${afterBody + 26}" width="900" height="2" fill="${line}"/>
-${block([`${f.retweets || '128'} Retuites     ${f.likes || '1.204'} Curtidas`], 90, afterBody + 78, 28, muted, 700, 0)}
+${f.time || f.date ? block([[f.time, f.date].filter(Boolean).join(' · ')], 90, afterBody, 26, muted, 400, 0) : ''}
+${f.retweets || f.likes ? `<rect x="90" y="${afterBody + 26}" width="900" height="2" fill="${line}"/>${block([[f.retweets && `${f.retweets} Retuites`, f.likes && `${f.likes} Curtidas`].filter(Boolean).join('     ')], 90, afterBody + 78, 28, muted, 700, 0)}` : ''}
+</svg>`
+  return { svg, w: W, h: H }
+}
+
+// Slide de carrossel "tipo apresentação" (pedido do dono 2026-10-14: o
+// carrossel de slides não pode parecer print de tweet). Fundo da marca,
+// frase grande, nome da marca em cima e "2/5" + barra de progresso embaixo.
+// Nada de número inventado (curtidas, horário).
+function svgSlide(f: F, b: Brand): { svg: string; w: number; h: number } {
+  const W = 1080, H = 1350, bg = b.bg || '#0E0B0A', text = b.text || '#ffffff'
+  const page = Math.max(1, Number(f.page) || 1), total = Math.max(page, Number(f.total) || 1)
+  const first = page === 1, size = first ? 76 : 62, lh = Math.round(size * 1.22)
+  const tl = limitLines(wrap(f.text || 'Seu texto aqui.', size, 900), first ? 8 : 10)
+  const top = Math.max(300, Math.round((H - tl.length * lh) / 2))
+  const barW = Math.round(900 * page / total)
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>
+<rect x="90" y="120" width="70" height="8" rx="4" fill="${b.primary}"/>
+${block([(f.name || b.name || '').toUpperCase().slice(0, 40)], 90, 190, 30, b.primary, 700, 0)}
+${block(tl, 90, top, size, text, first ? 800 : 700, lh)}
+<rect x="90" y="${H - 150}" width="900" height="6" rx="3" fill="${text}" fill-opacity="0.15"/>
+<rect x="90" y="${H - 150}" width="${barW}" height="6" rx="3" fill="${b.primary}"/>
+${block([`${page}/${total}`], 990, H - 90, 30, text, 600, 0, 'end')}
+${page < total ? block(['arraste →'], 90, H - 90, 30, b.primary, 700, 0) : ''}
 </svg>`
   return { svg, w: W, h: H }
 }
@@ -311,10 +333,12 @@ function svgReview(f: F, b: Brand): { svg: string; w: number; h: number } {
 // 'tweet'/'product'/'photo'/'problem'/'faq'/'trend'/'market_watch'/'review'
 // são os únicos templates válidos hoje (ver a regra em formatTemplates.tsx —
 // TEMPLATES precisa espelhar exatamente isso). Sem match, cai em 'photo' —
-// é o mais genérico/flexível.
+// é o mais genérico/flexível. 'slide' é interno (carrossel de slides do
+// creative-generate), não aparece na escolha de template do dono.
 function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, productImg: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
   switch (template) {
     case 'tweet': return svgTweet(f, b, logo)
+    case 'slide': return svgSlide(f, b)
     case 'product': return svgProduct(f, b, productImg)
     case 'problem': return svgProblem(f, b)
     case 'faq': return svgFaq(f, b)
@@ -337,7 +361,7 @@ Deno.serve(async (req) => {
       const brand = { primary: '#FF6D29', name: 'Test' }
       const safe = { top: 60, right: 80, bottom: 90, left: 80 }
       const sizes: Record<string, number> = {}
-      for (const t of ['tweet', 'product', 'photo', 'problem', 'faq', 'trend', 'market_watch', 'review']) {
+      for (const t of ['tweet', 'slide', 'product', 'photo', 'problem', 'faq', 'trend', 'market_watch', 'review']) {
         const { svg, w } = buildSvg(t, { value: '42%', stars: '4', items: 'Um\nDois\nTrês', text: 'selftest', name: 'Test', handle: 'test' }, brand, null, null, null, null, 1080, 1080, safe)
         sizes[t] = renderPng(svg, w).length
       }

@@ -52,12 +52,15 @@ function tweet(f: Record<string, string>, brand: Brand): JSX.Element {
           </div>
         </div>
         <div style={{ fontSize: '44px', lineHeight: 1.35, color: fg, fontWeight: 500, marginBottom: '30px', whiteSpace: 'pre-wrap' }}>{f.text || 'O texto do tweet aparece aqui.'}</div>
-        <div style={{ fontSize: '26px', color: muted, marginBottom: '24px' }}>{f.time || '14:22'} · {f.date || 'hoje'}</div>
-        <div style={{ height: '1px', background: line, marginBottom: '24px' }} />
-        <div style={{ display: 'flex', gap: '46px', fontSize: '28px', color: muted }}>
-          <span><b style={{ color: fg }}>{f.retweets || '128'}</b> Retuítes</span>
-          <span><b style={{ color: fg }}>{f.likes || '1.204'}</b> Curtidas</span>
-        </div>
+        {/* Horário e números só se o dono preencher — nunca inventados (regra 5). */}
+        {(f.time || f.date) && <div style={{ fontSize: '26px', color: muted, marginBottom: '24px' }}>{[f.time, f.date].filter(Boolean).join(' · ')}</div>}
+        {(f.retweets || f.likes) && <>
+          <div style={{ height: '1px', background: line, marginBottom: '24px' }} />
+          <div style={{ display: 'flex', gap: '46px', fontSize: '28px', color: muted }}>
+            {f.retweets && <span><b style={{ color: fg }}>{f.retweets}</b> Retuítes</span>}
+            {f.likes && <span><b style={{ color: fg }}>{f.likes}</b> Curtidas</span>}
+          </div>
+        </>}
       </div>
     </div>
   )
@@ -213,7 +216,7 @@ export const TEMPLATES: Template[] = [
       { key: 'likes', label: 'Curtidas' }, { key: 'retweets', label: 'Retuítes' },
       { key: 'time', label: 'Hora' }, { key: 'date', label: 'Data' }, { key: 'theme', label: 'Tema (dark/light)' },
     ],
-    sample: { name: '', handle: '', text: '', likes: '1.204', retweets: '128', time: '14:22', date: 'hoje', theme: 'dark' },
+    sample: { name: '', handle: '', text: '', likes: '', retweets: '', time: '', date: '', theme: 'dark' },
     render: tweet,
   },
   {

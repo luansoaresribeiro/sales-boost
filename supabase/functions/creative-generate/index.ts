@@ -388,7 +388,7 @@ interface CardBrand { primary: string; name: string; accent?: string; text?: str
 // cron_secret+company_id (modo lote, sem usuário logado).
 async function renderGraphicCard(
   auth: { bearer: string; isCron: boolean; cronSecret?: string },
-  companyId: string, template: 'tweet' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand,
+  companyId: string, template: 'tweet' | 'slide' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand,
 ): Promise<string | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   if (!supabaseUrl) return null
@@ -676,7 +676,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   if (!opts.skipImage) {
     if (fmt === 'carrossel' && opts.deck) {
       const rawSlides = Array.isArray(post.slides) ? (post.slides as { text?: string }[]).filter(x => String(x.text ?? '').trim()).slice(0, 7) : []
-      const urls = await Promise.all(rawSlides.map(x => renderGraphicCard(opts, company.id, 'tweet', { text: capWords(String(x.text ?? ''), 180), name: company.business_name, handle: slugHandle(company.business_name) }, cardBrand)))
+      const urls = await Promise.all(rawSlides.map((x, i) => renderGraphicCard(opts, company.id, 'slide', { text: capWords(String(x.text ?? ''), 180), name: company.business_name, page: String(i + 1), total: String(rawSlides.length) }, cardBrand)))
       slides = rawSlides.map((x, i) => ({ text: String(x.text ?? ''), image_prompt: '', image_url: urls[i] }))
       mainImage = slides.find(x => x.image_url)?.image_url ?? null
     } else if (fmt === 'carrossel') {
@@ -969,7 +969,12 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
   for (const slot of slots) {
     const recipe = slot.producer === 'item_package' ? recipeOf.get(slot.format) : slot.producer === 'item_video' ? VIDEO_RECIPE : undefined
     if (alreadyFilled(slot.date, recipe, slot.producer)) continue
-    if (slot.producer === 'post') { jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format: slot.format }); continue }
+    if (slot.producer === 'post') {
+      // Formato que a ficha desligou (ex.: card "tipo tweet" em imóveis) e
+      // ainda está numa estratégia antiga → sai como carrossel de slides.
+      const format = formats.some(f => f.key === slot.format) ? slot.format : DECK_FORMAT
+      jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format }); continue
+    }
     if (slot.producer === 'item_video') {
       const itemId = pickItem()
       if (!itemId) { addTodo(slot); continue }
