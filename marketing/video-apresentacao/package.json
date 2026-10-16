@@ -1,0 +1,15 @@
+{
+  "name": "sales-boost-video-apresentacao",
+  "private": true,
+  "scripts": {
+    "video": "remotion render src/index.tsx Apresentacao out/sales-boost-apresentacao.mp4",
+    "storyboard": "remotion still src/board.tsx Board out/storyboard.png",
+    "preview": "remotion studio src/index.tsx"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.535",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.535"
+  }
+}
