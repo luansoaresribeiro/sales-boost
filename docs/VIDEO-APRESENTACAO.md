@@ -172,3 +172,45 @@ nenhum crédito foi gasto.**
 - Próxima sessão: testar a chave com uma chamada de status; se passar,
   gerar as 6 versões (texto → vídeo, 9:16, sem texto, sem imóvel, sem
   pessoas) e salvar em `marketing/video-apresentacao/public/cenas/`.
+
+## Sessão de 2026-10-16 (madrugada) — cenas geradas, download bloqueado
+
+- **Chave da API Higgsfield funcionando** (o "Invalid credentials" sumiu).
+  Rotas que respondem em `platform.higgsfield.ai`:
+  `/kling-video/v3.0/{std,pro}/text-to-video` (aspect_ratio 9:16|16:9|1:1,
+  duration até 15, sound on/off) e `/higgsfield-ai/soul/standard` (imagem;
+  aspect_ratio 9:16…3:2, resolution 720p|1080p). Seedance/Seedream/Nano
+  Banana: `model_not_found`; Kling 2.1 master: `model_blocked`.
+- **Geradas (Kling 3.0 pro, 9:16, sem som)** — 2 versões de cada:
+  Copacabana entardecer (5s), Botafogo/Pão de Açúcar de dia (5s), drone Rio
+  à noite (7s). E 2 imagens da casa (Soul, 3:4, 1080p) — ver decisão do dono
+  em [DECISIONS.md](DECISIONS.md) (exceção da regra 4 só pra este anúncio).
+- **Download bloqueado:** a Higgsfield entrega os arquivos em
+  `d3u0tzju9qaucj.cloudfront.net`, que a rede do ambiente recusa (403).
+  Liberar esse domínio em Network access. Os links (públicos) e os IDs dos
+  pedidos estão abaixo; o status de cada um se consulta de graça em
+  `/requests/<id>/status`.
+
+| Arquivo | ID do pedido |
+|---|---|
+| cena1-copacabana-v1 | b0bba788-a96e-49f0-845e-556dadc9d781 |
+| cena1-copacabana-v2 | e6bbb56d-3cf3-4539-9408-c406f24926b9 |
+| cena5a-botafogo-v1 | 4bf3db52-715d-49df-a476-e00aa4a32e97 |
+| cena5a-botafogo-v2 | 5dc76c13-3ccf-4f18-a0f2-5daab1881ab7 |
+| cena7-rio-noite-v1 | e36d1be3-1f87-48c9-b316-c23d814879ed |
+| cena7-rio-noite-v2 | ea01f816-25f5-4e9b-bc2d-0b17b8101533 |
+| casa-v1 (imagem) | 5bdfb548-d755-47a4-a6ef-4aacd582e9aa |
+| casa-v2 (imagem) | 34ec5ae0-7e54-4316-b6c6-aa0d9ccbb0be |
+
+- **Prints do painel** (conta de teste; senha não salva) em
+  `public/painel/`, recortados sem o e-mail da conta:
+  - `aprovacoes-celular.png` → cena 6 ("Você aprova tudo").
+  - `calendario-celular.png` → cena 5b ("CRIA posts que vendem").
+  - `agentes-computador.png` → cenas 4/5 (os 4 agentes). A linha do
+    objetivo do Agente de Estratégia foi desfocada (tinha valor em R$ da
+    conta de teste — regra 5).
+  - Sem print bom pra 5c (respostas/DM) e 5d (aprendizado): a conta de
+    teste não tem dado real nessas telas → fazer versão estilizada.
+- Pra tirar os prints de novo: fechar o aviso de cookies ("Só essenciais")
+  e o pop-up "Seu status de negócio" (botão "Fechar"), senão eles cobrem a
+  tela.

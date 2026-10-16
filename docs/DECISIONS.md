@@ -1360,3 +1360,15 @@ grátis de 30 s, acima — mantidos como histórico):
   - Tela de Leads: selo 🌱 e filtro "Presença fraca".
   - Os 22 já rejeitados saem de `prospect_checked_places` e são reavaliados
     na próxima busca.
+
+## 2026-10-16 — Casa gerada por IA no vídeo de apresentação (exceção, decisão do dono)
+
+- Pra o anúncio do próprio Sales Boost (vídeo de apresentação, cenas 3a e
+  5b), o dono liberou **uma casa gerada por IA** (Higgsfield Soul), inspirada
+  em duas fotos que ele mandou. Motivo dele: "não é a criação de vídeo, não
+  tem a ver com o fluxo do nosso projeto, mas sim pra um anúncio, então
+  desta vez eu permito".
+- **Vale só pra esse anúncio.** A regra 4 continua igual pro produto: foto
+  de item (imóvel) dos clientes é sempre real.
+- Na montagem, a casa aparece como exemplo de post dentro do celular, sem
+  endereço, preço ou qualquer dado de imóvel à venda.
