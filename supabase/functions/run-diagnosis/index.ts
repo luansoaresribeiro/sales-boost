@@ -46,12 +46,18 @@ function extractInstagramHandle(raw: string): string | null {
   return v.toLowerCase()
 }
 
-interface LeanPost { ts: string | null; likes: number | null; comments: number | null; is_video: boolean | null }
+interface LeanPost {
+  ts: string | null; likes: number | null; comments: number | null; is_video: boolean | null
+  // Diagnóstico "pronto pra gerar conversas" (2026-10-16): legenda e amostra de
+  // comentários, quando o raspador traz. Texto curto — só pra contar chamadas,
+  // bairros e perguntas; nada de foto/URL.
+  caption?: string | null; comment_samples?: { text: string; by_owner: boolean }[]
+}
 
 // Guarda só o que o Growth Score usa: nada de foto/URL de mídia pesada.
 // Campos do apify/instagram-profile-scraper: followersCount, biography,
 // externalUrl, isBusinessAccount, highlightReelCount, postsCount,
-// latestPosts[].timestamp/likesCount/commentsCount/type/videoUrl.
+// latestPosts[].timestamp/likesCount/commentsCount/type/videoUrl/caption/latestComments.
 function leanInstagram(items: unknown[], handle: string): Record<string, unknown> {
   const p = items[0] as Record<string, unknown> | undefined
   const collected_at = new Date().toISOString()
@@ -62,6 +68,12 @@ function leanInstagram(items: unknown[], handle: string): Record<string, unknown
     likes: num(x.likesCount),
     comments: num(x.commentsCount),
     is_video: typeof x.type === 'string' ? x.type === 'Video' : (x.videoUrl ? true : null),
+    caption: typeof x.caption === 'string' ? x.caption.slice(0, 400) : null,
+    comment_samples: Array.isArray(x.latestComments)
+      ? (x.latestComments as Record<string, unknown>[]).slice(0, 8)
+        .filter(c => typeof c?.text === 'string')
+        .map(c => ({ text: String(c.text).slice(0, 160), by_owner: typeof c.ownerUsername === 'string' && c.ownerUsername.toLowerCase() === String(p.username ?? handle).toLowerCase() }))
+      : undefined,
   }))
   return {
     collected_at,

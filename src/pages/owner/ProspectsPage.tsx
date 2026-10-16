@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import {
-  STATUS_LABELS, STATUS_COLORS, scoreColor, recommendationTier, WEAK_PRESENCE_LABEL,
+  STATUS_LABELS, STATUS_COLORS, scoreColor, recommendationTier, WEAK_PRESENCE_LABEL, contentBadges,
   type Prospect, type Activity, type ScanLog, type QueryLogRow, type CandidateLogRow,
 } from './prospectShared'
 
@@ -40,10 +40,10 @@ export default function ProspectsPage() {
     void loadAll()
   }, [session])
 
-  // Busca "em andamento" há mais de 10 min foi cortada pelo limite de tempo da
-  // função (o próximo disparo fecha o registro como erro) — mostra "Interrompida".
+  // A busca roda em lotes (uma chamada atrás da outra) e dá sinal de vida a
+  // cada lote (heartbeat_at). Sem sinal há 10 min = foi cortada — "Interrompida".
   const withStale = (s: ScanLog): ScanLog =>
-    s.status === 'running' && Date.now() - new Date(s.started_at).getTime() > 10 * 60_000 ? { ...s, status: 'interrupted' } : s
+    s.status === 'running' && Date.now() - new Date(s.heartbeat_at ?? s.started_at).getTime() > 10 * 60_000 ? { ...s, status: 'interrupted' } : s
 
   const loadAll = async () => {
     setLoading(true)
@@ -93,6 +93,15 @@ export default function ProspectsPage() {
       setScanError(e instanceof Error ? e.message : String(e))
       setScanning(false)
     }
+  }
+
+  // "Parar busca": as próximas chamadas da fila veem o status e param.
+  const stopScan = async () => {
+    if (!session) return
+    await fetch(`${SUPABASE_URL}/functions/v1/find-sales-leads`, {
+      method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'stop' }),
+    }).catch(() => { /* a próxima leitura mostra o estado real */ })
   }
 
   const toggleExpand = async (id: string) => {
@@ -176,6 +185,11 @@ export default function ProspectsPage() {
             style={{ padding: '11px 22px', background: scanning ? 'rgba(255,109,41,0.15)' : ORANGE, color: scanning ? ORANGE : '#000', fontWeight: 700, fontSize: '13.5px', borderRadius: '10px', border: scanning ? '1px solid rgba(255,109,41,0.3)' : 'none', cursor: scanning ? 'not-allowed' : 'pointer', flexShrink: 0 }}>
             {scanning ? '🔎 Buscando...' : '🔎 Buscar leads agora'}
           </button>
+          {scanning && (
+            <button onClick={stopScan} style={{ padding: '11px 16px', background: 'transparent', color: MUTED, fontSize: '12.5px', borderRadius: '10px', border: `1px solid ${BORDER}`, cursor: 'pointer', flexShrink: 0 }}>
+              ■ Parar busca
+            </button>
+          )}
         </div>
 
         {/* Stats */}
@@ -198,7 +212,7 @@ export default function ProspectsPage() {
               <div style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>
                 {new Date(lastScan.started_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                 <div style={{ color: lastScan.status === 'error' || lastScan.status === 'interrupted' ? '#f87171' : lastScan.status === 'running' ? '#FBBF24' : '#4ade80', fontWeight: 700, marginTop: '2px' }}>
-                  {lastScan.status === 'running' ? 'Em andamento' : lastScan.status === 'interrupted' ? 'Interrompida' : lastScan.status === 'error' ? 'Erro' : `${lastScan.found_count} encontrados`}
+                  {lastScan.status === 'running' ? `Em andamento · ${lastScan.found_count} encontrados` : lastScan.status === 'interrupted' ? 'Interrompida' : lastScan.status === 'error' ? 'Erro' : lastScan.error_message === 'Parada por você' ? `Parada · ${lastScan.found_count} encontrados` : `${lastScan.found_count} encontrados`}
                 </div>
               </div>
             ) : <div style={{ fontSize: '12.5px', color: MUTED }}>Nenhuma ainda</div>}
@@ -355,6 +369,7 @@ export default function ProspectsPage() {
                         <span style={{ fontSize: '10.5px', fontWeight: 700, color: recommendationTier(p.lead_score).color }}>{recommendationTier(p.lead_score).label}</span>
                         {p.icp_confidence != null && <span style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.35)' }}>confiança ICP: {p.icp_confidence}%</span>}
                         {p.digital_presence && WEAK_PRESENCE_LABEL[p.digital_presence] && <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#A78BFA' }}>{WEAK_PRESENCE_LABEL[p.digital_presence]}</span>}
+                        {contentBadges(p).map(b => <span key={b} style={{ fontSize: '10.5px', fontWeight: 700, color: '#A78BFA' }}>{b}</span>)}
                       </div>
                     )}
                   </div>
@@ -369,6 +384,7 @@ export default function ProspectsPage() {
                       <div>
                         <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Diagnóstico da IA</div>
                         <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.7, margin: '0 0 12px' }}>{p.ai_summary ?? 'Sem diagnóstico ainda.'}</p>
+                        {p.content_issues && <p style={{ fontSize: '12px', color: MUTED, lineHeight: 1.6, margin: '0 0 12px' }}>🎨 Produção{p.content_quality != null ? ` (${p.content_quality}/10)` : ''}: {p.content_issues}</p>}
                         <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Roteiro de abordagem</div>
                         <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.7, margin: '0 0 12px' }}>{p.ai_cold_call_notes ?? 'Sem roteiro ainda.'}</p>
 

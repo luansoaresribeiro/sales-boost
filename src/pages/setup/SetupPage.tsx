@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLang } from '../../contexts/LanguageContext'
 import { useCompany } from '../../contexts/CompanyContext'
@@ -6,6 +6,9 @@ import { setupGateApplies } from '../../lib/setupGate'
 import { useSetupStatus, type SetupStepId } from '../../lib/useSetupStatus'
 import CatalogItems from '../dashboard/marketingAi/CatalogItems'
 import { DadosForm, PerguntasForm, StepShell, BG, CARD, D, GREEN, MUTED, ORANGE } from './SetupSteps'
+import { EtapaForm, IntelligenceSummary, stepOf } from './SetupV2'
+import { bi } from '../../lib/verticalPlaybook'
+import { loadDiagnosticAnswers, PROFILE_KEY, saveV2Answers, suggestedFrequency, SUMMARY_STEP, type AnswerStatus } from '../../lib/onboardingV2'
 
 const TX = {
   pt: {
@@ -18,7 +21,7 @@ const TX = {
     igP: 'Assim o Sales Boost publica e mede o resultado. Nada vai ao ar sem você aprovar.',
     igReq: ' Obrigatório nesta etapa.', connectIg: 'Conectar Instagram', connectLater: 'Conectar depois',
     dadosT: 'Dados do negócio', dadosH: 'Nome, cidade e telefone/WhatsApp',
-    qT: 'Perguntas sobre seu negócio', qH: (n: string) => `Responda todas (${n} sem resposta)`,
+    qT: 'Perguntas sobre seu negócio', qH: (n: string) => `Responda todas (${n} sem resposta)`, etH: (n: string) => `${n} pra passar — vale responder, "Não sei" ou "Depois"`,
     catMany: (label: string, n: number) => `${label}: cadastre ${n}`,
     catOne: (item: string) => `Seu primeiro ${item}`,
     catHint: (label: string, p: number, item: string) => `${label} · mínimo de ${p} fotos reais por ${item}`,
@@ -35,7 +38,7 @@ const TX = {
     igP: 'This lets Sales Boost publish and measure results. Nothing goes live without your approval.',
     igReq: ' Required for this step.', connectIg: 'Connect Instagram', connectLater: 'Connect later',
     dadosT: 'Business details', dadosH: 'Name, city and phone/WhatsApp',
-    qT: 'Questions about your business', qH: (n: string) => `Answer all (${n} unanswered)`,
+    qT: 'Questions about your business', qH: (n: string) => `Answer all (${n} unanswered)`, etH: (n: string) => `${n} to go — answer, "I don't know" or "Later"`,
     catMany: (label: string, n: number) => `${label}: add ${n}`,
     catOne: (item: string) => `Your first ${item}`,
     catHint: (label: string, p: number, item: string) => `${label} · at least ${p} real photos per ${item}`,
@@ -62,6 +65,34 @@ export default function SetupPage() {
   const [manual, setManual] = useState<SetupStepId | null | undefined>(undefined)
   const refresh = status.refresh
   const onChanged = useCallback(() => { void refresh() }, [refresh])
+  // Onboarding v2: campo a destacar (vindo do "Completar" do resumo) e o Instagram lido no diagnóstico.
+  const [focusKey, setFocusKey] = useState<string | null>(null)
+  const [instagram, setInstagram] = useState<Record<string, unknown> | null>(null)
+  const prefilled = useRef(false)
+  // Muda depois do pré-preenchimento: remonta a etapa aberta com as respostas novas
+  // (só aí — remontar a cada atualização apagaria o que a pessoa está digitando).
+  const [prefillVersion, setPrefillVersion] = useState(0)
+  // 1º acesso: traz o que a pessoa já respondeu no diagnóstico curto (antes de ter conta),
+  // sem sobrescrever nada que já esteja salvo. Frequência de posts vem do Instagram lido,
+  // marcada "lido automaticamente — confirme".
+  useEffect(() => {
+    const v2 = status.v2
+    if (!company || !v2 || status.loading || prefilled.current) return
+    prefilled.current = true
+    void loadDiagnosticAnswers(company.id).then(async diag => {
+      if (!diag) return
+      setInstagram(diag.instagram)
+      if (status.answers[PROFILE_KEY]) return
+      const answers: Record<string, unknown> = { ...diag.answers }
+      const st: AnswerStatus = { ...diag.status }
+      const freqQ = v2.questions.find(q => q.key === 'frequencia_posts')
+      const freq = suggestedFrequency(freqQ, diag.instagram)
+      if (freqQ && freq && !answers[freqQ.key]) { answers[freqQ.key] = freq; st[freqQ.key] = 'auto' }
+      const keys = Object.keys({ ...answers, ...st }).filter(k => !(k in status.answers) && !(k in status.answerStatus))
+      if (!keys.length) return
+      if (await saveV2Answers(company.id, v2, answers, st, keys)) { await status.refresh(); setPrefillVersion(v => v + 1) }
+    })
+  }, [company, status])
 
   if (!company || status.loading) {
     return (
@@ -155,6 +186,24 @@ export default function SetupPage() {
                 <DadosForm companyId={company.id} initial={status.business} onSaved={() => saved('dados')} />
               </StepShell>
             )
+            if (s.id.startsWith('etapa:') && status.v2) {
+              const v2 = status.v2
+              const key = s.id.slice(6)
+              const st = stepOf(v2, key)
+              const title = st ? bi(st.title, lang) : key
+              if (key === SUMMARY_STEP) return (
+                <StepShell key={s.id} n={n} done={s.done} open={open} onToggle={() => toggle(s.id)} title={title} hint={st?.subtitle ? bi(st.subtitle, lang) : ''}>
+                  <IntelligenceSummary v2={v2} answers={status.answers} status={status.answerStatus} instagram={instagram} complete={s.done}
+                    onFill={q => { setFocusKey(q.key); setManual(`etapa:${q.step}`); setTimeout(() => document.getElementById(`q-${q.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150) }} />
+                </StepShell>
+              )
+              return (
+                <StepShell key={s.id} n={n} done={s.done} open={open} onToggle={() => toggle(s.id)} title={title} hint={s.done ? '' : tx.etH(s.missing)}>
+                  <EtapaForm key={`${s.id}-${prefillVersion}`} companyId={company.id} v2={v2} stepKey={key} initialAnswers={status.answers} initialStatus={status.answerStatus}
+                    businessType={status.businessType} focusKey={focusKey} onSaved={() => { setFocusKey(null); void saved(s.id) }} />
+                </StepShell>
+              )
+            }
             if (s.id === 'perguntas') return (
               <StepShell key={s.id} n={n} done={s.done} open={open} onToggle={() => toggle(s.id)} title={tx.qT} hint={s.done ? '' : tx.qH(s.missing)}>
                 <PerguntasForm companyId={company.id} questions={status.questions} initial={status.answers} onSaved={() => saved('perguntas')} />

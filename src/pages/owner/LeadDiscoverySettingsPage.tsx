@@ -48,6 +48,7 @@ export default function LeadDiscoverySettingsPage() {
   const [loading, setLoading] = useState(true)
 
   const [cities, setCities] = useState('')
+  const [areas, setAreas] = useState('')
   const [enabledTypes, setEnabledTypes] = useState<string[]>([])
   const [maxPerNight, setMaxPerNight] = useState(FACTORY_DEFAULTS.maxPerNight)
   const [minRating, setMinRating] = useState(FACTORY_DEFAULTS.minRating)
@@ -77,12 +78,13 @@ export default function LeadDiscoverySettingsPage() {
     setLoading(true)
     const [{ data: settingsData }, { data: keywordData }] = await Promise.all([
       supabase.from('prospect_settings')
-        .select('cities, business_types, max_per_night, min_rating, max_rating, min_reviews, max_reviews, require_active_instagram, require_phone, exclude_chains, icp_custom_instructions, scoring_weights, icp_confidence_threshold')
+        .select('cities, search_areas, business_types, max_per_night, min_rating, max_rating, min_reviews, max_reviews, require_active_instagram, require_phone, exclude_chains, icp_custom_instructions, scoring_weights, icp_confidence_threshold')
         .eq('id', true).maybeSingle(),
       supabase.from('prospect_search_keywords').select('id, business_type, keyword, active').order('business_type').order('keyword'),
     ])
     if (settingsData) {
       setCities((settingsData.cities ?? []).join(', '))
+      setAreas(((settingsData.search_areas ?? []) as string[]).join('\n'))
       setEnabledTypes(settingsData.business_types ?? [])
       setMaxPerNight(settingsData.max_per_night ?? FACTORY_DEFAULTS.maxPerNight)
       setMinRating(settingsData.min_rating ?? FACTORY_DEFAULTS.minRating)
@@ -105,7 +107,7 @@ export default function LeadDiscoverySettingsPage() {
     setSaved(false)
     const cityList = cities.split(',').map(c => c.trim()).filter(Boolean)
     const { error } = await supabase.from('prospect_settings').update({
-      cities: cityList, business_types: enabledTypes, max_per_night: maxPerNight,
+      cities: cityList, search_areas: areas.split('\n').map(a => a.trim()).filter(Boolean), business_types: enabledTypes, max_per_night: maxPerNight,
       min_rating: minRating, max_rating: maxRating, min_reviews: minReviews, max_reviews: maxReviews,
       require_active_instagram: requireActiveInstagram, require_phone: requirePhone, exclude_chains: excludeChains,
       icp_custom_instructions: customInstructions.trim() || null,
@@ -181,6 +183,9 @@ export default function LeadDiscoverySettingsPage() {
               <label style={labelStyle}>Cidades que você atende (separadas por vírgula)</label>
               <input value={cities} onChange={e => setCities(e.target.value)} placeholder="Ex: Rio de Janeiro, Niterói"
                 style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+              <label style={{ ...labelStyle, marginTop: '14px' }}>Bairros (um por linha) — com bairros, a busca vai bairro a bairro e cobre a cidade inteira. Vazio = busca a cidade de uma vez (o Google devolve no máximo 60 por busca).</label>
+              <textarea value={areas} onChange={e => setAreas(e.target.value)} rows={6} placeholder={'Botafogo\nTijuca\nBarra da Tijuca'}
+                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: D }} />
             </SettingsSection>
 
             <SettingsSection title="Categorias de negócio" description="Quais tipos de negócio buscar, e as palavras-chave usadas em cada busca no Google.">
@@ -309,8 +314,8 @@ export default function LeadDiscoverySettingsPage() {
 
             <SettingsSection title="Automação" description="Quantos leads buscar por vez, e o agendamento automático da busca." defaultOpen={false}>
               <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <label style={labelStyle}>Novos leads por noite</label>
-                <input type="number" value={maxPerNight} onChange={e => setMaxPerNight(Number(e.target.value))} min={1} max={100} style={{ ...inputStyle, width: '80px' }} />
+                <label style={labelStyle}>Máximo de leads por busca (a busca continua sozinha, em lotes, até achar esse número ou acabar a lista)</label>
+                <input type="number" value={maxPerNight} onChange={e => setMaxPerNight(Number(e.target.value))} min={1} max={500} style={{ ...inputStyle, width: '80px' }} />
               </div>
               <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: '9px', fontSize: '12.5px', color: MUTED, lineHeight: 1.7 }}>
                 <span style={{ color: '#4ade80', fontWeight: 700 }}>● Busca automática ativa</span> — roda todos os dias às 6h (horário do servidor), usando essas mesmas configurações. Pra mudar o horário ou desligar, é preciso ajustar direto na infraestrutura — fale com o time técnico se precisar.

@@ -57,6 +57,7 @@
  * cron_secret + Bearer de service role.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { answerContextBlock } from '../_shared/answerContext.ts'
 import { fetchLearning, learningPromptBlock } from '../_shared/learning.ts'
 import { fetchContentRules, fetchFormatCatalog, formatCatalogBlock, sanitizeContentPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
@@ -134,7 +135,7 @@ async function notifyStrategy(supabaseUrl: string, chatId: number | null, compan
 // 'generico', ou qualquer setor sem ficha configurada) + sem respostas =
 // devolve '' = prompt fica idêntico ao de antes desta função existir. Nunca
 // derruba a geração por causa de erro no banco de fichas (try/catch).
-async function fetchPlaybookBlock(admin: SupaClient, verticalKey: string, playbookAnswers: Record<string, unknown> | null): Promise<string> {
+async function fetchPlaybookBlock(admin: SupaClient, verticalKey: string, playbookAnswers: Record<string, unknown> | null, companyId?: string): Promise<string> {
   try {
     const { data } = await admin.from('vertical_playbooks').select('name, config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
     const c = (data?.config ?? {}) as Record<string, unknown>
@@ -159,6 +160,9 @@ async function fetchPlaybookBlock(admin: SupaClient, verticalKey: string, playbo
     if (answers.length) {
       parts.push(`Respostas do cadastro desta empresa (preferência real, sobrepõe qualquer padrão genérico do setor):\n${answers.map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')}`)
     }
+    // Onboarding v2: o que é fato, o que é "não sei" e o que falta (answerContext.ts).
+    const ctx = await answerContextBlock(admin, companyId, c.onboarding_v2, playbookAnswers)
+    if (ctx) parts.push(ctx)
     if (!parts.length) return ''
     return `\n\nFICHA DE SETOR — "${String(data?.name ?? verticalKey)}":\n${parts.join('\n\n')}`
   } catch { return '' }
@@ -336,7 +340,7 @@ async function runStep1(
       admin.from('marketing_ai_config').select('brand_voice, target_audience, content_pillars, marketing_goals').eq('company_id', company.id).maybeSingle(),
       fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'state'),
       fetchRealBaseline(admin, company.id),
-      fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
+      fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers, company.id),
       fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
     ])
     lap('data-agent + baseline + playbook + formatos (paralelo)')
@@ -471,7 +475,7 @@ async function runStep2(admin: SupaClient, supabaseUrl: string, cronSecret: stri
     const [dataAgentState, baseline, playbookBlock, formats] = await Promise.all([
       fetchDataAgentState(supabaseUrl, cronSecret, companyId, 'state'),
       fetchRealBaseline(admin, companyId),
-      fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
+      fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers, company.id),
       fetchFormatCatalog(admin, company.vertical_key ?? 'generico', companyId),
     ])
     const rules = await fetchContentRules(admin, company.vertical_key ?? 'generico')
@@ -574,7 +578,7 @@ async function runReanalyze(admin: SupaClient, supabaseUrl: string, cronSecret: 
     const [delta, baseline, playbookBlock] = await Promise.all([
       fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'delta', String(strategy.updated_at)),
       fetchRealBaseline(admin, company.id),
-      fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
+      fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers, company.id),
     ])
 
     const prompt = `Você é Hermes fazendo o Strategy Health Check de uma tese já ativa — decida se ela continua sustentada pela evidência ou se precisa de ajuste. Novidade não muda a estratégia automaticamente: só muda se a evidência realmente invalidar a tese.
@@ -661,7 +665,7 @@ async function runRefresh(admin: SupaClient, supabaseUrl: string, cronSecret: st
     const [dataAgentState, baseline, playbookBlock, formats] = await Promise.all([
       fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'state'),
       fetchRealBaseline(admin, company.id),
-      fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
+      fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers, company.id),
       fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
     ])
     const rules = await fetchContentRules(admin, company.vertical_key ?? 'generico')

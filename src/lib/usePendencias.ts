@@ -8,6 +8,7 @@ import { bi, fetchCatalogSchema, fetchOnboardingQuestions } from './verticalPlay
 import { isShowcaseMode } from './setupGate'
 import { confirmProfile } from './profileConfirm'
 import { catalogMinPhotos, isCatalogItem, itemPhotoCount, unansweredQuestions } from './setupRules'
+import { fetchOnboardingV2, isPendingData, settingsLinkFor, visibleQuestions, type AnswerStatus } from './onboardingV2'
 
 // Pendências do dono — tudo que falta pro Sales Boost trabalhar melhor.
 // SÓ LEITURA: nenhuma escrita aqui. Cada fonte é independente: se uma falha
@@ -181,7 +182,24 @@ export function usePendencias() {
 
     // d) Perguntas da ficha sem resposta (chaves que não existem mais na ficha são ignoradas)
     try {
-      if (answers !== undefined) {
+      const v2 = answers !== undefined ? await fetchOnboardingV2(verticalKey) : null
+      if (v2) {
+        // Onboarding v2: pendente = sem dado de verdade e não marcado "Não sei"/"Não se aplica"
+        // (inclui "Preencher depois" e o "lido automaticamente — confirme"). Leva direto pro campo.
+        const { data: st } = await supabase.from('companies').select('answer_status').eq('id', companyId).maybeSingle()
+        const status = ((st as { answer_status?: AnswerStatus } | null)?.answer_status) ?? {}
+        const a = answers ?? {}
+        const missing = visibleQuestions(v2, a).filter(q => isPendingData(q, a, status))
+        if (missing.length > 0) {
+          const first = missing.find(q => q.needed_for?.length) ?? missing[0]
+          out.push({
+            id: 'ficha', kind: 'ficha', tone: 'orange',
+            title: t.questions(missing.length),
+            hint: `${t.eg}${bi(first.label, lang)}`,
+            destino: t.settingsUnd, to: settingsLinkFor(first.key),
+          })
+        }
+      } else if (answers !== undefined) {
         const { questions } = await fetchOnboardingQuestions(verticalKey)
         const missing = unansweredQuestions(questions, answers)
         if (missing.length > 0) {

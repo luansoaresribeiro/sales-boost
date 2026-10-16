@@ -7,6 +7,9 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
 import KitPhotoPicker from '../../components/KitPhotoPicker'
 import { giftEnabled, sendDiagnosisGift, KIT_PHOTOS } from '../../lib/giftKit'
+import { fetchOnboardingV2, sanitizeV2, PROFILE_KEY, fieldState, type AnswerState, type AnswerStatus, type OnboardingV2 } from '../../lib/onboardingV2'
+import QuestionField from '../../components/QuestionField'
+import { buildContextV2, diagnosticQuestions, isCompanyProfile, profileQuestion, stepResolved, V2QuestionList } from './DiagnosticV2'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -87,6 +90,14 @@ const TX = {
     giftT: '🎁 Um presente pra sua nota começar a subir', giftS: 'Mande a foto mais bonita do imóvel. Junto com o diagnóstico, ela ganha acabamento profissional e vira 3 artes prontas pra postar (2 pro feed e 1 pro stories) — no seu painel, grátis.', giftNote: 'Foto real, bem iluminada e sem pessoas. Nada é inventado e a IA não escreve na foto. É opcional.', giftPartial: (n: number) => `Faltam ${n} foto(s) pro presente — ou tire todas pra seguir sem ele.`, giftSending: 'Enviando sua foto pro presente...',
     back: '← Voltar', cont: 'Continuar →', create: 'Criar meu painel →', priv1: 'Ao continuar, você concorda com nossa', priv2: 'política de privacidade', priv3: '. Seus dados são usados só pra entender seu negócio e gerar o diagnóstico.',
     sum: { biz: 'Negócio', type: 'Tipo', ideal: 'Cliente ideal', goal: 'Objetivo principal', ch: 'Maior desafio', chan: 'Canais atuais', stage: 'Estágio', undef: 'ainda não definidos' },
+    v2steps: ['Você', 'Sua operação', 'Prioridade', 'Instagram'],
+    v2s0t: 'Vamos começar por você', v2s0s: 'Diagnóstico grátis do seu Instagram em uns 2 minutos — feito pra quem vende e aluga imóvel.',
+    v2nameOrg: 'Nome da imobiliária', v2nameOrgP: 'Ex: Imobiliária Silva', v2namePerson: 'Seu nome profissional (opcional)', v2namePersonP: 'Ex: Ana Souza Imóveis',
+    v2nameH: 'Aparece no seu painel. Pode mudar depois.',
+    v2s1t: 'Sua operação', v2s1s: 'Três respostas rápidas pra o diagnóstico já falar do seu mercado. Não sabe alguma? Marque e siga.',
+    v2s2t: 'Sua prioridade', v2s2s: 'Gerar demanda já é o trabalho do Sales Boost. Onde você quer melhorar primeiro?',
+    v2s3t: 'Seu Instagram', v2s3s: 'É ele que a gente analisa (só dados públicos). O e-mail é pra você acessar o resultado e o painel.',
+    v2later: 'O resto (equipe, carteira, canais) você completa depois do cadastro, no seu ritmo.',
   },
   en: {
     select: 'Select...', add: '+ Add', typeEnter: 'Type and press Enter',
@@ -107,6 +118,14 @@ const TX = {
     giftT: '🎁 A gift to start raising your score', giftS: 'Send the best photo of the property. Along with the diagnosis, it gets a professional finish and becomes 3 ready-to-post designs (2 for the feed and 1 for stories) — in your dashboard, free.', giftNote: 'A real, well-lit photo with no people. Nothing is made up and the AI never writes on the photo. Optional.', giftPartial: (n: number) => `${n} photo(s) missing for the gift — or remove them all to continue without it.`, giftSending: 'Uploading your photo for the gift...',
     back: '← Back', cont: 'Continue →', create: 'Create my dashboard →', priv1: 'By continuing, you agree to our', priv2: 'privacy policy', priv3: '. Your data is used only to understand your business and generate the diagnosis.',
     sum: { biz: 'Business', type: 'Type', ideal: 'Ideal customer', goal: 'Main goal', ch: 'Biggest challenge', chan: 'Current channels', stage: 'Stage', undef: 'not defined yet' },
+    v2steps: ['You', 'Your operation', 'Priority', 'Instagram'],
+    v2s0t: "Let's start with you", v2s0s: 'Free diagnosis of your Instagram in about 2 minutes — built for people who sell and rent property.',
+    v2nameOrg: 'Agency name', v2nameOrgP: 'E.g.: Silva Realty', v2namePerson: 'Your professional name (optional)', v2namePersonP: 'E.g.: Ana Souza Realty',
+    v2nameH: 'Shown in your dashboard. You can change it later.',
+    v2s1t: 'Your operation', v2s1s: 'Three quick answers so the diagnosis speaks about your market. Not sure about one? Mark it and move on.',
+    v2s2t: 'Your priority', v2s2s: 'Generating demand is already what Sales Boost does. Where do you want to improve first?',
+    v2s3t: 'Your Instagram', v2s3s: 'This is what we analyze (public data only). The email lets you access the result and the dashboard.',
+    v2later: 'The rest (team, listings, channels) you complete after signing up, at your own pace.',
   },
 }
 
@@ -334,7 +353,6 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   const loggedIn = !!useAuth().user
   const { lang } = useLang()
   const t = TX[lang]
-  const STEPS = t.steps
   const optLabel = (o: string) => (lang === 'en' ? (EN_LABELS[o] ?? o) : o)
   const [step, setStep] = useState(0)
   const [data, setData] = useState<OnboardingData>({
@@ -352,6 +370,18 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   // Presente do diagnóstico: só pro setor que tem o criativo na ficha.
   const [hasGift, setHasGift] = useState(false)
   const [giftFiles, setGiftFiles] = useState<(File | null)[]>(() => Array(KIT_PHOTOS).fill(null))
+  // Onboarding v2 (ficha com config.onboarding_v2): diagnóstico curto com perfil e estados de resposta.
+  const [v2, setV2] = useState<OnboardingV2 | null>(null)
+  const [v2Answers, setV2Answers] = useState<Record<string, unknown>>({})
+  const [v2Status, setV2Status] = useState<AnswerStatus>({})
+  const setV2Answer = (k: string, v: unknown) => setV2Answers(a => {
+    const next = { ...a, [k]: v }
+    // Trocou o perfil: respostas que só valiam pro perfil antigo saem.
+    if (k === PROFILE_KEY && v2) for (const q of v2.questions) if (q.profiles?.length && q.key in next) delete next[q.key]
+    return next
+  })
+  const setV2State = (k: string, st: AnswerState | null) => setV2Status(m => { const n = { ...m }; if (st) n[k] = st; else delete n[k]; return n })
+  const STEPS = v2 ? t.v2steps : t.steps
 
   useEffect(() => { fetchBusinessTypes().then(setBusinessTypes) }, [])
 
@@ -362,9 +392,11 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   useEffect(() => {
     let alive = true
     setData(d => ({ ...d, playbook_answers: {} }))
-    if (!data.business_type.trim()) { setFichaName(''); setFichaQuestions([]); setHasGift(false); return }
+    setV2Answers({}); setV2Status({})
+    if (!data.business_type.trim()) { setFichaName(''); setFichaQuestions([]); setHasGift(false); setV2(null); return }
     fetchVerticalKey(data.business_type).then(async vk => {
-      const [{ name, questions }, gift] = await Promise.all([fetchOnboardingQuestions(vk), giftEnabled(vk)])
+      const [{ name, questions }, gift, v2cfg] = await Promise.all([fetchOnboardingQuestions(vk), giftEnabled(vk), fetchOnboardingV2(vk)])
+      if (alive) setV2(v2cfg)
       // Quem já está LOGADO nesta tela (rota /onboarding, conta sem empresa) criou a
       // conta direto: sem kit grátis (decisão do dono 2026-10-13). O presente fica só
       // pra quem faz o diagnóstico sem conta (landing / link do diagnóstico).
@@ -393,6 +425,12 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   const giftPartial = giftChosen > 0 && giftChosen < KIT_PHOTOS
 
   const canNext = () => {
+    if (v2) {
+      if (step === 0) return !!(data.business_type && v2Answers[PROFILE_KEY] && data.city.trim() && (!isCompanyProfile(v2, v2Answers) || data.business_name.trim().length >= 2))
+      if (step === 1 || step === 2) return stepResolved(v2, v2Answers, v2Status, step)
+      if (step === 3) return !!normalizeInstagram(data.instagram_url) && !siteInvalid && EMAIL_RE.test(data.contact_email.trim()) && !giftPartial
+      return false
+    }
     if (step === 0) return !!(data.business_description.trim() && data.business_type)
     if (step === 1) return !!(data.ideal_customer.trim() && data.business_stage)
     if (step === 2) return !!data.goal
@@ -408,12 +446,16 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-      const onboarding_context = buildContext(data)
+      const clean = v2 ? sanitizeV2(v2, v2Answers, v2Status) : null
+      const onboarding_context = v2 && clean
+        ? { ...buildContextV2(v2, clean.answers, clean.status, data.business_type, data.city.trim()), profile_type: data.business_name.trim() ? 'profissional' : 'pessoal' }
+        : buildContext(data)
+      const goal = v2 && clean ? String(clean.answers.prioridade_principal ?? '') : data.goal
       const payload = {
         business_name: data.business_name, business_type: data.business_type, city: data.city,
         website_url: data.website_url.trim(), instagram_url: normalizeInstagram(data.instagram_url) ?? '', facebook_url: data.facebook_url,
         tiktok_url: data.tiktok_url, google_maps_url: data.google_maps_url, phone: data.phone,
-        contact_email: data.contact_email.trim(), goal: data.goal, onboarding_context,
+        contact_email: data.contact_email.trim(), goal, onboarding_context,
       }
       const res = await fetch(`${supabaseUrl}/functions/v1/run-diagnosis`, {
         method: 'POST',
@@ -469,6 +511,17 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
     )
   }
 
+  const giftBlock = hasGift && (
+                  <div style={{ background: 'linear-gradient(135deg, rgba(255,109,41,0.12), rgba(74,222,128,0.06))', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '14px', padding: '16px', marginBottom: '16px' }}>
+                    <div style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 900, color: 'white', marginBottom: '6px' }}>{t.giftT}</div>
+                    <p style={{ fontSize: '13px', color: 'white', lineHeight: 1.55, margin: '0 0 6px' }}>{t.giftS}</p>
+                    <p style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.5, margin: '0 0 12px' }}>{t.giftNote}</p>
+                    <KitPhotoPicker files={giftFiles} onChange={setGiftFiles} />
+                    {giftPartial && <p style={{ fontSize: '12px', color: ORANGE, margin: '10px 0 0' }}>{t.giftPartial(KIT_PHOTOS - giftChosen)}</p>}
+                  </div>
+                )
+  const errorBlock = error && <div style={{ padding: '12px 16px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '10px', fontSize: '13px', color: '#f87171', marginBottom: '16px', lineHeight: 1.5 }}>{error}</div>
+
   return (
     <div style={{ ...shell, display: 'flex', flexDirection: 'column', ...(embedded ? { overflowX: 'hidden' } : {}) }}>
       {!embedded && (
@@ -500,27 +553,58 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '20px', padding: embedded ? '20px' : '32px' }}>
             {step === 0 && (
               <>
-                <H t={t.s0t} s={t.s0s} />
-                <TextArea label={t.s0l} value={data.business_description} onChange={set('business_description')} placeholder={t.s0p} hint={t.s0h} />
+                <H t={v2 ? t.v2s0t : t.s0t} s={v2 ? t.v2s0s : t.s0s} />
                 <BusinessTypeSelect value={data.business_type} onChange={set('business_type')} options={businessTypes} />
-                <PlaybookQuestionsSection fichaName={fichaName} questions={fichaQuestions} answers={data.playbook_answers} onChange={setPlaybookAnswer} />
+                {v2 ? (
+                  <>
+                    {(() => { const pq = profileQuestion(v2); return pq ? <QuestionField q={pq} value={v2Answers[pq.key]} state={fieldState(pq, v2Answers, v2Status)} onChange={v => setV2Answer(pq.key, v)} onState={st => setV2State(pq.key, st)} lang={lang} businessType={data.business_type} /> : null })()}
+                    {isCompanyProfile(v2, v2Answers)
+                      ? <Field label={t.v2nameOrg} value={data.business_name} onChange={set('business_name')} placeholder={t.v2nameOrgP} hint={t.v2nameH} required />
+                      : <Field label={t.v2namePerson} value={data.business_name} onChange={set('business_name')} placeholder={t.v2namePersonP} hint={t.v2nameH} />}
+                    <Field label={t.s4city} value={data.city} onChange={set('city')} placeholder={t.s4cityp} required />
+                  </>
+                ) : (
+                  <>
+                    <TextArea label={t.s0l} value={data.business_description} onChange={set('business_description')} placeholder={t.s0p} hint={t.s0h} />
+                    <PlaybookQuestionsSection fichaName={fichaName} questions={fichaQuestions} answers={data.playbook_answers} onChange={setPlaybookAnswer} />
+                  </>
+                )}
               </>
             )}
-            {step === 1 && (
+            {v2 && (step === 1 || step === 2) && (
+              <>
+                <H t={step === 1 ? t.v2s1t : t.v2s2t} s={step === 1 ? t.v2s1s : t.v2s2s} />
+                <V2QuestionList questions={diagnosticQuestions(v2, v2Answers, step)} answers={v2Answers} status={v2Status}
+                  onAnswer={setV2Answer} onState={setV2State} lang={lang} businessType={data.business_type} />
+              </>
+            )}
+            {v2 && step === 3 && (
+              <>
+                <H t={t.v2s3t} s={t.v2s3s} />
+                <Field label={t.s3ig} value={data.instagram_url} onChange={set('instagram_url')} placeholder={t.s3igp} required hint={igInvalid ? t.s3igBad : t.s3igHint} />
+                <Field label={t.s3site} value={data.website_url} onChange={set('website_url')} type="url" placeholder="https://seunegocio.com.br" hint={siteInvalid ? t.s3siteBad : t.s3siteHint} />
+                <Field label={t.s4mail} value={data.contact_email} onChange={set('contact_email')} type="email" placeholder={t.s4mailp} required hint={emailInvalid ? t.s4mailBad : t.s4mailh} />
+                <Field label={t.s4phone} value={data.phone} onChange={set('phone')} placeholder="(21) 99999-9999" />
+                {giftBlock}
+                <p style={{ fontSize: '12px', color: MUTED, lineHeight: 1.5, margin: '4px 0 0' }}>{t.v2later}</p>
+                {errorBlock}
+              </>
+            )}
+            {!v2 && step === 1 && (
               <>
                 <H t={t.s1t} s={t.s1s} />
                 <TextArea label={t.s1l} value={data.ideal_customer} onChange={set('ideal_customer')} placeholder={t.s1p} />
                 <SelectField label={t.s1stage} value={data.business_stage} onChange={set('business_stage')} options={STAGES} optLabel={optLabel} required />
               </>
             )}
-            {step === 2 && (
+            {!v2 && step === 2 && (
               <>
                 <H t={t.s2t} s={t.s2s} />
                 <SelectField label={t.s2goal} value={data.goal} onChange={set('goal')} options={GOALS} optLabel={optLabel} required />
                 <SelectField label={t.s2ch} value={data.main_challenges} onChange={set('main_challenges')} options={CHALLENGES} optLabel={optLabel} />
               </>
             )}
-            {step === 3 && (
+            {!v2 && step === 3 && (
               <>
                 <H t={t.s3t} s={t.s3s} />
                 <MultiSelect label={t.s3chan} values={data.current_channels} options={CHANNELS} onToggle={toggleChannel} optLabel={optLabel} />
@@ -529,7 +613,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                 <Field label={t.s3fb} value={data.facebook_url} onChange={set('facebook_url')} placeholder="https://facebook.com/suapagina" />
               </>
             )}
-            {step === 4 && (
+            {!v2 && step === 4 && (
               <>
                 <H t={t.s4t} s={t.s4s} />
                 <div style={{ background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.18)', borderRadius: '12px', padding: '14px 16px', marginBottom: '20px', fontSize: '12.5px', color: 'white', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
@@ -539,16 +623,8 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                 <Field label={t.s4city} value={data.city} onChange={set('city')} placeholder={t.s4cityp} required />
                 <Field label={t.s4mail} value={data.contact_email} onChange={set('contact_email')} type="email" placeholder={t.s4mailp} required hint={emailInvalid ? t.s4mailBad : t.s4mailh} />
                 <Field label={t.s4phone} value={data.phone} onChange={set('phone')} placeholder="(21) 99999-9999" />
-                {hasGift && (
-                  <div style={{ background: 'linear-gradient(135deg, rgba(255,109,41,0.12), rgba(74,222,128,0.06))', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '14px', padding: '16px', marginBottom: '16px' }}>
-                    <div style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 900, color: 'white', marginBottom: '6px' }}>{t.giftT}</div>
-                    <p style={{ fontSize: '13px', color: 'white', lineHeight: 1.55, margin: '0 0 6px' }}>{t.giftS}</p>
-                    <p style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.5, margin: '0 0 12px' }}>{t.giftNote}</p>
-                    <KitPhotoPicker files={giftFiles} onChange={setGiftFiles} />
-                    {giftPartial && <p style={{ fontSize: '12px', color: ORANGE, margin: '10px 0 0' }}>{t.giftPartial(KIT_PHOTOS - giftChosen)}</p>}
-                  </div>
-                )}
-                {error && <div style={{ padding: '12px 16px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '10px', fontSize: '13px', color: '#f87171', marginBottom: '16px', lineHeight: 1.5 }}>{error}</div>}
+                {giftBlock}
+                {errorBlock}
               </>
             )}
 

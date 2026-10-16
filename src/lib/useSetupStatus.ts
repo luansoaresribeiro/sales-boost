@@ -7,6 +7,7 @@ import {
   type CatalogSchema, type PlaybookQuestion,
 } from './verticalPlaybook'
 import { catalogMinPhotos, isCatalogItem, itemHasEnoughPhotos, itemPhotoCount, unansweredQuestions } from './setupRules'
+import { fetchOnboardingV2, isResolved, SUMMARY_STEP, visibleQuestions, type AnswerStatus, type OnboardingV2 } from './onboardingV2'
 
 // Status do /setup (fim do cadastro). Usa as MESMAS regras do sino de
 // pendências (setupRules.ts). Cada passo obrigatório: dados do negócio,
@@ -14,7 +15,8 @@ import { catalogMinPhotos, isCatalogItem, itemHasEnoughPhotos, itemPhotoCount, u
 // tiver catálogo) e, se a ficha pedir (config.setup.instagram_required), o
 // Instagram conectado. Só LEITURA.
 
-export type SetupStepId = 'dados' | 'perguntas' | 'catalogo'
+// Ficha com onboarding v2: o cartão 'perguntas' vira as 5 etapas ('etapa:<chave da etapa>').
+export type SetupStepId = 'dados' | 'perguntas' | 'catalogo' | `etapa:${string}`
 
 // optional: aparece no /setup mas NÃO trava o "Ir para o painel" — o que faltar
 // vira pendência no sino (pedido do dono 2026-10-13: o catálogo não pode ser
@@ -40,6 +42,10 @@ export interface SetupStatus {
   business: BusinessData
   questions: PlaybookQuestion[]
   answers: Record<string, unknown>
+  /** Onboarding v2 da ficha (null = fluxo antigo) + estados das respostas ("Não sei" etc.). */
+  v2: OnboardingV2 | null
+  answerStatus: AnswerStatus
+  businessType: string
   schema: CatalogSchema | null
   verticalKey: string
   minPhotos: number
@@ -77,7 +83,7 @@ function businessMissing(b: BusinessData, lang: Lang): string {
 
 const EMPTY: Omit<SetupStatus, 'refresh' | 'loading' | 'error'> = {
   steps: [], instagramRequired: false, instagramConnected: false, required: 0, doneCount: 0, allDone: false, readyForStrategy: false, missingText: '',
-  business: { business_name: '', city: '', phone: '' }, questions: [], answers: {}, schema: null,
+  business: { business_name: '', city: '', phone: '' }, questions: [], answers: {}, v2: null, answerStatus: {}, businessType: '', schema: null,
   verticalKey: 'generico', minPhotos: 0, minItems: DEFAULT_SETUP_CONFIG.minItems,
 }
 
@@ -96,19 +102,33 @@ export function useSetupStatus(companyId: string | null | undefined, opts: { liv
     const m = MT[lang]
     try {
       const { data: c, error: cErr } = await supabase.from('companies')
-        .select('business_name, city, phone, instagram_user_id, vertical_key, playbook_answers').eq('id', companyId).maybeSingle()
+        .select('business_name, business_type, city, phone, instagram_user_id, vertical_key, playbook_answers').eq('id', companyId).maybeSingle()
       if (cErr || !c) throw new Error('company')
       const verticalKey = (c.vertical_key as string | null) ?? 'generico'
       const answers = (c.playbook_answers as Record<string, unknown> | null) ?? {}
       const business: BusinessData = { business_name: (c.business_name as string | null) ?? '', city: (c.city as string | null) ?? '', phone: (c.phone as string | null) ?? '' }
 
-      const [{ questions }, schema, cfg] = await Promise.all([fetchOnboardingQuestions(verticalKey), fetchCatalogSchema(verticalKey), fetchSetupConfig(verticalKey)])
+      const [{ questions }, schema, cfg, v2] = await Promise.all([fetchOnboardingQuestions(verticalKey), fetchCatalogSchema(verticalKey), fetchSetupConfig(verticalKey), fetchOnboardingV2(verticalKey)])
+      // answer_status só existe junto com o v2 (mesma migration) — consulta à parte, só quando há v2.
+      let answerStatus: AnswerStatus = {}
+      if (v2) {
+        const { data: st } = await supabase.from('companies').select('answer_status').eq('id', companyId).maybeSingle()
+        answerStatus = ((st as { answer_status?: AnswerStatus } | null)?.answer_status) ?? {}
+      }
 
       const steps: SetupStep[] = []
       const bOk = businessDataValid(business)
       steps.push({ id: 'dados', done: bOk, missing: bOk ? '' : businessMissing(business, lang) })
 
-      if (questions.length > 0) {
+      if (v2) {
+        // 5 etapas: passou por todas as perguntas (resposta, "Não sei", "Não se aplica" ou "Depois").
+        for (const st of v2.steps.filter(x => x.key !== SUMMARY_STEP)) {
+          const miss = visibleQuestions(v2, answers, st.key).filter(q => !isResolved(q, answers, answerStatus)).length
+          steps.push({ id: `etapa:${st.key}`, done: miss === 0, missing: miss === 0 ? '' : `${miss} ${miss === 1 ? m.question : m.questions}` })
+        }
+        // Etapa 5 (resumo): não tem pergunta; fica pronta quando as outras estão.
+        if (v2.steps.some(x => x.key === SUMMARY_STEP)) steps.push({ id: `etapa:${SUMMARY_STEP}`, done: steps.filter(x => x.id.startsWith('etapa:')).every(x => x.done), missing: '', optional: true })
+      } else if (questions.length > 0) {
         const miss = unansweredQuestions(questions, answers).length
         steps.push({ id: 'perguntas', done: miss === 0, missing: miss === 0 ? '' : `${miss} ${miss === 1 ? m.question : m.questions}` })
       }
@@ -147,9 +167,11 @@ export function useSetupStatus(companyId: string | null | undefined, opts: { liv
         loading: false, error: false,
         data: {
           steps, instagramRequired, instagramConnected, required, doneCount, allDone: doneCount === required,
+          // Mesma regra do servidor (setupReady.ts): com v2, "Não sei"/"Não se aplica"/"Depois" contam
+          // como respondido (as perguntas antigas da ficha estão dentro das etapas).
           readyForStrategy: steps.every(s => s.done) && (!instagramRequired || instagramConnected),
           missingText: missingParts.length ? `${m.missing}: ${missingParts.join(' · ')}` : '',
-          business, questions, answers, schema, verticalKey, minPhotos, minItems: cfg.minItems,
+          business, questions, answers, v2, answerStatus, businessType: (c.business_type as string | null) ?? '', schema, verticalKey, minPhotos, minItems: cfg.minItems,
         },
       })
     } catch {

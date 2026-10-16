@@ -5,6 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useShowcase } from '../../../contexts/ShowcaseContext'
 import { supabase } from '../../../lib/supabase'
 import { useSetupStatus } from '../../../lib/useSetupStatus'
+import MissingDataNotice from '../../../components/MissingDataNotice'
 import { CARD, MUTED, BORDER, D, ORANGE, SUPABASE_URL, timeAgo } from './shared'
 import { BudgetPanel, FunnelPanel, EstimatesPanel, InitiativesPanel, MonitoringPanel } from './StrategyPanels'
 import IntelligenceDomainsPanel from './IntelligenceDomainsPanel'
@@ -261,6 +262,7 @@ export default function StrategySection({ company }: { company: CompanyData }) {
 
   return (
     <div>
+      <MissingDataNotice v2={setup.v2} answers={setup.answers} status={setup.answerStatus} feature="estrategia" />
       {/* Cabeçalho: sempre visível, com "+ Criar estratégia" fixo no canto
           superior direito — criar uma nova enquanto existe uma ativa é um
           pivô consciente (confirmado antes de chamar a API). */}

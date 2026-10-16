@@ -1360,3 +1360,100 @@ grátis de 30 s, acima — mantidos como histórico):
   - Tela de Leads: selo 🌱 e filtro "Presença fraca".
   - Os 22 já rejeitados saem de `prospect_checked_places` e são reavaliados
     na próxima busca.
+- **ICP do agente de leads: CORRETOR DE IMÓVEIS com Instagram sem vídeo,
+  flopado ou mal produzido + potencial; busca em lotes por bairro** —
+  2026-10-15. Primeiro o dono pediu imobiliárias; no mesmo dia trocou: "ao
+  invés de imobiliária deveríamos procurar corretores de imóveis, a
+  princípio com as mesmas métricas" (`business_types` = só "Corretores de
+  imóveis"; com 1 categoria a busca por bairro usa todas as palavras dela;
+  Instagram cadastrado como "site" no Google conta como Instagram). (Dono: "nosso ICP
+  ideal são imobiliárias que têm contas do Instagram sem vídeo postado faz
+  tempo OU flopada OU mal produzido, COM POTENCIAL DE CRESCIMENTO";
+  "prospectar todos de uma vez possíveis e, na próxima rodada, mais").
+  - **Sinais medidos no perfil real** (Apify, 12 últimos posts):
+    - dias desde o último vídeo/Reels;
+    - engajamento médio ÷ seguidores;
+    - nota de produção 0-10 dada pela IA olhando as capas (Haiku com imagem).
+  - **Score = POTENCIAL (até 50) + OPORTUNIDADE (até 50):**
+    - potencial = nota/avaliações/avaliação recente/telefone/independente/
+      público 300+;
+    - oportunidade = sem vídeo 90+ dias (20), engajamento < 1% (15),
+      produção ≤ 6/10 (15), ou sem Instagram/parado (25 — fica abaixo de
+      quem tem Instagram ruim confirmado: "sem Instagram no site" pode só
+      ser link faltando).
+  - **"Instagram já forte" é rejeitado** (menos dor): vídeo nos últimos 30
+    dias + engajamento ≥ 2% + produção ≥ 7.
+  - **Busca:**
+    - `prospect_settings.search_areas` (bairros): "palavra em Bairro,
+      Cidade", 1 página por busca;
+    - fila em `prospect_scan_log.queue`;
+    - a função chama a si mesma (`continue_scan`) até acabar a fila ou bater
+      `max_per_night` (agora "máximo de leads por busca");
+    - sinal de vida em `heartbeat_at`;
+    - botão "Parar busca";
+    - só 1 varredura viva por vez;
+    - a próxima rodada só pega negócio novo (`prospect_checked_places`).
+  - **Custo/limite:** a conta do Apify tem teto de US$ 5/mês (visto em
+    2026-10-15: US$ 0,93 usados). Prospecção em massa depende de subir esse
+    plano — ver medição no PR.
+  - **Teste com corretores (2026-10-15) — achado:** buscando "corretor de
+    imóveis / corretora / consultor imobiliário" por bairro, o Google Maps
+    devolve quase só imobiliárias. Sem filtro, a IA aceitou 10 (9 eram
+    imobiliárias). Com a regra "só a PESSOA do corretor", 0 de 45 passaram:
+    os poucos corretores individuais que aparecem têm 1-4 avaliações e caem
+    no mínimo de avaliações (5). O Google Maps não é boa fonte pra
+    corretor autônomo — ele vive no Instagram. Próximo passo em aberto
+    (decisão do dono): afrouxar os filtros do Google pra corretor e/ou
+    buscar direto no Instagram (bio com "corretor"/CRECI, hashtags).
+  - **Correções vistas no teste:**
+    - a lista de "já analisados" passou de 1000 e o banco só devolve 1000
+      por leitura, então a busca reanalisava (e pagava de novo) gente já
+      vista. Agora lê em páginas;
+    - "Parar busca" gravava um status que o banco não aceita (`stopped`).
+      Agora grava `done` com a nota "Parada por você".
+- **Onboarding imobiliário v2 + diagnóstico "pronto pra gerar conversas"** —
+  2026-10-16. Pedido do dono (prompt "Refatoração do Onboarding Imobiliário"),
+  com as decisões dele na conversa:
+  - **Público:** imobiliária é o cliente pagante principal, mas o fluxo do
+    corretor (autônomo ou associado) é tão completo quanto. Quatro perfis:
+    dono/sócio, gestor comercial, corretor autônomo, corretor associado.
+  - **Duas fases:** diagnóstico curto ANTES do cadastro (4 passos, ~2 min:
+    você → operação → prioridade → Instagram); as **5 etapas** completas
+    DEPOIS, no /setup (operação, imóveis e mercado, prioridade comercial,
+    canais e desempenho, inteligência comercial). O que foi respondido no
+    diagnóstico já vem preenchido no /setup (lido de `diagnostics` pelo
+    `company_id`, sem mexer no claim-diagnostic).
+  - **Nunca travar por dado comercial:** todo campo aceita "Não sei",
+    "Não se aplica" (quando faz sentido) ou "Preencher depois". "." / espaços
+    não viram resposta: o campo fica pendente com aviso amigável. Estados em
+    `companies.answer_status` (valor real continua só em `playbook_answers`).
+    Obrigatórios de verdade: tipo de negócio, perfil, cidade, Instagram e
+    e-mail do diagnóstico (o Instagram é o que é analisado; o e-mail é o
+    limite de 3 diagnósticos/dia e do presente). Nome da empresa só pra
+    perfil de imobiliária.
+  - **Tudo de setor na ficha** (regra 6): perguntas, opções, "por que
+    perguntamos", perfis, condicionais, ações por prioridade, hipóteses de
+    público e padrões do diagnóstico em `vertical_playbooks.config.onboarding_v2`
+    (migration `20261019120000_onboarding_v2.sql`). Ficha sem v2 = fluxo
+    antigo, igual (testado com "Airbnb").
+  - **Compatível com as 6 perguntas antigas** (`onboarding_questions`, que
+    o servidor ainda confere): 5 estão no v2 com as mesmas chaves e opções;
+    `transacao` é calculada de "O que você faz hoje?" (`derive`).
+  - **Configurações:** o card "Entendimento do negócio" mostra as 5 etapas,
+    o resumo e as pendências; o sino e os avisos levam direto pro campo
+    (`?section=entendimento&q=<campo>`). A estratégia mostra "Dá pra ficar
+    mais certeiro" quando falta um dado que ela usa (`needed_for`).
+  - **Agentes:** Hermes e Estratégia recebem um bloco que separa informado /
+    lido automaticamente / "não sabe" / não se aplica / pendente
+    (`_shared/answerContext.ts`). Equipe da imobiliária (convites,
+    corretor pedindo acesso) **fica pra depois** — mexe em banco e
+    segurança (alteração arriscada), decisão do dono.
+  - **Diagnóstico:** seção nova "Seu Instagram está pronto pra gerar
+    conversas?" com três camadas separadas — **dado observado** (posts com
+    chamada pra conversa, posts que citam bairro, último vídeo, CRECI /
+    WhatsApp / bairro na bio, perguntas nos comentários), **análise** e
+    **hipótese a validar** (nunca promessa). O run-diagnosis passa a guardar
+    legenda e amostra de comentários dos posts. "Perguntas sem resposta" NÃO
+    é afirmado: a amostra de comentários do raspador não garante ver as
+    respostas — dizemos só quantas perguntas apareceram. A nota de 0 a 100
+    (Growth Score) não mudou.

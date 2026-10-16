@@ -323,7 +323,11 @@ companies (id, user_id, business_name, business_type, city, website_url,
   instagram_access_token, instagram_token_expires_at, instagram_auto_post,
   goal, plan, created_at, active, telegram_chat_id, notification_prefs,
   social_data, google_rating, google_review_count, vertical_key,
-  playbook_answers, auto_strategy, agent_automatic_mode, ...)
+  playbook_answers, answer_status, auto_strategy, agent_automatic_mode, ...)
+  `answer_status` (2026-10-16): estado de cada resposta da ficha quando não há
+  valor — `unknown` ("Não sei"), `na` ("Não se aplica"), `later`
+  ("Preencher depois"), `auto` (lido do Instagram, a confirmar). Ver
+  `src/lib/onboardingV2.ts` e DECISIONS.md (onboarding imobiliário v2).
 user_roles (user_id, role)  -- 'owner' | 'client'
 posts (id, company_id, content, platform, status, image_url,
   instagram_media_id, image_suggestion, best_time, campaign_id, created_at)
