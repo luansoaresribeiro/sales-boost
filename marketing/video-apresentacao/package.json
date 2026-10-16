@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "video": "remotion render src/index.tsx Apresentacao out/sales-boost-apresentacao.mp4",
-    "storyboard": "remotion still src/board.tsx Board out/storyboard.png",
+    "storyboard": "remotion still src/board.tsx Board out/storyboard-v2.png",
     "preview": "remotion studio src/index.tsx"
   },
   "dependencies": {

@@ -131,3 +131,21 @@ npx remotion still src/board.tsx Board out/storyboard.png \
 O ffmpeg embutido do Remotion não tem filtros (`fps`, `scale`, `tile`):
 pra extrair quadros de vídeo use `npx remotion ffmpeg -ss <t> -i <vídeo>
 -frames:v 1 saida.jpg` e monte a folha de contato com Python/PIL.
+
+## Sessão de 2026-10-16 (tarde)
+
+- **Storyboard v2** feito: `out/storyboard-v2.png` (`src/board.tsx` agora é
+  o v2, 11 quadros: 1, 2, 3a, 3b, 4, 5a–5d, 6, 7). O v1 continua em
+  `out/storyboard.png`.
+- **Katana:** é a ferramenta de edição dentro do app do Higgsfield e gasta
+  os créditos do app (conector com 0 créditos). Com os créditos da API, as
+  3 cenas de cidade saem pelos modelos de vídeo (Kling/Seedance), e a
+  edição é feita no Remotion. Mesma ideia do plano original (IA só no
+  fundo).
+- **Rede:** `getsaleboost.com` e `platform.higgsfield.ai` liberados. Bancos
+  de foto (Unsplash, Pexels, Wikimedia) **bloqueados** — a foto real do
+  imóvel (cenas 3a e 5b) precisa vir do dono ou de liberar
+  `images.unsplash.com` em Network access.
+- **Prints do painel** (cenas 5d e 6): ainda não tirados; precisam de login
+  na conta de teste.
+- Dono deu ok pra gerar as cenas de IA depois de ver o storyboard.
