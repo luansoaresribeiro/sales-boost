@@ -214,3 +214,12 @@ nenhum crédito foi gasto.**
 - Pra tirar os prints de novo: fechar o aviso de cookies ("Só essenciais")
   e o pop-up "Seu status de negócio" (botão "Fechar"), senão eles cobrem a
   tela.
+
+- **Atualização (mesma sessão):** a rede passou a liberar o cloudfront e os
+  8 arquivos foram baixados pra `public/cenas/` (6 vídeos + `casa-v1.png` e
+  `casa-v2.png`). Folhas de comparação: `out/comparar-cenas.jpg` e
+  `out/comparar-casa.jpg`.
+- **Erro geográfico da IA:** nas duas versões da cena 7 (Rio à noite) o
+  Cristo Redentor aparece **em cima do Pão de Açúcar** (no início da v1 e
+  na v2 toda). Carioca percebe. Usar só o final da v1 (de ~4s em diante),
+  onde o Cristo está no próprio morro — ou gerar de novo sem o Cristo.
