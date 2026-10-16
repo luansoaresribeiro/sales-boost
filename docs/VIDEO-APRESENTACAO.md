@@ -149,3 +149,26 @@ pra extrair quadros de vídeo use `npx remotion ffmpeg -ss <t> -i <vídeo>
 - **Prints do painel** (cenas 5d e 6): ainda não tirados; precisam de login
   na conta de teste.
 - Dono deu ok pra gerar as cenas de IA depois de ver o storyboard.
+
+## Sessão de 2026-10-16 (noite) — geração das 3 cenas bloqueada
+
+Pedido do dono: gerar as 3 cenas de cidade, 2 versões de cada (já
+aprovadas): Copacabana ao entardecer (cena 1), Botafogo com o Pão de Açúcar
+de dia (cena 5a) e drone sobre o Rio à noite (cena 7). **Nada foi gerado e
+nenhum crédito foi gasto.**
+
+- **API (`platform.higgsfield.ai`):** a rede passa e a chave é colocada
+  automaticamente nas chamadas, mas a Higgsfield responde
+  `{"detail":"Invalid credentials"}` em qualquer rota (status e
+  text-to-video). Provável: chave errada/revogada, ou fora do formato
+  `key_id:key_secret`. Conferir/gerar a chave no painel da API da
+  Higgsfield e salvar de novo em `HF_CREDENTIALS` (nas configurações do
+  ambiente), depois abrir sessão nova.
+- **Conector do claude.ai:** continua com 0 créditos (plano free).
+- **Divergência registrada:** o código do produto chama
+  `api.higgsfield.ai`; este ambiente só libera `platform.higgsfield.ai`.
+  Se a chave estiver certa e o erro continuar, liberar também
+  `api.higgsfield.ai` em Network access.
+- Próxima sessão: testar a chave com uma chamada de status; se passar,
+  gerar as 6 versões (texto → vídeo, 9:16, sem texto, sem imóvel, sem
+  pessoas) e salvar em `marketing/video-apresentacao/public/cenas/`.
