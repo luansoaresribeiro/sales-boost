@@ -73,6 +73,27 @@ Perguntas em aberto ao dono:
 3. Tem **foto real** de imóvel (com autorização) pras cenas 3 e 5? Senão,
    post estilizado sem foto.
 
+## Decisões de 2026-10-16 (ideia central + Higgsfield)
+
+- **Ideia central do dono** (entra no roteiro): "não conseguir transformar
+  presença digital em oportunidades comerciais previsíveis, sem depender de
+  trabalho manual o tempo inteiro". Sem prometer resultado: o que é
+  previsível é o **método**, não o número de clientes.
+- **Roteiro v2 aprovado pelo dono, com estes ajustes** (mantém ~33s):
+  - Cena 3 vira duas: 3a (5–7s) "Curtidas… não agendam *visita.*" e
+    3b (7–9s) **"E fazer tudo na mão… não *escala.*"** (tarefas
+    empilhando — "postar", "responder", "legendar" — até desabar).
+  - Cena 4 (9–12s): logo SALES BOOST + **"Menos sorte. Mais *método*."**
+    (escolha do dono; substitui "a IA que transforma imóveis em demanda").
+  - Cenas 1, 2, 5, 6 e 7 iguais.
+- **Higgsfield:** o conector do claude.ai está ligado, mas a conta dele tem
+  0 créditos (plano free). Os créditos do dono estão na **API** do
+  Higgsfield. Caminho: o dono põe a chave da API como variável de ambiente
+  `HF_CREDENTIALS` (formato `key_id:key_secret`, igual ao secret do
+  Supabase) e libera `platform.higgsfield.ai` em Network access; depois
+  abre sessão nova. Continua valendo: lista de cenas + custo → um "ok"
+  único do dono antes de gerar.
+
 ## Bloqueios desta sessão (2026-10-15/16)
 
 - **Conector Higgsfield não aparecia** na sessão. Dono vai conectar em
