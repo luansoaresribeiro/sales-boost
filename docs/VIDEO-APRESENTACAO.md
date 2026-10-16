@@ -106,6 +106,39 @@ Perguntas em aberto ao dono:
   aqui). Nunca conta de cliente real (Liga dos Sonhos). Dono deve trocar a
   senha depois.
 
+## Sessão de 2026-10-16 (continuação)
+
+- Dono confirmou: roteiro v2 aprovado com os ajustes acima; **não vai
+  mandar fotos do Rio** — cenas de cidade geradas por IA (nunca imóvel,
+  nunca texto). Usar os créditos da **API** do Higgsfield.
+- **Bloqueio:** a chave `HF_CREDENTIALS` foi cadastrada em *Network
+  secrets* presa ao domínio `getsaleboost.com`, não a
+  `platform.higgsfield.ai`. Resultado: `platform.higgsfield.ai` responde
+  401 "Invalid credentials" (a rede já está liberada). Correção: no menu do
+  ambiente → Edit → Network secrets, trocar o domínio do `HF_CREDENTIALS`
+  para `platform.higgsfield.ai` e abrir sessão nova.
+- Sem a chave não dá pra consultar o preço real de cada cena — **não
+  chutar valores**. Próximo passo: com a chave funcionando, montar a lista
+  de cenas Katana (1: Copacabana ao entardecer; 7: drone no Rio à noite;
+  opcionais: Botafogo/Pão de Açúcar pro fundo da cena 5) com o custo de
+  cada uma e pedir o "ok" único.
+
+## Pendências de outra conversa (retomar depois do vídeo)
+
+1. **Agente de leads** (PR #51, branch `claude/nifty-shannon-ysp818`): o
+   teste mostrou que o Google Maps quase só tem imobiliárias, não
+   corretores autônomos. Dono vai escolher entre (1) afrouxar o mínimo de
+   avaliações do Google para corretor, (2) buscar corretores direto no
+   Instagram (bio com "corretor"/CRECI, hashtags) ou (3) os dois. Também
+   vai dizer quantos leads quer por busca (hoje 10; a busca automática das
+   6h usa o mesmo número). Detalhes no fim de `docs/DECISIONS.md`.
+2. Depois que o dono juntar o PR #51: conferir se o site publicou e
+   confirmar **"Site publicado em getsaleboost.com ✅"**.
+3. Na sequência já aprovada: **"Comente QUERO" completo** (resposta
+   pública + DM terminando em pergunta + follow-up só dentro de 24h depois
+   que a pessoa responder) e depois a **confirmação de visita** (link de
+   agendamento + confirmação em 1 toque no Telegram).
+
 ## Regras que valem pra esse vídeo
 
 - IA de vídeo (Katana) **nunca escreve texto** e **nunca gera imóvel** —
