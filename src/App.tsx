@@ -104,7 +104,7 @@ function Navbar({ lang, setLang, onDiagClick }: { lang: Lang; setLang: (l: Lang)
         </div>
         <span className="hidden sm:inline font-bold text-white text-lg tracking-tight">SalesBoost</span>
       </div>
-      <div className="hidden md:flex items-center gap-8">
+      <div className="hidden lg:flex items-center gap-8">
         {labels.map((label, i) => (
           <a key={label} href={NAV_LINKS[i]} onClick={scrollTo(NAV_LINKS[i])} className="text-sm transition-colors" style={{ color: MUTED }} onMouseEnter={e => (e.currentTarget.style.color = '#fff')} onMouseLeave={e => (e.currentTarget.style.color = MUTED)}>
             {label}
@@ -130,124 +130,139 @@ function Navbar({ lang, setLang, onDiagClick }: { lang: Lang; setLang: (l: Lang)
 
 /* ══════════════════════════════════════════════════
    HERO  — load anim + parallax
+   Celular: uma coluna (texto → botão → celular → resumo → dados).
+   Desktop (lg+): três colunas (texto | celular | resumo).
 ══════════════════════════════════════════════════ */
-function HeroSection({ lang }: { lang: Lang }) {
+const HERO_DARK = '#240A02'
+
+function HeroPhone({ tx }: { tx: (typeof t)['pt']['hero'] }) {
+  return (
+    <div className="relative">
+      <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: '380px', maxWidth: '120vw', height: '480px', background: 'radial-gradient(ellipse,rgba(175,60,0,0.55) 0%,rgba(210,95,0,0.28) 45%,transparent 72%)', pointerEvents: 'none', zIndex: -1 }} />
+      <div style={{ width: '234px', height: '468px', borderRadius: '50px', background: '#100600', border: '2.5px solid rgba(255,255,255,0.1)', boxShadow: '0 50px 120px rgba(0,0,0,0.65),inset 0 1px 0 rgba(255,255,255,0.07)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: '3px', borderRadius: '47px', background: BG, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: '12px', marginBottom: '8px' }}>
+            <div style={{ width: '76px', height: '20px', borderRadius: '12px', background: '#100600' }} />
+          </div>
+          <div style={{ padding: '0 20px 10px' }}>
+            <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.27)', letterSpacing: '0.13em', textTransform: 'uppercase' }}>Junho 2026</div>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: 'white', marginTop: '2px' }}>{tx.reportTitle}</div>
+          </div>
+          <div style={{ margin: '0 16px 12px', padding: '12px 14px', borderRadius: '14px', background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '8px', color: 'rgba(255,109,41,0.6)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>{tx.scoreLabel}</div>
+                <div style={{ fontFamily: D, fontSize: '2.5rem', fontWeight: 900, color: ORANGE, lineHeight: 1 }}>87</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>↑ +12 pts</div>
+                <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.22)', marginTop: '2px' }}>vs anterior</div>
+              </div>
+            </div>
+            <div style={{ marginTop: '8px', height: '3px', borderRadius: '99px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+              <div style={{ width: '87%', height: '100%', borderRadius: '99px', background: `linear-gradient(90deg,${ORANGE},#FFB05A)` }} />
+            </div>
+          </div>
+          {tx.reportItems.map((item, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+              <span style={{ fontSize: '11px', flexShrink: 0 }}>{item.icon}</span>
+              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>{item.text}</span>
+            </div>
+          ))}
+          <div style={{ padding: '12px 16px 0' }}>
+            <div style={{ padding: '9px', borderRadius: '11px', background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.22)', textAlign: 'center' }}>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: ORANGE }}>{tx.reportCta}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function HeroInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="hero-meta">
+      <div className="text-[#2A0C02]/60 lg:text-white/50" style={{ fontSize: '10px', letterSpacing: '0.13em', textTransform: 'uppercase' }}>{label}</div>
+      <div className="text-[#2A0C02] lg:text-white/90" style={{ fontSize: '13px', fontWeight: 600, marginTop: '3px' }}>{value}</div>
+    </div>
+  )
+}
+
+function HeroSection({ lang, onDiagClick }: { lang: Lang; onDiagClick: () => void }) {
   const tx = t[lang].hero
   const sectionRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     const ctx = gsap.context(() => {
       const tl = gsap.timeline({ defaults: { ease: 'power3.out' } })
-      tl.from('.hero-meta', { y: 18, opacity: 0, stagger: 0.08, duration: 0.6 })
+      tl.from('.hero-kicker', { y: 18, opacity: 0, duration: 0.6 })
         .from('.hero-line', { y: 70, opacity: 0, stagger: 0.1, duration: 0.9 }, '-=0.3')
-        .from('.hero-desc', { y: 20, opacity: 0, duration: 0.6 }, '-=0.5')
+        .from('.hero-desc', { y: 20, opacity: 0, stagger: 0.08, duration: 0.6 }, '-=0.5')
         .from('.hero-phone', { y: 50, opacity: 0, scale: 0.94, duration: 1 }, '-=0.6')
-        .from('.hero-side', { x: 16, opacity: 0, stagger: 0.07, duration: 0.5 }, '-=0.7')
+        .from('.hero-meta', { y: 12, opacity: 0, stagger: 0.06, duration: 0.5 }, '-=0.6')
+        .from('.hero-side', { x: 16, opacity: 0, stagger: 0.07, duration: 0.5 }, '-=0.5')
 
-      // parallax on scroll
       gsap.to('.hero-bgword', {
         yPercent: -28,
         scrollTrigger: { trigger: sectionRef.current!, start: 'top top', end: 'bottom top', scrub: 1.2 },
       })
-      gsap.to('.hero-phone', {
-        yPercent: 14,
-        scrollTrigger: { trigger: sectionRef.current!, start: 'top top', end: 'bottom top', scrub: 1 },
-      })
+      // No celular o aparelho fica no meio do texto: sem parallax pra não "andar" por cima dele.
+      if (window.matchMedia('(min-width: 1024px)').matches) {
+        gsap.to('.hero-phone', {
+          yPercent: 14,
+          scrollTrigger: { trigger: sectionRef.current!, start: 'top top', end: 'bottom top', scrub: 1 },
+        })
+      }
     }, sectionRef)
     return () => ctx.revert()
   }, [])
 
   return (
-    <section ref={sectionRef} className="relative overflow-hidden" style={{ height: '100vh', minHeight: '660px', background: 'linear-gradient(158deg,#4E0D02 0%,#8F2400 16%,#BE4A00 32%,#D97215 50%,#E9A840 66%,#F2CC7A 82%,#F8E4B8 100%)' }}>
-      <div aria-hidden className="hero-bgword absolute bottom-[5%] left-0 right-0 overflow-hidden text-center select-none pointer-events-none z-0">
-        <span style={{ fontFamily: D, fontSize: '15vw', fontWeight: 900, color: 'rgba(255,255,255,0.07)', lineHeight: 1, display: 'block', whiteSpace: 'nowrap' }}>{tx.bgWord}</span>
+    <section ref={sectionRef} className="relative overflow-hidden lg:h-screen" style={{ minHeight: '660px', background: 'linear-gradient(158deg,#8A2C06 0%,#B0420A 18%,#C9560E 32%,#D97215 50%,#E9A840 66%,#F2CC7A 82%,#F8E4B8 100%)' }}>
+      <div aria-hidden className="hero-bgword absolute bottom-[4%] hidden sm:block left-0 right-0 overflow-hidden text-center select-none pointer-events-none z-0">
+        <span style={{ fontFamily: D, fontSize: '15vw', fontWeight: 900, color: 'rgba(255,255,255,0.08)', lineHeight: 1, display: 'block', whiteSpace: 'nowrap' }}>{tx.bgWord}</span>
       </div>
 
-      <div className="absolute z-10 flex items-start justify-between w-full px-6" style={{ top: '76px' }}>
-        {tx.meta.map((m) => (
-          <div key={m.label} className="hero-meta">
-            <div style={{ fontSize: '9px', letterSpacing: '0.14em', color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', fontWeight: 500 }}>{m.label}</div>
-            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.8)', fontWeight: 600, marginTop: '3px' }}>{m.value}</div>
+      <div className="relative z-10 mx-auto flex h-full max-w-[1600px] flex-col gap-10 px-5 pb-12 pt-24 sm:px-8 sm:pt-28 lg:grid lg:grid-cols-[minmax(0,1.15fr)_auto_minmax(0,0.85fr)] lg:gap-10 lg:px-12 lg:pb-0">
+        {/* coluna da esquerda — no celular os blocos se espalham pela ordem (contents) */}
+        <div className="contents lg:flex lg:flex-col lg:pb-10">
+          <div className="order-1 lg:order-none">
+            <div className="hero-kicker" style={{ fontSize: '13px', letterSpacing: '0.12em', color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', fontWeight: 500 }}>{tx.kicker}</div>
+            <h1 className="mt-5" style={{ fontFamily: D, letterSpacing: '-0.035em', lineHeight: 0.92 }}>
+              <span className="hero-line block" style={{ fontSize: 'clamp(1.75rem,2.6vw,3.1rem)', fontWeight: 800, color: '#FFEFE2', marginBottom: '0.3em' }}>{tx.headlineLight}</span>
+              {tx.headline.map((line, i) => (
+                <span key={i} className="hero-line block" style={{ fontSize: 'clamp(3.1rem,4.9vw,6rem)', fontWeight: 800, color: HERO_DARK }}>{line}</span>
+              ))}
+            </h1>
+            <p className="hero-desc mt-6 max-w-[34rem]" style={{ fontSize: 'clamp(1rem,1.15vw,1.2rem)', lineHeight: 1.55, color: 'rgba(255,255,255,0.95)' }}>{tx.lead}</p>
+            <button onClick={onDiagClick} className="hero-desc mt-7 inline-flex items-center gap-2 rounded-lg px-6 font-semibold text-white transition-transform hover:-translate-y-0.5" style={{ minHeight: 54, fontSize: '17px', background: '#F2591A', boxShadow: '0 10px 30px rgba(120,30,0,0.28)', border: 'none', cursor: 'pointer' }}>
+              {tx.cta} <span aria-hidden>↗</span>
+            </button>
           </div>
-        ))}
-        <div className="hero-meta" style={{ fontFamily: D, fontSize: '10px', fontWeight: 900, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.72)', textAlign: 'right', lineHeight: 1.5 }}>SALES<br />BOOST</div>
-      </div>
 
-      <h1 className="absolute z-10 text-white leading-none" style={{ fontFamily: D, fontSize: 'clamp(2.6rem,6vw,6.2rem)', fontWeight: 800, letterSpacing: '-0.02em', top: '132px', left: '24px', maxWidth: '44%' }}>
-        {tx.headline.map((line, i) => <span key={i} className="hero-line block">{line}</span>)}
-      </h1>
-
-      <div className="absolute z-10" style={{ top: '52%', left: '24px', transform: 'translateY(-24px)' }}>
-        <div style={{ fontSize: '9px', letterSpacing: '0.13em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>{tx.project[0]}</div>
-        <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.52)', fontWeight: 500, marginTop: '3px' }}>{tx.project[1]}</div>
-      </div>
-      <div className="absolute z-10" style={{ top: '64%', left: '24px' }}>
-        <div style={{ fontSize: '9px', letterSpacing: '0.13em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>{tx.typeLabel}</div>
-        <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.52)', fontWeight: 500, marginTop: '3px' }}>{tx.typeValue}</div>
-      </div>
-
-      <div className="hero-desc absolute z-10" style={{ top: '144px', right: '86px', maxWidth: '22%' }}>
-        <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.65)', lineHeight: 1.72 }}>{tx.sub}</p>
-      </div>
-
-      <div className="hero-phone absolute z-10" style={{ left: '50%', top: '50%', transform: 'translate(-50%,-46%)' }}>
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: '380px', height: '480px', background: 'radial-gradient(ellipse,rgba(175,60,0,0.55) 0%,rgba(210,95,0,0.28) 45%,transparent 72%)', pointerEvents: 'none', zIndex: -1 }} />
-        <div style={{ width: '234px', height: '468px', borderRadius: '50px', background: '#100600', border: '2.5px solid rgba(255,255,255,0.1)', boxShadow: '0 50px 120px rgba(0,0,0,0.65),inset 0 1px 0 rgba(255,255,255,0.07)', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', inset: '3px', borderRadius: '47px', background: BG, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', paddingTop: '12px', marginBottom: '8px' }}>
-              <div style={{ width: '76px', height: '20px', borderRadius: '12px', background: '#100600' }} />
-            </div>
-            <div style={{ padding: '0 20px 10px' }}>
-              <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.27)', letterSpacing: '0.13em', textTransform: 'uppercase' }}>Junho 2026</div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: 'white', marginTop: '2px' }}>{tx.reportTitle}</div>
-            </div>
-            <div style={{ margin: '0 16px 12px', padding: '12px 14px', borderRadius: '14px', background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.2)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: '8px', color: 'rgba(255,109,41,0.6)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>{tx.scoreLabel}</div>
-                  <div style={{ fontFamily: D, fontSize: '2.5rem', fontWeight: 900, color: ORANGE, lineHeight: 1 }}>87</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>↑ +12 pts</div>
-                  <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.22)', marginTop: '2px' }}>vs anterior</div>
-                </div>
-              </div>
-              <div style={{ marginTop: '8px', height: '3px', borderRadius: '99px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                <div style={{ width: '87%', height: '100%', borderRadius: '99px', background: `linear-gradient(90deg,${ORANGE},#FFB05A)` }} />
-              </div>
-            </div>
-            {tx.reportItems.map((item, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 20px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <span style={{ fontSize: '11px', flexShrink: 0 }}>{item.icon}</span>
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>{item.text}</span>
-              </div>
-            ))}
-            <div style={{ padding: '12px 16px 0' }}>
-              <div style={{ padding: '9px', borderRadius: '11px', background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.22)', textAlign: 'center' }}>
-                <span style={{ fontSize: '9px', fontWeight: 700, color: ORANGE }}>{tx.reportCta}</span>
-              </div>
-            </div>
+          <div className="order-4 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:order-none lg:mt-auto lg:grid-cols-1 lg:gap-y-7">
+            <HeroInfo label={tx.project[0]} value={tx.project[1]} />
+            <HeroInfo label={tx.typeLabel} value={tx.typeValue} />
+            <HeroInfo label={tx.location} value={`${tx.date}, ${tx.year}`} />
           </div>
         </div>
-      </div>
 
-      <div className="absolute z-10 flex flex-col" style={{ right: '30px', top: '42%', transform: 'translateY(-50%)', gap: '11px' }}>
-        {tx.sideLabels.map((label) => (
-          <div key={label} className="hero-side" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.36)', textAlign: 'right' }}>{label}</div>
-        ))}
-      </div>
+        {/* celular */}
+        <div className="hero-phone order-2 flex justify-center lg:order-none lg:items-center">
+          <HeroPhone tx={tx} />
+        </div>
 
-      <div className="absolute z-10 flex flex-col" style={{ right: '18px', bottom: '44px', gap: '10px' }}>
-        {(['←', '▶', '→'] as const).map((icon, i) => (
-          <button key={i} style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.85)', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
-            {icon}
-          </button>
-        ))}
-      </div>
-
-      <div className="absolute z-10" style={{ bottom: '28px', left: '24px' }}>
-        <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.28)', letterSpacing: '0.08em' }}>{tx.location}</div>
-        <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', fontWeight: 600, marginTop: '3px' }}>{tx.date} <span style={{ color: 'rgba(255,255,255,0.28)' }}>/</span> {tx.year}</div>
+        {/* coluna da direita */}
+        <div className="order-3 flex flex-col lg:order-none lg:pb-10">
+          {/* no celular este texto cai na parte clara do degradê: fica escuro pra continuar legível */}
+          <p className="hero-desc max-w-[26rem] text-[#2A0C02] lg:ml-auto lg:text-white/90" style={{ fontSize: '15px', lineHeight: 1.65, fontWeight: 500 }}>{tx.sub}</p>
+          <div className="my-auto hidden flex-col items-end gap-3 lg:flex">
+            {tx.sideLabels.map((label) => (
+              <div key={label} className="hero-side" style={{ fontSize: '11px', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.55)' }}>{label}</div>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   )
@@ -740,11 +755,13 @@ function DiagnosticSection({ lang }: { lang: Lang }) {
   const ref = useRef<HTMLElement>(null)
   const [stage, setStage] = useState<'intro' | 'form' | 'result'>('intro')
   const [diagId, setDiagId] = useState<string | null>(null)
-  const first = useRef(true)
+  const prevStage = useRef(stage)
 
   // Ao abrir as perguntas ou o resultado, volta pro topo da seção.
+  // Compara com a etapa anterior (e não "primeira vez"), pra não rolar a página sozinha ao carregar.
   useEffect(() => {
-    if (first.current) { first.current = false; return }
+    if (prevStage.current === stage) return
+    prevStage.current = stage
     if (ref.current) gsap.to(window, { scrollTo: { y: ref.current, offsetY: 64 }, duration: 0.7, ease: 'power2.inOut' })
   }, [stage])
 
@@ -855,7 +872,7 @@ export default function App() {
     <div style={{ background: BG }}>
       <FireCursor />
       <Navbar lang={lang} setLang={setLang} onDiagClick={goDiag} />
-      <HeroSection lang={lang} />
+      <HeroSection lang={lang} onDiagClick={goDiag} />
       <StatsSection lang={lang} />
       <FeaturesSection lang={lang} />
       <HowItWorksSection lang={lang} />
