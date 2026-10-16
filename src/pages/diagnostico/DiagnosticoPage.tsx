@@ -9,6 +9,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
 import MarketSection, { DiagnosisLoader, useMarket } from './MarketSection'
 import GiftNotice, { useGift } from './GiftNotice'
+import ReadinessSection from './ReadinessSection'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -34,6 +35,7 @@ interface Diagnostic {
   pagespeed_mobile: { scores: { performance: number; seo: number; accessibility: number; best_practices: number } } | null
   pagespeed_desktop: { scores: { performance: number; seo: number; accessibility: number; best_practices: number } } | null
   instagram_data: InstagramData | null
+  onboarding_context?: { playbook_answers?: Record<string, unknown> } | null
   status: string
   created_at: string
 }
@@ -265,6 +267,9 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
             </>
           )}
         </div>
+
+        {/* Pronto pra gerar conversas? (observado / análise / hipótese — ficha do setor) */}
+        <ReadinessSection ig={diag.instagram_data} businessType={diag.business_type} answers={diag.onboarding_context?.playbook_answers ?? {}} lang={lang} />
 
         {/* Potencial + principais problemas (regra fixa em growthScore.topGaps) */}
         {!showGaps && <MarketSection m={market} own={diag.instagram_data} lang={lang} />}

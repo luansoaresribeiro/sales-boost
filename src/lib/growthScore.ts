@@ -54,7 +54,10 @@ export const ENGAGEMENT_FULL_PCT = 3
 export const FORMAT_FULL_FRACTION = 0.5
 export const WINDOW_DAYS = 30
 
-export interface IgPost { ts: string | null; likes: number | null; comments: number | null; is_video: boolean | null }
+export interface IgPost {
+  ts: string | null; likes: number | null; comments: number | null; is_video: boolean | null
+  caption?: string | null; comment_samples?: { text: string; by_owner: boolean }[] // desde 2026-10-16 (diagnósticos antigos não têm)
+}
 
 /** Formato enxuto gravado em diagnostics.instagram_data. */
 export interface InstagramData {
