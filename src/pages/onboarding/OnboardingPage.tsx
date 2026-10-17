@@ -5,8 +5,7 @@ import { fetchBusinessTypes, OTHER_BUSINESS_TYPE } from '../../lib/businessTypes
 import { fetchVerticalKey, fetchOnboardingQuestions, bi, type PlaybookQuestion } from '../../lib/verticalPlaybook'
 import { useLang } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
-import KitPhotoPicker from '../../components/KitPhotoPicker'
-import { giftEnabled, sendDiagnosisGift, KIT_PHOTOS } from '../../lib/giftKit'
+import { DiagnosisLoader } from '../diagnostico/MarketSection'
 import { fetchOnboardingV2, sanitizeV2, PROFILE_KEY, fieldState, type AnswerState, type AnswerStatus, type OnboardingV2 } from '../../lib/onboardingV2'
 import QuestionField from '../../components/QuestionField'
 import { buildContextV2, diagnosticQuestions, isCompanyProfile, profileQuestion, stepResolved, V2QuestionList } from './DiagnosticV2'
@@ -75,9 +74,8 @@ const TX = {
     select: 'Selecione...', add: '+ Adicionar', typeEnter: 'Digite e aperte Enter',
     specific: 'Perguntas específicas do seu setor', helps: (f: string) => `Ajuda o Sales Boost a falar a língua de quem trabalha com ${f.toLowerCase()}. Tudo aqui é opcional.`, optional: 'Tudo aqui é opcional.',
     bizType: 'Tipo de negócio', which: 'Qual?', typeBiz: 'Digite o tipo do seu negócio',
-    loading: ['Entendendo seu negócio...', 'Montando seu perfil...', 'Analisando seu Instagram...', 'Analisando seu segmento...', 'Preparando seu diagnóstico...'],
     steps: ['Seu negócio', 'Seu cliente', 'Objetivo', 'Canais', 'Finalizar'], stepOf: (a: number, b: number) => `Passo ${a} de ${b}`,
-    procErr: 'Erro ao processar diagnóstico', analyzingBiz: 'Analisando seu negócio',
+    procErr: 'Erro ao processar diagnóstico',
     s0t: 'Vamos começar pelo seu negócio', s0s: 'Descubra o potencial do seu negócio em 2 minutos. Conte com suas palavras — assim o SalesBoost entende quem você é antes de qualquer coisa.',
     s0l: 'O que seu negócio faz?', s0p: 'Ex: Sou um estúdio de beleza que faz cabelo, unha e maquiagem para eventos...', s0h: 'Pode escrever livre. Quanto mais claro, melhores as recomendações.',
     s1t: 'Quem é seu cliente ideal?', s1s: 'Pra quem você mais quer vender? Não precisa de termos técnicos.', s1l: 'Descreva seu cliente ideal', s1p: 'Ex: Mulheres de 25 a 45 anos, no Rio, que valorizam autocuidado...', s1stage: 'Em que fase está seu negócio hoje?',
@@ -87,7 +85,6 @@ const TX = {
     s3site: 'Site (opcional)', s3siteBad: '⚠️ Esse endereço parece errado. Use: https://seunegocio.com.br — ou deixe em branco se não tem site.', s3siteHint: 'Se tiver site, analisamos a velocidade dele também. Não tem? Tudo bem, é só deixar em branco.', s3fb: 'Facebook (opcional)',
     s4t: 'É isso que entendemos?', s4s: 'Confira o resumo. Depois é só um último passo pra criar seu painel.', s4name: 'Nome da empresa (opcional)', s4namep: 'Ex: Studio Beleza Carioca', s4nameh: 'Sem empresa? Pode deixar em branco — seu perfil fica como pessoal. Não muda nada no que o Sales Boost faz.', s4city: 'Cidade / UF', s4cityp: 'Ex: Rio de Janeiro, RJ',
     s4mail: 'Seu e-mail', s4mailp: 'voce@seunegocio.com.br', s4mailh: 'Usado pra acessar seu painel e receber alertas.', s4mailBad: '⚠️ Esse e-mail parece incompleto. Confira: voce@exemplo.com', s4phone: 'Telefone / WhatsApp (opcional)',
-    giftT: '🎁 Um presente pra sua nota começar a subir', giftS: 'Mande a foto mais bonita do imóvel. Junto com o diagnóstico, ela ganha acabamento profissional e vira 3 artes prontas pra postar (2 pro feed e 1 pro stories) — no seu painel, grátis.', giftNote: 'Foto real, bem iluminada e sem pessoas. Nada é inventado e a IA não escreve na foto. É opcional.', giftPartial: (n: number) => `Faltam ${n} foto(s) pro presente — ou tire todas pra seguir sem ele.`, giftSending: 'Enviando sua foto pro presente...',
     back: '← Voltar', cont: 'Continuar →', create: 'Criar meu painel →', priv1: 'Ao continuar, você concorda com nossa', priv2: 'política de privacidade', priv3: '. Seus dados são usados só pra entender seu negócio e gerar o diagnóstico.',
     sum: { biz: 'Negócio', type: 'Tipo', ideal: 'Cliente ideal', goal: 'Objetivo principal', ch: 'Maior desafio', chan: 'Canais atuais', stage: 'Estágio', undef: 'ainda não definidos' },
     v2steps: ['Você', 'Sua operação', 'Prioridade', 'Instagram'],
@@ -104,9 +101,8 @@ const TX = {
     select: 'Select...', add: '+ Add', typeEnter: 'Type and press Enter',
     specific: 'Questions specific to your industry', helps: (f: string) => `Helps Sales Boost speak the language of people who work with ${f.toLowerCase()}. Everything here is optional.`, optional: 'Everything here is optional.',
     bizType: 'Business type', which: 'Which one?', typeBiz: 'Type your business type',
-    loading: ['Understanding your business...', 'Building your profile...', 'Analyzing your Instagram...', 'Analyzing your segment...', 'Preparing your diagnosis...'],
     steps: ['Your business', 'Your customer', 'Goal', 'Channels', 'Finish'], stepOf: (a: number, b: number) => `Step ${a} of ${b}`,
-    procErr: 'Error processing diagnosis', analyzingBiz: 'Analyzing your business',
+    procErr: 'Error processing diagnosis',
     s0t: 'Let us start with your business', s0s: 'Discover your business potential in 2 minutes. Tell us in your own words — so SalesBoost understands who you are before anything else.',
     s0l: 'What does your business do?', s0p: 'E.g.: I run a beauty studio that does hair, nails and makeup for events...', s0h: 'Feel free to write. The clearer, the better the recommendations.',
     s1t: 'Who is your ideal customer?', s1s: 'Who do you most want to sell to? No technical terms needed.', s1l: 'Describe your ideal customer', s1p: 'E.g.: Women aged 25 to 45, in Rio, who value self-care...', s1stage: 'What stage is your business at today?',
@@ -116,7 +112,6 @@ const TX = {
     s3site: 'Website (optional)', s3siteBad: '⚠️ This address looks wrong. Use: https://yourbusiness.com — or leave it blank if you have no website.', s3siteHint: 'If you have a website, we also analyze its speed. Do not have one? That is fine, just leave it blank.', s3fb: 'Facebook (optional)',
     s4t: 'Is this what we understood?', s4s: 'Check the summary. Then there is just one last step to create your dashboard.', s4name: 'Company name (optional)', s4namep: 'E.g.: Carioca Beauty Studio', s4nameh: 'No company? Leave it blank — your profile is marked as personal. It changes nothing in what Sales Boost does.', s4city: 'City / State', s4cityp: 'E.g.: Rio de Janeiro, RJ',
     s4mail: 'Your email', s4mailp: 'you@yourbusiness.com', s4mailh: 'Used to access your dashboard and receive alerts.', s4mailBad: '⚠️ This email looks incomplete. Check it: you@example.com', s4phone: 'Phone / WhatsApp (optional)',
-    giftT: '🎁 A gift to start raising your score', giftS: 'Send the best photo of the property. Along with the diagnosis, it gets a professional finish and becomes 3 ready-to-post designs (2 for the feed and 1 for stories) — in your dashboard, free.', giftNote: 'A real, well-lit photo with no people. Nothing is made up and the AI never writes on the photo. Optional.', giftPartial: (n: number) => `${n} photo(s) missing for the gift — or remove them all to continue without it.`, giftSending: 'Uploading your photo for the gift...',
     back: '← Back', cont: 'Continue →', create: 'Create my dashboard →', priv1: 'By continuing, you agree to our', priv2: 'privacy policy', priv3: '. Your data is used only to understand your business and generate the diagnosis.',
     sum: { biz: 'Business', type: 'Type', ideal: 'Ideal customer', goal: 'Main goal', ch: 'Biggest challenge', chan: 'Current channels', stage: 'Stage', undef: 'not defined yet' },
     v2steps: ['You', 'Your operation', 'Priority', 'Instagram'],
@@ -352,7 +347,6 @@ function normalizeInstagram(raw: string): string | null {
 // onDone(id) e quem hospeda mostra o resultado ali mesmo).
 export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolean; onDone?: (diagnosticId: string) => void }) {
   const navigate = useNavigate()
-  const loggedIn = !!useAuth().user
   const { lang } = useLang()
   const t = TX[lang]
   const optLabel = (o: string) => (lang === 'en' ? (EN_LABELS[o] ?? o) : o)
@@ -364,14 +358,10 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
     playbook_answers: {},
   })
   const [submitting, setSubmitting] = useState(false)
-  const [loadingMsg, setLoadingMsg] = useState('')
   const [error, setError] = useState('')
   const [businessTypes, setBusinessTypes] = useState<string[]>([])
   const [fichaName, setFichaName] = useState('')
   const [fichaQuestions, setFichaQuestions] = useState<PlaybookQuestion[]>([])
-  // Presente do diagnóstico: só pro setor que tem o criativo na ficha.
-  const [hasGift, setHasGift] = useState(false)
-  const [giftFiles, setGiftFiles] = useState<(File | null)[]>(() => Array(KIT_PHOTOS).fill(null))
   // Onboarding v2 (ficha com config.onboarding_v2): diagnóstico curto com perfil e estados de resposta.
   const [v2, setV2] = useState<OnboardingV2 | null>(null)
   // Primeira tela: escolher o tipo em botões grandes (sem a barra de passos).
@@ -400,17 +390,13 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
     let alive = true
     setData(d => ({ ...d, playbook_answers: {} }))
     setV2Answers({}); setV2Status({})
-    if (!data.business_type.trim()) { setFichaName(''); setFichaQuestions([]); setHasGift(false); setV2(null); setFichaLoading(false); return }
+    if (!data.business_type.trim()) { setFichaName(''); setFichaQuestions([]); setV2(null); setFichaLoading(false); return }
     fetchVerticalKey(data.business_type).then(async vk => {
-      const [{ name, questions }, gift, v2cfg] = await Promise.all([fetchOnboardingQuestions(vk), giftEnabled(vk), fetchOnboardingV2(vk)])
-      if (alive) { setV2(v2cfg); setFichaLoading(false) }
-      // Quem já está LOGADO nesta tela (rota /onboarding, conta sem empresa) criou a
-      // conta direto: sem kit grátis (decisão do dono 2026-10-13). O presente fica só
-      // pra quem faz o diagnóstico sem conta (landing / link do diagnóstico).
-      if (alive) { setFichaName(name); setFichaQuestions(questions); setHasGift(gift && (embedded || !loggedIn)) }
+      // Sem kit grátis no diagnóstico (decisão do dono 2026-10-17).
+      const [{ name, questions }, v2cfg] = await Promise.all([fetchOnboardingQuestions(vk), fetchOnboardingV2(vk)])
+      if (alive) { setV2(v2cfg); setFichaLoading(false); setFichaName(name); setFichaQuestions(questions) }
     })
     return () => { alive = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.business_type])
 
   const setPlaybookAnswer = (k: string, v: unknown) => setData(d => ({ ...d, playbook_answers: { ...d.playbook_answers, [k]: v } }))
@@ -427,29 +413,24 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   const igInvalid = !!data.instagram_url.trim() && !normalizeInstagram(data.instagram_url)
   const siteInvalid = !!data.website_url.trim() && !isValidUrl(data.website_url)
   const emailInvalid = !!data.contact_email.trim() && !EMAIL_RE.test(data.contact_email.trim())
-  // Presente: as 3 fotos ou nenhuma (sem presente).
-  const giftChosen = hasGift ? giftFiles.filter(Boolean).length : 0
-  const giftPartial = giftChosen > 0 && giftChosen < KIT_PHOTOS
 
   const canNext = () => {
     if (v2) {
       if (step === 0) return !!(data.business_type && v2Answers[PROFILE_KEY] && data.city.trim() && (!isCompanyProfile(v2, v2Answers) || data.business_name.trim().length >= 2))
       if (step === 1 || step === 2) return stepResolved(v2, v2Answers, v2Status, step)
-      if (step === 3) return !!normalizeInstagram(data.instagram_url) && !siteInvalid && EMAIL_RE.test(data.contact_email.trim()) && !giftPartial
+      if (step === 3) return !!normalizeInstagram(data.instagram_url) && !siteInvalid && EMAIL_RE.test(data.contact_email.trim())
       return false
     }
     if (step === 0) return !!(data.business_description.trim() && data.business_type)
     if (step === 1) return !!(data.ideal_customer.trim() && data.business_stage)
     if (step === 2) return !!data.goal
     if (step === 3) return !!normalizeInstagram(data.instagram_url) && !siteInvalid
-    if (step === 4) return !!(data.city.trim() && EMAIL_RE.test(data.contact_email.trim())) && !giftPartial
+    if (step === 4) return !!(data.city.trim() && EMAIL_RE.test(data.contact_email.trim()))
     return false
   }
 
   const handleSubmit = async () => {
     setSubmitting(true); setError('')
-    let msgIdx = 0
-    const interval = setInterval(() => { msgIdx = (msgIdx + 1) % t.loading.length; setLoadingMsg(t.loading[msgIdx]) }, 2500)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
@@ -481,21 +462,12 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
           body: JSON.stringify({ diagnostic_id: result.id }),
         })
       }
-      clearInterval(interval)
-      // Presente: manda as fotos e já começa o kit. Se der errado, segue pro
-      // resultado do mesmo jeito (dá pra criar os vídeos depois, no painel).
-      if (giftChosen === KIT_PHOTOS) {
-        setLoadingMsg(t.giftSending)
-        const gift = await sendDiagnosisGift(result.id, giftFiles.filter((f): f is File => !!f))
-        try { sessionStorage.setItem(`gift:${result.id}`, gift) } catch { /* sem sessionStorage: só não lembra */ }
-      }
       setSubmitting(false)
       if (embedded && onDone) onDone(result.id)
       // Direto pro diagnóstico (a tela intermediária "Seu negócio foi entendido"
       // saiu — decisão do dono 2026-10-10: menos cliques até o vídeo grátis).
       else navigate(`/diagnostico/${result.id}`)
     } catch (e) {
-      clearInterval(interval)
       setError(e instanceof Error ? e.message : String(e))
       setSubmitting(false)
     }
@@ -505,28 +477,11 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
     ? { background: 'transparent' }
     : { minHeight: '100vh', background: BG }
 
-  if (submitting) {
-    return (
-      <div style={{ ...shell, ...(embedded ? { padding: '48px 0' } : { padding: '24px' }), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} role="status">
-        <div style={{ marginBottom: '32px', position: 'relative' }}>
-          <div style={{ width: '72px', height: '72px', borderRadius: '50%', border: `3px solid rgba(255,109,41,0.15)`, borderTopColor: ORANGE, animation: 'spin 1s linear infinite' }} />
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        </div>
-        <div style={{ fontFamily: D, fontSize: '1.4rem', fontWeight: 800, color: 'white', marginBottom: '12px', textAlign: 'center' }}>{t.analyzingBiz}</div>
-        <div style={{ fontSize: '14px', color: MUTED, textAlign: 'center', transition: 'opacity 0.5s' }}>{loadingMsg || t.loading[0]}</div>
-      </div>
-    )
-  }
+  // Desde o clique: a mesma tela do resultado (S enchendo + barra), na etapa
+  // "lendo o seu Instagram" — é a parte mais demorada (até ~1 min).
+  if (submitting) return <DiagnosisLoader stage="instagram" lang={lang} embedded={embedded} />
 
-  const giftBlock = hasGift && (
-                  <div style={{ background: 'linear-gradient(135deg, rgba(255,109,41,0.12), rgba(74,222,128,0.06))', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '14px', padding: '16px', marginBottom: '16px' }}>
-                    <div style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 900, color: 'white', marginBottom: '6px' }}>{t.giftT}</div>
-                    <p style={{ fontSize: '13px', color: 'white', lineHeight: 1.55, margin: '0 0 6px' }}>{t.giftS}</p>
-                    <p style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.5, margin: '0 0 12px' }}>{t.giftNote}</p>
-                    <KitPhotoPicker files={giftFiles} onChange={setGiftFiles} />
-                    {giftPartial && <p style={{ fontSize: '12px', color: ORANGE, margin: '10px 0 0' }}>{t.giftPartial(KIT_PHOTOS - giftChosen)}</p>}
-                  </div>
-                )
+
   const errorBlock = error && <div style={{ padding: '12px 16px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '10px', fontSize: '13px', color: '#f87171', marginBottom: '16px', lineHeight: 1.5 }}>{error}</div>
 
   const choosing = step === 0 && !typePicked
@@ -619,7 +574,6 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                 <Field label={t.s3site} value={data.website_url} onChange={set('website_url')} type="url" placeholder="https://seunegocio.com.br" hint={siteInvalid ? t.s3siteBad : t.s3siteHint} />
                 <Field label={t.s4mail} value={data.contact_email} onChange={set('contact_email')} type="email" placeholder={t.s4mailp} required hint={emailInvalid ? t.s4mailBad : t.s4mailh} />
                 <Field label={t.s4phone} value={data.phone} onChange={set('phone')} placeholder="(21) 99999-9999" />
-                {giftBlock}
                 <p style={{ fontSize: '12px', color: MUTED, lineHeight: 1.5, margin: '4px 0 0' }}>{t.v2later}</p>
                 {errorBlock}
               </>
@@ -657,7 +611,6 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                 <Field label={t.s4city} value={data.city} onChange={set('city')} placeholder={t.s4cityp} required />
                 <Field label={t.s4mail} value={data.contact_email} onChange={set('contact_email')} type="email" placeholder={t.s4mailp} required hint={emailInvalid ? t.s4mailBad : t.s4mailh} />
                 <Field label={t.s4phone} value={data.phone} onChange={set('phone')} placeholder="(21) 99999-9999" />
-                {giftBlock}
                 {errorBlock}
               </>
             )}

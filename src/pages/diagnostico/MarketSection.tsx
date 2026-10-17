@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import type { InstagramData } from '../../lib/growthScore'
+import logo from '../../assets/logo.png'
+import LoaderShowcase from './LoaderShowcase'
 
 // Diagnóstico grátis v2 — "você vs. a concorrência da sua região" + o que
 // está em alta. Os dados vêm da função diagnosis-market (Instagram real, lido
@@ -81,34 +83,50 @@ export function useMarket(diagnosticId: string, enabled: boolean) {
 }
 
 const LTX = {
-  pt: { title: 'Preparando seu diagnóstico', steps: ['Lendo o seu Instagram', 'Buscando concorrentes da sua região', 'Comparando você com eles', 'Escrevendo sua análise'], note: 'Leva cerca de 1 minuto. Não feche esta página.' },
-  en: { title: 'Preparing your diagnosis', steps: ['Reading your Instagram', 'Finding competitors in your area', 'Comparing you with them', 'Writing your analysis'], note: 'Takes about 1 minute. Keep this page open.' },
+  pt: { title: 'Preparando seu diagnóstico', steps: ['Lendo o seu Instagram', 'Buscando concorrentes da sua região', 'Comparando você com eles', 'Escrevendo sua análise'], note: 'Leva cerca de 1 minuto. Não feche esta página.', calm: 'Não travou — estamos só garantindo que sua experiência seja a melhor.' },
+  en: { title: 'Preparing your diagnosis', steps: ['Reading your Instagram', 'Finding competitors in your area', 'Comparing you with them', 'Writing your analysis'], note: 'Takes about 1 minute. Keep this page open.', calm: "It's not stuck — we're just making sure your experience is the best it can be." },
 } as const
 
-// Tela de espera: logo + barra de progresso. A barra anda pela etapa real
-// (status do servidor) e, dentro da etapa, suaviza com o tempo — nunca chega
-// a 100% antes de terminar.
+// Tela de espera: o "S" da logo vai enchendo + barra de progresso. A barra anda
+// pela etapa real (status do servidor) e, dentro da etapa, suaviza com o tempo —
+// nunca chega a 100% antes de terminar. Aparece desde o clique em "enviar"
+// (cadastro, etapa 'instagram') e continua na página do resultado sem voltar pra trás.
+const STALL_MS = 5000
+
 export function DiagnosisLoader({ stage, lang, embedded = false }: { stage: Market['status'] | 'instagram'; lang: 'pt' | 'en'; embedded?: boolean }) {
   const t = LTX[lang]
   const idx = stage === 'instagram' ? 0 : stage === 'profiling' ? 2 : stage === 'thinking' || stage === 'done' ? 3 : 1
   const band: [number, number, number][] = [[4, 25, 15], [25, 62, 30], [62, 80, 10], [80, 97, 12]] // início, fim, segundos típicos
   const [a, b, sec] = band[idx]
   const start = useRef<{ stage: string; at: number }>({ stage: '', at: 0 })
-  const [pct, setPct] = useState(4)
+  const [pct, setPct] = useState(a)
+  // A barra fica parada (ex.: Instagram demorando a responder) → avisa que não travou.
+  const lastMove = useRef({ pct: a, at: 0 })
+  const [stalled, setStalled] = useState(false)
   useEffect(() => {
     const step = () => {
       if (start.current.stage !== stage) start.current = { stage, at: Date.now() }
       const el = (Date.now() - start.current.at) / 1000
       const next = stage === 'done' ? 100 : Math.round(a + (b - a) * (1 - Math.exp(-el / sec)))
       setPct(p => Math.max(p, next))
+      if (!lastMove.current.at || next > lastMove.current.pct) lastMove.current = { pct: Math.max(next, lastMove.current.pct), at: Date.now() }
+      setStalled(Date.now() - lastMove.current.at > STALL_MS)
     }
     const h = setInterval(step, 400)
     return () => clearInterval(h)
   }, [stage, a, b, sec])
   return (
-    <div role="status" aria-live="polite" style={{ minHeight: embedded ? 320 : '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ width: '100%', maxWidth: 360, textAlign: 'center' }}>
-        <div style={{ fontFamily: D, fontSize: '2.2rem', fontWeight: 900, color: 'white', letterSpacing: '-0.03em', marginBottom: 22, animation: 'sbpulse 1.6s ease-in-out infinite' }}>
+    <div role="status" aria-live="polite" style={{ position: 'relative', overflow: 'hidden', minHeight: embedded ? 640 : '100svh', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '24px 16px 28px', background: 'radial-gradient(ellipse at 50% 35%, #2a1408 0%, #0E0B0A 70%)' }}>
+      {/* fotos → tour → criativos passando atrás do painel */}
+      <LoaderShowcase />
+      <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(14,11,10,0) 45%, rgba(14,11,10,0.85) 78%, #0E0B0A 100%)', zIndex: 15, pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', zIndex: 20, width: '100%', maxWidth: 380, textAlign: 'center', background: 'rgba(20,14,10,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 22, padding: '20px 20px 16px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 20px 60px rgba(0,0,0,0.45)' }}>
+        {/* o S ocupa ~18%–84% da altura da imagem: o enchimento começa na base do S */}
+        <div aria-hidden style={{ position: 'relative', width: 76, height: 76, margin: '0 auto 14px', borderRadius: 18, overflow: 'hidden', boxShadow: '0 12px 36px rgba(255,109,41,0.25)' }}>
+          <img src={logo} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(1) brightness(0.45)' }} />
+          <img src={logo} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', clipPath: `inset(${100 - (pct >= 100 ? 100 : 18 + pct * 0.66)}% 0 0 0)`, transition: 'clip-path 0.4s ease' }} />
+        </div>
+        <div style={{ fontFamily: D, fontSize: '1.6rem', fontWeight: 900, color: 'white', letterSpacing: '-0.03em', marginBottom: 20, animation: 'sbpulse 1.6s ease-in-out infinite' }}>
           <span style={{ color: ORANGE }}>Sales</span>Boost
         </div>
         <div style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 800, color: 'white', marginBottom: 14 }}>{t.title}</div>
@@ -125,7 +143,9 @@ export function DiagnosisLoader({ stage, lang, embedded = false }: { stage: Mark
             </div>
           ))}
         </div>
-        <p style={{ fontSize: 12, color: MUTED, marginTop: 16 }}>{t.note}</p>
+        {stalled
+          ? <p style={{ fontSize: 13, color: 'white', marginTop: 16, lineHeight: 1.5 }}>{t.calm}</p>
+          : <p style={{ fontSize: 12, color: MUTED, marginTop: 16 }}>{t.note}</p>}
       </div>
       <style>{`@keyframes sbpulse{0%,100%{opacity:1}50%{opacity:.55}}`}</style>
     </div>

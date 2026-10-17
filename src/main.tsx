@@ -98,7 +98,7 @@ function ClientRoute({ children }: { children: React.ReactNode }) {
   // Conta nova que ainda não pagou ("modo vitrine", decisão do dono 2026-10-13):
   // NÃO é mais presa em /gratis — navega por todo o painel em "somente
   // visualização" (ShowcaseContext) e o servidor barra o que gasta/publica
-  // (_shared/access.ts). /gratis segue existindo (kit grátis + plano). O /setup
+  // (_shared/access.ts). /gratis segue existindo (página dos planos; o kit grátis acabou em 2026-10-17). O /setup
   // continua só depois de pagar. Leva o ?query junto (ex.: volta do checkout).
   if (isShowcaseMode(company, access)) {
     // Volta do checkout: a página /gratis espera o pagamento ser confirmado (a conta
@@ -189,6 +189,7 @@ function RouterRoot() {
       {/* Conta nova antes de pagar: só os vídeos grátis + plano/cupom */}
       <Route path="/gratis" element={<ClientRoute><FreePage /></ClientRoute>} />
       <Route path="/onboarding" element={<OnboardingPage />} />
+      <Route path="/diagnostico" element={<OnboardingPage />} />
       <Route path="/diagnostico/:id" element={<DiagnosticoPage />} />
       <Route path="/privacidade" element={<PrivacyPolicyPage />} />
       <Route path="/termos" element={<TermsOfUsePage />} />

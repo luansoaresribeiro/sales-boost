@@ -20,6 +20,7 @@ import type { TourRow } from '../_shared/tourEngine.ts'
 //  - start {photo_urls: string[1]}: a foto de destaque; valida, reserva e começa
 //  - status: avança; devolve as artes (e os vídeos dos kits antigos) quando prontos
 //  - coupon_seen: marca companies.coupon_offer_shown_at (1x) — conta os 7 dias do cupom
+//    (desde 2026-10-17 sem depender do kit; 'start' agora sempre recusa: o kit acabou)
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -27,6 +28,8 @@ const cors = {
 }
 // deno-lint-ignore no-explicit-any
 type Any = any
+// O kit grátis acabou (decisão do dono 2026-10-17). Voltar a oferecer = false.
+const KIT_ENDED = true
 const TOUR_COLS = 'id, status, photos, clips, video_path, assembly, updated_at, creative'
 
 function json(data: unknown, status = 200) {
@@ -89,8 +92,9 @@ Deno.serve(async (req) => {
     }
     const tourId = claim?.job_ref?.startsWith('tour:') ? claim.job_ref.slice(5) : null
 
+    // Desde 2026-10-17 o cupom não depende mais do kit (o kit acabou): o pop-up
+    // de cupom do painel marca a data na primeira vez que aparece.
     if (body.action === 'coupon_seen') {
-      if (claim?.status !== 'completed') return json({ error: 'Vídeo ainda não está pronto.' }, 400)
       if (!company.coupon_offer_shown_at) await admin.from('companies').update({ coupon_offer_shown_at: new Date().toISOString() }).eq('id', company.id).is('coupon_offer_shown_at', null)
       return json({ ok: true })
     }
@@ -155,7 +159,9 @@ Deno.serve(async (req) => {
       return json({ status: 'processing', done: artKit ? 0 : view.done, total: view.total, ...creativeOut })
     }
 
-    // action 'start'
+    // action 'start' — o kit grátis acabou (decisão do dono 2026-10-17):
+    // nenhum kit novo começa. Os antigos continuam aparecendo no 'status'.
+    if (KIT_ENDED) return json({ error: 'O kit grátis não está mais disponível.' }, 410)
     if (company.plan && company.plan !== 'free') return json({ error: 'Seu plano já inclui criativos todo mês.' }, 400)
     if (claim) return json({ error: 'O kit grátis desta conta já foi usado.', status: claim.status }, 409)
     const photos = Array.isArray(body.photo_urls) ? body.photo_urls.map(String) : []

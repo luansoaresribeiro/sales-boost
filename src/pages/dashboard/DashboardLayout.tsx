@@ -10,7 +10,7 @@ import TrialStatusWidget from './TrialStatusWidget'
 import BusinessContextButton from './BusinessContextButton'
 import PendenciasBell from './PendenciasBell'
 import { ShowcaseProvider, useShowcase } from '../../contexts/ShowcaseContext'
-import { ShowcaseBanner, KitPromoModal } from './ShowcaseUi'
+import { ShowcaseBanner, CouponModal } from './ShowcaseUi'
 import { usePendencias } from '../../lib/usePendencias'
 import { useSetupStatus } from '../../lib/useSetupStatus'
 import { supabase } from '../../lib/supabase'
@@ -282,7 +282,7 @@ function DashboardShell() {
       </div>
       {!readOnly && <TrialStartModal />}
       {!readOnly && <ProgressPopup />}
-      <KitPromoModal />
+      <CouponModal />
       {company && <BusinessContextButton />}
     </>
   )

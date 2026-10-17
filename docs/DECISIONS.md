@@ -1457,3 +1457,48 @@ grátis de 30 s, acima — mantidos como histórico):
     é afirmado: a amostra de comentários do raspador não garante ver as
     respostas — dizemos só quantas perguntas apareceram. A nota de 0 a 100
     (Growth Score) não mudou.
+
+## 2026-10-17 — Diagnóstico sem kit grátis + tela de carregamento desde o envio (pedido do dono)
+
+- **Kit grátis sai do diagnóstico.** O cadastro do diagnóstico não pede mais
+  a foto do presente, e o botão do resultado não promete "artes grátis"
+  (agora: "Criar minha conta e entrar no painel"). Motivo: pedido do dono.
+  O que continua: o código do kit no servidor (`diagnosis-gift`,
+  `trial-video`), o aviso de andamento para diagnósticos antigos que já
+  pediram o presente, e o kit pelo painel/`/gratis` — se for pra tirar
+  também de lá, é outra decisão do dono.
+- **Primeira tela:** "o que descreve você?" em botões grandes, sem a barra
+  antiga de 5 passos (parecia que o onboarding novo não tinha sido
+  publicado).
+- **Carregamento:** a tela com o "S" da logo enchendo + barra aparece desde
+  o clique em enviar (antes, a parte mais demorada — ler o Instagram, até
+  ~1 min — mostrava só uma bolinha girando com "Analisando seu negócio").
+- **Diagnóstico vira página própria** (`/diagnostico`): todos os botões do
+  site levam pra lá; a página inicial só tem o convite. A rota antiga
+  `/onboarding` continua funcionando (mesma tela).
+- **Barra parada:** se a barra não andar por 5 s, aparece "Não travou —
+  estamos só garantindo que sua experiência seja a melhor."
+- **Kit grátis acabou de vez** (pedido do dono, mesmo dia): sai também do
+  painel (cartão do vídeo/artes grátis e pop-up "seu presente está
+  esperando") e da página `/gratis`, que vira só a página dos planos. O
+  servidor (`trial-video`) recusa kit novo (`KIT_ENDED`); kits antigos
+  continuam consultáveis.
+- **Pop-up do painel vira o do cupom:** conta nova em modo vitrine vê "Você
+  ganhou um cupom de R$X" (R$1.000 imobiliária / R$200 corretor, 1º mês),
+  com o prazo que falta; "Usar meu cupom" leva aos planos com o cupom já
+  aplicado no mensal. Os 7 dias começam na primeira vez que o pop-up aparece
+  (`trial-video` action `coupon_seen`, que antes só valia depois do kit).
+  Some quando o cupom vence ou a conta paga.
+- **"Disponível no plano"** (modo vitrine) continua igual: a conta nova vê
+  todas as ferramentas, mas tudo que cria/publica/gasta abre o aviso.
+- **Tela de espera animada** (pedido do dono, mesmo dia): atrás do painel do
+  carregamento, fotos reais de imóvel flutuam soltas → se organizam numa
+  faixa de tour que desliza → os criativos do Sales Boost passam na frente
+  com leve desfoque (dá pra ver o design, não ler tudo). Repete enquanto o
+  diagnóstico roda; quem decide quando sai é o andamento real (não atrasa
+  nada). Com "reduzir movimento", fica parada. O resultado entra com um
+  esmaecimento suave. Imagens em `src/assets/loader/` (240 KB, webp): 8
+  fotos e 4 criativos **da conta de teste** (Tespon / QA Kit), escolhidas
+  sem objetos pessoais. As 6 artes do Pinterest **não** foram usadas
+  (trabalho de outras empresas). Antes de ir ao ar, o dono confirma que
+  pode mostrar as fotos desse apartamento.
