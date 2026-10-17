@@ -1457,3 +1457,19 @@ grátis de 30 s, acima — mantidos como histórico):
     é afirmado: a amostra de comentários do raspador não garante ver as
     respostas — dizemos só quantas perguntas apareceram. A nota de 0 a 100
     (Growth Score) não mudou.
+
+## 2026-10-17 — Diagnóstico sem kit grátis + tela de carregamento desde o envio (pedido do dono)
+
+- **Kit grátis sai do diagnóstico.** O cadastro do diagnóstico não pede mais
+  a foto do presente, e o botão do resultado não promete "artes grátis"
+  (agora: "Criar minha conta e entrar no painel"). Motivo: pedido do dono.
+  O que continua: o código do kit no servidor (`diagnosis-gift`,
+  `trial-video`), o aviso de andamento para diagnósticos antigos que já
+  pediram o presente, e o kit pelo painel/`/gratis` — se for pra tirar
+  também de lá, é outra decisão do dono.
+- **Primeira tela:** "o que descreve você?" em botões grandes, sem a barra
+  antiga de 5 passos (parecia que o onboarding novo não tinha sido
+  publicado).
+- **Carregamento:** a tela com o "S" da logo enchendo + barra aparece desde
+  o clique em enviar (antes, a parte mais demorada — ler o Instagram, até
+  ~1 min — mostrava só uma bolinha girando com "Analisando seu negócio").

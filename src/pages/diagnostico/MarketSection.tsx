@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import type { InstagramData } from '../../lib/growthScore'
+import logo from '../../assets/logo.png'
 
 // Diagnóstico grátis v2 — "você vs. a concorrência da sua região" + o que
 // está em alta. Os dados vêm da função diagnosis-market (Instagram real, lido
@@ -85,16 +86,17 @@ const LTX = {
   en: { title: 'Preparing your diagnosis', steps: ['Reading your Instagram', 'Finding competitors in your area', 'Comparing you with them', 'Writing your analysis'], note: 'Takes about 1 minute. Keep this page open.' },
 } as const
 
-// Tela de espera: logo + barra de progresso. A barra anda pela etapa real
-// (status do servidor) e, dentro da etapa, suaviza com o tempo — nunca chega
-// a 100% antes de terminar.
+// Tela de espera: o "S" da logo vai enchendo + barra de progresso. A barra anda
+// pela etapa real (status do servidor) e, dentro da etapa, suaviza com o tempo —
+// nunca chega a 100% antes de terminar. Aparece desde o clique em "enviar"
+// (cadastro, etapa 'instagram') e continua na página do resultado sem voltar pra trás.
 export function DiagnosisLoader({ stage, lang, embedded = false }: { stage: Market['status'] | 'instagram'; lang: 'pt' | 'en'; embedded?: boolean }) {
   const t = LTX[lang]
   const idx = stage === 'instagram' ? 0 : stage === 'profiling' ? 2 : stage === 'thinking' || stage === 'done' ? 3 : 1
   const band: [number, number, number][] = [[4, 25, 15], [25, 62, 30], [62, 80, 10], [80, 97, 12]] // início, fim, segundos típicos
   const [a, b, sec] = band[idx]
   const start = useRef<{ stage: string; at: number }>({ stage: '', at: 0 })
-  const [pct, setPct] = useState(4)
+  const [pct, setPct] = useState(a)
   useEffect(() => {
     const step = () => {
       if (start.current.stage !== stage) start.current = { stage, at: Date.now() }
@@ -108,7 +110,12 @@ export function DiagnosisLoader({ stage, lang, embedded = false }: { stage: Mark
   return (
     <div role="status" aria-live="polite" style={{ minHeight: embedded ? 320 : '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ width: '100%', maxWidth: 360, textAlign: 'center' }}>
-        <div style={{ fontFamily: D, fontSize: '2.2rem', fontWeight: 900, color: 'white', letterSpacing: '-0.03em', marginBottom: 22, animation: 'sbpulse 1.6s ease-in-out infinite' }}>
+        {/* o S ocupa ~18%–84% da altura da imagem: o enchimento começa na base do S */}
+        <div aria-hidden style={{ position: 'relative', width: 76, height: 76, margin: '0 auto 14px', borderRadius: 18, overflow: 'hidden', boxShadow: '0 12px 36px rgba(255,109,41,0.25)' }}>
+          <img src={logo} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(1) brightness(0.45)' }} />
+          <img src={logo} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', clipPath: `inset(${100 - (pct >= 100 ? 100 : 18 + pct * 0.66)}% 0 0 0)`, transition: 'clip-path 0.4s ease' }} />
+        </div>
+        <div style={{ fontFamily: D, fontSize: '1.6rem', fontWeight: 900, color: 'white', letterSpacing: '-0.03em', marginBottom: 20, animation: 'sbpulse 1.6s ease-in-out infinite' }}>
           <span style={{ color: ORANGE }}>Sales</span>Boost
         </div>
         <div style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 800, color: 'white', marginBottom: 14 }}>{t.title}</div>
