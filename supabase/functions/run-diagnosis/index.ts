@@ -233,123 +233,136 @@ Deno.serve(async (req) => {
 
     const diagnosticId = row.id
 
-    // 1b. Diagnóstico v2: a busca de concorrentes começa JÁ, em paralelo com a
-    // leitura do Instagram (antes esperava a página abrir — ~30-60 s a mais).
-    // A diagnosis-market responde na hora e continua sozinha; se falhar, a
-    // página do diagnóstico toca a análise do mesmo jeito.
-    fetch(`${supabaseUrl}/functions/v1/diagnosis-market`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseServiceKey}` },
-      body: JSON.stringify({ diagnostic_id: diagnosticId, drive: true }),
-      signal: AbortSignal.timeout(10_000),
-    }).catch(e => console.log('[run-diagnosis] diagnosis-market não disparou', String(e)))
+    // A análise (Instagram, site, robôs extras), que antes segurava a resposta.
+    async function analyze() {
+      // 1b. Diagnóstico v2: a busca de concorrentes começa JÁ, em paralelo com a
+      // leitura do Instagram (antes esperava a página abrir — ~30-60 s a mais).
+      // A diagnosis-market responde na hora e continua sozinha; se falhar, a
+      // página do diagnóstico toca a análise do mesmo jeito.
+      fetch(`${supabaseUrl}/functions/v1/diagnosis-market`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseServiceKey}` },
+        body: JSON.stringify({ diagnostic_id: diagnosticId, drive: true }),
+        signal: AbortSignal.timeout(10_000),
+      }).catch(e => console.log('[run-diagnosis] diagnosis-market não disparou', String(e)))
 
-    // 2. PageSpeed (só se houver site) e coleta do Instagram, em paralelo
-    const categories = ['PERFORMANCE', 'SEO', 'ACCESSIBILITY', 'BEST_PRACTICES']
-      .map(c => `category=${c}`)
-      .join('&')
-    const keyParam = pagespeedKey ? `&key=${pagespeedKey}` : ''
-    const psBase = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(websiteUrl)}&${categories}${keyParam}`
-    const psFetch = (strategy: string): Promise<Response> =>
-      fetch(`${psBase}&strategy=${strategy}`, { signal: AbortSignal.timeout(70_000) })
-    const skipped = Promise.reject(new Error('sem site'))
-    skipped.catch(() => {})
+      // 2. PageSpeed (só se houver site) e coleta do Instagram, em paralelo
+      const categories = ['PERFORMANCE', 'SEO', 'ACCESSIBILITY', 'BEST_PRACTICES']
+        .map(c => `category=${c}`)
+        .join('&')
+      const keyParam = pagespeedKey ? `&key=${pagespeedKey}` : ''
+      const psBase = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(websiteUrl)}&${categories}${keyParam}`
+      const psFetch = (strategy: string): Promise<Response> =>
+        fetch(`${psBase}&strategy=${strategy}`, { signal: AbortSignal.timeout(70_000) })
+      const skipped = Promise.reject(new Error('sem site'))
+      skipped.catch(() => {})
 
-    const igPromise = igHandle && igUrl
-      ? collectInstagram(supabase, igHandle, igUrl, apifyToken, since)
-      : Promise.resolve({ error: 'not_provided', collected_at: new Date().toISOString() })
+      const igPromise = igHandle && igUrl
+        ? collectInstagram(supabase, igHandle, igUrl, apifyToken, since)
+        : Promise.resolve({ error: 'not_provided', collected_at: new Date().toISOString() })
 
-    const [mobileRes, desktopRes] = await Promise.allSettled([
-      websiteUrl ? psFetch('mobile') : skipped,
-      websiteUrl ? psFetch('desktop') : skipped,
-    ])
-
-    const parsePagespeed = async (res: PromiseSettledResult<Response>): Promise<PagespeedResult | null> => {
-      if (res.status !== 'fulfilled' || !res.value.ok) return null
-      try {
-        const raw = await res.value.json()
-        const lr = raw?.lighthouseResult ?? {}
-        const cats = lr?.categories ?? {}
-        const audits = lr?.audits ?? {}
-
-        const score = (key: string) => Math.round((cats[key]?.score ?? 0) * 100)
-        const metric = (key: string) => audits[key]?.displayValue as string | undefined
-
-        const opportunities = Object.entries(audits as Record<string, { score?: number; displayValue?: string; title?: string }>)
-          .filter(([, v]) => typeof v.score === 'number' && v.score < 0.9 && v.displayValue)
-          .slice(0, 6)
-          .map(([k, v]) => ({ id: k, value: v.displayValue }))
-
-        return {
-          scores: {
-            performance: score('performance'),
-            seo: score('seo'),
-            accessibility: score('accessibility'),
-            best_practices: score('best-practices'),
-          },
-          metrics: {
-            lcp: metric('largest-contentful-paint'),
-            tbt: metric('total-blocking-time'),
-            cls: metric('cumulative-layout-shift'),
-            fcp: metric('first-contentful-paint'),
-            si: metric('speed-index'),
-          },
-          opportunities,
-        }
-      } catch {
-        return null
-      }
-    }
-
-    const [pagespeedMobile, pagespeedDesktop, instagramData] = await Promise.all([
-      parsePagespeed(mobileRes),
-      parsePagespeed(desktopRes),
-      igPromise,
-    ])
-
-    // 3. Fire Apify actors async (just kick off, don't wait for results)
-    const apifyRunIds: Record<string, string> = {}
-
-    if (apifyToken) {
-      const fireApify = async (actor: string, input: Record<string, unknown>, key: string) => {
-        try {
-          const r = await fetch(
-            `https://api.apify.com/v2/acts/${actor}/runs?token=${apifyToken}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }
-          )
-          if (r.ok) {
-            const body = await r.json()
-            if (body?.data?.id) apifyRunIds[key] = body.data.id
-          }
-        } catch { /* silent */ }
-      }
-
-      await Promise.all([
-        websiteUrl
-          ? fireApify('apify~website-content-crawler', { startUrls: [{ url: websiteUrl }], maxCrawlPages: 5 }, 'website')
-          : Promise.resolve(),
-        data.google_maps_url
-          ? fireApify('compass~google-maps-reviews-scraper', { startUrls: [{ url: data.google_maps_url }], maxReviews: 20 }, 'google_maps')
-          : Promise.resolve(),
+      const [mobileRes, desktopRes] = await Promise.allSettled([
+        websiteUrl ? psFetch('mobile') : skipped,
+        websiteUrl ? psFetch('desktop') : skipped,
       ])
+
+      const parsePagespeed = async (res: PromiseSettledResult<Response>): Promise<PagespeedResult | null> => {
+        if (res.status !== 'fulfilled' || !res.value.ok) return null
+        try {
+          const raw = await res.value.json()
+          const lr = raw?.lighthouseResult ?? {}
+          const cats = lr?.categories ?? {}
+          const audits = lr?.audits ?? {}
+
+          const score = (key: string) => Math.round((cats[key]?.score ?? 0) * 100)
+          const metric = (key: string) => audits[key]?.displayValue as string | undefined
+
+          const opportunities = Object.entries(audits as Record<string, { score?: number; displayValue?: string; title?: string }>)
+            .filter(([, v]) => typeof v.score === 'number' && v.score < 0.9 && v.displayValue)
+            .slice(0, 6)
+            .map(([k, v]) => ({ id: k, value: v.displayValue }))
+
+          return {
+            scores: {
+              performance: score('performance'),
+              seo: score('seo'),
+              accessibility: score('accessibility'),
+              best_practices: score('best-practices'),
+            },
+            metrics: {
+              lcp: metric('largest-contentful-paint'),
+              tbt: metric('total-blocking-time'),
+              cls: metric('cumulative-layout-shift'),
+              fcp: metric('first-contentful-paint'),
+              si: metric('speed-index'),
+            },
+            opportunities,
+          }
+        } catch {
+          return null
+        }
+      }
+
+      const [pagespeedMobile, pagespeedDesktop, instagramData] = await Promise.all([
+        parsePagespeed(mobileRes),
+        parsePagespeed(desktopRes),
+        igPromise,
+      ])
+
+      // 3. Fire Apify actors async (just kick off, don't wait for results)
+      const apifyRunIds: Record<string, string> = {}
+
+      if (apifyToken) {
+        const fireApify = async (actor: string, input: Record<string, unknown>, key: string) => {
+          try {
+            const r = await fetch(
+              `https://api.apify.com/v2/acts/${actor}/runs?token=${apifyToken}`,
+              { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }
+            )
+            if (r.ok) {
+              const body = await r.json()
+              if (body?.data?.id) apifyRunIds[key] = body.data.id
+            }
+          } catch { /* silent */ }
+        }
+
+        await Promise.all([
+          websiteUrl
+            ? fireApify('apify~website-content-crawler', { startUrls: [{ url: websiteUrl }], maxCrawlPages: 5 }, 'website')
+            : Promise.resolve(),
+          data.google_maps_url
+            ? fireApify('compass~google-maps-reviews-scraper', { startUrls: [{ url: data.google_maps_url }], maxReviews: 20 }, 'google_maps')
+            : Promise.resolve(),
+        ])
+      }
+
+      // 4. Update row with results
+      const hasPagespeed = !!(pagespeedMobile || pagespeedDesktop)
+      const hasInstagram = !instagramData.error
+      const finalStatus = hasPagespeed || hasInstagram ? 'complete' : 'partial'
+      await supabase
+        .from('diagnostics')
+        .update({
+          pagespeed_mobile: pagespeedMobile,
+          pagespeed_desktop: pagespeedDesktop,
+          apify_run_ids: apifyRunIds,
+          instagram_data: instagramData,
+          status: finalStatus,
+        })
+        .eq('id', diagnosticId)
     }
 
-    // 4. Update row with results
-    const hasPagespeed = !!(pagespeedMobile || pagespeedDesktop)
-    const hasInstagram = !instagramData.error
-    const finalStatus = hasPagespeed || hasInstagram ? 'complete' : 'partial'
-    await supabase
-      .from('diagnostics')
-      .update({
-        pagespeed_mobile: pagespeedMobile,
-        pagespeed_desktop: pagespeedDesktop,
-        apify_run_ids: apifyRunIds,
-        instagram_data: instagramData,
-        status: finalStatus,
-      })
-      .eq('id', diagnosticId)
-
-    return json({ id: diagnosticId, status: finalStatus })
+    // Responde JÁ com o id e termina a análise em segundo plano (pedido do dono
+    // 2026-10-17: fechou o celular no meio → o diagnóstico tem de continuar e
+    // ficar salvo). A página /diagnostico/:id acompanha pelo status da linha.
+    const work = analyze().catch(async e => {
+      console.error('[run-diagnosis] análise falhou', diagnosticId, String(e))
+      await supabase.from('diagnostics').update({ status: 'partial' }).eq('id', diagnosticId).eq('status', 'processing')
+    })
+    // deno-lint-ignore no-explicit-any
+    const rt = (globalThis as any).EdgeRuntime
+    if (rt?.waitUntil) rt.waitUntil(work); else await work
+    return json({ id: diagnosticId, status: 'processing' })
 
   } catch (err) {
     return json({ error: String(err) }, 500)

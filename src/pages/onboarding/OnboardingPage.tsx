@@ -6,6 +6,7 @@ import { fetchVerticalKey, fetchOnboardingQuestions, bi, type PlaybookQuestion }
 import { useLang } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { DiagnosisLoader } from '../diagnostico/MarketSection'
+import { loadDiagnosis, saveDiagnosis } from '../../lib/savedDiagnosis'
 import { fetchOnboardingV2, sanitizeV2, PROFILE_KEY, fieldState, type AnswerState, type AnswerStatus, type OnboardingV2 } from '../../lib/onboardingV2'
 import QuestionField from '../../components/QuestionField'
 import { buildContextV2, diagnosticQuestions, isCompanyProfile, profileQuestion, stepResolved, V2QuestionList } from './DiagnosticV2'
@@ -89,6 +90,8 @@ const TX = {
     sum: { biz: 'Negócio', type: 'Tipo', ideal: 'Cliente ideal', goal: 'Objetivo principal', ch: 'Maior desafio', chan: 'Canais atuais', stage: 'Estágio', undef: 'ainda não definidos' },
     v2steps: ['Você', 'Sua operação', 'Prioridade', 'Instagram'],
     pickT: 'Vamos começar: o que descreve você?', pickS: 'Diagnóstico grátis do seu Instagram em uns 2 minutos. Escolha uma opção pra gente fazer as perguntas certas.', pickOther: 'Outro tipo de negócio', loadingFicha: 'Preparando as perguntas certas pra você…',
+    savedT: 'Seu diagnóstico está salvo neste aparelho', savedS: (d: string) => `Você fez um diagnóstico aqui em ${d}. Mesmo se fechou a tela no meio, ele terminou de ser feito — é só abrir.`,
+    savedSee: 'Ver meu diagnóstico →', savedNew: 'Começar outro diagnóstico',
     v2s0t: 'Vamos começar por você', v2s0s: 'Diagnóstico grátis do seu Instagram em uns 2 minutos — feito pra quem vende e aluga imóvel.',
     v2nameOrg: 'Nome da imobiliária', v2nameOrgP: 'Ex: Imobiliária Silva', v2namePerson: 'Seu nome profissional (opcional)', v2namePersonP: 'Ex: Ana Souza Imóveis',
     v2nameH: 'Aparece no seu painel. Pode mudar depois.',
@@ -116,6 +119,8 @@ const TX = {
     sum: { biz: 'Business', type: 'Type', ideal: 'Ideal customer', goal: 'Main goal', ch: 'Biggest challenge', chan: 'Current channels', stage: 'Stage', undef: 'not defined yet' },
     v2steps: ['You', 'Your operation', 'Priority', 'Instagram'],
     pickT: "Let's start: what describes you?", pickS: 'Free diagnosis of your Instagram in about 2 minutes. Pick one so we ask the right questions.', pickOther: 'Another type of business', loadingFicha: 'Getting the right questions ready for you…',
+    savedT: 'Your diagnosis is saved on this device', savedS: (d: string) => `You ran a diagnosis here on ${d}. Even if you closed the screen halfway, it finished — just open it.`,
+    savedSee: 'See my diagnosis →', savedNew: 'Start another diagnosis',
     v2s0t: "Let's start with you", v2s0s: 'Free diagnosis of your Instagram in about 2 minutes — built for people who sell and rent property.',
     v2nameOrg: 'Agency name', v2nameOrgP: 'E.g.: Silva Realty', v2namePerson: 'Your professional name (optional)', v2namePersonP: 'E.g.: Ana Souza Realty',
     v2nameH: 'Shown in your dashboard. You can change it later.',
@@ -359,6 +364,9 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  // Diagnóstico já feito neste aparelho: primeiro oferece abrir ele (o novo só
+  // começa se a pessoa pedir — o anterior continua salvo).
+  const [saved, setSaved] = useState(() => (embedded ? null : loadDiagnosis()))
   const [businessTypes, setBusinessTypes] = useState<string[]>([])
   const [fichaName, setFichaName] = useState('')
   const [fichaQuestions, setFichaQuestions] = useState<PlaybookQuestion[]>([])
@@ -452,6 +460,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error ?? t.procErr)
+      saveDiagnosis(result.id)
       // Quem já está logado (conta criada antes de ter empresa) não passa pelo
       // cadastro com ?claim= — liga o diagnóstico à conta aqui mesmo, senão o
       // botão final mandava criar uma conta nova e a pessoa ficava travada.
@@ -519,7 +528,22 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
           </div>}
 
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '20px', padding: embedded ? '20px' : '32px' }}>
-            {choosing && (
+            {choosing && saved && (
+              <>
+                <H t={t.savedT} s={t.savedS(new Date(saved.at).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR'))} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <button type="button" onClick={() => navigate(`/diagnostico/${saved.id}`)}
+                    style={{ minHeight: 56, width: '100%', padding: '14px 18px', borderRadius: '14px', background: ORANGE, border: 'none', color: '#000', fontSize: '16px', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {t.savedSee}
+                  </button>
+                  <button type="button" onClick={() => setSaved(null)}
+                    style={{ minHeight: 52, width: '100%', padding: '12px 18px', borderRadius: '14px', background: 'transparent', border: `1px solid ${BORDER}`, color: 'white', fontSize: '14.5px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {t.savedNew}
+                  </button>
+                </div>
+              </>
+            )}
+            {choosing && !saved && (
               <>
                 <H t={t.pickT} s={t.pickS} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

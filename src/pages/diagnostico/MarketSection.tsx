@@ -83,8 +83,8 @@ export function useMarket(diagnosticId: string, enabled: boolean) {
 }
 
 const LTX = {
-  pt: { title: 'Preparando seu diagnóstico', steps: ['Lendo o seu Instagram', 'Buscando concorrentes da sua região', 'Comparando você com eles', 'Escrevendo sua análise'], note: 'Leva cerca de 1 minuto. Não feche esta página.', calm: 'Não travou — estamos só garantindo que sua experiência seja a melhor.' },
-  en: { title: 'Preparing your diagnosis', steps: ['Reading your Instagram', 'Finding competitors in your area', 'Comparing you with them', 'Writing your analysis'], note: 'Takes about 1 minute. Keep this page open.', calm: "It's not stuck — we're just making sure your experience is the best it can be." },
+  pt: { title: 'Preparando seu diagnóstico', steps: ['Lendo o seu Instagram', 'Buscando concorrentes da sua região', 'Comparando você com eles', 'Escrevendo sua análise'], note: 'Leva cerca de 1 minuto. Se fechar a tela, o diagnóstico continua e fica salvo neste aparelho.', calm: 'Não travou — estamos só garantindo que sua experiência seja a melhor.' },
+  en: { title: 'Preparing your diagnosis', steps: ['Reading your Instagram', 'Finding competitors in your area', 'Comparing you with them', 'Writing your analysis'], note: 'Takes about 1 minute. If you close the screen, the diagnosis keeps going and stays saved on this device.', calm: "It's not stuck — we're just making sure your experience is the best it can be." },
 } as const
 
 // Tela de espera: o "S" da logo vai enchendo + barra de progresso. A barra anda
@@ -118,7 +118,7 @@ export function DiagnosisLoader({ stage, lang, embedded = false }: { stage: Mark
   return (
     <div role="status" aria-live="polite" style={{ position: 'relative', overflow: 'hidden', minHeight: embedded ? 640 : '100svh', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '24px 16px 28px', background: 'radial-gradient(ellipse at 50% 35%, #2a1408 0%, #0E0B0A 70%)' }}>
       {/* fotos → tour → criativos passando atrás do painel */}
-      <LoaderShowcase />
+      <LoaderShowcase lang={lang} />
       <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(14,11,10,0) 45%, rgba(14,11,10,0.85) 78%, #0E0B0A 100%)', zIndex: 15, pointerEvents: 'none' }} />
       <div style={{ position: 'relative', zIndex: 20, width: '100%', maxWidth: 380, textAlign: 'center', background: 'rgba(20,14,10,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 22, padding: '20px 20px 16px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 20px 60px rgba(0,0,0,0.45)' }}>
         {/* o S ocupa ~18%–84% da altura da imagem: o enchimento começa na base do S */}
