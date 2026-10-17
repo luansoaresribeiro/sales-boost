@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { t, type Lang } from './i18n'
+import { capture } from './posthog'
 
 function Navbar({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
   const tx = t[lang].nav
@@ -20,12 +21,19 @@ function Navbar({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
       </div>
       <div className="flex items-center gap-3">
         <button
-          onClick={() => setLang(lang === 'pt' ? 'en' : 'pt')}
+          onClick={() => {
+            const selectedLanguage = lang === 'pt' ? 'en' : 'pt'
+            setLang(selectedLanguage)
+            capture('language_changed', { selected_language: selectedLanguage })
+          }}
           className="text-xs font-medium px-3 py-1.5 rounded-full border border-white/20 text-slate-300 hover:border-green-500/50 hover:text-white transition-all"
         >
           {lang === 'pt' ? '🇺🇸 EN' : '🇧🇷 PT'}
         </button>
-        <button className="bg-green-500 hover:bg-green-400 text-black font-semibold text-sm px-4 py-2 rounded-lg transition-colors">
+        <button
+          onClick={() => capture('start_free_clicked', { placement: 'navigation' })}
+          className="bg-green-500 hover:bg-green-400 text-black font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+        >
           {tx.cta}
         </button>
       </div>
@@ -66,11 +74,17 @@ function HeroSection({ lang }: { lang: Lang }) {
 
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-          <button className="group flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-bold text-base px-8 py-4 rounded-xl transition-all shadow-lg shadow-green-500/25 hover:shadow-green-400/40">
+          <button
+            onClick={() => capture('demo_report_requested', { placement: 'hero' })}
+            className="group flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-bold text-base px-8 py-4 rounded-xl transition-all shadow-lg shadow-green-500/25 hover:shadow-green-400/40"
+          >
             {tx.cta_primary}
             <span className="group-hover:translate-x-1 transition-transform">→</span>
           </button>
-          <button className="flex items-center gap-2 text-slate-300 hover:text-white font-medium text-base px-6 py-4 rounded-xl border border-white/10 hover:border-white/25 transition-all">
+          <button
+            onClick={() => capture('how_it_works_clicked', { placement: 'hero' })}
+            className="flex items-center gap-2 text-slate-300 hover:text-white font-medium text-base px-6 py-4 rounded-xl border border-white/10 hover:border-white/25 transition-all"
+          >
             ▶ {tx.cta_secondary}
           </button>
         </div>
