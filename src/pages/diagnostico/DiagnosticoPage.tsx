@@ -21,7 +21,11 @@ const VERDICT_COLOR: Record<Verdict | 'partial', string> = {
   ready: '#4ade80', potential: '#FB923C', blocked: '#f87171', partial: '#9CA3AF',
 }
 const POLL_EVERY_MS = 5000
-const POLL_MAX_MS = 90000
+// A leitura do Instagram roda no servidor depois do envio (o envio só cria o
+// diagnóstico e já devolve o id). Espera até 3 min; se o diagnóstico já é
+// antigo (ex.: celular fechado por muito tempo e algo falhou), não espera.
+const POLL_MAX_MS = 180000
+const STALE_MS = 6 * 60 * 1000
 
 interface Diagnostic {
   id: string
@@ -136,7 +140,10 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
     supabase.from('diagnostics').select('*').eq('id', id).single().then(({ data, error: err }) => {
       if (!alive) return
       if (err || !data) setError(t.notFoundErr)
-      else setDiag(data as Diagnostic)
+      else {
+        setDiag(data as Diagnostic)
+        if (Date.now() - new Date((data as Diagnostic).created_at).getTime() > STALE_MS) setWaited(POLL_MAX_MS)
+      }
       setLoading(false)
     })
     return () => { alive = false }

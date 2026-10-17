@@ -1513,3 +1513,28 @@ grátis de 30 s, acima — mantidos como histórico):
   de diferenciais, "À venda" com cápsulas), **refeitos por nós** com as fotos
   do mesmo apartamento, marca "Sua Imobiliária" e "valores ilustrativos". As
   artes originais (de outras empresas) não entram, nem desfocadas.
+- **Tela de espera, 3ª versão (pedido do dono, mesmo dia):**
+  - As fotos que flutuam agora são **quadros do próprio tour** (8 cômodos
+    tirados do vídeo), pra ficar claro que o tour nasceu delas. Divergência
+    registrada: o item acima dizia "fotos e tour do mesmo apartamento"; as
+    fotos antigas eram da conta de teste e não do vídeo.
+  - Selo do vídeo: "Tour virtual gerado pela IA do Sales Boost" (texto do
+    dono).
+  - Quando o tour acaba, os 6 criativos refeitos aparecem **um por vez** no
+    lugar dele (~2,8 s cada); as faixas desfocadas continuam ao fundo. Ciclo
+    completo ≈ 44 s, depois recomeça.
+- **Diagnóstico não se perde se fechar o celular:**
+  - `run-diagnosis` cria o diagnóstico e **devolve o id na hora**; a leitura
+    do Instagram/site continua no servidor em segundo plano
+    (`EdgeRuntime.waitUntil`, o mesmo jeito do `diagnosis-market`). Se a
+    análise falhar, a linha vira `partial` (a página nunca fica esperando
+    pra sempre).
+  - O aparelho guarda o último diagnóstico (`src/lib/savedDiagnosis.ts`,
+    30 dias). Quem abre `/diagnostico` de novo vê "Seu diagnóstico está
+    salvo neste aparelho" → **Ver meu diagnóstico** ou **Começar outro
+    diagnóstico** (ideia do dono; o anterior continua salvo).
+  - A página do resultado espera a leitura do Instagram por até 3 min (era
+    1,5 min, quando a espera acontecia antes de abrir a página). Diagnóstico
+    com mais de 6 min ainda "processando" não espera: mostra o que tem.
+  - O aviso da tela de espera trocou "Não feche esta página" por "Se fechar
+    a tela, o diagnóstico continua e fica salvo neste aparelho".
