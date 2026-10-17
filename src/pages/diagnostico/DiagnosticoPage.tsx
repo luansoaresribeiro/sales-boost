@@ -211,7 +211,9 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
   const bands = lang === 'en' ? VERDICT_BANDS_EN : VERDICT_BANDS
 
   return (
-    <div style={{ overflowX: 'hidden' }}>
+    <div style={{ overflowX: 'hidden', animation: 'sbresultin 0.7s ease both' }}>
+      {/* entra suave depois da tela de espera */}
+      <style>{`@keyframes sbresultin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}@media (prefers-reduced-motion: reduce){@keyframes sbresultin{from{opacity:0}to{opacity:1}}}`}</style>
       <div style={{ maxWidth: 640, margin: '0 auto', padding: embedded ? '8px 0 0' : '28px 16px 64px' }}>
         {/* Fluxo */}
         <ol style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: 6, padding: 0, margin: '0 0 24px', fontSize: 11, fontWeight: 700 }}>

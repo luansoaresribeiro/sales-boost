@@ -1491,3 +1491,14 @@ grátis de 30 s, acima — mantidos como histórico):
   Some quando o cupom vence ou a conta paga.
 - **"Disponível no plano"** (modo vitrine) continua igual: a conta nova vê
   todas as ferramentas, mas tudo que cria/publica/gasta abre o aviso.
+- **Tela de espera animada** (pedido do dono, mesmo dia): atrás do painel do
+  carregamento, fotos reais de imóvel flutuam soltas → se organizam numa
+  faixa de tour que desliza → os criativos do Sales Boost passam na frente
+  com leve desfoque (dá pra ver o design, não ler tudo). Repete enquanto o
+  diagnóstico roda; quem decide quando sai é o andamento real (não atrasa
+  nada). Com "reduzir movimento", fica parada. O resultado entra com um
+  esmaecimento suave. Imagens em `src/assets/loader/` (240 KB, webp): 8
+  fotos e 4 criativos **da conta de teste** (Tespon / QA Kit), escolhidas
+  sem objetos pessoais. As 6 artes do Pinterest **não** foram usadas
+  (trabalho de outras empresas). Antes de ir ao ar, o dono confirma que
+  pode mostrar as fotos desse apartamento.

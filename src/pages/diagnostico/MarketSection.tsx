@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import type { InstagramData } from '../../lib/growthScore'
 import logo from '../../assets/logo.png'
+import LoaderShowcase from './LoaderShowcase'
 
 // Diagnóstico grátis v2 — "você vs. a concorrência da sua região" + o que
 // está em alta. Os dados vêm da função diagnosis-market (Instagram real, lido
@@ -115,8 +116,11 @@ export function DiagnosisLoader({ stage, lang, embedded = false }: { stage: Mark
     return () => clearInterval(h)
   }, [stage, a, b, sec])
   return (
-    <div role="status" aria-live="polite" style={{ minHeight: embedded ? 320 : '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ width: '100%', maxWidth: 360, textAlign: 'center' }}>
+    <div role="status" aria-live="polite" style={{ position: 'relative', overflow: 'hidden', minHeight: embedded ? 640 : '100svh', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '24px 16px 28px', background: 'radial-gradient(ellipse at 50% 35%, #2a1408 0%, #0E0B0A 70%)' }}>
+      {/* fotos → tour → criativos passando atrás do painel */}
+      <LoaderShowcase />
+      <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(14,11,10,0) 45%, rgba(14,11,10,0.85) 78%, #0E0B0A 100%)', zIndex: 15, pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', zIndex: 20, width: '100%', maxWidth: 380, textAlign: 'center', background: 'rgba(20,14,10,0.72)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 22, padding: '20px 20px 16px', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 20px 60px rgba(0,0,0,0.45)' }}>
         {/* o S ocupa ~18%–84% da altura da imagem: o enchimento começa na base do S */}
         <div aria-hidden style={{ position: 'relative', width: 76, height: 76, margin: '0 auto 14px', borderRadius: 18, overflow: 'hidden', boxShadow: '0 12px 36px rgba(255,109,41,0.25)' }}>
           <img src={logo} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(1) brightness(0.45)' }} />
