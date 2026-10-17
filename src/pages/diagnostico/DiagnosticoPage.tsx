@@ -8,7 +8,6 @@ import {
 import { useLang } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
 import MarketSection, { DiagnosisLoader, useMarket } from './MarketSection'
-import GiftNotice, { useGift } from './GiftNotice'
 import ReadinessSection from './ReadinessSection'
 
 const ORANGE = '#FF6D29'
@@ -78,9 +77,8 @@ const TX = {
     howCalc: '▸ Como calculamos',
     calc1: 'A nota vem do seu Instagram. Site e Google só somam se existirem. O que não conseguimos ver fica "não avaliado" e sai da conta — nada é inventado nem penaliza você.',
     pts: 'pts', calc2: 'Nota = pontos dos critérios avaliados ÷ pontos possíveis deles × 100. Com menos de 40% dos critérios avaliados, mostramos "Análise parcial", sem veredito.',
-    cta: 'Criar minha conta e entrar no painel →', ctaGift: 'Entrar no painel e ver meu presente →',
+    cta: 'Criar minha conta e entrar no painel →',
     ctaSub: 'Crie sua conta em segundos, sem cartão, e veja o que o Sales Boost faz pelo seu Instagram.',
-    ctaSubGift: 'Crie sua conta em segundos, sem cartão. Seus vídeos e seu criativo ficam esperando por você lá.',
     ctaDirect: 'Entrar no painel →', ctaSubDirect: 'Seu painel já está pronto pra você explorar.',
     ctaPlan: 'A estratégia completa faz parte do plano pago.',
   },
@@ -101,9 +99,8 @@ const TX = {
     howCalc: '▸ How we calculate',
     calc1: 'The score comes from your Instagram. Website and Google only add if they exist. What we cannot see stays "not evaluated" and is left out of the calculation — nothing is made up and nothing penalizes you.',
     pts: 'pts', calc2: 'Score = points of the evaluated criteria ÷ their possible points × 100. With fewer than 40% of the criteria evaluated, we show "Partial analysis", with no verdict.',
-    cta: 'Create my account and enter the dashboard →', ctaGift: 'Enter the dashboard and see my gift →',
+    cta: 'Create my account and enter the dashboard →',
     ctaSub: 'Create your account in seconds, no card, and see what Sales Boost does for your Instagram.',
-    ctaSubGift: 'Create your account in seconds, no card. Your videos and your creative will be waiting for you there.',
     ctaDirect: 'Enter the dashboard →', ctaSubDirect: 'Your dashboard is ready for you to explore.',
     ctaPlan: 'The full strategy is part of the paid plan.',
   },
@@ -167,12 +164,10 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
   // vai rodar / passou do tempo) — até lá, logo + barra de progresso.
   const igReady = !!diag && !(!diag.instagram_data && diag.status === 'processing' && waited < POLL_MAX_MS)
   const { m: market, settled } = useMarket(id, !!diag)
-  const gift = useGift(id)
   // Quem criou a conta DIRETO (antes do diagnóstico) não veio do diagnóstico grátis:
   // sem promessa de kit (decisão do dono 2026-10-13).
   const { user } = useAuth()
   const direct = !!user?.created_at && !!diag?.created_at && new Date(user.created_at).getTime() <= new Date(diag.created_at).getTime()
-  const hasGift = !!gift.view && (gift.view.status === 'processing' || gift.view.status === 'completed')
 
   if (!loading && diag && (!igReady || !settled)) return (
     <DiagnosisLoader stage={!igReady ? 'instagram' : (market?.status ?? 'queued')} lang={lang} embedded={embedded} />
@@ -387,16 +382,15 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
           </div>
         </details>
 
-        {/* Presente (fotos do cadastro) + CTA */}
-        <GiftNotice sent={gift.sent} view={gift.view} lang={lang} />
+        {/* CTA */}
         <button
           onClick={() => void enterDashboard()}
           style={{ display: 'block', width: '100%', minHeight: 52, padding: '14px 20px', background: ORANGE, color: '#000', fontFamily: D, fontWeight: 900, fontSize: 16, borderRadius: 14, border: 'none', cursor: 'pointer', boxShadow: '0 12px 32px rgba(255,109,41,0.35)' }}
         >
-          {direct ? t.ctaDirect : hasGift ? t.ctaGift : t.cta}
+          {direct ? t.ctaDirect : t.cta}
         </button>
         <p style={{ textAlign: 'center', fontSize: 13, color: MUTED, margin: '12px 0 0' }}>
-          {direct ? t.ctaSubDirect : hasGift ? t.ctaSubGift : t.ctaSub}
+          {direct ? t.ctaSubDirect : t.ctaSub}
         </p>
         <p style={{ textAlign: 'center', fontSize: 12.5, color: MUTED, margin: '6px 0 0' }}>
           {t.ctaPlan}

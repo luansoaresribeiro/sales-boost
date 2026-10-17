@@ -1478,3 +1478,16 @@ grátis de 30 s, acima — mantidos como histórico):
   `/onboarding` continua funcionando (mesma tela).
 - **Barra parada:** se a barra não andar por 5 s, aparece "Não travou —
   estamos só garantindo que sua experiência seja a melhor."
+- **Kit grátis acabou de vez** (pedido do dono, mesmo dia): sai também do
+  painel (cartão do vídeo/artes grátis e pop-up "seu presente está
+  esperando") e da página `/gratis`, que vira só a página dos planos. O
+  servidor (`trial-video`) recusa kit novo (`KIT_ENDED`); kits antigos
+  continuam consultáveis.
+- **Pop-up do painel vira o do cupom:** conta nova em modo vitrine vê "Você
+  ganhou um cupom de R$X" (R$1.000 imobiliária / R$200 corretor, 1º mês),
+  com o prazo que falta; "Usar meu cupom" leva aos planos com o cupom já
+  aplicado no mensal. Os 7 dias começam na primeira vez que o pop-up aparece
+  (`trial-video` action `coupon_seen`, que antes só valia depois do kit).
+  Some quando o cupom vence ou a conta paga.
+- **"Disponível no plano"** (modo vitrine) continua igual: a conta nova vê
+  todas as ferramentas, mas tudo que cria/publica/gasta abre o aviso.
