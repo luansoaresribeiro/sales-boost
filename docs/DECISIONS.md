@@ -1502,3 +1502,14 @@ grátis de 30 s, acima — mantidos como histórico):
   sem objetos pessoais. As 6 artes do Pinterest **não** foram usadas
   (trabalho de outras empresas). Antes de ir ao ar, o dono confirma que
   pode mostrar as fotos desse apartamento.
+- **Roteiro da tela de espera ajustado pelo dono:** fotos flutuam → se juntam
+  no centro e viram o **tour virtual** (vídeo do mesmo apartamento, enviado
+  pelo dono; `tour.webm` pra Chrome/Android e `tour.mp4` pro Safari/iPhone,
+  ~700 KB cada, o navegador baixa só um) → enquanto isso, **10 criativos**
+  passam ao fundo desfocados, em duas faixas. Os criativos: 4 gerados pelo
+  Sales Boost na conta de teste + 6 nos estilos das referências que o dono
+  mandou (título fino sobre a foto, empreendimento com painel de números,
+  título vertical com condições, carrossel com faixa dourada, mini-cartões
+  de diferenciais, "À venda" com cápsulas), **refeitos por nós** com as fotos
+  do mesmo apartamento, marca "Sua Imobiliária" e "valores ilustrativos". As
+  artes originais (de outras empresas) não entram, nem desfocadas.
