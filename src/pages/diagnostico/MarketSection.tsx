@@ -82,14 +82,16 @@ export function useMarket(diagnosticId: string, enabled: boolean) {
 }
 
 const LTX = {
-  pt: { title: 'Preparando seu diagnóstico', steps: ['Lendo o seu Instagram', 'Buscando concorrentes da sua região', 'Comparando você com eles', 'Escrevendo sua análise'], note: 'Leva cerca de 1 minuto. Não feche esta página.' },
-  en: { title: 'Preparing your diagnosis', steps: ['Reading your Instagram', 'Finding competitors in your area', 'Comparing you with them', 'Writing your analysis'], note: 'Takes about 1 minute. Keep this page open.' },
+  pt: { title: 'Preparando seu diagnóstico', steps: ['Lendo o seu Instagram', 'Buscando concorrentes da sua região', 'Comparando você com eles', 'Escrevendo sua análise'], note: 'Leva cerca de 1 minuto. Não feche esta página.', calm: 'Não travou — estamos só garantindo que sua experiência seja a melhor.' },
+  en: { title: 'Preparing your diagnosis', steps: ['Reading your Instagram', 'Finding competitors in your area', 'Comparing you with them', 'Writing your analysis'], note: 'Takes about 1 minute. Keep this page open.', calm: "It's not stuck — we're just making sure your experience is the best it can be." },
 } as const
 
 // Tela de espera: o "S" da logo vai enchendo + barra de progresso. A barra anda
 // pela etapa real (status do servidor) e, dentro da etapa, suaviza com o tempo —
 // nunca chega a 100% antes de terminar. Aparece desde o clique em "enviar"
 // (cadastro, etapa 'instagram') e continua na página do resultado sem voltar pra trás.
+const STALL_MS = 5000
+
 export function DiagnosisLoader({ stage, lang, embedded = false }: { stage: Market['status'] | 'instagram'; lang: 'pt' | 'en'; embedded?: boolean }) {
   const t = LTX[lang]
   const idx = stage === 'instagram' ? 0 : stage === 'profiling' ? 2 : stage === 'thinking' || stage === 'done' ? 3 : 1
@@ -97,12 +99,17 @@ export function DiagnosisLoader({ stage, lang, embedded = false }: { stage: Mark
   const [a, b, sec] = band[idx]
   const start = useRef<{ stage: string; at: number }>({ stage: '', at: 0 })
   const [pct, setPct] = useState(a)
+  // A barra fica parada (ex.: Instagram demorando a responder) → avisa que não travou.
+  const lastMove = useRef({ pct: a, at: 0 })
+  const [stalled, setStalled] = useState(false)
   useEffect(() => {
     const step = () => {
       if (start.current.stage !== stage) start.current = { stage, at: Date.now() }
       const el = (Date.now() - start.current.at) / 1000
       const next = stage === 'done' ? 100 : Math.round(a + (b - a) * (1 - Math.exp(-el / sec)))
       setPct(p => Math.max(p, next))
+      if (!lastMove.current.at || next > lastMove.current.pct) lastMove.current = { pct: Math.max(next, lastMove.current.pct), at: Date.now() }
+      setStalled(Date.now() - lastMove.current.at > STALL_MS)
     }
     const h = setInterval(step, 400)
     return () => clearInterval(h)
@@ -132,7 +139,9 @@ export function DiagnosisLoader({ stage, lang, embedded = false }: { stage: Mark
             </div>
           ))}
         </div>
-        <p style={{ fontSize: 12, color: MUTED, marginTop: 16 }}>{t.note}</p>
+        {stalled
+          ? <p style={{ fontSize: 13, color: 'white', marginTop: 16, lineHeight: 1.5 }}>{t.calm}</p>
+          : <p style={{ fontSize: 12, color: MUTED, marginTop: 16 }}>{t.note}</p>}
       </div>
       <style>{`@keyframes sbpulse{0%,100%{opacity:1}50%{opacity:.55}}`}</style>
     </div>

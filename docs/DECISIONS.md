@@ -1473,3 +1473,8 @@ grátis de 30 s, acima — mantidos como histórico):
 - **Carregamento:** a tela com o "S" da logo enchendo + barra aparece desde
   o clique em enviar (antes, a parte mais demorada — ler o Instagram, até
   ~1 min — mostrava só uma bolinha girando com "Analisando seu negócio").
+- **Diagnóstico vira página própria** (`/diagnostico`): todos os botões do
+  site levam pra lá; a página inicial só tem o convite. A rota antiga
+  `/onboarding` continua funcionando (mesma tela).
+- **Barra parada:** se a barra não andar por 5 s, aparece "Não travou —
+  estamos só garantindo que sua experiência seja a melhor."

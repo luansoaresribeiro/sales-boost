@@ -189,6 +189,7 @@ function RouterRoot() {
       {/* Conta nova antes de pagar: só os vídeos grátis + plano/cupom */}
       <Route path="/gratis" element={<ClientRoute><FreePage /></ClientRoute>} />
       <Route path="/onboarding" element={<OnboardingPage />} />
+      <Route path="/diagnostico" element={<OnboardingPage />} />
       <Route path="/diagnostico/:id" element={<DiagnosticoPage />} />
       <Route path="/privacidade" element={<PrivacyPolicyPage />} />
       <Route path="/termos" element={<TermsOfUsePage />} />

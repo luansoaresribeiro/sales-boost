@@ -1,11 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { useRef, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
 import { t, type Lang } from './i18n'
-import { DiagnosticFlow } from './pages/onboarding/OnboardingPage'
-import { DiagnosticResult } from './pages/diagnostico/DiagnosticoPage'
 import { useLang } from './contexts/LanguageContext'
 import logo from './assets/logo.png'
 
@@ -750,28 +748,16 @@ function IcpSection({ lang, onDiagClick }: { lang: Lang; onDiagClick: () => void
 /* ══════════════════════════════════════════════════
    DIAGNÓSTICO  — seção final: perguntas e resultado INLINE (sem trocar de página)
 ══════════════════════════════════════════════════ */
-function DiagnosticSection({ lang }: { lang: Lang }) {
+// Chamada pro diagnóstico grátis. O diagnóstico em si é uma página separada
+// (/diagnostico — pedido do dono 2026-10-17); aqui só o convite.
+function DiagnosticSection({ lang, onStart }: { lang: Lang; onStart: () => void }) {
   const tx = t[lang].diag
-  const ref = useRef<HTMLElement>(null)
-  const [stage, setStage] = useState<'intro' | 'form' | 'result'>('intro')
-  const [diagId, setDiagId] = useState<string | null>(null)
-  const prevStage = useRef(stage)
-
-  // Ao abrir as perguntas ou o resultado, volta pro topo da seção.
-  // Compara com a etapa anterior (e não "primeira vez"), pra não rolar a página sozinha ao carregar.
-  useEffect(() => {
-    if (prevStage.current === stage) return
-    prevStage.current = stage
-    if (ref.current) gsap.to(window, { scrollTo: { y: ref.current, offsetY: 64 }, duration: 0.7, ease: 'power2.inOut' })
-  }, [stage])
-
   return (
-    <section ref={ref} id="diagnostico" className="relative overflow-hidden py-24 px-4 sm:px-6" style={{ background: '#100C0A' }}>
+    <section id="diagnostico" className="relative overflow-hidden py-24 px-4 sm:px-6" style={{ background: '#100C0A' }}>
       <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg,transparent,rgba(255,109,41,0.25),transparent)' }} />
       <Glow w={600} h={400} opacity={0.12} top="40%" left="50%" />
       <div className="relative z-10 mx-auto" style={{ maxWidth: 640 }}>
-        {stage === 'intro' && (
-          <div className="text-center">
+        <div className="text-center">
             <Badge text={tx.badge} />
             <h2 className="font-black tracking-tight leading-tight mb-4 text-white" style={{ fontFamily: D, fontSize: 'clamp(1.9rem,6vw,3rem)', overflowWrap: 'anywhere' }}>
               {tx.title1} <span style={{ color: ORANGE }}>{tx.title2}</span>
@@ -782,13 +768,10 @@ function DiagnosticSection({ lang }: { lang: Lang }) {
                 <span key={i} className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,109,41,0.08)', border: '1px solid rgba(255,109,41,0.25)', color: '#fff' }}>{i}</span>
               ))}
             </div>
-            <button onClick={() => setStage('form')} className="w-full sm:w-auto font-bold text-base px-8 rounded-xl transition-all" style={{ minHeight: 52, background: ORANGE, color: '#000', border: 'none', cursor: 'pointer', boxShadow: '0 8px 24px rgba(255,109,41,0.3)' }}>
+            <button onClick={onStart} className="w-full sm:w-auto font-bold text-base px-8 rounded-xl transition-all" style={{ minHeight: 52, background: ORANGE, color: '#000', border: 'none', cursor: 'pointer', boxShadow: '0 8px 24px rgba(255,109,41,0.3)' }}>
               {tx.cta}
             </button>
           </div>
-        )}
-        {stage === 'form' && <DiagnosticFlow embedded onDone={id => { setDiagId(id); setStage('result') }} />}
-        {stage === 'result' && diagId && <DiagnosticResult id={diagId} embedded />}
       </div>
     </section>
   )
@@ -864,10 +847,8 @@ export default function App() {
   // Mesmo idioma do resto do site (salvo em sb_lang): escolher EN na landing
   // já abre login, cadastro e painel em inglês.
   const { lang, setLang } = useLang()
-  const goDiag = () => {
-    const el = document.querySelector('#diagnostico')
-    if (el) gsap.to(window, { scrollTo: el, duration: 1.1, ease: 'power3.inOut' })
-  }
+  const navigate = useNavigate()
+  const goDiag = () => navigate('/diagnostico')
   return (
     <div style={{ background: BG }}>
       <FireCursor />
@@ -879,7 +860,7 @@ export default function App() {
       <ShowcaseSection lang={lang} />
       <StatementSection lang={lang} onDiagClick={goDiag} />
       <IcpSection lang={lang} onDiagClick={goDiag} />
-      <DiagnosticSection lang={lang} />
+      <DiagnosticSection lang={lang} onStart={goDiag} />
       <SiteFooter lang={lang} onDiagClick={goDiag} />
     </div>
   )
