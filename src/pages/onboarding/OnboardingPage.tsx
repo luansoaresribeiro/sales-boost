@@ -91,6 +91,7 @@ const TX = {
     back: '← Voltar', cont: 'Continuar →', create: 'Criar meu painel →', priv1: 'Ao continuar, você concorda com nossa', priv2: 'política de privacidade', priv3: '. Seus dados são usados só pra entender seu negócio e gerar o diagnóstico.',
     sum: { biz: 'Negócio', type: 'Tipo', ideal: 'Cliente ideal', goal: 'Objetivo principal', ch: 'Maior desafio', chan: 'Canais atuais', stage: 'Estágio', undef: 'ainda não definidos' },
     v2steps: ['Você', 'Sua operação', 'Prioridade', 'Instagram'],
+    pickT: 'Vamos começar: o que descreve você?', pickS: 'Diagnóstico grátis do seu Instagram em uns 2 minutos. Escolha uma opção pra gente fazer as perguntas certas.', pickOther: 'Outro tipo de negócio', loadingFicha: 'Preparando as perguntas certas pra você…',
     v2s0t: 'Vamos começar por você', v2s0s: 'Diagnóstico grátis do seu Instagram em uns 2 minutos — feito pra quem vende e aluga imóvel.',
     v2nameOrg: 'Nome da imobiliária', v2nameOrgP: 'Ex: Imobiliária Silva', v2namePerson: 'Seu nome profissional (opcional)', v2namePersonP: 'Ex: Ana Souza Imóveis',
     v2nameH: 'Aparece no seu painel. Pode mudar depois.',
@@ -119,6 +120,7 @@ const TX = {
     back: '← Back', cont: 'Continue →', create: 'Create my dashboard →', priv1: 'By continuing, you agree to our', priv2: 'privacy policy', priv3: '. Your data is used only to understand your business and generate the diagnosis.',
     sum: { biz: 'Business', type: 'Type', ideal: 'Ideal customer', goal: 'Main goal', ch: 'Biggest challenge', chan: 'Current channels', stage: 'Stage', undef: 'not defined yet' },
     v2steps: ['You', 'Your operation', 'Priority', 'Instagram'],
+    pickT: "Let's start: what describes you?", pickS: 'Free diagnosis of your Instagram in about 2 minutes. Pick one so we ask the right questions.', pickOther: 'Another type of business', loadingFicha: 'Getting the right questions ready for you…',
     v2s0t: "Let's start with you", v2s0s: 'Free diagnosis of your Instagram in about 2 minutes — built for people who sell and rent property.',
     v2nameOrg: 'Agency name', v2nameOrgP: 'E.g.: Silva Realty', v2namePerson: 'Your professional name (optional)', v2namePersonP: 'E.g.: Ana Souza Realty',
     v2nameH: 'Shown in your dashboard. You can change it later.',
@@ -270,10 +272,10 @@ function PlaybookQuestionsSection({ fichaName, questions, answers, onChange }: {
   )
 }
 
-function BusinessTypeSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
+function BusinessTypeSelect({ value, onChange, options, startOther = false }: { value: string; onChange: (v: string) => void; options: string[]; startOther?: boolean }) {
   const { lang } = useLang()
   const t = TX[lang]
-  const [otherMode, setOtherMode] = useState(false)
+  const [otherMode, setOtherMode] = useState(startOther)
   const known = options.includes(value)
   const showOther = otherMode || (value !== '' && !known && options.length > 0)
   return (
@@ -372,6 +374,11 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   const [giftFiles, setGiftFiles] = useState<(File | null)[]>(() => Array(KIT_PHOTOS).fill(null))
   // Onboarding v2 (ficha com config.onboarding_v2): diagnóstico curto com perfil e estados de resposta.
   const [v2, setV2] = useState<OnboardingV2 | null>(null)
+  // Primeira tela: escolher o tipo em botões grandes (sem a barra de passos).
+  // Só depois de escolher — e de a ficha carregar — aparece o formulário certo
+  // (o novo de imobiliária/corretor, ou o antigo pros outros tipos).
+  const [typePicked, setTypePicked] = useState<'' | 'known' | 'other'>('')
+  const [fichaLoading, setFichaLoading] = useState(false)
   const [v2Answers, setV2Answers] = useState<Record<string, unknown>>({})
   const [v2Status, setV2Status] = useState<AnswerStatus>({})
   const setV2Answer = (k: string, v: unknown) => setV2Answers(a => {
@@ -393,10 +400,10 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
     let alive = true
     setData(d => ({ ...d, playbook_answers: {} }))
     setV2Answers({}); setV2Status({})
-    if (!data.business_type.trim()) { setFichaName(''); setFichaQuestions([]); setHasGift(false); setV2(null); return }
+    if (!data.business_type.trim()) { setFichaName(''); setFichaQuestions([]); setHasGift(false); setV2(null); setFichaLoading(false); return }
     fetchVerticalKey(data.business_type).then(async vk => {
       const [{ name, questions }, gift, v2cfg] = await Promise.all([fetchOnboardingQuestions(vk), giftEnabled(vk), fetchOnboardingV2(vk)])
-      if (alive) setV2(v2cfg)
+      if (alive) { setV2(v2cfg); setFichaLoading(false) }
       // Quem já está LOGADO nesta tela (rota /onboarding, conta sem empresa) criou a
       // conta direto: sem kit grátis (decisão do dono 2026-10-13). O presente fica só
       // pra quem faz o diagnóstico sem conta (landing / link do diagnóstico).
@@ -522,6 +529,10 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                 )
   const errorBlock = error && <div style={{ padding: '12px 16px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: '10px', fontSize: '13px', color: '#f87171', marginBottom: '16px', lineHeight: 1.5 }}>{error}</div>
 
+  const choosing = step === 0 && !typePicked
+  const preparing = step === 0 && !!typePicked && fichaLoading
+  const hideSteps = choosing || preparing
+
   return (
     <div style={{ ...shell, display: 'flex', flexDirection: 'column', ...(embedded ? { overflowX: 'hidden' } : {}) }}>
       {!embedded && (
@@ -529,17 +540,19 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
           <a href="/" style={{ fontFamily: D, fontSize: '1.3rem', fontWeight: 900, color: 'white', textDecoration: 'none', letterSpacing: '-0.02em' }}>
             <span style={{ color: ORANGE }}>Sales</span>Boost
           </a>
-          <div style={{ fontSize: '13px', color: MUTED }}>{t.stepOf(step + 1, STEPS.length)}</div>
+          {!hideSteps && <div style={{ fontSize: '13px', color: MUTED }}>{t.stepOf(step + 1, STEPS.length)}</div>}
         </div>
       )}
 
-      <div style={{ height: '3px', background: 'rgba(255,255,255,0.06)', borderRadius: embedded ? 2 : 0 }}>
-        <div style={{ height: '100%', background: ORANGE, width: `${((step + 1) / STEPS.length) * 100}%`, transition: 'width 0.4s ease', borderRadius: '0 2px 2px 0' }} />
-      </div>
+      {!hideSteps && (
+        <div style={{ height: '3px', background: 'rgba(255,255,255,0.06)', borderRadius: embedded ? 2 : 0 }}>
+          <div style={{ height: '100%', background: ORANGE, width: `${((step + 1) / STEPS.length) * 100}%`, transition: 'width 0.4s ease', borderRadius: '0 2px 2px 0' }} />
+        </div>
+      )}
 
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: embedded ? '24px 0 0' : '48px 24px' }}>
         <div style={{ width: '100%', maxWidth: '540px' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '24px' }}>
+          {!hideSteps && <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '24px' }}>
             {STEPS.map((s, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                 <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: i < step ? ORANGE : i === step ? 'rgba(255,109,41,0.15)' : 'rgba(255,255,255,0.05)', border: i === step ? `1px solid ${ORANGE}` : i < step ? 'none' : `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9.5px', fontWeight: 900, color: i < step ? '#000' : i === step ? ORANGE : MUTED, flexShrink: 0 }}>
@@ -548,13 +561,34 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                 <span style={{ fontSize: '11.5px', color: i === step ? 'white' : MUTED, fontWeight: i === step ? 600 : 400, whiteSpace: 'nowrap' }}>{s}</span>
               </div>
             ))}
-          </div>
+          </div>}
 
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '20px', padding: embedded ? '20px' : '32px' }}>
-            {step === 0 && (
+            {choosing && (
+              <>
+                <H t={t.pickT} s={t.pickS} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {[...businessTypes.map(b => ({ label: b, other: false })), { label: t.pickOther, other: true }].map(o => (
+                    <button key={o.label} type="button"
+                      onClick={() => { if (o.other) { setTypePicked('other'); set('business_type')('') } else { setTypePicked('known'); setFichaLoading(true); set('business_type')(o.label) } }}
+                      style={{ minHeight: 56, width: '100%', textAlign: 'left', padding: '14px 18px', borderRadius: '14px', background: o.other ? 'transparent' : 'rgba(255,109,41,0.07)', border: `1px solid ${o.other ? BORDER : 'rgba(255,109,41,0.3)'}`, color: o.other ? MUTED : 'white', fontSize: o.other ? '14px' : '16px', fontWeight: o.other ? 500 : 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                      <span>{o.label}</span><span aria-hidden style={{ color: ORANGE }}>→</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {preparing && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '24px 4px', color: MUTED, fontSize: '14px' }}>
+                <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2px solid rgba(255,109,41,0.2)', borderTopColor: ORANGE, animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                {t.loadingFicha}
+              </div>
+            )}
+            {step === 0 && !choosing && !preparing && (
               <>
                 <H t={v2 ? t.v2s0t : t.s0t} s={v2 ? t.v2s0s : t.s0s} />
-                <BusinessTypeSelect value={data.business_type} onChange={set('business_type')} options={businessTypes} />
+                <BusinessTypeSelect value={data.business_type} onChange={set('business_type')} options={businessTypes} startOther={typePicked === 'other'} />
                 {v2 ? (
                   <>
                     {(() => { const pq = profileQuestion(v2); return pq ? <QuestionField q={pq} value={v2Answers[pq.key]} state={fieldState(pq, v2Answers, v2Status)} onChange={v => setV2Answer(pq.key, v)} onState={st => setV2State(pq.key, st)} lang={lang} businessType={data.business_type} /> : null })()}
@@ -628,7 +662,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
               </>
             )}
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+            {!hideSteps && <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
               {step > 0 && (
                 <button onClick={() => setStep(s => s - 1)}
                   style={{ flex: '0 0 auto', minHeight: 48, padding: '12px 20px', background: 'transparent', color: MUTED, fontWeight: 600, fontSize: '14px', borderRadius: '12px', border: `1px solid ${BORDER}`, cursor: 'pointer', fontFamily: 'inherit' }}>{t.back}</button>
@@ -637,7 +671,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                 style={{ flex: 1, minHeight: 48, padding: '13px 24px', background: canNext() ? ORANGE : 'rgba(255,109,41,0.2)', color: canNext() ? '#000' : 'rgba(255,255,255,0.3)', fontWeight: 800, fontSize: '15px', borderRadius: '12px', border: 'none', cursor: canNext() ? 'pointer' : 'not-allowed', fontFamily: D, letterSpacing: '-0.01em', transition: 'all 0.2s', boxShadow: canNext() ? '0 8px 20px rgba(255,109,41,0.3)' : 'none' }}>
                 {step < STEPS.length - 1 ? t.cont : t.create}
               </button>
-            </div>
+            </div>}
           </div>
 
           <p style={{ textAlign: 'center', fontSize: '12px', color: MUTED, marginTop: '20px', lineHeight: 1.6 }}>
