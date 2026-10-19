@@ -27,13 +27,17 @@ export interface SSPillar {
   signals?: ('cta_posts' | 'owner_replies')[] // sinais medidos no código (padrões da ficha)
   strong_share?: number // fração dos posts pra ser "forte" (padrão 0.25)
 }
-export interface SSConfig { categories: SSCategory[]; pillars: SSPillar[]; buyer_doubts?: string[] }
+// Camada 2 do diagnóstico ("o que você precisa entender sobre geração de
+// demanda"): princípios fixos da ficha, com exemplo do setor, ligados a um pilar.
+export interface SSPrinciple { key: string; title: string; text: string; example: string; pillar?: string }
+export interface SSConfig { categories: SSCategory[]; pillars: SSPillar[]; buyer_doubts?: string[]; principles?: SSPrinciple[] }
 
 export interface SocialSelling {
   v: 1
   created_at: string
   total: number // posts lidos (classificados)
   categories: { key: string; name: string }[]
+  principles: SSPrinciple[]
   posts: { i: number; c: string; excerpt: string; ts: string | null }[]
   counts: Record<string, number>
   pillars: { key: string; name: string; question: string; why: string; level: 'forte' | 'parcial' | 'ausente'; count: number; evidence: number[]; note: string }[]
@@ -55,7 +59,11 @@ export function parseSSConfig(raw: unknown): SSConfig | null {
       strong_share: typeof p.strong_share === 'number' && p.strong_share > 0 && p.strong_share <= 1 ? p.strong_share : 0.25,
     }))
   if (!categories.length || !pillars.length) return null
-  return { categories, pillars, buyer_doubts: Array.isArray(r.buyer_doubts) ? r.buyer_doubts.map(String).slice(0, 12) : [] }
+  const principles = (Array.isArray(r.principles) ? r.principles : [])
+    .filter((x: Any) => typeof x?.key === 'string' && typeof x?.title === 'string')
+    .map((x: Any) => ({ key: x.key, title: x.title, text: String(x.text ?? ''), example: String(x.example ?? ''), ...(typeof x.pillar === 'string' ? { pillar: x.pillar } : {}) }))
+    .slice(0, 8)
+  return { categories, pillars, buyer_doubts: Array.isArray(r.buyer_doubts) ? r.buyer_doubts.map(String).slice(0, 12) : [], principles }
 }
 
 function safeRe(p: unknown): RegExp | null {
@@ -151,7 +159,7 @@ Responda SÓ JSON: {"posts":[{"n":1,"c":""}],"pilares":{"<chave>":""},"resposta"
   const opportunity = { gap: clean(o.lacuna, 240), consequence: clean(o.consequencia, 320), shift: clean(o.novo_olhar, 260) }
   const example = { format: clean(e.formato, 20).toLowerCase(), hook: clean(e.gancho, 140), outline: clean(e.roteiro, 320), goal: clean(e.objetivo, 260) }
   return {
-    v: 1, created_at: new Date().toISOString(), total, categories: cfg.categories.map(c => ({ key: c.key, name: c.name })), posts: classified, counts, pillars,
+    v: 1, created_at: new Date().toISOString(), total, categories: cfg.categories.map(c => ({ key: c.key, name: c.name })), principles: cfg.principles ?? [], posts: classified, counts, pillars,
     answer: clean(j.resposta, 260),
     opportunity: opportunity.gap ? opportunity : null,
     example: example.hook && example.goal ? example : null,

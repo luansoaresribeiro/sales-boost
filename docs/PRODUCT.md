@@ -63,13 +63,17 @@ passo?"
    Educação, Confiança, Relacionamento e Conversão. Avalia **do que falam**
    os posts, não só quantos são.
 
-**Ordem da página:**
-1. Growth Potential
-2. Mercado
-3. O que seu Instagram transmite
-4. A oportunidade ignorada
-5. O raciocínio do Sales Boost (um post de exemplo com objetivo)
-6. Criar conta
+**A página é organizada em 3 camadas** (ajuste do dono no mesmo dia):
+1. **O que você está fazendo hoje:** nota, do que falam os posts, o que já
+   funciona como vitrine e o mercado.
+2. **O que você precisa entender sobre geração de demanda:** princípios com
+   exemplos imobiliários. Por exemplo: visualização não é intenção, educar
+   atrai quem pesquisa, uma chamada abre a conversa. O corretor aprende algo
+   que pode aplicar antes mesmo de contratar.
+3. **Como aplicar isso ao seu perfil:** os 5 pilares com evidência real, a
+   oportunidade ignorada e um post de exemplo com objetivo.
+
+Depois das camadas vem o botão de criar conta.
 
 Para cada lacuna, o diagnóstico ensina o porquê, além de apontar a tarefa.
 

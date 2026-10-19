@@ -9,7 +9,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
 import MarketSection, { DiagnosisLoader, useMarket } from './MarketSection'
 import ReadinessSection from './ReadinessSection'
-import SocialSellingSection, { type SocialSelling } from './SocialSellingSection'
+import { ApplyToProfile, ContentMix, LayerHeader, Principles, type SocialSelling } from './SocialSellingSection'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -376,6 +376,8 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
           {diag.business_type} · {diag.city}
         </p>
 
+        {/* Camada 1 (diagnóstico em 3 camadas, 2026-10-19): a nota abre "o que você faz hoje" */}
+        {ss && <LayerHeader n={1} lang={lang} />}
         {/* Nota */}
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 20, padding: 20, marginBottom: 20 }}>
           {noIgYet ? (
@@ -410,8 +412,12 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
         {ss ? (
           <>
             <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, margin: '-8px 0 20px' }}>{t.scoreMeans}</p>
+            <ContentMix ss={ss} lang={lang} />
             <MarketSection m={market} own={diag.instagram_data} lang={lang} />
-            <SocialSellingSection ss={ss} lang={lang} />
+            <LayerHeader n={2} lang={lang} />
+            <Principles ss={ss} lang={lang} />
+            <LayerHeader n={3} lang={lang} />
+            <ApplyToProfile ss={ss} lang={lang} />
             <details style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: '4px 16px', marginBottom: 24 }}>
               <summary style={{ cursor: 'pointer', minHeight: 44, display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 700, color: 'white' }}>{t.scoreDetails}</summary>
               <div style={{ paddingTop: 8 }}>{gapsBlock(false)}{scoreDetails}</div>

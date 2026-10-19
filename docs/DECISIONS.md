@@ -1585,4 +1585,18 @@ grátis de 30 s, acima — mantidos como histórico):
 - **Divergência registrada:** o plano previa um tipo novo em
   `src/lib/onboardingV2.ts`. Não foi preciso, porque a página lê tudo pronto
   de `diagnostics.social_selling` (nomes, pilares e textos) e não lê a ficha.
+- **Ajuste do dono, mesmo dia: página em 3 camadas.** Feito no mesmo PR,
+  antes do merge.
+  - **Camada 1, "O que você está fazendo hoje":** nota, do que falam os
+    posts, "o que já funciona como vitrine" (pilares fortes; sem nenhum
+    forte, mostra os parciais) e o mercado.
+  - **Camada 2, "O que você precisa entender sobre geração de demanda":**
+    princípios fixos da ficha (`social_selling.principles`), cada um com
+    exemplo imobiliário e ligado a um pilar, sem IA e sem custo. O dono
+    pediu 5; acrescentei um 6º ("A confiança começa antes da primeira
+    conversa") pra que todo pilar tenha o seu princípio. Fecha com "dá pra
+    começar a aplicar hoje".
+  - **Camada 3, "Como aplicar isso ao seu perfil":** a resposta à
+    pergunta-guia, os pilares (cada um com a linha "Princípio: …"), a
+    oportunidade ignorada e o post de exemplo.
 
