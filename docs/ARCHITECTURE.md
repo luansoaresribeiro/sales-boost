@@ -432,6 +432,17 @@ HIGGSFIELD_API_KEY=          # ainda não usado em código — ver MEDIA-ENGINE.
 
 ## Rota `/setup` — fim do cadastro (2026-10-06)
 
+> **Removida em 2026-10-19 (decisão do dono).** A página e o gate saíram. Quem paga
+> ou é liberado à mão entra direto no painel.
+> - As respostas do diagnóstico são importadas pra empresa no 1º acesso
+>   (`importDiagnosisAnswers` em `src/lib/onboardingV2.ts`, chamado no `DashboardLayout`).
+> - O sino (`src/lib/usePendencias.ts`) cobra o que falta: dados do negócio, perguntas,
+>   fotos e Instagram.
+> - `/setup` redireciona pra `/dashboard/settings?section=entendimento`.
+> - `useSetupStatus` e `setupRules` continuam: a tela da estratégia usa pra dizer o que falta.
+>
+> O texto abaixo é histórico.
+
 Tela `src/pages/setup/SetupPage.tsx`, atrás do login e **fora** do
 `DashboardLayout`. "Alimentar os dados reais": Instagram em destaque
 (mesma chamada `instagram-oauth-start` das Configurações), cartões

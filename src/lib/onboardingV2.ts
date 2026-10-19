@@ -269,3 +269,31 @@ export async function saveV2Answers(companyId: string, v2: OnboardingV2, answers
   }).eq('id', companyId)
   return !error
 }
+
+/**
+ * 1º acesso ao painel: traz pra empresa o que a pessoa respondeu no diagnóstico
+ * (antes de ter conta), sem sobrescrever nada que já esteja salvo. A frequência de
+ * posts vem do Instagram lido, marcada "lido automaticamente — confirme".
+ * Antes isso acontecia no /setup; a página saiu em 2026-10-19 (decisão do dono),
+ * então roda no DashboardLayout. Já importado (tem perfil salvo) = não faz nada.
+ */
+export async function importDiagnosisAnswers(companyId: string, verticalKey: string): Promise<boolean> {
+  try {
+    const v2 = await fetchOnboardingV2(verticalKey)
+    if (!v2) return false
+    const { data: c } = await supabase.from('companies').select('playbook_answers, answer_status').eq('id', companyId).maybeSingle()
+    const cur = ((c?.playbook_answers as Record<string, unknown> | null) ?? {})
+    const curS = (((c as { answer_status?: AnswerStatus } | null)?.answer_status) ?? {})
+    if (cur[PROFILE_KEY]) return false
+    const diag = await loadDiagnosticAnswers(companyId)
+    if (!diag) return false
+    const answers: Record<string, unknown> = { ...diag.answers }
+    const st: AnswerStatus = { ...diag.status }
+    const freqQ = v2.questions.find(q => q.key === 'frequencia_posts')
+    const freq = suggestedFrequency(freqQ, diag.instagram)
+    if (freqQ && freq && !answers[freqQ.key]) { answers[freqQ.key] = freq; st[freqQ.key] = 'auto' }
+    const keys = Object.keys({ ...answers, ...st }).filter(k => !(k in cur) && !(k in curS))
+    if (!keys.length) return false
+    return await saveV2Answers(companyId, v2, answers, st, keys)
+  } catch { return false }
+}

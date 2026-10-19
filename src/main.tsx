@@ -32,10 +32,8 @@ import ProspectsPage from './pages/owner/ProspectsPage.tsx'
 import LeadDiscoverySettingsPage from './pages/owner/LeadDiscoverySettingsPage.tsx'
 import OwnerSettingsPage from './pages/owner/OwnerSettingsPage.tsx'
 import PlatformHealthPage from './pages/owner/PlatformHealthPage.tsx'
-import SetupPage from './pages/setup/SetupPage.tsx'
-import { isShowcaseMode, setupGateApplies } from './lib/setupGate.ts'
+import { isShowcaseMode } from './lib/setupGate.ts'
 import FreePage from './pages/free/FreePage.tsx'
-import { useSetupStatus } from './lib/useSetupStatus.ts'
 import OnboardingPage from './pages/onboarding/OnboardingPage.tsx'
 import DiagnosticoPage from './pages/diagnostico/DiagnosticoPage.tsx'
 import PrivacyPolicyPage from './pages/legal/PrivacyPolicyPage.tsx'
@@ -65,16 +63,6 @@ function DashboardIndex() {
   return <Navigate to={company?.marketing_ai_enabled === false ? '/dashboard/atividades' : '/dashboard/marketing-ai'} replace />
 }
 
-// Gate do /setup: só montado quando a conta é nova e sem assinatura. Avalia
-// UMA vez (sem tempo real, pra não expulsar o dono do painel depois). Erro ao
-// calcular = deixa passar (falha aberta).
-function SetupGate({ companyId, children }: { companyId: string; children: React.ReactNode }) {
-  const status = useSetupStatus(companyId, { live: false })
-  if (status.loading) return <Spinner />
-  if (!status.error && !status.allDone) return <Navigate to="/setup" replace />
-  return <>{children}</>
-}
-
 function ClientRoute({ children }: { children: React.ReactNode }) {
   const { user, role, loading } = useAuth()
   const { company, access, loading: companyLoading, loadError, refreshCompany } = useCompany()
@@ -99,15 +87,15 @@ function ClientRoute({ children }: { children: React.ReactNode }) {
   // NÃO é mais presa em /gratis — navega por todo o painel em "somente
   // visualização" (ShowcaseContext) e o servidor barra o que gasta/publica
   // (_shared/access.ts). /gratis segue existindo (página dos planos; o kit grátis acabou em 2026-10-17). O /setup
-  // continua só depois de pagar. Leva o ?query junto (ex.: volta do checkout).
+  // saiu em 2026-10-19 (o sino cobra o que falta). Leva o ?query junto (ex.: volta do checkout).
   if (isShowcaseMode(company, access)) {
     // Volta do checkout: a página /gratis espera o pagamento ser confirmado (a conta
     // ainda aparece como vitrine por alguns segundos) e depois leva pro painel.
     if (new URLSearchParams(location.search).get('upgrade') === 'success' && location.pathname !== '/gratis') {
       return <Navigate to={`/gratis${location.search}`} replace />
     }
-    // Telas de teste/bloqueio/fim de cadastro não existem pra quem está em vitrine.
-    if (location.pathname === '/setup' || location.pathname.startsWith('/dashboard/trial') || location.pathname.startsWith('/dashboard/access-blocked')) {
+    // Telas de teste/bloqueio não existem pra quem está em vitrine.
+    if (location.pathname.startsWith('/dashboard/trial') || location.pathname.startsWith('/dashboard/access-blocked')) {
       return <Navigate to="/dashboard" replace />
     }
     return <>{children}</>
@@ -118,13 +106,6 @@ function ClientRoute({ children }: { children: React.ReactNode }) {
   const exempt = location.pathname.startsWith('/dashboard/trial') || location.pathname.startsWith('/dashboard/settings') || location.pathname.startsWith('/dashboard/access-blocked')
   if (access && !access.granted && !exempt) {
     return <Navigate to={access.source === 'blocked' ? '/dashboard/access-blocked' : '/dashboard/trial'} replace />
-  }
-  // Fim do cadastro (/setup) — DEPOIS de todos os checks acima (não mudar a
-  // ordem: bug "recarreguei e caí no onboarding"). Não se aplica ao próprio
-  // /setup nem às telas de acesso/plano.
-  const accessScreen = location.pathname.startsWith('/dashboard/trial') || location.pathname.startsWith('/dashboard/access-blocked')
-  if (!accessScreen && location.pathname !== '/setup' && setupGateApplies(company, access)) {
-    return <SetupGate companyId={company.id}>{children}</SetupGate>
   }
   return <>{children}</>
 }
@@ -185,7 +166,8 @@ function RouterRoot() {
       </Route>
 
       {/* Fim do cadastro: atrás do login, fora do DashboardLayout */}
-      <Route path="/setup" element={<ClientRoute><SetupPage /></ClientRoute>} />
+      {/* /setup saiu (decisão do dono 2026-10-19): o que falta fica em Configurações e o sino cobra. Link antigo cai lá. */}
+      <Route path="/setup" element={<Navigate to="/dashboard/settings?section=entendimento" replace />} />
       {/* Conta nova antes de pagar: só os vídeos grátis + plano/cupom */}
       <Route path="/gratis" element={<ClientRoute><FreePage /></ClientRoute>} />
       <Route path="/onboarding" element={<OnboardingPage />} />
@@ -201,7 +183,7 @@ function RouterRoot() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      {/* Idioma (PT/EN) vale pro site inteiro: landing, login, cadastro, /setup e painel. */}
+      {/* Idioma (PT/EN) vale pro site inteiro: landing, login, cadastro e painel. */}
       <LanguageProvider>
       <AuthProvider>
         <CompanyProvider>

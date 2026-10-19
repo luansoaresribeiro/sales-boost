@@ -51,6 +51,10 @@ const PT = {
   questions: (n: number) => `${n} ${n === 1 ? 'pergunta' : 'perguntas'} do seu negócio sem resposta`,
   eg: 'Ex.: ', questionsHint: 'Quanto mais o Hermes souber, melhor ele decide.',
   settingsUnd: 'Configurações · Entendimento do negócio',
+  bizT: (items: string) => `Complete os dados do negócio: ${items}`,
+  bizHint: 'A estratégia só começa com nome, cidade e telefone/WhatsApp.',
+  bizName: 'nome', bizCity: 'cidade', bizPhone: 'telefone/WhatsApp',
+  settingsBiz: 'Configurações · Sobre o negócio',
   profileT: 'Suas informações ainda estão atualizadas?',
   profileHint: 'Sua estratégia de marketing é baseada nas informações atuais do seu negócio. Quer mudar alguma coisa?',
   profileOk: 'Está tudo certo', profileEdit: 'Quero atualizar',
@@ -73,6 +77,10 @@ const EN: typeof PT = {
   questions: (n: number) => `${n} ${n === 1 ? 'question' : 'questions'} about your business unanswered`,
   eg: 'E.g.: ', questionsHint: 'The more Hermes knows, the better it decides.',
   settingsUnd: 'Settings · Business understanding',
+  bizT: (items: string) => `Complete your business details: ${items}`,
+  bizHint: 'The strategy only starts with name, city and phone/WhatsApp.',
+  bizName: 'name', bizCity: 'city', bizPhone: 'phone/WhatsApp',
+  settingsBiz: 'Settings · About the business',
   profileT: 'Is your business information still up to date?',
   profileHint: 'Your marketing strategy is based on the information currently available about your business. Anything you would change?',
   profileOk: 'All good', profileEdit: 'Update',
@@ -121,12 +129,20 @@ export function usePendencias() {
       }
     } catch { /* fonte ignorada */ }
 
-    // b) Instagram + e) Telegram + dados da ficha (d)
+    // b) Instagram + e) Telegram + dados do negócio + dados da ficha (d)
     let answers: Record<string, unknown> | null | undefined
     try {
-      const { data, error } = await supabase.from('companies').select('instagram_user_id, telegram_chat_id, playbook_answers').eq('id', companyId).maybeSingle()
+      const { data, error } = await supabase.from('companies').select('instagram_user_id, telegram_chat_id, playbook_answers, business_name, city, phone').eq('id', companyId).maybeSingle()
       if (!error && data) {
         answers = (data.playbook_answers as Record<string, unknown> | null) ?? null
+        // Dados do negócio — mesma regra do servidor (_shared/setupReady.ts). Antes o /setup
+        // cobrava isso; a página saiu em 2026-10-19 e o sino passou a avisar.
+        const biz = [
+          String(data.business_name ?? '').trim().length < 2 ? t.bizName : '',
+          String(data.city ?? '').trim().length < 2 ? t.bizCity : '',
+          String(data.phone ?? '').replace(/\D/g, '').length < 10 ? t.bizPhone : '',
+        ].filter(Boolean)
+        if (biz.length) out.push({ id: 'dados', kind: 'ficha', tone: 'orange', title: t.bizT(biz.join(', ')), hint: t.bizHint, destino: t.settingsBiz, to: '/dashboard/settings?section=negocio' })
         let expiresAt: string | null = null
         try {
           const r = await supabase.from('companies').select('instagram_token_expires_at').eq('id', companyId).maybeSingle()

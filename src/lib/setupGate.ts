@@ -4,8 +4,8 @@
 //    "somente visualização" (ver contexts/ShowcaseContext.tsx e a rede de
 //    segurança do servidor em supabase/functions/_shared/access.ts). Quem veio do
 //    diagnóstico grátis ainda tem o kit grátis em /gratis (pop-up no painel).
-//  - Depois de pagar: aí sim pede os dados adicionais (/setup) e libera o
-//    painel inteiro.
+//  - Depois de pagar: libera o painel inteiro. O /setup (dados adicionais)
+//    saiu em 2026-10-19 — o essencial já vem do diagnóstico e o sino cobra o resto.
 // Vale só pra contas criadas a partir de NEW_FLOW_FROM — as antigas (Liga dos
 // Sonhos, conta Sales Boost) continuam como estavam.
 import type { AccessInfo } from '../contexts/CompanyContext'
@@ -36,8 +36,3 @@ export function isShowcaseMode(company: CompanyLike, access: AccessInfo | null):
 
 // Nome antigo (até 2026-10-12), mantido pra quem ainda importar.
 export const isFreeMode = isShowcaseMode
-
-// /setup (dados adicionais): só pra conta nova que JÁ pagou.
-export function setupGateApplies(company: CompanyLike, access: AccessInfo | null): boolean {
-  return isNewAccount(company) && hasPaidAccess(company, access)
-}

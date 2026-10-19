@@ -85,10 +85,10 @@ const TX = {
     s3igBad: '⚠️ Não entendi esse Instagram. Digite assim: @seuperfil', s3igHint: 'Olhamos seus posts, engajamento e perfil pra montar sua nota (só dados públicos).',
     s3site: 'Site (opcional)', s3siteBad: '⚠️ Esse endereço parece errado. Use: https://seunegocio.com.br — ou deixe em branco se não tem site.', s3siteHint: 'Se tiver site, analisamos a velocidade dele também. Não tem? Tudo bem, é só deixar em branco.', s3fb: 'Facebook (opcional)',
     s4t: 'É isso que entendemos?', s4s: 'Confira o resumo. Depois é só um último passo pra criar seu painel.', s4name: 'Nome da empresa (opcional)', s4namep: 'Ex: Studio Beleza Carioca', s4nameh: 'Sem empresa? Pode deixar em branco — seu perfil fica como pessoal. Não muda nada no que o Sales Boost faz.', s4city: 'Cidade / UF', s4cityp: 'Ex: Rio de Janeiro, RJ',
-    s4mail: 'Seu e-mail', s4mailp: 'voce@seunegocio.com.br', s4mailh: 'Usado pra acessar seu painel e receber alertas.', s4mailBad: '⚠️ Esse e-mail parece incompleto. Confira: voce@exemplo.com', s4phone: 'Telefone / WhatsApp (opcional)',
+    s4mail: 'Seu e-mail', s4mailp: 'voce@seunegocio.com.br', s4mailh: 'Usado pra acessar seu painel e receber alertas.', s4mailBad: '⚠️ Esse e-mail parece incompleto. Confira: voce@exemplo.com', s4phone: 'Telefone / WhatsApp (opcional)', s4phoneH: 'Pra falarmos com você e o Sales Boost te avisar de novos contatos.',
     back: '← Voltar', cont: 'Continuar →', create: 'Criar meu painel →', priv1: 'Ao continuar, você concorda com nossa', priv2: 'política de privacidade', priv3: '. Seus dados são usados só pra entender seu negócio e gerar o diagnóstico.',
     sum: { biz: 'Negócio', type: 'Tipo', ideal: 'Cliente ideal', goal: 'Objetivo principal', ch: 'Maior desafio', chan: 'Canais atuais', stage: 'Estágio', undef: 'ainda não definidos' },
-    v2steps: ['Você', 'Sua operação', 'Prioridade', 'Instagram'],
+    v2steps: ['Você', 'Sua operação', 'Mercado e prioridade', 'Instagram e contato'],
     pickT: 'Vamos começar: o que descreve você?', pickS: 'Diagnóstico grátis do seu Instagram em uns 2 minutos. Escolha uma opção pra gente fazer as perguntas certas.', pickOther: 'Outro tipo de negócio', loadingFicha: 'Preparando as perguntas certas pra você…',
     savedT: 'Seu diagnóstico está salvo neste aparelho', savedS: (d: string) => `Você fez um diagnóstico aqui em ${d}. Mesmo se fechou a tela no meio, ele terminou de ser feito — é só abrir.`,
     savedSee: 'Ver meu diagnóstico →', savedNew: 'Começar outro diagnóstico',
@@ -96,7 +96,7 @@ const TX = {
     v2nameOrg: 'Nome da imobiliária', v2nameOrgP: 'Ex: Imobiliária Silva', v2namePerson: 'Seu nome profissional (opcional)', v2namePersonP: 'Ex: Ana Souza Imóveis',
     v2nameH: 'Aparece no seu painel. Pode mudar depois.',
     v2s1t: 'Sua operação', v2s1s: 'Três respostas rápidas pra o diagnóstico já falar do seu mercado. Não sabe alguma? Marque e siga.',
-    v2s2t: 'Sua prioridade', v2s2s: 'Gerar demanda já é o trabalho do Sales Boost. Onde você quer melhorar primeiro?',
+    v2s2t: 'Seu mercado e sua prioridade', v2s2s: 'Com isso o Sales Boost já monta sua estratégia certa desde o primeiro dia. Não sabe alguma? Marque e siga.',
     v2s3t: 'Seu Instagram', v2s3s: 'É ele que a gente analisa (só dados públicos). O e-mail é pra você acessar o resultado e o painel.',
     v2later: 'O resto (equipe, carteira, canais) você completa depois do cadastro, no seu ritmo.',
   },
@@ -114,10 +114,10 @@ const TX = {
     s3igBad: '⚠️ I did not understand this Instagram. Type it like this: @yourprofile', s3igHint: 'We look at your posts, engagement and profile to build your score (public data only).',
     s3site: 'Website (optional)', s3siteBad: '⚠️ This address looks wrong. Use: https://yourbusiness.com — or leave it blank if you have no website.', s3siteHint: 'If you have a website, we also analyze its speed. Do not have one? That is fine, just leave it blank.', s3fb: 'Facebook (optional)',
     s4t: 'Is this what we understood?', s4s: 'Check the summary. Then there is just one last step to create your dashboard.', s4name: 'Company name (optional)', s4namep: 'E.g.: Carioca Beauty Studio', s4nameh: 'No company? Leave it blank — your profile is marked as personal. It changes nothing in what Sales Boost does.', s4city: 'City / State', s4cityp: 'E.g.: Rio de Janeiro, RJ',
-    s4mail: 'Your email', s4mailp: 'you@yourbusiness.com', s4mailh: 'Used to access your dashboard and receive alerts.', s4mailBad: '⚠️ This email looks incomplete. Check it: you@example.com', s4phone: 'Phone / WhatsApp (optional)',
+    s4mail: 'Your email', s4mailp: 'you@yourbusiness.com', s4mailh: 'Used to access your dashboard and receive alerts.', s4mailBad: '⚠️ This email looks incomplete. Check it: you@example.com', s4phone: 'Phone / WhatsApp (optional)', s4phoneH: 'So we can reach you and Sales Boost can alert you about new leads.',
     back: '← Back', cont: 'Continue →', create: 'Create my dashboard →', priv1: 'By continuing, you agree to our', priv2: 'privacy policy', priv3: '. Your data is used only to understand your business and generate the diagnosis.',
     sum: { biz: 'Business', type: 'Type', ideal: 'Ideal customer', goal: 'Main goal', ch: 'Biggest challenge', chan: 'Current channels', stage: 'Stage', undef: 'not defined yet' },
-    v2steps: ['You', 'Your operation', 'Priority', 'Instagram'],
+    v2steps: ['You', 'Your operation', 'Market and priority', 'Instagram and contact'],
     pickT: "Let's start: what describes you?", pickS: 'Free diagnosis of your Instagram in about 2 minutes. Pick one so we ask the right questions.', pickOther: 'Another type of business', loadingFicha: 'Getting the right questions ready for you…',
     savedT: 'Your diagnosis is saved on this device', savedS: (d: string) => `You ran a diagnosis here on ${d}. Even if you closed the screen halfway, it finished — just open it.`,
     savedSee: 'See my diagnosis →', savedNew: 'Start another diagnosis',
@@ -125,7 +125,7 @@ const TX = {
     v2nameOrg: 'Agency name', v2nameOrgP: 'E.g.: Silva Realty', v2namePerson: 'Your professional name (optional)', v2namePersonP: 'E.g.: Ana Souza Realty',
     v2nameH: 'Shown in your dashboard. You can change it later.',
     v2s1t: 'Your operation', v2s1s: 'Three quick answers so the diagnosis speaks about your market. Not sure about one? Mark it and move on.',
-    v2s2t: 'Your priority', v2s2s: 'Generating demand is already what Sales Boost does. Where do you want to improve first?',
+    v2s2t: 'Your market and your priority', v2s2s: 'With this, Sales Boost builds the right strategy from day one. Not sure about one? Mark it and move on.',
     v2s3t: 'Your Instagram', v2s3s: 'This is what we analyze (public data only). The email lets you access the result and the dashboard.',
     v2later: 'The rest (team, listings, channels) you complete after signing up, at your own pace.',
   },
@@ -595,9 +595,9 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
               <>
                 <H t={t.v2s3t} s={t.v2s3s} />
                 <Field label={t.s3ig} value={data.instagram_url} onChange={set('instagram_url')} placeholder={t.s3igp} required hint={igInvalid ? t.s3igBad : t.s3igHint} />
-                <Field label={t.s3site} value={data.website_url} onChange={set('website_url')} type="url" placeholder="https://seunegocio.com.br" hint={siteInvalid ? t.s3siteBad : t.s3siteHint} />
                 <Field label={t.s4mail} value={data.contact_email} onChange={set('contact_email')} type="email" placeholder={t.s4mailp} required hint={emailInvalid ? t.s4mailBad : t.s4mailh} />
-                <Field label={t.s4phone} value={data.phone} onChange={set('phone')} placeholder="(21) 99999-9999" />
+                <Field label={t.s4phone} value={data.phone} onChange={set('phone')} type="tel" placeholder="(21) 99999-9999" hint={t.s4phoneH} />
+                <Field label={t.s3site} value={data.website_url} onChange={set('website_url')} type="url" placeholder="https://seunegocio.com.br" hint={siteInvalid ? t.s3siteBad : t.s3siteHint} />
                 <p style={{ fontSize: '12px', color: MUTED, lineHeight: 1.5, margin: '4px 0 0' }}>{t.v2later}</p>
                 {errorBlock}
               </>

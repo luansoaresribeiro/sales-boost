@@ -12,6 +12,7 @@ import PendenciasBell from './PendenciasBell'
 import { ShowcaseProvider, useShowcase } from '../../contexts/ShowcaseContext'
 import { ShowcaseBanner, CouponModal } from './ShowcaseUi'
 import { usePendencias } from '../../lib/usePendencias'
+import { importDiagnosisAnswers } from '../../lib/onboardingV2'
 import { useSetupStatus } from '../../lib/useSetupStatus'
 import { supabase } from '../../lib/supabase'
 import logo from '../../assets/logo.png'
@@ -249,6 +250,9 @@ function DashboardShell() {
   useFirstStrategy(paid ? company?.id ?? null : null, readOnly)
   const [mobileOpen, setMobileOpen] = useState(false)
   useEffect(() => { if (!isMobile) setMobileOpen(false) }, [isMobile])
+  // Respostas do diagnóstico → empresa (antes era o /setup; saiu em 2026-10-19).
+  const companyId = company?.id ?? null, verticalKey = company?.vertical_key ?? 'generico'
+  useEffect(() => { if (companyId) void importDiagnosisAnswers(companyId, verticalKey) }, [companyId, verticalKey])
 
   return (
     <>
