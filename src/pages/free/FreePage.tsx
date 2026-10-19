@@ -2,8 +2,8 @@
 // A conta navega pelo painel em somente visualização (docs/DECISIONS.md); "Ver
 // planos" e o pop-up do cupom levam pra cá (/gratis#plano). O kit grátis acabou
 // (decisão do dono 2026-10-17): aqui fica só o que o plano libera + a oferta
-// (com o cupom do 1º mês, se estiver valendo). Os dados adicionais (/setup) só
-// são pedidos depois de pagar. Quem decide se a conta é vitrine é
+// (com o cupom do 1º mês, se estiver valendo). O /setup saiu em 2026-10-19: depois de
+// pagar a pessoa entra direto no painel e o sino mostra o que falta. Quem decide se a conta é vitrine é
 // isShowcaseMode (lib/setupGate.ts).
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
@@ -35,7 +35,7 @@ const TX = {
       '✅ Nada vai ao ar sem a sua aprovação',
     ],
     planT: 'Ative o plano e o Sales Boost começa a trabalhar',
-    planIntro: 'Depois do pagamento, pedimos só os dados que faltam pra começar (telefone, algumas perguntas e as fotos dos seus imóveis).',
+    planIntro: 'Depois do pagamento você entra direto no painel. O que faltar pra começar (como as fotos dos seus imóveis) aparece no sininho de pendências.',
     confirming: 'Confirmando seu pagamento…',
     confirmLate: 'Ainda não recebemos a confirmação do pagamento. Se você já pagou, aguarde alguns minutos e recarregue a página.',
   },
@@ -52,7 +52,7 @@ const TX = {
       '✅ Nothing goes live without your approval',
     ],
     planT: 'Activate the plan and Sales Boost starts working',
-    planIntro: 'After payment, we only ask for what is missing to start (phone, a few questions and photos of your properties).',
+    planIntro: 'After payment you go straight to the dashboard. Anything missing to start (like photos of your properties) shows up in the to-do bell.',
     confirming: 'Confirming your payment…',
     confirmLate: 'We have not received the payment confirmation yet. If you already paid, wait a few minutes and reload the page.',
   },
@@ -71,7 +71,7 @@ export default function FreePage() {
 
   // Volta do checkout: o Stripe avisa o servidor alguns segundos depois. Enquanto
   // a conta não aparece como paga, recarrega; quando aparecer, o roteador leva
-  // pro painel (e de lá pros dados adicionais).
+  // pro painel (o sino de pendências mostra o que falta).
   const confirming = params.get('upgrade') === 'success'
   useEffect(() => {
     if (!confirming || waited > CONFIRM_MAX_MS) return

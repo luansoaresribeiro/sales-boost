@@ -1600,3 +1600,36 @@ grátis de 30 s, acima — mantidos como histórico):
     pergunta-guia, os pilares (cada um com a linha "Princípio: …"), a
     oportunidade ignorada e o post de exemplo.
 
+## 2026-10-19 — /setup removido; essenciais no diagnóstico (pedido do dono)
+
+- **Por quê:** o dono entrou na conta teste2 (Tespon, liberada à mão) e
+  ficou preso no /setup. O pedido dele foi: "pode excluir essa página, e a
+  tab de notificações vai notificar a falta de certas informações… na
+  criação de cadastro o máximo dessas informações já deve ser respondida".
+- **Substitui** a decisão "/setup obrigatório no fim do cadastro" e a parte
+  "/setup só depois de pagar" das decisões de 2026-10-13 e 2026-10-16.
+- **O que mudou:**
+  - **Página e gate:** removidos. Quem paga ou é liberado à mão entra
+    direto no painel. Links antigos pra `/setup` caem em Configurações.
+  - **Essenciais no diagnóstico** (opção escolhida pelo dono: "só as
+    essenciais", cerca de 1 minuto a mais):
+    - entram 4 perguntas da ficha: CRECI, tipos de imóvel, faixa de preço
+      (a estratégia precisa dela) e quem quer atrair. Feito com a migration
+      `20261019200000_onboarding_essenciais.sql`, que só mexe no JSON da
+      ficha;
+    - as etapas do diagnóstico passam a ser: Você · Sua operação · Mercado e
+      prioridade · Instagram e contato;
+    - o telefone/WhatsApp sobe de posição, com uma explicação, e continua
+      opcional.
+  - **As outras perguntas** ficam em Configurações → "Entendimento do
+    negócio".
+  - **O sino de pendências** cobra o que falta:
+    - as perguntas (já cobrava);
+    - fotos e Instagram (já cobrava);
+    - **novo:** dados do negócio (nome, cidade e telefone, com a mesma regra
+      do servidor em `setupReady`).
+  - **Respostas do diagnóstico → empresa:** quem fazia isso era o /setup.
+    Agora acontece no 1º acesso ao painel, só nos campos vazios.
+  - **Botão "Completar agora" da estratégia:** leva direto pro que falta
+    (dados, perguntas ou catálogo).
+

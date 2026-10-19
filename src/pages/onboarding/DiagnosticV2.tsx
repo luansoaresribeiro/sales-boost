@@ -5,14 +5,16 @@ import {
 } from '../../lib/onboardingV2'
 
 // Diagnóstico curto do onboarding v2 (antes do cadastro, ~2 minutos). Só as
-// perguntas marcadas `diagnostic: true` na ficha; o resto vem nas 5 etapas
-// do /setup, depois da conta criada (decisão do dono 2026-10-16).
+// perguntas marcadas `diagnostic: true` na ficha; o resto fica em Configurações
+// e o sino de pendências cobra (o /setup saiu — decisão do dono 2026-10-19).
 //   passo 0: tipo de negócio + perfil + nome + cidade (o DiagnosticFlow monta)
-//   passo 1: perguntas de diagnóstico das etapas "operacao"/"mercado"
-//   passo 2: perguntas de diagnóstico das demais etapas (ex.: prioridade)
+//   passo 1: perguntas de diagnóstico da etapa "operacao"
+//   passo 2: perguntas de diagnóstico das demais etapas (mercado, prioridade)
 //   passo 3: Instagram e contato (o DiagnosticFlow monta)
 
-const FIRST_STEPS = ['operacao', 'mercado']
+// Etapa 1 = operação; etapa 2 = mercado + prioridade (essenciais do mercado entraram
+// no diagnóstico quando o /setup saiu — decisão do dono 2026-10-19).
+const FIRST_STEPS = ['operacao']
 
 export function diagnosticQuestions(v2: OnboardingV2, answers: Record<string, unknown>, step: 1 | 2): V2Question[] {
   return visibleQuestions(v2, answers).filter(q =>
