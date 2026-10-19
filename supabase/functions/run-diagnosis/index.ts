@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { analyzeSocialSelling, parseSSConfig, SOCIAL_SELLING_MONTHLY_CAP } from '../_shared/socialSelling.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -233,6 +234,30 @@ Deno.serve(async (req) => {
 
     const diagnosticId = row.id
 
+    async function writeSocialSelling(ig: unknown) {
+      const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
+      if (!anthropicKey || !igUrl) return
+      const { data: bt } = await supabase.from('business_types').select('vertical_key').eq('label', data.business_type ?? '').maybeSingle()
+      const { data: pb } = await supabase.from('vertical_playbooks').select('config').eq('key', bt?.vertical_key ?? 'generico').eq('enabled', true).maybeSingle()
+      const v2 = (pb?.config as { onboarding_v2?: { social_selling?: unknown; diagnosis_readiness?: unknown } } | null)?.onboarding_v2
+      const cfg = parseSSConfig(v2?.social_selling)
+      if (!cfg) return
+      // Mesmo Instagram nas últimas 24 h: reaproveita (não paga de novo).
+      const { data: prev } = await supabase.from('diagnostics').select('social_selling').eq('instagram_url', igUrl)
+        .not('social_selling', 'is', null).gte('created_at', since).order('created_at', { ascending: false }).limit(1).maybeSingle()
+      let ss = prev?.social_selling ?? null
+      if (!ss) {
+        const month = new Date(); month.setUTCDate(1); month.setUTCHours(0, 0, 0, 0)
+        const { count } = await supabase.from('diagnostics').select('id', { count: 'exact', head: true })
+          .not('social_selling', 'is', null).gte('created_at', month.toISOString())
+        if ((count ?? 0) >= SOCIAL_SELLING_MONTHLY_CAP) { console.log('[run-diagnosis] teto mensal do social selling', count); return }
+        ss = await analyzeSocialSelling(ig, cfg, v2?.diagnosis_readiness, { business: `${data.business_type ?? 'negócio'} em ${data.city ?? ''}`.trim(), anthropicKey })
+      }
+      if (!ss) return
+      const { error } = await supabase.from('diagnostics').update({ social_selling: ss }).eq('id', diagnosticId)
+      if (error) console.log('[run-diagnosis] social selling não gravou', error.message)
+    }
+
     // A análise (Instagram, site, robôs extras), que antes segurava a resposta.
     async function analyze() {
       // 1b. Diagnóstico v2: a busca de concorrentes começa JÁ, em paralelo com a
@@ -335,6 +360,12 @@ Deno.serve(async (req) => {
             : Promise.resolve(),
         ])
       }
+
+      // 3b. Social Selling (o coração do diagnóstico): lê do que falam os posts.
+      // Grava numa atualização separada ANTES do status final — a página só sai
+      // da tela de espera com ele pronto; se falhar (ou a coluna ainda não
+      // existir), segue sem ele e a página mostra a seção antiga.
+      if (!instagramData.error) await writeSocialSelling(instagramData).catch(e => console.log('[run-diagnosis] social selling falhou', String(e)))
 
       // 4. Update row with results
       const hasPagespeed = !!(pagespeedMobile || pagespeedDesktop)

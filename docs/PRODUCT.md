@@ -45,6 +45,42 @@ investir esforço com base no que funciona de verdade. Ele analisa a cadeia
 completa: onde descobrem o negócio → como contatam → como convertem → como
 compram.
 
+## O diagnóstico grátis: Social Selling no centro (2026-10-19)
+
+**Objetivo central:** fazer o corretor perceber que o Instagram dele pode
+estar desperdiçando oportunidades de gerar confiança e iniciar conversas
+comerciais, e mostrar como o Social Selling muda isso. Não é dar nota, listar
+erros nem comparar seguidores.
+
+**Pergunta-guia de cada seção:** "quando um potencial comprador visita este
+perfil, o que encontra que o ajude a confiar, aprender e dar o próximo
+passo?"
+
+**Duas camadas:**
+1. **Inteligência de mercado** (o que já existia): concorrentes, o que está
+   em alta e as descobertas. Prova que o Sales Boost entende o contexto.
+2. **Social Selling** (a assinatura do Sales Boost): 5 pilares — Autoridade,
+   Educação, Confiança, Relacionamento e Conversão. Avalia **do que falam**
+   os posts, não só quantos são.
+
+**Ordem da página:**
+1. Growth Potential
+2. Mercado
+3. O que seu Instagram transmite
+4. A oportunidade ignorada
+5. O raciocínio do Sales Boost (um post de exemplo com objetivo)
+6. Criar conta
+
+Para cada lacuna, o diagnóstico ensina o porquê, além de apontar a tarefa.
+
+**Mensagem para a imobiliária:** a mensagem deixa de ser "uma ferramenta que
+cria posts". Passa a ser: "ajude seus corretores a construir autoridade,
+educar compradores e transformar a presença digital em oportunidades, com
+uma estratégia que a imobiliária organiza e acompanha". O conteúdo é o meio;
+o resultado comercial é o produto.
+
+Como funciona (código e ficha): docs/DECISIONS.md, 2026-10-19.
+
 ## Verticalização (regra central)
 
 Mesma infraestrutura pra todo setor; setor = **ficha**

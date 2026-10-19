@@ -1538,3 +1538,51 @@ grátis de 30 s, acima — mantidos como histórico):
     com mais de 6 min ainda "processando" não espera: mostra o que tem.
   - O aviso da tela de espera trocou "Não feche esta página" por "Se fechar
     a tela, o diagnóstico continua e fica salvo neste aparelho".
+
+## 2026-10-19 — Diagnóstico com Social Selling no centro (pedido do dono)
+
+- **Por quê:** o dono trouxe um roteiro novo para o diagnóstico grátis. O
+  objetivo é mudar como o corretor enxerga o próprio Instagram: mostrar que
+  o perfil pode preparar o comprador para confiar e iniciar uma conversa, não
+  só divulgar imóveis. Mais métricas não fazem isso. Detalhes em
+  docs/PRODUCT.md, na seção "O diagnóstico grátis".
+- **O que mudou:**
+  - O `run-diagnosis`, depois de ler o Instagram e ainda em segundo plano,
+    faz uma chamada ao Claude (`_shared/socialSelling.ts`).
+  - Essa chamada classifica cada post em uma categoria da ficha e escreve:
+    o que cada pilar mostra, a resposta à pergunta-guia, a oportunidade
+    ignorada (lacuna → consequência → novo jeito de pensar) e um post de
+    exemplo com objetivo estratégico.
+  - O resultado fica em `diagnostics.social_selling`.
+- **Regra 5 (nunca inventar número):**
+  - Quem conta é o código: quantos posts há de cada categoria e de cada
+    pilar, e qual o nível de cada pilar.
+  - A IA não escreve números. Toda frase dela que tiver algarismo é
+    descartada.
+  - Os trechos citados são as legendas reais.
+- **Regra 6 (setor na ficha):** fica em `config.onboarding_v2.social_selling`
+  da ficha `imoveis_rio`:
+  - as categorias de post;
+  - os 5 pilares (pergunta, categorias, limite para "forte" e o "por que
+    importa");
+  - as dúvidas comuns do comprador.
+
+  Os sinais de Conversão e Relacionamento usam os padrões que já estavam em
+  `diagnosis_readiness`.
+- **Página:**
+  - Ordem nova: nota → mercado → pilares → oportunidade → exemplo → CTA.
+  - Potencial, pontos que travam, "como a nota foi formada" e "como
+    calculamos" foram para um bloco "Detalhes da nota", fechado. Nada foi
+    removido.
+  - A fórmula da nota não mudou.
+  - Sem `social_selling` (diagnóstico antigo, ficha sem a chave, IA fora do
+    ar ou teto do mês atingido), a página continua como antes, com
+    "Pronto pra gerar conversas?".
+- **Custo (regra 7):**
+  - Uma chamada de texto por diagnóstico, cerca de US$ 0,03.
+  - Teto mensal `SOCIAL_SELLING_MONTHLY_CAP`, padrão 300.
+  - O mesmo Instagram nas últimas 24 h reaproveita a análise.
+- **Divergência registrada:** o plano previa um tipo novo em
+  `src/lib/onboardingV2.ts`. Não foi preciso, porque a página lê tudo pronto
+  de `diagnostics.social_selling` (nomes, pilares e textos) e não lê a ficha.
+
