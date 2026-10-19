@@ -7,6 +7,7 @@ import {
 
 const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '9px 12px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '9px', color: 'white', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }
 const label: React.CSSProperties = { display: 'block', fontSize: '10.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }
+const LEVEL_COLOR: Record<string, string> = { forte: '#4ade80', parcial: '#FB923C', ausente: '#f87171' } // mesmas cores do diagnóstico
 const cardBox: React.CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '14px 16px' }
 
 const TX = {
@@ -23,7 +24,9 @@ const TX = {
     logStatus: { proposed: 'PROPOSTO', approved: 'APROVADO', dismissed: 'DISPENSADO', implemented: 'IMPLEMENTADO' } as Record<string, string>,
     alsoIn: 'Essas recomendações também aparecem em Aprendizado (Feedback Loop).',
     centralLine: 'Linha central de conteúdo', heroFormats: 'Formatos-âncora', weeklyMix: 'Mix da semana', perWeek: (n: number) => `${n}x por semana`,
-    producer: { post: 'o calendário cria sozinho', item_package: 'você gera no imóvel (Catálogo)', item_video: 'vídeo: você pede no imóvel', dm: 'resposta automática do QUERO' } as Record<string, string>,
+    producer: { post: 'o calendário cria sozinho', item_package: 'o calendário cria a partir de um imóvel do Catálogo', item_video: 'vídeo: o calendário cria a partir de uma foto real do imóvel', dm: 'resposta automática do QUERO' } as Record<string, string>,
+    pillarsTitle: 'Como a estratégia trabalha seus 5 pilares', pillarsSub: 'Os pilares de Social Selling do seu diagnóstico: o que mostra confiança, ensina e abre conversa no seu Instagram.',
+    today: 'Hoje:', plan: 'O que vamos fazer:', level: { forte: 'forte', parcial: 'parcial', ausente: 'ausente' } as Record<string, string>, pillar: 'Pilar:',
     noMix: 'Esta estratégia é anterior à escolha de formatos — peça uma nova ou espere a próxima atualização mensal pra ver o mix da semana.',
   },
   en: {
@@ -39,7 +42,9 @@ const TX = {
     logStatus: { proposed: 'PROPOSED', approved: 'APPROVED', dismissed: 'DISMISSED', implemented: 'IMPLEMENTED' } as Record<string, string>,
     alsoIn: 'These recommendations also appear in Learning (Feedback Loop).',
     centralLine: 'Core content line', heroFormats: 'Anchor formats', weeklyMix: 'Weekly mix', perWeek: (n: number) => `${n}x per week`,
-    producer: { post: 'the calendar creates it', item_package: 'you generate it on the listing (Catalog)', item_video: 'video: you request it on the listing', dm: 'automatic QUERO reply' } as Record<string, string>,
+    producer: { post: 'the calendar creates it', item_package: 'the calendar creates it from a Catalog listing', item_video: 'video: the calendar creates it from a real listing photo', dm: 'automatic QUERO reply' } as Record<string, string>,
+    pillarsTitle: 'How the strategy works your 5 pillars', pillarsSub: 'The Social Selling pillars from your diagnosis: what builds trust, teaches and starts conversations on your Instagram.',
+    today: 'Today:', plan: 'What we will do:', level: { forte: 'strong', parcial: 'partial', ausente: 'missing' } as Record<string, string>, pillar: 'Pillar:',
     noMix: 'This strategy predates the format choice — ask for a new one or wait for the next monthly update to see the weekly mix.',
   },
 } as const
@@ -98,6 +103,8 @@ export function FunnelPanel({ strategy }: { strategy: Strategy }) {
   const t = TX[lang]
   const L = strategyLabels(lang)
   const cp = strategy.content_plan
+  // Etapa do funil traz a chave do pilar; o nome vem dos pilares da estratégia.
+  const pillarName = (k?: string) => (k ? cp?.pillars?.find(p => p.key === k)?.name ?? null : null)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {cp ? (
@@ -127,11 +134,28 @@ export function FunnelPanel({ strategy }: { strategy: Strategy }) {
           </>}
         </div>
       ) : <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55 }}>{t.noMix}</div>}
+      {cp?.pillars && cp.pillars.length > 0 && (
+        <div style={cardBox}>
+          <div style={{ fontSize: '9.5px', fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>{t.pillarsTitle}</div>
+          <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55, marginBottom: '6px' }}>{t.pillarsSub}</div>
+          {cp.pillars.map(p => (
+            <div key={p.key} style={{ padding: '8px 0', borderTop: `1px solid ${BORDER}`, fontSize: '12px', lineHeight: 1.55 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                <strong style={{ color: 'white' }}>{p.name}</strong>
+                {p.level && <span style={{ fontSize: '10px', fontWeight: 700, color: LEVEL_COLOR[p.level] ?? MUTED, border: `1px solid ${LEVEL_COLOR[p.level] ?? BORDER}`, borderRadius: '99px', padding: '1px 8px' }}>{t.level[p.level] ?? p.level}</span>}
+              </div>
+              {p.today && <div style={{ color: MUTED, fontSize: '11.5px' }}><strong style={{ color: 'rgba(255,255,255,0.7)' }}>{t.today}</strong> {p.today}</div>}
+              <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '11.5px' }}><strong style={{ color: 'rgba(255,255,255,0.7)' }}>{t.plan}</strong> {p.plan}</div>
+            </div>
+          ))}
+        </div>
+      )}
       {!strategy.funnel_plan.length && <div style={{ fontSize: '12.5px', color: MUTED }}>{t.noFunnel}</div>}
       {strategy.funnel_plan.map((f, i) => (
         <div key={i} style={cardBox}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '9.5px', fontWeight: 800, color: ORANGE, background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.3)', borderRadius: '99px', padding: '3px 9px' }}>{L.FUNNEL_STAGE[f.stage] ?? f.stage}</span>
+            {pillarName(f.pillar) && <span style={{ fontSize: '10.5px', color: 'white' }}>{t.pillar} {pillarName(f.pillar)}</span>}
             {f.metric && <span style={{ fontSize: '10.5px', color: MUTED }}>{t.metric}{f.metric}</span>}
           </div>
           <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>{f.objective}</div>

@@ -36,7 +36,13 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente ·
    `supabase/functions/strategy-generate/index.ts`. Lê a ficha do setor
    (`fetchPlaybookBlock`) e uma memória estratégica real (via `data-agent`
    → domínio `history`, que lê `marketing_ai_brain_nodes`,
-   `marketing_ai_strategy_log`, `marketing_ai_experiments`). **Automático**:
+   `marketing_ai_strategy_log`, `marketing_ai_experiments`). Desde
+   2026-10-19 também recebe o **escopo do produto** (`SCOPE_BLOCK`: o que o
+   Sales Boost executa e o que não executa) e os **pilares de Social
+   Selling** (ficha `onboarding_v2.social_selling` + nível de cada pilar no
+   diagnóstico ligado à empresa). Grava `content_plan.pillars` e
+   `funnel_plan[].pillar`. Ver [DECISIONS.md](DECISIONS.md) 2026-10-19.
+   **Automático**:
    `claim-diagnostic` dispara a 1ª estratégia sozinha logo após o cadastro;
    um despachante (`action:'cron_dispatch'`, pg_cron diário) reavalia
    semanalmente (`reanalyze`) e atualiza o plano tático mensalmente OU
