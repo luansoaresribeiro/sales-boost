@@ -45,6 +45,46 @@ investir esforço com base no que funciona de verdade. Ele analisa a cadeia
 completa: onde descobrem o negócio → como contatam → como convertem → como
 compram.
 
+## O diagnóstico grátis: Social Selling no centro (2026-10-19)
+
+**Objetivo central:** fazer o corretor perceber que o Instagram dele pode
+estar desperdiçando oportunidades de gerar confiança e iniciar conversas
+comerciais, e mostrar como o Social Selling muda isso. Não é dar nota, listar
+erros nem comparar seguidores.
+
+**Pergunta-guia de cada seção:** "quando um potencial comprador visita este
+perfil, o que encontra que o ajude a confiar, aprender e dar o próximo
+passo?"
+
+**Duas camadas:**
+1. **Inteligência de mercado** (o que já existia): concorrentes, o que está
+   em alta e as descobertas. Prova que o Sales Boost entende o contexto.
+2. **Social Selling** (a assinatura do Sales Boost): 5 pilares — Autoridade,
+   Educação, Confiança, Relacionamento e Conversão. Avalia **do que falam**
+   os posts, não só quantos são.
+
+**A página é organizada em 3 camadas** (ajuste do dono no mesmo dia):
+1. **O que você está fazendo hoje:** nota, do que falam os posts, o que já
+   funciona como vitrine e o mercado.
+2. **O que você precisa entender sobre geração de demanda:** princípios com
+   exemplos imobiliários. Por exemplo: visualização não é intenção, educar
+   atrai quem pesquisa, uma chamada abre a conversa. O corretor aprende algo
+   que pode aplicar antes mesmo de contratar.
+3. **Como aplicar isso ao seu perfil:** os 5 pilares com evidência real, a
+   oportunidade ignorada e um post de exemplo com objetivo.
+
+Depois das camadas vem o botão de criar conta.
+
+Para cada lacuna, o diagnóstico ensina o porquê, além de apontar a tarefa.
+
+**Mensagem para a imobiliária:** a mensagem deixa de ser "uma ferramenta que
+cria posts". Passa a ser: "ajude seus corretores a construir autoridade,
+educar compradores e transformar a presença digital em oportunidades, com
+uma estratégia que a imobiliária organiza e acompanha". O conteúdo é o meio;
+o resultado comercial é o produto.
+
+Como funciona (código e ficha): docs/DECISIONS.md, 2026-10-19.
+
 ## Verticalização (regra central)
 
 Mesma infraestrutura pra todo setor; setor = **ficha**

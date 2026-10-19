@@ -73,6 +73,18 @@ fixo, só com dados cadastrados; também cria o lead. Detalhes em
 até 7 dias depois do comentário, 750/hora por conta; sem custo por
 mensagem.
 
+## Ligação com o diagnóstico (2026-10-19)
+
+O diagnóstico grátis avalia dois pilares de Social Selling que são a porta de
+entrada deste fluxo:
+- **Relacionamento:** posts que convidam o público a falar, e o dono
+  respondendo comentários.
+- **Conversão:** posts com chamada clara, como "comente", "chama no
+  WhatsApp" ou "agende".
+
+Quando um desses pilares sai "ausente", o diagnóstico explica o custo disso.
+O "Comente QUERO" é a resposta do Sales Boost para esse problema.
+
 ## Status real (atualizar a cada mudança)
 
 🟡 **Parcial, em construção** — `supabase/functions/instagram-webhook/index.ts`.
