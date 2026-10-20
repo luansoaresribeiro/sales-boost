@@ -1680,3 +1680,21 @@ grátis de 30 s, acima — mantidos como histórico):
   limite de texto).
 - **Estratégias já ativas:** só mudam quando forem geradas de novo. A
   atualização mensal mantém a tese e não cria os pilares.
+- **Perguntas novas** (pedido do dono 2026-10-20; migration
+  `20261020090000_onboarding_custos_grupo.sql`, só no JSON da ficha):
+  - **"Quanto você gasta por mês, hoje, pra conseguir clientes?"**
+    (`gasto_aquisicao`): faixas de "Nada / quase nada" até "Mais de R$ 5
+    mil". Fica no diagnóstico, etapa "Mercado e prioridade". A estratégia
+    usa só a faixa informada e nunca calcula retorno (regra 5). Antes só
+    existiam "Você faz anúncios pagos?" (sem valor) e o orçamento de
+    marketing em Configurações.
+  - **"A que imobiliária ou grupo imobiliário você está ligado(a)?"**
+    (`imobiliaria_parceira`, que já existia como "Com qual imobiliária você
+    trabalha?" e ficava só em Configurações). Passa a entrar no
+    diagnóstico, só pra corretor associado.
+- **Business Game por imobiliária** (regra do dono): os corretores da mesma
+  imobiliária jogam juntos. A pergunta acima é o primeiro passo. A
+  ligação confirmada e o placar ficam pra um PR próprio, porque mexem em
+  quem vê dados de quem (ver [ROADMAP.md](ROADMAP.md), 2026-10-20).
+- **soul.md:** o dono pediu atualizar, e depois pediu pra esquecer. Não
+  existe no repositório.

@@ -101,7 +101,8 @@ const PLANNED_COMPONENTS = ['positioning', 'content', 'acquisition', 'conversion
 // orçamento e vídeos ao que o Sales Boost executa.
 const TACTICAL_SCOPE_RULES = `- Funil: cada etapa usa formato do catálogo, CTA no Instagram (comentário/DM/salvar/compartilhar) e destino dentro do Instagram/Sales Boost. Diga em "pillar" qual pilar de Social Selling a etapa fortalece.
 - Orçamento: "allocation" só com o que o Sales Boost produz (conteúdo do calendário e vídeos curtos). Anúncio pago não entra no orçamento — está em breve no Sales Boost; se fizer sentido no futuro, cite só em "budget_reasoning". "paid_ads" fica null.
-- Vídeo curto faz parte do mix da semana (mínimo abaixo) — não trate como opcional.`
+- Vídeo curto faz parte do mix da semana (mínimo abaixo) — não trate como opcional.
+- Se o dono informou quanto gasta por mês pra conseguir clientes (gasto_aquisicao), use só essa faixa como ele disse (INFORMADO_PELO_DONO) ao falar de custo; nunca calcule retorno nem invente valor.`
 function pillarsLine(plan: Partial<ContentPlan> | null): string {
   const p = plan?.pillars ?? []
   return p.length ? `\nComo a tese trabalha os pilares: ${p.map(x => `${x.name}: ${x.plan}`).join(' | ')}` : ''
