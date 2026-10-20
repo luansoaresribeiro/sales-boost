@@ -27,7 +27,11 @@ export interface ContentFormat {
 }
 
 export interface WeeklyMixItem { format: string; name: string; producer: FormatProducer; per_week: number; pillar: string; purpose: string }
-export interface ContentPlan { central_line: string; hero_formats: { key: string; name: string }[]; why: string; weekly_mix: WeeklyMixItem[]; updated_at: string }
+// Como a estratégia trabalha cada pilar de Social Selling (ficha:
+// onboarding_v2.social_selling). `today` = como o pilar está hoje (nível do
+// diagnóstico, quando há); `plan` = o que a estratégia faz por ele.
+export interface PillarPlan { key: string; name: string; level: string | null; today: string; plan: string }
+export interface ContentPlan { central_line: string; hero_formats: { key: string; name: string }[]; why: string; weekly_mix: WeeklyMixItem[]; pillars?: PillarPlan[]; updated_at: string }
 
 const PRODUCERS: FormatProducer[] = ['post', 'item_package', 'item_video', 'dm']
 const STATUSES: FormatStatus[] = ['live', 'needs_material', 'planned']
@@ -45,7 +49,7 @@ const GENERIC: ContentFormat[] = [
 
 const PRODUCER_LABEL: Record<FormatProducer, string> = {
   post: 'gerado sozinho no calendário',
-  item_package: 'sai do pacote de um item do catálogo (botão no item)',
+  item_package: 'criado sozinho no calendário a partir de um item do catálogo com fotos reais',
   item_video: 'vídeo curto a partir de 1 foto real de um item (criado sozinho no calendário; custa ~US$ 0,42 do teto mensal)',
   dm: 'resposta automática na DM (dono aprova a mensagem uma vez)',
 }
@@ -143,7 +147,22 @@ export function sanitizeContentPlan(raw: unknown, formats: ContentFormat[], prev
   const central = String(r.central_line ?? prev?.central_line ?? '').trim().slice(0, 600)
   if (!central && !mix.length) return null
   const weekly = ensureMinVideos(mix.length ? mix : (prev?.weekly_mix ?? []), formats, minVideos)
-  return { central_line: central, hero_formats: hero, why: String(r.why ?? prev?.why ?? '').slice(0, 600), weekly_mix: weekly, updated_at: new Date().toISOString() }
+  const pillars = Array.isArray(r.pillars) ? cleanPillars(r.pillars) : (prev?.pillars ?? [])
+  return { central_line: central, hero_formats: hero, why: String(r.why ?? prev?.why ?? '').slice(0, 600), weekly_mix: weekly, ...(pillars.length ? { pillars } : {}), updated_at: new Date().toISOString() }
+}
+
+// Pilares já resolvidos pelo strategy-generate (chave e nome vindos da ficha).
+function cleanPillars(raw: unknown[]): PillarPlan[] {
+  const out: PillarPlan[] = []
+  for (const x of raw) {
+    const p = (x ?? {}) as Record<string, unknown>
+    const key = String(p.key ?? '')
+    if (!/^[a-z0-9_]{2,60}$/.test(key) || out.some(o => o.key === key)) continue
+    const plan = String(p.plan ?? '').trim().slice(0, 400)
+    if (!plan) continue
+    out.push({ key, name: String(p.name ?? key).slice(0, 60), level: typeof p.level === 'string' ? p.level.slice(0, 20) : null, today: String(p.today ?? '').trim().slice(0, 300), plan })
+  }
+  return out.slice(0, 8)
 }
 
 // Do mix da estratégia pro calendário: `auto` é a fila intercalada (1 slot por

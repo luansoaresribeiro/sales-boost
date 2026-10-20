@@ -3,6 +3,7 @@
 export interface FunnelStep {
   stage: string; objective: string; audience: string; message: string; format: string
   cta: string; destination: string; metric: string; dependencies: string; horizon: string
+  pillar?: string // pilar de Social Selling que a etapa fortalece (estratégias desde 2026-10-19)
 }
 export interface Budget {
   total: number | null; currency: string; period: string
@@ -24,6 +25,8 @@ export interface ContentPlan {
   hero_formats: { key: string; name: string }[]
   why: string
   weekly_mix: { format: string; name: string; producer: 'post' | 'item_package' | 'item_video' | 'dm'; per_week: number; pillar: string; purpose: string }[]
+  // Como a estratégia trabalha cada pilar de Social Selling (nível = do diagnóstico).
+  pillars?: { key: string; name: string; level: string | null; today: string; plan: string }[]
 }
 export interface Strategy {
   id: string

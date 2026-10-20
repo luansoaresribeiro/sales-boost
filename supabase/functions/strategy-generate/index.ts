@@ -62,6 +62,7 @@ import { fetchLearning, learningPromptBlock } from '../_shared/learning.ts'
 import { fetchContentRules, fetchFormatCatalog, formatCatalogBlock, sanitizeContentPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { setupMissing } from '../_shared/setupReady.ts'
+import { parseSSConfig, type SSConfig } from '../_shared/socialSelling.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 type SupaClient = ReturnType<typeof createClient>
@@ -73,6 +74,39 @@ type SupaClient = ReturnType<typeof createClient>
 // pra cima"). O sanitizeContentPlan completa o mínimo se a IA pedir menos.
 const weeklyMixRules = (minVideos: number) => `- MIX DA SEMANA: escolha no CATÁLOGO DE FORMATOS quantas peças de cada formato entram por semana pra servir a tese (total entre 7 e 14 — o calendário faz 1-2 por dia). Só formatos que "funcionam hoje"; nada "em breve". ${minVideos > 0 ? `VÍDEO: no MÍNIMO ${minVideos} vídeos por semana (regra do setor) — pode pedir mais se a tese pedir; cada vídeo de 5 s custa ~US$ 0,42 do teto mensal de US$ 40, diga por quê quando passar do mínimo.` : 'Formatos de vídeo custam — use com moderação e diga por quê.'} Cada item diz qual objetivo da tese ele serve.`
 const WEEKLY_MIX_SHAPE = '[{"format":"chave do catálogo","per_week":1,"pillar":"","purpose":"qual parte da tese essa peça serve, 1 frase"}]'
+
+// Escopo do PRODUTO (pedido do dono 2026-10-19: "a estratégia precisa ser
+// direcionada ao que a gente faz"). Vale pra todo setor — o que é de setor
+// (formatos, pilares, CTAs) continua vindo da ficha. Atualizar quando o
+// Sales Boost passar a executar algo novo (ex.: anúncio pago sair de "em breve").
+const SCOPE_BLOCK = `
+
+O QUE O SALES BOOST EXECUTA (a estratégia só planeja com isto — é o que o produto faz de verdade, sempre com aprovação do dono antes de ir ao público):
+- Conteúdo no Instagram: posts, carrosséis, vídeos curtos (reels) e stories, só nos formatos do CATÁLOGO acima, criados sozinhos pelo calendário semanal que sai desta estratégia. Foto de item sempre real.
+- Conversão no Instagram: "comente PALAVRA" com resposta automática na DM; respostas a comentários e DMs escritas pela IA e aprovadas pelo dono; quem demonstra interesse vira contato no funil de leads do Sales Boost (sem planilha nem registro manual).
+- Aprendizado: lê as métricas reais do Instagram, faz o check-up semanal e a atualização mensal desta estratégia.
+O QUE O SALES BOOST NÃO EXECUTA HOJE: anúncio pago (em breve), WhatsApp, e-mail, site/SEO, Google, TikTok, CRM externo, ligação/videochamada, eventos.
+REGRAS DE ESCOPO:
+- Toda etapa do funil, formato, CTA, destino, meta e linha de orçamento usa só o que o Sales Boost executa. O destino de uma conversa é a DM do Instagram, que vira lead no Sales Boost; daí em diante o dono atende.
+- O que está fora só aparece em "exclusões", dizendo por quê (ex.: "anúncio pago — em breve no Sales Boost; entra quando houver dado real de qual conteúdo gera conversa").
+- Não planeje tarefa manual do dono que o Sales Boost já faz sozinho.`
+
+// Opções que o Hermes recebe no prompt: só o que o Sales Boost move hoje. A
+// validação na gravação continua aceitando a lista completa (GOAL_TYPES /
+// COMPONENTS) pra estratégias antigas não quebrarem.
+const PLANNED_GOAL_TYPES = ['lead_gen', 'instagram_growth', 'engagement', 'awareness']
+const PLANNED_COMPONENTS = ['positioning', 'content', 'acquisition', 'conversion', 'competitive_response']
+
+// Regras do plano tático (parte 2 e atualização mensal) que amarram funil,
+// orçamento e vídeos ao que o Sales Boost executa.
+const TACTICAL_SCOPE_RULES = `- Funil: cada etapa usa formato do catálogo, CTA no Instagram (comentário/DM/salvar/compartilhar) e destino dentro do Instagram/Sales Boost. Diga em "pillar" qual pilar de Social Selling a etapa fortalece.
+- Orçamento: "allocation" só com o que o Sales Boost produz (conteúdo do calendário e vídeos curtos). Anúncio pago não entra no orçamento — está em breve no Sales Boost; se fizer sentido no futuro, cite só em "budget_reasoning". "paid_ads" fica null.
+- Vídeo curto faz parte do mix da semana (mínimo abaixo) — não trate como opcional.
+- Se o dono informou quanto gasta por mês pra conseguir clientes (gasto_aquisicao), use só essa faixa como ele disse (INFORMADO_PELO_DONO) ao falar de custo; nunca calcule retorno nem invente valor.`
+function pillarsLine(plan: Partial<ContentPlan> | null): string {
+  const p = plan?.pillars ?? []
+  return p.length ? `\nComo a tese trabalha os pilares: ${p.map(x => `${x.name}: ${x.plan}`).join(' | ')}` : ''
+}
 
 const STALE_GENERATING_MS = 10 * 60 * 1000 // ponto 3: 'generating' há mais de 10min = tratado como 'failed'
 
@@ -166,6 +200,54 @@ async function fetchPlaybookBlock(admin: SupaClient, verticalKey: string, playbo
     if (!parts.length) return ''
     return `\n\nFICHA DE SETOR — "${String(data?.name ?? verticalKey)}":\n${parts.join('\n\n')}`
   } catch { return '' }
+}
+
+// Social Selling (o centro do produto, docs/PRODUCT.md): os pilares vêm da
+// ficha (onboarding_v2.social_selling) e o nível de cada um vem do
+// diagnóstico grátis que esta empresa fez (diagnostics.social_selling, o mais
+// recente ligado a ela). Sem ficha → bloco vazio e o prompt fica como antes.
+interface SSContext { cfg: SSConfig; levels: Record<string, string>; block: string }
+const LEVEL_LABEL: Record<string, string> = { forte: 'forte', parcial: 'parcial', ausente: 'ausente' }
+async function fetchSocialSelling(admin: SupaClient, verticalKey: string, companyId: string): Promise<SSContext | null> {
+  try {
+    const [{ data: pb }, { data: diag }] = await Promise.all([
+      admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle(),
+      admin.from('diagnostics').select('social_selling').eq('company_id', companyId).not('social_selling', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ])
+    const cfg = parseSSConfig(((pb?.config ?? {}) as Record<string, Record<string, unknown>>).onboarding_v2?.social_selling)
+    if (!cfg) return null
+    // deno-lint-ignore no-explicit-any
+    const ss = (diag?.social_selling ?? null) as any
+    const levels: Record<string, string> = {}
+    const lines = cfg.pillars.map(p => {
+      const d = Array.isArray(ss?.pillars) ? ss.pillars.find((x: { key?: string }) => x?.key === p.key) : null
+      if (d?.level && LEVEL_LABEL[d.level]) levels[p.key] = d.level
+      const today = d ? ` — HOJE (diagnóstico, OBSERVADO): ${LEVEL_LABEL[d.level] ?? 'sem leitura'}${typeof d.count === 'number' && typeof ss.total === 'number' ? ` (${d.count} de ${ss.total} posts lidos)` : ''}${d.note ? `. ${d.note}` : ''}` : ''
+      return `- ${p.key} (${p.name}): ${p.question} Por que importa: ${p.why}${today}`
+    })
+    const opp = ss?.opportunity?.gap ? `\nLacuna principal apontada no diagnóstico: ${ss.opportunity.gap}${ss.opportunity.shift ? ` Novo olhar: ${ss.opportunity.shift}` : ''}` : ''
+    const block = `\n\nSOCIAL SELLING — o centro do Sales Boost: usar o Instagram pra criar confiança e abrir conversas comerciais, não só divulgar. Pergunta-guia: "quando um potencial cliente visita este perfil, o que encontra que o ajude a confiar, aprender e dar o próximo passo?"
+PILARES (da ficha do setor):
+${lines.join('\n')}${opp}
+${ss ? 'Este cliente chegou pelo diagnóstico grátis: a estratégia CONTINUA esse diagnóstico — ataca primeiro os pilares ausentes/parciais.' : 'Ainda não há diagnóstico de Social Selling desta empresa: avalie os pilares pelo que os domínios mostram e diga isso.'}`
+    return { cfg, levels, block }
+  } catch { return null }
+}
+
+function withPillars(core: unknown, ss: SSContext | null): unknown {
+  if (!core || typeof core !== 'object') return core
+  const c = core as Record<string, unknown>
+  return { ...c, pillars: resolvePillars(c.pillars, ss) }
+}
+
+// Liga a resposta da IA (pillars) aos pilares da ficha: só chaves que existem,
+// nome da ficha e nível do diagnóstico (nunca o que a IA disser).
+function resolvePillars(raw: unknown, ss: SSContext | null): Record<string, unknown>[] | undefined {
+  if (!ss || !Array.isArray(raw)) return undefined
+  const byKey = new Map(ss.cfg.pillars.map(p => [p.key, p]))
+  return raw.map(x => (x ?? {}) as Record<string, unknown>)
+    .filter(x => byKey.has(String(x.key)))
+    .map(x => ({ key: String(x.key), name: byKey.get(String(x.key))!.name, level: ss.levels[String(x.key)] ?? null, today: x.today, plan: x.plan }))
 }
 
 function round1(n: number): string { return (Math.round(n * 10) / 10).toLocaleString('pt-BR') }
@@ -336,12 +418,13 @@ async function runStep1(
     const t0 = Date.now()
     const lap = (label: string) => console.log(`TIMING strategy-generate step1[${strategyId}]: ${label} = ${Date.now() - t0}ms`)
 
-    const [{ data: cfgRow }, dataAgentState, baseline, playbookBlock, formats] = await Promise.all([
+    const [{ data: cfgRow }, dataAgentState, baseline, playbookBlock, formats, ss] = await Promise.all([
       admin.from('marketing_ai_config').select('brand_voice, target_audience, content_pillars, marketing_goals').eq('company_id', company.id).maybeSingle(),
       fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'state'),
       fetchRealBaseline(admin, company.id),
       fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers, company.id),
       fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
+      fetchSocialSelling(admin, company.vertical_key ?? 'generico', company.id),
     ])
     lap('data-agent + baseline + playbook + formatos (paralelo)')
     const cfg = (cfgRow ?? {}) as { brand_voice?: string; target_audience?: string; content_pillars?: string[]; marketing_goals?: string }
@@ -356,7 +439,7 @@ async function runStep1(
 
 Sua fonte de verdade são os 9 domínios do Data Agent (Business/Customer/Market/Competition/Digital/Content/History/Resources/Performance). Não analise os domínios isolados — procure relações entre eles antes de decidir (ex: concorrente compete por preço + cliente reclama de preço + negócio tem margem melhor em serviço premium + histórico mostra que desconto atraiu cliente ruim + performance mostra que cliente premium tem LTV maior ⇒ a resposta não é baixar preço, é reposicionar por valor).
 
-${businessPreamble(company, cfg)}${playbookBlock}${formatCatalogBlock(formats)}
+${businessPreamble(company, cfg)}${playbookBlock}${formatCatalogBlock(formats)}${SCOPE_BLOCK}${ss?.block ?? ''}
 ${parentContext}
 
 ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
@@ -367,9 +450,9 @@ Esta é a PARTE 1 de 2 (diagnóstico + tese). A parte 2 (funil/metas/orçamento)
 
 REGRAS CRÍTICAS:
 - NUNCA invente taxa de conversão, CPC, CPM, CAC, ROAS ou qualquer métrica histórica que não foi te dada acima. Quando precisar supor algo, rotule dentro do texto (reasoning/assumptions) com um destes níveis de confiança: VERIFICADO (veio de dado real acima), INFORMADO_PELO_DONO, OBSERVADO (sinal do Data Agent), ESTIMADO, INFERIDO, ou DESCONHECIDO — nunca apresente estimativa como fato.
-- Diagnostique a RESTRIÇÃO PRINCIPAL primeiro (o que está travando o crescimento agora — não assuma automaticamente que é "falta de conteúdo" ou "falta de anúncio"; pode ser posicionamento fraco, oferta fraca, conversão fraca, retenção fraca, etc.) e a OPORTUNIDADE ESTRATÉGICA (a coisa de maior impacto que o Sales Boost consegue realmente influenciar agora).
+- Diagnostique a RESTRIÇÃO PRINCIPAL primeiro (o que está travando o crescimento agora — não assuma automaticamente que é "falta de conteúdo" ou "falta de anúncio"; pode ser posicionamento fraco, oferta fraca, conversão fraca, confiança fraca, etc.) e a OPORTUNIDADE ESTRATÉGICA (a coisa de maior impacto que o Sales Boost consegue realmente influenciar agora, com o que ele executa).${ss ? '\n- A tese é uma tese de SOCIAL SELLING: diga quais pilares ela fortalece primeiro e por quê (comece pelos ausentes/parciais do diagnóstico).' : ''}
 - A TESE precisa seguir o formato: "Porque [evidência], acreditamos [hipótese]. Por isso, vamos [abordagem] por [horizonte] pra alcançar [objetivo]." — baseada em evidência real acima, nunca genérica.
-- Só ative os COMPONENTES necessários pra essa tese (não ative os 11 automaticamente): ${COMPONENTS.join(', ')}.
+- Só ative os COMPONENTES necessários pra essa tese: ${PLANNED_COMPONENTS.join(', ')}.
 - Defina EXCLUSÕES explícitas — o que o Sales Boost NÃO vai fazer agora e por quê (evita diluição estratégica).
 - Cadência de revisão: campanha/tática rápida = "semanal"; estratégia ampla = "2-4 semanas".
 - Horizonte: normalmente 1-6 meses — escolha com base no tipo de negócio/ciclo de venda, nunca um número fixo padrão; justifique.
@@ -379,7 +462,7 @@ REGRAS CRÍTICAS:
 Retorne APENAS um JSON:
 {
   "name": "nome curto da estratégia",
-  "content_core": {"central_line": "1-2 frases: a linha central de conteúdo que sustenta a tese", "hero_formats": ["chave do catálogo", "..."], "why": "por que esses formatos, 1-2 frases simples"},
+  "content_core": {"central_line": "1-2 frases: a linha central de conteúdo que sustenta a tese", "hero_formats": ["chave do catálogo", "..."], "why": "por que esses formatos, 1-2 frases simples"${ss ? `, "pillars": [{"key": "chave do pilar", "today": "como o pilar está hoje, 1 frase", "plan": "o que esta estratégia faz por ele, com formatos do catálogo, 1-2 frases"}]` : ''}},
   "thesis": "Porque [evidência], acreditamos [hipótese]. Por isso, vamos [abordagem] por [horizonte] pra alcançar [objetivo].",
   "primary_constraint": "a restrição principal que trava o crescimento agora, com a evidência",
   "strategic_opportunity": "a oportunidade de maior impacto que dá pra perseguir agora",
@@ -392,7 +475,7 @@ Retorne APENAS um JSON:
   "assumptions": ["...", "..."],
   "constraints": ["...", "..."],
   "exclusions": ["o que não vamos fazer agora, e por quê", "..."],
-  "active_components": ["só os necessários, escolha dentre: ${COMPONENTS.join('|')}"],
+  "active_components": ["só os necessários, escolha dentre: ${PLANNED_COMPONENTS.join('|')}"],
   "success_conditions": "que evidência mostraria que está funcionando",
   "failure_conditions": "que evidência mostraria que não está funcionando"
 }`
@@ -423,7 +506,7 @@ Retorne APENAS um JSON:
       active_components: activeComponents,
       success_conditions: parsed1.success_conditions ? String(parsed1.success_conditions) : null,
       failure_conditions: parsed1.failure_conditions ? String(parsed1.failure_conditions) : null,
-      content_plan: sanitizeContentPlan(parsed1.content_core, formats),
+      content_plan: sanitizeContentPlan(withPillars(parsed1.content_core, ss), formats),
       // status continua 'generating' de propósito — só a parte 2 põe 'active'.
       updated_at: new Date().toISOString(),
     }).eq('id', strategyId)
@@ -472,11 +555,12 @@ async function runStep2(admin: SupaClient, supabaseUrl: string, cronSecret: stri
     const company = companyRow as Company | null
     if (!company) { await markFailed('Empresa não encontrada na 2ª etapa.'); return }
 
-    const [dataAgentState, baseline, playbookBlock, formats] = await Promise.all([
+    const [dataAgentState, baseline, playbookBlock, formats, ss] = await Promise.all([
       fetchDataAgentState(supabaseUrl, cronSecret, companyId, 'state'),
       fetchRealBaseline(admin, companyId),
       fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers, company.id),
       fetchFormatCatalog(admin, company.vertical_key ?? 'generico', companyId),
+      fetchSocialSelling(admin, company.vertical_key ?? 'generico', companyId),
     ])
     const rules = await fetchContentRules(admin, company.vertical_key ?? 'generico')
     lap('data-agent + baseline + playbook + formatos (2a etapa)')
@@ -484,7 +568,7 @@ async function runStep2(admin: SupaClient, supabaseUrl: string, cronSecret: stri
 
     const prompt = `Você é Hermes, continuando o plano tático de uma estratégia cuja tese já foi decidida (parte 1, já gravada) — não questione a tese, só desdobre em plano tático.
 
-${businessPreamble(company, {})}${playbookBlock}${formatCatalogBlock(formats)}
+${businessPreamble(company, {})}${playbookBlock}${formatCatalogBlock(formats)}${SCOPE_BLOCK}${ss?.block ?? ''}
 
 TESE JÁ DECIDIDA:
 Nome: ${row.name}
@@ -495,7 +579,7 @@ Objetivo: ${row.primary_business_objective ?? row.primary_marketing_objective ??
 Foco estratégico: ${row.strategic_focus ?? '—'}
 Componentes ativos: ${Array.isArray(row.active_components) ? (row.active_components as string[]).join(', ') : '—'}
 Horizonte: ${row.horizon ?? '—'}
-Linha central de conteúdo: ${prevPlan?.central_line || '—'}${prevPlan?.hero_formats?.length ? ` (formatos-âncora: ${prevPlan.hero_formats.map(h => h.key).join(', ')})` : ''}
+Linha central de conteúdo: ${prevPlan?.central_line || '—'}${prevPlan?.hero_formats?.length ? ` (formatos-âncora: ${prevPlan.hero_formats.map(h => h.key).join(', ')})` : ''}${pillarsLine(prevPlan)}
 
 ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
 ${formatDomains(dataAgentState)}
@@ -504,15 +588,16 @@ ${baseline ? `\nDADO REAL de performance atual (NÃO invente outro número — u
 REGRAS CRÍTICAS:
 - NUNCA invente taxa de conversão, CPC, CPM, CAC, ROAS ou qualquer métrica histórica que não foi te dada acima.
 - NUNCA garanta um resultado. Use faixas/estimativas com a incerteza explícita.
-- Metas: no máximo 3, "goal_type" sendo um destes: ${GOAL_TYPES.join('|')}. NÃO preencha baseline — isso é calculado à parte com dado real.
+- Metas: no máximo 3, "goal_type" sendo um destes: ${PLANNED_GOAL_TYPES.join('|')}. NÃO preencha baseline — isso é calculado à parte com dado real.
 - Orçamento: só proponha valores SE o dono já informou orçamento mensal (${company.marketing_monthly_budget ? `informou: R$ ${company.marketing_monthly_budget}` : 'não informou'}); caso contrário, campos null e explique em "budget_reasoning" que falta essa informação.
+${TACTICAL_SCOPE_RULES}
 - Seja específico ao negócio e à tese acima — nunca genérico.
 ${weeklyMixRules(rules.minVideosPerWeek)}
 
 Retorne APENAS um JSON:
 {
   "weekly_mix": ${WEEKLY_MIX_SHAPE},
-  "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
+  "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","pillar":"chave do pilar de Social Selling que esta etapa fortalece (se houver)","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
   "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}],
   "budget": {"total":null,"currency":"BRL","period":"monthly","paid_ads":null,"organic":null,"creative":null,"other":null,"is_flexible":true,"allocation":[{"channel":"","amount":null,"reason":""}],"budget_reasoning":""},
   "estimates": {"time_to_signals":"","time_to_progress":"","time_to_target":"","confidence":"high|medium|low","risks":"","feasibility_status":"supports_plan|needs_more_data|needs_adjustment|significant_constraints","feasibility_reasoning":""},
@@ -662,11 +747,12 @@ async function runRefresh(admin: SupaClient, supabaseUrl: string, cronSecret: st
 
     const { data: goalRows } = await admin.from('marketing_ai_strategy_goals').select('*').eq('strategy_id', strategyId)
     const { data: pastLog } = await admin.from('marketing_ai_strategy_log').select('decision_type, recommendation, status, created_at').eq('strategy_id', strategyId).order('created_at', { ascending: false }).limit(5)
-    const [dataAgentState, baseline, playbookBlock, formats] = await Promise.all([
+    const [dataAgentState, baseline, playbookBlock, formats, ss] = await Promise.all([
       fetchDataAgentState(supabaseUrl, cronSecret, company.id, 'state'),
       fetchRealBaseline(admin, company.id),
       fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers, company.id),
       fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
+      fetchSocialSelling(admin, company.vertical_key ?? 'generico', company.id),
     ])
     const rules = await fetchContentRules(admin, company.vertical_key ?? 'generico')
     const prevPlan = (strategy.content_plan ?? null) as Partial<ContentPlan> | null
@@ -677,7 +763,7 @@ async function runRefresh(admin: SupaClient, supabaseUrl: string, cronSecret: st
 
     const prompt = `Você é Hermes, ATUALIZANDO uma estratégia ativa (refresh de rotina mensal, ou porque o check-up semanal pediu ajuste) — a TESE principal já está decidida e NÃO deve mudar aqui, só o plano tático (funil/metas/orçamento/prioridades) precisa refletir o que já funcionou até agora + os dados mais recentes.
 
-${businessPreamble(company, {})}${playbookBlock}${formatCatalogBlock(formats)}
+${businessPreamble(company, {})}${playbookBlock}${formatCatalogBlock(formats)}${SCOPE_BLOCK}${ss?.block ?? ''}
 
 TESE ATIVA (não mude, só use como base):
 Nome: ${strategy.name}
@@ -690,7 +776,7 @@ Funil: ${JSON.stringify(strategy.funnel_plan ?? [])}
 Metas: ${JSON.stringify((goalRows ?? []).map((g: Record<string, unknown>) => ({ name: g.name, goal_type: g.goal_type, target: g.target_value, progress: g.current_progress })))}
 Orçamento: ${JSON.stringify(strategy.budget ?? {})}
 Linha central de conteúdo: ${prevPlan?.central_line || '—'}
-Mix semanal atual: ${JSON.stringify((prevPlan?.weekly_mix ?? []).map(m => ({ format: m.format, per_week: m.per_week })))}
+Mix semanal atual: ${JSON.stringify((prevPlan?.weekly_mix ?? []).map(m => ({ format: m.format, per_week: m.per_week })))}${pillarsLine(prevPlan)}
 
 DECISÕES/RECOMENDAÇÕES PASSADAS (memória — o que já foi tentado/sugerido, pra não repetir o que não funcionou nem descartar o que já provou valor):
 ${(pastLog ?? []).length ? (pastLog ?? []).map((l: Record<string, unknown>) => `- [${l.decision_type}/${l.status}] ${l.recommendation}`).join('\n') : 'Nenhuma recomendação anterior ainda.'}
@@ -700,14 +786,15 @@ ${baseline ? `Dado real ATUAL: ${baseline.label}.` : 'Ainda sem dado real de per
 ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
 ${formatDomains(dataAgentState)}
 ${learningBlock}
-REGRAS: mantenha a tese intacta; priorize (regra 80/20) manter e reforçar o que os sinais reais mostram que já funciona, reservando só uma fatia menor pra testar algo novo; NUNCA invente métrica que não foi te dada acima; metas no máximo 3 (goal_type: ${GOAL_TYPES.join('|')}), NÃO preencha baseline.
+REGRAS: mantenha a tese intacta; priorize (regra 80/20) manter e reforçar o que os sinais reais mostram que já funciona, reservando só uma fatia menor pra testar algo novo; NUNCA invente métrica que não foi te dada acima; metas no máximo 3 (goal_type: ${PLANNED_GOAL_TYPES.join('|')}), NÃO preencha baseline.
+${TACTICAL_SCOPE_RULES}
 ${weeklyMixRules(rules.minVideosPerWeek)}
 
 Retorne APENAS um JSON:
 {
   "what_changed": "2-4 frases: o que mudou no plano tático e por quê, citando os sinais reais que motivaram",
   "weekly_mix": ${WEEKLY_MIX_SHAPE},
-  "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
+  "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","pillar":"chave do pilar de Social Selling que esta etapa fortalece (se houver)","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
   "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}],
   "budget": {"total":null,"currency":"BRL","period":"monthly","paid_ads":null,"organic":null,"creative":null,"other":null,"is_flexible":true,"allocation":[{"channel":"","amount":null,"reason":""}],"budget_reasoning":""}
 }`

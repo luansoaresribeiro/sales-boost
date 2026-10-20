@@ -1633,3 +1633,68 @@ grátis de 30 s, acima — mantidos como histórico):
   - **Botão "Completar agora" da estratégia:** leva direto pro que falta
     (dados, perguntas ou catálogo).
 
+
+## 2026-10-19 — Estratégia focada no que o Sales Boost faz (pedido do dono)
+
+- **Pedido:** "o agente de estratégia deve estar tailored para o que o Sales
+  Boost oferece… eu amo a forma detalhada e a length das estratégias, mas
+  elas precisam ser direcionadas ao que a gente faz".
+- **O que estava errado** (estratégia ativa da Tespon, conta de teste):
+  - planejava coisas que o produto não executa: DM → WhatsApp do
+    corretor, videochamada, "registro manual dos leads" e Instagram Ads
+    como canal de orçamento;
+  - tratava vídeo como "opcional", contra a regra de mínimo semanal;
+  - não usava o Social Selling: os 5 pilares e o resultado do diagnóstico
+    não chegavam ao Hermes.
+- **O que mudou** (`strategy-generate` e `_shared/formatCatalog.ts`):
+  - **Escopo do produto no prompt** (`SCOPE_BLOCK`), nas 3 rodadas: tese,
+    plano tático e atualização mensal.
+    - Executa: conteúdo do calendário no Instagram, "comente PALAVRA",
+      respostas aprovadas e lead no funil.
+    - Não executa hoje: anúncio pago (em breve), WhatsApp, e-mail,
+      site/SEO, Google, TikTok, CRM externo, videochamada.
+    - O que está fora do escopo só aparece em "exclusões".
+    - É do produto, não de setor, por isso fica no código. Atualizar quando
+      o Sales Boost passar a executar algo novo.
+  - **Social Selling como espinha:**
+    - pilares da ficha mais o nível de cada pilar no diagnóstico da
+      empresa;
+    - a tese ataca primeiro os pilares ausentes ou parciais;
+    - a IA diz como trabalha cada pilar (`content_plan.pillars`) e qual
+      pilar cada etapa do funil fortalece (`funnel_plan[].pillar`);
+    - nome e nível do pilar vêm da ficha e do diagnóstico, nunca da IA.
+  - **Orçamento:** só o que o Sales Boost produz; `paid_ads` fica vazio.
+    Vídeo faz parte do mix mínimo.
+  - **Opções pedidas ao Hermes:**
+    - metas: lead_gen, instagram_growth, engagement, awareness;
+    - componentes: positioning, content, acquisition, conversion,
+      competitive_response;
+    - a gravação continua aceitando as listas completas, pra estratégias
+      antigas.
+  - **Tela da estratégia:**
+    - novo bloco "Como a estratégia trabalha seus 5 pilares";
+    - cada etapa do funil mostra o seu pilar;
+    - os textos "você gera/pede no imóvel" foram corrigidos pra "o
+      calendário cria", que é o que o código faz desde 2026-10-14.
+- **Igual:** o tamanho e o detalhe da estratégia (mesmos campos, mesmo
+  limite de texto).
+- **Estratégias já ativas:** só mudam quando forem geradas de novo. A
+  atualização mensal mantém a tese e não cria os pilares.
+- **Perguntas novas** (pedido do dono 2026-10-20; migration
+  `20261020090000_onboarding_custos_grupo.sql`, só no JSON da ficha):
+  - **"Quanto você gasta por mês, hoje, pra conseguir clientes?"**
+    (`gasto_aquisicao`): faixas de "Nada / quase nada" até "Mais de R$ 5
+    mil". Fica no diagnóstico, etapa "Mercado e prioridade". A estratégia
+    usa só a faixa informada e nunca calcula retorno (regra 5). Antes só
+    existiam "Você faz anúncios pagos?" (sem valor) e o orçamento de
+    marketing em Configurações.
+  - **"A que imobiliária ou grupo imobiliário você está ligado(a)?"**
+    (`imobiliaria_parceira`, que já existia como "Com qual imobiliária você
+    trabalha?" e ficava só em Configurações). Passa a entrar no
+    diagnóstico, só pra corretor associado.
+- **Business Game por imobiliária** (regra do dono): os corretores da mesma
+  imobiliária jogam juntos. A pergunta acima é o primeiro passo. A
+  ligação confirmada e o placar ficam pra um PR próprio, porque mexem em
+  quem vê dados de quem (ver [ROADMAP.md](ROADMAP.md), 2026-10-20).
+- **soul.md:** o dono pediu atualizar, e depois pediu pra esquecer. Não
+  existe no repositório.
