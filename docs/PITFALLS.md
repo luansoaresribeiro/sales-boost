@@ -545,3 +545,27 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   esperar o build do merge e conferir a palavra nova no bundle publicado.
   Se acontecer: `npx wrangler deployments list` e `npx wrangler rollback
   <versão anterior>`.
+
+## Slides: medir o texto com a MESMA fonte que desenha (2026-10-21)
+
+- **O que era:** `svgSlide` estimava a largura contando letras (Poppins ≈ 0,55·tamanho)
+  — frase longa ou palavra larga podia sair apertada/cortada.
+- **Agora:** `render-format` carrega Poppins Regular/Bold também no **opentype.js**
+  (`esm.sh/opentype.js@1.3.4`) e passa um medidor (`getAdvanceWidth` × 1,03) pro
+  `_shared/slideSystem.ts`. Medido contra o resvg: a largura real fica em ~97% da medida
+  (a margem de 3% cobre kerning). Se o opentype não carregar, cai na estimativa antiga,
+  loga `opentype indisponível` e o render segue — nunca falha por isso.
+- **Estourou?** `fitText` reduz a letra até o mínimo; não coube → `overflow:true` no JSON
+  do `render-format` (nunca corta, nunca "…"). O `creative-generate` pede 1 versão mais
+  curta daquele slide e re-renderiza; se ainda estourar, mantém o render reduzido e loga.
+- **Só existem Poppins 400 e 700.** Qualquer `font-weight` entre eles cai num dos dois —
+  o medidor usa bold = 700. Emoji, "→", "✓" e afins não existem na fonte (viram quadrado):
+  o desenho strip-a e usa polígono pra seta.
+- **Teste local:** a CDN do jsDelivr pode estar bloqueada no ambiente do agente; as mesmas
+  fontes Poppins vêm do pacote npm `@expo-google-fonts/poppins`. Rasterizar com
+  `@resvg/resvg-js` (`fontFiles`, `loadSystemFonts:false`) e medir a caixa real
+  (`innerBBox`) de cada linha desenhada, comparando com a medição.
+- **"Comente QUERO" (vídeo do calendário):** o aviso "Sem resposta do QUERO aprovada…" mora
+  em `reasoning`; o `item-videos` troca `reasoning` quando o vídeo fica pronto/falha — por
+  isso ele chama `keepQueroNotice` (em `_shared/videoCta.ts`). Quem mexer nesses updates de
+  `reasoning` precisa manter essa chamada, senão o aviso some.

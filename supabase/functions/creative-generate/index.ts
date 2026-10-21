@@ -25,6 +25,7 @@ import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
 import { privateFieldKeys } from '../_shared/nearbyPlaces.ts'
 import { loadLessons, lessonsBlock, relearn } from '../_shared/contentLessons.ts'
+import { deckPromptRules, DECK_SLIDE_JSON, inventedNumbers, normalizeDeck, normalizeSlide, numbersOf, pickCoverStyle, rewritePrompt, slideSummary, type DeckSlide } from '../_shared/deckSlides.ts'
 import { decideVideoCta, queroNotice, sanitizeCaptionCta } from '../_shared/videoCta.ts'
 import { checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 
@@ -34,7 +35,7 @@ const cors = {
 }
 type SupaClient = ReturnType<typeof createClient>
 
-interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null; language: string | null; telegram_chat_id: string | null; vertical_key: string | null; playbook_answers: Record<string, unknown> | null }
+interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null; language: string | null; telegram_chat_id: string | null; vertical_key: string | null; playbook_answers: Record<string, unknown> | null; instagram_username?: string | null }
 
 // Ficha de setor (vertical_playbooks) + respostas do onboarding, mescladas
 // num bloco de texto pra injetar no prompt. Ficha vazia (caso 'generico', ou
@@ -393,6 +394,14 @@ async function renderGraphicCard(
   auth: { bearer: string; isCron: boolean; cronSecret?: string },
   companyId: string, template: 'tweet' | 'slide' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand,
 ): Promise<string | null> {
+  return (await renderGraphicCardFull(auth, companyId, template, fields, brand))?.url ?? null
+}
+
+// Igual ao renderGraphicCard, mas devolve também o `overflow` do render-format (texto que não coube no quadro).
+async function renderGraphicCardFull(
+  auth: { bearer: string; isCron: boolean; cronSecret?: string },
+  companyId: string, template: 'tweet' | 'slide' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand,
+): Promise<{ url: string; overflow: boolean } | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   if (!supabaseUrl) return null
   try {
@@ -401,8 +410,8 @@ async function renderGraphicCard(
     if (auth.isCron && auth.cronSecret) { body.cron_secret = auth.cronSecret; body.company_id = companyId }
     else headers.Authorization = auth.bearer
     const res = await fetch(`${supabaseUrl}/functions/v1/render-format`, { method: 'POST', headers, body: JSON.stringify(body) })
-    const data = await res.json().catch(() => ({})) as { url?: string }
-    return res.ok && data.url ? data.url : null
+    const data = await res.json().catch(() => ({})) as { url?: string; overflow?: boolean }
+    return res.ok && data.url ? { url: data.url, overflow: data.overflow === true } : null
   } catch (e) { console.error('renderGraphicCard error:', e); return null }
 }
 
@@ -601,6 +610,8 @@ Decida o brief. Retorne APENAS um JSON:
   const visualContent = findContent(lib, 'visual_system', brief.visual_system as string | undefined)
   const visualSystemTitle = String(brief.visual_system ?? '')
 
+  // Capa do carrossel em rodízio (gancho → pergunta → lista), pela quantidade de carrosséis já feitos.
+  const coverStyle = opts.deck ? pickCoverStyle((await admin.from('marketing_ai_test_content').select('id', { count: 'exact', head: true }).eq('company_id', company.id).eq('format', 'carrossel')).count ?? 0) : 'gancho'
   const execPrompt = `${preamble(config, company, playbookBlock)}
 
 Você agora EXECUTA como esta personalidade: ${personaContent}
@@ -621,14 +632,13 @@ ${visualRefs ? `\nReferências visuais da marca (Layouts & Estilos — inspire-s
 Escreva o post pronto pra publicar. Regras importantes:
 - "caption" é APENAS a legenda que vai no Instagram (texto pro público). NUNCA coloque nela instruções de imagem, descrição de foto nem "Slide 1/2/3".
 - Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
-${opts.deck ? `- ESTE é um CARROSSEL DE SLIDES (tipo apresentação, só texto na arte — sem foto): "slides" com 4 a 7 itens. Slide 1 = o gancho; do meio = um ponto por slide; último = a chamada pra ação. Cada "text" é UMA frase curta e completa (máx. 160 caracteres, sem emoji, nunca cortada no meio). Deixe "image" vazio.
-` : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
+${opts.deck ? deckPromptRules(coverStyle, String(brief.cta ?? '')) : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
 - Depois de escrever, avalie o PRÓPRIO post: ele é forte/direto o suficiente pra também valer a pena repostar nos Stories tal como está (sem regerar nada)? Se sim, "story_worthy":true e "story_note": 1 frase curta dizendo por quê. Seja seletivo — nem todo post é bom pra Stories (ex: um card com muito texto lido rápido não funciona lá); só marque true quando fizer sentido de verdade.
 ${CARD_FIELD_INSTRUCTIONS[String(brief.template ?? '')] ?? ''}
 Retorne APENAS um JSON array:
-[{"idea":"resumo curto do post","caption":"só a legenda do Instagram, texto pro público","hashtags":"#tag1 #tag2 #tag3","cta":"chamada pra ação final","format":"${brief.format ?? 'foto'}","video_script":"","slides":[{"text":"","image":""}],"story_worthy":true|false,"story_note":""${CARD_FIELD_JSON[String(brief.template ?? '')] ?? ''}}]`
+[{"idea":"resumo curto do post","caption":"só a legenda do Instagram, texto pro público","hashtags":"#tag1 #tag2 #tag3","cta":"chamada pra ação final","format":"${brief.format ?? 'foto'}","video_script":"","slides":${opts.deck ? DECK_SLIDE_JSON : '[{"text":"","image":""}]'},"story_worthy":true|false,"story_note":""${CARD_FIELD_JSON[String(brief.template ?? '')] ?? ''}}]`
 
-  const execRaw = await callClaude(anthropicKey, execPrompt, 2000)
+  const execRaw = await callClaude(anthropicKey, execPrompt, opts.deck ? 3000 : 2000)
   let post = extractOne(execRaw)
   if (!post) {
     // Fallback: uma tentativa direta e simples, garante que o dono sempre recebe um post.
@@ -659,7 +669,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   if (insErr) throw new Error(insErr.message)
 
   let mainImage: string | null = null
-  let slides: { text: string; image_prompt: string; image_url: string | null }[] | null = null
+  let slides: { text: string; image_prompt: string; image_url: string | null; layout?: string }[] | null = null
   // Só `idea` (o CONCEITO visual curto) — nunca hook_angle/offer/caption:
   // são copy de verdade, e mandar isso pro prompt de imagem é exatamente o
   // que ensina a IA a tentar "escrever" a frase na foto (ver NO_TEXT_RULE).
@@ -683,10 +693,38 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
 
   if (!opts.skipImage) {
     if (fmt === 'carrossel' && opts.deck) {
-      const rawSlides = Array.isArray(post.slides) ? (post.slides as { text?: string }[]).filter(x => String(x.text ?? '').trim()).slice(0, 7) : []
-      const urls = await Promise.all(rawSlides.map((x, i) => renderGraphicCard(opts, company.id, 'slide', { text: capWords(String(x.text ?? ''), 180), name: company.business_name, page: String(i + 1), total: String(rawSlides.length) }, cardBrand)))
-      slides = rawSlides.map((x, i) => ({ text: String(x.text ?? ''), image_prompt: '', image_url: urls[i] }))
+      // Sistema de slides: a IA pede {layout,title,text,items,highlight,cta}; o código valida (1º capa, último
+      // fecho), o render-format mede o texto de verdade e acusa `overflow`. Estourou (ou tem número que não veio
+      // dos dados — regra 5)? 1 pedido de versão mais curta POR SLIDE, depois re-renderiza; se ainda estourar
+      // mantém o render reduzido e loga. O dono aprova tudo antes de ir ao ar.
+      const deckSlides = normalizeDeck(Array.isArray(post.slides) ? post.slides : [], String(post.cta ?? brief.cta ?? ''))
+      const dataText = [preamble(config, company, playbookBlock), seedBlock, insights.map(i => `${i.title} ${i.description}`).join(' '), JSON.stringify(brief), idea ?? ''].join(' ')
+      const allowed = numbersOf(dataText)
+      const handle = String(company.instagram_username ?? '').replace(/^@/, '').trim()
+      const renderSlide = (sl: DeckSlide, i: number) => renderGraphicCardFull(opts, company.id, 'slide', {
+        layout: sl.layout, title: sl.title, text: sl.text, items: sl.items, highlight: sl.highlight, cta: sl.cta, cover_style: coverStyle,
+        handle, name: company.business_name, page: String(i + 1), total: String(deckSlides.length),
+      }, cardBrand)
+      const warnings: string[] = []
+      const done = await Promise.all(deckSlides.map(async (sl, i) => {
+        let cur = sl, r = await renderSlide(cur, i)
+        const bad = inventedNumbers(cur, allowed)
+        if (r?.overflow || bad.length) {
+          try {
+            const raw = parseObj(await callClaude(anthropicKey, rewritePrompt(company.business_name, cur, { tooLong: !!r?.overflow, numbers: bad }), 600))
+            const next = normalizeSlide(raw, cur.layout === 'capa' || cur.layout === 'fecho' ? cur.layout : null, cur.cta)
+            next.layout = cur.layout
+            if (Object.keys(raw).length) { cur = next; r = (await renderSlide(cur, i)) ?? r }
+          } catch (e) { console.error('creative-generate: slide mais curto falhou', company.id, i + 1, e) }
+        }
+        if (r?.overflow) console.error('creative-generate: slide ainda estoura depois do retry (render reduzido mantido)', company.id, i + 1, cur.layout)
+        const still = inventedNumbers(cur, allowed)
+        if (still.length) warnings.push(`slide ${i + 1} tem número que não veio dos dados cadastrados (${still.join(', ')}) — confira antes de aprovar`)
+        return { cur, url: r?.url ?? null }
+      }))
+      slides = done.map(d => ({ text: slideSummary(d.cur), image_prompt: '', image_url: d.url, layout: d.cur.layout }))
       mainImage = slides.find(x => x.image_url)?.image_url ?? null
+      if (warnings.length) await admin.from('marketing_ai_test_content').update({ reasoning: `${brief.reasoning ?? ''} Atenção: ${warnings.join('; ')}.`.trim() }).eq('id', inserted.id)
     } else if (fmt === 'carrossel') {
       const rawSlides = Array.isArray(post.slides) ? (post.slides as { text?: string; image?: string }[]).slice(0, 6) : []
       if (rawSlides.length > 0) {
@@ -1194,7 +1232,7 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`, 700))
   try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runVideoSlot: nota falhou', e) }
 }
 
-const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language, telegram_chat_id, vertical_key, playbook_answers'
+const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language, telegram_chat_id, vertical_key, playbook_answers, instagram_username'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
