@@ -71,10 +71,57 @@ segurança (sem número sem fonte, IA nunca escreve texto).
 | `tema` (educativo) | categoria do `dica_faq` (ex.: `documentacao`) |
 | `item_id` (tour/oferta) | qual imóvel do catálogo |
 | `cta` | da lista da ficha (`ctas`): "Comente QUERO", "Me chama no direct"… |
+| `gancho_atual` (opcional) | trend/notícia do momento que dá o ângulo, com `trend_id` → ver "Trends e notícias na intenção" |
 
 O gerador **preenche os campos do formato a partir da intenção**, sem trocar
 o formato. Validação em código: intenção sem `objetivo` ou com formato fora
 do catálogo é rejeitada (mesmo padrão de `formatCatalog.ts`).
+
+**Quem melhora os ângulos:** as famílias e o mix ficam fixos (decisão do
+dono 2026-10-21: "devemos sempre postar estas mesmas coisas"). O que muda
+semana a semana é a intenção — o agente de Estratégia lê o desempenho por
+família × ângulo (base em [LEARNING.md](LEARNING.md)) e troca ângulo, público
+e gancho do que rendeu menos, nunca a família.
+
+## Trends e notícias na intenção
+
+Pedido do dono (2026-10-21): o dado de trend/notícia que o Agente de Dados
+pega entra na intenção do post. Exemplo dado: *"como a alta dos juros afeta
+você, comprador?"* vira o `gancho_atual` de um **carrossel educativo** (ou o
+ângulo de um criativo de oferta), sem criar família nova.
+
+**Divergência encontrada no código (2026-10-21):**
+
+- `marketing_ai_trends` hoje tem só `title`, `description`, `category`,
+  `relevance`, `source` e `detected_at` — **não guarda link, data da
+  publicação nem trecho da fonte**.
+- As origens atuais são: posts do Instagram nas hashtags da região
+  (`marketScan.ts`, `source='diagnostico'`; `creative-ideas`,
+  `source='instagram_scan'`) e raciocínio da IA sem dado real
+  (`marketing-ai` → `runTrends`, `source=null`, a própria função avisa que
+  "não é tendência em tempo real").
+- **Não foi achada nenhuma fonte de notícia em tempo real** no código
+  (busca por news/RSS/web search/Banco Central em `supabase/functions` e
+  `src`). Se o Agente de Dados trouxe uma notícia de juros, ela não ficou
+  gravada com fonte que um post possa citar.
+
+**Regra para usar trend/notícia num post (regra 5 — nunca inventar número):**
+
+1. Só entra como `gancho_atual` trend com **fonte gravada**: link, nome do
+   veículo/órgão, data e o trecho exato que contém o número.
+2. Número no post = **o mesmo número do trecho**, com a fonte citada no
+   slide final ou na legenda ("Fonte: Banco Central, 21/10/2026").
+3. Trend sem fonte (raciocínio da IA, `source=null`) pode inspirar ângulo,
+   **nunca** número nem afirmação de fato.
+4. Validade curta: notícia com mais de 14 dias não vira gancho (fica velha).
+
+**Fonte proposta para começar (grátis e oficial):** séries do Banco Central
+(API SGS — taxa Selic e juros de financiamento imobiliário). A lista de
+fontes oficiais fica na ficha, junto da que o `dica_faq` já usa (regra 6).
+Mudar a tabela de trends é migration em produção → vai no PR.
+
+**Ressalva:** "juros subiram 15%" e "juros chegaram a 15% ao ano" são coisas
+diferentes. O post só repete a forma exata que está na fonte.
 
 ## Identidade visual — o "sistema de slides"
 
@@ -95,6 +142,11 @@ Um único sistema de design no `render-format`, usado por todas as famílias
    linha; se não couber, reduz a letra até um mínimo e, abaixo disso, encurta
    o texto pelo gerador — nunca corta no meio.
 5. **Prévia** do carrossel inteiro em Aprovações (deslizar) antes de aprovar.
+6. **Capa do educativo varia** (decisão do dono 2026-10-21): rodízio entre
+   layouts de capa (gancho grande, pergunta, número com fonte, lista) para
+   não repetir a mesma cara toda semana. **Com foto do corretor no sistema**
+   → algumas capas usam a foto real dele (tratada pelo Higgsfield só em
+   luz/cor). **Sem foto** → capa só com o design da marca.
 
 ## Fases (com critério de pronto)
 
@@ -105,8 +157,9 @@ Um único sistema de design no `render-format`, usado por todas as famílias
 | **3. Intenção estruturada** | `weekly_mix`/`WeekSlot` com `objetivo/publico/angulo/tema/item_id/cta`; gerador obedece | Cada peça do calendário mostra a intenção na tela e a peça gerada usa o CTA e o tema pedidos | Sim: deploy de `strategy-generate` e `creative-generate` |
 | **4. Fonte e estilo no Kit da Marca** | Campos novos + escolha na tela Padrão visual + sugestão automática | Trocar a fonte no kit muda os próximos criativos | Não (aditivo), salvo migration em produção (vai no PR) |
 | **5. Calendário em 4 famílias** | Tela do calendário agrupa/rotula por família (ícone + cor) | Dono reconhece as 4 famílias na semana sem ler o nome do formato | Não |
+| **6. Trends e notícias com fonte** | `marketing_ai_trends` ganha link/veículo/data/trecho; coleta das séries do Banco Central; `gancho_atual` na intenção | Um educativo de teste usa um número real do Banco Central, com a fonte no último slide, e o sistema recusa trend sem fonte | Sim: migration em produção (vai no PR) e deploy de `strategy-generate`/`creative-generate` |
 
-Ordem recomendada: **1 → 2 → 3**, depois 4 e 5. A fase 1 sozinha já melhora
+Ordem recomendada: **1 → 2 → 3**, depois 6, 4 e 5. A fase 1 sozinha já melhora
 todos os carrosséis que existem hoje.
 
 ## Custos e Higgsfield
@@ -125,9 +178,13 @@ todos os carrosséis que existem hoje.
 - Número só com fonte (educativo usa só dica conferida em fonte oficial).
 - Tudo que é do setor fica na ficha (`vertical_playbooks`), nunca no código.
 
-## Perguntas em aberto para o dono
+## Decisões do dono (2026-10-21)
 
-1. O mix padrão (3 tour · 2 oferta · 2 educativo · 1 bairro) está bom?
-2. A família 5 (prova social/bastidores) fica só como eventual, como proposto?
-3. Na capa do educativo, preferimos foto real do corretor (precisa enviar) ou
-   só design da marca?
+1. **Mix aprovado:** 3 tour · 2 oferta · 2 educativo · 1 bairro por semana,
+   sempre as mesmas famílias; a Estratégia aprende e melhora os **ângulos**.
+2. **Família 5** (prova social/bastidores) fica **só como eventual**.
+3. **Capa do educativo varia**; com foto do corretor no sistema, usa às vezes;
+   sem foto, só design da marca.
+4. **Calendário rotulado pelas 4 famílias.**
+5. **Trends/notícias entram na intenção** — com fonte gravada (ver seção
+   própria).
