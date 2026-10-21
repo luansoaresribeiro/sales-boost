@@ -8,7 +8,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { DiagnosisLoader } from '../diagnostico/MarketSection'
 import { loadDiagnosis, saveDiagnosis } from '../../lib/savedDiagnosis'
 import { fetchOnboardingV2, sanitizeV2, PROFILE_KEY, fieldState, type AnswerState, type AnswerStatus, type OnboardingV2 } from '../../lib/onboardingV2'
-import { REQUIRED_STAR, nameOk, phoneOk } from '../../lib/requiredFields'
+import { REQUIRED_STAR, cityOk, nameOk, phoneOk } from '../../lib/requiredFields'
 import QuestionField from '../../components/QuestionField'
 import { buildContextV2, diagnosticQuestions, isCompanyProfile, profileQuestion, stepResolved, V2QuestionList } from './DiagnosticV2'
 
@@ -74,7 +74,7 @@ const EN_LABELS: Record<string, string> = {
 const TX = {
   pt: {
     select: 'Selecione...', add: '+ Adicionar', typeEnter: 'Digite e aperte Enter',
-    specific: 'Perguntas específicas do seu setor', helps: (f: string) => `Ajuda o Sales Boost a falar a língua de quem trabalha com ${f.toLowerCase()}. Tudo aqui é opcional.`, optional: 'Tudo aqui é opcional.',
+    specific: 'Perguntas específicas do seu setor', helps: (f: string) => `Ajuda o Sales Boost a falar a língua de quem trabalha com ${f.toLowerCase()}. Pode responder depois; o sininho lembra o que faltar.`, optional: 'Pode responder depois; o sininho lembra o que faltar.',
     bizType: 'Tipo de negócio', which: 'Qual?', typeBiz: 'Digite o tipo do seu negócio',
     steps: ['Seu negócio', 'Seu cliente', 'Objetivo', 'Canais', 'Finalizar'], stepOf: (a: number, b: number) => `Passo ${a} de ${b}`,
     procErr: 'Erro ao processar diagnóstico',
@@ -103,7 +103,7 @@ const TX = {
   },
   en: {
     select: 'Select...', add: '+ Add', typeEnter: 'Type and press Enter',
-    specific: 'Questions specific to your industry', helps: (f: string) => `Helps Sales Boost speak the language of people who work with ${f.toLowerCase()}. Everything here is optional.`, optional: 'Everything here is optional.',
+    specific: 'Questions specific to your industry', helps: (f: string) => `Helps Sales Boost speak the language of people who work with ${f.toLowerCase()}. You can answer later; the bell reminds you of what is missing.`, optional: 'You can answer later; the bell reminds you of what is missing.',
     bizType: 'Business type', which: 'Which one?', typeBiz: 'Type your business type',
     steps: ['Your business', 'Your customer', 'Goal', 'Channels', 'Finish'], stepOf: (a: number, b: number) => `Step ${a} of ${b}`,
     procErr: 'Error processing diagnosis',
@@ -149,13 +149,13 @@ function Field({ label, value, onChange, placeholder, type = 'text', required = 
   )
 }
 
-function TextArea({ label, value, onChange, placeholder, hint }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string
+function TextArea({ label, value, onChange, placeholder, hint, required = false }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string; required?: boolean
 }) {
   const [focused, setFocused] = useState(false)
   return (
     <div style={{ marginBottom: '16px' }}>
-      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>{label}</label>
+      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>{label}{required && <span style={{ color: REQUIRED_STAR }}>*</span>}</label>
       <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={3}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         style={{ width: '100%', padding: '12px 16px', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: `1px solid ${focused ? 'rgba(255,109,41,0.55)' : BORDER}`, borderRadius: '12px', color: 'white', fontSize: '15px', outline: 'none', transition: 'border-color 0.2s', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }} />
@@ -426,7 +426,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
 
   const canNext = () => {
     if (v2) {
-      if (step === 0) return !!(data.business_type && v2Answers[PROFILE_KEY] && data.city.trim() && nameOk(data.business_name))
+      if (step === 0) return !!(data.business_type && v2Answers[PROFILE_KEY] && cityOk(data.city) && nameOk(data.business_name))
       if (step === 1 || step === 2) return stepResolved(v2, v2Answers, v2Status, step)
       if (step === 3) return !!normalizeInstagram(data.instagram_url) && !siteInvalid && EMAIL_RE.test(data.contact_email.trim()) && phoneOk(data.phone)
       return false
@@ -435,7 +435,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
     if (step === 1) return !!(data.ideal_customer.trim() && data.business_stage)
     if (step === 2) return !!data.goal
     if (step === 3) return !!normalizeInstagram(data.instagram_url) && !siteInvalid
-    if (step === 4) return !!(nameOk(data.business_name) && data.city.trim() && EMAIL_RE.test(data.contact_email.trim()) && phoneOk(data.phone))
+    if (step === 4) return !!(nameOk(data.business_name) && cityOk(data.city) && EMAIL_RE.test(data.contact_email.trim()) && phoneOk(data.phone))
     return false
   }
 
@@ -580,7 +580,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                   </>
                 ) : (
                   <>
-                    <TextArea label={t.s0l} value={data.business_description} onChange={set('business_description')} placeholder={t.s0p} hint={t.s0h} />
+                    <TextArea label={t.s0l} value={data.business_description} onChange={set('business_description')} placeholder={t.s0p} hint={t.s0h} required />
                     <PlaybookQuestionsSection fichaName={fichaName} questions={fichaQuestions} answers={data.playbook_answers} onChange={setPlaybookAnswer} />
                   </>
                 )}
@@ -588,7 +588,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
             )}
             {v2 && (step === 1 || step === 2) && (
               <>
-                <H t={step === 1 ? t.v2s1t : t.v2s2t} s={step === 1 ? t.v2s1s : t.v2s2s} star />
+                <H t={step === 1 ? t.v2s1t : t.v2s2t} s={step === 1 ? t.v2s1s : t.v2s2s} />
                 <V2QuestionList questions={diagnosticQuestions(v2, v2Answers, step)} answers={v2Answers} status={v2Status}
                   onAnswer={setV2Answer} onState={setV2State} lang={lang} businessType={data.business_type} />
               </>
@@ -607,7 +607,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
             {!v2 && step === 1 && (
               <>
                 <H t={t.s1t} s={t.s1s} star />
-                <TextArea label={t.s1l} value={data.ideal_customer} onChange={set('ideal_customer')} placeholder={t.s1p} />
+                <TextArea label={t.s1l} value={data.ideal_customer} onChange={set('ideal_customer')} placeholder={t.s1p} required />
                 <SelectField label={t.s1stage} value={data.business_stage} onChange={set('business_stage')} options={STAGES} optLabel={optLabel} required />
               </>
             )}
