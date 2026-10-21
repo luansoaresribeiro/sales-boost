@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { advanceTour, clipPrompt, estimateUsd, hfHeaders, SECONDS, submitAll, VIDEO_BUCKET, type ClipKind, type TourRow } from '../_shared/tourEngine.ts'
 import { draftReply, type DmReplyConfig } from '../_shared/dmReply.ts'
+import { keepQueroNotice } from '../_shared/videoCta.ts'
 import { capMessage, fitsCap, monthSpend } from '../_shared/spendCap.ts'
 
 // Vídeos curtos de um imóvel do catálogo (plano pago — decisões do dono
@@ -51,7 +52,9 @@ async function advanceVideo(admin: Admin, supabaseUrl: string, serviceKey: strin
   const finish = async (path: string) => {
     if (pieceId) {
       const url = publicVideo(path)
-      await admin.from('marketing_ai_test_content').update({ video_url: url, media: [{ url, type: 'video' }], reasoning: null }).eq('id', pieceId).eq('company_id', v.company_id)
+      // Só o aviso do "QUERO sem resposta aprovada" sobrevive; o resto do reasoning era "vídeo sendo feito".
+      const { data: cur } = await admin.from('marketing_ai_test_content').select('reasoning').eq('id', pieceId).eq('company_id', v.company_id).maybeSingle()
+      await admin.from('marketing_ai_test_content').update({ video_url: url, media: [{ url, type: 'video' }], reasoning: keepQueroNotice(cur?.reasoning as string | null) }).eq('id', pieceId).eq('company_id', v.company_id)
     }
     return 'completed' as const
   }
@@ -66,7 +69,11 @@ async function advanceVideo(admin: Admin, supabaseUrl: string, serviceKey: strin
   if (r.status === 'failed') {
     // Não cobra no teto o que não foi entregue (a Higgsfield devolve crédito de trecho que falha).
     await admin.from('video_tours').update({ cost_usd: 0 }).eq('id', v.id)
-    if (pieceId) await admin.from('marketing_ai_test_content').update({ reasoning: 'O vídeo não saiu: a Higgsfield recusou (costuma ser falta de crédito). Nada foi cobrado.' }).eq('id', pieceId).eq('company_id', v.company_id)
+    if (pieceId) {
+      const { data: cur } = await admin.from('marketing_ai_test_content').select('reasoning').eq('id', pieceId).eq('company_id', v.company_id).maybeSingle()
+      const notice = keepQueroNotice(cur?.reasoning as string | null)
+      await admin.from('marketing_ai_test_content').update({ reasoning: `O vídeo não saiu: a Higgsfield recusou (costuma ser falta de crédito). Nada foi cobrado.${notice ? ` ${notice}` : ''}` }).eq('id', pieceId).eq('company_id', v.company_id)
+    }
     return 'failed'
   }
   return 'processing'

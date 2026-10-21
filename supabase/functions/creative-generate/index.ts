@@ -25,6 +25,7 @@ import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
 import { privateFieldKeys } from '../_shared/nearbyPlaces.ts'
 import { loadLessons, lessonsBlock, relearn } from '../_shared/contentLessons.ts'
+import { decideVideoCta, queroNotice, sanitizeCaptionCta } from '../_shared/videoCta.ts'
 import { checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 
 const cors = {
@@ -1127,6 +1128,15 @@ Responda SÓ em JSON: {"card_question":"...","card_answer":"...","caption":"..."
   return true
 }
 
+// CTA alternativo (sem resposta do QUERO aprovada) vem da ficha: config.ctas.sem_automacao.
+async function fetchFichaCtas(admin: SupaClient, verticalKey: string | null): Promise<{ sem_automacao?: unknown } | null> {
+  try {
+    const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey ?? 'generico').eq('enabled', true).maybeSingle()
+    const c = (data?.config ?? {}) as { ctas?: { sem_automacao?: unknown } }
+    return c.ctas && typeof c.ctas === 'object' ? c.ctas : null
+  } catch { return null }
+}
+
 // Vaga de vídeo: legenda (texto da IA, sem inventar) + peça no calendário com
 // a foto de capa; o item-videos manda a foto pra Higgsfield (confere o teto) e
 // liga o vídeo à peça (plan.piece_id). Se não der pra fazer o vídeo, a peça
@@ -1144,6 +1154,9 @@ async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Co
   const f = (item.meta?.fields ?? {}) as Record<string, unknown>
   const hidden = await privateFieldKeys(admin, company.vertical_key ?? null)
   const facts = Object.entries(f).filter(([k, v]) => !hidden.has(k) && v !== null && v !== undefined && String(v).trim() !== '').map(([k, v]) => `${k}: ${String(v).slice(0, 600)}`).join('\n')
+  // "Comente QUERO" só com a resposta do QUERO deste imóvel aprovada (decisão em código, não da IA).
+  const { data: auto } = await admin.from('engagement_automations').select('active, message, keywords').eq('company_id', company.id).eq('item_id', item.id).maybeSingle()
+  const decision = decideVideoCta(auto as { active?: boolean; message?: string; keywords?: string[] } | null, await fetchFichaCtas(admin, company.vertical_key))
   let cap: Record<string, unknown> = {}
   try {
     cap = parseObj(await callClaude(anthropicKey, `Você escreve a legenda de um Reels curto (5 s) de "${company.business_name}" mostrando 1 ambiente deste imóvel real, em movimento de câmera suave.
@@ -1151,14 +1164,20 @@ Dados reais do imóvel (use só isto):
 ${facts || '(sem dados além do título)'}
 Título: ${item.title}
 Objetivo da peça na estratégia: ${job.purpose || job.name}
-${HONESTY_RULE} A legenda é pro público do Instagram — nunca um recado pro corretor.${lessonsBlock(await loadLessons(admin, company.id))}
+${HONESTY_RULE} A legenda é pro público do Instagram — nunca um recado pro corretor.
+${decision.promptRule}${lessonsBlock(await loadLessons(admin, company.id))}
 Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`, 700))
   } catch (e) { console.error('runVideoSlot: legenda falhou', company.id, e) }
+  const safe = sanitizeCaptionCta(cap.caption ? String(cap.caption) : null, cap.cta ? String(cap.cta) : null, decision)
+  if (safe.changed) console.log('runVideoSlot: CTA ajustado pela trava', company.id, decision.approved ? 'com QUERO' : 'sem QUERO')
+  // Sem a resposta aprovada, o dono é avisado na peça (e o item-videos preserva o aviso).
+  const notice = decision.approved ? '' : queroNotice(decision.cta)
+  const withNotice = (msg: string) => notice ? `${msg} ${notice}` : msg
   const { data: piece, error } = await admin.from('marketing_ai_test_content').insert({
     company_id: company.id, kind: 'organico', format: 'reel', idea: `${item.title} — vídeo`,
-    caption: cap.caption ? String(cap.caption) : null, hashtags: cap.hashtags ? String(cap.hashtags) : null, cta: cap.cta ? String(cap.cta) : null,
+    caption: safe.caption, hashtags: cap.hashtags ? String(cap.hashtags) : null, cta: safe.cta,
     image_url: photo, media: [{ url: photo, type: 'photo' }], item_id: item.id, pillar: job.pillar, recipe: VIDEO_RECIPE, provider: 'higgsfield',
-    planned_for: job.date || null, reasoning: 'Vídeo sendo feito na Higgsfield a partir de uma foto real — aparece aqui em alguns minutos.',
+    planned_for: job.date || null, reasoning: withNotice('Vídeo sendo feito na Higgsfield a partir de uma foto real — aparece aqui em alguns minutos.'),
   }).select('id').single()
   if (error || !piece) { console.error('runVideoSlot: peça não gravada', company.id, error?.message); return }
   try {
@@ -1167,9 +1186,9 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`, 700))
       body: JSON.stringify({ action: 'create', cron_secret: cronSecret, company_id: company.id, item_id: item.id, kind: 'room', photos: [photo], label: 'Calendário', piece_id: piece.id }),
     })
     const r = await res.json().catch(() => ({})) as { error?: string }
-    if (!res.ok) await admin.from('marketing_ai_test_content').update({ reasoning: `O vídeo não foi feito: ${r.error ?? `erro ${res.status}`}. Nada foi cobrado.` }).eq('id', piece.id)
+    if (!res.ok) await admin.from('marketing_ai_test_content').update({ reasoning: withNotice(`O vídeo não foi feito: ${r.error ?? `erro ${res.status}`}. Nada foi cobrado.`) }).eq('id', piece.id)
   } catch (e) {
-    await admin.from('marketing_ai_test_content').update({ reasoning: 'O vídeo não foi feito (falha de conexão). Nada foi cobrado.' }).eq('id', piece.id)
+    await admin.from('marketing_ai_test_content').update({ reasoning: withNotice('O vídeo não foi feito (falha de conexão). Nada foi cobrado.') }).eq('id', piece.id)
     console.error('runVideoSlot: item-videos falhou', company.id, e)
   }
   try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runVideoSlot: nota falhou', e) }

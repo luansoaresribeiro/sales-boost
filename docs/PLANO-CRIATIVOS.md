@@ -151,6 +151,14 @@ diferentes. O post só repete a forma exata que está na fonte.
    imóvel foi aprovada (`engagement_automations.item_id`) antes de escrever a
    legenda. A IA pode pôr "Comente QUERO" (está na biblioteca de CTAs) e
    ninguém responder na DM.
+   **FEITO NO CÓDIGO (2026-10-21), aguardando deploy de `creative-generate` e
+   `item-videos` + migration `20261021120000_ficha_cta_sem_automacao.sql`:**
+   `_shared/videoCta.ts` decide o CTA (automação ativa com mensagem e palavra
+   = "Comente {palavra}"; senão `config.ctas.sem_automacao` da ficha, padrão
+   "Me chama no direct"), o prompt recebe a regra pronta e uma trava em código
+   remove "Comente PALAVRA" da legenda/CTA quando não há resposta aprovada. A
+   peça ganha o aviso "Sem resposta do QUERO aprovada…" em `reasoning` (o
+   `item-videos` preserva o aviso ao pôr o vídeo ou ao falhar).
 5. [MEDIA-ENGINE.md](MEDIA-ENGINE.md) ainda descreve o "tour completo em
    caminhada", substituído pelo vídeo-isca em 2026-10-09 (divergência
    registrada lá).
