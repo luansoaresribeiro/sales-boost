@@ -8,6 +8,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { DiagnosisLoader } from '../diagnostico/MarketSection'
 import { loadDiagnosis, saveDiagnosis } from '../../lib/savedDiagnosis'
 import { fetchOnboardingV2, sanitizeV2, PROFILE_KEY, fieldState, type AnswerState, type AnswerStatus, type OnboardingV2 } from '../../lib/onboardingV2'
+import { REQUIRED_STAR, nameOk, phoneOk } from '../../lib/requiredFields'
 import QuestionField from '../../components/QuestionField'
 import { buildContextV2, diagnosticQuestions, isCompanyProfile, profileQuestion, stepResolved, V2QuestionList } from './DiagnosticV2'
 
@@ -84,8 +85,8 @@ const TX = {
     s3t: 'Como você traz clientes hoje?', s3s: 'Marque os canais que usa. O Instagram é a base do seu diagnóstico gratuito.', s3chan: 'Canais atuais', s3ig: 'Instagram do negócio', s3igp: '@seuperfil ou instagram.com/seuperfil',
     s3igBad: '⚠️ Não entendi esse Instagram. Digite assim: @seuperfil', s3igHint: 'Olhamos seus posts, engajamento e perfil pra montar sua nota (só dados públicos).',
     s3site: 'Site (opcional)', s3siteBad: '⚠️ Esse endereço parece errado. Use: https://seunegocio.com.br — ou deixe em branco se não tem site.', s3siteHint: 'Se tiver site, analisamos a velocidade dele também. Não tem? Tudo bem, é só deixar em branco.', s3fb: 'Facebook (opcional)',
-    s4t: 'É isso que entendemos?', s4s: 'Confira o resumo. Depois é só um último passo pra criar seu painel.', s4name: 'Nome da empresa (opcional)', s4namep: 'Ex: Studio Beleza Carioca', s4nameh: 'Sem empresa? Pode deixar em branco — seu perfil fica como pessoal. Não muda nada no que o Sales Boost faz.', s4city: 'Cidade / UF', s4cityp: 'Ex: Rio de Janeiro, RJ',
-    s4mail: 'Seu e-mail', s4mailp: 'voce@seunegocio.com.br', s4mailh: 'Usado pra acessar seu painel e receber alertas.', s4mailBad: '⚠️ Esse e-mail parece incompleto. Confira: voce@exemplo.com', s4phone: 'Telefone / WhatsApp (opcional)', s4phoneH: 'Pra falarmos com você e o Sales Boost te avisar de novos contatos.',
+    s4t: 'É isso que entendemos?', s4s: 'Confira o resumo. Depois é só um último passo pra criar seu painel.', s4name: 'Nome da empresa ou seu nome profissional', s4namep: 'Ex: Studio Beleza Carioca', s4nameh: 'Sem empresa? Use seu nome profissional (ex.: Ana Souza Imóveis). O nome é obrigatório — a estratégia precisa dele.', s4city: 'Cidade / UF', s4cityp: 'Ex: Rio de Janeiro, RJ',
+    s4mail: 'Seu e-mail', s4mailp: 'voce@seunegocio.com.br', s4mailh: 'Usado pra acessar seu painel e receber alertas.', s4mailBad: '⚠️ Esse e-mail parece incompleto. Confira: voce@exemplo.com', s4phone: 'Telefone / WhatsApp', s4phoneBad: '⚠️ Confira o número com DDD: (21) 99999-9999', req: '* obrigatório', s4phoneH: 'Pra falarmos com você e o Sales Boost te avisar de novos contatos.',
     back: '← Voltar', cont: 'Continuar →', create: 'Criar meu painel →', priv1: 'Ao continuar, você concorda com nossa', priv2: 'política de privacidade', priv3: '. Seus dados são usados só pra entender seu negócio e gerar o diagnóstico.',
     sum: { biz: 'Negócio', type: 'Tipo', ideal: 'Cliente ideal', goal: 'Objetivo principal', ch: 'Maior desafio', chan: 'Canais atuais', stage: 'Estágio', undef: 'ainda não definidos' },
     v2steps: ['Você', 'Sua operação', 'Mercado e prioridade', 'Instagram e contato'],
@@ -93,7 +94,7 @@ const TX = {
     savedT: 'Seu diagnóstico está salvo neste aparelho', savedS: (d: string) => `Você fez um diagnóstico aqui em ${d}. Mesmo se fechou a tela no meio, ele terminou de ser feito — é só abrir.`,
     savedSee: 'Ver meu diagnóstico →', savedNew: 'Começar outro diagnóstico',
     v2s0t: 'Vamos começar por você', v2s0s: 'Diagnóstico grátis do seu Instagram em uns 2 minutos — feito pra quem vende e aluga imóvel.',
-    v2nameOrg: 'Nome da imobiliária', v2nameOrgP: 'Ex: Imobiliária Silva', v2namePerson: 'Seu nome profissional (opcional)', v2namePersonP: 'Ex: Ana Souza Imóveis',
+    v2nameOrg: 'Nome da imobiliária', v2nameOrgP: 'Ex: Imobiliária Silva', v2namePerson: 'Seu nome profissional', v2namePersonP: 'Ex: Ana Souza Imóveis',
     v2nameH: 'Aparece no seu painel. Pode mudar depois.',
     v2s1t: 'Sua operação', v2s1s: 'Três respostas rápidas pra o diagnóstico já falar do seu mercado. Não sabe alguma? Marque e siga.',
     v2s2t: 'Seu mercado e sua prioridade', v2s2s: 'Com isso o Sales Boost já monta sua estratégia certa desde o primeiro dia. Não sabe alguma? Marque e siga.',
@@ -113,8 +114,8 @@ const TX = {
     s3t: 'How do you bring in customers today?', s3s: 'Select the channels you use. Instagram is the basis of your free diagnosis.', s3chan: 'Current channels', s3ig: 'Business Instagram', s3igp: '@yourprofile or instagram.com/yourprofile',
     s3igBad: '⚠️ I did not understand this Instagram. Type it like this: @yourprofile', s3igHint: 'We look at your posts, engagement and profile to build your score (public data only).',
     s3site: 'Website (optional)', s3siteBad: '⚠️ This address looks wrong. Use: https://yourbusiness.com — or leave it blank if you have no website.', s3siteHint: 'If you have a website, we also analyze its speed. Do not have one? That is fine, just leave it blank.', s3fb: 'Facebook (optional)',
-    s4t: 'Is this what we understood?', s4s: 'Check the summary. Then there is just one last step to create your dashboard.', s4name: 'Company name (optional)', s4namep: 'E.g.: Carioca Beauty Studio', s4nameh: 'No company? Leave it blank — your profile is marked as personal. It changes nothing in what Sales Boost does.', s4city: 'City / State', s4cityp: 'E.g.: Rio de Janeiro, RJ',
-    s4mail: 'Your email', s4mailp: 'you@yourbusiness.com', s4mailh: 'Used to access your dashboard and receive alerts.', s4mailBad: '⚠️ This email looks incomplete. Check it: you@example.com', s4phone: 'Phone / WhatsApp (optional)', s4phoneH: 'So we can reach you and Sales Boost can alert you about new leads.',
+    s4t: 'Is this what we understood?', s4s: 'Check the summary. Then there is just one last step to create your dashboard.', s4name: 'Company name or your professional name', s4namep: 'E.g.: Carioca Beauty Studio', s4nameh: 'No company? Use your professional name (e.g. Ana Souza Realty). The name is required — the strategy needs it.', s4city: 'City / State', s4cityp: 'E.g.: Rio de Janeiro, RJ',
+    s4mail: 'Your email', s4mailp: 'you@yourbusiness.com', s4mailh: 'Used to access your dashboard and receive alerts.', s4mailBad: '⚠️ This email looks incomplete. Check it: you@example.com', s4phone: 'Phone / WhatsApp', s4phoneBad: '⚠️ Check the number with area code: (21) 99999-9999', req: '* required', s4phoneH: 'So we can reach you and Sales Boost can alert you about new leads.',
     back: '← Back', cont: 'Continue →', create: 'Create my dashboard →', priv1: 'By continuing, you agree to our', priv2: 'privacy policy', priv3: '. Your data is used only to understand your business and generate the diagnosis.',
     sum: { biz: 'Business', type: 'Type', ideal: 'Ideal customer', goal: 'Main goal', ch: 'Biggest challenge', chan: 'Current channels', stage: 'Stage', undef: 'not defined yet' },
     v2steps: ['You', 'Your operation', 'Market and priority', 'Instagram and contact'],
@@ -122,7 +123,7 @@ const TX = {
     savedT: 'Your diagnosis is saved on this device', savedS: (d: string) => `You ran a diagnosis here on ${d}. Even if you closed the screen halfway, it finished — just open it.`,
     savedSee: 'See my diagnosis →', savedNew: 'Start another diagnosis',
     v2s0t: "Let's start with you", v2s0s: 'Free diagnosis of your Instagram in about 2 minutes — built for people who sell and rent property.',
-    v2nameOrg: 'Agency name', v2nameOrgP: 'E.g.: Silva Realty', v2namePerson: 'Your professional name (optional)', v2namePersonP: 'E.g.: Ana Souza Realty',
+    v2nameOrg: 'Agency name', v2nameOrgP: 'E.g.: Silva Realty', v2namePerson: 'Your professional name', v2namePersonP: 'E.g.: Ana Souza Realty',
     v2nameH: 'Shown in your dashboard. You can change it later.',
     v2s1t: 'Your operation', v2s1s: 'Three quick answers so the diagnosis speaks about your market. Not sure about one? Mark it and move on.',
     v2s2t: 'Your market and your priority', v2s2s: 'With this, Sales Boost builds the right strategy from day one. Not sure about one? Mark it and move on.',
@@ -138,7 +139,7 @@ function Field({ label, value, onChange, placeholder, type = 'text', required = 
   return (
     <div style={{ marginBottom: '16px' }}>
       <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>
-        {label}{required && <span style={{ color: ORANGE }}>*</span>}
+        {label}{required && <span style={{ color: REQUIRED_STAR }}>*</span>}
       </label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
@@ -171,7 +172,7 @@ function SelectField({ label, value, onChange, options, required = false, optLab
   return (
     <div style={{ marginBottom: '16px' }}>
       <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '7px' }}>
-        {label}{required && <span style={{ color: ORANGE }}>*</span>}
+        {label}{required && <span style={{ color: REQUIRED_STAR }}>*</span>}
       </label>
       <select value={value} onChange={e => onChange(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         style={{ width: '100%', padding: '12px 16px', boxSizing: 'border-box', background: '#1a1008', border: `1px solid ${focused ? 'rgba(255,109,41,0.55)' : BORDER}`, borderRadius: '12px', color: value ? 'white' : MUTED, fontSize: '15px', outline: 'none', transition: 'border-color 0.2s', fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23BABABA' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 16px center' }}>
@@ -420,20 +421,21 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
 
   const igInvalid = !!data.instagram_url.trim() && !normalizeInstagram(data.instagram_url)
   const siteInvalid = !!data.website_url.trim() && !isValidUrl(data.website_url)
+  const phoneInvalid = !!data.phone.trim() && !phoneOk(data.phone)
   const emailInvalid = !!data.contact_email.trim() && !EMAIL_RE.test(data.contact_email.trim())
 
   const canNext = () => {
     if (v2) {
-      if (step === 0) return !!(data.business_type && v2Answers[PROFILE_KEY] && data.city.trim() && (!isCompanyProfile(v2, v2Answers) || data.business_name.trim().length >= 2))
+      if (step === 0) return !!(data.business_type && v2Answers[PROFILE_KEY] && data.city.trim() && nameOk(data.business_name))
       if (step === 1 || step === 2) return stepResolved(v2, v2Answers, v2Status, step)
-      if (step === 3) return !!normalizeInstagram(data.instagram_url) && !siteInvalid && EMAIL_RE.test(data.contact_email.trim())
+      if (step === 3) return !!normalizeInstagram(data.instagram_url) && !siteInvalid && EMAIL_RE.test(data.contact_email.trim()) && phoneOk(data.phone)
       return false
     }
     if (step === 0) return !!(data.business_description.trim() && data.business_type)
     if (step === 1) return !!(data.ideal_customer.trim() && data.business_stage)
     if (step === 2) return !!data.goal
     if (step === 3) return !!normalizeInstagram(data.instagram_url) && !siteInvalid
-    if (step === 4) return !!(data.city.trim() && EMAIL_RE.test(data.contact_email.trim()))
+    if (step === 4) return !!(nameOk(data.business_name) && data.city.trim() && EMAIL_RE.test(data.contact_email.trim()) && phoneOk(data.phone))
     return false
   }
 
@@ -566,14 +568,14 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
             )}
             {step === 0 && !choosing && !preparing && (
               <>
-                <H t={v2 ? t.v2s0t : t.s0t} s={v2 ? t.v2s0s : t.s0s} />
+                <H t={v2 ? t.v2s0t : t.s0t} s={v2 ? t.v2s0s : t.s0s} star />
                 <BusinessTypeSelect value={data.business_type} onChange={set('business_type')} options={businessTypes} startOther={typePicked === 'other'} />
                 {v2 ? (
                   <>
                     {(() => { const pq = profileQuestion(v2); return pq ? <QuestionField q={pq} value={v2Answers[pq.key]} state={fieldState(pq, v2Answers, v2Status)} onChange={v => setV2Answer(pq.key, v)} onState={st => setV2State(pq.key, st)} lang={lang} businessType={data.business_type} /> : null })()}
                     {isCompanyProfile(v2, v2Answers)
                       ? <Field label={t.v2nameOrg} value={data.business_name} onChange={set('business_name')} placeholder={t.v2nameOrgP} hint={t.v2nameH} required />
-                      : <Field label={t.v2namePerson} value={data.business_name} onChange={set('business_name')} placeholder={t.v2namePersonP} hint={t.v2nameH} />}
+                      : <Field label={t.v2namePerson} value={data.business_name} onChange={set('business_name')} placeholder={t.v2namePersonP} hint={t.v2nameH} required />}
                     <Field label={t.s4city} value={data.city} onChange={set('city')} placeholder={t.s4cityp} required />
                   </>
                 ) : (
@@ -586,17 +588,17 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
             )}
             {v2 && (step === 1 || step === 2) && (
               <>
-                <H t={step === 1 ? t.v2s1t : t.v2s2t} s={step === 1 ? t.v2s1s : t.v2s2s} />
+                <H t={step === 1 ? t.v2s1t : t.v2s2t} s={step === 1 ? t.v2s1s : t.v2s2s} star />
                 <V2QuestionList questions={diagnosticQuestions(v2, v2Answers, step)} answers={v2Answers} status={v2Status}
                   onAnswer={setV2Answer} onState={setV2State} lang={lang} businessType={data.business_type} />
               </>
             )}
             {v2 && step === 3 && (
               <>
-                <H t={t.v2s3t} s={t.v2s3s} />
+                <H t={t.v2s3t} s={t.v2s3s} star />
                 <Field label={t.s3ig} value={data.instagram_url} onChange={set('instagram_url')} placeholder={t.s3igp} required hint={igInvalid ? t.s3igBad : t.s3igHint} />
                 <Field label={t.s4mail} value={data.contact_email} onChange={set('contact_email')} type="email" placeholder={t.s4mailp} required hint={emailInvalid ? t.s4mailBad : t.s4mailh} />
-                <Field label={t.s4phone} value={data.phone} onChange={set('phone')} type="tel" placeholder="(21) 99999-9999" hint={t.s4phoneH} />
+                <Field label={t.s4phone} value={data.phone} onChange={set('phone')} type="tel" placeholder="(21) 99999-9999" required hint={phoneInvalid ? t.s4phoneBad : t.s4phoneH} />
                 <Field label={t.s3site} value={data.website_url} onChange={set('website_url')} type="url" placeholder="https://seunegocio.com.br" hint={siteInvalid ? t.s3siteBad : t.s3siteHint} />
                 <p style={{ fontSize: '12px', color: MUTED, lineHeight: 1.5, margin: '4px 0 0' }}>{t.v2later}</p>
                 {errorBlock}
@@ -604,21 +606,21 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
             )}
             {!v2 && step === 1 && (
               <>
-                <H t={t.s1t} s={t.s1s} />
+                <H t={t.s1t} s={t.s1s} star />
                 <TextArea label={t.s1l} value={data.ideal_customer} onChange={set('ideal_customer')} placeholder={t.s1p} />
                 <SelectField label={t.s1stage} value={data.business_stage} onChange={set('business_stage')} options={STAGES} optLabel={optLabel} required />
               </>
             )}
             {!v2 && step === 2 && (
               <>
-                <H t={t.s2t} s={t.s2s} />
+                <H t={t.s2t} s={t.s2s} star />
                 <SelectField label={t.s2goal} value={data.goal} onChange={set('goal')} options={GOALS} optLabel={optLabel} required />
                 <SelectField label={t.s2ch} value={data.main_challenges} onChange={set('main_challenges')} options={CHALLENGES} optLabel={optLabel} />
               </>
             )}
             {!v2 && step === 3 && (
               <>
-                <H t={t.s3t} s={t.s3s} />
+                <H t={t.s3t} s={t.s3s} star />
                 <MultiSelect label={t.s3chan} values={data.current_channels} options={CHANNELS} onToggle={toggleChannel} optLabel={optLabel} />
                 <Field label={t.s3ig} value={data.instagram_url} onChange={set('instagram_url')} placeholder={t.s3igp} required hint={igInvalid ? t.s3igBad : t.s3igHint} />
                 <Field label={t.s3site} value={data.website_url} onChange={set('website_url')} type="url" placeholder="https://seunegocio.com.br" hint={siteInvalid ? t.s3siteBad : t.s3siteHint} />
@@ -627,14 +629,14 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
             )}
             {!v2 && step === 4 && (
               <>
-                <H t={t.s4t} s={t.s4s} />
+                <H t={t.s4t} s={t.s4s} star />
                 <div style={{ background: 'rgba(255,109,41,0.05)', border: '1px solid rgba(255,109,41,0.18)', borderRadius: '12px', padding: '14px 16px', marginBottom: '20px', fontSize: '12.5px', color: 'white', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                   {displaySummary(data, lang)}
                 </div>
-                <Field label={t.s4name} value={data.business_name} onChange={set('business_name')} placeholder={t.s4namep} hint={t.s4nameh} />
+                <Field label={t.s4name} value={data.business_name} onChange={set('business_name')} placeholder={t.s4namep} hint={t.s4nameh} required />
                 <Field label={t.s4city} value={data.city} onChange={set('city')} placeholder={t.s4cityp} required />
                 <Field label={t.s4mail} value={data.contact_email} onChange={set('contact_email')} type="email" placeholder={t.s4mailp} required hint={emailInvalid ? t.s4mailBad : t.s4mailh} />
-                <Field label={t.s4phone} value={data.phone} onChange={set('phone')} placeholder="(21) 99999-9999" />
+                <Field label={t.s4phone} value={data.phone} onChange={set('phone')} type="tel" placeholder="(21) 99999-9999" required hint={phoneInvalid ? t.s4phoneBad : t.s4phoneH} />
                 {errorBlock}
               </>
             )}
@@ -683,11 +685,13 @@ export default function OnboardingPage() {
   )
 }
 
-function H({ t, s }: { t: string; s: string }) {
+function H({ t, s, star = false }: { t: string; s: string; star?: boolean }) {
+  const { lang } = useLang()
   return (
     <>
       <h1 style={{ fontFamily: D, fontSize: '1.5rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', marginBottom: '8px' }}>{t}</h1>
-      <p style={{ color: MUTED, fontSize: '14px', marginBottom: '26px', lineHeight: 1.6 }}>{s}</p>
+      <p style={{ color: MUTED, fontSize: '14px', marginBottom: star ? '8px' : '26px', lineHeight: 1.6 }}>{s}</p>
+      {star && <p style={{ color: MUTED, fontSize: '12px', marginBottom: '22px' }}><span style={{ color: REQUIRED_STAR }}>*</span> {TX[lang].req.replace('* ', '')}</p>}
     </>
   )
 }
