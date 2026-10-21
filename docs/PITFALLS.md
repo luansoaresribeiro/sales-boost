@@ -575,6 +575,9 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   use…) ou "palavra(-chave)" seguido da palavra em MAIÚSCULAS/aspas, e a ordem invertida
   "PALAVRA nos comentários". Achou frase nova que escapa? Acrescente o caso no teste antes
   de mexer na regex — e confira que "Fale com a gente pelo direct" continua intacto.
+  Limitação conhecida (lado seguro): sigla em MAIÚSCULAS logo após o verbo ("Fale com o
+  CRECI", "Use o RIO como referência") é tratada como palavra-chave e a frase sai da
+  legenda. O dono vê a legenda antes de aprovar.
 - **Números do carrossel (regra 5):** só valem números dos dados (ficha, empresa, imóvel,
   insights). Nunca da `idea` nem do `brief` — são texto da própria IA.
 
