@@ -462,7 +462,7 @@ REGRAS CRÍTICAS:
 Retorne APENAS um JSON:
 {
   "name": "nome curto da estratégia",
-  "content_core": {"central_line": "1-2 frases: a linha central de conteúdo que sustenta a tese", "hero_formats": ["chave do catálogo", "..."], "why": "por que esses formatos, 1-2 frases simples"${ss ? `, "pillars": [{"key": "chave do pilar", "today": "como o pilar está hoje, 1 frase", "plan": "o que esta estratégia faz por ele, com formatos do catálogo, 1-2 frases"}]` : ''}},
+  "content_core": {"central_line": "1-2 frases: a linha central de conteúdo que sustenta a tese", "hero_formats": ["chave do catálogo", "..."], "why": "por que esses formatos, 1-2 frases simples"${ss ? `, "pillars": [{"key": "chave do pilar", "today": "como o pilar está hoje, 1 frase curta", "plan": "o que esta estratégia faz por ele, com formatos do catálogo, 1 frase"}]` : ''}},
   "thesis": "Porque [evidência], acreditamos [hipótese]. Por isso, vamos [abordagem] por [horizonte] pra alcançar [objetivo].",
   "primary_constraint": "a restrição principal que trava o crescimento agora, com a evidência",
   "strategic_opportunity": "a oportunidade de maior impacto que dá pra perseguir agora",
@@ -481,7 +481,10 @@ Retorne APENAS um JSON:
 }`
     lap(`prompt 1 montado, ${prompt.length} chars`)
 
-    const r1 = await callClaudeStep(anthropicKey, prompt, 2200, { allowRetry: true, bumpedMaxTokens: 3200 }, 'Parte 1 (tese)')
+    // 2200/3200 cortava a resposta depois que a parte 1 passou a trazer os
+    // pilares de Social Selling (teste real Tespon 2026-10-21: cortou nas duas
+    // tentativas). 3600 cabe com folga; a nova tentativa (4200) só roda se cortar.
+    const r1 = await callClaudeStep(anthropicKey, prompt, 3600, { allowRetry: true, bumpedMaxTokens: 4200 }, 'Parte 1 (tese)')
     lap(`parte 1 concluída, ok=${r1.ok}`)
     if (!r1.ok) { await markFailed(r1.reason); return }
     const parsed1 = r1.parsed
