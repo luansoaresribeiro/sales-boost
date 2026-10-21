@@ -697,10 +697,10 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
     if (fmt === 'carrossel' && opts.deck) {
       // Sistema de slides: a IA pede {layout,title,text,items,highlight,cta}; o código valida (1º capa, último
       // fecho), o render-format mede o texto de verdade e acusa `overflow`. Estourou (ou tem número que não veio
-      // dos dados — regra 5)? 1 pedido de versão mais curta POR SLIDE, depois re-renderiza; se ainda estourar
-      // mantém o render reduzido e loga. O dono aprova tudo antes de ir ao ar.
+      // dos dados — regra 5)? 1 pedido de versão mais curta POR SLIDE, depois re-renderiza; se ainda
+      // ainda estoura: o desenho descarta as linhas que passariam do rodapé e o reasoning avisa o dono ("slide apertado"). O dono aprova tudo antes de ir ao ar.
       const deckSlides = normalizeDeck(Array.isArray(post.slides) ? post.slides : [], String(post.cta ?? brief.cta ?? ''))
-      const dataText = [preamble(config, company, playbookBlock), seedBlock, insights.map(i => `${i.title} ${i.description}`).join(' '), JSON.stringify(brief), idea ?? ''].join(' ')
+      const dataText = [preamble(config, company, playbookBlock), seedBlock, insights.map(i => `${i.title} ${i.description}`).join(' '), idea ?? ''].join(' ')
       const allowed = numbersOf(dataText)
       const handle = String(company.instagram_username ?? '').replace(/^@/, '').trim()
       const renderSlide = (sl: DeckSlide, i: number) => renderGraphicCardFull(opts, company.id, 'slide', {
@@ -719,14 +719,22 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
             if (Object.keys(raw).length) { cur = next; r = (await renderSlide(cur, i)) ?? r }
           } catch (e) { console.error('creative-generate: slide mais curto falhou', company.id, i + 1, e) }
         }
-        if (r?.overflow) console.error('creative-generate: slide ainda estoura depois do retry (render reduzido mantido)', company.id, i + 1, cur.layout)
+        if (r?.overflow) {
+          console.error('creative-generate: slide ainda estoura depois do retry', company.id, i + 1, cur.layout)
+          warnings.push(`O slide ${i + 1} ficou apertado — confira antes de aprovar`)
+        }
         const still = inventedNumbers(cur, allowed)
         if (still.length) warnings.push(`slide ${i + 1} tem número que não veio dos dados cadastrados (${still.join(', ')}) — confira antes de aprovar`)
         return { cur, url: r?.url ?? null }
       }))
       slides = done.map(d => ({ text: slideSummary(d.cur), image_prompt: '', image_url: d.url, layout: d.cur.layout }))
       mainImage = slides.find(x => x.image_url)?.image_url ?? null
-      if (warnings.length) await admin.from('marketing_ai_test_content').update({ reasoning: `${brief.reasoning ?? ''} Atenção: ${warnings.join('; ')}.`.trim() }).eq('id', inserted.id)
+      if (!deckSlides.length) {
+        await admin.from('marketing_ai_test_content').update({ reasoning: `${brief.reasoning ?? ''} Atenção: a IA não devolveu nenhum slide aproveitável, então este carrossel ficou sem arte. Gere de novo ou descarte.`.trim() }).eq('id', inserted.id)
+      } else if (warnings.length) {
+        warnings.sort()
+        await admin.from('marketing_ai_test_content').update({ reasoning: `${brief.reasoning ?? ''} Atenção: ${warnings.join('; ')}.`.trim() }).eq('id', inserted.id)
+      }
     } else if (fmt === 'carrossel') {
       const rawSlides = Array.isArray(post.slides) ? (post.slides as { text?: string; image?: string }[]).slice(0, 6) : []
       if (rawSlides.length > 0) {

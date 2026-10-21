@@ -92,7 +92,12 @@ export function fitText(text: string | Tok[], maxW: number, limits: { maxLines?:
 }
 
 // ── desenho ────────────────────────────────────────────────────────────────────────────────
-interface Ctx { m: Measure; drawn: DrawnLine[]; overflow: boolean; text: string; bg: string; primary: string; onPrimary: string; underline: boolean }
+// Limite de baixo do corpo: abaixo disso ficam a barra de progresso, o contador e o "arraste".
+const BODY_LIMIT = SLIDE_H - 165
+// O render-format mede com 3% de folga (largura * 1.03); o texto de verdade não tem essa folga.
+export const MEASURE_PAD = 1.03
+
+interface Ctx { m: Measure; maxY: number; drawn: DrawnLine[]; overflow: boolean; text: string; bg: string; primary: string; onPrimary: string; underline: boolean }
 
 function lum(hex: string): number {
   const h = String(hex ?? '').replace('#', '')
@@ -118,6 +123,9 @@ export function pickAccent(b: SlideBrand, bg: string, text: string): { color: st
 
 /** Linha de texto (com tspans de destaque). `y` é a linha de base. */
 function lineSvg(c: Ctx, line: Tok[], x: number, y: number, size: number, bold: boolean, fill: string, anchor: 'start' | 'middle' | 'end' = 'start', box: [number, number] = [M, RIGHT], hlFill = c.primary, opacity = 1): string {
+  // Linha que passaria do limite (estouro): NÃO se desenha — nunca fica por cima do rodapé. Marca overflow
+  // (o creative-generate avisa o dono "slide apertado").
+  if (y + size * 0.25 > c.maxY) { c.overflow = true; return '' }
   const txt = lineText(line)
   const wd = c.m(txt, size, bold)
   const x0 = anchor === 'middle' ? x - wd / 2 : anchor === 'end' ? x - wd : x
@@ -133,7 +141,7 @@ function lineSvg(c: Ctx, line: Tok[], x: number, y: number, size: number, bold: 
   if (c.underline && runs.some(r => r.hl)) {
     let off = 0
     for (const r of runs) {
-      const rw = c.m(r.t, size, bold), tw = c.m(r.t.trimEnd(), size, bold)
+      const rw = c.m(r.t, size, bold) / MEASURE_PAD, tw = c.m(r.t.trimEnd(), size, bold) / MEASURE_PAD
       if (r.hl) marks += `<rect x="${Math.round(x0 + off)}" y="${Math.round(y + size * 0.14)}" width="${Math.round(tw)}" height="${Math.max(4, Math.round(size * 0.1))}" rx="${Math.max(2, Math.round(size * 0.05))}" fill="${hlFill}"/>`
       off += rw
     }
@@ -359,7 +367,7 @@ export function svgSlideSystem(f: SlideFields, b: SlideBrand, logo: string | nul
   const text = b.text || (lum(bg) > 0.45 ? '#111111' : '#ffffff')
   const acc = pickAccent({ ...b, primary: b.primary || '#FF6D29' }, bg, text)
   const primary = acc.color
-  const c: Ctx = { m: measure, drawn: [], overflow: false, text, bg, primary, onPrimary: contrast('#111111', primary) >= contrast('#ffffff', primary) ? '#111111' : '#ffffff', underline: acc.underline }
+  const c: Ctx = { m: measure, maxY: BODY_LIMIT, drawn: [], overflow: false, text, bg, primary, onPrimary: contrast('#111111', primary) >= contrast('#ffffff', primary) ? '#111111' : '#ffffff', underline: acc.underline }
   const page = Math.max(1, Number(f.page) || 1), total = Math.max(page, Number(f.total) || 1)
   const layout = (SLIDE_LAYOUTS as readonly string[]).includes(f.layout) ? f.layout : 'texto'
   let body = ''
@@ -372,8 +380,9 @@ export function svgSlideSystem(f: SlideFields, b: SlideBrand, logo: string | nul
     case 'fecho': body = layoutFecho(c, f); break
     default: body = layoutTexto(c, f, page === 1)
   }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDE_W}" height="${SLIDE_H}" viewBox="0 0 ${SLIDE_W} ${SLIDE_H}"><rect width="${SLIDE_W}" height="${SLIDE_H}" fill="${bg}"/>` +
+  c.maxY = Infinity   // rodapé e topo (logo, contador, arraste) sempre desenham
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDE_W}" height="${SLIDE_H}" viewBox="0 0 ${SLIDE_W} ${SLIDE_H}"><defs><clipPath id="bodyClip"><rect x="0" y="0" width="${SLIDE_W}" height="${BODY_LIMIT}"/></clipPath></defs><rect width="${SLIDE_W}" height="${SLIDE_H}" fill="${bg}"/>` +
     `<circle cx="${SLIDE_W}" cy="${SLIDE_H}" r="380" fill="${primary}" fill-opacity="0.07"/>` +
-    chrome(c, f, b, logo, page, total) + body + '</svg>'
+    chrome(c, f, b, logo, page, total) + `<g clip-path="url(#bodyClip)">${body}</g></svg>`
   return { svg, w: SLIDE_W, h: SLIDE_H, overflow: c.overflow, layout, drawn: c.drawn }
 }
