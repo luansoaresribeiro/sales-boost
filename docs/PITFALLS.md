@@ -569,6 +569,14 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   em `reasoning`; o `item-videos` troca `reasoning` quando o vídeo fica pronto/falha — por
   isso ele chama `keepQueroNotice` (em `_shared/videoCta.ts`). Quem mexer nesses updates de
   `reasoning` precisa manter essa chamada, senão o aviso some.
+- **Trava do "Comente QUERO" (`videoCta.ts`):** a IA escreve o pedido de muitos jeitos
+  ("Deixe nos comentários a palavra QUERO", "Palavra-chave: QUERO", "QUERO nos
+  comentários"…). A trava pega verbo de pedido (comente/digite/mande/deixe/coloque/fale/
+  use…) ou "palavra(-chave)" seguido da palavra em MAIÚSCULAS/aspas, e a ordem invertida
+  "PALAVRA nos comentários". Achou frase nova que escapa? Acrescente o caso no teste antes
+  de mexer na regex — e confira que "Fale com a gente pelo direct" continua intacto.
+- **Números do carrossel (regra 5):** só valem números dos dados (ficha, empresa, imóvel,
+  insights). Nunca da `idea` nem do `brief` — são texto da própria IA.
 
 ## Cor primária do kit igual ao fundo (2026-10-21)
 

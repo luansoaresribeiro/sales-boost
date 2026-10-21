@@ -700,7 +700,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
       // dos dados — regra 5)? 1 pedido de versão mais curta POR SLIDE, depois re-renderiza; se ainda
       // ainda estoura: o desenho descarta as linhas que passariam do rodapé e o reasoning avisa o dono ("slide apertado"). O dono aprova tudo antes de ir ao ar.
       const deckSlides = normalizeDeck(Array.isArray(post.slides) ? post.slides : [], String(post.cta ?? brief.cta ?? ''))
-      const dataText = [preamble(config, company, playbookBlock), seedBlock, insights.map(i => `${i.title} ${i.description}`).join(' '), idea ?? ''].join(' ')
+      const dataText = [preamble(config, company, playbookBlock), seedBlock, insights.map(i => `${i.title} ${i.description}`).join(' ')].join(' ')  // sem `idea`: é texto da própria IA, não dado
       const allowed = numbersOf(dataText)
       const handle = String(company.instagram_username ?? '').replace(/^@/, '').trim()
       const renderSlide = (sl: DeckSlide, i: number) => renderGraphicCardFull(opts, company.id, 'slide', {
