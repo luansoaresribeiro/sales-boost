@@ -1698,3 +1698,10 @@ grátis de 30 s, acima — mantidos como histórico):
   quem vê dados de quem (ver [ROADMAP.md](ROADMAP.md), 2026-10-20).
 - **soul.md:** o dono pediu atualizar, e depois pediu pra esquecer. Não
   existe no repositório.
+- **Correção pós-deploy (2026-10-21):** no teste real da Tespon, a parte 1
+  da estratégia foi cortada nas duas tentativas (2200 e 3200 tokens),
+  porque agora traz os pilares. O limite subiu pra 3600, com nova
+  tentativa em 4200, e o texto de cada pilar foi encurtado pra 1 frase.
+  Enquanto a correção não entra, uma geração nova falha. A estratégia
+  ativa de cada cliente continua no lugar, porque só é trocada quando a
+  nova termina.
