@@ -123,6 +123,51 @@ Mudar a tabela de trends é migration em produção → vai no PR.
 **Ressalva:** "juros subiram 15%" e "juros chegaram a 15% ao ano" são coisas
 diferentes. O post só repete a forma exata que está na fonte.
 
+## Família Tour virtual — como decide hoje e o que melhora
+
+**Como está hoje (conferido no código em 2026-10-21):**
+
+- **Manual** (`item-videos` + `ItemVideos.tsx`, botão "🎬 Vídeos e resposta
+  do QUERO"): o corretor escolhe o tipo (`room` 1 cômodo · `pair` 2 cômodos
+  vizinhos · `opening` abertura de fora com a vista), as fotos, vê custo e
+  gasto do mês (teto único US$ 40/mês, `_shared/spendCap.ts`) e aprova uma
+  vez a DM do "Comente QUERO" daquele imóvel.
+- **Automático** (`creative-generate` → `planWeekFromStrategy` /
+  `runVideoSlot`, mínimo de 3 vídeos/semana):
+  - **imóvel:** o menos usado nas últimas 3 semanas, entre os com ≥5 fotos
+    reais (rodízio — `pickItem`);
+  - **foto:** **sorteada** entre as ainda não usadas em vídeo daquele imóvel;
+  - **tipo:** **sempre `room`** (5 s, US$ 0,42);
+  - **legenda:** IA com os dados cadastrados + `purpose` da vaga;
+  - o vídeo entra na peça quando fica pronto (tick a cada 5 min) → nota →
+    Aprovações. Sem imóvel com 5 fotos → vira "pra fazer".
+
+**Problemas achados:**
+
+1. Foto sorteada pode ser corredor, banheiro ou área de serviço.
+2. O automático nunca usa `pair` nem `opening`.
+3. A estratégia não escolhe o imóvel — é só rodízio.
+4. **Risco confirmado:** `runVideoSlot` não confere se a DM do QUERO daquele
+   imóvel foi aprovada (`engagement_automations.item_id`) antes de escrever a
+   legenda. A IA pode pôr "Comente QUERO" (está na biblioteca de CTAs) e
+   ninguém responder na DM.
+5. [MEDIA-ENGINE.md](MEDIA-ENGINE.md) ainda descreve o "tour completo em
+   caminhada", substituído pelo vídeo-isca em 2026-10-09 (divergência
+   registrada lá).
+
+**Melhorias propostas:**
+
+| Melhoria | Como | Custo |
+|---|---|---|
+| **Escolher a melhor foto** | Uma chamada de visão (modelo barato, ex. Haiku) dá nota a cada foto real do imóvel uma vez só e guarda em `meta.photos[].video_score` + cômodo detectado (sala, varanda, vista, cozinha, quarto, banheiro, fachada). O automático usa a melhor ainda não usada; banheiro/área de serviço/corredor ficam por último. | 1 chamada por foto, uma vez (centavos) |
+| **Variar os 3 tipos** | Na semana: 2 `room` + 1 `pair` (duas fotos de cômodos vizinhos pela etiqueta de cômodo) ou `opening` **só se houver foto real de fachada/vista** (regra 4). Sem par confiável → volta pra `room`. | `pair` = 2 trechos (≈ US$ 0,84); dentro do teto de US$ 40 |
+| **Estratégia escolhe o imóvel** | O `item_id` da intenção (seção acima) manda; rodízio vira plano B. A estratégia pode pedir "empurrar imóvel X" (ex.: imóvel novo, com mais leads, ou parado há tempo). | zero |
+| **QUERO só com DM aprovada** | Antes da legenda, conferir se há automação ativa do QUERO pro imóvel. **Sem** → CTA alternativo da ficha ("Me chama no direct") e um aviso na peça: "aprove a resposta do QUERO deste imóvel pra usar essa chamada". **Com** → "Comente QUERO". | zero |
+| **Ordem natural na semana** | Não repetir o mesmo cômodo do mesmo imóvel em semanas seguidas; alternar imóveis quando houver mais de um. | zero |
+
+Tudo continua: vídeo só com foto real, Higgsfield só move a câmera, nada vai
+ao ar sem aprovação, teto de custo por cliente.
+
 ## Identidade visual — o "sistema de slides"
 
 Um único sistema de design no `render-format`, usado por todas as famílias
@@ -159,8 +204,11 @@ Um único sistema de design no `render-format`, usado por todas as famílias
 | **5. Calendário em 4 famílias** | Tela do calendário agrupa/rotula por família (ícone + cor) | Dono reconhece as 4 famílias na semana sem ler o nome do formato | Não |
 | **6. Trends e notícias com fonte** | `marketing_ai_trends` ganha link/veículo/data/trecho; coleta das séries do Banco Central; `gancho_atual` na intenção | Um educativo de teste usa um número real do Banco Central, com a fonte no último slide, e o sistema recusa trend sem fonte | Sim: migration em produção (vai no PR) e deploy de `strategy-generate`/`creative-generate` |
 
-Ordem recomendada: **1 → 2 → 3**, depois 6, 4 e 5. A fase 1 sozinha já melhora
-todos os carrosséis que existem hoje.
+| **7. Tour virtual inteligente** | Nota das fotos + cômodo detectado; mistura `room`/`pair`/`opening`; imóvel pela intenção; QUERO só com DM aprovada | Numa empresa de teste, a semana sai com 3 vídeos de fotos boas (nenhum banheiro/corredor), pelo menos 1 que não é `room` quando há par/fachada, e nenhum "Comente QUERO" sem DM aprovada | Sim: deploy de `creative-generate` (função de cliente real) |
+
+Ordem recomendada: **1 → 2 → 3**, depois **7** (a correção do QUERO pode ir
+antes, sozinha, por ser pequena), 6, 4 e 5. A fase 1 sozinha já melhora todos
+os carrosséis que existem hoje.
 
 ## Custos e Higgsfield
 

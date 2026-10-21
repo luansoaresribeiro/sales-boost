@@ -7,6 +7,15 @@
 > [ARCHITECTURE.md](ARCHITECTURE.md) etapas 4-6 e
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md).
 
+> **Divergência registrada (2026-10-21):** parte disto já está implementada —
+> vídeos curtos do imóvel (`item-videos`, inclusive 3/semana pelo calendário),
+> tratamento da foto real no Vault e mobiliar virtualmente (seções do fim
+> deste doc). E o "tour completo em caminhada" descrito em "Escopo agora" foi
+> **substituído pelo vídeo-isca** (1 cômodo, 2 cômodos vizinhos ou abertura
+> de fora) em 2026-10-09 — ver [DECISIONS.md](DECISIONS.md). Como o
+> automático escolhe imóvel/foto/tipo hoje e o que melhora:
+> [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md#família-tour-virtual--como-decide-hoje-e-o-que-melhora).
+
 ## Fluxo obrigatório (fotos do cliente + inteligência da estratégia)
 
 1. O corretor sobe as fotos reais do imóvel no catálogo ("Meus imóveis" —
