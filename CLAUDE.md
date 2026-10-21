@@ -21,6 +21,9 @@ conteúdo técnico detalhado vive em `docs/`:
   item, calendário).
 - [docs/MEDIA-ENGINE.md](docs/MEDIA-ENGINE.md) — Higgsfield: fotos reais
   do cliente → criativos (plano, ainda não implementado).
+- [docs/PLANO-CRIATIVOS.md](docs/PLANO-CRIATIVOS.md) — plano: 4 famílias de
+  conteúdo, formato fixo × intenção da estratégia, sistema de slides com a
+  identidade do cliente (ainda não implementado).
 - [docs/CONVERSION.md](docs/CONVERSION.md) — da conversa (comentário/DM)
   ao lead.
 - [docs/LEARNING.md](docs/LEARNING.md) — medição e aprendizado.
