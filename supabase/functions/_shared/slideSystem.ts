@@ -11,7 +11,7 @@
 //  - capa com número fica fora desta fase (regra 5: número só com fonte).
 
 export type Measure = (text: string, size: number, bold: boolean) => number
-export interface SlideBrand { primary: string; name: string; bg?: string; text?: string; accent?: string }
+export interface SlideBrand { primary: string; name: string; bg?: string; text?: string; accent?: string; primary2?: string; accent2?: string }
 export type SlideFields = Record<string, string>
 export interface Tok { w: string; hl: boolean }
 export interface DrawnLine { text: string; x0: number; x1: number; y: number; size: number; bold: boolean; box: [number, number] }
@@ -92,7 +92,7 @@ export function fitText(text: string | Tok[], maxW: number, limits: { maxLines?:
 }
 
 // ── desenho ────────────────────────────────────────────────────────────────────────────────
-interface Ctx { m: Measure; drawn: DrawnLine[]; overflow: boolean; text: string; bg: string; primary: string; onPrimary: string }
+interface Ctx { m: Measure; drawn: DrawnLine[]; overflow: boolean; text: string; bg: string; primary: string; onPrimary: string; underline: boolean }
 
 function lum(hex: string): number {
   const h = String(hex ?? '').replace('#', '')
@@ -100,6 +100,20 @@ function lum(hex: string): number {
   if (!/^[0-9a-fA-F]{6}$/.test(f)) return 0
   const c = [0, 2, 4].map(i => { const v = parseInt(f.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) })
   return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+}
+
+const contrast = (a: string, b: string) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) }
+const isHex = (s?: string) => !!s && /^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(s)
+
+/** Cor de destaque que APARECE: a 1ª cor da marca que contrasta com o fundo e
+ *  se distingue do texto (kit real da Tespon: primária = fundo, teste
+ *  2026-10-21). Sem nenhuma → usa a cor do texto e marca o destaque com
+ *  sublinhado grosso (nunca some). */
+export function pickAccent(b: SlideBrand, bg: string, text: string): { color: string; underline: boolean } {
+  for (const cand of [b.primary, b.primary2, b.accent, b.accent2]) {
+    if (isHex(cand) && contrast(cand!, bg) >= 3 && contrast(cand!, text) >= 1.6) return { color: cand!, underline: false }
+  }
+  return { color: text, underline: true }
 }
 
 /** Linha de texto (com tspans de destaque). `y` é a linha de base. */
@@ -114,7 +128,17 @@ function lineSvg(c: Ctx, line: Tok[], x: number, y: number, size: number, bold: 
     const r = runs[runs.length - 1]
     if (r && r.hl === t.hl) r.t += w; else runs.push({ t: w, hl: t.hl })
   })
-  return `<text x="${x}" y="${y}" font-family="Poppins" font-size="${size}" font-weight="${bold ? 700 : 400}" fill="${fill}"${opacity < 1 ? ` fill-opacity="${opacity}"` : ''} text-anchor="${anchor}" xml:space="preserve">` +
+  // Sem cor de destaque que contraste: sublinhado grosso sob as palavras destacadas.
+  let marks = ''
+  if (c.underline && runs.some(r => r.hl)) {
+    let off = 0
+    for (const r of runs) {
+      const rw = c.m(r.t, size, bold), tw = c.m(r.t.trimEnd(), size, bold)
+      if (r.hl) marks += `<rect x="${Math.round(x0 + off)}" y="${Math.round(y + size * 0.14)}" width="${Math.round(tw)}" height="${Math.max(4, Math.round(size * 0.1))}" rx="${Math.max(2, Math.round(size * 0.05))}" fill="${hlFill}"/>`
+      off += rw
+    }
+  }
+  return marks + `<text x="${x}" y="${y}" font-family="Poppins" font-size="${size}" font-weight="${bold ? 700 : 400}" fill="${fill}"${opacity < 1 ? ` fill-opacity="${opacity}"` : ''} text-anchor="${anchor}" xml:space="preserve">` +
     runs.map(r => `<tspan${r.hl ? ` fill="${hlFill}" fill-opacity="1"` : ''}>${esc(r.t)}</tspan>`).join('') + '</text>'
 }
 
@@ -333,8 +357,9 @@ function layoutTexto(c: Ctx, f: SlideFields, first: boolean): string {
 export function svgSlideSystem(f: SlideFields, b: SlideBrand, logo: string | null, measure: Measure): SlideOut {
   const bg = b.bg || '#0E0B0A'
   const text = b.text || (lum(bg) > 0.45 ? '#111111' : '#ffffff')
-  const primary = b.primary || '#FF6D29'
-  const c: Ctx = { m: measure, drawn: [], overflow: false, text, bg, primary, onPrimary: lum(primary) > 0.4 ? '#111111' : '#ffffff' }
+  const acc = pickAccent({ ...b, primary: b.primary || '#FF6D29' }, bg, text)
+  const primary = acc.color
+  const c: Ctx = { m: measure, drawn: [], overflow: false, text, bg, primary, onPrimary: contrast('#111111', primary) >= contrast('#ffffff', primary) ? '#111111' : '#ffffff', underline: acc.underline }
   const page = Math.max(1, Number(f.page) || 1), total = Math.max(page, Number(f.total) || 1)
   const layout = (SLIDE_LAYOUTS as readonly string[]).includes(f.layout) ? f.layout : 'texto'
   let body = ''

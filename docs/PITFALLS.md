@@ -569,3 +569,11 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   em `reasoning`; o `item-videos` troca `reasoning` quando o vídeo fica pronto/falha — por
   isso ele chama `keepQueroNotice` (em `_shared/videoCta.ts`). Quem mexer nesses updates de
   `reasoning` precisa manter essa chamada, senão o aviso some.
+
+## Cor primária do kit igual ao fundo (2026-10-21)
+
+O Kit da Marca da Tespon tem `primary` = `bg` (#1e3a5f). Tudo que o slide
+pintava na cor primária (palavra em destaque, números, barra, botão) sumia.
+`slideSystem.pickAccent` escolhe a 1ª cor do kit que contrasta com o fundo
+(≥ 3:1) e se distingue do texto; sem nenhuma, usa a cor do texto e marca o
+destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.

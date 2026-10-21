@@ -382,7 +382,7 @@ const PHOTO_HINT: Record<string, string> = {
   'Timeline': 'a single clear moment representing one step of an ongoing process or journey, implying progression',
 }
 
-interface CardBrand { primary: string; name: string; accent?: string; text?: string; bg?: string; logoUrl?: string }
+interface CardBrand { primary: string; name: string; accent?: string; text?: string; bg?: string; logoUrl?: string; primary2?: string; accent2?: string }
 
 // Renderiza o card gráfico de verdade via render-format (SVG → PNG, texto
 // nítido, sem custo de IA além das fotos que o card em si precisar). `save:
@@ -512,6 +512,8 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
   const cardBrand: CardBrand = {
     primary: kitColors?.primary?.[0] || bd?.colors?.[0] || '#FF6D29', name: company.business_name,
     accent: kitColors?.accent?.[0], text: kitColors?.text, bg: kitColors?.bg, logoUrl: bd?.logo_url ?? undefined,
+    // Cores de reserva: o slide escolhe a 1ª que contrasta com o fundo (slideSystem.pickAccent).
+    primary2: kitColors?.primary?.[1] || bd?.colors?.[1], accent2: kitColors?.accent?.[1],
   }
   const product = ((productRows ?? [])[0] as { title: string; image_url: string | null } | undefined) ?? null
   const templateDesc = TEMPLATE_DESC(!!product?.image_url, !!realReview, !!realStat)
