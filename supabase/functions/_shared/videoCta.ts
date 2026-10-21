@@ -20,9 +20,51 @@ export interface CtaDecision {
   promptRule: string
 }
 
-// "Comente QUERO", "comenta VISITA", "COMENTE SIMULAÇÃO". Palavra-chave em
-// MAIÚSCULAS (3+ letras) — "comente abaixo" não é palavra-chave.
-const COMMENT_KEYWORD_RE = /(?:[Cc]oment|COMENT)[eaEA]r?\s+["“'‘]?([A-ZÁÉÍÓÚÂÊÔÃÕÇ]{3,})(?![A-Za-zÀ-ÿ])["”'’]?/g
+// Detector de "peça comentário com palavra-chave" (ver findCta). Verbos de pedido
+// (comente/digite/escreva/mande/responda/envie) seguidos, em até 3 palavras, de
+// uma palavra-chave: entre aspas, em MAIÚSCULAS (2+ letras) ou conhecida
+// (quero/visita/simulação — só se só houver "enchimento" no meio, pra "comente o
+// que achou da visita" não ser pego).
+const CTA_VERB_RE = /(?<![\p{L}])(?:coment(?:a|e|ar|em|am)|digit(?:a|e|em)|escrev(?:a|e|em)|mand(?:a|e|em)|respond(?:a|e|am|em)|envi(?:a|e|em))(?![\p{L}])/giu
+const KNOWN_KEYWORDS = new Set(['quero', 'visita', 'simulação', 'simulacao'])
+const FILLERS = new Set(['palavra', 'aqui', 'aí', 'ai', 'abaixo', 'agora', 'só', 'so', 'apenas', 'mesmo', 'eu'])
+const EDGE_RE = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu
+
+interface CtaHit { start: number; end: number; words: string[] }
+
+/** Acha a primeira frase de "comente PALAVRA" (qualquer variação). `except` = palavra aprovada (não conta). */
+function findCta(text: string, except?: string, extra?: string): CtaHit | null {
+  const known = new Set(KNOWN_KEYWORDS); if (extra) known.add(extra.toLowerCase())
+  const exc = except?.toUpperCase()
+  for (const v of text.matchAll(CTA_VERB_RE)) {
+    const vEnd = (v.index ?? 0) + v[0].length
+    const toks = [...text.slice(vEnd).matchAll(/\S+/g)].slice(0, 12).map(m => ({ raw: m[0], end: vEnd + (m.index ?? 0) + m[0].length, w: m[0].replace(EDGE_RE, '') }))
+    let gap = 0, onlyFiller = true
+    for (let i = 0; i < toks.length; i++) {
+      const { raw, w } = toks[i]
+      if (!w) continue
+      if (gap > 3) break
+      const quoted = /^["“”'‘«]/.test(raw) && w.length >= 2
+      const caps = /^\p{Lu}{2,}$/u.test(w)
+      const kw = quoted || caps || (onlyFiller && known.has(w.toLowerCase()))
+      if (kw) {
+        const words = [w.toUpperCase()]; let end = toks[i].end
+        for (let j = i + 1; j < toks.length && /^\p{Lu}{2,}$/u.test(toks[j].w) && !/[.!?]$/.test(toks[j - 1].raw); j++) { words.push(toks[j].w.toUpperCase()); end = toks[j].end }
+        if (exc && words.includes(exc)) break
+        const before = text.slice(0, v.index ?? 0), cut = Math.max(before.search(/[.!?\n][^.!?\n]*$/) , -1)
+        const start = cut >= 0 ? cut + 1 : (v.index ?? 0)
+        const m = /[.!?\n]/.exec(text.slice(end))
+        const stop = m ? end + (m.index ?? 0) + (m[0] === '\n' ? 0 : 1) : text.length
+        return { start, end: stop, words }
+      }
+      const filler = FILLERS.has(w.toLowerCase()) || (w.toLowerCase() === 'a' && toks[i + 1]?.w.toLowerCase() === 'palavra')
+      onlyFiller = onlyFiller && filler
+      gap++
+      if (/[.!?]$/.test(raw)) break
+    }
+  }
+  return null
+}
 
 function fichaCta(raw: unknown): string {
   return typeof raw === 'string' && raw.trim() ? raw.trim() : DEFAULT_CTA_SEM_AUTOMACAO
@@ -38,27 +80,28 @@ export function decideVideoCta(automation: VideoAutomation | null | undefined, c
   return { approved: false, keyword: null, cta: alt, promptRule: `Regra de chamada final (decidida pelo sistema): NÃO peça comentário com palavra-chave (nada de "Comente QUERO", "Comente VISITA" etc.). Use este CTA: "${alt}".` }
 }
 
-function dropSentences(text: string, bad: (s: string) => boolean): string {
-  return text.split('\n').map(line => {
-    const parts = line.split(/(?<=[.!?])\s+/)
-    return parts.filter(p => !bad(p)).join(' ').trim()
-  }).join('\n').replace(/\n{3,}/g, '\n\n').trim()
+/** Remove, da legenda, toda frase que pede comentário com palavra-chave (exceto a aprovada). */
+function dropCtaPhrases(text: string, except?: string, extra?: string): string {
+  let t = text
+  for (let n = 0; n < 20; n++) {
+    const h = findCta(t, except, extra); if (!h) break
+    t = t.slice(0, h.start) + t.slice(h.end)
+  }
+  return t.replace(/[ \t]+\n/g, '\n').replace(/[ \t]{2,}/g, ' ').replace(/[,;:–-][ \t]*$/gm, '').replace(/\n{3,}/g, '\n\n').trim()
 }
-const hasKeywordCta = (s: string, except?: string) => {
-  for (const m of s.matchAll(COMMENT_KEYWORD_RE)) if (!except || m[1].toUpperCase() !== except.toUpperCase()) return true
-  return false
-}
+const hasKeywordCta = (s: string, except?: string, extra?: string) => !!findCta(s, except, extra)
 
 /** Trava depois da IA: garante que legenda e CTA obedecem a decisão do código. */
 export function sanitizeCaptionCta(caption: string | null, cta: string | null, d: CtaDecision): { caption: string | null; cta: string | null; changed: boolean } {
   let cap = caption, c = cta, changed = false
-  if (!d.approved) {
-    if (cap && hasKeywordCta(cap)) { cap = dropSentences(cap, s => hasKeywordCta(s)) || null; changed = true }
-    if (!c || hasKeywordCta(c)) { c = d.cta; changed = true }
-  } else {
-    if (cap && hasKeywordCta(cap, d.keyword ?? undefined)) { cap = dropSentences(cap, s => hasKeywordCta(s, d.keyword ?? undefined)) || null; changed = true }
-    if (!c || !hasKeywordCta(c) || hasKeywordCta(c, d.keyword ?? undefined)) { c = d.cta; changed = true }
+  const exc = d.approved ? d.keyword ?? undefined : undefined
+  if (cap && hasKeywordCta(cap, exc, d.keyword ?? undefined)) {
+    cap = dropCtaPhrases(cap, exc, d.keyword ?? undefined) || d.cta  // legenda esvaziou: o CTA vira a legenda mínima
+    changed = true
   }
+  if (!d.approved) {
+    if (!c || hasKeywordCta(c, undefined, undefined)) { c = d.cta; changed = true }
+  } else if (!c || !hasKeywordCta(c, undefined, d.keyword ?? undefined) || hasKeywordCta(c, exc, d.keyword ?? undefined)) { c = d.cta; changed = true }
   return { caption: cap, cta: c, changed }
 }
 
