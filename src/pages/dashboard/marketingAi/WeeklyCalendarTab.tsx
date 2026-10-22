@@ -50,7 +50,9 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 }
 
 type Item = TestPost & { kind?: string; planned_for: string | null; item_id?: string | null; recipe?: string | null; story_worthy?: boolean | null }
-interface FormatMeta { surface?: string; recipe?: string }
+interface FormatMeta { surface?: string; recipe?: string; family?: string; pillar?: string }
+// Formatos genéricos (não vêm da ficha) e a família que o servidor dá a eles (formatCatalog.ts).
+const GENERIC_FAMILY: Record<string, string> = { post_card: 'eventual', carrossel_slides: 'educativo' }
 const SURFACE_ICON: Record<string, string> = { feed: '📝', stories: '📖', reels: '🎬', dm: '💬' }
 
 function startOfWeek(base: Date): Date {
@@ -102,7 +104,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
     const plan = (strat?.content_plan ?? null) as { weekly_mix?: MixItem[] } | null
     setMix(Array.isArray(plan?.weekly_mix) ? plan!.weekly_mix : [])
     const fm: Record<string, FormatMeta> = {}
-    for (const f of ((pb?.config as { content_formats?: { key: string; surface?: string; recipe?: string }[] } | null)?.content_formats ?? [])) fm[f.key] = { surface: f.surface, recipe: f.recipe }
+    for (const f of ((pb?.config as { content_formats?: { key: string; surface?: string; recipe?: string; family?: string; pillar?: string; producer?: string }[] } | null)?.content_formats ?? [])) fm[f.key] = { surface: f.surface, recipe: f.recipe, family: f.family ?? (f.producer === 'item_video' ? 'tour' : 'eventual'), pillar: f.pillar }
     setFormatMeta(fm)
     setItems((posts ?? []) as Item[])
     setScheduledIds(new Set(((actions ?? []) as { ref_id: string }[]).map(a => a.ref_id)))
@@ -215,7 +217,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                       {SURFACE_ICON[surface] ?? '📝'} {sl.name}
                     </div>
                     <div style={{ fontSize: '8.5px', color: MUTED, marginTop: '2px' }}>{t.surf[surface] ?? surface} · {slotWho(sl)}</div>
-                    <div style={{ marginTop: '4px' }}><PieceChips familia={sl.familia} pilarSs={sl.pilar_ss} tema={sl.tema} ssNames={ssNames} /></div>
+                    <div style={{ marginTop: '4px' }}><PieceChips familia={sl.familia ?? formatMeta[sl.format]?.family ?? GENERIC_FAMILY[sl.format] ?? (sl.producer === 'item_video' ? 'tour' : 'eventual')} pilarSs={sl.pilar_ss} tema={sl.tema ?? formatMeta[sl.format]?.pillar ?? sl.pillar} ssNames={ssNames} /></div>
                   </div>
                 )
               })}

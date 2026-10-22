@@ -352,6 +352,25 @@ foi aplicado nem deployado** (migration e functions dependem de aprovação).
   da estratégia, não de dado cadastrado (regra 5).
 - **Slides e QUERO:** a trava confere legenda e CTA; texto dentro dos slides do
   carrossel não é conferido (o prompt do deck já não pede QUERO).
+  **Corrigido (QA rodada 1, 2026-10-22):** isso era falso — o prompt do deck
+  recebia o `brief.cta` cru do Diretor (podia ser "Comente QUERO") e o `cta`
+  desenhado no fecho vinha da IA. Agora a decisão do QUERO (`decideVideoCta`)
+  é tomada em código ANTES do prompt (o deck recebe o CTA seguro) e todo slide
+  (título, texto, itens, destaque) passa por `lockSlide`/`lockDeck`
+  (`_shared/deckSlides.ts`); o fecho sempre usa o CTA decidido pelo código,
+  também nos slides reescritos pelo retry de overflow.
+- **Chip "Tema" sozinho (QA rodada 1):** peças antigas (vídeo/pacote/FAQ) já
+  tinham `pillar` preenchido, então mostravam só "Tema". Agora o Tema só
+  aparece junto de Família ou Pilar SS. O nome do tema vem de um mapa genérico
+  (com acento) em `PieceLabels.tsx`, porque a ficha guarda `config.pillars`
+  só como chave → peso, sem nome; chave fora do mapa vira texto legível.
+- **`pilar_ss` validado nas bordas (QA rodada 1):** `plan_slot` e
+  `catalog-package` descartam `pilar_ss` que não existe na ficha
+  (`dropUnknownPilar` + `fetchSSPillars`); a intenção da vaga cai junto.
+- **Vaga vazia de estratégia antiga (QA rodada 1):** o front completa
+  família/tema a partir do catálogo de formatos da ficha já carregado no
+  Calendário (`WeeklyCalendarTab.tsx`); `pilar_ss` continua sem chip (só a
+  estratégia nova sabe).
 - **Peça nasce sem rótulo se a migration faltar:** os rótulos são gravados num
   UPDATE à parte, tolerante a falha (ver PITFALLS).
 

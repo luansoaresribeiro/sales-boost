@@ -22,7 +22,7 @@
 import { loadLessons, lessonsBlock } from '../_shared/contentLessons.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
-import { applyQueroLock, cleanLabels } from '../_shared/slotIntent.ts'
+import { applyQueroLock, cleanLabels, dropUnknownPilar, fetchSSPillars } from '../_shared/slotIntent.ts'
 import { decideVideoCta } from '../_shared/videoCta.ts'
 import { ensureNearby, fetchNearbyConfig, fmtDistance, topPlaces } from '../_shared/nearbyPlaces.ts'
 
@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
     const automation = auto as { active?: boolean; message?: string; keywords?: string[] } | null
     const decision = decideVideoCta(automation, ficha.ctas)
     const intentTxt = internal && typeof body.intent === 'string' ? body.intent.trim().slice(0, 1000) : ''
-    const labels = internal ? cleanLabels(body as { familia?: unknown; pilar_ss?: unknown; tema?: unknown }) : {}
+    const labels: { familia?: string; pilar_ss?: string; tema?: string } = internal ? dropUnknownPilar(cleanLabels(body as { familia?: unknown; pilar_ss?: unknown; tema?: unknown }), await fetchSSPillars(admin, company.vertical_key)) : {}
     const copy = (briefing: string) => writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`)
 
     const fieldsLine = `Tipo: ${fields.tipo ?? '—'} · Bairro: ${fields.bairro ?? '—'} · ${fields.venda_ou_aluguel ?? '—'} · Preço: R$ ${fields.preco ?? '—'} · Quartos: ${fields.quartos ?? '—'} · Metragem: ${fields.m2 ?? '—'}m²${fields.perto_de ? ` · Perto de: ${fields.perto_de}` : ''}${fields.descricao ? `\nDescrição real escrita pelo corretor (use só o que está aqui, sem acrescentar): ${String(fields.descricao).slice(0, 1500)}` : ''}`

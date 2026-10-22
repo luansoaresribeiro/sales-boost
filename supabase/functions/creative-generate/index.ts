@@ -21,12 +21,12 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchContentRules, ensureMinVideos, labelMix, familyOf, type ContentPlan } from '../_shared/formatCatalog.ts'
-import { applyQueroLock, buildSlotIntent, cleanIntent, cleanLabels, fetchSSPillars, intentBlock, type SlotIntent } from '../_shared/slotIntent.ts'
+import { applyQueroLock, buildSlotIntent, cleanIntent, cleanLabels, dropUnknownPilar, fetchSSPillars, intentBlock, type SlotIntent } from '../_shared/slotIntent.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
 import { privateFieldKeys } from '../_shared/nearbyPlaces.ts'
 import { loadLessons, lessonsBlock, relearn } from '../_shared/contentLessons.ts'
-import { deckPromptRules, DECK_SLIDE_JSON, inventedNumbers, normalizeDeck, normalizeSlide, numbersOf, pickCoverStyle, rewritePrompt, slideSummary, type DeckSlide } from '../_shared/deckSlides.ts'
+import { deckPromptRules, DECK_SLIDE_JSON, lockSlide, inventedNumbers, normalizeDeck, normalizeSlide, numbersOf, pickCoverStyle, rewritePrompt, slideSummary, type DeckSlide } from '../_shared/deckSlides.ts'
 import { decideVideoCta, queroNotice, sanitizeCaptionCta } from '../_shared/videoCta.ts'
 import { checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 
@@ -642,6 +642,10 @@ Decida o brief. Retorne APENAS um JSON:
 
   // Capa do carrossel em rodízio (gancho → pergunta → lista), pela quantidade de carrosséis já feitos.
   const coverStyle = opts.deck ? pickCoverStyle((await admin.from('marketing_ai_test_content').select('id', { count: 'exact', head: true }).eq('company_id', company.id).eq('format', 'carrossel')).count ?? 0) : 'gancho'
+  // Decisão do QUERO em código ANTES do prompt: o CTA que o carrossel recebe de exemplo já é o seguro.
+  const automation = opts.itemId ? (await admin.from('engagement_automations').select('active, message, keywords').eq('company_id', company.id).eq('item_id', opts.itemId).maybeSingle()).data : null
+  const fichaCtas = await fetchFichaCtas(admin, company.vertical_key)
+  const quero = decideVideoCta(automation as { active?: boolean; message?: string; keywords?: string[] } | null, fichaCtas)
   const execPrompt = `${preamble(config, company, playbookBlock)}
 
 Você agora EXECUTA como esta personalidade: ${personaContent}
@@ -662,7 +666,7 @@ ${visualRefs ? `\nReferências visuais da marca (Layouts & Estilos — inspire-s
 Escreva o post pronto pra publicar. Regras importantes:
 - "caption" é APENAS a legenda que vai no Instagram (texto pro público). NUNCA coloque nela instruções de imagem, descrição de foto nem "Slide 1/2/3".
 - Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
-${opts.deck ? deckPromptRules(coverStyle, String(brief.cta ?? '')) : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
+${opts.deck ? deckPromptRules(coverStyle, quero.cta) : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
 - Depois de escrever, avalie o PRÓPRIO post: ele é forte/direto o suficiente pra também valer a pena repostar nos Stories tal como está (sem regerar nada)? Se sim, "story_worthy":true e "story_note": 1 frase curta dizendo por quê. Seja seletivo — nem todo post é bom pra Stories (ex: um card com muito texto lido rápido não funciona lá); só marque true quando fizer sentido de verdade.
 ${CARD_FIELD_INSTRUCTIONS[String(brief.template ?? '')] ?? ''}
 Retorne APENAS um JSON array:
@@ -688,8 +692,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   // Trava do QUERO (vale pra toda peça): sem resposta aprovada do imóvel (post solto não tem imóvel),
   // "Comente QUERO" vira o CTA alternativo da ficha. Decisão em código, depois da IA.
   const rawCta = post.cta ? String(post.cta) : (brief.cta ? String(brief.cta) : null)
-  const automation = opts.itemId ? (await admin.from('engagement_automations').select('active, message, keywords').eq('company_id', company.id).eq('item_id', opts.itemId).maybeSingle()).data : null
-  const lock = applyQueroLock(post.caption ? String(post.caption) : null, rawCta, automation as { active?: boolean; message?: string; keywords?: string[] } | null, await fetchFichaCtas(admin, company.vertical_key))
+  const lock = applyQueroLock(post.caption ? String(post.caption) : null, rawCta, automation as { active?: boolean; message?: string; keywords?: string[] } | null, fichaCtas)
   const caption = lock.caption
   if (rawCta) post.cta = lock.cta // CTA vazio fica vazio (não inventa CTA onde a IA não pôs)
   if (lock.notice) brief.reasoning = `${brief.reasoning ?? ''} ${lock.notice}`.trim()
@@ -735,7 +738,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
       // fecho), o render-format mede o texto de verdade e acusa `overflow`. Estourou (ou tem número que não veio
       // dos dados — regra 5)? 1 pedido de versão mais curta POR SLIDE, depois re-renderiza; se ainda
       // ainda estoura: o desenho descarta as linhas que passariam do rodapé e o reasoning avisa o dono ("slide apertado"). O dono aprova tudo antes de ir ao ar.
-      const deckSlides = normalizeDeck(Array.isArray(post.slides) ? post.slides : [], String(post.cta ?? brief.cta ?? ''))
+      const deckSlides = normalizeDeck(Array.isArray(post.slides) ? post.slides : [], String(post.cta ?? quero.cta)).map(x => lockSlide(x, quero))
       const dataText = [preamble(config, company, playbookBlock), seedBlock, insights.map(i => `${i.title} ${i.description}`).join(' ')].join(' ')  // sem `idea`: é texto da própria IA, não dado
       const allowed = numbersOf(dataText)
       const handle = String(company.instagram_username ?? '').replace(/^@/, '').trim()
@@ -752,6 +755,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
             const raw = parseObj(await callClaude(anthropicKey, rewritePrompt(company.business_name, cur, { tooLong: !!r?.overflow, numbers: bad }), 600))
             const next = normalizeSlide(raw, cur.layout === 'capa' || cur.layout === 'fecho' ? cur.layout : null, cur.cta)
             next.layout = cur.layout
+            Object.assign(next, lockSlide(next, quero))
             if (Object.keys(raw).length) { cur = next; r = (await renderSlide(cur, i)) ?? r }
           } catch (e) { console.error('creative-generate: slide mais curto falhou', company.id, i + 1, e) }
         }
@@ -1334,7 +1338,12 @@ Deno.serve(async (req) => {
       if (!company) return json({ error: 'empresa não encontrada' }, 404)
       if (!(await hasPaidAccess(admin, company.id))) return json({ error: 'sem plano' }, 402)
       // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
-      EdgeRuntime.waitUntil(runPlanSlot(admin, anthropicKey, company, job, cronSecretEnv))
+      // pilar_ss precisa existir na ficha deste setor; desconhecido some (e a intenção junto).
+      const ssKeys = await fetchSSPillars(admin, company.vertical_key)
+      const okJob = dropUnknownPilar(job, ssKeys)
+      if (okJob.pilar_ss !== job.pilar_ss) okJob.intent = null
+      if (okJob.intent && !ssKeys.some(p => p.key === okJob.intent?.pilar_ss)) okJob.intent = null
+      EdgeRuntime.waitUntil(runPlanSlot(admin, anthropicKey, company, okJob, cronSecretEnv))
       return json({ ok: true, accepted: true }, 202)
     }
 

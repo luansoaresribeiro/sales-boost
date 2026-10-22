@@ -94,6 +94,13 @@ export function cleanLabels(x: { familia?: unknown; pilar_ss?: unknown; tema?: u
   return out
 }
 
+/** Tira o pilar_ss que não existe na ficha do setor (borda: plan_slot / catalog-package). Ficha sem pilares = nenhum vale. */
+export function dropUnknownPilar<T extends { pilar_ss?: string }>(x: T, ssPillars: SSPillarLite[] | null | undefined): T {
+  if (!x.pilar_ss || (ssPillars ?? []).some(p => p.key === x.pilar_ss)) return x
+  const { pilar_ss: _drop, ...rest } = x
+  return rest as T
+}
+
 /** Revalida uma intenção que viajou por JSON (plan_slot / cron): forma fixa + slice. */
 export function cleanIntent(x: unknown): SlotIntent | null {
   const r = (x && typeof x === 'object' ? x : null) as Record<string, unknown> | null
