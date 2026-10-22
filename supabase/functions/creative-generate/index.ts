@@ -20,7 +20,8 @@
  *     Testes liga isso, e auto_daily_test_image decide se gera imagem junto.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchContentRules, ensureMinVideos, type ContentPlan } from '../_shared/formatCatalog.ts'
+import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchContentRules, ensureMinVideos, labelMix, familyOf, type ContentPlan } from '../_shared/formatCatalog.ts'
+import { applyQueroLock, buildSlotIntent, cleanIntent, cleanLabels, fetchSSPillars, intentBlock, type SlotIntent } from '../_shared/slotIntent.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
 import { privateFieldKeys } from '../_shared/nearbyPlaces.ts'
@@ -438,7 +439,13 @@ const MOD_LABEL: Record<string, string> = { organico: 'Post Orgânico', stories:
 
 interface GenOpts {
   bearer: string; isCron: boolean; cronSecret?: string
-  seed?: { title?: string; hook?: string; angle?: string; format?: string } | null
+  // `intent` = texto da intenção da estratégia (intentBlock); só vem das vagas do calendário.
+  seed?: { title?: string; hook?: string; angle?: string; format?: string; intent?: string } | null
+  // Rótulo único da peça (familia · pilar_ss · tema) + intenção, gravados depois do insert.
+  labels?: { familia?: string; pilar_ss?: string; tema?: string }
+  intent?: SlotIntent | null
+  // Imóvel ligado à peça (só a trava do QUERO usa hoje; post solto não tem).
+  itemId?: string | null
   ideaId?: string | null
   skipImage?: boolean
   // Escolha manual do dono no botão "Gerar post de teste": undefined/null =
@@ -453,6 +460,22 @@ interface GenOpts {
   // que a trend traz". Cada slide é um card do render-format (texto nítido da
   // marca, custo zero); a IA de imagem nunca escreve texto (regra 4).
   deck?: boolean
+}
+
+// Rótulo único da peça (familia · pilar_ss · tema→pillar) + intenção que a guiou.
+// UPDATE separado e tolerante, NUNCA no insert: se a migration das colunas ainda não
+// foi aplicada, a peça nasce sem rótulo mas nasce (docs/PITFALLS.md).
+async function saveLabels(admin: SupaClient, id: string, l?: { familia?: string; pilar_ss?: string; tema?: string } | null, intent?: SlotIntent | null): Promise<void> {
+  const upd: Record<string, unknown> = {}
+  if (l?.familia) upd.familia = l.familia
+  if (l?.pilar_ss) upd.pilar_ss = l.pilar_ss
+  if (l?.tema && l.tema !== 'qualquer') upd.pillar = l.tema
+  if (intent) upd.intent = intent
+  if (!Object.keys(upd).length) return
+  try {
+    const { error } = await admin.from('marketing_ai_test_content').update(upd).eq('id', id)
+    if (error) console.error('saveLabels: rótulo não gravado (migration aplicada?)', id, error.message)
+  } catch (e) { console.error('saveLabels falhou', id, e) }
 }
 
 // O núcleo da geração — usado tanto pelo modo interativo (1 empresa, o
@@ -538,6 +561,11 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
 - Ângulo: ${seed.angle ?? '—'}
 - Formato sugerido: ${seed.format ?? '—'}${seed.format ? ` — RESPEITE esse formato no seu "format" a menos que haja um motivo forte pra mudar (aí explique o motivo em "reasoning"). Nem toda ideia precisa virar carrossel: se o formato sugerido for "foto", gere UMA foto só.` : ''}\n` : ''
 
+  // Intenção da estratégia (pilar de Social Selling, público, mensagem, CTA sugerido). Fica FORA do
+  // seedBlock de propósito: o seedBlock entra na lista de "dados" que libera número no carrossel
+  // (numbersOf) e a intenção vem de texto da IA da estratégia — não é dado cadastrado (regra 5).
+  const intentTxt = seed?.intent ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${seed.intent}\n` : ''
+
   // ── Passo 1: Diretor Criativo → BRIEF ────────────────────────────
   const baseFormats = ALLOWED_FORMATS[kind] ?? ['foto', 'carrossel']
   const allowedFormats = allowCarrossel ? baseFormats : baseFormats.filter(f => f !== 'carrossel')
@@ -561,7 +589,7 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
   const directorPrompt = `${preamble(config, company, playbookBlock)}
 
 Você é o DIRETOR CRIATIVO de uma agência. Vai criar um conteúdo do tipo "${modLabel}". Decida o brief usando os insights reais e as boas práticas ESPECÍFICAS desse formato (não use regra genérica).
-${seedBlock}${insights.length ? `\nInsights abertos:\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
+${seedBlock}${intentTxt}${insights.length ? `\nInsights abertos:\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
 ${recentUsed ? `\nÚltimos posts desse negócio (formato/sistema visual/framework já usados — VARIE, não repita o mesmo combo à toa só porque "faz sentido pro negócio"; só repita se você tiver um motivo estratégico real e disser isso em "reasoning"):\n${recentUsed}` : ''}
 
 Boas práticas do formato ${modLabel}:\n${moduleKnow}
@@ -625,7 +653,7 @@ Siga fielmente o brief do Diretor Criativo:
 - Ângulo do hook: ${brief.hook_angle ?? '—'}
 - CTA desejado: ${brief.cta ?? '—'}
 - Oferta: ${brief.offer ?? '—'}
-${brief.template === 'product' && product ? `- Produto real desse post: "${product.title}" — a legenda precisa ser sobre ESTE produto especificamente.` : ''}
+${intentTxt}${brief.template === 'product' && product ? `- Produto real desse post: "${product.title}" — a legenda precisa ser sobre ESTE produto especificamente.` : ''}
 ${frameworkContent ? `\nUse este framework de copy:\n${frameworkContent}` : ''}
 ${visualContent ? `\nConceito visual a evocar:\n${visualContent}` : ''}
 
@@ -657,7 +685,14 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
 
   const fmt = String(post.format ?? brief.format ?? 'foto')
   const idea = post.idea ? String(post.idea) : null
-  const caption = post.caption ? String(post.caption) : null
+  // Trava do QUERO (vale pra toda peça): sem resposta aprovada do imóvel (post solto não tem imóvel),
+  // "Comente QUERO" vira o CTA alternativo da ficha. Decisão em código, depois da IA.
+  const rawCta = post.cta ? String(post.cta) : (brief.cta ? String(brief.cta) : null)
+  const automation = opts.itemId ? (await admin.from('engagement_automations').select('active, message, keywords').eq('company_id', company.id).eq('item_id', opts.itemId).maybeSingle()).data : null
+  const lock = applyQueroLock(post.caption ? String(post.caption) : null, rawCta, automation as { active?: boolean; message?: string; keywords?: string[] } | null, await fetchFichaCtas(admin, company.vertical_key))
+  const caption = lock.caption
+  if (rawCta) post.cta = lock.cta // CTA vazio fica vazio (não inventa CTA onde a IA não pôs)
+  if (lock.notice) brief.reasoning = `${brief.reasoning ?? ''} ${lock.notice}`.trim()
 
   const { data: inserted, error: insErr } = await admin.from('marketing_ai_test_content').insert({
     company_id: company.id, kind, idea, caption,
@@ -669,6 +704,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
     story_worthy: !!post.story_worthy, story_note: post.story_note ? String(post.story_note) : null,
   }).select('id').single()
   if (insErr) throw new Error(insErr.message)
+  await saveLabels(admin, inserted.id, opts.labels, opts.intent)
 
   let mainImage: string | null = null
   let slides: { text: string; image_prompt: string; image_url: string | null; layout?: string }[] | null = null
@@ -907,7 +943,7 @@ async function planWeekForCompany(admin: SupaClient, anthropicKey: string, compa
     admin.from('marketing_ai_test_content').select('id').eq('company_id', company.id).eq('status', 'draft').is('quality_score', null),
     fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers),
     fetchWeekPillarOccupancy(admin, company.id, dates.map(d => d.iso), await fetchPillarWeights(admin, company.vertical_key ?? 'generico')),
-    admin.from('marketing_ai_strategies').select('content_plan').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('marketing_ai_strategies').select('content_plan, funnel_plan').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
   ])
   // Mix da semana escolhido pela estratégia (Hermes): o calendário segue as
   // quantidades e os formatos; o que não dá pra gerar sozinho (vídeo, pacote
@@ -915,15 +951,23 @@ async function planWeekForCompany(admin: SupaClient, anthropicKey: string, compa
   const storedPlan = (stratRow?.content_plan ?? null) as ContentPlan | null
   // Mínimo de vídeos da ficha vale também pra estratégia antiga (criada antes
   // da regra) — sem precisar refazer a estratégia.
+  // Estratégia antiga (sem familia/pilar_ss/tema): o labelMix completa pelo catálogo e pelo
+  // fallback determinístico (funil do mesmo formato → rodízio entre os pilares da ficha).
+  const funnelPlan = stratRow?.funnel_plan ?? null
+  const ssPillars = await fetchSSPillars(admin, company.vertical_key)
   const contentPlan = storedPlan && Array.isArray(storedPlan.weekly_mix) && storedPlan.weekly_mix.length
-    ? { ...storedPlan, weekly_mix: ensureMinVideos(storedPlan.weekly_mix, await fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id), (await fetchContentRules(admin, company.vertical_key ?? 'generico')).minVideosPerWeek) }
+    ? await (async () => {
+      const cat = await fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id)
+      const mixed = ensureMinVideos(storedPlan.weekly_mix, cat, (await fetchContentRules(admin, company.vertical_key ?? 'generico')).minVideosPerWeek)
+      return { ...storedPlan, weekly_mix: labelMix(mixed, new Map(cat.map(f => [f.key, f])), ssPillars.map(p => p.key), { funnel: funnelPlan }) }
+    })()
     : storedPlan
   const mix = weeklyMixPlan(contentPlan)
   // Estratégia com mix semanal → o calendário é o plano dela, dia a dia
   // (weekSlots), sem a IA decidir cadência. Sem estratégia, vale o
   // planejamento antigo abaixo.
   const slots = weekSlots(contentPlan, dates.map(d => d.iso))
-  if (slots.length) return await planWeekFromStrategy(admin, company, slots, contentPlan!)
+  if (slots.length) return await planWeekFromStrategy(admin, company, slots, contentPlan!, funnelPlan, ssPillars)
   const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
   const pendingCount = (pendingRows ?? []).length
 
@@ -952,7 +996,7 @@ Retorne APENAS um JSON array, um item por dia, nesta ordem (sempre os 7 dias):
       // Com mix da estratégia: cada peça leva o formato/objetivo da vez (fila
       // intercalada). Sem estratégia: sem seed de propósito — ver comentário acima.
       const pick = mix.auto.length ? mix.auto[slot++ % mix.auto.length] : null
-      const seed = pick ? { title: pick.name, angle: `Pilar ${pick.pillar}: ${pick.purpose || 'serve a estratégia ativa'}`, format: 'foto' } : null
+      const seed = pick ? { title: pick.name, angle: `Pilar ${pick.pillar}: ${pick.purpose || 'serve a estratégia ativa'}`, format: 'foto' } : null  // (caminho antigo, sem mix da estratégia: sem intenção)
       try {
         await generateForCompany(admin, anthropicKey, company, 'organico', { ...auth, plannedFor: date, seed })
         planned++; ok++
@@ -985,9 +1029,11 @@ Retorne APENAS um JSON array, um item por dia, nesta ordem (sempre os 7 dias):
 // depois do botão não gera de novo nem gasta IA de novo.
 const VIDEO_RECIPE = 'video_imovel'
 const DECK_FORMAT = 'carrossel_slides' // genérico (formatCatalog.ts)
-interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string }
+// familia/pilar_ss/tema = rótulo único da peça (tema = pilar de conteúdo da ficha, gravado em `pillar`);
+// intent = a intenção da estratégia pra esta vaga (buildSlotIntent). Todos opcionais (vaga antiga/avulsa).
+interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string; familia?: string; pilar_ss?: string; tema?: string; intent?: SlotIntent | null }
 
-async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: ReturnType<typeof weekSlots>, plan: ContentPlan): Promise<{ planned: number; days: { date: string; posts: number; note: string }[]; todo: { format: string; name: string; per_week: number; purpose: string }[] }> {
+async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: ReturnType<typeof weekSlots>, plan: ContentPlan, funnelPlan: unknown = null, ssPillars: { key: string; name: string; why?: string }[] = []): Promise<{ planned: number; days: { date: string; posts: number; note: string }[]; todo: { format: string; name: string; per_week: number; purpose: string }[] }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const cronSecret = Deno.env.get('CRON_SECRET') ?? ''
@@ -1025,6 +1071,10 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
   for (const m of plan.weekly_mix ?? []) if (m.producer === 'dm') todo.set(m.format, { format: m.format, name: m.name, per_week: m.per_week, purpose: m.purpose })
 
   const jobs: SlotJob[] = []
+  const labelsOf = (slot: ReturnType<typeof weekSlots>[number]) => ({
+    familia: slot.familia, pilar_ss: slot.pilar_ss, tema: slot.tema,
+    intent: buildSlotIntent({ format: slot.format, pilar_ss: slot.pilar_ss }, plan, funnelPlan, ssPillars),
+  })
   for (const slot of slots) {
     const recipe = slot.producer === 'item_package' ? recipeOf.get(slot.format) : slot.producer === 'item_video' ? VIDEO_RECIPE : undefined
     if (alreadyFilled(slot.date, recipe, slot.producer)) continue
@@ -1032,17 +1082,17 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
       // Formato que a ficha desligou (ex.: card "tipo tweet" em imóveis) e
       // ainda está numa estratégia antiga → sai como carrossel de slides.
       const format = formats.some(f => f.key === slot.format) ? slot.format : DECK_FORMAT
-      jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format }); continue
+      jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format, ...labelsOf(slot) }); continue
     }
     if (slot.producer === 'item_video') {
       const itemId = pickItem()
       if (!itemId) { addTodo(slot); continue }
-      jobs.push({ date: slot.date, producer: 'item_video', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe: VIDEO_RECIPE, item_id: itemId })
+      jobs.push({ date: slot.date, producer: 'item_video', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe: VIDEO_RECIPE, item_id: itemId, ...labelsOf(slot) })
       continue
     }
     const itemId = recipe ? pickItem() : null
     if (!recipe || !itemId) { addTodo(slot); continue }
-    jobs.push({ date: slot.date, producer: 'item_package', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe, item_id: itemId })
+    jobs.push({ date: slot.date, producer: 'item_package', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe, item_id: itemId, ...labelsOf(slot) })
   }
 
   // Despacho: cada vaga é uma chamada própria; esperamos só o aceite.
@@ -1075,7 +1125,7 @@ async function makeNowJob(admin: SupaClient, company: Company, formatKey: string
   const formats = await fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id)
   const f = formats.find(x => x.key === formatKey && x.status === 'live' && x.producer !== 'dm')
   if (!f) return 'Esse tipo de criativo não está disponível agora.'
-  const job: SlotJob = { date: '', producer: f.producer as SlotJob['producer'], name: f.name, pillar: f.pillar, purpose: 'Peça avulsa pedida pelo dono', format: f.key }
+  const job: SlotJob = { date: '', producer: f.producer as SlotJob['producer'], name: f.name, pillar: f.pillar, purpose: 'Peça avulsa pedida pelo dono', format: f.key, familia: familyOf(f), tema: f.pillar }
   if (f.producer === 'post') return job
   const recipe = f.producer === 'item_video' ? VIDEO_RECIPE : f.recipe
   if (!recipe) return 'Esse tipo de criativo ainda não tem receita pronta.'
@@ -1102,17 +1152,21 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
       // Vaga de dica: usa uma dica JÁ conferida (aba Dicas e FAQ). Sem dica
       // liberada, sai um carrossel de slides com o mesmo propósito.
       if (job.format === FAQ_FORMAT && await runFaqSlot(admin, anthropicKey, company, job)) return
-      const seed = { title: job.name, angle: `Pilar ${job.pillar}: ${job.purpose || 'serve a estratégia ativa'}${job.format === FAQ_FORMAT ? ' — dica GERAL: sem número, prazo, taxa, valor nem nome de lei (nada foi conferido em fonte oficial).' : ''}`, format: 'foto' }
+      // Com intenção (setor com Social Selling): o ângulo é o pilar de Social Selling + o texto da intenção
+      // vai inteiro pro prompt. Sem ela (setor sem ficha de SS, vaga antiga/avulsa) fica como sempre foi.
+      const ib = intentBlock(job.intent)
+      const angleHead = job.intent ? `Pilar ${job.intent.pilar_ss_name}` : `Pilar ${job.pillar}`
+      const seed = { title: job.name, intent: ib || undefined, angle: `${angleHead}: ${job.purpose || 'serve a estratégia ativa'}${job.format === FAQ_FORMAT ? ' — dica GERAL: sem número, prazo, taxa, valor nem nome de lei (nada foi conferido em fonte oficial).' : ''}`, format: 'foto' }
       // Só o card genérico (post_card, em setor que não desligou) usa o
       // caminho de imagem+template; qualquer outro formato de post — inclusive
       // um antigo que ficou numa estratégia — sai como carrossel de slides.
-      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card' })
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: job.intent ?? null })
       return
     }
     if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }
     const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/catalog-package`, {
       method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ item_id: job.item_id, only_recipe: job.recipe, planned_for: job.date || undefined, loose: !job.date, cron_secret: cronSecret, company_id: company.id }),
+      body: JSON.stringify({ item_id: job.item_id, only_recipe: job.recipe, planned_for: job.date || undefined, loose: !job.date, cron_secret: cronSecret, company_id: company.id, intent: intentBlock(job.intent) || undefined, familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }),
     })
     const r = await res.json().catch(() => ({})) as { error?: string; generated?: unknown[] }
     if (!res.ok || !r.generated?.length) console.error('runPlanSlot: catalog-package sem peça', company.id, job.date, job.recipe, res.status, r.error)
@@ -1167,10 +1221,11 @@ Responda SÓ em JSON: {"card_question":"...","card_answer":"...","caption":"..."
   const { data: piece, error } = await admin.from('marketing_ai_test_content').insert({
     company_id: company.id, kind: 'organico', format: 'foto', idea: tip.title.slice(0, 200),
     caption, hashtags: out.hashtags ? String(out.hashtags) : null, cta: out.cta ? String(out.cta) : null,
-    image_url: url, media: [{ url, type: 'photo' }], pillar: job.pillar, recipe: FAQ_FORMAT, provider: 'faq_conferida',
+    image_url: url, media: [{ url, type: 'photo' }], pillar: job.tema ?? job.pillar, recipe: FAQ_FORMAT, provider: 'faq_conferida',
     planned_for: job.date || null, reasoning: badge,
   }).select('id').single()
   if (error || !piece) { console.error('runFaqSlot: peça não gravada', company.id, error?.message); return false }
+  await saveLabels(admin, piece.id, job) // sem intent: a dica é conferida em fonte, não segue o texto da estratégia
   await admin.from('marketing_ai_knowledge').update({ meta: { ...tip.meta, used_count: (tip.meta?.used_count ?? 0) + 1 } }).eq('id', tip.id)
   try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runFaqSlot: nota falhou', e) }
   return true
@@ -1211,7 +1266,7 @@ async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Co
 Dados reais do imóvel (use só isto):
 ${facts || '(sem dados além do título)'}
 Título: ${item.title}
-Objetivo da peça na estratégia: ${job.purpose || job.name}
+Objetivo da peça na estratégia: ${job.purpose || job.name}${job.intent ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentBlock(job.intent)}\nO CTA sugerido acima é só sugestão: a regra de chamada final abaixo manda.` : ''}
 ${HONESTY_RULE} A legenda é pro público do Instagram — nunca um recado pro corretor.
 ${decision.promptRule}${lessonsBlock(await loadLessons(admin, company.id))}
 Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`, 700))
@@ -1224,10 +1279,11 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`, 700))
   const { data: piece, error } = await admin.from('marketing_ai_test_content').insert({
     company_id: company.id, kind: 'organico', format: 'reel', idea: `${item.title} — vídeo`,
     caption: safe.caption, hashtags: cap.hashtags ? String(cap.hashtags) : null, cta: safe.cta,
-    image_url: photo, media: [{ url: photo, type: 'photo' }], item_id: item.id, pillar: job.pillar, recipe: VIDEO_RECIPE, provider: 'higgsfield',
+    image_url: photo, media: [{ url: photo, type: 'photo' }], item_id: item.id, pillar: job.tema ?? job.pillar, recipe: VIDEO_RECIPE, provider: 'higgsfield',
     planned_for: job.date || null, reasoning: withNotice('Vídeo sendo feito na Higgsfield a partir de uma foto real — aparece aqui em alguns minutos.'),
   }).select('id').single()
   if (error || !piece) { console.error('runVideoSlot: peça não gravada', company.id, error?.message); return }
+  await saveLabels(admin, piece.id, job, job.intent)
   try {
     const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/item-videos`, {
       method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
@@ -1269,7 +1325,9 @@ Deno.serve(async (req) => {
 
     // ── Uma vaga do calendário (despachada por planWeekFromStrategy) ──
     if (cronSecretEnv && body.cron_secret === cronSecretEnv && body.action === 'plan_slot' && typeof body.company_id === 'string') {
-      const job = body.slot as SlotJob | undefined
+      const rawJob = body.slot as SlotJob | undefined
+      // Campos novos (rótulo + intenção) revalidados: lista fixa / formato fixo / slice.
+      const job = rawJob ? { ...rawJob, familia: undefined, pilar_ss: undefined, tema: undefined, ...cleanLabels(rawJob), intent: cleanIntent(rawJob.intent) } as SlotJob : undefined
       if (!job || !/^\d{4}-\d{2}-\d{2}$/.test(String(job.date)) || !['post', 'item_package', 'item_video'].includes(String(job.producer))) return json({ error: 'vaga inválida' }, 400)
       const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', body.company_id).maybeSingle()
       const company = companyRow as Company | null
