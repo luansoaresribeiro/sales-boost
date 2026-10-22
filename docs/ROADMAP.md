@@ -395,3 +395,30 @@ Os posts que nascem daqui seguem a regra 1: só saem com aprovação do dono.
 3. **Prova Social + Histórias de sucesso.** Entrada manual (depoimento,
    imóvel vendido) até o app da Meta ser aprovado; cada item com status de
    autorização do cliente antes de virar post.
+
+## Pedidos do dono (2026-10-20) — próximas frentes
+
+1. **Business Game por imobiliária.** Regra do dono: "todos que estiverem
+   atrelados à mesma imobiliária jogarão" o jogo juntos.
+   - **Já feito:** a pergunta "A que imobiliária ou grupo imobiliário você
+     está ligado(a)?" entrou no diagnóstico, só pra corretor associado
+     (migration `20261020090000_onboarding_custos_grupo.sql`).
+   - **Falta:**
+     - **Ligação confirmada:** a imobiliária tem um código de convite e o
+       corretor entra com ele. O texto livre não basta, porque qualquer um
+       poderia dizer que é de qualquer imobiliária.
+     - **Placar da equipe:** montado no servidor a partir de
+       `progress_events`. Mostra só nome, nível e pontos, nunca leads ou
+       vendas de outro corretor, e não abre o acesso (RLS) entre contas.
+     - **Na tela:** um bloco "Sua equipe" no Business Game.
+     - **Aprovação:** é tabela nova e regra de acesso nova, então precisa
+       do aviso e do "Posso seguir?".
+   - **Critério de pronto:** dois corretores ligados à mesma imobiliária
+     se veem no placar, e um corretor de fora não vê.
+2. **Inteligência de mercado mais forte.** Melhorar `diagnosis-market` e
+   `map-competitors`:
+   - ferramentas melhores;
+   - mais ângulos de análise de cada concorrente;
+   - garantir que os concorrentes encontrados são os reais.
+
+   Ganha um plano próprio.

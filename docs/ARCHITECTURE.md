@@ -36,7 +36,13 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente ·
    `supabase/functions/strategy-generate/index.ts`. Lê a ficha do setor
    (`fetchPlaybookBlock`) e uma memória estratégica real (via `data-agent`
    → domínio `history`, que lê `marketing_ai_brain_nodes`,
-   `marketing_ai_strategy_log`, `marketing_ai_experiments`). **Automático**:
+   `marketing_ai_strategy_log`, `marketing_ai_experiments`). Desde
+   2026-10-19 também recebe o **escopo do produto** (`SCOPE_BLOCK`: o que o
+   Sales Boost executa e o que não executa) e os **pilares de Social
+   Selling** (ficha `onboarding_v2.social_selling` + nível de cada pilar no
+   diagnóstico ligado à empresa). Grava `content_plan.pillars` e
+   `funnel_plan[].pillar`. Ver [DECISIONS.md](DECISIONS.md) 2026-10-19.
+   **Automático**:
    `claim-diagnostic` dispara a 1ª estratégia sozinha logo após o cadastro;
    um despachante (`action:'cron_dispatch'`, pg_cron diário) reavalia
    semanalmente (`reanalyze`) e atualiza o plano tático mensalmente OU
@@ -323,7 +329,11 @@ companies (id, user_id, business_name, business_type, city, website_url,
   instagram_access_token, instagram_token_expires_at, instagram_auto_post,
   goal, plan, created_at, active, telegram_chat_id, notification_prefs,
   social_data, google_rating, google_review_count, vertical_key,
-  playbook_answers, auto_strategy, agent_automatic_mode, ...)
+  playbook_answers, answer_status, auto_strategy, agent_automatic_mode, ...)
+  `answer_status` (2026-10-16): estado de cada resposta da ficha quando não há
+  valor — `unknown` ("Não sei"), `na` ("Não se aplica"), `later`
+  ("Preencher depois"), `auto` (lido do Instagram, a confirmar). Ver
+  `src/lib/onboardingV2.ts` e DECISIONS.md (onboarding imobiliário v2).
 user_roles (user_id, role)  -- 'owner' | 'client'
 posts (id, company_id, content, platform, status, image_url,
   instagram_media_id, image_suggestion, best_time, campaign_id, created_at)
@@ -427,6 +437,17 @@ HIGGSFIELD_API_KEY=          # ainda não usado em código — ver MEDIA-ENGINE.
 ```
 
 ## Rota `/setup` — fim do cadastro (2026-10-06)
+
+> **Removida em 2026-10-19 (decisão do dono).** A página e o gate saíram. Quem paga
+> ou é liberado à mão entra direto no painel.
+> - As respostas do diagnóstico são importadas pra empresa no 1º acesso
+>   (`importDiagnosisAnswers` em `src/lib/onboardingV2.ts`, chamado no `DashboardLayout`).
+> - O sino (`src/lib/usePendencias.ts`) cobra o que falta: dados do negócio, perguntas,
+>   fotos e Instagram.
+> - `/setup` redireciona pra `/dashboard/settings?section=entendimento`.
+> - `useSetupStatus` e `setupRules` continuam: a tela da estratégia usa pra dizer o que falta.
+>
+> O texto abaixo é histórico.
 
 Tela `src/pages/setup/SetupPage.tsx`, atrás do login e **fora** do
 `DashboardLayout`. "Alimentar os dados reais": Instagram em destaque

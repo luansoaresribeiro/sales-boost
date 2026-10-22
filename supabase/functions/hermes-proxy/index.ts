@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { answerContextBlock } from '../_shared/answerContext.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -25,7 +26,7 @@ const PLAN_LIMITS: Record<string, number> = { free: 30, basic: 150, pro: Infinit
 // 'generico', ou qualquer setor sem ficha configurada) + sem respostas =
 // devolve '' = o prompt fica idêntico ao de antes desta função existir.
 // Nunca derruba a conversa por causa de erro no banco de fichas (try/catch).
-async function fetchPlaybookBlock(admin: SupaClient, verticalKey: string | null | undefined, playbookAnswers: Record<string, unknown> | null | undefined): Promise<string> {
+async function fetchPlaybookBlock(admin: SupaClient, verticalKey: string | null | undefined, playbookAnswers: Record<string, unknown> | null | undefined, companyId?: string): Promise<string> {
   try {
     const { data } = await admin.from('vertical_playbooks').select('name, config').eq('key', verticalKey ?? 'generico').eq('enabled', true).maybeSingle()
     const c = (data?.config ?? {}) as Record<string, unknown>
@@ -50,6 +51,9 @@ async function fetchPlaybookBlock(admin: SupaClient, verticalKey: string | null 
     if (answers.length) {
       parts.push(`Respostas do cadastro desta empresa (preferência real, sobrepõe qualquer padrão genérico do setor):\n${answers.map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')}`)
     }
+    // Onboarding v2: o que é fato, o que é "não sei" e o que falta (answerContext.ts).
+    const ctx = await answerContextBlock(admin, companyId, c.onboarding_v2, playbookAnswers)
+    if (ctx) parts.push(ctx)
     if (!parts.length) return ''
     return `\n\nFICHA DE SETOR — "${String(data?.name ?? verticalKey ?? 'generico')}":\n${parts.join('\n\n')}`
   } catch { return '' }
@@ -664,7 +668,7 @@ async function runAutonomousCycle(admin: SupaClient, hermesUrl: string, hermesAp
   try {
     const [integrations, playbookBlock] = await Promise.all([
       getConnectedIntegrations(admin, company.id),
-      fetchPlaybookBlock(admin, company.vertical_key, company.playbook_answers),
+      fetchPlaybookBlock(admin, company.vertical_key, company.playbook_answers, company.id),
     ])
     const messages = [
       { role: 'system', content: buildSystemPrompt(agentRole, company, config, roleSettings, integrations, playbookBlock) },
@@ -746,7 +750,7 @@ async function decideRolesToRun(hermesUrl: string, hermesApiKey: string, company
 
   const [integrations, playbookBlock] = await Promise.all([
     getConnectedIntegrations(admin, company.id),
-    fetchPlaybookBlock(admin, company.vertical_key, company.playbook_answers),
+    fetchPlaybookBlock(admin, company.vertical_key, company.playbook_answers, company.id),
   ])
   const systemPrompt = `${composeHermesPreamble(config, roleSettings.approvals, integrations)}
 
@@ -860,7 +864,7 @@ async function runChatTurn(
   const [integrations, roleSettings, playbookBlock] = await Promise.all([
     getConnectedIntegrations(admin, company.id),
     getAgentRoleSettings(admin, agentRole),
-    fetchPlaybookBlock(admin, company.vertical_key, company.playbook_answers),
+    fetchPlaybookBlock(admin, company.vertical_key, company.playbook_answers, company.id),
   ])
   const systemPrompt = buildSystemPrompt(agentRole, company, config, roleSettings, integrations, playbookBlock) + (lang === 'en' ? '\n\nLANGUAGE: The user communicates in English. Respond in English only.' : '')
   const historyMessages = history.map(m => ({ role: m.role, content: m.content }))

@@ -1360,6 +1360,351 @@ grátis de 30 s, acima — mantidos como histórico):
   - Tela de Leads: selo 🌱 e filtro "Presença fraca".
   - Os 22 já rejeitados saem de `prospect_checked_places` e são reavaliados
     na próxima busca.
+- **ICP do agente de leads: CORRETOR DE IMÓVEIS com Instagram sem vídeo,
+  flopado ou mal produzido + potencial; busca em lotes por bairro** —
+  2026-10-15. Primeiro o dono pediu imobiliárias; no mesmo dia trocou: "ao
+  invés de imobiliária deveríamos procurar corretores de imóveis, a
+  princípio com as mesmas métricas" (`business_types` = só "Corretores de
+  imóveis"; com 1 categoria a busca por bairro usa todas as palavras dela;
+  Instagram cadastrado como "site" no Google conta como Instagram). (Dono: "nosso ICP
+  ideal são imobiliárias que têm contas do Instagram sem vídeo postado faz
+  tempo OU flopada OU mal produzido, COM POTENCIAL DE CRESCIMENTO";
+  "prospectar todos de uma vez possíveis e, na próxima rodada, mais").
+  - **Sinais medidos no perfil real** (Apify, 12 últimos posts):
+    - dias desde o último vídeo/Reels;
+    - engajamento médio ÷ seguidores;
+    - nota de produção 0-10 dada pela IA olhando as capas (Haiku com imagem).
+  - **Score = POTENCIAL (até 50) + OPORTUNIDADE (até 50):**
+    - potencial = nota/avaliações/avaliação recente/telefone/independente/
+      público 300+;
+    - oportunidade = sem vídeo 90+ dias (20), engajamento < 1% (15),
+      produção ≤ 6/10 (15), ou sem Instagram/parado (25 — fica abaixo de
+      quem tem Instagram ruim confirmado: "sem Instagram no site" pode só
+      ser link faltando).
+  - **"Instagram já forte" é rejeitado** (menos dor): vídeo nos últimos 30
+    dias + engajamento ≥ 2% + produção ≥ 7.
+  - **Busca:**
+    - `prospect_settings.search_areas` (bairros): "palavra em Bairro,
+      Cidade", 1 página por busca;
+    - fila em `prospect_scan_log.queue`;
+    - a função chama a si mesma (`continue_scan`) até acabar a fila ou bater
+      `max_per_night` (agora "máximo de leads por busca");
+    - sinal de vida em `heartbeat_at`;
+    - botão "Parar busca";
+    - só 1 varredura viva por vez;
+    - a próxima rodada só pega negócio novo (`prospect_checked_places`).
+  - **Custo/limite:** a conta do Apify tem teto de US$ 5/mês (visto em
+    2026-10-15: US$ 0,93 usados). Prospecção em massa depende de subir esse
+    plano — ver medição no PR.
+  - **Teste com corretores (2026-10-15) — achado:** buscando "corretor de
+    imóveis / corretora / consultor imobiliário" por bairro, o Google Maps
+    devolve quase só imobiliárias. Sem filtro, a IA aceitou 10 (9 eram
+    imobiliárias). Com a regra "só a PESSOA do corretor", 0 de 45 passaram:
+    os poucos corretores individuais que aparecem têm 1-4 avaliações e caem
+    no mínimo de avaliações (5). O Google Maps não é boa fonte pra
+    corretor autônomo — ele vive no Instagram. Próximo passo em aberto
+    (decisão do dono): afrouxar os filtros do Google pra corretor e/ou
+    buscar direto no Instagram (bio com "corretor"/CRECI, hashtags).
+  - **Correções vistas no teste:**
+    - a lista de "já analisados" passou de 1000 e o banco só devolve 1000
+      por leitura, então a busca reanalisava (e pagava de novo) gente já
+      vista. Agora lê em páginas;
+    - "Parar busca" gravava um status que o banco não aceita (`stopped`).
+      Agora grava `done` com a nota "Parada por você".
+- **Onboarding imobiliário v2 + diagnóstico "pronto pra gerar conversas"** —
+  2026-10-16. Pedido do dono (prompt "Refatoração do Onboarding Imobiliário"),
+  com as decisões dele na conversa:
+  - **Público:** imobiliária é o cliente pagante principal, mas o fluxo do
+    corretor (autônomo ou associado) é tão completo quanto. Quatro perfis:
+    dono/sócio, gestor comercial, corretor autônomo, corretor associado.
+  - **Duas fases:** diagnóstico curto ANTES do cadastro (4 passos, ~2 min:
+    você → operação → prioridade → Instagram); as **5 etapas** completas
+    DEPOIS, no /setup (operação, imóveis e mercado, prioridade comercial,
+    canais e desempenho, inteligência comercial). O que foi respondido no
+    diagnóstico já vem preenchido no /setup (lido de `diagnostics` pelo
+    `company_id`, sem mexer no claim-diagnostic).
+  - **Nunca travar por dado comercial:** todo campo aceita "Não sei",
+    "Não se aplica" (quando faz sentido) ou "Preencher depois". "." / espaços
+    não viram resposta: o campo fica pendente com aviso amigável. Estados em
+    `companies.answer_status` (valor real continua só em `playbook_answers`).
+    Obrigatórios de verdade: tipo de negócio, perfil, cidade, Instagram e
+    e-mail do diagnóstico (o Instagram é o que é analisado; o e-mail é o
+    limite de 3 diagnósticos/dia e do presente). Nome da empresa só pra
+    perfil de imobiliária.
+  - **Tudo de setor na ficha** (regra 6): perguntas, opções, "por que
+    perguntamos", perfis, condicionais, ações por prioridade, hipóteses de
+    público e padrões do diagnóstico em `vertical_playbooks.config.onboarding_v2`
+    (migration `20261019120000_onboarding_v2.sql`). Ficha sem v2 = fluxo
+    antigo, igual (testado com "Airbnb").
+  - **Compatível com as 6 perguntas antigas** (`onboarding_questions`, que
+    o servidor ainda confere): 5 estão no v2 com as mesmas chaves e opções;
+    `transacao` é calculada de "O que você faz hoje?" (`derive`).
+  - **Configurações:** o card "Entendimento do negócio" mostra as 5 etapas,
+    o resumo e as pendências; o sino e os avisos levam direto pro campo
+    (`?section=entendimento&q=<campo>`). A estratégia mostra "Dá pra ficar
+    mais certeiro" quando falta um dado que ela usa (`needed_for`).
+  - **Agentes:** Hermes e Estratégia recebem um bloco que separa informado /
+    lido automaticamente / "não sabe" / não se aplica / pendente
+    (`_shared/answerContext.ts`). Equipe da imobiliária (convites,
+    corretor pedindo acesso) **fica pra depois** — mexe em banco e
+    segurança (alteração arriscada), decisão do dono.
+  - **Diagnóstico:** seção nova "Seu Instagram está pronto pra gerar
+    conversas?" com três camadas separadas — **dado observado** (posts com
+    chamada pra conversa, posts que citam bairro, último vídeo, CRECI /
+    WhatsApp / bairro na bio, perguntas nos comentários), **análise** e
+    **hipótese a validar** (nunca promessa). O run-diagnosis passa a guardar
+    legenda e amostra de comentários dos posts. "Perguntas sem resposta" NÃO
+    é afirmado: a amostra de comentários do raspador não garante ver as
+    respostas — dizemos só quantas perguntas apareceram. A nota de 0 a 100
+    (Growth Score) não mudou.
+
+## 2026-10-17 — Diagnóstico sem kit grátis + tela de carregamento desde o envio (pedido do dono)
+
+- **Kit grátis sai do diagnóstico.** O cadastro do diagnóstico não pede mais
+  a foto do presente, e o botão do resultado não promete "artes grátis"
+  (agora: "Criar minha conta e entrar no painel"). Motivo: pedido do dono.
+  O que continua: o código do kit no servidor (`diagnosis-gift`,
+  `trial-video`), o aviso de andamento para diagnósticos antigos que já
+  pediram o presente, e o kit pelo painel/`/gratis` — se for pra tirar
+  também de lá, é outra decisão do dono.
+- **Primeira tela:** "o que descreve você?" em botões grandes, sem a barra
+  antiga de 5 passos (parecia que o onboarding novo não tinha sido
+  publicado).
+- **Carregamento:** a tela com o "S" da logo enchendo + barra aparece desde
+  o clique em enviar (antes, a parte mais demorada — ler o Instagram, até
+  ~1 min — mostrava só uma bolinha girando com "Analisando seu negócio").
+- **Diagnóstico vira página própria** (`/diagnostico`): todos os botões do
+  site levam pra lá; a página inicial só tem o convite. A rota antiga
+  `/onboarding` continua funcionando (mesma tela).
+- **Barra parada:** se a barra não andar por 5 s, aparece "Não travou —
+  estamos só garantindo que sua experiência seja a melhor."
+- **Kit grátis acabou de vez** (pedido do dono, mesmo dia): sai também do
+  painel (cartão do vídeo/artes grátis e pop-up "seu presente está
+  esperando") e da página `/gratis`, que vira só a página dos planos. O
+  servidor (`trial-video`) recusa kit novo (`KIT_ENDED`); kits antigos
+  continuam consultáveis.
+- **Pop-up do painel vira o do cupom:** conta nova em modo vitrine vê "Você
+  ganhou um cupom de R$X" (R$1.000 imobiliária / R$200 corretor, 1º mês),
+  com o prazo que falta; "Usar meu cupom" leva aos planos com o cupom já
+  aplicado no mensal. Os 7 dias começam na primeira vez que o pop-up aparece
+  (`trial-video` action `coupon_seen`, que antes só valia depois do kit).
+  Some quando o cupom vence ou a conta paga.
+- **"Disponível no plano"** (modo vitrine) continua igual: a conta nova vê
+  todas as ferramentas, mas tudo que cria/publica/gasta abre o aviso.
+- **Tela de espera animada** (pedido do dono, mesmo dia): atrás do painel do
+  carregamento, fotos reais de imóvel flutuam soltas → se organizam numa
+  faixa de tour que desliza → os criativos do Sales Boost passam na frente
+  com leve desfoque (dá pra ver o design, não ler tudo). Repete enquanto o
+  diagnóstico roda; quem decide quando sai é o andamento real (não atrasa
+  nada). Com "reduzir movimento", fica parada. O resultado entra com um
+  esmaecimento suave. Imagens em `src/assets/loader/` (240 KB, webp): 8
+  fotos e 4 criativos **da conta de teste** (Tespon / QA Kit), escolhidas
+  sem objetos pessoais. As 6 artes do Pinterest **não** foram usadas
+  (trabalho de outras empresas). Antes de ir ao ar, o dono confirma que
+  pode mostrar as fotos desse apartamento.
+- **Roteiro da tela de espera ajustado pelo dono:** fotos flutuam → se juntam
+  no centro e viram o **tour virtual** (vídeo do mesmo apartamento, enviado
+  pelo dono; `tour.webm` pra Chrome/Android e `tour.mp4` pro Safari/iPhone,
+  ~700 KB cada, o navegador baixa só um) → enquanto isso, **10 criativos**
+  passam ao fundo desfocados, em duas faixas. Os criativos: 4 gerados pelo
+  Sales Boost na conta de teste + 6 nos estilos das referências que o dono
+  mandou (título fino sobre a foto, empreendimento com painel de números,
+  título vertical com condições, carrossel com faixa dourada, mini-cartões
+  de diferenciais, "À venda" com cápsulas), **refeitos por nós** com as fotos
+  do mesmo apartamento, marca "Sua Imobiliária" e "valores ilustrativos". As
+  artes originais (de outras empresas) não entram, nem desfocadas.
+- **Tela de espera, 3ª versão (pedido do dono, mesmo dia):**
+  - As fotos que flutuam agora são **quadros do próprio tour** (8 cômodos
+    tirados do vídeo), pra ficar claro que o tour nasceu delas. Divergência
+    registrada: o item acima dizia "fotos e tour do mesmo apartamento"; as
+    fotos antigas eram da conta de teste e não do vídeo.
+  - Selo do vídeo: "Tour virtual gerado pela IA do Sales Boost" (texto do
+    dono).
+  - Quando o tour acaba, os 6 criativos refeitos aparecem **um por vez** no
+    lugar dele (~2,8 s cada); as faixas desfocadas continuam ao fundo. Ciclo
+    completo ≈ 44 s, depois recomeça.
+- **Diagnóstico não se perde se fechar o celular:**
+  - `run-diagnosis` cria o diagnóstico e **devolve o id na hora**; a leitura
+    do Instagram/site continua no servidor em segundo plano
+    (`EdgeRuntime.waitUntil`, o mesmo jeito do `diagnosis-market`). Se a
+    análise falhar, a linha vira `partial` (a página nunca fica esperando
+    pra sempre).
+  - O aparelho guarda o último diagnóstico (`src/lib/savedDiagnosis.ts`,
+    30 dias). Quem abre `/diagnostico` de novo vê "Seu diagnóstico está
+    salvo neste aparelho" → **Ver meu diagnóstico** ou **Começar outro
+    diagnóstico** (ideia do dono; o anterior continua salvo).
+  - A página do resultado espera a leitura do Instagram por até 3 min (era
+    1,5 min, quando a espera acontecia antes de abrir a página). Diagnóstico
+    com mais de 6 min ainda "processando" não espera: mostra o que tem.
+  - O aviso da tela de espera trocou "Não feche esta página" por "Se fechar
+    a tela, o diagnóstico continua e fica salvo neste aparelho".
+
+## 2026-10-19 — Diagnóstico com Social Selling no centro (pedido do dono)
+
+- **Por quê:** o dono trouxe um roteiro novo para o diagnóstico grátis. O
+  objetivo é mudar como o corretor enxerga o próprio Instagram: mostrar que
+  o perfil pode preparar o comprador para confiar e iniciar uma conversa, não
+  só divulgar imóveis. Mais métricas não fazem isso. Detalhes em
+  docs/PRODUCT.md, na seção "O diagnóstico grátis".
+- **O que mudou:**
+  - O `run-diagnosis`, depois de ler o Instagram e ainda em segundo plano,
+    faz uma chamada ao Claude (`_shared/socialSelling.ts`).
+  - Essa chamada classifica cada post em uma categoria da ficha e escreve:
+    o que cada pilar mostra, a resposta à pergunta-guia, a oportunidade
+    ignorada (lacuna → consequência → novo jeito de pensar) e um post de
+    exemplo com objetivo estratégico.
+  - O resultado fica em `diagnostics.social_selling`.
+- **Regra 5 (nunca inventar número):**
+  - Quem conta é o código: quantos posts há de cada categoria e de cada
+    pilar, e qual o nível de cada pilar.
+  - A IA não escreve números. Toda frase dela que tiver algarismo é
+    descartada.
+  - Os trechos citados são as legendas reais.
+- **Regra 6 (setor na ficha):** fica em `config.onboarding_v2.social_selling`
+  da ficha `imoveis_rio`:
+  - as categorias de post;
+  - os 5 pilares (pergunta, categorias, limite para "forte" e o "por que
+    importa");
+  - as dúvidas comuns do comprador.
+
+  Os sinais de Conversão e Relacionamento usam os padrões que já estavam em
+  `diagnosis_readiness`.
+- **Página:**
+  - Ordem nova: nota → mercado → pilares → oportunidade → exemplo → CTA.
+  - Potencial, pontos que travam, "como a nota foi formada" e "como
+    calculamos" foram para um bloco "Detalhes da nota", fechado. Nada foi
+    removido.
+  - A fórmula da nota não mudou.
+  - Sem `social_selling` (diagnóstico antigo, ficha sem a chave, IA fora do
+    ar ou teto do mês atingido), a página continua como antes, com
+    "Pronto pra gerar conversas?".
+- **Custo (regra 7):**
+  - Uma chamada de texto por diagnóstico, cerca de US$ 0,03.
+  - Teto mensal `SOCIAL_SELLING_MONTHLY_CAP`, padrão 300.
+  - O mesmo Instagram nas últimas 24 h reaproveita a análise.
+- **Divergência registrada:** o plano previa um tipo novo em
+  `src/lib/onboardingV2.ts`. Não foi preciso, porque a página lê tudo pronto
+  de `diagnostics.social_selling` (nomes, pilares e textos) e não lê a ficha.
+- **Ajuste do dono, mesmo dia: página em 3 camadas.** Feito no mesmo PR,
+  antes do merge.
+  - **Camada 1, "O que você está fazendo hoje":** nota, do que falam os
+    posts, "o que já funciona como vitrine" (pilares fortes; sem nenhum
+    forte, mostra os parciais) e o mercado.
+  - **Camada 2, "O que você precisa entender sobre geração de demanda":**
+    princípios fixos da ficha (`social_selling.principles`), cada um com
+    exemplo imobiliário e ligado a um pilar, sem IA e sem custo. O dono
+    pediu 5; acrescentei um 6º ("A confiança começa antes da primeira
+    conversa") pra que todo pilar tenha o seu princípio. Fecha com "dá pra
+    começar a aplicar hoje".
+  - **Camada 3, "Como aplicar isso ao seu perfil":** a resposta à
+    pergunta-guia, os pilares (cada um com a linha "Princípio: …"), a
+    oportunidade ignorada e o post de exemplo.
+
+## 2026-10-19 — /setup removido; essenciais no diagnóstico (pedido do dono)
+
+- **Por quê:** o dono entrou na conta teste2 (Tespon, liberada à mão) e
+  ficou preso no /setup. O pedido dele foi: "pode excluir essa página, e a
+  tab de notificações vai notificar a falta de certas informações… na
+  criação de cadastro o máximo dessas informações já deve ser respondida".
+- **Substitui** a decisão "/setup obrigatório no fim do cadastro" e a parte
+  "/setup só depois de pagar" das decisões de 2026-10-13 e 2026-10-16.
+- **O que mudou:**
+  - **Página e gate:** removidos. Quem paga ou é liberado à mão entra
+    direto no painel. Links antigos pra `/setup` caem em Configurações.
+  - **Essenciais no diagnóstico** (opção escolhida pelo dono: "só as
+    essenciais", cerca de 1 minuto a mais):
+    - entram 4 perguntas da ficha: CRECI, tipos de imóvel, faixa de preço
+      (a estratégia precisa dela) e quem quer atrair. Feito com a migration
+      `20261019200000_onboarding_essenciais.sql`, que só mexe no JSON da
+      ficha;
+    - as etapas do diagnóstico passam a ser: Você · Sua operação · Mercado e
+      prioridade · Instagram e contato;
+    - o telefone/WhatsApp sobe de posição, com uma explicação, e continua
+      opcional.
+  - **As outras perguntas** ficam em Configurações → "Entendimento do
+    negócio".
+  - **O sino de pendências** cobra o que falta:
+    - as perguntas (já cobrava);
+    - fotos e Instagram (já cobrava);
+    - **novo:** dados do negócio (nome, cidade e telefone, com a mesma regra
+      do servidor em `setupReady`).
+  - **Respostas do diagnóstico → empresa:** quem fazia isso era o /setup.
+    Agora acontece no 1º acesso ao painel, só nos campos vazios.
+  - **Botão "Completar agora" da estratégia:** leva direto pro que falta
+    (dados, perguntas ou catálogo).
+
+
+## 2026-10-19 — Estratégia focada no que o Sales Boost faz (pedido do dono)
+
+- **Pedido:** "o agente de estratégia deve estar tailored para o que o Sales
+  Boost oferece… eu amo a forma detalhada e a length das estratégias, mas
+  elas precisam ser direcionadas ao que a gente faz".
+- **O que estava errado** (estratégia ativa da Tespon, conta de teste):
+  - planejava coisas que o produto não executa: DM → WhatsApp do
+    corretor, videochamada, "registro manual dos leads" e Instagram Ads
+    como canal de orçamento;
+  - tratava vídeo como "opcional", contra a regra de mínimo semanal;
+  - não usava o Social Selling: os 5 pilares e o resultado do diagnóstico
+    não chegavam ao Hermes.
+- **O que mudou** (`strategy-generate` e `_shared/formatCatalog.ts`):
+  - **Escopo do produto no prompt** (`SCOPE_BLOCK`), nas 3 rodadas: tese,
+    plano tático e atualização mensal.
+    - Executa: conteúdo do calendário no Instagram, "comente PALAVRA",
+      respostas aprovadas e lead no funil.
+    - Não executa hoje: anúncio pago (em breve), WhatsApp, e-mail,
+      site/SEO, Google, TikTok, CRM externo, videochamada.
+    - O que está fora do escopo só aparece em "exclusões".
+    - É do produto, não de setor, por isso fica no código. Atualizar quando
+      o Sales Boost passar a executar algo novo.
+  - **Social Selling como espinha:**
+    - pilares da ficha mais o nível de cada pilar no diagnóstico da
+      empresa;
+    - a tese ataca primeiro os pilares ausentes ou parciais;
+    - a IA diz como trabalha cada pilar (`content_plan.pillars`) e qual
+      pilar cada etapa do funil fortalece (`funnel_plan[].pillar`);
+    - nome e nível do pilar vêm da ficha e do diagnóstico, nunca da IA.
+  - **Orçamento:** só o que o Sales Boost produz; `paid_ads` fica vazio.
+    Vídeo faz parte do mix mínimo.
+  - **Opções pedidas ao Hermes:**
+    - metas: lead_gen, instagram_growth, engagement, awareness;
+    - componentes: positioning, content, acquisition, conversion,
+      competitive_response;
+    - a gravação continua aceitando as listas completas, pra estratégias
+      antigas.
+  - **Tela da estratégia:**
+    - novo bloco "Como a estratégia trabalha seus 5 pilares";
+    - cada etapa do funil mostra o seu pilar;
+    - os textos "você gera/pede no imóvel" foram corrigidos pra "o
+      calendário cria", que é o que o código faz desde 2026-10-14.
+- **Igual:** o tamanho e o detalhe da estratégia (mesmos campos, mesmo
+  limite de texto).
+- **Estratégias já ativas:** só mudam quando forem geradas de novo. A
+  atualização mensal mantém a tese e não cria os pilares.
+- **Perguntas novas** (pedido do dono 2026-10-20; migration
+  `20261020090000_onboarding_custos_grupo.sql`, só no JSON da ficha):
+  - **"Quanto você gasta por mês, hoje, pra conseguir clientes?"**
+    (`gasto_aquisicao`): faixas de "Nada / quase nada" até "Mais de R$ 5
+    mil". Fica no diagnóstico, etapa "Mercado e prioridade". A estratégia
+    usa só a faixa informada e nunca calcula retorno (regra 5). Antes só
+    existiam "Você faz anúncios pagos?" (sem valor) e o orçamento de
+    marketing em Configurações.
+  - **"A que imobiliária ou grupo imobiliário você está ligado(a)?"**
+    (`imobiliaria_parceira`, que já existia como "Com qual imobiliária você
+    trabalha?" e ficava só em Configurações). Passa a entrar no
+    diagnóstico, só pra corretor associado.
+- **Business Game por imobiliária** (regra do dono): os corretores da mesma
+  imobiliária jogam juntos. A pergunta acima é o primeiro passo. A
+  ligação confirmada e o placar ficam pra um PR próprio, porque mexem em
+  quem vê dados de quem (ver [ROADMAP.md](ROADMAP.md), 2026-10-20).
+- **soul.md:** o dono pediu atualizar, e depois pediu pra esquecer. Não
+  existe no repositório.
+- **Correção pós-deploy (2026-10-21):** no teste real da Tespon, a parte 1
+  da estratégia foi cortada nas duas tentativas (2200 e 3200 tokens),
+  porque agora traz os pilares. O limite subiu pra 3600, com nova
+  tentativa em 4200, e o texto de cada pilar foi encurtado pra 1 frase.
+  Enquanto a correção não entra, uma geração nova falha. A estratégia
+  ativa de cada cliente continua no lugar, porque só é trocada quando a
+  nova termina.
 
 ## 2026-10-21 — Criativos: 4 famílias fixas, formato fixo × intenção da estratégia (decisão do dono)
 
@@ -1380,3 +1725,20 @@ grátis de 30 s, acima — mantidos como histórico):
   `marketing_ai_trends` não guarda link/data da fonte.
 - **Plano completo e fases:** [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md) (ainda não
   implementado).
+
+## 2026-10-21 — Estrela vermelha = obrigatório; telefone e nome obrigatórios no diagnóstico (pedido do dono)
+
+- **Contradição resolvida:** o diagnóstico dizia "(opcional)" para telefone e
+  para o nome do perfil pessoal, mas a estratégia (`_shared/setupReady.ts`)
+  exige nome, cidade e telefone — a pessoa fazia o diagnóstico, pagava e só
+  então descobria que a estratégia não começava.
+- **Decidido:** estrela **vermelha** (`#ef4444`) em qualquer campo = obrigatório,
+  em todas as telas (diagnóstico, Configurações, perguntas da ficha que não
+  aceitam "Não sei/Depois/Não se aplica"). No diagnóstico: nome (2+ letras),
+  cidade (2+ letras) e telefone (10+ dígitos) passam a ser obrigatórios para
+  todos os perfis, inclusive pessoa física. Cada etapa com campo obrigatório
+  mostra a linha "* obrigatório"; Configurações mostra "* obrigatório pra
+  estratégia começar".
+- **Regra única no código:** `src/lib/requiredFields.ts` (espelho de
+  `setupReady.ts`); o sino de pendências usa a mesma.
+- **Só telas** — nenhuma function mudou.

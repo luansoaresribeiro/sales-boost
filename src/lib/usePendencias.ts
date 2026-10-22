@@ -6,8 +6,10 @@ import { useCompany } from '../contexts/CompanyContext'
 import { useLang } from '../contexts/LanguageContext'
 import { bi, fetchCatalogSchema, fetchOnboardingQuestions } from './verticalPlaybook'
 import { isShowcaseMode } from './setupGate'
+import { missingBizFields } from './requiredFields'
 import { confirmProfile } from './profileConfirm'
 import { catalogMinPhotos, isCatalogItem, itemPhotoCount, unansweredQuestions } from './setupRules'
+import { fetchOnboardingV2, isPendingData, settingsLinkFor, visibleQuestions, type AnswerStatus } from './onboardingV2'
 
 // Pendências do dono — tudo que falta pro Sales Boost trabalhar melhor.
 // SÓ LEITURA: nenhuma escrita aqui. Cada fonte é independente: se uma falha
@@ -50,6 +52,10 @@ const PT = {
   questions: (n: number) => `${n} ${n === 1 ? 'pergunta' : 'perguntas'} do seu negócio sem resposta`,
   eg: 'Ex.: ', questionsHint: 'Quanto mais o Hermes souber, melhor ele decide.',
   settingsUnd: 'Configurações · Entendimento do negócio',
+  bizT: (items: string) => `Complete os dados do negócio: ${items}`,
+  bizHint: 'A estratégia só começa com nome, cidade e telefone/WhatsApp.',
+  bizName: 'nome', bizCity: 'cidade', bizPhone: 'telefone/WhatsApp',
+  settingsBiz: 'Configurações · Sobre o negócio',
   profileT: 'Suas informações ainda estão atualizadas?',
   profileHint: 'Sua estratégia de marketing é baseada nas informações atuais do seu negócio. Quer mudar alguma coisa?',
   profileOk: 'Está tudo certo', profileEdit: 'Quero atualizar',
@@ -72,6 +78,10 @@ const EN: typeof PT = {
   questions: (n: number) => `${n} ${n === 1 ? 'question' : 'questions'} about your business unanswered`,
   eg: 'E.g.: ', questionsHint: 'The more Hermes knows, the better it decides.',
   settingsUnd: 'Settings · Business understanding',
+  bizT: (items: string) => `Complete your business details: ${items}`,
+  bizHint: 'The strategy only starts with name, city and phone/WhatsApp.',
+  bizName: 'name', bizCity: 'city', bizPhone: 'phone/WhatsApp',
+  settingsBiz: 'Settings · About the business',
   profileT: 'Is your business information still up to date?',
   profileHint: 'Your marketing strategy is based on the information currently available about your business. Anything you would change?',
   profileOk: 'All good', profileEdit: 'Update',
@@ -120,12 +130,17 @@ export function usePendencias() {
       }
     } catch { /* fonte ignorada */ }
 
-    // b) Instagram + e) Telegram + dados da ficha (d)
+    // b) Instagram + e) Telegram + dados do negócio + dados da ficha (d)
     let answers: Record<string, unknown> | null | undefined
     try {
-      const { data, error } = await supabase.from('companies').select('instagram_user_id, telegram_chat_id, playbook_answers').eq('id', companyId).maybeSingle()
+      const { data, error } = await supabase.from('companies').select('instagram_user_id, telegram_chat_id, playbook_answers, business_name, city, phone').eq('id', companyId).maybeSingle()
       if (!error && data) {
         answers = (data.playbook_answers as Record<string, unknown> | null) ?? null
+        // Dados do negócio — mesma regra do servidor (_shared/setupReady.ts). Antes o /setup
+        // cobrava isso; a página saiu em 2026-10-19 e o sino passou a avisar.
+        const label = { name: t.bizName, city: t.bizCity, phone: t.bizPhone }
+        const biz = missingBizFields(data).map(k => label[k])
+        if (biz.length) out.push({ id: 'dados', kind: 'ficha', tone: 'orange', title: t.bizT(biz.join(', ')), hint: t.bizHint, destino: t.settingsBiz, to: '/dashboard/settings?section=negocio' })
         let expiresAt: string | null = null
         try {
           const r = await supabase.from('companies').select('instagram_token_expires_at').eq('id', companyId).maybeSingle()
@@ -181,7 +196,24 @@ export function usePendencias() {
 
     // d) Perguntas da ficha sem resposta (chaves que não existem mais na ficha são ignoradas)
     try {
-      if (answers !== undefined) {
+      const v2 = answers !== undefined ? await fetchOnboardingV2(verticalKey) : null
+      if (v2) {
+        // Onboarding v2: pendente = sem dado de verdade e não marcado "Não sei"/"Não se aplica"
+        // (inclui "Preencher depois" e o "lido automaticamente — confirme"). Leva direto pro campo.
+        const { data: st } = await supabase.from('companies').select('answer_status').eq('id', companyId).maybeSingle()
+        const status = ((st as { answer_status?: AnswerStatus } | null)?.answer_status) ?? {}
+        const a = answers ?? {}
+        const missing = visibleQuestions(v2, a).filter(q => isPendingData(q, a, status))
+        if (missing.length > 0) {
+          const first = missing.find(q => q.needed_for?.length) ?? missing[0]
+          out.push({
+            id: 'ficha', kind: 'ficha', tone: 'orange',
+            title: t.questions(missing.length),
+            hint: `${t.eg}${bi(first.label, lang)}`,
+            destino: t.settingsUnd, to: settingsLinkFor(first.key),
+          })
+        }
+      } else if (answers !== undefined) {
         const { questions } = await fetchOnboardingQuestions(verticalKey)
         const missing = unansweredQuestions(questions, answers)
         if (missing.length > 0) {

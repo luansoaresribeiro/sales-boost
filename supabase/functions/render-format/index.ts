@@ -14,6 +14,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { Resvg, initWasm } from 'https://esm.sh/@resvg/resvg-wasm@2.6.2'
 import { encodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts'
 import { requirePaidAccess } from '../_shared/access.ts'
+import { svgSlideSystem, SLIDE_LAYOUTS, type Measure } from '../_shared/slideSystem.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 
@@ -29,11 +30,24 @@ const FONT_BOLD = 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/poppins/Pop
 
 let wasmReady = false
 let fontBuffers: Uint8Array[] | null = null
+// Medição REAL do texto (largura da Poppins via opentype.js) — as mesmas fontes que o resvg usa.
+// Se o opentype falhar (rede/CDN), cai na estimativa antiga (0,55·tamanho por letra) e loga:
+// o render nunca falha por causa disso. Margem de 3% pra diferença de kerning entre os dois motores.
+const estimateMeasure: Measure = (t, size) => t.length * size * 0.55
+let measureFn: Measure = estimateMeasure
+let measureReal = false
 async function ensureEngine(): Promise<Uint8Array[]> {
   if (!wasmReady) { await initWasm(fetch('https://unpkg.com/@resvg/resvg-wasm@2.6.2/index_bg.wasm')); wasmReady = true }
   if (!fontBuffers) {
     const [r, b] = await Promise.all([fetch(FONT_REG).then(x => x.arrayBuffer()), fetch(FONT_BOLD).then(x => x.arrayBuffer())])
     fontBuffers = [new Uint8Array(r), new Uint8Array(b)]
+    try {
+      const ot = await import('https://esm.sh/opentype.js@1.3.4') as { parse: (b: ArrayBuffer) => { getAdvanceWidth: (t: string, s: number, o?: { kerning?: boolean }) => number } }
+      const parse = ot.parse ?? (ot as unknown as { default: typeof ot }).default.parse
+      const reg = parse(r), bold = parse(b)
+      measureFn = (t, size, isBold) => (isBold ? bold : reg).getAdvanceWidth(t, size, { kerning: true }) * 1.03
+      measureReal = true
+    } catch (e) { console.error('render-format: opentype indisponível, usando estimativa de largura', e) }
   }
   return fontBuffers
 }
@@ -126,29 +140,6 @@ ${block(['@' + (f.handle || 'usuario')], 226, 214, 30, muted, 400, 0)}
 ${block(tl, 90, bodyY, 44, fg, 500, 60)}
 ${f.time || f.date ? block([[f.time, f.date].filter(Boolean).join(' · ')], 90, afterBody, 26, muted, 400, 0) : ''}
 ${f.retweets || f.likes ? `<rect x="90" y="${afterBody + 26}" width="900" height="2" fill="${line}"/>${block([[f.retweets && `${f.retweets} Retuites`, f.likes && `${f.likes} Curtidas`].filter(Boolean).join('     ')], 90, afterBody + 78, 28, muted, 700, 0)}` : ''}
-</svg>`
-  return { svg, w: W, h: H }
-}
-
-// Slide de carrossel "tipo apresentação" (pedido do dono 2026-10-14: o
-// carrossel de slides não pode parecer print de tweet). Fundo da marca,
-// frase grande, nome da marca em cima e "2/5" + barra de progresso embaixo.
-// Nada de número inventado (curtidas, horário).
-function svgSlide(f: F, b: Brand): { svg: string; w: number; h: number } {
-  const W = 1080, H = 1350, bg = b.bg || '#0E0B0A', text = b.text || '#ffffff'
-  const page = Math.max(1, Number(f.page) || 1), total = Math.max(page, Number(f.total) || 1)
-  const first = page === 1, size = first ? 76 : 62, lh = Math.round(size * 1.22)
-  const tl = limitLines(wrap(f.text || 'Seu texto aqui.', size, 900), first ? 8 : 10)
-  const top = Math.max(300, Math.round((H - tl.length * lh) / 2))
-  const barW = Math.round(900 * page / total)
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>
-<rect x="90" y="120" width="70" height="8" rx="4" fill="${b.primary}"/>
-${block([(f.name || b.name || '').toUpperCase().slice(0, 40)], 90, 190, 30, b.primary, 700, 0)}
-${block(tl, 90, top, size, text, first ? 800 : 700, lh)}
-<rect x="90" y="${H - 150}" width="900" height="6" rx="3" fill="${text}" fill-opacity="0.15"/>
-<rect x="90" y="${H - 150}" width="${barW}" height="6" rx="3" fill="${b.primary}"/>
-${block([`${page}/${total}`], 990, H - 90, 30, text, 600, 0, 'end')}
-${page < total ? block(['arraste →'], 90, H - 90, 30, b.primary, 700, 0) : ''}
 </svg>`
   return { svg, w: W, h: H }
 }
@@ -335,10 +326,10 @@ function svgReview(f: F, b: Brand): { svg: string; w: number; h: number } {
 // TEMPLATES precisa espelhar exatamente isso). Sem match, cai em 'photo' —
 // é o mais genérico/flexível. 'slide' é interno (carrossel de slides do
 // creative-generate), não aparece na escolha de template do dono.
-function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, productImg: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
+function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, productImg: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number; overflow?: boolean } {
   switch (template) {
     case 'tweet': return svgTweet(f, b, logo)
-    case 'slide': return svgSlide(f, b)
+    case 'slide': { const r = svgSlideSystem(f, b, logo, measureFn); return { svg: r.svg, w: r.w, h: r.h, overflow: r.overflow } }
     case 'product': return svgProduct(f, b, productImg)
     case 'problem': return svgProblem(f, b)
     case 'faq': return svgFaq(f, b)
@@ -365,7 +356,13 @@ Deno.serve(async (req) => {
         const { svg, w } = buildSvg(t, { value: '42%', stars: '4', items: 'Um\nDois\nTrês', text: 'selftest', name: 'Test', handle: 'test' }, brand, null, null, null, null, 1080, 1080, safe)
         sizes[t] = renderPng(svg, w).length
       }
-      return json({ ok: true, sizes })
+      // Layouts do sistema de slides (cada um com os campos que usa).
+      const overflow: Record<string, boolean> = {}
+      for (const layout of ['texto', ...SLIDE_LAYOUTS]) {
+        const r = buildSvg('slide', { layout, title: 'Título de teste', text: 'Texto de teste', items: 'Um | A\nDois | B\nTrês | C', cta: 'Fale comigo', handle: 'test', page: '2', total: '5' }, brand, null, null, null, null, 1080, 1350, safe)
+        sizes[`slide:${layout}`] = renderPng(r.svg, r.w).length; overflow[layout] = !!r.overflow
+      }
+      return json({ ok: true, sizes, overflow, measure: measureReal ? 'opentype' : 'estimativa' })
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -416,7 +413,7 @@ Deno.serve(async (req) => {
     const bgData = bgUrl ? await toDataUri(bgUrl) : null
     // Avatar do Tweet Print = logo real da empresa (mesmo asset do Kit da
     // Marca em Estilos e Visuais) — sem logo, cai pras iniciais na svgTweet.
-    const logoData = (template === 'photo' || template === 'tweet') && brand.logoUrl ? await toDataUri(brand.logoUrl) : null
+    const logoData = (template === 'photo' || template === 'tweet' || template === 'slide') && brand.logoUrl ? await toDataUri(brand.logoUrl) : null
     const stickerData = template === 'photo' && body.sticker ? await toDataUri(String(body.sticker)) : null
     // Foco no Produto: a foto vem de fields.productImage (URL real da aba
     // Produtos, escolhida no FormatStudio ou passada pelo Diretor Criativo).
@@ -428,7 +425,7 @@ Deno.serve(async (req) => {
     const safe = (body.safe as Safe | undefined) ?? { top: Math.round(H * 0.06), right: Math.round(W * 0.08), bottom: Math.round(H * 0.09), left: Math.round(W * 0.08) }
 
     await ensureEngine()
-    const { svg, w } = buildSvg(template, fields, brand, bgData, logoData, stickerData, productImgData, W, H, safe)
+    const { svg, w, overflow } = buildSvg(template, fields, brand, bgData, logoData, stickerData, productImgData, W, H, safe)
     const png = renderPng(svg, w)
 
     const path = `renders/${companyId}/${crypto.randomUUID()}.png`
@@ -452,7 +449,7 @@ Deno.serve(async (req) => {
       id = ins.id as string
     }
 
-    return json({ ok: true, url: pub.publicUrl, id, bg_url: bgUrl })
+    return json({ ok: true, url: pub.publicUrl, id, bg_url: bgUrl, overflow: !!overflow })
   } catch (err) {
     console.error('render-format error:', err)
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)

@@ -3,6 +3,13 @@ import { supabase } from '../../../lib/supabase'
 import { markProfileSaved } from '../../../lib/profileConfirm'
 import { useLang } from '../../../contexts/LanguageContext'
 import { fetchOnboardingQuestions, sanitizePlaybookAnswers, bi, type PlaybookQuestion } from '../../../lib/verticalPlaybook'
+import { useSearchParams } from 'react-router-dom'
+import QuestionField from '../../../components/QuestionField'
+import { IntelligenceSummary } from '../../setup/SetupV2'
+import {
+  fetchOnboardingV2, fieldState, loadDiagnosticAnswers, saveV2Answers, SUMMARY_STEP, visibleQuestions,
+  type AnswerState, type AnswerStatus, type OnboardingV2,
+} from '../../../lib/onboardingV2'
 
 const ORANGE = '#FF6D29'
 const CARD = '#150E08'
@@ -44,6 +51,8 @@ const TX = {
     select: 'Selecione...', sectorQs: 'Perguntas específicas do seu setor',
     ficha: (n: string) => `Ficha: ${n}. Tudo aqui é opcional.`, aiSummary: 'Como a IA resume seu negócio',
     saved: '✓ Salvo', saving: 'Salvando...', save: 'Salvar entendimento',
+    v2intro: 'Tudo que o Sales Boost sabe da sua operação — é o contexto que o Hermes usa pra montar a estratégia. Complete ou corrija quando quiser; não precisa refazer o cadastro.',
+    v2summary: 'Resumo e pendências',
   },
   en: {
     labels: { business_description: 'What your business does', ideal_customer: 'Ideal customer', business_stage: 'Business stage', primary_goals: 'Main goal', main_challenges: 'Biggest challenge', current_channels: 'Current channels' } as Record<string, string>,
@@ -52,6 +61,8 @@ const TX = {
     select: 'Select...', sectorQs: 'Questions specific to your industry',
     ficha: (n: string) => `Profile: ${n}. Everything here is optional.`, aiSummary: 'How the AI summarizes your business',
     saved: '✓ Saved', saving: 'Saving...', save: 'Save understanding',
+    v2intro: "Everything Sales Boost knows about your operation — the context Hermes uses to build your strategy. Complete or fix it anytime; no need to redo signup.",
+    v2summary: 'Summary and pending items',
   },
 } as const
 
@@ -99,6 +110,13 @@ export default function BusinessUnderstandingCard({ companyId }: { companyId: st
   const [fichaName, setFichaName] = useState('')
   const [fichaQuestions, setFichaQuestions] = useState<PlaybookQuestion[]>([])
   const [playbookAnswers, setPlaybookAnswers] = useState<Record<string, unknown>>({})
+  // Onboarding v2 (ficha com config.onboarding_v2): perguntas por etapa + estados ("Não sei" etc.).
+  const [v2, setV2] = useState<OnboardingV2 | null>(null)
+  const [answerStatus, setAnswerStatus] = useState<AnswerStatus>({})
+  const [businessType, setBusinessType] = useState('')
+  const [instagram, setInstagram] = useState<Record<string, unknown> | null>(null)
+  const [searchParams] = useSearchParams()
+  const focusKey = searchParams.get('q')
 
   const loadFicha = async (vk: string) => {
     const { name, questions } = await fetchOnboardingQuestions(vk)
@@ -108,11 +126,19 @@ export default function BusinessUnderstandingCard({ companyId }: { companyId: st
   useEffect(() => {
     let alive = true
     supabase.from('companies')
-      .select('business_description, ideal_customer, business_stage, primary_goals, main_challenges, current_channels, agent_business_interpretation, vertical_key, playbook_answers')
+      .select('business_description, ideal_customer, business_stage, primary_goals, main_challenges, current_channels, agent_business_interpretation, vertical_key, playbook_answers, business_type')
       .eq('id', companyId).maybeSingle()
       .then(async ({ data }) => {
         if (!alive || !data) { setLoading(false); return }
-        const { vertical_key, playbook_answers, ...understanding } = data as Record<string, unknown>
+        const { vertical_key, playbook_answers, business_type, ...understanding } = data as Record<string, unknown>
+        setBusinessType((business_type as string | null) ?? '')
+        const cfg = await fetchOnboardingV2((vertical_key as string | null) ?? 'generico')
+        if (cfg && alive) {
+          setV2(cfg)
+          const { data: st } = await supabase.from('companies').select('answer_status').eq('id', companyId).maybeSingle()
+          setAnswerStatus(((st as { answer_status?: AnswerStatus } | null)?.answer_status) ?? {})
+          void loadDiagnosticAnswers(companyId).then(d => { if (alive && d) setInstagram(d.instagram) })
+        }
         setU({ ...EMPTY, ...Object.fromEntries(Object.entries(understanding).map(([k, v]) => [k, v ?? ''])) } as Understanding)
         const vk = (vertical_key as string | null) ?? 'generico'
         setVerticalKey(vk)
@@ -130,6 +156,23 @@ export default function BusinessUnderstandingCard({ companyId }: { companyId: st
   // Se o dono trocou o tipo de negócio noutra parte de Configurações desde
   // que este card carregou, recarrega a ficha certa na hora de salvar —
   // evita mostrar/gravar perguntas do setor antigo.
+  const setV2State = (k: string, st: AnswerState | null) => { setAnswerStatus(m => { const n = { ...m }; if (st) n[k] = st; else delete n[k]; return n }); setSaved(false) }
+
+  // Veio de um aviso ("falta a faixa de preço") com ?q=<campo>: rola até ele.
+  useEffect(() => {
+    if (!focusKey || loading) return
+    const timer = setTimeout(() => document.getElementById(`q-${focusKey}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 600)
+    return () => clearTimeout(timer)
+  }, [focusKey, loading])
+
+  const saveV2 = async () => {
+    if (!v2) return
+    setSaving(true)
+    const ok = await saveV2Answers(companyId, v2, playbookAnswers, answerStatus)
+    if (ok) void markProfileSaved(companyId)
+    setSaving(false); setSaved(ok); if (ok) setTimeout(() => setSaved(false), 2500)
+  }
+
   const save = async () => {
     setSaving(true)
     const { data: fresh } = await supabase.from('companies').select('vertical_key').eq('id', companyId).maybeSingle()
@@ -147,6 +190,37 @@ export default function BusinessUnderstandingCard({ companyId }: { companyId: st
   }
 
   if (loading) return null
+
+  if (v2) {
+    return (
+      <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '22px 24px', marginBottom: '20px' }}>
+        <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>{X.title}</div>
+        <p style={{ fontSize: '12px', color: MUTED, marginBottom: '14px', lineHeight: 1.6 }}>{X.v2intro}</p>
+        <details style={{ marginBottom: '16px', background: 'rgba(255,109,41,0.04)', border: '1px solid rgba(255,109,41,0.15)', borderRadius: '10px', padding: '10px 14px' }}>
+          <summary style={{ cursor: 'pointer', fontSize: '13px', fontWeight: 700, color: ORANGE }}>{X.v2summary}</summary>
+          <IntelligenceSummary v2={v2} answers={playbookAnswers} status={answerStatus} instagram={instagram} complete
+            onFill={q => document.getElementById(`q-${q.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />
+        </details>
+        {v2.steps.filter(st => st.key !== SUMMARY_STEP).map(st => {
+          const qs = visibleQuestions(v2, playbookAnswers, st.key)
+          if (!qs.length) return null
+          return (
+            <div key={st.key} style={{ paddingTop: '14px', borderTop: `1px solid ${BORDER}`, marginTop: '6px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '12px' }}>{bi(st.title, lang)}</div>
+              {qs.map(q => (
+                <QuestionField key={q.key} q={q} value={playbookAnswers[q.key]} state={fieldState(q, playbookAnswers, answerStatus)} highlight={focusKey === q.key}
+                  onChange={v => setAnswer(q.key, v)} onState={s => setV2State(q.key, s)} lang={lang} businessType={businessType} />
+              ))}
+            </div>
+          )
+        })}
+        <button onClick={saveV2} disabled={saving}
+          style={{ padding: '10px 20px', minHeight: 44, background: saved ? '#4ade80' : ORANGE, color: '#000', fontWeight: 700, fontSize: '13px', border: 'none', borderRadius: '10px', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: D }}>
+          {saved ? X.saved : saving ? X.saving : X.save}
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '22px 24px', marginBottom: '20px' }}>

@@ -5,6 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useShowcase } from '../../../contexts/ShowcaseContext'
 import { supabase } from '../../../lib/supabase'
 import { useSetupStatus } from '../../../lib/useSetupStatus'
+import MissingDataNotice from '../../../components/MissingDataNotice'
 import { CARD, MUTED, BORDER, D, ORANGE, SUPABASE_URL, timeAgo } from './shared'
 import { BudgetPanel, FunnelPanel, EstimatesPanel, InitiativesPanel, MonitoringPanel } from './StrategyPanels'
 import IntelligenceDomainsPanel from './IntelligenceDomainsPanel'
@@ -261,6 +262,7 @@ export default function StrategySection({ company }: { company: CompanyData }) {
 
   return (
     <div>
+      <MissingDataNotice v2={setup.v2} answers={setup.answers} status={setup.answerStatus} feature="estrategia" />
       {/* Cabeçalho: sempre visível, com "+ Criar estratégia" fixo no canto
           superior direito — criar uma nova enquanto existe uma ativa é um
           pivô consciente (confirmado antes de chamar a API). */}
@@ -305,7 +307,14 @@ export default function StrategySection({ company }: { company: CompanyData }) {
           <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', marginBottom: '8px' }}>{t.waitSetup}</div>
           <p style={{ fontSize: '12.5px', color: '#FBBF24', lineHeight: 1.6, margin: '0 0 6px' }}>{setup.steps.filter(s => !s.done).map(s => s.missing).concat(setup.instagramRequired && !setup.instagramConnected ? ['Instagram'] : []).join(' · ')}</p>
           <p style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>{t.waitSetupDesc}</p>
-          <a href="/setup" style={{ ...primaryBtn, display: 'inline-block', marginTop: '10px', textDecoration: 'none' }}>{t.completeNow}</a>
+          {/* /setup saiu (2026-10-19): leva direto pro que falta — dados do negócio, perguntas ou catálogo. */}
+          {setup.steps.find(s => !s.done)?.id === 'catalogo' ? (
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('sb:open-add', { detail: { tab: 'catalogo' } }))}
+              style={{ ...primaryBtn, display: 'inline-block', marginTop: '10px' }}>{t.completeNow}</button>
+          ) : (
+            <a href={setup.steps.find(s => !s.done)?.id === 'dados' ? '/dashboard/settings?section=negocio' : '/dashboard/settings?section=entendimento'}
+              style={{ ...primaryBtn, display: 'inline-block', marginTop: '10px', textDecoration: 'none' }}>{t.completeNow}</a>
+          )}
         </div>
       )}
 

@@ -8,7 +8,8 @@ import {
 import { useLang } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
 import MarketSection, { DiagnosisLoader, useMarket } from './MarketSection'
-import GiftNotice, { useGift } from './GiftNotice'
+import ReadinessSection from './ReadinessSection'
+import { ApplyToProfile, ContentMix, LayerHeader, Principles, type SocialSelling } from './SocialSellingSection'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -21,7 +22,11 @@ const VERDICT_COLOR: Record<Verdict | 'partial', string> = {
   ready: '#4ade80', potential: '#FB923C', blocked: '#f87171', partial: '#9CA3AF',
 }
 const POLL_EVERY_MS = 5000
-const POLL_MAX_MS = 90000
+// A leitura do Instagram roda no servidor depois do envio (o envio só cria o
+// diagnóstico e já devolve o id). Espera até 3 min; se o diagnóstico já é
+// antigo (ex.: celular fechado por muito tempo e algo falhou), não espera.
+const POLL_MAX_MS = 180000
+const STALE_MS = 6 * 60 * 1000
 
 interface Diagnostic {
   id: string
@@ -34,8 +39,10 @@ interface Diagnostic {
   pagespeed_mobile: { scores: { performance: number; seo: number; accessibility: number; best_practices: number } } | null
   pagespeed_desktop: { scores: { performance: number; seo: number; accessibility: number; best_practices: number } } | null
   instagram_data: InstagramData | null
+  onboarding_context?: { playbook_answers?: Record<string, unknown> } | null
   status: string
   created_at: string
+  social_selling?: SocialSelling | null // leitura do conteúdo (run-diagnosis); sem ela, a página antiga
 }
 
 function Ring({ score, color, label, partialLabel }: { score: number | null; color: string; label: string; partialLabel: string }) {
@@ -76,9 +83,11 @@ const TX = {
     howCalc: '▸ Como calculamos',
     calc1: 'A nota vem do seu Instagram. Site e Google só somam se existirem. O que não conseguimos ver fica "não avaliado" e sai da conta — nada é inventado nem penaliza você.',
     pts: 'pts', calc2: 'Nota = pontos dos critérios avaliados ÷ pontos possíveis deles × 100. Com menos de 40% dos critérios avaliados, mostramos "Análise parcial", sem veredito.',
-    cta: 'Entrar no painel e criar minhas artes grátis →', ctaGift: 'Entrar no painel e ver meu presente →',
-    ctaSub: 'Crie sua conta em segundos, sem cartão, e receba 3 artes grátis do seu imóvel.',
-    ctaSubGift: 'Crie sua conta em segundos, sem cartão. Seus vídeos e seu criativo ficam esperando por você lá.',
+    cta: 'Criar minha conta e entrar no painel →',
+    ctaSub: 'Crie sua conta em segundos, sem cartão, e veja o que o Sales Boost faz pelo seu Instagram.',
+    ctaSubSS: 'Crie sua conta em segundos, sem cartão. No painel, o Sales Boost transforma este diagnóstico em estratégia e conteúdo que constroem autoridade e puxam conversa — e a imobiliária acompanha tudo.',
+    scoreMeans: 'A nota mede o que dá pra contar no seu Instagram: frequência, engajamento, formato e perfil. Ela não mostra o mais importante — se quem visita o seu perfil encontra motivos pra confiar em você. É isso que vem a seguir.',
+    scoreDetails: '▸ Detalhes da nota: potencial, pontos que travam e como calculamos',
     ctaDirect: 'Entrar no painel →', ctaSubDirect: 'Seu painel já está pronto pra você explorar.',
     ctaPlan: 'A estratégia completa faz parte do plano pago.',
   },
@@ -99,9 +108,11 @@ const TX = {
     howCalc: '▸ How we calculate',
     calc1: 'The score comes from your Instagram. Website and Google only add if they exist. What we cannot see stays "not evaluated" and is left out of the calculation — nothing is made up and nothing penalizes you.',
     pts: 'pts', calc2: 'Score = points of the evaluated criteria ÷ their possible points × 100. With fewer than 40% of the criteria evaluated, we show "Partial analysis", with no verdict.',
-    cta: 'Enter the dashboard and create my free designs →', ctaGift: 'Enter the dashboard and see my gift →',
-    ctaSub: 'Create your account in seconds, no card, and get 3 designs of your property for free.',
-    ctaSubGift: 'Create your account in seconds, no card. Your videos and your creative will be waiting for you there.',
+    cta: 'Create my account and enter the dashboard →',
+    ctaSub: 'Create your account in seconds, no card, and see what Sales Boost does for your Instagram.',
+    ctaSubSS: 'Create your account in seconds, no card. In the dashboard, Sales Boost turns this diagnosis into strategy and content that build authority and start conversations — and the agency follows it all.',
+    scoreMeans: 'The score measures what can be counted on your Instagram: frequency, engagement, format and profile. It does not show what matters most — whether visitors find reasons to trust you. That is what comes next.',
+    scoreDetails: '▸ Score details: potential, blockers and how we calculate',
     ctaDirect: 'Enter the dashboard →', ctaSubDirect: 'Your dashboard is ready for you to explore.',
     ctaPlan: 'The full strategy is part of the paid plan.',
   },
@@ -137,7 +148,10 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
     supabase.from('diagnostics').select('*').eq('id', id).single().then(({ data, error: err }) => {
       if (!alive) return
       if (err || !data) setError(t.notFoundErr)
-      else setDiag(data as Diagnostic)
+      else {
+        setDiag(data as Diagnostic)
+        if (Date.now() - new Date((data as Diagnostic).created_at).getTime() > STALE_MS) setWaited(POLL_MAX_MS)
+      }
       setLoading(false)
     })
     return () => { alive = false }
@@ -165,12 +179,10 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
   // vai rodar / passou do tempo) — até lá, logo + barra de progresso.
   const igReady = !!diag && !(!diag.instagram_data && diag.status === 'processing' && waited < POLL_MAX_MS)
   const { m: market, settled } = useMarket(id, !!diag)
-  const gift = useGift(id)
   // Quem criou a conta DIRETO (antes do diagnóstico) não veio do diagnóstico grátis:
   // sem promessa de kit (decisão do dono 2026-10-13).
   const { user } = useAuth()
   const direct = !!user?.created_at && !!diag?.created_at && new Date(user.created_at).getTime() <= new Date(diag.created_at).getTime()
-  const hasGift = !!gift.view && (gift.view.status === 'processing' || gift.view.status === 'completed')
 
   if (!loading && diag && (!igReady || !settled)) return (
     <DiagnosisLoader stage={!igReady ? 'instagram' : (market?.status ?? 'queued')} lang={lang} embedded={embedded} />
@@ -205,6 +217,8 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
   }
 
   const color = VERDICT_COLOR[result.verdict ?? 'partial']
+  // Social Selling (o coração do diagnóstico, 2026-10-19): só com a leitura completa.
+  const ss = diag.social_selling?.v === 1 && Array.isArray(diag.social_selling.pillars) && !collecting ? diag.social_selling : null
   const partial = result.state === 'partial'
   const igRow = ['frequency', 'engagement', 'format', 'profile'].map(k => result.criteria.find(c => c.key === k)!)
   const noIgYet = collecting // ainda coletando
@@ -213,8 +227,135 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
   const info = lang === 'en' ? CRITERIA_INFO_EN : CRITERIA_INFO
   const bands = lang === 'en' ? VERDICT_BANDS_EN : VERDICT_BANDS
 
+  // Nota: potencial + pontos que travam (com ou sem a análise de mercado no meio,
+  // na ordem antiga), e "como a nota foi formada" + "como calculamos".
+  const gapsBlock = (withMarket: boolean) => (
+    <>
+          {/* Potencial + principais problemas (regra fixa em growthScore.topGaps) */}
+          {!showGaps && withMarket && <MarketSection m={market} own={diag.instagram_data} lang={lang} />}
+          {showGaps && (() => {
+            const gaps = topGaps(result, lang, 3)
+            const pot = potentialScore(result, gaps)
+            if (!gaps.length) return (
+              <>
+                <div style={{ background: CARD, border: '1px solid rgba(74,222,128,0.3)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
+                  <p style={{ fontSize: 13, color: 'white', lineHeight: 1.6, margin: 0 }}>{t.noGap}</p>
+                </div>
+                {withMarket && <MarketSection m={market} own={diag.instagram_data} lang={lang} />}
+              </>
+            )
+            return (
+              <>
+                <div style={{ background: 'linear-gradient(135deg, rgba(74,222,128,0.12), rgba(255,109,41,0.10))', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>{t.potTitle}</div>
+                  {pot !== null && result.score !== null ? (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, flexWrap: 'wrap', marginBottom: 10 }}>
+                        <div>
+                          <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>{t.potNow}</div>
+                          <div style={{ fontFamily: D, fontSize: 34, fontWeight: 900, color: color, lineHeight: 1 }}>{result.score}</div>
+                        </div>
+                        <div aria-hidden style={{ fontSize: 26, color: MUTED, lineHeight: 1, paddingBottom: 4 }}>→</div>
+                        <div>
+                          <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>{t.potCan}</div>
+                          <div style={{ fontFamily: D, fontSize: 48, fontWeight: 900, color: '#4ade80', lineHeight: 1 }}>{pot}</div>
+                        </div>
+                      </div>
+                      <p style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, margin: 0 }}>{t.potLine}</p>
+                    </>
+                  ) : (
+                    <p style={{ fontSize: 14, color: 'white', lineHeight: 1.6, margin: 0 }}>{t.potPartial}</p>
+                  )}
+                </div>
+  
+                {/* Ordem pedida pelo dono (2026-10-10): nota e potencial em cima,
+                    análise (concorrência) e explicação embaixo. */}
+                {withMarket && <MarketSection m={market} own={diag.instagram_data} lang={lang} />}
+  
+                <div style={{ background: CARD, border: '1px solid rgba(255,109,41,0.3)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
+                  <h2 style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 800, color: 'white', margin: '0 0 4px' }}>{t.problemsTitle(gaps.length)}</h2>
+                  {gaps.map(({ gap, gain }, i) => (
+                    <div key={gap.key} style={{ padding: '14px 0 2px', borderTop: i ? `1px solid ${BORDER}` : 'none' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
+                        <span style={{ fontSize: 14.5, fontWeight: 800, color: 'white' }}>{i + 1}. {gap.label}</span>
+                        {result.score !== null && <span style={{ fontSize: 12, fontWeight: 800, color: '#4ade80', whiteSpace: 'nowrap' }}>{t.gain(gain)}</span>}
+                      </div>
+                      <div style={{ fontSize: 10.5, fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{t.whyLabel}</div>
+                      <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, margin: '0 0 8px' }}>{gap.why}</p>
+                      <div style={{ fontSize: 10.5, fontWeight: 800, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{t.fixLabel}</div>
+                      <p style={{ fontSize: 13, color: 'white', lineHeight: 1.6, margin: '0 0 8px' }}>{gap.action}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )
+          })()}
+    </>
+  )
+  const scoreDetails = (
+    <>
+          {/* Como a nota foi formada */}
+          {!noIgYet && (
+            <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 20, padding: 20, marginBottom: 20 }}>
+              <h2 style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 800, color: 'white', margin: '0 0 6px' }}>{t.howFormed}</h2>
+              {diag.instagram_data?.error && (
+                <p style={{ fontSize: 12, color: MUTED, margin: '0 0 6px', lineHeight: 1.5 }}>
+                  {t.igErr}
+                </p>
+              )}
+              {!diag.instagram_data && (
+                <p style={{ fontSize: 12, color: MUTED, margin: '0 0 6px', lineHeight: 1.5 }}>
+                  {t.noIg}
+                </p>
+              )}
+              {[...igRow, ...result.criteria.filter(c => c.key === 'addon')].map(c => (
+                <div key={c.key} style={{ padding: '12px 0', borderTop: `1px solid ${BORDER}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>{c.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: c.evaluated ? ORANGE : MUTED, whiteSpace: 'nowrap' }}>
+                      {c.evaluated ? `${lang === 'en' ? String(c.points) : String(c.points).replace('.', ',')} ${t.of} ${c.weight}` : t.notEval}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13, color: c.evaluated ? '#E5E5E5' : MUTED, marginTop: 3, overflowWrap: 'anywhere' }}>
+                    {c.evaluated ? c.value : c.reason}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+  
+          {/* Como calculamos */}
+          <details style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: '4px 16px', marginBottom: 24 }}>
+            <summary style={{ cursor: 'pointer', minHeight: 44, display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 700, color: 'white' }}>{t.howCalc}</summary>
+            <div style={{ paddingBottom: 14 }}>
+              <p style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, margin: '0 0 10px' }}>
+                {t.calc1}
+              </p>
+              {(Object.keys(CRITERIA_WEIGHTS) as CriterionKey[]).map(k => (
+                <div key={k} style={{ padding: '8px 0', borderTop: `1px solid ${BORDER}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, color: 'white', fontWeight: 700 }}>
+                    <span>{info[k].label}</span><span>{CRITERIA_WEIGHTS[k]} {t.pts}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, marginTop: 2 }}>{info[k].rule}</div>
+                </div>
+              ))}
+              <p style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, margin: '10px 0 6px' }}>
+                {t.calc2}
+              </p>
+              {bands.map(b => (
+                <div key={b.verdict} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '4px 0', color: VERDICT_COLOR[b.verdict] }}>
+                  <span style={{ fontWeight: 700 }}>{b.label}</span><span>{b.range}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+    </>
+  )
+
   return (
-    <div style={{ overflowX: 'hidden' }}>
+    <div style={{ overflowX: 'hidden', animation: 'sbresultin 0.7s ease both' }}>
+      {/* entra suave depois da tela de espera */}
+      <style>{`@keyframes sbresultin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}@media (prefers-reduced-motion: reduce){@keyframes sbresultin{from{opacity:0}to{opacity:1}}}`}</style>
       <div style={{ maxWidth: 640, margin: '0 auto', padding: embedded ? '8px 0 0' : '28px 16px 64px' }}>
         {/* Fluxo */}
         <ol style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: 6, padding: 0, margin: '0 0 24px', fontSize: 11, fontWeight: 700 }}>
@@ -235,6 +376,8 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
           {diag.business_type} · {diag.city}
         </p>
 
+        {/* Camada 1 (diagnóstico em 3 camadas, 2026-10-19): a nota abre "o que você faz hoje" */}
+        {ss && <LayerHeader n={1} lang={lang} />}
         {/* Nota */}
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 20, padding: 20, marginBottom: 20 }}>
           {noIgYet ? (
@@ -266,132 +409,38 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
           )}
         </div>
 
-        {/* Potencial + principais problemas (regra fixa em growthScore.topGaps) */}
-        {!showGaps && <MarketSection m={market} own={diag.instagram_data} lang={lang} />}
-        {showGaps && (() => {
-          const gaps = topGaps(result, lang, 3)
-          const pot = potentialScore(result, gaps)
-          if (!gaps.length) return (
-            <>
-              <div style={{ background: CARD, border: '1px solid rgba(74,222,128,0.3)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
-                <p style={{ fontSize: 13, color: 'white', lineHeight: 1.6, margin: 0 }}>{t.noGap}</p>
-              </div>
-              <MarketSection m={market} own={diag.instagram_data} lang={lang} />
-            </>
-          )
-          return (
-            <>
-              <div style={{ background: 'linear-gradient(135deg, rgba(74,222,128,0.12), rgba(255,109,41,0.10))', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>{t.potTitle}</div>
-                {pot !== null && result.score !== null ? (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, flexWrap: 'wrap', marginBottom: 10 }}>
-                      <div>
-                        <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>{t.potNow}</div>
-                        <div style={{ fontFamily: D, fontSize: 34, fontWeight: 900, color: color, lineHeight: 1 }}>{result.score}</div>
-                      </div>
-                      <div aria-hidden style={{ fontSize: 26, color: MUTED, lineHeight: 1, paddingBottom: 4 }}>→</div>
-                      <div>
-                        <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>{t.potCan}</div>
-                        <div style={{ fontFamily: D, fontSize: 48, fontWeight: 900, color: '#4ade80', lineHeight: 1 }}>{pot}</div>
-                      </div>
-                    </div>
-                    <p style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, margin: 0 }}>{t.potLine}</p>
-                  </>
-                ) : (
-                  <p style={{ fontSize: 14, color: 'white', lineHeight: 1.6, margin: 0 }}>{t.potPartial}</p>
-                )}
-              </div>
-
-              {/* Ordem pedida pelo dono (2026-10-10): nota e potencial em cima,
-                  análise (concorrência) e explicação embaixo. */}
-              <MarketSection m={market} own={diag.instagram_data} lang={lang} />
-
-              <div style={{ background: CARD, border: '1px solid rgba(255,109,41,0.3)', borderRadius: 20, padding: 20, marginBottom: 20 }}>
-                <h2 style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 800, color: 'white', margin: '0 0 4px' }}>{t.problemsTitle(gaps.length)}</h2>
-                {gaps.map(({ gap, gain }, i) => (
-                  <div key={gap.key} style={{ padding: '14px 0 2px', borderTop: i ? `1px solid ${BORDER}` : 'none' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
-                      <span style={{ fontSize: 14.5, fontWeight: 800, color: 'white' }}>{i + 1}. {gap.label}</span>
-                      {result.score !== null && <span style={{ fontSize: 12, fontWeight: 800, color: '#4ade80', whiteSpace: 'nowrap' }}>{t.gain(gain)}</span>}
-                    </div>
-                    <div style={{ fontSize: 10.5, fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{t.whyLabel}</div>
-                    <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, margin: '0 0 8px' }}>{gap.why}</p>
-                    <div style={{ fontSize: 10.5, fontWeight: 800, color: '#4ade80', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{t.fixLabel}</div>
-                    <p style={{ fontSize: 13, color: 'white', lineHeight: 1.6, margin: '0 0 8px' }}>{gap.action}</p>
-                  </div>
-                ))}
-              </div>
-            </>
-          )
-        })()}
-
-        {/* Como a nota foi formada */}
-        {!noIgYet && (
-          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 20, padding: 20, marginBottom: 20 }}>
-            <h2 style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 800, color: 'white', margin: '0 0 6px' }}>{t.howFormed}</h2>
-            {diag.instagram_data?.error && (
-              <p style={{ fontSize: 12, color: MUTED, margin: '0 0 6px', lineHeight: 1.5 }}>
-                {t.igErr}
-              </p>
-            )}
-            {!diag.instagram_data && (
-              <p style={{ fontSize: 12, color: MUTED, margin: '0 0 6px', lineHeight: 1.5 }}>
-                {t.noIg}
-              </p>
-            )}
-            {[...igRow, ...result.criteria.filter(c => c.key === 'addon')].map(c => (
-              <div key={c.key} style={{ padding: '12px 0', borderTop: `1px solid ${BORDER}` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>{c.label}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: c.evaluated ? ORANGE : MUTED, whiteSpace: 'nowrap' }}>
-                    {c.evaluated ? `${lang === 'en' ? String(c.points) : String(c.points).replace('.', ',')} ${t.of} ${c.weight}` : t.notEval}
-                  </span>
-                </div>
-                <div style={{ fontSize: 13, color: c.evaluated ? '#E5E5E5' : MUTED, marginTop: 3, overflowWrap: 'anywhere' }}>
-                  {c.evaluated ? c.value : c.reason}
-                </div>
-              </div>
-            ))}
-          </div>
+        {ss ? (
+          <>
+            <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, margin: '-8px 0 20px' }}>{t.scoreMeans}</p>
+            <ContentMix ss={ss} lang={lang} />
+            <MarketSection m={market} own={diag.instagram_data} lang={lang} />
+            <LayerHeader n={2} lang={lang} />
+            <Principles ss={ss} lang={lang} />
+            <LayerHeader n={3} lang={lang} />
+            <ApplyToProfile ss={ss} lang={lang} />
+            <details style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: '4px 16px', marginBottom: 24 }}>
+              <summary style={{ cursor: 'pointer', minHeight: 44, display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 700, color: 'white' }}>{t.scoreDetails}</summary>
+              <div style={{ paddingTop: 8 }}>{gapsBlock(false)}{scoreDetails}</div>
+            </details>
+          </>
+        ) : (
+          <>
+          {/* Pronto pra gerar conversas? (observado / análise / hipótese — ficha do setor) */}
+          <ReadinessSection ig={diag.instagram_data} businessType={diag.business_type} answers={diag.onboarding_context?.playbook_answers ?? {}} lang={lang} />
+            {gapsBlock(true)}
+            {scoreDetails}
+          </>
         )}
 
-        {/* Como calculamos */}
-        <details style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: '4px 16px', marginBottom: 24 }}>
-          <summary style={{ cursor: 'pointer', minHeight: 44, display: 'flex', alignItems: 'center', fontSize: 14, fontWeight: 700, color: 'white' }}>{t.howCalc}</summary>
-          <div style={{ paddingBottom: 14 }}>
-            <p style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, margin: '0 0 10px' }}>
-              {t.calc1}
-            </p>
-            {(Object.keys(CRITERIA_WEIGHTS) as CriterionKey[]).map(k => (
-              <div key={k} style={{ padding: '8px 0', borderTop: `1px solid ${BORDER}` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, color: 'white', fontWeight: 700 }}>
-                  <span>{info[k].label}</span><span>{CRITERIA_WEIGHTS[k]} {t.pts}</span>
-                </div>
-                <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.5, marginTop: 2 }}>{info[k].rule}</div>
-              </div>
-            ))}
-            <p style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, margin: '10px 0 6px' }}>
-              {t.calc2}
-            </p>
-            {bands.map(b => (
-              <div key={b.verdict} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '4px 0', color: VERDICT_COLOR[b.verdict] }}>
-                <span style={{ fontWeight: 700 }}>{b.label}</span><span>{b.range}</span>
-              </div>
-            ))}
-          </div>
-        </details>
-
-        {/* Presente (fotos do cadastro) + CTA */}
-        <GiftNotice sent={gift.sent} view={gift.view} lang={lang} />
+        {/* CTA */}
         <button
           onClick={() => void enterDashboard()}
           style={{ display: 'block', width: '100%', minHeight: 52, padding: '14px 20px', background: ORANGE, color: '#000', fontFamily: D, fontWeight: 900, fontSize: 16, borderRadius: 14, border: 'none', cursor: 'pointer', boxShadow: '0 12px 32px rgba(255,109,41,0.35)' }}
         >
-          {direct ? t.ctaDirect : hasGift ? t.ctaGift : t.cta}
+          {direct ? t.ctaDirect : t.cta}
         </button>
         <p style={{ textAlign: 'center', fontSize: 13, color: MUTED, margin: '12px 0 0' }}>
-          {direct ? t.ctaSubDirect : hasGift ? t.ctaSubGift : t.ctaSub}
+          {direct ? t.ctaSubDirect : ss ? t.ctaSubSS : t.ctaSub}
         </p>
         <p style={{ textAlign: 'center', fontSize: 12.5, color: MUTED, margin: '6px 0 0' }}>
           {t.ctaPlan}
