@@ -4,11 +4,12 @@ import { useCompany } from '../../../contexts/CompanyContext'
 import { weekSlots, planWindow, type MixItem, type WeekSlot } from '../../../lib/weekSlots'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
-import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
+import { CARD, MUTED, BORDER, D, SUPABASE_URL, useSSNames } from './shared'
 import { templateLabel, type TestPost } from './TestingArea'
 import CalendarPostModal from './CalendarPostModal'
 import MakeNowPicker from './MakeNowPicker'
 import { useRealtime } from '../../../lib/useRealtime'
+import { PieceChips } from './PieceLabels'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -65,6 +66,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   const { session } = useAuth()
   const token = session?.access_token ?? ''
   const { company } = useCompany()
+  const ssNames = useSSNames(companyId)
   const [items, setItems] = useState<Item[]>([])
   const [mix, setMix] = useState<MixItem[]>([])
   const [formatMeta, setFormatMeta] = useState<Record<string, FormatMeta>>({})
@@ -200,6 +202,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                       <span style={{ fontSize: '8.5px', fontWeight: 700, color: sm.color }}>● {lang === 'en' ? STATUS_LABEL_EN[status] ?? sm.label : sm.label}{it.quality_score != null ? ` · ${it.quality_score}` : ''}</span>
                       {it.brief?.template && <span style={{ fontSize: '8.5px', color: MUTED }}>· {templateLabel(it.brief.template, lang)}</span>}
                     </div>
+                    <div style={{ marginTop: '4px' }}><PieceChips familia={it.familia} pilarSs={it.pilar_ss} tema={it.pillar} ssNames={ssNames} /></div>
                     {it.story_worthy && it.kind !== 'stories' && <div style={{ fontSize: '8.5px', color: '#A78BFA', marginTop: '2px' }}>{t.alsoStory}</div>}
                   </button>
                 )
@@ -212,6 +215,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                       {SURFACE_ICON[surface] ?? '📝'} {sl.name}
                     </div>
                     <div style={{ fontSize: '8.5px', color: MUTED, marginTop: '2px' }}>{t.surf[surface] ?? surface} · {slotWho(sl)}</div>
+                    <div style={{ marginTop: '4px' }}><PieceChips familia={sl.familia} pilarSs={sl.pilar_ss} tema={sl.tema} ssNames={ssNames} /></div>
                   </div>
                 )
               })}
