@@ -1705,3 +1705,40 @@ grátis de 30 s, acima — mantidos como histórico):
   Enquanto a correção não entra, uma geração nova falha. A estratégia
   ativa de cada cliente continua no lugar, porque só é trocada quando a
   nova termina.
+
+## 2026-10-21 — Criativos: 4 famílias fixas, formato fixo × intenção da estratégia (decisão do dono)
+
+- **Pedido do dono:** melhorar o fluxo de criativos com a identidade visual do
+  cliente e ter carrosséis educativos, sem encher o calendário de tipos novos.
+  "Os formatos são pré-definidos, mas a intenção do post vem da estratégia."
+- **Decidido:**
+  - 4 famílias fixas — Tour virtual · Criativo de oferta · Carrossel educativo ·
+    Bairro e estilo de vida — + prova social/bastidores **só eventual**.
+  - Mix padrão por semana: 3 tour · 2 oferta · 2 educativo · 1 bairro. Sempre
+    as mesmas famílias; a Estratégia aprende e melhora os **ângulos**.
+  - Calendário rotulado pelas 4 famílias.
+  - Capa do educativo varia; usa a foto real do corretor quando existe no
+    sistema, senão só o design da marca.
+  - Trends/notícias entram na intenção do post (`gancho_atual`), **só com fonte
+    gravada** (link, veículo, data, trecho) — regra 5.
+- **Achado:** hoje não há fonte de notícia em tempo real no código e
+  `marketing_ai_trends` não guarda link/data da fonte.
+- **Plano completo e fases:** [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md) (ainda não
+  implementado).
+
+## 2026-10-21 — Estrela vermelha = obrigatório; telefone e nome obrigatórios no diagnóstico (pedido do dono)
+
+- **Contradição resolvida:** o diagnóstico dizia "(opcional)" para telefone e
+  para o nome do perfil pessoal, mas a estratégia (`_shared/setupReady.ts`)
+  exige nome, cidade e telefone — a pessoa fazia o diagnóstico, pagava e só
+  então descobria que a estratégia não começava.
+- **Decidido:** estrela **vermelha** (`#ef4444`) em qualquer campo = obrigatório,
+  em todas as telas (diagnóstico, Configurações, perguntas da ficha que não
+  aceitam "Não sei/Depois/Não se aplica"). No diagnóstico: nome (2+ letras),
+  cidade (2+ letras) e telefone (10+ dígitos) passam a ser obrigatórios para
+  todos os perfis, inclusive pessoa física. Cada etapa com campo obrigatório
+  mostra a linha "* obrigatório"; Configurações mostra "* obrigatório pra
+  estratégia começar".
+- **Regra única no código:** `src/lib/requiredFields.ts` (espelho de
+  `setupReady.ts`); o sino de pendências usa a mesma.
+- **Só telas** — nenhuma function mudou.

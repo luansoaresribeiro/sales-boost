@@ -6,6 +6,7 @@ import { useLang } from '../../../contexts/LanguageContext'
 import { fetchBusinessTypes, OTHER_BUSINESS_TYPE } from '../../../lib/businessTypes'
 import { CARD, MUTED, BORDER, D, ORANGE, SUPABASE_URL } from './shared'
 import { buildIcpDemo } from './growthIntelDemo'
+import { REQUIRED_STAR } from '../../../lib/requiredFields'
 
 // Infos da empresa — tudo que foi coletado no onboarding (identidade,
 // contatos, canais, e o entendimento conversacional do negócio), agora
@@ -67,6 +68,8 @@ const IDENTITY_FIELDS: { key: keyof Info; placeholder?: string; type?: string }[
   { key: 'avg_ticket', type: 'number' },
   { key: 'marketing_monthly_budget', type: 'number' },
 ]
+// Obrigatórios pra estratégia começar (src/lib/requiredFields.ts).
+const REQUIRED_KEYS: (keyof Info)[] = ['business_name', 'city', 'phone']
 const LINK_FIELDS: { key: keyof Info; label?: string; placeholder: string }[] = [
   { key: 'website_url', placeholder: 'https://...' },
   { key: 'instagram_url', label: 'Instagram', placeholder: 'https://instagram.com/...' },
@@ -99,7 +102,7 @@ const TX = {
     icpTitle: '🧬 Cliente ideal aprendido pela IA', example: 'EXEMPLO',
     icpA: 'Isso é uma ', icpB: 'demonstração', icpC: ' de como a IA vai refinar o cliente ideal sozinha, cruzando engajamento/campanhas reais — ainda não tem dado real suficiente pra isso. O campo "Cliente ideal" ali em cima (que você preenche) é o real, usado pelos agentes hoje.',
     readErr: 'Erro ao ler o site', loading: 'Carregando...',
-    title: '🏢 Infos da empresa',
+    title: '🏢 Infos da empresa', requiredLegend: 'obrigatório pra estratégia começar',
     introA: 'Tudo que foi coletado no cadastro — identidade, contatos, canais e o entendimento do negócio. É o ', introB: 'contexto que os agentes usam', introC: ' pra decidir e recomendar. Pode ajustar quando quiser.',
     identity: 'Identidade', bizType: 'Tipo de estabelecimento', select: 'Selecione...', otherSpecify: 'Outro (especifique)', typeYourBiz: 'Digite o tipo do seu negócio', mainGoal: 'Principal objetivo',
     channels: 'Canais e links', siteRep: 'Repertório do site',
@@ -129,7 +132,7 @@ const TX = {
     icpTitle: '🧬 Ideal customer learned by the AI', example: 'EXAMPLE',
     icpA: 'This is a ', icpB: 'demonstration', icpC: ' of how the AI will refine the ideal customer on its own, using real engagement/campaign data — there is not enough real data for that yet. The "Ideal customer" field above (which you fill in) is the real one, used by the agents today.',
     readErr: 'Error reading the website', loading: 'Loading...',
-    title: '🏢 Company info',
+    title: '🏢 Company info', requiredLegend: 'required for the strategy to start',
     introA: 'Everything collected at signup — identity, contacts, channels and the understanding of the business. It is the ', introB: 'context the agents use', introC: ' to decide and recommend. You can adjust it anytime.',
     identity: 'Identity', bizType: 'Business type', select: 'Select...', otherSpecify: 'Other (specify)', typeYourBiz: 'Type your business type', mainGoal: 'Main goal',
     channels: 'Channels and links', siteRep: 'Website knowledge',
@@ -150,10 +153,10 @@ function timeAgoL(iso: string, A: (typeof TX)[keyof typeof TX]['ago']): string {
   return A.d(Math.floor(hours / 24))
 }
 
-function TextInput({ label, value, onChange, placeholder, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+function TextInput({ label, value, onChange, placeholder, type = 'text', required = false }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; required?: boolean }) {
   return (
     <div style={{ marginBottom: '14px' }}>
-      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>{label}</label>
+      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>{label}{required && <span style={{ color: REQUIRED_STAR }}> *</span>}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         style={{ width: '100%', boxSizing: 'border-box', padding: '10px 13px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '10px', color: 'white', fontSize: '13.5px', outline: 'none', fontFamily: 'inherit' }} />
     </div>
@@ -278,7 +281,8 @@ export default function CompanyInfoCard({ companyId }: { companyId: string }) {
       </p>
 
       <SubBlock title={X.identity}>
-        {IDENTITY_FIELDS.map(f => <TextInput key={f.key} label={X.labels[f.key]} value={info[f.key]} onChange={set(f.key)} placeholder={f.placeholder ?? X.placeholders[f.key]} type={f.type} />)}
+        <p style={{ fontSize: '11.5px', color: MUTED, margin: '0 0 12px' }}><span style={{ color: REQUIRED_STAR }}>*</span> {X.requiredLegend}</p>
+        {IDENTITY_FIELDS.map(f => <TextInput key={f.key} label={X.labels[f.key]} value={info[f.key]} onChange={set(f.key)} placeholder={f.placeholder ?? X.placeholders[f.key]} type={f.type} required={REQUIRED_KEYS.includes(f.key)} />)}
         <div style={{ marginBottom: '14px' }}>
           <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>{X.bizType}</label>
           <select

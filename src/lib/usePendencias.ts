@@ -6,6 +6,7 @@ import { useCompany } from '../contexts/CompanyContext'
 import { useLang } from '../contexts/LanguageContext'
 import { bi, fetchCatalogSchema, fetchOnboardingQuestions } from './verticalPlaybook'
 import { isShowcaseMode } from './setupGate'
+import { missingBizFields } from './requiredFields'
 import { confirmProfile } from './profileConfirm'
 import { catalogMinPhotos, isCatalogItem, itemPhotoCount, unansweredQuestions } from './setupRules'
 import { fetchOnboardingV2, isPendingData, settingsLinkFor, visibleQuestions, type AnswerStatus } from './onboardingV2'
@@ -137,11 +138,8 @@ export function usePendencias() {
         answers = (data.playbook_answers as Record<string, unknown> | null) ?? null
         // Dados do negócio — mesma regra do servidor (_shared/setupReady.ts). Antes o /setup
         // cobrava isso; a página saiu em 2026-10-19 e o sino passou a avisar.
-        const biz = [
-          String(data.business_name ?? '').trim().length < 2 ? t.bizName : '',
-          String(data.city ?? '').trim().length < 2 ? t.bizCity : '',
-          String(data.phone ?? '').replace(/\D/g, '').length < 10 ? t.bizPhone : '',
-        ].filter(Boolean)
+        const label = { name: t.bizName, city: t.bizCity, phone: t.bizPhone }
+        const biz = missingBizFields(data).map(k => label[k])
         if (biz.length) out.push({ id: 'dados', kind: 'ficha', tone: 'orange', title: t.bizT(biz.join(', ')), hint: t.bizHint, destino: t.settingsBiz, to: '/dashboard/settings?section=negocio' })
         let expiresAt: string | null = null
         try {

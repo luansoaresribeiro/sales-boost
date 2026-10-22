@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { bi } from '../lib/verticalPlaybook'
+import { REQUIRED_STAR } from '../lib/requiredFields'
 import { allowedStates, isMeaningful, optionsFor, STATE_LABEL, type AnswerState, type FieldState, type V2Question } from '../lib/onboardingV2'
 
 // Uma pergunta do onboarding v2 (ficha do setor), com "por que perguntamos"
@@ -14,12 +15,12 @@ const BORDER = 'rgba(255,255,255,0.08)'
 
 const TX = {
   pt: {
-    why: 'Por que perguntamos: ', add: '+ Adicionar', typeEnter: 'Digite e aperte Enter', upTo: (n: number) => `até ${n}`,
+    required: 'obrigatório', why: 'Por que perguntamos: ', add: '+ Adicionar', typeEnter: 'Digite e aperte Enter', upTo: (n: number) => `até ${n}`,
     invalid: 'Não conseguimos identificar uma resposta válida para este campo. Você pode informar agora ou deixar para depois. Se essa informação for necessária para uma funcionalidade, avisaremos você e mostraremos onde completá-la.',
     autoHint: 'Lemos isso do seu Instagram. Está certo? Toque numa opção pra confirmar ou trocar.',
   },
   en: {
-    why: 'Why we ask: ', add: '+ Add', typeEnter: 'Type and press Enter', upTo: (n: number) => `up to ${n}`,
+    required: 'required', why: 'Why we ask: ', add: '+ Add', typeEnter: 'Type and press Enter', upTo: (n: number) => `up to ${n}`,
     invalid: "We couldn't find a valid answer for this field. You can fill it in now or leave it for later. If a feature needs it, we'll let you know and show you where to complete it.",
     autoHint: 'We read this from your Instagram. Is it right? Tap an option to confirm or change it.',
   },
@@ -77,6 +78,7 @@ export default function QuestionField({ q, value, state, onChange, onState, lang
     <div id={`q-${q.key}`} style={{ marginBottom: '20px', scrollMarginTop: '90px', ...(highlight ? { outline: `2px solid ${ORANGE}`, outlineOffset: '6px', borderRadius: '8px' } : {}) }}>
       <div style={{ fontSize: '14.5px', fontWeight: 700, color: 'white', marginBottom: '4px', lineHeight: 1.4 }}>
         {bi(q.label, lang)}
+        {states.length === 0 && <span aria-label={t.required} title={t.required} style={{ color: REQUIRED_STAR, marginLeft: 3 }}>*</span>}
         {q.type !== 'text' && q.type !== 'select' && q.max ? <span style={{ color: MUTED, fontWeight: 500, fontSize: '12px' }}> ({t.upTo(q.max)})</span> : null}
       </div>
       {q.why && <div style={{ fontSize: '12px', color: MUTED, marginBottom: '10px', lineHeight: 1.5 }}>{t.why}{bi(q.why, lang)}</div>}

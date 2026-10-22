@@ -25,6 +25,8 @@ import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
 import { privateFieldKeys } from '../_shared/nearbyPlaces.ts'
 import { loadLessons, lessonsBlock, relearn } from '../_shared/contentLessons.ts'
+import { deckPromptRules, DECK_SLIDE_JSON, inventedNumbers, normalizeDeck, normalizeSlide, numbersOf, pickCoverStyle, rewritePrompt, slideSummary, type DeckSlide } from '../_shared/deckSlides.ts'
+import { decideVideoCta, queroNotice, sanitizeCaptionCta } from '../_shared/videoCta.ts'
 import { checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 
 const cors = {
@@ -33,7 +35,7 @@ const cors = {
 }
 type SupaClient = ReturnType<typeof createClient>
 
-interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null; language: string | null; telegram_chat_id: string | null; vertical_key: string | null; playbook_answers: Record<string, unknown> | null }
+interface Company { id: string; business_name: string; business_type: string | null; city: string | null; goal: string | null; business_description: string | null; ideal_customer: string | null; language: string | null; telegram_chat_id: string | null; vertical_key: string | null; playbook_answers: Record<string, unknown> | null; instagram_username?: string | null }
 
 // Ficha de setor (vertical_playbooks) + respostas do onboarding, mescladas
 // num bloco de texto pra injetar no prompt. Ficha vazia (caso 'generico', ou
@@ -380,7 +382,7 @@ const PHOTO_HINT: Record<string, string> = {
   'Timeline': 'a single clear moment representing one step of an ongoing process or journey, implying progression',
 }
 
-interface CardBrand { primary: string; name: string; accent?: string; text?: string; bg?: string; logoUrl?: string }
+interface CardBrand { primary: string; name: string; accent?: string; text?: string; bg?: string; logoUrl?: string; primary2?: string; accent2?: string }
 
 // Renderiza o card gráfico de verdade via render-format (SVG → PNG, texto
 // nítido, sem custo de IA além das fotos que o card em si precisar). `save:
@@ -392,6 +394,14 @@ async function renderGraphicCard(
   auth: { bearer: string; isCron: boolean; cronSecret?: string },
   companyId: string, template: 'tweet' | 'slide' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand,
 ): Promise<string | null> {
+  return (await renderGraphicCardFull(auth, companyId, template, fields, brand))?.url ?? null
+}
+
+// Igual ao renderGraphicCard, mas devolve também o `overflow` do render-format (texto que não coube no quadro).
+async function renderGraphicCardFull(
+  auth: { bearer: string; isCron: boolean; cronSecret?: string },
+  companyId: string, template: 'tweet' | 'slide' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand,
+): Promise<{ url: string; overflow: boolean } | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   if (!supabaseUrl) return null
   try {
@@ -400,8 +410,8 @@ async function renderGraphicCard(
     if (auth.isCron && auth.cronSecret) { body.cron_secret = auth.cronSecret; body.company_id = companyId }
     else headers.Authorization = auth.bearer
     const res = await fetch(`${supabaseUrl}/functions/v1/render-format`, { method: 'POST', headers, body: JSON.stringify(body) })
-    const data = await res.json().catch(() => ({})) as { url?: string }
-    return res.ok && data.url ? data.url : null
+    const data = await res.json().catch(() => ({})) as { url?: string; overflow?: boolean }
+    return res.ok && data.url ? { url: data.url, overflow: data.overflow === true } : null
   } catch (e) { console.error('renderGraphicCard error:', e); return null }
 }
 
@@ -502,6 +512,8 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
   const cardBrand: CardBrand = {
     primary: kitColors?.primary?.[0] || bd?.colors?.[0] || '#FF6D29', name: company.business_name,
     accent: kitColors?.accent?.[0], text: kitColors?.text, bg: kitColors?.bg, logoUrl: bd?.logo_url ?? undefined,
+    // Cores de reserva: o slide escolhe a 1ª que contrasta com o fundo (slideSystem.pickAccent).
+    primary2: kitColors?.primary?.[1] || bd?.colors?.[1], accent2: kitColors?.accent?.[1],
   }
   const product = ((productRows ?? [])[0] as { title: string; image_url: string | null } | undefined) ?? null
   const templateDesc = TEMPLATE_DESC(!!product?.image_url, !!realReview, !!realStat)
@@ -600,6 +612,8 @@ Decida o brief. Retorne APENAS um JSON:
   const visualContent = findContent(lib, 'visual_system', brief.visual_system as string | undefined)
   const visualSystemTitle = String(brief.visual_system ?? '')
 
+  // Capa do carrossel em rodízio (gancho → pergunta → lista), pela quantidade de carrosséis já feitos.
+  const coverStyle = opts.deck ? pickCoverStyle((await admin.from('marketing_ai_test_content').select('id', { count: 'exact', head: true }).eq('company_id', company.id).eq('format', 'carrossel')).count ?? 0) : 'gancho'
   const execPrompt = `${preamble(config, company, playbookBlock)}
 
 Você agora EXECUTA como esta personalidade: ${personaContent}
@@ -620,14 +634,13 @@ ${visualRefs ? `\nReferências visuais da marca (Layouts & Estilos — inspire-s
 Escreva o post pronto pra publicar. Regras importantes:
 - "caption" é APENAS a legenda que vai no Instagram (texto pro público). NUNCA coloque nela instruções de imagem, descrição de foto nem "Slide 1/2/3".
 - Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
-${opts.deck ? `- ESTE é um CARROSSEL DE SLIDES (tipo apresentação, só texto na arte — sem foto): "slides" com 4 a 7 itens. Slide 1 = o gancho; do meio = um ponto por slide; último = a chamada pra ação. Cada "text" é UMA frase curta e completa (máx. 160 caracteres, sem emoji, nunca cortada no meio). Deixe "image" vazio.
-` : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
+${opts.deck ? deckPromptRules(coverStyle, String(brief.cta ?? '')) : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
 - Depois de escrever, avalie o PRÓPRIO post: ele é forte/direto o suficiente pra também valer a pena repostar nos Stories tal como está (sem regerar nada)? Se sim, "story_worthy":true e "story_note": 1 frase curta dizendo por quê. Seja seletivo — nem todo post é bom pra Stories (ex: um card com muito texto lido rápido não funciona lá); só marque true quando fizer sentido de verdade.
 ${CARD_FIELD_INSTRUCTIONS[String(brief.template ?? '')] ?? ''}
 Retorne APENAS um JSON array:
-[{"idea":"resumo curto do post","caption":"só a legenda do Instagram, texto pro público","hashtags":"#tag1 #tag2 #tag3","cta":"chamada pra ação final","format":"${brief.format ?? 'foto'}","video_script":"","slides":[{"text":"","image":""}],"story_worthy":true|false,"story_note":""${CARD_FIELD_JSON[String(brief.template ?? '')] ?? ''}}]`
+[{"idea":"resumo curto do post","caption":"só a legenda do Instagram, texto pro público","hashtags":"#tag1 #tag2 #tag3","cta":"chamada pra ação final","format":"${brief.format ?? 'foto'}","video_script":"","slides":${opts.deck ? DECK_SLIDE_JSON : '[{"text":"","image":""}]'},"story_worthy":true|false,"story_note":""${CARD_FIELD_JSON[String(brief.template ?? '')] ?? ''}}]`
 
-  const execRaw = await callClaude(anthropicKey, execPrompt, 2000)
+  const execRaw = await callClaude(anthropicKey, execPrompt, opts.deck ? 3000 : 2000)
   let post = extractOne(execRaw)
   if (!post) {
     // Fallback: uma tentativa direta e simples, garante que o dono sempre recebe um post.
@@ -658,7 +671,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   if (insErr) throw new Error(insErr.message)
 
   let mainImage: string | null = null
-  let slides: { text: string; image_prompt: string; image_url: string | null }[] | null = null
+  let slides: { text: string; image_prompt: string; image_url: string | null; layout?: string }[] | null = null
   // Só `idea` (o CONCEITO visual curto) — nunca hook_angle/offer/caption:
   // são copy de verdade, e mandar isso pro prompt de imagem é exatamente o
   // que ensina a IA a tentar "escrever" a frase na foto (ver NO_TEXT_RULE).
@@ -682,10 +695,46 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
 
   if (!opts.skipImage) {
     if (fmt === 'carrossel' && opts.deck) {
-      const rawSlides = Array.isArray(post.slides) ? (post.slides as { text?: string }[]).filter(x => String(x.text ?? '').trim()).slice(0, 7) : []
-      const urls = await Promise.all(rawSlides.map((x, i) => renderGraphicCard(opts, company.id, 'slide', { text: capWords(String(x.text ?? ''), 180), name: company.business_name, page: String(i + 1), total: String(rawSlides.length) }, cardBrand)))
-      slides = rawSlides.map((x, i) => ({ text: String(x.text ?? ''), image_prompt: '', image_url: urls[i] }))
+      // Sistema de slides: a IA pede {layout,title,text,items,highlight,cta}; o código valida (1º capa, último
+      // fecho), o render-format mede o texto de verdade e acusa `overflow`. Estourou (ou tem número que não veio
+      // dos dados — regra 5)? 1 pedido de versão mais curta POR SLIDE, depois re-renderiza; se ainda
+      // ainda estoura: o desenho descarta as linhas que passariam do rodapé e o reasoning avisa o dono ("slide apertado"). O dono aprova tudo antes de ir ao ar.
+      const deckSlides = normalizeDeck(Array.isArray(post.slides) ? post.slides : [], String(post.cta ?? brief.cta ?? ''))
+      const dataText = [preamble(config, company, playbookBlock), seedBlock, insights.map(i => `${i.title} ${i.description}`).join(' ')].join(' ')  // sem `idea`: é texto da própria IA, não dado
+      const allowed = numbersOf(dataText)
+      const handle = String(company.instagram_username ?? '').replace(/^@/, '').trim()
+      const renderSlide = (sl: DeckSlide, i: number) => renderGraphicCardFull(opts, company.id, 'slide', {
+        layout: sl.layout, title: sl.title, text: sl.text, items: sl.items, highlight: sl.highlight, cta: sl.cta, cover_style: coverStyle,
+        handle, name: company.business_name, page: String(i + 1), total: String(deckSlides.length),
+      }, cardBrand)
+      const warnings: string[] = []
+      const done = await Promise.all(deckSlides.map(async (sl, i) => {
+        let cur = sl, r = await renderSlide(cur, i)
+        const bad = inventedNumbers(cur, allowed)
+        if (r?.overflow || bad.length) {
+          try {
+            const raw = parseObj(await callClaude(anthropicKey, rewritePrompt(company.business_name, cur, { tooLong: !!r?.overflow, numbers: bad }), 600))
+            const next = normalizeSlide(raw, cur.layout === 'capa' || cur.layout === 'fecho' ? cur.layout : null, cur.cta)
+            next.layout = cur.layout
+            if (Object.keys(raw).length) { cur = next; r = (await renderSlide(cur, i)) ?? r }
+          } catch (e) { console.error('creative-generate: slide mais curto falhou', company.id, i + 1, e) }
+        }
+        if (r?.overflow) {
+          console.error('creative-generate: slide ainda estoura depois do retry', company.id, i + 1, cur.layout)
+          warnings.push(`O slide ${i + 1} ficou apertado — confira antes de aprovar`)
+        }
+        const still = inventedNumbers(cur, allowed)
+        if (still.length) warnings.push(`slide ${i + 1} tem número que não veio dos dados cadastrados (${still.join(', ')}) — confira antes de aprovar`)
+        return { cur, url: r?.url ?? null }
+      }))
+      slides = done.map(d => ({ text: slideSummary(d.cur), image_prompt: '', image_url: d.url, layout: d.cur.layout }))
       mainImage = slides.find(x => x.image_url)?.image_url ?? null
+      if (!deckSlides.length) {
+        await admin.from('marketing_ai_test_content').update({ reasoning: `${brief.reasoning ?? ''} Atenção: a IA não devolveu nenhum slide aproveitável, então este carrossel ficou sem arte. Gere de novo ou descarte.`.trim() }).eq('id', inserted.id)
+      } else if (warnings.length) {
+        warnings.sort()
+        await admin.from('marketing_ai_test_content').update({ reasoning: `${brief.reasoning ?? ''} Atenção: ${warnings.join('; ')}.`.trim() }).eq('id', inserted.id)
+      }
     } else if (fmt === 'carrossel') {
       const rawSlides = Array.isArray(post.slides) ? (post.slides as { text?: string; image?: string }[]).slice(0, 6) : []
       if (rawSlides.length > 0) {
@@ -1127,6 +1176,15 @@ Responda SÓ em JSON: {"card_question":"...","card_answer":"...","caption":"..."
   return true
 }
 
+// CTA alternativo (sem resposta do QUERO aprovada) vem da ficha: config.ctas.sem_automacao.
+async function fetchFichaCtas(admin: SupaClient, verticalKey: string | null): Promise<{ sem_automacao?: unknown } | null> {
+  try {
+    const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey ?? 'generico').eq('enabled', true).maybeSingle()
+    const c = (data?.config ?? {}) as { ctas?: { sem_automacao?: unknown } }
+    return c.ctas && typeof c.ctas === 'object' ? c.ctas : null
+  } catch { return null }
+}
+
 // Vaga de vídeo: legenda (texto da IA, sem inventar) + peça no calendário com
 // a foto de capa; o item-videos manda a foto pra Higgsfield (confere o teto) e
 // liga o vídeo à peça (plan.piece_id). Se não der pra fazer o vídeo, a peça
@@ -1144,6 +1202,9 @@ async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Co
   const f = (item.meta?.fields ?? {}) as Record<string, unknown>
   const hidden = await privateFieldKeys(admin, company.vertical_key ?? null)
   const facts = Object.entries(f).filter(([k, v]) => !hidden.has(k) && v !== null && v !== undefined && String(v).trim() !== '').map(([k, v]) => `${k}: ${String(v).slice(0, 600)}`).join('\n')
+  // "Comente QUERO" só com a resposta do QUERO deste imóvel aprovada (decisão em código, não da IA).
+  const { data: auto } = await admin.from('engagement_automations').select('active, message, keywords').eq('company_id', company.id).eq('item_id', item.id).maybeSingle()
+  const decision = decideVideoCta(auto as { active?: boolean; message?: string; keywords?: string[] } | null, await fetchFichaCtas(admin, company.vertical_key))
   let cap: Record<string, unknown> = {}
   try {
     cap = parseObj(await callClaude(anthropicKey, `Você escreve a legenda de um Reels curto (5 s) de "${company.business_name}" mostrando 1 ambiente deste imóvel real, em movimento de câmera suave.
@@ -1151,14 +1212,20 @@ Dados reais do imóvel (use só isto):
 ${facts || '(sem dados além do título)'}
 Título: ${item.title}
 Objetivo da peça na estratégia: ${job.purpose || job.name}
-${HONESTY_RULE} A legenda é pro público do Instagram — nunca um recado pro corretor.${lessonsBlock(await loadLessons(admin, company.id))}
+${HONESTY_RULE} A legenda é pro público do Instagram — nunca um recado pro corretor.
+${decision.promptRule}${lessonsBlock(await loadLessons(admin, company.id))}
 Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`, 700))
   } catch (e) { console.error('runVideoSlot: legenda falhou', company.id, e) }
+  const safe = sanitizeCaptionCta(cap.caption ? String(cap.caption) : null, cap.cta ? String(cap.cta) : null, decision)
+  if (safe.changed) console.log('runVideoSlot: CTA ajustado pela trava', company.id, decision.approved ? 'com QUERO' : 'sem QUERO')
+  // Sem a resposta aprovada, o dono é avisado na peça (e o item-videos preserva o aviso).
+  const notice = decision.approved ? '' : queroNotice(decision.cta)
+  const withNotice = (msg: string) => notice ? `${msg} ${notice}` : msg
   const { data: piece, error } = await admin.from('marketing_ai_test_content').insert({
     company_id: company.id, kind: 'organico', format: 'reel', idea: `${item.title} — vídeo`,
-    caption: cap.caption ? String(cap.caption) : null, hashtags: cap.hashtags ? String(cap.hashtags) : null, cta: cap.cta ? String(cap.cta) : null,
+    caption: safe.caption, hashtags: cap.hashtags ? String(cap.hashtags) : null, cta: safe.cta,
     image_url: photo, media: [{ url: photo, type: 'photo' }], item_id: item.id, pillar: job.pillar, recipe: VIDEO_RECIPE, provider: 'higgsfield',
-    planned_for: job.date || null, reasoning: 'Vídeo sendo feito na Higgsfield a partir de uma foto real — aparece aqui em alguns minutos.',
+    planned_for: job.date || null, reasoning: withNotice('Vídeo sendo feito na Higgsfield a partir de uma foto real — aparece aqui em alguns minutos.'),
   }).select('id').single()
   if (error || !piece) { console.error('runVideoSlot: peça não gravada', company.id, error?.message); return }
   try {
@@ -1167,15 +1234,15 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`, 700))
       body: JSON.stringify({ action: 'create', cron_secret: cronSecret, company_id: company.id, item_id: item.id, kind: 'room', photos: [photo], label: 'Calendário', piece_id: piece.id }),
     })
     const r = await res.json().catch(() => ({})) as { error?: string }
-    if (!res.ok) await admin.from('marketing_ai_test_content').update({ reasoning: `O vídeo não foi feito: ${r.error ?? `erro ${res.status}`}. Nada foi cobrado.` }).eq('id', piece.id)
+    if (!res.ok) await admin.from('marketing_ai_test_content').update({ reasoning: withNotice(`O vídeo não foi feito: ${r.error ?? `erro ${res.status}`}. Nada foi cobrado.`) }).eq('id', piece.id)
   } catch (e) {
-    await admin.from('marketing_ai_test_content').update({ reasoning: 'O vídeo não foi feito (falha de conexão). Nada foi cobrado.' }).eq('id', piece.id)
+    await admin.from('marketing_ai_test_content').update({ reasoning: withNotice('O vídeo não foi feito (falha de conexão). Nada foi cobrado.') }).eq('id', piece.id)
     console.error('runVideoSlot: item-videos falhou', company.id, e)
   }
   try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runVideoSlot: nota falhou', e) }
 }
 
-const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language, telegram_chat_id, vertical_key, playbook_answers'
+const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language, telegram_chat_id, vertical_key, playbook_answers, instagram_username'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
