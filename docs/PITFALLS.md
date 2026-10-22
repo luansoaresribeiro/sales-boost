@@ -565,6 +565,10 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   fontes Poppins vêm do pacote npm `@expo-google-fonts/poppins`. Rasterizar com
   `@resvg/resvg-js` (`fontFiles`, `loadSystemFonts:false`) e medir a caixa real
   (`innerBBox`) de cada linha desenhada, comparando com a medição.
+- **Autoteste do `render-format` em produção estoura o limite (2026-10-22):** `{"selftest":true}`
+  desenha 16 imagens numa chamada só e volta `WORKER_RESOURCE_LIMIT`. Não é defeito do uso
+  real (1 slide por chamada funciona). Pra testar em produção, renderize 1 slide por vez
+  (cron_secret + `company_id` de empresa de teste + `save:false`).
 - **"Comente QUERO" (vídeo do calendário):** o aviso "Sem resposta do QUERO aprovada…" mora
   em `reasoning`; o `item-videos` troca `reasoning` quando o vídeo fica pronto/falha — por
   isso ele chama `keepQueroNotice` (em `_shared/videoCta.ts`). Quem mexer nesses updates de
