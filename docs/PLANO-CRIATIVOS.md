@@ -65,6 +65,8 @@ segurança (sem número sem fonte, IA nunca escreve texto).
 
 | Campo | Exemplo |
 |---|---|
+| `pilar_ss` | pilar de Social Selling da ficha (`onboarding_v2.social_selling.pillars`), ex.: `confianca` — **pra que** a peça serve (ver "Um rótulo só por peça") |
+| `etapa_funil` | etapa do `funnel_plan` que a peça executa (awareness · consideration · conversion · retention) |
 | `objetivo` | atrair · educar · converter |
 | `publico` | "primeiro imóvel, família, Barra" |
 | `angulo` | "medo de errar na documentação" |
@@ -201,6 +203,87 @@ Um único sistema de design no `render-format`, usado por todas as famílias
    → algumas capas usam a foto real dele (tratada pelo Higgsfield só em
    luz/cor). **Sem foto** → capa só com o design da marca.
 
+## Análise 2026-10-22 — da estratégia até o post (depois do sistema de slides e do QUERO no ar)
+
+Conferido no código da `main` em 2026-10-22 (`strategy-generate`,
+`_shared/formatCatalog.ts`, `creative-generate`).
+
+### 1. A estratégia é rica, mas o post recebe só "um bilhete"
+
+A estratégia grava em `marketing_ai_strategies`: tese, `content_plan`
+(`central_line`, `hero_formats`, `why`, **`pillars[]`** = como a tese trabalha
+cada pilar de Social Selling, `weekly_mix[]`) e **`funnel_plan[]`** (por etapa:
+`pillar`, `objective`, `audience`, `message`, `format`, `cta`, `destination`).
+
+O `creative-generate` lê **só** `content_plan.weekly_mix` (via `weekSlots`) e
+monta o seed de cada vaga como
+`angle: "Pilar ${pillar}: ${purpose}"` (`runPlanSlot` / `planWeekForCompany`).
+`runVideoSlot` usa só `purpose`. **Não chegam ao post:** tese, `central_line`,
+`content_plan.pillars`, nada do `funnel_plan` (público, mensagem, CTA,
+etapa). E `WEEKLY_MIX_SHAPE` pede `"pillar": ""` sem dizer qual taxonomia —
+às vezes vem vazio.
+
+**Consequência:** o trabalho de Social Selling feito na estratégia (e
+continuado do diagnóstico) não guia de verdade a peça; a peça só sabe o
+formato e uma frase.
+
+### 2. Três "pilares" diferentes convivendo
+
+| Nome | Exemplos | Onde é usado |
+|---|---|---|
+| Pilares de conteúdo da ficha (`config.pillars` + `production_recipes`) | imovel, local, mercado, educacao, marca_pessoal, prova_social | Peso do calendário (`fetchWeekPillarOccupancy`), receita de produção |
+| Pilares de Social Selling (`onboarding_v2.social_selling.pillars`) | autoridade, educação, confiança, relacionamento, conversão | Diagnóstico, estratégia, `funnel_plan[].pillar` |
+| `weekly_mix[].pillar` | texto livre, às vezes vazio | Seed da vaga ("Pilar X: …") |
+| Famílias (este plano) | Tour, Oferta, Educativo, Bairro | ainda não implementadas |
+
+O aprendizado (família × ângulo) fica impossível de medir se cada peça é
+rotulada de um jeito.
+
+### 3. Carrossel educativo duplicado e sem trava de fonte oficial
+
+- `carrossel_slides` (genérico, `formatCatalog.ts` GENERIC) está **`live`** e
+  é o que o calendário usa pra toda vaga `post` que não é `post_card` →
+  na prática os "educativos" saem por ele.
+- `carrossel_educativo` (ficha) continua **`planned`**.
+- O genérico tem a trava de **número** (`inventedNumbers`), mas **não** a de
+  **afirmação**: uma regra de ITBI/documentação/financiamento errada, sem
+  algarismo, passa. O `dica_faq` (dicas conferidas em fonte oficial) não é
+  usado pelo carrossel.
+
+### 4. Tour/oferta ainda por rodízio
+
+Imóvel por rodízio (`pickItem`), foto sorteada, vídeo sempre `room` — fase 7,
+não feita. O QUERO já foi corrigido (no ar).
+
+### Decisões propostas a partir desta análise
+
+**A. Um rótulo só por peça:** cada vaga e cada peça levam três campos, sempre
+iguais em todo o sistema:
+
+- `familia` — **o que é** (tour · oferta · educativo · bairro · eventual);
+- `pilar_ss` — **pra que serve** (chave do pilar de Social Selling da ficha);
+- `tema` — **sobre o quê** (os antigos pilares de conteúdo da ficha viram
+  tema: imovel, local, mercado, educacao… + categoria do `dica_faq`).
+
+`WEEKLY_MIX_SHAPE` passa a pedir `pilar_ss` (validado contra a ficha) no lugar
+de `pillar` livre; a `familia` vem do formato (campo novo `family` em
+`content_formats` da ficha, regra 6). O aprendizado mede `familia × pilar_ss ×
+ângulo`.
+
+**B. Intenção completa chega no post:** cada `WeekSlot` carrega, além de
+`format/purpose`: `pilar_ss` + o `content_plan.pillars[pilar_ss].plan`, a etapa
+do `funnel_plan` ligada (mesmo `pilar_ss` ou mesmo `format`) com
+`audience/message/cta`, e a `central_line`. O seed do `creative-generate`
+(post, carrossel, vídeo, pacote do item) usa esses campos em vez de
+"Pilar X: purpose". CTA da intenção continua passando pela trava do QUERO.
+
+**C. Educativo com fonte:** juntar `carrossel_slides` e `carrossel_educativo`:
+tema regulado (jurídico, financiamento, documentação, impostos — categorias
+do `dica_faq`) → o carrossel **só** usa dica liberada do `dica_faq` (sem dica
+liberada daquele tema → vira dica geral sem número/lei, como o `runFaqSlot`
+já faz). Tema leve (bairro, estilo de vida, bastidores, mercado sem número)
+→ carrossel livre com a trava de número.
+
 ## Fases (com critério de pronto)
 
 | Fase | O que entrega | Pronto quando | Alteração arriscada? |
@@ -209,15 +292,20 @@ Um único sistema de design no `render-format`, usado por todas as famílias
 |  | **NO AR (2026-10-22: `render-format` v43, `creative-generate` v72)** | `_shared/slideSystem.ts` (layouts capa · lista · passos · comparação · destaque · fecho, + `texto` pros slides antigos), `_shared/deckSlides.ts` (validação + regras do prompt), medição real via opentype.js no `render-format` (devolve `overflow`), retry de 1 texto mais curto por slide no `creative-generate`. Teste local: 2 marcas de teste × 5 slides com texto longo, 0 texto fora da área útil. Fica de fora desta fase: fonte/estilo do Kit (fase 4), prévia em Aprovações (item 5), capa com número/foto do corretor (item 6, regra 5), `carrossel_educativo` ainda `planned` (fase 2). | |
 | **2. Carrossel educativo de verdade** | `carrossel_educativo` passa a `live`; conteúdo vem das dicas liberadas do `dica_faq`; `allow_carrossel` ligado para esse formato | A estratégia de uma empresa de teste coloca 2 educativos na semana e eles chegam em Aprovações | **Sim:** SQL na ficha de produção (vai no PR; o merge aprova) e deploy de `creative-generate` (função de cliente real) |
 | **3. Intenção estruturada** | `weekly_mix`/`WeekSlot` com `objetivo/publico/angulo/tema/item_id/cta`; gerador obedece | Cada peça do calendário mostra a intenção na tela e a peça gerada usa o CTA e o tema pedidos | Sim: deploy de `strategy-generate` e `creative-generate` |
+|  | **Atualização 2026-10-22 (ver "Análise 2026-10-22"):** a fase 3 passa a incluir as decisões **A** (rótulo único `familia × pilar_ss × tema`) e **B** (pilar de Social Selling + plano do pilar + etapa do funil com público/mensagem/CTA + linha central chegando no seed de toda vaga). A decisão **C** entra na fase 2. | Além do de cima: numa empresa de teste com diagnóstico, cada peça da semana mostra família, pilar de Social Selling e tema; o texto gerado usa o público/mensagem/CTA da etapa do funil ligada; nenhuma vaga sai com pilar vazio | Sim: deploy de `strategy-generate` e `creative-generate`; se `content_formats` ganhar `family`, SQL na ficha de produção (vai no PR) |
 | **4. Fonte e estilo no Kit da Marca** | Campos novos + escolha na tela Padrão visual + sugestão automática | Trocar a fonte no kit muda os próximos criativos | Não (aditivo), salvo migration em produção (vai no PR) |
 | **5. Calendário em 4 famílias** | Tela do calendário agrupa/rotula por família (ícone + cor) | Dono reconhece as 4 famílias na semana sem ler o nome do formato | Não |
 | **6. Trends e notícias com fonte** | `marketing_ai_trends` ganha link/veículo/data/trecho; coleta das séries do Banco Central; `gancho_atual` na intenção | Um educativo de teste usa um número real do Banco Central, com a fonte no último slide, e o sistema recusa trend sem fonte | Sim: migration em produção (vai no PR) e deploy de `strategy-generate`/`creative-generate` |
-
 | **7. Tour virtual inteligente** | Nota das fotos + cômodo detectado; mistura `room`/`pair`/`opening`; imóvel pela intenção; QUERO só com DM aprovada | Numa empresa de teste, a semana sai com 3 vídeos de fotos boas (nenhum banheiro/corredor), pelo menos 1 que não é `room` quando há par/fachada, e nenhum "Comente QUERO" sem DM aprovada | Sim: deploy de `creative-generate` (função de cliente real) |
 
 Ordem recomendada: **1 → 2 → 3**, depois **7** (a correção do QUERO pode ir
 antes, sozinha, por ser pequena), 6, 4 e 5. A fase 1 sozinha já melhora todos
 os carrosséis que existem hoje.
+
+**Ordem atualizada em 2026-10-22** (fase 1 e QUERO no ar): **3 (com A + B) →
+2 (com C) → 7 → 6 → 4 → 5**. A fase 3 vem primeiro porque os dados da
+estratégia já existem e só não chegam ao post — é o maior ganho pelo menor
+risco.
 
 ## Custos e Higgsfield
 
