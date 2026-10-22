@@ -302,6 +302,65 @@ Ordem recomendada: **1 → 2 → 3**, depois **7** (a correção do QUERO pode i
 antes, sozinha, por ser pequena), 6, 4 e 5. A fase 1 sozinha já melhora todos
 os carrosséis que existem hoje.
 
+
+### Fase 3 (A + B) — em código, aguardando migration e deploy (2026-10-22)
+
+Aprovada pelo dono em 2026-10-22. Branch `claude/nifty-shannon-ysp818`; **nada
+foi aplicado nem deployado** (migration e functions dependem de aprovação).
+
+**O que entrou**
+
+- **Rótulo único (A):** `familia` · `pilar_ss` · `tema` em toda vaga e peça.
+  `family` vem do formato na ficha (`content_formats[].family`, migration);
+  sem ela: vídeo de item = tour, resto = eventual. `pilar_ss` é pedido à IA
+  (`WEEKLY_MIX_SHAPE` lista as chaves da ficha) e **validado no código**
+  (`sanitizeContentPlan` com `ssKeys`); inválido/vazio vira uma chave válida
+  por regra fixa: pilar da etapa do funil com o mesmo formato → rodízio entre
+  pilares ausentes/parciais do diagnóstico → 1º da ficha. Roda depois do
+  mínimo de vídeos. `familia` e `tema` nunca vêm da IA.
+- **Intenção (B):** `_shared/slotIntent.ts` (funções puras): `buildSlotIntent`
+  liga a vaga à etapa do funil (mesmo pilar + formato → só pilar → só formato
+  → nenhuma) e `intentBlock` monta o texto (≤ 900 caracteres: pra que serve,
+  plano do pilar, público/mensagem/CTA sugerido, linha central; "use como
+  direção, não copie"; "não repita número que não esteja nos dados").
+  Chega ao post/carrossel (Diretor e Copywriter), à legenda do vídeo e à
+  legenda do pacote do imóvel (`catalog-package`). A dica FAQ **não** recebe
+  a intenção (decisão C é da fase 2).
+- **Trava do QUERO em toda peça (decisão do dono):** `applyQueroLock`
+  (`slotIntent.ts`) roda depois da IA em post/carrossel (sem imóvel = "não
+  aprovado", CTA alternativo da ficha), vídeo e todas as receitas do pacote
+  (imóvel: `engagement_automations`). O CTA da etapa do funil é só sugestão.
+- **Telas:** chips "Família · Pilar SS · Tema" na vaga e na peça do
+  Calendário, no modal da peça e no cartão de Aprovações
+  (`marketingAi/PieceLabels.tsx`; nome do pilar vem da ficha).
+
+**Divergências registradas**
+
+- **`pillar` já era o tema na prática:** `marketing_ai_test_content.pillar` já
+  guardava o pilar de conteúdo da ficha (imovel, local, educacao…). Por isso o
+  `tema` **não ganhou coluna**: continua em `pillar` (ver DECISIONS).
+- **`catalog-package` não tinha a trava do QUERO** (só o vídeo tinha): os
+  pacotes do imóvel podiam sair com "Comente QUERO" sem resposta aprovada.
+  Corrigido nesta fase.
+- **O rótulo se perde na publicação:** `agent-actions` não copia
+  `familia`/`pilar_ss` para `posts` (fora deste PR de propósito — é função de
+  cliente real). As colunas existem em `posts`, mas ficam vazias até o
+  `agent-actions` copiar; o aprendizado (família × pilar × ângulo) só mede a
+  partir daí. Também não há `intent` em `posts`.
+- **Intenção fora da lista de "dados" do carrossel:** o `intentBlock` não entra
+  no `numbersOf` (que libera números no carrossel), porque vem de texto da IA
+  da estratégia, não de dado cadastrado (regra 5).
+- **Slides e QUERO:** a trava confere legenda e CTA; texto dentro dos slides do
+  carrossel não é conferido (o prompt do deck já não pede QUERO).
+- **Peça nasce sem rótulo se a migration faltar:** os rótulos são gravados num
+  UPDATE à parte, tolerante a falha (ver PITFALLS).
+
+**Ainda falta pro critério de pronto:** rodar a semana de teste no banco de
+**ensaio** (decisão do dono) depois da migration e do deploy de
+`strategy-generate`, `creative-generate` e `catalog-package`, e conferir que
+cada peça mostra família, pilar e tema e que o texto usa público/mensagem/CTA
+da etapa do funil.
+
 **Ordem atualizada em 2026-10-22** (fase 1 e QUERO no ar): **3 (com A + B) →
 2 (com C) → 7 → 6 → 4 → 5**. A fase 3 vem primeiro porque os dados da
 estratégia já existem e só não chegam ao post — é o maior ganho pelo menor

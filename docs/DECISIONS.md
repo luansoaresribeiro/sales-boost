@@ -1742,3 +1742,23 @@ grátis de 30 s, acima — mantidos como histórico):
 - **Regra única no código:** `src/lib/requiredFields.ts` (espelho de
   `setupReady.ts`); o sino de pendências usa a mesma.
 - **Só telas** — nenhuma function mudou.
+
+## 2026-10-22 — Rótulo único por peça e trava do QUERO em todas as peças (fase 3 do PLANO-CRIATIVOS)
+
+- **Decidido pelo dono:** (1) a semana de teste da fase 3 roda no banco de
+  **ensaio**, antes de qualquer aprovação em produção; (2) a trava do QUERO
+  vale em **todas** as peças — post, carrossel, vídeo e pacote do imóvel.
+- **Armazenamento do rótulo:** `tema` = coluna **`pillar` que já existia**
+  (pilar de conteúdo da ficha; sem renomear, sem coluna nova); `familia` e
+  `pilar_ss` são colunas novas (texto) em `marketing_ai_test_content` e
+  `posts`; `intent` (jsonb, o "porquê" da peça) só em
+  `marketing_ai_test_content`. `weekly_mix[]` guarda `familia`, `pilar_ss` e
+  `tema` ao lado do `pillar` legado (que segue valendo pra estratégia antiga).
+- **Quem decide o quê:** `familia` (campo `family` do formato, na ficha) e
+  `tema` vêm do catálogo; `pilar_ss` a IA sugere e o código valida contra a
+  ficha, com fallback fixo. A IA nunca escreve família nem tema.
+- **Fora do PR:** `agent-actions` (copiar o rótulo pra `posts` na publicação) —
+  é função de cliente real. Até lá o rótulo existe na peça, mas se perde na
+  publicação.
+- **Migration:** `supabase/migrations/20261022150000_rotulos_familia_pilar_ss.sql`
+  (aditiva; bloco DESFAZER no topo).
