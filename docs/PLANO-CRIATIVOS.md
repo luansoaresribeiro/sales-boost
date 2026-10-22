@@ -151,8 +151,8 @@ diferentes. O post só repete a forma exata que está na fonte.
    imóvel foi aprovada (`engagement_automations.item_id`) antes de escrever a
    legenda. A IA pode pôr "Comente QUERO" (está na biblioteca de CTAs) e
    ninguém responder na DM.
-   **FEITO NO CÓDIGO (2026-10-21), aguardando deploy de `creative-generate` e
-   `item-videos` + migration `20261021120000_ficha_cta_sem_automacao.sql`:**
+   **NO AR (2026-10-22: `creative-generate` v72, `item-videos` v7, migration
+   `20261021120000_ficha_cta_sem_automacao.sql` aplicada):**
    `_shared/videoCta.ts` decide o CTA (automação ativa com mensagem e palavra
    = "Comente {palavra}"; senão `config.ctas.sem_automacao` da ficha, padrão
    "Me chama no direct"), o prompt recebe a regra pronta e uma trava em código
@@ -206,7 +206,7 @@ Um único sistema de design no `render-format`, usado por todas as famílias
 | Fase | O que entrega | Pronto quando | Alteração arriscada? |
 |---|---|---|---|
 | **1. Sistema de slides + medir texto** | Novo `svgSlide` com os layouts, logo, destaque, fonte do kit; medição real de texto | Carrossel de teste (5 slides) renderizado sem texto cortado, com logo e cor do kit de 2 empresas de teste diferentes; prints no PR | Não (função nova/ajustada, testada no ensaio) |
-|  | **FEITO NO CÓDIGO (2026-10-21), aguardando deploy de `render-format` e `creative-generate`** | `_shared/slideSystem.ts` (layouts capa · lista · passos · comparação · destaque · fecho, + `texto` pros slides antigos), `_shared/deckSlides.ts` (validação + regras do prompt), medição real via opentype.js no `render-format` (devolve `overflow`), retry de 1 texto mais curto por slide no `creative-generate`. Teste local: 2 marcas de teste × 5 slides com texto longo, 0 texto fora da área útil. Fica de fora desta fase: fonte/estilo do Kit (fase 4), prévia em Aprovações (item 5), capa com número/foto do corretor (item 6, regra 5), `carrossel_educativo` ainda `planned` (fase 2). | |
+|  | **NO AR (2026-10-22: `render-format` v43, `creative-generate` v72)** | `_shared/slideSystem.ts` (layouts capa · lista · passos · comparação · destaque · fecho, + `texto` pros slides antigos), `_shared/deckSlides.ts` (validação + regras do prompt), medição real via opentype.js no `render-format` (devolve `overflow`), retry de 1 texto mais curto por slide no `creative-generate`. Teste local: 2 marcas de teste × 5 slides com texto longo, 0 texto fora da área útil. Fica de fora desta fase: fonte/estilo do Kit (fase 4), prévia em Aprovações (item 5), capa com número/foto do corretor (item 6, regra 5), `carrossel_educativo` ainda `planned` (fase 2). | |
 | **2. Carrossel educativo de verdade** | `carrossel_educativo` passa a `live`; conteúdo vem das dicas liberadas do `dica_faq`; `allow_carrossel` ligado para esse formato | A estratégia de uma empresa de teste coloca 2 educativos na semana e eles chegam em Aprovações | **Sim:** SQL na ficha de produção (vai no PR; o merge aprova) e deploy de `creative-generate` (função de cliente real) |
 | **3. Intenção estruturada** | `weekly_mix`/`WeekSlot` com `objetivo/publico/angulo/tema/item_id/cta`; gerador obedece | Cada peça do calendário mostra a intenção na tela e a peça gerada usa o CTA e o tema pedidos | Sim: deploy de `strategy-generate` e `creative-generate` |
 | **4. Fonte e estilo no Kit da Marca** | Campos novos + escolha na tela Padrão visual + sugestão automática | Trocar a fonte no kit muda os próximos criativos | Não (aditivo), salvo migration em produção (vai no PR) |
