@@ -50,8 +50,12 @@ function findCta(text: string, except?: string, extra?: string): CtaHit | null {
     const w = k[1].toUpperCase()
     if (/^\p{Lu}{2,}$/u.test(k[1]) || known.has(k[1].toLowerCase())) {
       if (exc && w === exc) continue
-      const at = k.index ?? 0
-      return { ...sentenceAround(text, at, at + k[0].length), words: [w] }
+      let at = k.index ?? 0
+      // "Digite VISITA nos comentários": leva junto o verbo de pedido logo antes (até 3 palavras), senão sobra "Digite"
+      const before = text.slice(0, at), win = before.slice(Math.max(0, before.search(/(?:\S+\s+){0,3}$/)))
+      const verb = [...win.matchAll(CTA_VERB_RE)].pop()
+      if (verb) at = at - win.length + (verb.index ?? 0)
+      return { ...sentenceAround(text, at, (k.index ?? 0) + k[0].length), words: [w] }
     }
   }
   for (const v of text.matchAll(CTA_VERB_RE)) {
