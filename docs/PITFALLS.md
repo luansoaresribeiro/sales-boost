@@ -585,6 +585,27 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
 - **Números do carrossel (regra 5):** só valem números dos dados (ficha, empresa, imóvel,
   insights). Nunca da `idea` nem do `brief` — são texto da própria IA.
 
+## Rótulos da peça: nunca no insert; pilar_ss só com social_selling na ficha (2026-10-22)
+
+- `familia`, `pilar_ss` e `intent` são colunas novas (migration
+  `20261022150000_rotulos_familia_pilar_ss.sql`). Se o código que as grava for
+  deployado antes da migration, um `insert` com coluna que não existe **derruba
+  a peça inteira**. Por isso o `creative-generate` e o `catalog-package`
+  gravam o rótulo num `UPDATE` separado e tolerante (erro só vai pro log):
+  sem a migration a peça nasce sem rótulo, mas nasce. Manter assim. A ordem
+  segura é migration → deploy.
+- `pilar_ss` só existe quando a ficha do setor tem
+  `onboarding_v2.social_selling`. Setor sem isso: `sanitizeContentPlan` não
+  recebe `ssKeys`, o mix sai sem `pilar_ss`, `buildSlotIntent` devolve null e o
+  prompt fica idêntico ao de antes. Não "inventar" um pilar padrão.
+- `tema` é a coluna `pillar` (já usada pelo `fetchWeekPillarOccupancy` do
+  `catalog-package` pra pesos do calendário). Não gravar `qualquer` nela.
+- Mesmo formato pode repetir no mix com `pilar_ss` diferentes: a deduplicação é
+  por `format|pilar_ss` (antes era só por `format`). O teto de 14 peças/semana
+  continua.
+- O texto da intenção (`intentBlock`) vem de texto da IA da estratégia: **nunca**
+  entra na lista de dados que libera número (`numbersOf` do carrossel).
+
 ## Cor primária do kit igual ao fundo (2026-10-21)
 
 O Kit da Marca da Tespon tem `primary` = `bg` (#1e3a5f). Tudo que o slide

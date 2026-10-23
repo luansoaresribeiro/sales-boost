@@ -10,6 +10,9 @@ type SupaClient = any
 export type FormatProducer = 'post' | 'item_package' | 'item_video' | 'dm'
 export type FormatStatus = 'live' | 'needs_material' | 'planned'
 export type FormatSurface = 'feed' | 'stories' | 'reels' | 'dm'
+// Família = "o que é" a peça (rótulo único, PLANO-CRIATIVOS decisão A).
+export type FormatFamily = 'tour' | 'oferta' | 'educativo' | 'bairro' | 'eventual'
+export const FAMILIES: FormatFamily[] = ['tour', 'oferta', 'educativo', 'bairro', 'eventual']
 
 export interface ContentFormat {
   key: string
@@ -24,9 +27,14 @@ export interface ContentFormat {
   // formato a partir de um item (os dois vêm da ficha — nada de setor aqui).
   surface?: FormatSurface
   recipe?: string
+  // Família do formato (vem da ficha; sem ela: item_video = tour, resto = eventual).
+  family?: FormatFamily
 }
 
-export interface WeeklyMixItem { format: string; name: string; producer: FormatProducer; per_week: number; pillar: string; purpose: string }
+// `pillar` (legado) = `tema` = pilar de conteúdo da ficha; `pilar_ss` = pra que
+// serve (chave do pilar de Social Selling); `familia` = o que é. Os 3 novos são
+// opcionais: estratégia antiga sem eles continua valendo.
+export interface WeeklyMixItem { format: string; name: string; producer: FormatProducer; per_week: number; pillar: string; purpose: string; familia?: FormatFamily; pilar_ss?: string; tema?: string }
 // Como a estratégia trabalha cada pilar de Social Selling (ficha:
 // onboarding_v2.social_selling). `today` = como o pilar está hoje (nível do
 // diagnóstico, quando há); `plan` = o que a estratégia faz por ele.
@@ -41,10 +49,10 @@ const SURFACES: FormatSurface[] = ['feed', 'stories', 'reels', 'dm']
 // Stories separado de propósito (regra do dono, 2026-09: o calendário só tem
 // post orgânico; o Copywriter marca se o post também vale pros Stories).
 const GENERIC: ContentFormat[] = [
-  { key: 'post_card', name: 'Post de foto/card com template da marca', pillar: 'qualquer', producer: 'post', status: 'live', media: 'imagem gerada + template da marca', cost: 'centavos' },
+  { key: 'post_card', name: 'Post de foto/card com template da marca', pillar: 'qualquer', producer: 'post', status: 'live', family: 'eventual', media: 'imagem gerada + template da marca', cost: 'centavos' },
   // Pedido do dono 2026-10-14: post do zero, tipo apresentação, a partir de
   // uma ideia/trend (não do item do catálogo). Slides de texto da marca.
-  { key: 'carrossel_slides', name: 'Carrossel de slides (tipo apresentação) a partir de uma ideia ou trend', pillar: 'qualquer', producer: 'post', status: 'live', media: 'slides de texto com a marca (sem foto)', cost: 'centavos' },
+  { key: 'carrossel_slides', name: 'Carrossel de slides (tipo apresentação) a partir de uma ideia ou trend', pillar: 'qualquer', producer: 'post', status: 'live', family: 'educativo', media: 'slides de texto com a marca (sem foto)', cost: 'centavos' },
 ]
 
 const PRODUCER_LABEL: Record<FormatProducer, string> = {
@@ -66,7 +74,13 @@ function clean(raw: unknown): ContentFormat | null {
   const opt = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 200) : undefined)
   const surface = SURFACES.includes(f.surface as FormatSurface) ? f.surface as FormatSurface : undefined
   const recipe = typeof f.recipe === 'string' && /^[a-z0-9_]{2,60}$/.test(f.recipe) ? f.recipe : undefined
-  return { key, name: name.slice(0, 120), pillar: String(f.pillar ?? 'qualquer').slice(0, 60), producer, status, media: opt(f.media), cost: opt(f.cost), notes: opt(f.notes), surface, recipe }
+  const family = FAMILIES.includes(f.family as FormatFamily) ? f.family as FormatFamily : undefined
+  return { key, name: name.slice(0, 120), pillar: String(f.pillar ?? 'qualquer').slice(0, 60), producer, status, media: opt(f.media), cost: opt(f.cost), notes: opt(f.notes), surface, recipe, family }
+}
+
+// Família efetiva do formato (sempre do catálogo, nunca da IA).
+export function familyOf(f: Pick<ContentFormat, 'family' | 'producer'> | undefined | null): FormatFamily {
+  return f?.family ?? (f?.producer === 'item_video' ? 'tour' : 'eventual')
 }
 
 export async function fetchFormatCatalog(admin: SupaClient, verticalKey: string, companyId: string): Promise<ContentFormat[]> {
@@ -114,7 +128,7 @@ export function ensureMinVideos(mix: WeeklyMixItem[], formats: ContentFormat[], 
   if (cur) { cur.per_week = Math.min(7, cur.per_week + (min - have)); return out }
   const f = formats.find(x => x.producer === 'item_video' && x.status === 'live')
   if (!f) return out
-  out.push({ format: f.key, name: f.name, producer: 'item_video', per_week: Math.min(7, min - have), pillar: f.pillar, purpose: 'Mínimo de vídeos por semana (regra do setor): vídeo curto de uma foto real do imóvel.' })
+  out.push({ format: f.key, name: f.name, producer: 'item_video', per_week: Math.min(7, min - have), pillar: f.pillar, familia: familyOf(f), tema: f.pillar, purpose: 'Mínimo de vídeos por semana (regra do setor): vídeo curto de uma foto real do imóvel.' })
   return out
 }
 
@@ -125,7 +139,11 @@ export function formatCatalogBlock(formats: ContentFormat[]): string {
 
 // Valida a escolha da IA contra o catálogo: só chaves que existem e que
 // funcionam hoje; no máximo 14 peças/semana (regra do calendário: 1-2/dia).
-export function sanitizeContentPlan(raw: unknown, formats: ContentFormat[], prev?: Partial<ContentPlan> | null, minVideos = 0): ContentPlan | null {
+// `opts` (fase 3): chaves dos pilares de Social Selling da ficha, etapas do
+// funil e nível de cada pilar no diagnóstico. Sem `ssKeys` (setor sem social
+// selling) o plano sai como sempre, sem pilar_ss.
+export interface PlanOpts { ssKeys?: string[]; funnel?: unknown; levels?: Record<string, string> }
+export function sanitizeContentPlan(raw: unknown, formats: ContentFormat[], prev?: Partial<ContentPlan> | null, minVideos = 0, opts?: PlanOpts): ContentPlan | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
   const byKey = new Map(formats.map(f => [f.key, f]))
@@ -133,22 +151,51 @@ export function sanitizeContentPlan(raw: unknown, formats: ContentFormat[], prev
   const hero = (Array.isArray(r.hero_formats) ? r.hero_formats : prev?.hero_formats?.map(h => h.key) ?? [])
     .map(k => byKey.get(String(typeof k === 'object' && k ? (k as { key?: string }).key : k)))
     .filter((f): f is ContentFormat => !!f).slice(0, 4).map(f => ({ key: f.key, name: f.name }))
+  const ssKeys = (opts?.ssKeys ?? []).filter(k => typeof k === 'string' && k)
+  const validSS = (v: unknown) => { const k = String(v ?? '').trim(); return ssKeys.includes(k) ? k : undefined }
   const mix: WeeklyMixItem[] = []
   let total = 0
   for (const m of Array.isArray(r.weekly_mix) ? r.weekly_mix : []) {
     const item = m as Record<string, unknown>
     const f = live(item.format)
-    if (!f || mix.some(x => x.format === f.key)) continue
+    const ss = validSS(item.pilar_ss)
+    if (!f || mix.some(x => x.format === f.key && x.pilar_ss === ss)) continue
     const n = Math.max(0, Math.min(7, Math.round(Number(item.per_week) || 0), 14 - total))
     if (!n) continue
     total += n
-    mix.push({ format: f.key, name: f.name, producer: f.producer, per_week: n, pillar: String(item.pillar ?? f.pillar).slice(0, 60), purpose: String(item.purpose ?? '').slice(0, 240) })
+    mix.push({ format: f.key, name: f.name, producer: f.producer, per_week: n, pillar: String(item.pillar ?? f.pillar).slice(0, 60), purpose: String(item.purpose ?? '').slice(0, 240), ...(ss ? { pilar_ss: ss } : {}) })
   }
   const central = String(r.central_line ?? prev?.central_line ?? '').trim().slice(0, 600)
   if (!central && !mix.length) return null
-  const weekly = ensureMinVideos(mix.length ? mix : (prev?.weekly_mix ?? []), formats, minVideos)
+  const weekly = labelMix(ensureMinVideos(mix.length ? mix : (prev?.weekly_mix ?? []), formats, minVideos), byKey, ssKeys, opts)
   const pillars = Array.isArray(r.pillars) ? cleanPillars(r.pillars) : (prev?.pillars ?? [])
   return { central_line: central, hero_formats: hero, why: String(r.why ?? prev?.why ?? '').slice(0, 600), weekly_mix: weekly, ...(pillars.length ? { pillars } : {}), updated_at: new Date().toISOString() }
+}
+
+// Rótulos de cada item do mix (decisão A). Roda DEPOIS do ensureMinVideos pra
+// o vídeo de mínimo também sair com pilar. familia/tema vêm SEMPRE do catálogo
+// (nunca da IA). pilar_ss: o da IA se existir na ficha; senão, em ordem: o
+// pilar da etapa do funil com o mesmo formato → rodízio entre os pilares
+// ausentes/parciais (ou todos, se nenhum está fraco) → o 1º da ficha.
+export function labelMix(mix: WeeklyMixItem[], byKey: Map<string, ContentFormat>, ssKeys: string[], opts?: PlanOpts): WeeklyMixItem[] {
+  const funnel = (Array.isArray(opts?.funnel) ? opts!.funnel as Record<string, unknown>[] : []).filter(x => x && typeof x === 'object')
+  const weak = ssKeys.filter(k => { const l = opts?.levels?.[k]; return !l || l === 'ausente' || l === 'parcial' })
+  const rot = weak.length ? weak : ssKeys
+  let turn = 0
+  const out: WeeklyMixItem[] = []
+  for (const m of mix) {
+    const f = byKey.get(m.format)
+    let ss = ssKeys.includes(String(m.pilar_ss ?? '')) ? m.pilar_ss : undefined
+    if (!ss && ssKeys.length) {
+      const st = funnel.find(x => String(x.format ?? '') === m.format && ssKeys.includes(String(x.pillar ?? '')))
+      ss = st ? String(st.pillar) : (rot[turn++ % rot.length] ?? ssKeys[0])
+    }
+    const lab: WeeklyMixItem = { ...m, familia: f ? familyOf(f) : m.familia, tema: f?.pillar ?? m.tema ?? m.pillar }
+    if (ss) lab.pilar_ss = ss; else delete lab.pilar_ss
+    const same = out.find(o => o.format === lab.format && o.pilar_ss === lab.pilar_ss)
+    if (same) same.per_week = Math.min(7, same.per_week + lab.per_week); else out.push(lab)
+  }
+  return out
 }
 
 // Pilares já resolvidos pelo strategy-generate (chave e nome vindos da ficha).
@@ -186,7 +233,7 @@ export function weeklyMixPlan(plan: ContentPlan | null): { auto: WeeklyMixItem[]
 // na tela (src/lib/weekSlots.ts — duplicada de propósito, convenção do
 // projeto) pra o dono ver o plano antes de qualquer peça ser gerada, e as
 // peças geradas caírem exatamente nos dias mostrados.
-export interface WeekSlot { date: string; format: string; name: string; producer: FormatProducer; pillar: string; purpose: string }
+export interface WeekSlot { date: string; format: string; name: string; producer: FormatProducer; pillar: string; purpose: string; familia?: FormatFamily; pilar_ss?: string; tema?: string }
 export function weekSlots(plan: ContentPlan | null, dates: string[]): WeekSlot[] {
   const mix = (Array.isArray(plan?.weekly_mix) ? plan!.weekly_mix : []).filter(m => m.producer !== 'dm')
   const left = mix.map(m => ({ m, n: Math.max(0, m.per_week | 0) }))
@@ -194,5 +241,5 @@ export function weekSlots(plan: ContentPlan | null, dates: string[]): WeekSlot[]
   while (left.some(x => x.n > 0)) for (const x of left) if (x.n > 0) { queue.push(x.m); x.n-- }
   const n = queue.length
   if (!n || dates.length !== 7) return []
-  return queue.map((m, k) => ({ date: dates[Math.floor((k * 7) / n)], format: m.format, name: m.name, producer: m.producer, pillar: m.pillar, purpose: m.purpose }))
+  return queue.map((m, k) => ({ date: dates[Math.floor((k * 7) / n)], format: m.format, name: m.name, producer: m.producer, pillar: m.pillar, purpose: m.purpose, familia: m.familia, pilar_ss: m.pilar_ss, tema: m.tema }))
 }

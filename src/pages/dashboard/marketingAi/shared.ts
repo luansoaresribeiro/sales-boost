@@ -1,3 +1,6 @@
+import { useEffect, useState } from 'react'
+import { supabase } from '../../../lib/supabase'
+
 export const ORANGE = '#FF6D29'
 export const CARD = '#150E08'
 export const MUTED = '#BABABA'
@@ -247,4 +250,26 @@ export function timeAgo(iso: string, lang: 'pt' | 'en' = 'pt'): string {
   if (hours < 24) return en ? `${hours}h ago` : `${hours}h atrás`
   const days = Math.floor(hours / 24)
   return en ? `${days}d ago` : `${days}d atrás`
+}
+
+// Nome dos pilares de Social Selling vem da ficha do setor (regra 6); cache por empresa.
+const cache = new Map<string, Promise<Record<string, string>>>()
+async function loadNames(companyId: string): Promise<Record<string, string>> {
+  const { data: c } = await supabase.from('companies').select('vertical_key').eq('id', companyId).maybeSingle()
+  const { data: pb } = await supabase.from('vertical_playbooks').select('config').eq('key', c?.vertical_key ?? 'generico').maybeSingle()
+  const list = (pb?.config as { onboarding_v2?: { social_selling?: { pillars?: { key?: string; name?: string }[] } } } | null)?.onboarding_v2?.social_selling?.pillars
+  const out: Record<string, string> = {}
+  for (const p of Array.isArray(list) ? list : []) if (p?.key && p?.name) out[p.key] = p.name
+  return out
+}
+export function useSSNames(companyId: string | undefined): Record<string, string> {
+  const [names, setNames] = useState<Record<string, string>>({})
+  useEffect(() => {
+    if (!companyId) return
+    let live = true
+    if (!cache.has(companyId)) cache.set(companyId, loadNames(companyId).catch(() => ({})))
+    void cache.get(companyId)!.then(n => { if (live) setNames(n) })
+    return () => { live = false }
+  }, [companyId])
+  return names
 }

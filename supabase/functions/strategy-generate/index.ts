@@ -72,8 +72,14 @@ type SupaClient = ReturnType<typeof createClient>
 // Vídeo: mínimo da ficha (content_rules.min_videos_per_week — decisão do dono
 // 2026-10-14: "pelo menos uns 3 vídeos na semana, e a estratégia pode jogar
 // pra cima"). O sanitizeContentPlan completa o mínimo se a IA pedir menos.
-const weeklyMixRules = (minVideos: number) => `- MIX DA SEMANA: escolha no CATÁLOGO DE FORMATOS quantas peças de cada formato entram por semana pra servir a tese (total entre 7 e 14 — o calendário faz 1-2 por dia). Só formatos que "funcionam hoje"; nada "em breve". ${minVideos > 0 ? `VÍDEO: no MÍNIMO ${minVideos} vídeos por semana (regra do setor) — pode pedir mais se a tese pedir; cada vídeo de 5 s custa ~US$ 0,42 do teto mensal de US$ 40, diga por quê quando passar do mínimo.` : 'Formatos de vídeo custam — use com moderação e diga por quê.'} Cada item diz qual objetivo da tese ele serve.`
-const WEEKLY_MIX_SHAPE = '[{"format":"chave do catálogo","per_week":1,"pillar":"","purpose":"qual parte da tese essa peça serve, 1 frase"}]'
+const weeklyMixRules = (minVideos: number, ss?: SSContext | null) => `- MIX DA SEMANA: escolha no CATÁLOGO DE FORMATOS quantas peças de cada formato entram por semana pra servir a tese (total entre 7 e 14 — o calendário faz 1-2 por dia). Só formatos que "funcionam hoje"; nada "em breve". ${minVideos > 0 ? `VÍDEO: no MÍNIMO ${minVideos} vídeos por semana (regra do setor) — pode pedir mais se a tese pedir; cada vídeo de 5 s custa ~US$ 0,42 do teto mensal de US$ 40, diga por quê quando passar do mínimo.` : 'Formatos de vídeo custam — use com moderação e diga por quê.'} Cada item diz qual objetivo da tese ele serve.${ss ? ' Todo item DEVE ter "pilar_ss" (uma chave da lista de PILARES de Social Selling); priorize os pilares ausentes/parciais e não deixe nenhum pilar ausente sem peça na semana. O mesmo formato pode repetir com pilares diferentes.' : ''}`
+// Com Social Selling na ficha, cada item aponta o pilar que serve (chave da
+// ficha, validada no sanitizeContentPlan); sem ficha, forma antiga.
+const weeklyMixShape = (ss?: SSContext | null) => ss
+  ? `[{"format":"chave do catálogo","per_week":1,"pilar_ss":"UMA chave de: ${ss.cfg.pillars.map(p => p.key).join(' | ')}","purpose":"qual parte da tese essa peça serve, 1 frase"}]`
+  : '[{"format":"chave do catálogo","per_week":1,"pillar":"","purpose":"qual parte da tese essa peça serve, 1 frase"}]'
+// Opções do sanitizeContentPlan: pilares da ficha + funil + nível no diagnóstico.
+const planOpts = (ss: SSContext | null, funnel: unknown) => ({ ssKeys: ss?.cfg.pillars.map(p => p.key) ?? [], funnel, levels: ss?.levels ?? {} })
 
 // Escopo do PRODUTO (pedido do dono 2026-10-19: "a estratégia precisa ser
 // direcionada ao que a gente faz"). Vale pra todo setor — o que é de setor
@@ -595,11 +601,11 @@ REGRAS CRÍTICAS:
 - Orçamento: só proponha valores SE o dono já informou orçamento mensal (${company.marketing_monthly_budget ? `informou: R$ ${company.marketing_monthly_budget}` : 'não informou'}); caso contrário, campos null e explique em "budget_reasoning" que falta essa informação.
 ${TACTICAL_SCOPE_RULES}
 - Seja específico ao negócio e à tese acima — nunca genérico.
-${weeklyMixRules(rules.minVideosPerWeek)}
+${weeklyMixRules(rules.minVideosPerWeek, ss)}
 
 Retorne APENAS um JSON:
 {
-  "weekly_mix": ${WEEKLY_MIX_SHAPE},
+  "weekly_mix": ${weeklyMixShape(ss)},
   "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","pillar":"chave do pilar de Social Selling que esta etapa fortalece (se houver)","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
   "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}],
   "budget": {"total":null,"currency":"BRL","period":"monthly","paid_ads":null,"organic":null,"creative":null,"other":null,"is_flexible":true,"allocation":[{"channel":"","amount":null,"reason":""}],"budget_reasoning":""},
@@ -634,7 +640,7 @@ Retorne APENAS um JSON:
       budget: parsed2.budget && typeof parsed2.budget === 'object' ? parsed2.budget : {},
       estimates: parsed2.estimates && typeof parsed2.estimates === 'object' ? parsed2.estimates : {},
       data_provenance: { baseline_source: baseline ? 'instagram_performance_snapshots' : 'nenhum dado real ainda — metas sem baseline verificado', source: 'data-agent' },
-      content_plan: sanitizeContentPlan({ weekly_mix: parsed2.weekly_mix }, formats, prevPlan, rules.minVideosPerWeek) ?? prevPlan,
+      content_plan: sanitizeContentPlan({ weekly_mix: parsed2.weekly_mix }, formats, prevPlan, rules.minVideosPerWeek, planOpts(ss, Array.isArray(parsed2.funnel_plan) ? parsed2.funnel_plan : [])) ?? prevPlan,
       status: 'active',
       updated_at: new Date().toISOString(),
     }).eq('id', strategyId)
@@ -791,12 +797,12 @@ ${formatDomains(dataAgentState)}
 ${learningBlock}
 REGRAS: mantenha a tese intacta; priorize (regra 80/20) manter e reforçar o que os sinais reais mostram que já funciona, reservando só uma fatia menor pra testar algo novo; NUNCA invente métrica que não foi te dada acima; metas no máximo 3 (goal_type: ${PLANNED_GOAL_TYPES.join('|')}), NÃO preencha baseline.
 ${TACTICAL_SCOPE_RULES}
-${weeklyMixRules(rules.minVideosPerWeek)}
+${weeklyMixRules(rules.minVideosPerWeek, ss)}
 
 Retorne APENAS um JSON:
 {
   "what_changed": "2-4 frases: o que mudou no plano tático e por quê, citando os sinais reais que motivaram",
-  "weekly_mix": ${WEEKLY_MIX_SHAPE},
+  "weekly_mix": ${weeklyMixShape(ss)},
   "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","pillar":"chave do pilar de Social Selling que esta etapa fortalece (se houver)","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
   "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}],
   "budget": {"total":null,"currency":"BRL","period":"monthly","paid_ads":null,"organic":null,"creative":null,"other":null,"is_flexible":true,"allocation":[{"channel":"","amount":null,"reason":""}],"budget_reasoning":""}
@@ -810,7 +816,7 @@ Retorne APENAS um JSON:
     await admin.from('marketing_ai_strategies').update({
       funnel_plan: Array.isArray(parsed.funnel_plan) ? parsed.funnel_plan : strategy.funnel_plan,
       budget: parsed.budget && typeof parsed.budget === 'object' ? parsed.budget : strategy.budget,
-      content_plan: sanitizeContentPlan({ weekly_mix: parsed.weekly_mix }, formats, prevPlan, rules.minVideosPerWeek) ?? prevPlan,
+      content_plan: sanitizeContentPlan({ weekly_mix: parsed.weekly_mix }, formats, prevPlan, rules.minVideosPerWeek, planOpts(ss, Array.isArray(parsed.funnel_plan) ? parsed.funnel_plan : strategy.funnel_plan)) ?? prevPlan,
       last_refreshed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('id', strategyId)

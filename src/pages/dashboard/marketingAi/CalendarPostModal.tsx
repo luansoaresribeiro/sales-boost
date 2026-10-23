@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
-import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
+import { CARD, MUTED, BORDER, D, SUPABASE_URL, useSSNames } from './shared'
 import { ScoreBreakdown, BriefBlock, PostMedia, VideoScript, templateLabel, type TestPost } from './TestingArea'
 import { useLang, type Lang } from '../../../contexts/LanguageContext'
 import AdaptModal, { type VaultPost } from './AdaptModal'
+import { PieceChips } from './PieceLabels'
 import { proposeAgentAction, unscheduleAgentAction } from '../../../lib/agentActions'
 
 const GREEN = '#4ade80'
@@ -57,6 +58,7 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
   const { session } = useAuth()
   const { lang } = useLang(); const tx = TX[lang]
   const token = session?.access_token ?? ''
+  const ssNames = useSSNames(companyId)
   const [item, setItem] = useState<Post>(post)
   const [adapts, setAdapts] = useState<TestPost[]>([])
   const [adaptOpen, setAdaptOpen] = useState(false)
@@ -213,6 +215,7 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
           {item.recipe === 'video_imovel' && !item.video_url && item.reasoning && (
             <div style={{ fontSize: '11.5px', color: '#60a5fa', background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: '9px', padding: '9px 12px', lineHeight: 1.5 }}>🎬 {item.reasoning}</div>
           )}
+          <PieceChips familia={item.familia} pilarSs={item.pilar_ss} tema={item.pillar} ssNames={ssNames} />
           {item.idea && <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{item.idea}</div>}
           {editing ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
