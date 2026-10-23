@@ -613,3 +613,38 @@ pintava na cor primária (palavra em destaque, números, barra, botão) sumia.
 `slideSystem.pickAccent` escolhe a 1ª cor do kit que contrasta com o fundo
 (≥ 3:1) e se distingue do texto; sem nenhuma, usa a cor do texto e marca o
 destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
+
+## Logo em PNG transparente (2026-10-23)
+
+- **O bucket `post-images` só aceita png/jpeg/webp (≤ 5 MB): SVG nunca vai pra lá.** Logo em SVG é
+  rasterizado (resvg) na função e só o PNG sobe (`renders/<empresa>/logo-png-<uuid>.png`). WebP não
+  decodifica no imagescript 1.3.0: o logo fica como está, sem PNG, com aviso na tela.
+- **`brand_dna.logo_meta.src` precisa ser igual ao `logo_url` de agora.** O dono pode trocar o logo
+  (upload, link colado, Instagram) sem passar pelo pipeline; sem essa checagem o criativo sairia com o PNG do
+  logo velho. Quem lê (`render-format`, `BrandCard`, `AdaptModal`) usa `png_url` só se `src === logo_url`.
+  Todo `select` de `logo_meta` é separado e tolerante: com a migration pendente, `select('…, logo_meta')`
+  junto de outras colunas **derrubaria a leitura inteira**.
+- **O tirador de fundo só mexe em fundo LISO e só a partir das bordas** (flood-fill). Global apagaria o
+  branco das letras de dentro do logo. Cantos de cores diferentes = foto/ilustração = não mexe (e
+  `png_url:null` + aviso). Mudou o algoritmo? Rode `scripts/test-logo-png.mjs`.
+- **Nunca `preserveAspectRatio="slice"` nem `borderRadius`/círculo em logo** — corta o logo do cliente. Use
+  `meet`; o contraste baixo se resolve com pílula ATRÁS, não mexendo no logo.
+- **Classificação logo × foto:** foto de perfil do Instagram costuma ser rosto/fachada. `analyzeLogo` (Haiku)
+  devolve `kind`; `foto` → criativo usa o nome da marca em texto e as cores dela NÃO entram no Kit.
+- **Ambiente de trabalho sem deno.land/esm.sh:** o proxy do agente bloqueia esses domínios. Pra rodar o
+  `render-format` local use `deno` do npm com `--config` apontando `https://esm.sh/...` pra pacotes do npm
+  e stub do supabase-js (ver o harness descrito em PLANO-CRIATIVOS → "Correções pós-fase 3").
+
+## Recado da IA dentro da legenda (2026-10-23)
+
+- A IA, quando acha um dado estranho (7.373 m² num imóvel de 4 quartos), escreve **pro corretor** dentro da
+  legenda: "⚠️ Sobre a metragem: os dados que recebi precisam de confirmação antes de publicar…". O prompt
+  proibia só "pedido de dado" — não cobria **aviso/alerta/ressalva**. Agora `_shared/internalNotes.ts`
+  (`stripInternalNotes`) tira o recado em código e o `catalog-package` o põe no `reasoning`
+  ("Recado da IA que saiu da legenda: …"). **Frase nova que escapou?** Acrescente o caso em
+  `scripts/test-internal-notes.mjs` antes de mexer nas regras — e confira que "Fale com o corretor João",
+  "⚠️ Últimas unidades" e "Me passa seu contato" continuam passando.
+- Regra de ouro da trava: nunca remover só por "corretor" nem só por ⚠️. `creative-generate` ainda não usa
+  essa trava (só o `catalog-package`).
+- Quem mexer em `reasoning` das peças do `catalog-package`: o aviso do QUERO vem PRIMEIRO (o
+  `keepQueroNotice` corta a partir do prefixo dele até o fim) e o recado da IA depois.

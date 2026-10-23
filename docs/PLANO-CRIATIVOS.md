@@ -21,6 +21,7 @@
 | Carrossel educativo | Está na ficha `imoveis_rio` (`content_formats`) como `carrossel_educativo`, **status `planned`**. A estratégia só escolhe formato que "funciona hoje" → **nunca entra no calendário**. |
 | Chave "considerar carrossel" | `marketing_ai_config.allow_carrossel` vem **desligada** por padrão (TestingArea). |
 | Slide de carrossel | `render-format` → `svgSlide`: fundo da marca + **uma frase por slide**, fonte única Poppins para todo cliente, **sem logo**, sem título/explicação, sem destaque de palavra, capa e fim iguais aos do meio. |
+| *(2026-10-23)* | **Desatualizado:** a coluna acima descreve o slide ANTES da fase 1. Desde a fase 1 (no ar 2026-10-22) o slide tem logo + @, título/texto, destaque de palavra e capa/fecho próprios (`_shared/slideSystem.ts`); "sem logo" não é mais verdade. O texto original foi mantido como histórico do diagnóstico. |
 | Kit da Marca | `brand_dna` guarda cores (tiradas das fotos reais do Instagram por `brand-kit-suggest`), logo e notas de direção. **Não guarda fonte nem estilo.** |
 | Quebra de texto | `render-format` estima a largura contando caracteres ("Poppins ~0.55·fontSize") → risco de texto cortado/apertado. |
 | Higgsfield | Já em uso: tour em vídeo (`item-videos`, Kling, US$ 0,42 por 5 s medido), tratamento da foto real (`/alibaba/qwen-image-3/edit`, Vault com foto real), mobiliar virtualmente (`virtual-staging`). |
@@ -342,7 +343,7 @@ foi aplicado nem deployado** (migration e functions dependem de aprovação).
 - **`catalog-package` não tinha a trava do QUERO** (só o vídeo tinha): os
   pacotes do imóvel podiam sair com "Comente QUERO" sem resposta aprovada.
   Corrigido nesta fase.
-- **O rótulo se perde na publicação:** `agent-actions` não copia
+- **(Corrigido em 2026-10-23, ver "Correções pós-fase 3")** **O rótulo se perde na publicação:** `agent-actions` não copia
   `familia`/`pilar_ss` para `posts` (fora deste PR de propósito — é função de
   cliente real). As colunas existem em `posts`, mas ficam vazias até o
   `agent-actions` copiar; o aprendizado (família × pilar × ângulo) só mede a
@@ -420,11 +421,127 @@ Resultado (2026-10-23):
   A causa é o dado de teste do imóvel (7.373 m² para 4 quartos), mas o prompt
   do `catalog-package` não proíbe recado ao corretor, como o do vídeo proíbe.
   O dono pega isso na aprovação; vale uma correção pequena depois.
+  **Correção (2026-10-23): isso estava impreciso.** A regra já existia no prompt
+  ("nunca uma mensagem pro corretor pedindo dado"), mas só cobria *pedido de dado*,
+  não **aviso/alerta/ressalva** ("os dados que recebi precisam de confirmação"). O
+  prompt foi reforçado e entrou uma trava em código — ver "Correções pós-fase 3".
 
 **Ordem atualizada em 2026-10-22** (fase 1 e QUERO no ar): **3 (com A + B) →
 2 (com C) → 7 → 6 → 4 → 5**. A fase 3 vem primeiro porque os dados da
 estratégia já existem e só não chegam ao post — é o maior ganho pelo menor
 risco.
+
+## Correções pós-fase 3 (2026-10-23)
+
+Três pedidos do dono depois do teste da fase 3. Branch `claude/nifty-shannon-ysp818`;
+**nada foi aplicado nem deployado** (migration e functions dependem de "pode").
+
+### 1. Logo em PNG transparente nos criativos
+
+**Problema:** o logo entrava como estava: JPG com fundo branco virava um quadrado branco
+em cima do slide escuro; foto de perfil do Instagram (rosto, fachada) virava "logo"; o
+avatar do Print de Tweet cortava o logo (`slice` + círculo).
+
+**O que entrou**
+
+- `_shared/logoPng.ts` (função PURA sobre `{width,height,data RGBA}`, testada em Node):
+  reduz pra ≤ 1024 px; `removeFlatBackground` amostra 4 cantos (blocos 8×8): cantos já
+  transparentes → só reencoda (`bg_removed:false`); mesma cor (diferença ≤ 18 por canal) →
+  flood-fill **a partir das bordas** (letra branca no miolo do logo fica; o "O" com miolo
+  branco não vira buraco), com anel de 2 px de alpha parcial e correção de franja; cantos
+  diferentes / não lisos → `null` (não mexe). `meanLuma` dos pixels opacos.
+- `_shared/logoCodec.ts` (Deno): decodifica PNG/JPEG e codifica PNG com **imagescript@1.3.0**
+  (sem custo; spike OK: o mesmo código decodifica JPEG/PNG e codifica PNG no Deno; WebP **não**
+  decodifica); SVG → PNG com o **mesmo resvg-wasm@2.6.2** do `render-format`; download de link
+  colado só `https`, sem IP/localhost/rede interna, até 5 MB (SVG 500 KB), 15 s, redirecionamento
+  revalidado. Tudo com `import()` dinâmico: se a lib não carregar, o logo fica como estava.
+- Migration aditiva `20261023120000_brand_dna_logo_meta.sql`: `brand_dna.logo_meta jsonb`
+  = `{ src, png_url, kind: 'logo'|'foto', luma, bg_removed, w, h }`. **Quem lê só usa o PNG se
+  `logo_meta.src === logo_url`** (logo trocada depois → meta velha ignorada). Todo `select` de
+  `logo_meta` é separado e tolerante (sem a coluna cai no logo de sempre).
+- `brand-kit-suggest`: `colorsFromLogo` virou `analyzeLogo` — **a mesma chamada do Haiku**, agora
+  devolvendo `kind` (`logo` | `foto`) junto das cores; se for `foto`, as cores **não** são usadas.
+  No `on_connect` com kit já assumido pelo dono a classificação roda mesmo assim (cores só
+  quando permitido). Nova ação `process_logo` (auth do dono + plano): entrada = logo atual, link
+  colado ou **texto de um SVG** (≤ 500 KB). Sobe o PNG em `post-images`
+  `renders/<empresa>/logo-png-<uuid>.png` e grava `logo_meta`. Foto → `{kind:'foto'}`; fundo
+  não liso → `{kind:'logo', png_url:null}` (aviso); WebP/outro formato → mantém o original, sem
+  PNG, com aviso. `generateAndSave` e `on_connect` rodam o mesmo pipeline depois de
+  `fetchInstagramLogo`. Logo enviado pelo dono (arquivo que não é `logo-ig-*`) nunca é trocado
+  sozinho. **Sem backfill automático** — logo antigo só é preparado quando o dono aperta o botão.
+- `render-format`: `resolveLogo()` (em try/catch): `foto` → sem logo (nome da marca em texto);
+  `src === logo atual` e `png_url` → usa o PNG; senão **o logo de sempre**. Contraste: a
+  luminância do logo (`logo_meta.luma`) contra a do fundo do card; contraste baixo → pílula
+  discreta (branca ou quase preta) **atrás**, com folga, sem distorcer nem cortar. Só vale
+  pra logo preparado; logo sem `logo_meta` sai idêntico a antes. Tweet (logo preparado): caixa
+  sem corte (`meet`), nunca círculo/`slice`. Card de foto sem logo: nome da marca em texto no
+  canto (só quando quem chamou mandou o nome de verdade, não o "Marca" padrão).
+- Tela do Kit (`BrandKit.tsx`): aceita PNG e SVG, pede "PNG com fundo transparente" (PT/EN),
+  **duas prévias** (fundo escuro e claro, `contain`), aviso amarelo quando é foto, aviso quando o
+  fundo não pôde ser removido, botão "Preparar logo para criativos". `BrandCard` e `AdaptModal`
+  preferem o PNG (`shared.ts` → `preferredLogo`, tolerante). Avatar do tweet na pré-visualização
+  (`formatTemplates.tsx`): `contain`, sem corte.
+
+**Divergências / decisões registradas**
+
+- **Pílula no "photo" com foto de fundo:** não dá pra medir a luminância da foto no servidor, então a
+  pílula só entra quando o logo é muito claro (> 0,75) ou muito escuro (< 0,15). Em fundo liso do
+  kit a regra é a mesma dos slides.
+- **Tweet com logo antigo (sem `logo_meta`):** continua como antes (círculo com corte) no servidor,
+  pra garantir "idêntico a antes" pros clientes reais; só o logo preparado sai sem corte. A
+  pré-visualização na tela já usa `contain` sem corte pra todos — pode diferir do servidor
+  até o logo ser preparado.
+- **`AdaptModal`** manda o PNG preparado como `logoUrl` (o servidor o trata como logo comum, sem
+  pílula); logo-foto vira "sem logo".
+- **Logo = quadrado de cor lisa com letra branca** (ex.: ícone de app): os 4 cantos têm a mesma cor, então o
+  fundo "liso" é o próprio quadrado e some, ficando só a letra branca. A pílula atrás cobre o caso de a
+  letra sumir no fundo do card, mas vale o dono conferir na prévia. Se o fundo removido passar de 97% da
+  imagem, o código desiste (não mexe).
+- **SVG com texto:** o resvg do servidor não tem fonte instalada; texto que não foi convertido em curvas
+  não aparece no PNG.
+- **Download de link colado:** a trava contra IP/rede interna olha o endereço escrito; não resolve o DNS
+  (o Edge não expõe isso). Risco residual: um domínio público apontando pra IP interno.
+- **`brand-compose`:** não foi alterado (opcional no pedido). Ele ainda lê `logo_url` direto.
+- **Ainda não validado em produção:** o import `https://deno.land/x/imagescript@1.3.0/mod.ts` e o resvg
+  só foram exercitados com o equivalente do npm (mesmo código) — o ambiente de trabalho bloqueia
+  deno.land/esm.sh. Conferir no primeiro `process_logo` real (a função devolve erro tratável).
+
+### 2. Rótulos chegam em `posts` na publicação
+
+`agent-actions` (insert em `posts` a partir da peça aprovada, ~linha 365): um **segundo** bloco
+`try/catch`, separado do que copia `pillar/recipe/format/item_id`, lê `familia, pilar_ss` da peça e
+faz `update` em `posts` só se houver valor, **antes** de apagar a peça. Erro é logado, nunca derruba
+a publicação; se a migration das colunas faltar, só esse bloco falha. O `select` antigo não foi
+ampliado (de propósito, mesma razão da regra de nunca pôr coluna nova no insert). **`pillar` já
+era copiado** (é o `tema`); só `familia` e `pilar_ss` faltavam.
+
+**Ainda falta:** `_shared/learning.ts` **não agrupa** por `familia`/`pilar_ss` — `GroupKind` é
+`pillar | recipe | format`. Os rótulos agora chegam em `posts`, mas o aprendizado "família × pilar × ângulo"
+ainda precisa dessa mudança (e de `select` com as colunas, tolerante).
+
+### 3. A legenda nunca fala com o corretor
+
+Testes (sem biblioteca externa): `node --experimental-strip-types scripts/test-internal-notes.mjs` e `scripts/test-logo-png.mjs`.
+
+- `_shared/internalNotes.ts` — `stripInternalNotes(text) → { text, notes[] }`, por bloco/linha/frase.
+  Regras fortes (dados que recebi + precisa/confirm/revis; "precisa de confirmação"; "ser confirmado";
+  "antes de publicar"; "nota/aviso interna"; "para o corretor/dono"; fala dirigida "Corretor,";
+  pedido de dado "me passe/envie/confirme … metragem/preço/dado") e fracas (só com ⚠/🚨/❗ no
+  começo: "sobre a metragem:", "inconsistência", "parece erro", "valor estranho", "não bate",
+  "verifique"). Nunca remove só por "corretor" nem só por ⚠️ ("Fale com o corretor João",
+  "⚠️ Últimas unidades" passam). Bloco que começa com ⚠ ou "Corretor," e casa com qualquer regra sai
+  inteiro; num bloco normal sai só a linha/frase marcada.
+  - **Divergência do pedido:** "me passe/envie/confirme" só marca quando seguido de dado (metragem,
+    preço, área, valor, endereço…), pra não apagar chamada pública como "Me passa seu contato…". O
+    caso real e "Ops! Corretor, me passa…" saem (este último pela fala dirigida).
+- `catalog-package`: aplicado no wrapper `copy()` em `caption` e `cta`, **antes** de anexar o aviso de
+  mobiliado do `carrossel_tour`. O que saiu vai pro `reasoning` com o prefixo fixo
+  "Recado da IA que saiu da legenda: …", **depois** do aviso do QUERO (o prefixo do QUERO fica intacto,
+  então `keepQueroNotice` continua achando). Legenda que esvaziou fica vazia + aviso "a legenda não saiu
+  … gere de novo". Prompt do `writeCopy` reforçado ("nunca um recado, aviso, alerta ou ressalva pro
+  corretor, nem pedido de dado… se um dado parecer estranho ou faltar, simplesmente não o cite").
+- **Não mexido:** `creative-generate` (legenda de post/vídeo) — a mesma trava pode ser reutilizada lá
+  num próximo PR.
 
 ## Custos e Higgsfield
 
