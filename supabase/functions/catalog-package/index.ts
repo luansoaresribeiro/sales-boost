@@ -24,6 +24,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { applyQueroLock, cleanLabels, dropUnknownPilar, fetchSSPillars } from '../_shared/slotIntent.ts'
 import { decideVideoCta } from '../_shared/videoCta.ts'
+import { stripInternalNotes, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
 import { ensureNearby, fetchNearbyConfig, fmtDistance, topPlaces } from '../_shared/nearbyPlaces.ts'
 
 const cors = {
@@ -129,7 +130,7 @@ function pickSlot(dates: string[], occ: Occupancy, pillar: string, pillarWeightP
 async function writeCopy(anthropicKey: string, briefing: string, extra = ''): Promise<{ caption: string; hashtags: string; cta: string }> {
   const prompt = `Você é o Content Agent do Sales Boost, especializado em corretores de imóveis no Rio de Janeiro.
 ${briefing}
-${extra}Regras inegociáveis: nunca invente preço, m², condomínio ou qualquer dado de mercado além do que foi passado; nunca invente cliente, depoimento, venda fechada nem distância; a legenda é SEMPRE pro público do Instagram — nunca uma mensagem pro corretor pedindo dado (se faltar informação, escreva sem ela); nunca prometa valorização; tom próximo e carioca, direto nos números reais, sem "oportunidade imperdível".
+${extra}Regras inegociáveis: nunca invente preço, m², condomínio ou qualquer dado de mercado além do que foi passado; nunca invente cliente, depoimento, venda fechada nem distância; a legenda é SEMPRE pro público do Instagram — nunca um recado, aviso, alerta ou ressalva pro corretor, nem pedido de dado (nada de "⚠️", "os dados que recebi", "precisam de confirmação", "antes de publicar"). Se um dado parecer estranho ou faltar, simplesmente não o cite; nunca prometa valorização; tom próximo e carioca, direto nos números reais, sem "oportunidade imperdível".
 Responda SÓ em JSON: {"caption":"...","hashtags":"...","cta":"..."}`
   const obj = parseObj(await callClaude(anthropicKey, prompt, 700))
   return { caption: String(obj.caption ?? '').trim(), hashtags: String(obj.hashtags ?? '').trim(), cta: String(obj.cta ?? '').trim() }
@@ -248,7 +249,17 @@ Deno.serve(async (req) => {
     const decision = decideVideoCta(automation, ficha.ctas)
     const intentTxt = internal && typeof body.intent === 'string' ? body.intent.trim().slice(0, 1000) : ''
     const labels: { familia?: string; pilar_ss?: string; tema?: string } = internal ? dropUnknownPilar(cleanLabels(body as { familia?: unknown; pilar_ss?: unknown; tema?: unknown }), await fetchSSPillars(admin, company.vertical_key)) : {}
-    const copy = (briefing: string) => writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`)
+    // Rede de segurança (2026-10-23): mesmo com o prompt proibindo, a IA às vezes escreve um recado pro corretor
+    // dentro da legenda/CTA ("⚠️ Sobre a metragem: os dados que recebi precisam de confirmação…"). Aqui o recado
+    // SAI do texto (antes de qualquer coisa ser anexada, ex.: o aviso de mobiliado) e vai pro aviso do dono.
+    let pieceNotes: string[] = [], pieceEmptied = false
+    const copy = async (briefing: string) => {
+      const c = await writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`)
+      const cap = stripInternalNotes(c.caption), cta = stripInternalNotes(c.cta)
+      pieceNotes.push(...cap.notes, ...cta.notes)
+      if (c.caption.trim() && !cap.text.trim()) pieceEmptied = true
+      return { ...c, caption: cap.text, cta: cta.text }
+    }
 
     const fieldsLine = `Tipo: ${fields.tipo ?? '—'} · Bairro: ${fields.bairro ?? '—'} · ${fields.venda_ou_aluguel ?? '—'} · Preço: R$ ${fields.preco ?? '—'} · Quartos: ${fields.quartos ?? '—'} · Metragem: ${fields.m2 ?? '—'}m²${fields.perto_de ? ` · Perto de: ${fields.perto_de}` : ''}${fields.descricao ? `\nDescrição real escrita pelo corretor (use só o que está aqui, sem acrescentar): ${String(fields.descricao).slice(0, 1500)}` : ''}`
 
@@ -291,6 +302,7 @@ Deno.serve(async (req) => {
         let caption = '', hashtags = '', cta = ''
         let kind = 'organico'
         let provider = ''
+        pieceNotes = []; pieceEmptied = false
 
         if (recipe === 'carrossel_tour') {
           // Até 2 fotos mobiliadas virtualmente (escolhidas pelo dono) entram
@@ -301,7 +313,7 @@ Deno.serve(async (req) => {
           // Instagram aceita até 10 mídias no carrossel — corta aqui, não na publicação.
           media = [photos[0], ...(useStaged ? staged : []), ...photos.slice(1)].slice(0, 10).map(p => ({ url: p.url, type: 'photo' }))
           const c = await copy(lessonsTxt + `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
-          caption = useStaged ? `${c.caption}\n\n${ficha.stagingDisclosure}` : c.caption
+          caption = useStaged ? [c.caption, ficha.stagingDisclosure].filter(Boolean).join('\n\n') : c.caption
           hashtags = c.hashtags; cta = c.cta
           provider = 'catalogo_real'
         } else if (recipe === 'post_detalhe_que_voce_nao_viu') {
@@ -365,7 +377,8 @@ Deno.serve(async (req) => {
         const lock = applyQueroLock(caption || null, cta || null, automation, ficha.ctas)
         caption = lock.caption ?? ''
         if (cta || lock.approved) cta = lock.cta ?? ''
-        const reasoning = lock.notice ?? null
+        // Avisos pro dono: o do QUERO vem primeiro (o prefixo dele fica intacto — keepQueroNotice) e depois o recado que saiu.
+        const reasoning = [lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null].filter(Boolean).join(' ') || null
 
         const slot = forcedDate || loose ? { date: forcedDate ?? '', overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
         const { data: row, error } = await admin.from('marketing_ai_test_content').insert({

@@ -1762,3 +1762,19 @@ grátis de 30 s, acima — mantidos como histórico):
   publicação.
 - **Migration:** `supabase/migrations/20261022150000_rotulos_familia_pilar_ss.sql`
   (aditiva; bloco DESFAZER no topo).
+
+## 2026-10-23 — Logo em PNG transparente, rótulos na publicação e legenda sem recado pro corretor (pós-fase 3)
+
+- **Pedido do dono:** (1) logo limpa nos criativos (hoje JPG com fundo branco vira quadrado branco; foto de
+  perfil vira "logo"); (2) `familia`/`pilar_ss` chegarem em `posts`; (3) a legenda nunca falar com o corretor.
+- **Decidido — logo:** o criativo usa um PNG transparente preparado pelo `brand-kit-suggest` (`process_logo`),
+  guardado em `brand_dna.logo_meta` (migration aditiva `20261023120000_brand_dna_logo_meta.sql`). Imagem que a
+  IA classifica como **foto** não vira logo (criativo usa o nome da marca em texto). Fundo só é removido se
+  for liso (flood-fill das bordas); senão a imagem não é mexida e o dono é avisado. Sem backfill automático
+  e sem trocar logo enviada pelo dono. Biblioteca: imagescript@1.3.0 (decodifica/codifica) + o resvg-wasm que o
+  `render-format` já usa (SVG) — sem custo novo.
+- **Decidido — rótulos:** `agent-actions` copia `familia`/`pilar_ss` num bloco à parte, tolerante.
+- **Decidido — legenda:** trava em código (`_shared/internalNotes.ts`) no `catalog-package` + prompt reforçado;
+  o recado que sai aparece pro dono em `reasoning`. Não remove só por "corretor" nem só por ⚠️.
+- **Fora deste trabalho:** `brand-compose`, `creative-generate` (legenda) e o agrupamento do aprendizado por
+  família/pilar (`learning.ts`). Detalhes e divergências em PLANO-CRIATIVOS → "Correções pós-fase 3".

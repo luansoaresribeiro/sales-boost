@@ -39,7 +39,7 @@ function tweet(f: Record<string, string>, brand: Brand): JSX.Element {
       <div style={{ width: '84%', background: bg }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '30px' }}>
           {brand.logoUrl ? (
-            <img src={brand.logoUrl} crossOrigin="anonymous" alt="" style={{ width: '92px', height: '92px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, background: '#fff' }} />
+            <img src={brand.logoUrl} crossOrigin="anonymous" alt="" style={{ width: '92px', height: '92px', objectFit: 'contain', flexShrink: 0 }} />
           ) : (
             <div style={{ width: '92px', height: '92px', borderRadius: '50%', background: brand.primary, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '38px', fontWeight: 800, flexShrink: 0 }}>{initials(f.name)}</div>
           )}
