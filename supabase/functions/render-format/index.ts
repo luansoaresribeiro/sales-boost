@@ -142,7 +142,7 @@ interface Brand { primary: string; name: string; primary2?: string; accent?: str
 type F = Record<string, string>
 
 // ── SVG por template ───────────────────────────────────────────────────────────────────────────────────
-function svgTweet(f: F, b: Brand, logoData: string | null, prepared = false, backdrop: string | null = null, aspect: number | null = null): { svg: string; w: number; h: number } {
+function svgTweet(f: F, b: Brand, logoData: string | null, backdrop: string | null = null, aspect: number | null = null): { svg: string; w: number; h: number } {
   const W = 1080, H = 1080, dark = (f.theme || 'dark') === 'dark'
   const bg = dark ? '#15202b' : '#ffffff', fg = dark ? '#e7e9ea' : '#0f1419', muted = dark ? '#8b98a5' : '#536471', line = dark ? '#38444d' : '#eff3f4'
   const tl = limitLines(wrap(f.text || 'O texto do tweet aparece aqui.', 44, 900), 9)
@@ -385,7 +385,7 @@ function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: str
     return lo > 0.75 ? '#111111' : hi < 0.15 ? '#ffffff' : null   // foto de fundo: só os extremos (claro/escuro demais)
   }
   switch (template) {
-    case 'tweet': return svgTweet(f, b, logo, lc.prepared, pill(hexLuma((f.theme || 'dark') === 'dark' ? '#15202b' : '#ffffff')), lc.aspect)
+    case 'tweet': return svgTweet(f, b, logo, pill(hexLuma((f.theme || 'dark') === 'dark' ? '#15202b' : '#ffffff')), lc.aspect)
     case 'slide': { const r = svgSlideSystem(f, b, logo, measureFn, { backdrop: pill(hexLuma(b.bg || '#0E0B0A')), aspect: lc.aspect }); return { svg: r.svg, w: r.w, h: r.h, overflow: r.overflow } }
     case 'product': return svgProduct(f, b, productImg)
     case 'problem': return svgProblem(f, b)
