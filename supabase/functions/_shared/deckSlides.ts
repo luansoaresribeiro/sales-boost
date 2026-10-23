@@ -3,6 +3,7 @@
 // O DESENHO fica em slideSystem.ts; aqui só se decide o conteúdo de cada slide.
 
 import { COVER_STYLES, SLIDE_LAYOUTS, clean } from './slideSystem.ts'
+import { sanitizeCaptionCta, type CtaDecision } from './videoCta.ts'
 
 export interface DeckSlide { layout: string; title: string; text: string; items: string; highlight: string; cta: string }
 
@@ -49,6 +50,19 @@ export function normalizeDeck(rawSlides: unknown[], postCta = ''): DeckSlide[] {
     .filter(x => str(x.title).trim() || str(x.text).trim() || str(x.items).trim()).slice(0, MAX_SLIDES)
   return rows.map((x, i) => normalizeSlide(x, i === 0 ? 'capa' : i === rows.length - 1 ? 'fecho' : null, postCta))
 }
+
+/**
+ * Trava do QUERO no slide (o texto vira IMAGEM, então a legenda sozinha não basta): título, texto,
+ * itens e botão passam pela mesma trava da legenda. No fecho, o botão é sempre o CTA decidido pelo código
+ * (sem resposta aprovada, nunca "Comente QUERO"). Fora do fecho o botão fica vazio.
+ */
+export function lockSlide(sl: DeckSlide, d: CtaDecision): DeckSlide {
+  const f = (v: string) => { if (!v) return v; const r = sanitizeCaptionCta(v, null, d); return r.changed ? (r.caption ?? '') : v }
+  const items = sl.items.split('\n').map(f).filter(Boolean).join('\n')
+  const cta = sl.layout === 'fecho' ? capText(sanitizeCaptionCta(null, sl.cta || d.cta, d).cta ?? d.cta, CAP.cta) : ''
+  return { ...sl, title: f(sl.title), text: f(sl.text), items, highlight: f(sl.highlight) === sl.highlight ? sl.highlight : '', cta }
+}
+export const lockDeck = (slides: DeckSlide[], d: CtaDecision): DeckSlide[] => slides.map(x => lockSlide(x, d))
 
 /** Texto corrido do slide (vai em slides[].text, que as telas já leem). */
 export const slideSummary = (s: DeckSlide) => [s.title, s.text, s.items.split('\n').join(' · ')].filter(Boolean).join(' — ')

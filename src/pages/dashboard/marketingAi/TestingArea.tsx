@@ -93,6 +93,11 @@ export interface TestPost {
   brief: Record<string, string> | null
   personality: string | null
   created_at: string
+  // Rótulo único da peça (fase 3): família (o que é), pilar de Social Selling
+  // (pra que serve) e tema (sobre o quê = coluna `pillar`). Opcionais.
+  familia?: string | null
+  pilar_ss?: string | null
+  pillar?: string | null
 }
 
 // Recomendação de como GRAVAR o vídeo (roteiro), quando o formato é vídeo/reel/story.

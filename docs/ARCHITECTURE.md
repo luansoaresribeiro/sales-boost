@@ -365,7 +365,13 @@ marketing_ai_knowledge (id, company_id, kind, module, image_url, meta
   jsonb, content, ...)  -- catálogo de itens (kind='product')
 marketing_ai_test_content (id, company_id, kind, idea, caption, hashtags,
   cta, format, image_url, media jsonb, item_id, pillar, recipe, provider,
-  planned_for, quality_score, status, ...)  -- 'draft'|'vault'|'adapt'
+  planned_for, quality_score, status, familia, pilar_ss, intent, ...)
+  -- 'draft'|'vault'|'adapt'. Rótulo único da peça (fase 3, 2026-10-22):
+  -- pillar = TEMA (pilar de conteúdo da ficha), familia = o que é
+  -- (tour|oferta|educativo|bairro|eventual), pilar_ss = pra que serve (chave
+  -- do pilar de Social Selling da ficha), intent = a intenção da estratégia
+  -- que guiou a peça (jsonb). `posts` também ganhou familia e pilar_ss, mas o
+  -- agent-actions ainda não os copia na publicação.
 marketing_ai_strategies (id, company_id, kind, parent_strategy_id, name,
   status, thesis, primary_constraint, strategic_opportunity,
   active_components, funnel_plan, budget, estimates, last_reanalyzed_at,

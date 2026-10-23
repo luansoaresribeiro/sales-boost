@@ -4,11 +4,12 @@ import { useCompany } from '../../../contexts/CompanyContext'
 import { weekSlots, planWindow, type MixItem, type WeekSlot } from '../../../lib/weekSlots'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
-import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
+import { CARD, MUTED, BORDER, D, SUPABASE_URL, useSSNames } from './shared'
 import { templateLabel, type TestPost } from './TestingArea'
 import CalendarPostModal from './CalendarPostModal'
 import MakeNowPicker from './MakeNowPicker'
 import { useRealtime } from '../../../lib/useRealtime'
+import { PieceChips } from './PieceLabels'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -49,7 +50,9 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 }
 
 type Item = TestPost & { kind?: string; planned_for: string | null; item_id?: string | null; recipe?: string | null; story_worthy?: boolean | null }
-interface FormatMeta { surface?: string; recipe?: string }
+interface FormatMeta { surface?: string; recipe?: string; family?: string; pillar?: string }
+// Formatos genéricos (não vêm da ficha) e a família que o servidor dá a eles (formatCatalog.ts).
+const GENERIC_FAMILY: Record<string, string> = { post_card: 'eventual', carrossel_slides: 'educativo' }
 const SURFACE_ICON: Record<string, string> = { feed: '📝', stories: '📖', reels: '🎬', dm: '💬' }
 
 function startOfWeek(base: Date): Date {
@@ -65,6 +68,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   const { session } = useAuth()
   const token = session?.access_token ?? ''
   const { company } = useCompany()
+  const ssNames = useSSNames(companyId)
   const [items, setItems] = useState<Item[]>([])
   const [mix, setMix] = useState<MixItem[]>([])
   const [formatMeta, setFormatMeta] = useState<Record<string, FormatMeta>>({})
@@ -100,7 +104,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
     const plan = (strat?.content_plan ?? null) as { weekly_mix?: MixItem[] } | null
     setMix(Array.isArray(plan?.weekly_mix) ? plan!.weekly_mix : [])
     const fm: Record<string, FormatMeta> = {}
-    for (const f of ((pb?.config as { content_formats?: { key: string; surface?: string; recipe?: string }[] } | null)?.content_formats ?? [])) fm[f.key] = { surface: f.surface, recipe: f.recipe }
+    for (const f of ((pb?.config as { content_formats?: { key: string; surface?: string; recipe?: string; family?: string; pillar?: string; producer?: string }[] } | null)?.content_formats ?? [])) fm[f.key] = { surface: f.surface, recipe: f.recipe, family: f.family ?? (f.producer === 'item_video' ? 'tour' : 'eventual'), pillar: f.pillar }
     setFormatMeta(fm)
     setItems((posts ?? []) as Item[])
     setScheduledIds(new Set(((actions ?? []) as { ref_id: string }[]).map(a => a.ref_id)))
@@ -200,6 +204,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                       <span style={{ fontSize: '8.5px', fontWeight: 700, color: sm.color }}>● {lang === 'en' ? STATUS_LABEL_EN[status] ?? sm.label : sm.label}{it.quality_score != null ? ` · ${it.quality_score}` : ''}</span>
                       {it.brief?.template && <span style={{ fontSize: '8.5px', color: MUTED }}>· {templateLabel(it.brief.template, lang)}</span>}
                     </div>
+                    <div style={{ marginTop: '4px' }}><PieceChips familia={it.familia} pilarSs={it.pilar_ss} tema={it.pillar} ssNames={ssNames} /></div>
                     {it.story_worthy && it.kind !== 'stories' && <div style={{ fontSize: '8.5px', color: '#A78BFA', marginTop: '2px' }}>{t.alsoStory}</div>}
                   </button>
                 )
@@ -212,6 +217,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                       {SURFACE_ICON[surface] ?? '📝'} {sl.name}
                     </div>
                     <div style={{ fontSize: '8.5px', color: MUTED, marginTop: '2px' }}>{t.surf[surface] ?? surface} · {slotWho(sl)}</div>
+                    <div style={{ marginTop: '4px' }}><PieceChips familia={sl.familia ?? formatMeta[sl.format]?.family ?? GENERIC_FAMILY[sl.format] ?? (sl.producer === 'item_video' ? 'tour' : 'eventual')} pilarSs={sl.pilar_ss} tema={sl.tema ?? formatMeta[sl.format]?.pillar ?? sl.pillar} ssNames={ssNames} /></div>
                   </div>
                 )
               })}

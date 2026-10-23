@@ -22,6 +22,8 @@
 import { loadLessons, lessonsBlock } from '../_shared/contentLessons.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
+import { applyQueroLock, cleanLabels, dropUnknownPilar, fetchSSPillars } from '../_shared/slotIntent.ts'
+import { decideVideoCta } from '../_shared/videoCta.ts'
 import { ensureNearby, fetchNearbyConfig, fmtDistance, topPlaces } from '../_shared/nearbyPlaces.ts'
 
 const cors = {
@@ -34,7 +36,7 @@ type SupaClient = ReturnType<typeof createClient>
 interface Photo { url: string; path: string }
 interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
 interface RecipeGroup { recipes: string[]; fonte_midia: string; descricao: string }
-interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string }
+interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null }
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -60,7 +62,7 @@ async function fetchFichaConfig(admin: SupaClient, verticalKey: string | null): 
     const c = (data?.config ?? {}) as Record<string, unknown>
     if (!c.production_recipes) return null
     const disclosure = String((c.virtual_staging as { disclosure?: string } | undefined)?.disclosure ?? '').slice(0, 200)
-    return { pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure }
+    return { pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null }
   } catch { return null }
 }
 
@@ -124,10 +126,10 @@ function pickSlot(dates: string[], occ: Occupancy, pillar: string, pillarWeightP
 // ── Geração de texto por peça (1 função parametrizada em vez de 5 quase
 // iguais — reuso normal DENTRO do arquivo, não é a lib compartilhada ENTRE
 // functions que o projeto evita) ──────────────────────────────────────────
-async function writeCopy(anthropicKey: string, briefing: string): Promise<{ caption: string; hashtags: string; cta: string }> {
+async function writeCopy(anthropicKey: string, briefing: string, extra = ''): Promise<{ caption: string; hashtags: string; cta: string }> {
   const prompt = `Você é o Content Agent do Sales Boost, especializado em corretores de imóveis no Rio de Janeiro.
 ${briefing}
-Regras inegociáveis: nunca invente preço, m², condomínio ou qualquer dado de mercado além do que foi passado; nunca invente cliente, depoimento, venda fechada nem distância; a legenda é SEMPRE pro público do Instagram — nunca uma mensagem pro corretor pedindo dado (se faltar informação, escreva sem ela); nunca prometa valorização; tom próximo e carioca, direto nos números reais, sem "oportunidade imperdível".
+${extra}Regras inegociáveis: nunca invente preço, m², condomínio ou qualquer dado de mercado além do que foi passado; nunca invente cliente, depoimento, venda fechada nem distância; a legenda é SEMPRE pro público do Instagram — nunca uma mensagem pro corretor pedindo dado (se faltar informação, escreva sem ela); nunca prometa valorização; tom próximo e carioca, direto nos números reais, sem "oportunidade imperdível".
 Responda SÓ em JSON: {"caption":"...","hashtags":"...","cta":"..."}`
   const obj = parseObj(await callClaude(anthropicKey, prompt, 700))
   return { caption: String(obj.caption ?? '').trim(), hashtags: String(obj.hashtags ?? '').trim(), cta: String(obj.cta ?? '').trim() }
@@ -239,6 +241,15 @@ Deno.serve(async (req) => {
     const fields = meta.fields ?? {}
     if (photos.length < 5) return json({ error: 'Item precisa de pelo menos 5 fotos reais pra gerar o pacote.' }, 400)
 
+    // Trava do QUERO (vale pra toda receita): "Comente QUERO" só com a resposta deste imóvel aprovada.
+    // Intenção da estratégia + rótulos só chegam pelo modo interno (cron_secret) — o botão do dono não manda.
+    const { data: auto } = await admin.from('engagement_automations').select('active, message, keywords').eq('company_id', company.id).eq('item_id', item.id).maybeSingle()
+    const automation = auto as { active?: boolean; message?: string; keywords?: string[] } | null
+    const decision = decideVideoCta(automation, ficha.ctas)
+    const intentTxt = internal && typeof body.intent === 'string' ? body.intent.trim().slice(0, 1000) : ''
+    const labels: { familia?: string; pilar_ss?: string; tema?: string } = internal ? dropUnknownPilar(cleanLabels(body as { familia?: unknown; pilar_ss?: unknown; tema?: unknown }), await fetchSSPillars(admin, company.vertical_key)) : {}
+    const copy = (briefing: string) => writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`)
+
     const fieldsLine = `Tipo: ${fields.tipo ?? '—'} · Bairro: ${fields.bairro ?? '—'} · ${fields.venda_ou_aluguel ?? '—'} · Preço: R$ ${fields.preco ?? '—'} · Quartos: ${fields.quartos ?? '—'} · Metragem: ${fields.m2 ?? '—'}m²${fields.perto_de ? ` · Perto de: ${fields.perto_de}` : ''}${fields.descricao ? `\nDescrição real escrita pelo corretor (use só o que está aqui, sem acrescentar): ${String(fields.descricao).slice(0, 1500)}` : ''}`
 
     // Data-fonte de agendamento: hoje + 21 dias (3 semanas), calculada 1x e
@@ -289,14 +300,14 @@ Deno.serve(async (req) => {
           const useStaged = staged.length > 0 && !!ficha.stagingDisclosure
           // Instagram aceita até 10 mídias no carrossel — corta aqui, não na publicação.
           media = [photos[0], ...(useStaged ? staged : []), ...photos.slice(1)].slice(0, 10).map(p => ({ url: p.url, type: 'photo' }))
-          const c = await writeCopy(anthropicKey, lessonsTxt + `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
+          const c = await copy(lessonsTxt + `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
           caption = useStaged ? `${c.caption}\n\n${ficha.stagingDisclosure}` : c.caption
           hashtags = c.hashtags; cta = c.cta
           provider = 'catalogo_real'
         } else if (recipe === 'post_detalhe_que_voce_nao_viu') {
           media = [{ url: photos[photos.length - 1].url, type: 'photo' }]
           const detalhe = fields.detalhe_que_ninguem_percebe ? String(fields.detalhe_que_ninguem_percebe) : null
-          const c = await writeCopy(anthropicKey, lessonsTxt + `Escreva um post de 1 foto destacando um detalhe do imóvel que ninguém repara de cara${detalhe ? ` (o detalhe real é: "${detalhe}")` : ' (fale de algo real do imóvel que só quem visita percebe, sem inventar um detalhe específico que não foi informado — pode ser mais genérico, tipo iluminação natural, silêncio, vista)'}. \n${fieldsLine}`)
+          const c = await copy(lessonsTxt + `Escreva um post de 1 foto destacando um detalhe do imóvel que ninguém repara de cara${detalhe ? ` (o detalhe real é: "${detalhe}")` : ' (fale de algo real do imóvel que só quem visita percebe, sem inventar um detalhe específico que não foi informado — pode ser mais genérico, tipo iluminação natural, silêncio, vista)'}. \n${fieldsLine}`)
           caption = c.caption; hashtags = c.hashtags; cta = c.cta
           provider = 'catalogo_real'
         } else if ((recipe === 'reels_o_que_compra_no_bairro' || recipe === 'post_3_coisas_perto') && (near ??= await loadNear()).top.length >= (recipe === 'post_3_coisas_perto' ? 3 : 1)) {
@@ -323,7 +334,7 @@ Deno.serve(async (req) => {
           } else {
             media = [{ url: photos[0].url, type: 'photo' }]
           }
-          const c = await writeCopy(anthropicKey, lessonsTxt + `${recipe === 'post_3_coisas_perto' ? 'Escreva um post "3 coisas perto" deste imóvel' : `Escreva um post sobre como é morar perto deste imóvel em ${fields.bairro ?? 'no bairro'} — estilo de vida, não o imóvel em si`}. Use SÓ estes lugares reais, com o nome exatamente assim (dados do OpenStreetMap):\n${lista.join('\n')}\n${distRule} Nunca diga o endereço/rua do imóvel.\n${fieldsLine}`)
+          const c = await copy(lessonsTxt + `${recipe === 'post_3_coisas_perto' ? 'Escreva um post "3 coisas perto" deste imóvel' : `Escreva um post sobre como é morar perto deste imóvel em ${fields.bairro ?? 'no bairro'} — estilo de vida, não o imóvel em si`}. Use SÓ estes lugares reais, com o nome exatamente assim (dados do OpenStreetMap):\n${lista.join('\n')}\n${distRule} Nunca diga o endereço/rua do imóvel.\n${fieldsLine}`)
           caption = c.caption; hashtags = c.hashtags; cta = c.cta
           provider = 'lugares_osm'
         } else if (recipe === 'reels_o_que_compra_no_bairro' || recipe === 'post_3_coisas_perto') {
@@ -335,7 +346,7 @@ Deno.serve(async (req) => {
           const briefing = recipe === 'reels_o_que_compra_no_bairro'
             ? `Escreva um post sobre como é morar no bairro "${fields.bairro ?? 'da região'}" — estilo de vida, sem citar nome de estabelecimento nem número que não esteja nos dados. A foto é do imóvel real.`
             : `Escreva um post "o que tem perto" do imóvel${fields.perto_de ? ` — use SÓ isto que o corretor informou: ${fields.perto_de}` : ' — fale de forma geral do bairro, sem inventar nome de lugar nem distância'}. A foto é do imóvel real.`
-          const c = await writeCopy(anthropicKey, lessonsTxt + `${briefing}\n${fieldsLine}`)
+          const c = await copy(lessonsTxt + `${briefing}\n${fieldsLine}`)
           caption = c.caption; hashtags = c.hashtags; cta = c.cta
           provider = 'catalogo_real'
         } else if (recipe === 'stories_enquete_pagaria') {
@@ -350,13 +361,28 @@ Deno.serve(async (req) => {
           continue // pilar 'educacao' não tem receita ligada a um item específico
         }
 
+        // Trava depois da IA: legenda e CTA obedecem a decisão do código (CTA vazio continua vazio, salvo QUERO aprovado).
+        const lock = applyQueroLock(caption || null, cta || null, automation, ficha.ctas)
+        caption = lock.caption ?? ''
+        if (cta || lock.approved) cta = lock.cta ?? ''
+        const reasoning = lock.notice ?? null
+
         const slot = forcedDate || loose ? { date: forcedDate ?? '', overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
         const { data: row, error } = await admin.from('marketing_ai_test_content').insert({
           company_id: company.id, kind, idea: item.title, caption, hashtags, cta,
           format: media.length > 1 ? 'carrossel' : 'foto', image_url: media[0]?.url ?? null,
           item_id: item.id, media, pillar: pillarKey, recipe, provider, planned_for: loose ? null : slot.date,
+          ...(reasoning ? { reasoning } : {}),
         }).select('id').single()
         if (error) { skipped.push({ recipe, reason: error.message }); continue }
+        // Rótulo num UPDATE à parte e tolerante: sem a migration das colunas, a peça nasce sem rótulo mas nasce.
+        // (pillar já foi gravado acima com o pilar de conteúdo da receita = tema.)
+        if (labels.familia || labels.pilar_ss) {
+          try {
+            const { error: lerr } = await admin.from('marketing_ai_test_content').update({ ...(labels.familia ? { familia: labels.familia } : {}), ...(labels.pilar_ss ? { pilar_ss: labels.pilar_ss } : {}) }).eq('id', row!.id)
+            if (lerr) console.error('catalog-package: rótulo não gravado (migration aplicada?)', lerr.message)
+          } catch (e) { console.error('catalog-package: rótulo falhou', e) }
+        }
         await scoreTestContent(supabaseUrl, serviceKey, company.id as string, row!.id as string)
         generated.push({ recipe, pillar: pillarKey, planned_for: slot.date, id: row!.id as string, over_capacity: slot.overCapacity })
       }

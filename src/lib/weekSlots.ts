@@ -4,8 +4,10 @@
 // Se mudar uma, mude a outra: é isso que faz a peça gerada cair no MESMO dia
 // que o calendário mostra antes.
 export type Producer = 'post' | 'item_package' | 'item_video' | 'dm'
-export interface MixItem { format: string; name: string; producer: Producer; per_week: number; pillar: string; purpose: string }
-export interface WeekSlot { date: string; format: string; name: string; producer: Producer; pillar: string; purpose: string }
+export type Familia = 'tour' | 'oferta' | 'educativo' | 'bairro' | 'eventual'
+// familia/pilar_ss/tema: rótulo único da peça (fase 3); opcionais (estratégia antiga não tem).
+export interface MixItem { format: string; name: string; producer: Producer; per_week: number; pillar: string; purpose: string; familia?: Familia; pilar_ss?: string; tema?: string }
+export interface WeekSlot { date: string; format: string; name: string; producer: Producer; pillar: string; purpose: string; familia?: Familia; pilar_ss?: string; tema?: string }
 
 export function weekSlots(mixRaw: MixItem[] | null | undefined, dates: string[]): WeekSlot[] {
   const mix = (Array.isArray(mixRaw) ? mixRaw : []).filter(m => m.producer !== 'dm')
@@ -14,7 +16,7 @@ export function weekSlots(mixRaw: MixItem[] | null | undefined, dates: string[])
   while (left.some(x => x.n > 0)) for (const x of left) if (x.n > 0) { queue.push(x.m); x.n-- }
   const n = queue.length
   if (!n || dates.length !== 7) return []
-  return queue.map((m, k) => ({ date: dates[Math.floor((k * 7) / n)], format: m.format, name: m.name, producer: m.producer, pillar: m.pillar, purpose: m.purpose }))
+  return queue.map((m, k) => ({ date: dates[Math.floor((k * 7) / n)], format: m.format, name: m.name, producer: m.producer, pillar: m.pillar, purpose: m.purpose, familia: m.familia, pilar_ss: m.pilar_ss, tema: m.tema }))
 }
 
 // Janela de planejamento = segunda a domingo (igual ao nextWeekDates do

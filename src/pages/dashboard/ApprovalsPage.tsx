@@ -10,6 +10,8 @@ import {
 import { useRealtime } from '../../lib/useRealtime'
 import CalendarPostModal from './marketingAi/CalendarPostModal'
 import type { TestPost } from './marketingAi/TestingArea'
+import { PieceChips } from './marketingAi/PieceLabels'
+import { useSSNames } from './marketingAi/shared'
 
 const EXEC_LABEL_EN: Record<string, string> = { organico: 'Organic', cliente: 'Reply to customer', campanha: 'Campaign' }
 const RISK_EN: Record<string, string> = { high: 'high', medium: 'medium', low: 'low' }
@@ -170,7 +172,7 @@ function ContentCard({ item, onApprove, onDiscard, busy, lang }: {
 // — a mesma que aparece no Calendário da semana / Peças avulsas. Clicar abre
 // a peça (CalendarPostModal) com publicar agora / agendar / excluir.
 type CalPiece = TestPost & { kind?: string; planned_for?: string | null; recipe?: string | null }
-function PieceCard({ p, onOpen, lang }: { p: CalPiece; onOpen: () => void; lang: 'pt' | 'en' }) {
+function PieceCard({ p, onOpen, lang, ssNames }: { p: CalPiece; onOpen: () => void; lang: 'pt' | 'en'; ssNames: Record<string, string> }) {
   const day = p.planned_for ? new Date(`${p.planned_for}T12:00:00`).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : null
   const where = day ? (lang === 'en' ? `Calendar · ${day}` : `Calendário · ${day}`) : (lang === 'en' ? 'Loose piece' : 'Peça avulsa')
   return (
@@ -185,6 +187,7 @@ function PieceCard({ p, onOpen, lang }: { p: CalPiece; onOpen: () => void; lang:
           <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#A78BFA', marginBottom: '6px' }}>
             ● {lang === 'en' ? 'Ready to approve' : 'Pronta pra aprovar'}{p.quality_score != null ? ` · ${lang === 'en' ? 'score' : 'nota'} ${p.quality_score}` : ''} · {where}
           </div>
+          <div style={{ marginBottom: '6px' }}><PieceChips familia={p.familia} pilarSs={p.pilar_ss} tema={p.pillar} ssNames={ssNames} /></div>
           {p.caption && <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.82)', lineHeight: 1.55, whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.caption}</div>}
         </div>
       </div>
@@ -227,6 +230,7 @@ export default function ApprovalsPage() {
   const tx = TX[lang]
 
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const ssNames = useSSNames(companyId ?? undefined)
   const [content, setContent] = useState<AiContent[]>([])
   const [pending, setPending] = useState<AgentAction[]>([])
   const [history, setHistory] = useState<AgentAction[]>([])
@@ -356,7 +360,7 @@ export default function ApprovalsPage() {
                         onApprove={() => approveContent(item)} onDiscard={() => discardContent(item.id)} />
                     ) })),
                     ...pieces.map(p => ({ key: `p-${p.id}`, created_at: p.created_at, node: (
-                      <PieceCard key={`p-${p.id}`} p={p} lang={lang} onOpen={() => setOpenPiece(p)} />
+                      <PieceCard key={`p-${p.id}`} p={p} lang={lang} ssNames={ssNames} onOpen={() => setOpenPiece(p)} />
                     ) })),
                   ]
                     .sort((x, y) => y.created_at.localeCompare(x.created_at))

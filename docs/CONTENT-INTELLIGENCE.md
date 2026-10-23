@@ -225,6 +225,18 @@ stories e vídeos também, não só foto no feed.
   repetida, acima do teto), compilação das duas functions e a tela com um
   plano montado a partir do catálogo real (desktop e 390 px, sem erro).
 
+### Rótulo e intenção de cada vaga (fase 3, 2026-10-22)
+
+Cada item do `weekly_mix` e cada peça carregam `familia` (o que é), `pilar_ss`
+(pra que serve — pilar de Social Selling da ficha) e `tema` (sobre o quê — o
+pilar de conteúdo, coluna `pillar`). O `creative-generate` monta a intenção da
+vaga (`_shared/slotIntent.ts`): pilar + plano do pilar + etapa do funil
+(público, mensagem, CTA sugerido) + linha central, e entrega ao Diretor/
+Copywriter do post, à legenda do vídeo e à legenda do pacote do imóvel. Estratégia
+antiga sem rótulos é completada na hora de gerar (família/tema do catálogo,
+pilar pelo funil ou rodízio). O CTA sugerido nunca passa por cima da trava do
+QUERO. Detalhes e divergências: [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md#fase-3-a--b--em-código-aguardando-migration-e-deploy-2026-10-22).
+
 ## Trends de verdade (2026-10-09)
 
 Primeira fonte externa real de "o que está em alta": o diagnóstico grátis

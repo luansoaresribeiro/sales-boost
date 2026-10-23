@@ -396,6 +396,17 @@ Os posts que nascem daqui seguem a regra 1: só saem com aprovação do dono.
    imóvel vendido) até o app da Meta ser aprovado; cada item com status de
    autorização do cliente antes de virar post.
 
+## Criativos — fase 3 (rótulo + intenção da estratégia nas peças) — 2026-10-22
+
+- **Status:** 🟡 em código no branch `claude/nifty-shannon-ysp818`, aguardando
+  aprovação do dono pra aplicar a migration
+  `20261022150000_rotulos_familia_pilar_ss.sql` e deployar `strategy-generate`,
+  `creative-generate` e `catalog-package` (alteração arriscada). Depois, rodar a
+  semana de teste no banco de ensaio. Detalhes: [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md).
+- **Falta fora deste PR:** `agent-actions` copiar `familia`/`pilar_ss` para
+  `posts` na publicação (sem isso o rótulo se perde ao publicar).
+- **Próximas:** fase 2 (carrossel educativo com fonte, decisão C), 7, 6, 4, 5.
+
 ## Pedidos do dono (2026-10-20) — próximas frentes
 
 1. **Business Game por imobiliária.** Regra do dono: "todos que estiverem
