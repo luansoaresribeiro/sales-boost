@@ -11,6 +11,7 @@ export const MAX_LOGO_BYTES = 5 * 1024 * 1024   // mesmo teto do bucket post-ima
 export const MAX_SVG_BYTES = 500 * 1024
 
 // deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any
 let imageLib: Any = null
 async function lib(): Promise<Any> {

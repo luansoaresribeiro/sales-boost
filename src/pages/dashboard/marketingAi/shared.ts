@@ -273,3 +273,22 @@ export function useSSNames(companyId: string | undefined): Record<string, string
   }, [companyId])
   return names
 }
+
+// ── Logo preparado (PNG transparente) ────────────────────────────────────────────
+// brand_dna.logo_meta = { src, png_url, kind, luma, bg_removed }. Só vale se `src` é o logo de agora
+// (anti logo velha). Leitura SEMPRE tolerante: sem a coluna (migration pendente) ou com erro → o logo de sempre.
+export interface LogoMeta { src: string; png_url: string | null; kind: 'logo' | 'foto'; luma: number | null; bg_removed: boolean }
+export const usableLogoMeta = (m: LogoMeta | null | undefined, logo: string | null | undefined): LogoMeta | null =>
+  (m && logo && m.src === logo && (m.kind === 'logo' || m.kind === 'foto') ? m : null)
+export async function fetchLogoMeta(companyId: string): Promise<LogoMeta | null> {
+  try {
+    const { data, error } = await supabase.from('brand_dna').select('logo_meta').eq('company_id', companyId).maybeSingle()
+    return error ? null : ((data as { logo_meta?: LogoMeta | null } | null)?.logo_meta ?? null)
+  } catch { return null }
+}
+/** O que mostrar/usar como logo: o PNG preparado quando existe; `null` quando a imagem é uma foto (cai no nome da marca em texto). */
+export const preferredLogo = (logo: string | null | undefined, meta: LogoMeta | null | undefined): string | null => {
+  const m = usableLogoMeta(meta, logo)
+  if (m?.kind === 'foto') return null
+  return (m?.png_url || logo) || null
+}

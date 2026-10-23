@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { track } from '../../../lib/analytics'
-import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
+import { CARD, MUTED, BORDER, D, SUPABASE_URL, fetchLogoMeta, preferredLogo } from './shared'
 import { STANDARD_FORMATS, safePx, type FormatDef } from './formats'
 import type { Brand } from './formatTemplates'
 import { useLang } from '../../../contexts/LanguageContext'
@@ -53,7 +53,7 @@ export default function AdaptModal({ post, companyId, onClose, onDone }: { post:
     ])
     const kit = (bd?.kit as { colors?: { primary?: string[]; accent?: string[]; text?: string; bg?: string }; typography?: { heading?: string } } | null) ?? null
     const c = kit?.colors ?? {}
-    setBrand({ primary: c.primary?.[0] || ORANGE, name: 'Marca', primary2: c.primary?.[1], accent: c.accent?.[0], accent2: c.accent?.[1], text: c.text, bg: c.bg, logoUrl: (bd?.logo_url as string | null) ?? undefined, heading: kit?.typography?.heading })
+    setBrand({ primary: c.primary?.[0] || ORANGE, name: 'Marca', primary2: c.primary?.[1], accent: c.accent?.[0], accent2: c.accent?.[1], text: c.text, bg: c.bg, logoUrl: preferredLogo(bd?.logo_url as string | null, await fetchLogoMeta(companyId)) ?? undefined, heading: kit?.typography?.heading })
     setCustomFmts(((cf ?? []) as { id: string; name: string; w: number; h: number }[]).map(x => ({ key: 'custom:' + x.id, name: x.name, platform: 'Custom', placement: '', ratio: `${x.w}:${x.h}`, w: x.w, h: x.h, safe: { top: 0.06, right: 0.08, bottom: 0.09, left: 0.08 } })))
   }, [companyId])
   useEffect(() => { load() }, [load])
