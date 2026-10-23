@@ -19,8 +19,6 @@ const PATCH_TOL = 26       // o próprio canto precisa ser liso (senão é foto)
 const CORE_TOL = 16        // até aqui o pixel é fundo puro (ruído de JPEG incluso)
 const SOLID = 60           // pixel a esta distância do fundo já é "logo de verdade"
 const MAX_REMOVED = 0.97   // se o fundo cobriria quase a imagem toda, não mexe
-const HOLE_AREA = 0.02     // ilha de cor-de-fundo (miolo de "O"/"P") menor que 2% da imagem...
-const HOLE_SIDE = 0.35     // ...e com caixa menor que 35% do lado maior = furo de letra, não desenho
 
 export interface LogoResult { img: Rgba; bg_removed: boolean; luma: number | null; luma_lo: number | null; luma_hi: number | null }
 
@@ -130,24 +128,8 @@ export function removeFlatBackground(src: Rgba): { img: Rgba; bg_removed: boolea
     if (y < h - 1) seed(x, y + 1)
   }
   if (removed === 0) return { img: src, bg_removed: false }
-  // Furos de letra ("O", "P", "A"): ilhas pequenas de cor-de-fundo totalmente cercadas por desenho. Ficam brancas no meio
-  // do logo em fundo escuro, então saem também. Preenchimento grande (letra branca, barra, miolo de ícone) fica.
-  {
-    const seen = new Uint8Array(N), maxSide = Math.max(w, h)
-    for (let p0 = 0; p0 < N; p0++) {
-      if (state[p0] || seen[p0] || dist(src.data, p0 * 4, br, bgc, bb) > CORE_TOL) continue
-      const comp = [p0]; seen[p0] = 1
-      let x0 = p0 % w, x1 = x0, y0 = (p0 - x0) / w, y1 = y0
-      for (let k = 0; k < comp.length; k++) {
-        const p = comp[k], x = p % w, y = (p - x) / w
-        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
-        for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1]) {
-          if (q >= 0 && !state[q] && !seen[q] && dist(src.data, q * 4, br, bgc, bb) <= CORE_TOL) { seen[q] = 1; comp.push(q) }
-        }
-      }
-      if (comp.length / N < HOLE_AREA && Math.max(x1 - x0 + 1, y1 - y0 + 1) < HOLE_SIDE * maxSide) for (const p of comp) { state[p] = 1; removed++ }
-    }
-  }
+  // (Rodada 1 do QA tentou apagar "furos de letra" aqui; foi REVERTIDO na rodada 2: apagava texto branco dentro de selo/retângulo coloridos.
+  // Só o fundo ligado às bordas sai; o miolo de uma letra fica com a cor do fundo original.)
   if (removed / N > MAX_REMOVED) return null
 
   // fundo puro → transparente

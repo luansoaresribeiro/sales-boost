@@ -506,7 +506,7 @@ avatar do Print de Tweet cortava o logo (`slice` + círculo).
   só foram exercitados com o equivalente do npm (mesmo código) — o ambiente de trabalho bloqueia
   deno.land/esm.sh. Conferir no primeiro `process_logo` real (a função devolve erro tratável).
 
-**QA rodada 1 (2026-10-23) — correções**
+**QA rodada 1 (2026-10-23) — correções** (ver as reversões/ajustes da rodada 2 dentro dos itens e no fim do bloco)
 
 - `internalNotes.ts` refeito por **contexto**, não por palavra solta: o sinal de recado é a IA falando com quem publica
   (1ª pessoa sobre os dados, vocativo, ordem de revisão, dado que "precisa ser conferido", rótulo "Obs.:/Nota:/PS:" +
@@ -528,9 +528,16 @@ avatar do Print de Tweet cortava o logo (`slice` + círculo).
 - **Furo de letra:** ilhas pequenas (< 2% da imagem, caixa < 35% do lado maior) de cor-de-fundo cercadas por desenho
   saem junto com o fundo (miolo do "O"/"P"); preenchimento grande (letra/barra branca) fica. Heurística: um preenchimento
   branco pequeno e fechado (ex.: ponto do "i") também some.
+  **REVERTIDO na rodada 2 do QA (2026-10-23):** a remoção de furos apagava texto branco dentro de forma colorida (selo azul
+  "CRECI 1234", retângulo vermelho "IMOBILIARIA": 100% das letras viravam buraco). Decisão: segurança da logo do cliente >
+  cosmético; o código voltou ao flood-fill só das bordas. **Limitação conhecida:** o miolo de uma letra fica com a cor do fundo
+  original (branco); aparece em logo colorida de contraste médio sobre slide escuro quando a pílula não entra. No caso que
+  motivou (letras escuras no fundo escuro) a pílula clara já esconde o miolo. Testes: selo e retângulo com texto branco
+  ficam 100% opacos (`scripts/test-logo-png.mjs`).
 - **Contraste por percentil:** `logo_meta` ganha `luma_lo`/`luma_hi` (p20/p80 dos pixels opacos; `luma` média continua).
   A pílula usa o pior dos dois extremos contra o fundo e escolhe branco ou quase preta pelo que mais contrasta. Meta
   antigo (só `luma`) segue a regra de antes. Casinha laranja + letras azul-escuras no slide escuro ganha pílula clara.
+- **Rodada 2 (2026-10-23):** (a) furos revertidos (acima); (b) `internalNotes` cobre também 1ª pessoa de dado que falta ("não encontrei o valor…", "deixei de fora", "dados faltando"), "dica pro corretor" com instrução, "Corretor:" + verbo, "aviso/nota interno", colchetes/parênteses com "confirmar + dado"; "revise" saiu da regra fraca do ⚠️ (só conta com dado do imóvel como objeto: "⚠️ Revise seu orçamento…" passa); (c) `svgToPng` só zera o cache do resvg se o `initWasm` falhou (SVG inválido seguido de válido funciona); (d) slide também ignora o nome padrão "Marca".
 - Conhecido: SVG com filtro pesado (feTurbulence) leva ~1,8 s no resvg (sem timeout possível no wasm síncrono).
 
 ### 2. Rótulos chegam em `posts` na publicação

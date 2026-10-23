@@ -45,8 +45,20 @@ const STRONG: RegExp[] = [
   /antes\s+de\s+(?:publicar|postar)\b[,:]?\s+(?:revis|confer|confir|verifi|valid)\w*/i,
   /\[\s*(?:revisar|revis[aã]o|conferir|verificar|checar|aten[cç][aã]o|nota|obs)[^\]]*\]/i,
   // rótulo de nota interna
-  /\b(?:nota|aviso|obs\.?|observa[cç][aã]o)\s+interna\b/i,
+  /\b(?:nota|aviso|recado|obs\.?|observa[cç][aã]o)\s+intern[ao]\b/i,
   /\b(?:nota|aviso|recado|obs\w*|observa[cç][aã]o|mensagem)\s+(?:interna\s+)?para\s+(?:o|a)\s+(?:corretor|corretora|dono|dona)\b/i,
+  // 1ª pessoa sobre dado que FALTA
+  new RegExp(`\\bn[aã]o\\s+(?:encontrei|achei|recebi)\\s+(?:o|a|os|as)?\\s*${DATA}\\b`, 'i'),
+  /\bdeixei\s+de\s+fora\b/i,
+  new RegExp(`\\b(?:dados?|informa[cç][oõ]es|${DATA})\\s+(?:faltando|ausentes?|incomplet\\w+)`, 'i'),
+  new RegExp(`\\bfaltou\\s+(?:a|o)\\s+(?:${DATA}|bairro)\\b`, 'i'),
+  // dica/pedido "pro corretor" com instrução
+  /\b(?:dica|sugest[aã]o|pedido)\s+(?:pro|pra|para\s+o|para\s+a|pra\s+o)\s+corretor(?:a)?\b[^.!?\n]{0,60}\b(?:envi\w+|mand\w+|confirm\w+|revis\w+|confer\w+|adicion\w+|inclu\w+|preench\w+|inform\w+)/i,
+  // vocativo "Corretor:" / "corretor," em qualquer posição + verbo/falta de dado
+  /\bcorretor(?:a)?\s*[:,]\s*[^.!?\n]{0,40}?\b(?:falt\w+|precis\w+|confirm\w+|revis\w+|confer\w+|envi\w+|inform\w+|verific\w+|ajust\w+)/i,
+  /\bme\s+(?:passar|passa|passe|enviar|envie|confirmar|confirme)\b[^.!?\n]{0,20},\s*corretor/i,
+  // colchetes/parênteses curtos com ordem de conferir + DADO do imóvel
+  new RegExp(`[\\[(]\\s*(?:confirmar|confirme|conferir|confira|revisar|revise|verificar|verifique|checar|validar|ajustar)\\s+(?:(?:a|o|os|as)\\s+)?${DATA}\\b[^\\])]{0,40}[\\])]`, 'i'),
   // vocativo
   /\baten[cç][aã]o\s*,?\s+(?:corretor|corretora|dono|dona)\b/i,
 ]
@@ -59,7 +71,7 @@ const WEAK: RegExp[] = [
   /verifique/i,
 ]
 // Estranheza de dado: só conta com rótulo de nota ("Obs.:", "Nota:", "PS:", "Aviso:") ou ⚠/🚨/❗ no começo.
-const ODD = new RegExp(`(?:parece|pareceu)\\s+(?:um\\s+)?(?:alto|baixo|incorret\\w*|errad\\w*|estranh\\w*|erro|suspeit\\w*|absurd\\w*)|\\b${DATA}\\s+(?:estranho|suspeito|incorreto|errado)|erro\\s+de\\s+digita[cç][aã]o|incomplet\\w+|inconsist[eê]nc\\w+|\\bfavor\\b|\\brevis(?:ar|e)\\b|(?:confirm\\w+|confer\\w+|verific\\w+|valid\\w+)\\s+com\\s+(?:o|a)\\s+(?:propriet\\S*|dono|dona|corretor\\w*)|(?:confirm\\w+|confer\\w+|revis\\w+)\\s+antes\\s+de\\s+(?:publicar|postar)`, 'i')
+const ODD = new RegExp(`(?:parece|pareceu)\\s+(?:um\\s+)?(?:alto|baixo|incorret\\w*|errad\\w*|estranh\\w*|erro|suspeit\\w*|absurd\\w*)|\\b${DATA}\\s+(?:estranho|suspeito|incorreto|errado)|erro\\s+de\\s+digita[cç][aã]o|incomplet\\w+|inconsist[eê]nc\\w+|\\bfavor\\b|\\brevis(?:ar|e)\\s+(?:(?:a|o|os|as)\\s+)?${DATA}\\b|(?:confirm\\w+|confer\\w+|verific\\w+|valid\\w+)\\s+com\\s+(?:o|a)\\s+(?:propriet\\S*|dono|dona|corretor\\w*)|(?:confirm\\w+|confer\\w+|revis\\w+)\\s+antes\\s+de\\s+(?:publicar|postar)`, 'i')
 const LABEL = /^[\s\W]*(?:obs\.?|observa[cç][aã]o|p\.?\s?s\.?|nota|aviso|aten[cç][aã]o)\s*[:\-–—]/iu
 // "Corretor," / "Atenção corretor:" falando com a pessoa: no começo do bloco ou de uma frase ("Ops! Corretor, …").
 const ADDRESS_START = /^[\s\W]*(?:corretor(?:a)?\s*,|aten[cç][aã]o[\s,:!-]*(?:corretor|corretora|dono|dona)\b)/iu

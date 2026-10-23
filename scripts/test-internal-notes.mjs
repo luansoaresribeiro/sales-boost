@@ -37,6 +37,77 @@ for (const t of [GOOD, 'Fale com o corretor João pelo direct e agende sua visit
   'Confirme sua visita pelo direct', 'Antes de publicar seu anúncio, tire fotos com luz natural.', 'Nota: aceita pet', '⚠️ Última unidade com vista', 'Corretor responsável: João CRECI 123', 'Me passa seu WhatsApp que te mando o preço', 'Me manda uma mensagem e confirme o valor do aluguel comigo.', 'Confirme com o corretor a disponibilidade da vaga de garagem.', 'Precisa de mais espaço? Esse apê tem 3 quartos.', 'Revise suas finanças antes de comprar: veja quanto cabe no bolso.', 'Confira a metragem real na visita!', 'Fale com o corretor Carlos pelo direct.', 'Os valores precisam de atualização? Chama no direct que a gente confirma o preço do dia.', 'Veja a planta e confira todos os detalhes. Você precisa conhecer.', 'Aviso importante: o condomínio inclui água e gás.', 'Observação: IPTU incluso no aluguel.', 'Esse apartamento precisa de um novo dono.', 'Antes de publicar nas redes, muita gente esquece de checar a documentação do imóvel.', 'Seu imóvel precisa de revisão elétrica antes de vender? Fale com a gente.', 'Pode me passar seu telefone? Te ligo hoje.', 'Me envia seu orçamento e eu te mostro as opções.', 'Me passa o seu bairro favorito que eu busco opções.', 'Para o dono do primeiro imóvel, dica de ouro.', 'Para a dona de casa que quer praticidade.', 'Verifique a documentação com um advogado antes de fechar.', '❗Ofertas até sexta, não perde', 'Inconsistência no mercado? Aqui o preço é claro.']) {
   const r = stripInternalNotes(t); assert.equal(r.text, t, t); assert.equal(r.notes.length, 0, t) }
 ok('frases boas passam idênticas')
+// QA rodada 2 (2026-10-23): listas do QA — todas as boas passam intactas, todas as ruins saem de dentro de uma legenda boa
+const good2 = [
+ '⚠️ Atenção: últimas 2 unidades com desconto até sexta!',
+ '⚠️ Confira as condições especiais de lançamento no direct.',
+ '⚠️ Confirme sua visita até quinta, as vagas são limitadas.',
+ '⚠️ Revise seu orçamento e veja se cabe: parcelas a partir de uma entrada acessível.',
+ 'Nota: o condomínio inclui academia e piscina.',
+ 'Obs: aceita financiamento e FGTS.',
+ 'Obs: valor do condomínio inclui água.',
+ 'Atenção! Esse imóvel não vai durar.',
+ 'Atenção: o valor do condomínio inclui IPTU.',
+ 'Atenção para os detalhes: piso porcelanato e armários planejados.',
+ 'Confira o tour completo no nosso perfil.',
+ 'Confira todos os detalhes e agende a sua visita antes de acabar.',
+ 'Revise com calma e venha conhecer.',
+ 'Eu amo esse apartamento, a vista é de tirar o fôlego.',
+ 'Eu mesmo visitei e recomendo, a luz é incrível.',
+ 'Recebi esse imóvel essa semana e já me apaixonei!',
+ 'Acabei de receber as chaves desse apê, vem ver!',
+ 'Não encontrei nada igual na região. Esse é único.',
+ 'Não consegui parar de olhar essa vista!',
+ 'Não consegui acreditar no preço desse apê!',
+ 'Corretor de plantão: Marcos. Chame no direct.',
+ 'Dica pro comprador: confirme a documentação antes de fechar negócio.',
+ 'Dica: verifique sempre o IPTU antes de comprar um imóvel.',
+ 'Antes de publicar seu anúncio, confira se as fotos estão boas.',
+ 'Condomínio com valor acessível e área de lazer completa.',
+ 'O preço pode ser confirmado com nosso corretor no direct.',
+ 'A metragem confirmada é de 85 m² e o valor é de ótimo custo.',
+ 'Parece um sonho, mas é real: cobertura com vista pro mar.',
+ 'Esse valor parece alto? Compare com o que oferece e veja.',
+ 'Metragem generosa: parece até uma casa!',
+ 'Preço parece baixo demais? É oportunidade real.',
+ 'Obs: preço sujeito a alteração sem aviso prévio.',
+ 'Aviso: visitas somente com hora marcada.',
+ 'PS: me chama no direct pra tirar dúvidas!',
+ 'Confirmar presença no plantão de sábado!',
+ '(confirmar horário no direct)',
+ 'Observação: confira a disponibilidade da unidade.',
+ 'Nota: valores sujeitos a confirmação de disponibilidade.',
+ 'Os dados completos você recebe no direct.',
+ 'Revise sua lista de desejos e venha ver esse apê.',
+ 'Verifique a disponibilidade no direct.',
+ 'Foto 3: a sala com luz da manhã. Foto 5: a varanda.',
+]
+const bad2 = [
+ 'Corretor, a foto 3 está escura',
+ 'Não encontrei o valor do condomínio, então deixei de fora',
+ 'Dica pro corretor: envie mais fotos da cozinha',
+ '(confirmar metragem)',
+ 'OBS INTERNA: sem preço no cadastro',
+ 'Corretor: faltou o bairro.',
+ 'Nota para o corretor: o preço não veio no cadastro.',
+ 'Não recebi o preço, então deixei de fora; confirme antes de postar.',
+ 'Eu não tinha o valor do condomínio, favor conferir.',
+ 'Aviso interno: metragem ausente.',
+ 'Obs: metragem parece errada, conferir com o proprietário.',
+ '⚠️ Confirme a metragem antes de publicar.',
+ '⚠️ Corretor, a foto está escura.',
+ 'Revise o preço antes de publicar.',
+ 'Sugiro conferir o preço antes de postar.',
+ 'Recado: o m² informado parece errado',
+ 'Antes de postar, confira se a metragem está correta.',
+ '[confirmar preço]',
+ 'Dados faltando: não tenho o preço. Pode me passar, corretor?',
+ 'Por favor, corretor, revise os dados.',
+]
+const ctx2 = t => `Apê lindo na Barra!\n\n${t}\n\n#imoveis`
+for (const t of good2) for (const f of [x => x, ctx2]) { const r = stripInternalNotes(f(t)); assert.equal(r.text, f(t), 'FALSO POSITIVO: ' + t); assert.equal(r.notes.length, 0) }
+for (const t of bad2) { const r = stripInternalNotes(ctx2(t)); assert.ok(r.notes.length, 'ESCAPOU: ' + t); assert.ok(r.text.startsWith('Apê lindo') && r.text.endsWith('#imoveis'), 'perdeu a legenda: ' + t); assert.equal(r.text.replace(/Apê lindo na Barra!|#imoveis|\s/g, ''), '', 'SOBROU: ' + t) }
+ok('listas do QA (rodada 2): boas passam, ruins saem')
 // legenda multi-parágrafo preserva a formatação quando nada sai
 { const t = 'Linha 1\n\n\nLinha 2\n- item'; assert.equal(stripInternalNotes(t).text, t); ok('sem recado: texto idêntico (inclusive espaços)') }
 // o aviso

@@ -49,14 +49,15 @@ async function resvg(): Promise<Any> {
 /** SVG (texto) → PNG com fundo transparente, maior lado = 1024 px. Sem fonte instalada: texto do SVG não aparece (use "converter texto em curvas"). */
 export async function svgToPng(svg: string, maxSide = 1024): Promise<Uint8Array | null> {
   try {
-    const { Resvg } = await resvg()
+    let Resvg: Any
+    try { ({ Resvg } = await resvg()) } catch (e) { resvgReady = null; console.error('logoCodec.svgToPng: resvg não iniciou:', e); return null }   // só a falha do initWasm zera o cache
     // Lê o tamanho do SVG ANTES de rasterizar e limita pelo MAIOR lado (um SVG 1x100000 renderizado "por largura" viraria 1024x100M).
     const probe = new Resvg(svg, { font: { loadSystemFonts: false } })
     const w = Number(probe.width), h = Number(probe.height)
     if (!(w > 0) || !(h > 0) || !isFinite(w) || !isFinite(h) || Math.max(w, h) / Math.min(w, h) > 20) { console.error('logoCodec.svgToPng: proporção/tamanho inválido', w, h); return null }
     const fitTo = w >= h ? { mode: 'width', value: maxSide } : { mode: 'height', value: maxSide }
     return new Resvg(svg, { fitTo, font: { loadSystemFonts: false } }).render().asPng()
-  } catch (e) { resvgReady = null; console.error('logoCodec.svgToPng falhou:', e); return null }
+  } catch (e) { console.error('logoCodec.svgToPng falhou (SVG inválido?):', e); return null }   // erro de SVG não invalida o resvg já iniciado
 }
 
 export interface Fetched { bytes: Uint8Array; mime: string; isSvg: boolean }

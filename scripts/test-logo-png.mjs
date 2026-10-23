@@ -38,12 +38,21 @@ t('preenchimento branco GRANDE dentro do logo fica (anel com miolo de 6% da imag
   const r = processLogoPixels(ring)
   assert.ok(r.bg_removed); assert.equal(px(r.img, 60, 60)[3], 255); assert.equal(px(r.img, 4, 4)[3], 0)
 })
-t('furo pequeno de letra ("O", "P") sai; preenchimento grande fica', () => {
-  const o = img(200, 200, WHITE, [{ x: 30, y: 30, w: 140, h: 140, c: NAVY }, { x: 90, y: 90, w: 10, h: 10, c: WHITE }, { x: 120, y: 120, w: 40, h: 25, c: WHITE }], 2)
-  const r = processLogoPixels(o)
-  assert.equal(px(r.img, 95, 95)[3], 0, 'furo de 10x10 (0,25%) vira transparente')
-  assert.equal(px(r.img, 140, 132)[3], 255, 'barra branca de 40x25 (2,5%) fica')
-  assert.equal(px(r.img, 60, 60)[3], 255)
+t('miolo de letra NÃO é apagado (rodada 2 do QA reverteu a remoção de furos): texto branco em selo/retângulo fica 100% opaco', () => {
+  // selo azul redondo com "texto" branco (blocos pequenos) sobre fundo branco
+  const sel = img(200, 200, WHITE, [])
+  for (let y = 0; y < 200; y++) for (let x = 0; x < 200; x++) if (Math.hypot(x - 100, y - 100) < 90) { const i = (y * 200 + x) * 4; sel.data[i] = 30; sel.data[i + 1] = 79; sel.data[i + 2] = 160 }
+  const letters = [[60, 85, 12, 25], [80, 85, 12, 25], [100, 85, 12, 25], [120, 85, 12, 25], [65, 120, 10, 20], [85, 120, 10, 20], [105, 120, 10, 20]]
+  for (const [lx, ly, lw, lh] of letters) for (let y = ly; y < ly + lh; y++) for (let x = lx; x < lx + lw; x++) { const i = (y * 200 + x) * 4; sel.data[i] = sel.data[i + 1] = sel.data[i + 2] = 255 }
+  const r = processLogoPixels(sel)
+  assert.equal(px(r.img, 2, 2)[3], 0, 'fundo branco sai')
+  let tot = 0, gone = 0
+  for (const [lx, ly, lw, lh] of letters) for (let y = ly; y < ly + lh; y++) for (let x = lx; x < lx + lw; x++) { tot++; if (px(r.img, x, y)[3] < 255) gone++ }
+  assert.equal(gone, 0, `${gone}/${tot} pixels de letra viraram buraco`)
+  // retângulo vermelho com letras brancas
+  const ret = img(300, 120, WHITE, [{ x: 10, y: 10, w: 280, h: 100, c: [192, 57, 43] }, { x: 40, y: 40, w: 14, h: 40, c: WHITE }, { x: 70, y: 40, w: 14, h: 40, c: WHITE }, { x: 100, y: 40, w: 30, h: 8, c: WHITE }])
+  const r2 = processLogoPixels(ret)
+  assert.equal(px(r2.img, 47, 60)[3], 255); assert.equal(px(r2.img, 77, 60)[3], 255); assert.equal(px(r2.img, 110, 44)[3], 255)
 })
 t('QA: 1x1, 3x3 e 0x0 não quebram', () => { for (const [w, h] of [[1, 1], [3, 3], [0, 0], [4, 4]]) processLogoPixels(img(w, h, WHITE)) })
 t('contraste por percentil: casinha laranja + letras azul-escuras no slide ESCURO ganha pílula clara', () => {

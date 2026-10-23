@@ -180,8 +180,12 @@ function chrome(c: Ctx, f: SlideFields, b: SlideBrand, logo: string | null, page
     s += `<image href="${logo}" x="${M}" y="64" width="260" height="76" preserveAspectRatio="xMinYMid meet"/>`
     hBox = [lo.backdrop ? 410 : 380, RIGHT]
   } else {
-    const name = fitText(clean(f.name || b.name || '').toUpperCase().slice(0, 40), 480, { maxLines: 1 }, 34, 20, c.m)
-    s += blockSvg(c, name, M, 78, c.primary, true, 'start', [M, 570])
+    // "Marca" (qualquer caixa) é o nome padrão de quem não sabe o nome da empresa: nunca imprimir.
+    const nm = clean(f.name || b.name || '').trim()
+    if (nm && nm.toLowerCase() !== 'marca') {
+      const name = fitText(nm.toUpperCase().slice(0, 40), 480, { maxLines: 1 }, 34, 20, c.m)
+      s += blockSvg(c, name, M, 78, c.primary, true, 'start', [M, 570])
+    }
     hBox = [600, RIGHT]
   }
   if (handle) {
