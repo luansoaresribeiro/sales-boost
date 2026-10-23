@@ -5,7 +5,7 @@
 //
 // Libs: imagescript@1.3.0 (decodifica PNG/JPEG, codifica PNG — sem custo) e o mesmo
 // resvg-wasm@2.6.2 que o render-format já usa (SVG → PNG).
-import { isSafeLogoUrl, type Rgba } from './logoPng.ts'
+import { isSafeLogoUrl, imageDims, dimsOk, type Rgba } from './logoPng.ts'
 
 export const MAX_LOGO_BYTES = 5 * 1024 * 1024   // mesmo teto do bucket post-images
 export const MAX_SVG_BYTES = 500 * 1024
@@ -20,6 +20,8 @@ async function lib(): Promise<Any> {
 
 /** PNG/JPEG → pixels RGBA. null se o formato não decodifica (ex.: WebP, GIF animado, arquivo quebrado). */
 export async function decodeImage(bytes: Uint8Array): Promise<Rgba | null> {
+  // Tamanho pelo CABEÇALHO antes de decodificar: PNG/JPEG enorme (ex.: 12000x12000) não pode estourar a memória da função.
+  if (!dimsOk(imageDims(bytes))) { console.error('logoCodec.decodeImage: tamanho fora do limite ou formato não suportado'); return null }
   try {
     const { decode, Image } = await lib()
     const img = await decode(bytes, true)
@@ -44,11 +46,16 @@ async function resvg(): Promise<Any> {
   })()
 }
 
-/** SVG (texto) → PNG com fundo transparente, 1024 px de largura. Sem fonte instalada: texto do SVG não aparece (use "converter texto em curvas"). */
-export async function svgToPng(svg: string, width = 1024): Promise<Uint8Array | null> {
+/** SVG (texto) → PNG com fundo transparente, maior lado = 1024 px. Sem fonte instalada: texto do SVG não aparece (use "converter texto em curvas"). */
+export async function svgToPng(svg: string, maxSide = 1024): Promise<Uint8Array | null> {
   try {
     const { Resvg } = await resvg()
-    return new Resvg(svg, { fitTo: { mode: 'width', value: width }, font: { loadSystemFonts: false } }).render().asPng()
+    // Lê o tamanho do SVG ANTES de rasterizar e limita pelo MAIOR lado (um SVG 1x100000 renderizado "por largura" viraria 1024x100M).
+    const probe = new Resvg(svg, { font: { loadSystemFonts: false } })
+    const w = Number(probe.width), h = Number(probe.height)
+    if (!(w > 0) || !(h > 0) || !isFinite(w) || !isFinite(h) || Math.max(w, h) / Math.min(w, h) > 20) { console.error('logoCodec.svgToPng: proporção/tamanho inválido', w, h); return null }
+    const fitTo = w >= h ? { mode: 'width', value: maxSide } : { mode: 'height', value: maxSide }
+    return new Resvg(svg, { fitTo, font: { loadSystemFonts: false } }).render().asPng()
   } catch (e) { resvgReady = null; console.error('logoCodec.svgToPng falhou:', e); return null }
 }
 

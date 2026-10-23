@@ -71,17 +71,17 @@ async function toDataUri(url: string): Promise<string | null> {
 // nome da marca em texto); (2) logo_meta.src === logo atual E png_url → o PNG transparente preparado;
 // (3) senão o logo de sempre (brand.logoUrl), idêntico a antes. logo_meta só vale se src === logo atual
 // (anti logo velha) e a leitura é tolerante: sem a coluna/migration cai no (3).
-interface ResolvedLogo { url: string | null; foto: boolean; prepared: boolean; luma: number | null; aspect: number | null }
+interface ResolvedLogo { url: string | null; foto: boolean; prepared: boolean; luma: number | null; lo: number | null; hi: number | null; aspect: number | null }
 async function resolveLogo(admin: ReturnType<typeof createClient>, companyId: string, brand: { logoUrl?: string }): Promise<ResolvedLogo> {
-  const legacy: ResolvedLogo = { url: brand.logoUrl ?? null, foto: false, prepared: false, luma: null, aspect: null }
+  const legacy: ResolvedLogo = { url: brand.logoUrl ?? null, foto: false, prepared: false, luma: null, lo: null, hi: null, aspect: null }
   try {
     if (!brand.logoUrl) return legacy
     const { data, error } = await admin.from('brand_dna').select('logo_meta').eq('company_id', companyId).maybeSingle()
     if (error || !data) return legacy
     const m = usableLogoMeta((data as { logo_meta?: unknown }).logo_meta, brand.logoUrl)
     if (!m) return legacy
-    if (m.kind === 'foto') return { url: null, foto: true, prepared: false, luma: null, aspect: null }
-    if (m.png_url) return { url: m.png_url, foto: false, prepared: true, luma: m.luma, aspect: m.w && m.h ? m.w / m.h : null }
+    if (m.kind === 'foto') return { url: null, foto: true, prepared: false, luma: null, lo: null, hi: null, aspect: null }
+    if (m.png_url) return { url: m.png_url, foto: false, prepared: true, luma: m.luma, lo: m.luma_lo ?? null, hi: m.luma_hi ?? null, aspect: m.w && m.h ? m.w / m.h : null }
     return legacy
   } catch (e) { console.error('render-format: resolveLogo falhou, usando o logo de sempre', e); return legacy }
 }
@@ -230,11 +230,7 @@ function svgPhoto(f: F, b: Brand, bg: string | null, logo: string | null, sticke
     const pad = Math.round(14 * s)
     logoPill = `<rect x="${Math.round(lx + logoW / 2 - dw / 2 - pad)}" y="${Math.round(safe.top + logoH / 2 - dh / 2 - pad)}" width="${Math.round(dw + 2 * pad)}" height="${Math.round(dh + 2 * pad)}" rx="${Math.round(18 * s)}" fill="${lo.backdrop}" fill-opacity="0.92"/>`
   }
-  // Sem logo (ou imagem de logo que é uma FOTO): o nome da marca em texto no canto, como no slide.
-  const nm = lo.showName && !logo ? stripEmoji(String(b.name ?? '')).toUpperCase().slice(0, 28) : ''
-  const nameSz = Math.max(18, Math.min(Math.round(34 * s), Math.floor((maxW * 0.55) / Math.max(1, nm.length * 0.68))))
-  const nameSvg = nm ? `<text x="${W - safe.right}" y="${safe.top + nameSz}" font-family="Poppins" font-size="${nameSz}" font-weight="700" fill="#ffffff" stroke="#000000" stroke-opacity="0.35" stroke-width="${Math.max(2, Math.round(4 * s))}" stroke-linejoin="round" paint-order="stroke" text-anchor="end">${esc(nm)}</text>` : ''
-  const logoSvg = logoPill + (logo ? `<image href="${logo}" x="${lx}" y="${safe.top}" width="${logoW}" height="${logoH}" preserveAspectRatio="xMidYMid meet"/>` : '') + nameSvg
+  const logoSvg = logoPill + (logo ? `<image href="${logo}" x="${lx}" y="${safe.top}" width="${logoW}" height="${logoH}" preserveAspectRatio="xMidYMid meet"/>` : '')
   const stW = Math.round(W * 0.24)
   const stickerSvg = sticker ? `<image href="${sticker}" x="${safe.left}" y="${safe.top}" width="${stW}" height="${stW}" preserveAspectRatio="xMidYMid meet"/>` : ''
   // Selo no topo (opcional, ex.: kit grátis): pílula na cor da marca pra
@@ -243,11 +239,23 @@ function svgPhoto(f: F, b: Brand, bg: string | null, logo: string | null, sticke
   const tagSvg = f.tag && !sticker
     ? `<rect x="${safe.left}" y="${safe.top}" width="${tw}" height="${th}" rx="${Math.round(th / 2)}" fill="${b.primary}"/>` + block([f.tag.toUpperCase()], safe.left + Math.round(32 * s), safe.top + Math.round(th * 0.66), ts, '#000', 700, 0)
     : ''
+  // Sem logo (ou imagem de logo que é uma FOTO): o nome da marca em texto no canto superior direito, como no slide.
+  // Nunca invade o selo/sticker do canto esquerdo: a largura disponível desconta o que já ocupa a linha; se não couber nem
+  // na letra mínima, encurta o texto (com "…") em vez de sobrepor.
+  const nmRaw = lo.showName && !logo ? stripEmoji(String(b.name ?? '')).toUpperCase().trim().slice(0, 40) : ''
+  let nameSvg = ''
+  if (nmRaw) {
+    const gapN = Math.round(24 * s), used = sticker ? stW + gapN : f.tag ? tw + gapN : 0, availW = Math.min(maxW * 0.6, maxW - used), minSz = Math.max(16, Math.round(20 * s))
+    let nameSz = Math.min(Math.round(34 * s), Math.floor(availW / Math.max(1, nmRaw.length * 0.68)))
+    let nm = nmRaw
+    if (nameSz < minSz) { nameSz = minSz; const maxCh = Math.floor(availW / (minSz * 0.68)); nm = maxCh >= 4 ? nmRaw.slice(0, maxCh - 1).trimEnd() + '…' : '' }
+    if (nm) nameSvg = `<text x="${W - safe.right}" y="${safe.top + nameSz}" font-family="Poppins" font-size="${nameSz}" font-weight="700" fill="#ffffff" stroke="#000000" stroke-opacity="0.35" stroke-width="${Math.max(2, Math.round(4 * s))}" stroke-linejoin="round" paint-order="stroke" text-anchor="end">${esc(nm)}</text>`
+  }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
 <defs><linearGradient id="scrim" x1="0" y1="0" x2="0" y2="1"><stop offset="${big ? 0.25 : 0.35}" stop-color="#000" stop-opacity="0"/><stop offset="${big ? 0.7 : 1}" stop-color="#000" stop-opacity="${big ? 0.8 : 0.9}"/><stop offset="1" stop-color="#000" stop-opacity="0.9"/></linearGradient></defs>
 ${bg ? `<image href="${bg}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/>` : `<rect width="${W}" height="${H}" fill="${b.bg || '#0E0B0A'}"/>`}
 <rect width="${W}" height="${H}" fill="url(#scrim)"/>
-${logoSvg}${stickerSvg}${tagSvg}
+${logoSvg}${nameSvg}${stickerSvg}${tagSvg}
 ${overlay}
 </svg>`
   return { svg, w: W, h: H }
@@ -365,15 +373,16 @@ function svgReview(f: F, b: Brand): { svg: string; w: number; h: number } {
 // TEMPLATES precisa espelhar exatamente isso). Sem match, cai em 'photo' —
 // é o mais genérico/flexível. 'slide' é interno (carrossel de slides do
 // creative-generate), não aparece na escolha de template do dono.
-interface LogoCtx { prepared: boolean; luma: number | null; aspect: number | null; showName: boolean }
-const NO_LOGO_CTX: LogoCtx = { prepared: false, luma: null, aspect: null, showName: false }
+interface LogoCtx { prepared: boolean; luma: number | null; lo: number | null; hi: number | null; aspect: number | null; showName: boolean }
+const NO_LOGO_CTX: LogoCtx = { prepared: false, luma: null, lo: null, hi: null, aspect: null, showName: false }
 function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, productImg: string | null, W: number, H: number, safe: Safe, lc: LogoCtx = NO_LOGO_CTX): { svg: string; w: number; h: number; overflow?: boolean } {
   // Pílula atrás só com logo PNG preparado (luma conhecido); logo de sempre fica idêntica a antes.
-  const pill = (bgLuma: number | null) => logo && lc.prepared ? logoBackdrop(lc.luma, bgLuma) : null
+  const pill = (bgLuma: number | null) => logo && lc.prepared ? logoBackdrop({ lo: lc.lo, hi: lc.hi, mean: lc.luma }, bgLuma) : null
   const photoPill = (): string | null => {
-    if (!logo || !lc.prepared || typeof lc.luma !== 'number') return null
+    if (!logo || !lc.prepared || (lc.luma == null && lc.lo == null)) return null
     if (!bg) return pill(hexLuma(b.bg || '#0E0B0A'))
-    return lc.luma > 0.75 ? '#111111' : lc.luma < 0.15 ? '#ffffff' : null   // foto de fundo: só os extremos (claro/escuro demais)
+    const lo = lc.lo ?? lc.luma!, hi = lc.hi ?? lc.luma!
+    return lo > 0.75 ? '#111111' : hi < 0.15 ? '#ffffff' : null   // foto de fundo: só os extremos (claro/escuro demais)
   }
   switch (template) {
     case 'tweet': return svgTweet(f, b, logo, lc.prepared, pill(hexLuma((f.theme || 'dark') === 'dark' ? '#15202b' : '#ffffff')), lc.aspect)
@@ -462,13 +471,14 @@ Deno.serve(async (req) => {
     // Avatar do Tweet Print = logo real da empresa (mesmo asset do Kit da
     // Marca em Estilos e Visuais) — sem logo, cai pras iniciais na svgTweet.
     const wantsLogo = template === 'photo' || template === 'tweet' || template === 'slide'
-    const rl: ResolvedLogo = wantsLogo ? await resolveLogo(admin, companyId, brand) : { url: null, foto: false, prepared: false, luma: null, aspect: null }
+    const rl: ResolvedLogo = wantsLogo ? await resolveLogo(admin, companyId, brand) : { url: null, foto: false, prepared: false, luma: null, lo: null, hi: null, aspect: null }
     let logoData = rl.url ? await toDataUri(rl.url) : null
     let prepared = rl.prepared
     if (!logoData && rl.prepared && brand.logoUrl) { logoData = await toDataUri(brand.logoUrl); prepared = false }   // PNG preparado indisponível → logo de sempre
     // Nome da marca em texto (card de foto sem logo): só quando o chamador mandou o nome de verdade (não o padrão "Marca").
-    const showName = wantsLogo && !logoData && !!(body.brand as Partial<Brand> | undefined)?.name
-    const logoCtx: LogoCtx = { prepared, luma: rl.luma, aspect: rl.aspect, showName }
+    const sentName = String((body.brand as Partial<Brand> | undefined)?.name ?? '').trim()
+    const showName = wantsLogo && !logoData && !!sentName && sentName.toLowerCase() !== 'marca'   // 'Marca' = nome padrão de quem não sabe o nome: nunca imprimir
+    const logoCtx: LogoCtx = { prepared, luma: rl.luma, lo: rl.lo, hi: rl.hi, aspect: rl.aspect, showName }
     const stickerData = template === 'photo' && body.sticker ? await toDataUri(String(body.sticker)) : null
     // Foco no Produto: a foto vem de fields.productImage (URL real da aba
     // Produtos, escolhida no FormatStudio ou passada pelo Diretor Criativo).

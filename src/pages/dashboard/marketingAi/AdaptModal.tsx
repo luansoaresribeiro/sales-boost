@@ -51,9 +51,12 @@ export default function AdaptModal({ post, companyId, onClose, onDone }: { post:
       supabase.from('brand_dna').select('kit, logo_url').eq('company_id', companyId).maybeSingle(),
       supabase.from('marketing_ai_formats').select('*').eq('active', true),
     ])
+    // Nome real da empresa pro card (o render-format ignora o nome padrão "Marca"). Tolerante: sem nome, segue como antes.
+    let bizName = ''
+    try { const { data: co } = await supabase.from('companies').select('business_name').eq('id', companyId).maybeSingle(); bizName = String((co as { business_name?: string | null } | null)?.business_name ?? '').trim() } catch { /* sem nome */ }
     const kit = (bd?.kit as { colors?: { primary?: string[]; accent?: string[]; text?: string; bg?: string }; typography?: { heading?: string } } | null) ?? null
     const c = kit?.colors ?? {}
-    setBrand({ primary: c.primary?.[0] || ORANGE, name: 'Marca', primary2: c.primary?.[1], accent: c.accent?.[0], accent2: c.accent?.[1], text: c.text, bg: c.bg, logoUrl: preferredLogo(bd?.logo_url as string | null, await fetchLogoMeta(companyId)) ?? undefined, heading: kit?.typography?.heading })
+    setBrand({ primary: c.primary?.[0] || ORANGE, name: bizName || 'Marca', primary2: c.primary?.[1], accent: c.accent?.[0], accent2: c.accent?.[1], text: c.text, bg: c.bg, logoUrl: preferredLogo(bd?.logo_url as string | null, await fetchLogoMeta(companyId)) ?? undefined, heading: kit?.typography?.heading })
     setCustomFmts(((cf ?? []) as { id: string; name: string; w: number; h: number }[]).map(x => ({ key: 'custom:' + x.id, name: x.name, platform: 'Custom', placement: '', ratio: `${x.w}:${x.h}`, w: x.w, h: x.h, safe: { top: 0.06, right: 0.08, bottom: 0.09, left: 0.08 } })))
   }, [companyId])
   useEffect(() => { load() }, [load])

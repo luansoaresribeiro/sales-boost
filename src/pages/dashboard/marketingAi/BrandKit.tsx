@@ -354,7 +354,7 @@ export default function BrandKit({ companyId }: { companyId: string }) {
           </div>
         </div>
         {isFoto && <div style={{ marginTop: '10px', padding: '9px 13px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '9px', fontSize: '11.5px', color: '#FBBF24', lineHeight: 1.55 }}>{X.warnFoto}</div>}
-        {meta && !isFoto && !meta.png_url && <div style={{ marginTop: '10px', padding: '9px 13px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '9px', fontSize: '11.5px', color: '#FBBF24', lineHeight: 1.55 }}>{X.warnBg}</div>}
+        {meta && !isFoto && !meta.png_url && !procWarn && <div style={{ marginTop: '10px', padding: '9px 13px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '9px', fontSize: '11.5px', color: '#FBBF24', lineHeight: 1.55 }}>{X.warnBg}</div>}
         {procWarn && <div style={{ marginTop: '10px', padding: '9px 13px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '9px', fontSize: '11.5px', color: '#FBBF24', lineHeight: 1.55 }}>{procWarn}</div>}
         {meta && !isFoto && meta.png_url && !preparing && <div style={{ marginTop: '10px', fontSize: '11.5px', color: GREEN }}>{meta.bg_removed ? X.ready : X.readyKept}</div>}
         {(logoMsg || readingLogo || preparing) && (

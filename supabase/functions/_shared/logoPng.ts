@@ -19,8 +19,10 @@ const PATCH_TOL = 26       // o próprio canto precisa ser liso (senão é foto)
 const CORE_TOL = 16        // até aqui o pixel é fundo puro (ruído de JPEG incluso)
 const SOLID = 60           // pixel a esta distância do fundo já é "logo de verdade"
 const MAX_REMOVED = 0.97   // se o fundo cobriria quase a imagem toda, não mexe
+const HOLE_AREA = 0.02     // ilha de cor-de-fundo (miolo de "O"/"P") menor que 2% da imagem...
+const HOLE_SIDE = 0.35     // ...e com caixa menor que 35% do lado maior = furo de letra, não desenho
 
-export interface LogoResult { img: Rgba; bg_removed: boolean; luma: number | null }
+export interface LogoResult { img: Rgba; bg_removed: boolean; luma: number | null; luma_lo: number | null; luma_hi: number | null }
 
 // ── redução (média por caixa, com alpha pré-multiplicado) ──────────────────────────────────
 export function downscale(img: Rgba, maxSide = LOGO_MAX_SIDE): Rgba {
@@ -77,6 +79,20 @@ export function meanLuma(img: Rgba): number | null {
   return n ? Math.round((sum / n) * 1000) / 1000 : null
 }
 
+/** Luminância dos pixels opacos nos percentis 20 e 80: o "escuro" e o "claro" relevantes do logo (a média engana: ícone laranja + letras azul-escuras dá média média). */
+export function lumaRange(img: Rgba): { lo: number; hi: number } | null {
+  const lin = (v: number) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4) }
+  const hist = new Uint32Array(1001)
+  let n = 0
+  for (let i = 0; i < img.data.length; i += 4) {
+    if (img.data[i + 3] < 128) continue
+    hist[Math.round((0.2126 * lin(img.data[i]) + 0.7152 * lin(img.data[i + 1]) + 0.0722 * lin(img.data[i + 2])) * 1000)]++; n++
+  }
+  if (!n) return null
+  const at = (q: number) => { let acc = 0; const target = Math.ceil(n * q); for (let b = 0; b <= 1000; b++) { acc += hist[b]; if (acc >= target) return b / 1000 } return 1 }
+  return { lo: at(0.2), hi: at(0.8) }
+}
+
 /**
  * Tira o fundo liso. Devolve:
  *  - { bg_removed:false } com a MESMA imagem se os cantos já são transparentes;
@@ -114,6 +130,24 @@ export function removeFlatBackground(src: Rgba): { img: Rgba; bg_removed: boolea
     if (y < h - 1) seed(x, y + 1)
   }
   if (removed === 0) return { img: src, bg_removed: false }
+  // Furos de letra ("O", "P", "A"): ilhas pequenas de cor-de-fundo totalmente cercadas por desenho. Ficam brancas no meio
+  // do logo em fundo escuro, então saem também. Preenchimento grande (letra branca, barra, miolo de ícone) fica.
+  {
+    const seen = new Uint8Array(N), maxSide = Math.max(w, h)
+    for (let p0 = 0; p0 < N; p0++) {
+      if (state[p0] || seen[p0] || dist(src.data, p0 * 4, br, bgc, bb) > CORE_TOL) continue
+      const comp = [p0]; seen[p0] = 1
+      let x0 = p0 % w, x1 = x0, y0 = (p0 - x0) / w, y1 = y0
+      for (let k = 0; k < comp.length; k++) {
+        const p = comp[k], x = p % w, y = (p - x) / w
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
+        for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1]) {
+          if (q >= 0 && !state[q] && !seen[q] && dist(src.data, q * 4, br, bgc, bb) <= CORE_TOL) { seen[q] = 1; comp.push(q) }
+        }
+      }
+      if (comp.length / N < HOLE_AREA && Math.max(x1 - x0 + 1, y1 - y0 + 1) < HOLE_SIDE * maxSide) for (const p of comp) { state[p] = 1; removed++ }
+    }
+  }
   if (removed / N > MAX_REMOVED) return null
 
   // fundo puro → transparente
@@ -168,18 +202,19 @@ export function processLogoPixels(src: Rgba): LogoResult | null {
   const small = downscale(src)
   const r = removeFlatBackground(small)
   if (!r) return null
-  return { img: r.img, bg_removed: r.bg_removed, luma: meanLuma(r.img) }
+  const rg = lumaRange(r.img)
+  return { img: r.img, bg_removed: r.bg_removed, luma: meanLuma(r.img), luma_lo: rg?.lo ?? null, luma_hi: rg?.hi ?? null }
 }
 
 // ── metadados que vão pro banco (brand_dna.logo_meta) ──────────────────────────────────────
-export interface LogoMeta { src: string; png_url: string | null; kind: 'logo' | 'foto'; luma: number | null; bg_removed: boolean; w?: number; h?: number }
+export interface LogoMeta { src: string; png_url: string | null; kind: 'logo' | 'foto'; luma: number | null; luma_lo?: number | null; luma_hi?: number | null; bg_removed: boolean; w?: number; h?: number }
 
 /** O PNG só vale se foi feito PARA a logo que está no Kit agora (anti logo velha). */
 export function usableLogoMeta(meta: unknown, currentLogoUrl: string | null | undefined): LogoMeta | null {
   const m = meta as Partial<LogoMeta> | null
   if (!m || typeof m !== 'object' || !currentLogoUrl || m.src !== currentLogoUrl) return null
   if (m.kind !== 'logo' && m.kind !== 'foto') return null
-  return { src: m.src, png_url: typeof m.png_url === 'string' ? m.png_url : null, kind: m.kind, luma: typeof m.luma === 'number' ? m.luma : null, bg_removed: !!m.bg_removed, w: typeof m.w === 'number' ? m.w : undefined, h: typeof m.h === 'number' ? m.h : undefined }
+  return { src: m.src, png_url: typeof m.png_url === 'string' ? m.png_url : null, kind: m.kind, luma: typeof m.luma === 'number' ? m.luma : null, luma_lo: typeof m.luma_lo === 'number' ? m.luma_lo : null, luma_hi: typeof m.luma_hi === 'number' ? m.luma_hi : null, bg_removed: !!m.bg_removed, w: typeof m.w === 'number' ? m.w : undefined, h: typeof m.h === 'number' ? m.h : undefined }
 }
 
 // ── URL colada pelo dono: só https público (nada de IP, localhost, rede interna) ─────────────
@@ -187,7 +222,7 @@ export function isSafeLogoUrl(raw: string): boolean {
   let u: URL
   try { u = new URL(raw) } catch { return false }
   if (u.protocol !== 'https:' || u.username || u.password) return false
-  const host = u.hostname.toLowerCase()
+  const host = u.hostname.toLowerCase().replace(/\.+$/, '')   // "localhost." e "x.internal." são o mesmo host
   if (!host.includes('.') || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return false
   if (/^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(':') || host.startsWith('[')) return false   // IP literal v4/v6
   if (/^\d+$/.test(host.replace(/\./g, '')) ) return false
@@ -203,10 +238,46 @@ export function hexLuma(hex: string): number | null {
   return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
 }
 
-/** Cor da pílula discreta atrás da logo quando ela some no fundo; null = não precisa. */
-export function logoBackdrop(logoLuma: number | null | undefined, bgLuma: number | null): '#ffffff' | '#111111' | null {
-  if (typeof logoLuma !== 'number' || bgLuma == null) return null
-  const ratio = (Math.max(logoLuma, bgLuma) + 0.05) / (Math.min(logoLuma, bgLuma) + 0.05)
-  if (ratio >= 2.2) return null
-  return logoLuma > 0.4 ? '#111111' : '#ffffff'
+const cr = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+/**
+ * Cor da pílula discreta atrás da logo quando alguma parte relevante dela some no fundo; null = não precisa.
+ * `logo` = { lo, hi } (percentis 20/80 da luminância dos pixels opacos) ou um número só (meta antigo, só a média).
+ * A pílula é a cor (branca ou quase preta) que mais contrasta com o PIOR dos dois extremos do logo.
+ */
+export function logoBackdrop(logo: number | { lo?: number | null; hi?: number | null; mean?: number | null } | null | undefined, bgLuma: number | null): '#ffffff' | '#111111' | null {
+  if (bgLuma == null || logo == null) return null
+  let lo: number, hi: number
+  if (typeof logo === 'number') { lo = hi = logo } else {
+    const m = typeof logo.mean === 'number' ? logo.mean : null
+    const a = typeof logo.lo === 'number' ? logo.lo : m, b = typeof logo.hi === 'number' ? logo.hi : m
+    if (a == null || b == null) return null
+    lo = a; hi = b
+  }
+  if (Math.min(cr(lo, bgLuma), cr(hi, bgLuma)) >= 2.2) return null
+  const WHITE = 1, DARK = 0.006
+  return Math.min(cr(lo, WHITE), cr(hi, WHITE)) >= Math.min(cr(lo, DARK), cr(hi, DARK)) ? '#ffffff' : '#111111'
 }
+
+// ── tamanho da imagem lido do CABEÇALHO (antes de decodificar): PNG 12000x12000 não pode derrubar a função ──
+export const MAX_IMG_SIDE = 8000
+export const MAX_IMG_PIXELS = 40_000_000
+/** Largura x altura de PNG (IHDR) ou JPEG (SOF) sem decodificar. null = formato que não é PNG/JPEG ou cabeçalho quebrado. */
+export function imageDims(b: Uint8Array): { w: number; h: number; type: 'png' | 'jpeg' } | null {
+  const u32 = (i: number) => ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0
+  if (b.length >= 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return { w: u32(16), h: u32(20), type: 'png' }
+  if (b.length >= 4 && b[0] === 0xff && b[1] === 0xd8) {
+    let i = 2
+    while (i + 9 < b.length) {
+      if (b[i] !== 0xff) { i++; continue }
+      const m = b[i + 1]
+      if (m === 0xff) { i++; continue }
+      if (m === 0xd8 || m === 0x01 || (m >= 0xd0 && m <= 0xd7)) { i += 2; continue }
+      const len = (b[i + 2] << 8) | b[i + 3]
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return { h: (b[i + 5] << 8) | b[i + 6], w: (b[i + 7] << 8) | b[i + 8], type: 'jpeg' }
+      if (len < 2) return null
+      i += 2 + len
+    }
+  }
+  return null
+}
+export const dimsOk = (d: { w: number; h: number } | null): boolean => !!d && d.w > 0 && d.h > 0 && d.w <= MAX_IMG_SIDE && d.h <= MAX_IMG_SIDE && d.w * d.h <= MAX_IMG_PIXELS

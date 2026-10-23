@@ -506,6 +506,33 @@ avatar do Print de Tweet cortava o logo (`slice` + círculo).
   só foram exercitados com o equivalente do npm (mesmo código) — o ambiente de trabalho bloqueia
   deno.land/esm.sh. Conferir no primeiro `process_logo` real (a função devolve erro tratável).
 
+**QA rodada 1 (2026-10-23) — correções**
+
+- `internalNotes.ts` refeito por **contexto**, não por palavra solta: o sinal de recado é a IA falando com quem publica
+  (1ª pessoa sobre os dados, vocativo, ordem de revisão, dado que "precisa ser conferido", rótulo "Obs.:/Nota:/PS:" +
+  estranheza de dado). Saíram as regras "antes de publicar" solta, "para o dono/corretor" solto, "precisa de revisão" solto
+  e "me passa + dado" (apagavam legenda boa: "Antes de publicar seu anúncio, tire fotos…", "Para o dono do primeiro imóvel…",
+  "Me passa seu WhatsApp que te mando o preço"). Todas as frases do QA estão em `scripts/test-internal-notes.mjs`.
+  Limitação: "Pode me passar a metragem exata?" sozinho (sem vocativo) agora passa.
+- **`item-videos` × recado da IA (divergência conhecida):** o `keepQueroNotice` mantém só do prefixo do QUERO em diante.
+  O `catalog-package` põe o recado DEPOIS do aviso do QUERO (então sobrevive). Mas o `item-videos` só reescreve `reasoning`
+  de peças de **vídeo** do `creative-generate` (`plan.piece_id`); o `catalog-package` não gera vídeo nem peça ligada a
+  `video_tours`, então o caso não ocorre. Se um dia o pacote passar a ter vídeo, o recado se perde ali.
+- `render-format`: o nome padrão **"Marca"** (qualquer caixa) nunca é impresso; o `AdaptModal` agora manda o nome real da
+  empresa (`companies.business_name`, tolerante). O nome no canto desconta selo/sticker e encolhe/encurta com "…" (sem sobrepor).
+- `svgToPng`: lê o tamanho do SVG antes e limita pelo MAIOR lado (1024); proporção > 20:1 ou tamanho inválido → recusa
+  (SVG 1x100000 não estoura memória). `decodeImage`: tamanho lido do cabeçalho PNG/JPEG antes de decodificar; recusa
+  > 8000 px de lado ou > 40 MP (PNG 12000x12000 decodificava em 7 s e 2 GB).
+- `isSafeLogoUrl` ignora ponto final no host (`localhost.`, `x.internal.`).
+- Tela do Kit: com WebP aparece só o aviso de formato (não o de "fundo não liso").
+- **Furo de letra:** ilhas pequenas (< 2% da imagem, caixa < 35% do lado maior) de cor-de-fundo cercadas por desenho
+  saem junto com o fundo (miolo do "O"/"P"); preenchimento grande (letra/barra branca) fica. Heurística: um preenchimento
+  branco pequeno e fechado (ex.: ponto do "i") também some.
+- **Contraste por percentil:** `logo_meta` ganha `luma_lo`/`luma_hi` (p20/p80 dos pixels opacos; `luma` média continua).
+  A pílula usa o pior dos dois extremos contra o fundo e escolhe branco ou quase preta pelo que mais contrasta. Meta
+  antigo (só `luma`) segue a regra de antes. Casinha laranja + letras azul-escuras no slide escuro ganha pílula clara.
+- Conhecido: SVG com filtro pesado (feTurbulence) leva ~1,8 s no resvg (sem timeout possível no wasm síncrono).
+
 ### 2. Rótulos chegam em `posts` na publicação
 
 `agent-actions` (insert em `posts` a partir da peça aprovada, ~linha 365): um **segundo** bloco

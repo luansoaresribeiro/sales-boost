@@ -192,7 +192,7 @@ async function processLogo(admin: ReturnType<typeof createClient>, anthropicKey:
   const fromSvgText = !!svgPng && !input.url
   const src = fromSvgText ? pngUrl! : url
   const dims = r ? { w: r.img.width, h: r.img.height } : pngUrl ? { w: Math.min(img.width, 1024), h: Math.round(img.height * Math.min(1, 1024 / Math.max(img.width, img.height))) } : {}
-  const meta: LogoMeta = { src, png_url: pngUrl, kind: 'logo', luma: r?.luma ?? null, bg_removed: !!r?.bg_removed, ...dims }
+  const meta: LogoMeta = { src, png_url: pngUrl, kind: 'logo', luma: r?.luma ?? null, luma_lo: r?.luma_lo ?? null, luma_hi: r?.luma_hi ?? null, bg_removed: !!r?.bg_removed, ...dims }
   return { meta, colors, logo_url: fromSvgText ? pngUrl! : undefined, warning: r ? iaWarn : 'fundo' }
 }
 
