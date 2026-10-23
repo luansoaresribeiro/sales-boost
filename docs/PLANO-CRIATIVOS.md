@@ -487,10 +487,10 @@ avatar do Print de Tweet cortava o logo (`slice` + círculo).
 - **Pílula no "photo" com foto de fundo:** não dá pra medir a luminância da foto no servidor, então a
   pílula só entra quando o logo é muito claro (> 0,75) ou muito escuro (< 0,15). Em fundo liso do
   kit a regra é a mesma dos slides.
-- **Tweet com logo antigo (sem `logo_meta`):** continua como antes (círculo com corte) no servidor,
-  pra garantir "idêntico a antes" pros clientes reais; só o logo preparado sai sem corte. A
-  pré-visualização na tela já usa `contain` sem corte pra todos — pode diferir do servidor
-  até o logo ser preparado.
+- **Tweet com logo antigo (sem `logo_meta`):** *(ajuste do dono, 2026-10-23: "nunca corta nem distorce a logo")* também
+  sai com `meet` numa caixa sem círculo/corte, igual ao preparado (sem pílula, pois falta a luminância). É a ÚNICA
+  mudança pra logos antigas: slide e card de foto continuam idênticos a antes. (Antes do ajuste o tweet legado
+  mantinha o círculo com `slice`.) Um JPG com fundo branco aparece como quadrado branco no tweet escuro até o logo ser preparado.
 - **`AdaptModal`** manda o PNG preparado como `logoUrl` (o servidor o trata como logo comum, sem
   pílula); logo-foto vira "sem logo".
 - **Logo = quadrado de cor lisa com letra branca** (ex.: ícone de app): os 4 cantos têm a mesma cor, então o

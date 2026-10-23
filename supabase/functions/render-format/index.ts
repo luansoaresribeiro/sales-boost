@@ -149,16 +149,15 @@ function svgTweet(f: F, b: Brand, logoData: string | null, prepared = false, bac
   const bodyY = 340, afterBody = bodyY + tl.length * 60 + 30
   // Avatar = logo real da empresa (Estilos e Visuais → Kit da Marca), quando
   // existe. Sem logo, cai pras iniciais na cor primária — nunca inventa foto.
-  // Logo PNG preparado: caixa sem corte (meet), nunca círculo/slice; pílula atrás se o contraste é baixo.
+  // Avatar sem corte (meet); pílula atrás só no logo preparado com contraste baixo (backdrop).
   const preparedAvatar = () => {
     const dw = aspect && aspect > 0 ? Math.min(96, 96 * aspect) : 96, dh = aspect && aspect > 0 ? Math.min(96, 96 / aspect) : 96
     const pill = backdrop ? `<rect x="${Math.round(150 - dw / 2 - 8)}" y="${Math.round(185 - dh / 2 - 8)}" width="${Math.round(dw + 16)}" height="${Math.round(dh + 16)}" rx="16" fill="${backdrop}" fill-opacity="0.92"/>` : ''
     return `${pill}<image href="${logoData}" x="102" y="137" width="96" height="96" preserveAspectRatio="xMidYMid meet"/>`
   }
-  const avatar = logoData && prepared
+  // Logo (preparado ou antigo): sempre caixa sem corte (meet) — nunca círculo/slice (o dono: "nunca corta nem distorce a logo").
+  const avatar = logoData
     ? preparedAvatar()
-    : logoData
-    ? `<defs><clipPath id="avatarClip"><circle cx="150" cy="185" r="48"/></clipPath></defs><image href="${logoData}" x="102" y="137" width="96" height="96" clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>`
     : `<circle cx="150" cy="185" r="48" fill="${b.primary}"/><text x="150" y="200" font-family="Poppins" font-size="38" font-weight="700" fill="#fff" text-anchor="middle">${esc(initials(f.name))}</text>`
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
 <rect width="${W}" height="${H}" fill="${bg}"/>
