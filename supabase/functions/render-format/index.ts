@@ -14,7 +14,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { Resvg, initWasm } from 'https://esm.sh/@resvg/resvg-wasm@2.6.2'
 import { encodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts'
 import { requirePaidAccess } from '../_shared/access.ts'
-import { svgSlideSystem, SLIDE_LAYOUTS, type Measure } from '../_shared/slideSystem.ts'
+import { svgSlideSystem, SLIDE_LAYOUTS, type Measure, type LogoOpts } from '../_shared/slideSystem.ts'
+import { usableLogoMeta, logoBackdrop, hexLuma } from '../_shared/logoPng.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 
@@ -64,6 +65,25 @@ async function toDataUri(url: string): Promise<string | null> {
     const ct = res.headers.get('content-type') || 'image/png'
     return `data:${ct};base64,${encodeBase64(new Uint8Array(await res.arrayBuffer()))}`
   } catch { return null }
+}
+
+// Logo que vai pro card (2026-10-23). Ordem: (1) logo_meta.kind 'foto' → NENHUMA logo (o card usa o
+// nome da marca em texto); (2) logo_meta.src === logo atual E png_url → o PNG transparente preparado;
+// (3) senão o logo de sempre (brand.logoUrl), idêntico a antes. logo_meta só vale se src === logo atual
+// (anti logo velha) e a leitura é tolerante: sem a coluna/migration cai no (3).
+interface ResolvedLogo { url: string | null; foto: boolean; prepared: boolean; luma: number | null; aspect: number | null }
+async function resolveLogo(admin: ReturnType<typeof createClient>, companyId: string, brand: { logoUrl?: string }): Promise<ResolvedLogo> {
+  const legacy: ResolvedLogo = { url: brand.logoUrl ?? null, foto: false, prepared: false, luma: null, aspect: null }
+  try {
+    if (!brand.logoUrl) return legacy
+    const { data, error } = await admin.from('brand_dna').select('logo_meta').eq('company_id', companyId).maybeSingle()
+    if (error || !data) return legacy
+    const m = usableLogoMeta((data as { logo_meta?: unknown }).logo_meta, brand.logoUrl)
+    if (!m) return legacy
+    if (m.kind === 'foto') return { url: null, foto: true, prepared: false, luma: null, aspect: null }
+    if (m.png_url) return { url: m.png_url, foto: false, prepared: true, luma: m.luma, aspect: m.w && m.h ? m.w / m.h : null }
+    return legacy
+  } catch (e) { console.error('render-format: resolveLogo falhou, usando o logo de sempre', e); return legacy }
 }
 
 // Gera 1 imagem de fundo com a IA (generate-image) — só quando NÃO há asset.
@@ -122,14 +142,22 @@ interface Brand { primary: string; name: string; primary2?: string; accent?: str
 type F = Record<string, string>
 
 // ── SVG por template ───────────────────────────────────────────────────────────────────────────────────
-function svgTweet(f: F, b: Brand, logoData: string | null): { svg: string; w: number; h: number } {
+function svgTweet(f: F, b: Brand, logoData: string | null, prepared = false, backdrop: string | null = null, aspect: number | null = null): { svg: string; w: number; h: number } {
   const W = 1080, H = 1080, dark = (f.theme || 'dark') === 'dark'
   const bg = dark ? '#15202b' : '#ffffff', fg = dark ? '#e7e9ea' : '#0f1419', muted = dark ? '#8b98a5' : '#536471', line = dark ? '#38444d' : '#eff3f4'
   const tl = limitLines(wrap(f.text || 'O texto do tweet aparece aqui.', 44, 900), 9)
   const bodyY = 340, afterBody = bodyY + tl.length * 60 + 30
   // Avatar = logo real da empresa (Estilos e Visuais → Kit da Marca), quando
   // existe. Sem logo, cai pras iniciais na cor primária — nunca inventa foto.
-  const avatar = logoData
+  // Logo PNG preparado: caixa sem corte (meet), nunca círculo/slice; pílula atrás se o contraste é baixo.
+  const preparedAvatar = () => {
+    const dw = aspect && aspect > 0 ? Math.min(96, 96 * aspect) : 96, dh = aspect && aspect > 0 ? Math.min(96, 96 / aspect) : 96
+    const pill = backdrop ? `<rect x="${Math.round(150 - dw / 2 - 8)}" y="${Math.round(185 - dh / 2 - 8)}" width="${Math.round(dw + 16)}" height="${Math.round(dh + 16)}" rx="16" fill="${backdrop}" fill-opacity="0.92"/>` : ''
+    return `${pill}<image href="${logoData}" x="102" y="137" width="96" height="96" preserveAspectRatio="xMidYMid meet"/>`
+  }
+  const avatar = logoData && prepared
+    ? preparedAvatar()
+    : logoData
     ? `<defs><clipPath id="avatarClip"><circle cx="150" cy="185" r="48"/></clipPath></defs><image href="${logoData}" x="102" y="137" width="96" height="96" clip-path="url(#avatarClip)" preserveAspectRatio="xMidYMid slice"/>`
     : `<circle cx="150" cy="185" r="48" fill="${b.primary}"/><text x="150" y="200" font-family="Poppins" font-size="38" font-weight="700" fill="#fff" text-anchor="middle">${esc(initials(f.name))}</text>`
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
@@ -176,7 +204,7 @@ interface Safe { top: number; right: number; bottom: number; left: number }
 // Post com foto — composer ADAPTATIVO: recebe qualquer tamanho (W×H) e safe
 // areas e RECOMPÕE (não estica) o mesmo conceito. Camadas: fundo (asset/IA) +
 // scrim + componente (sticker) + logo + texto/selo/cta, tudo dentro do safe.
-function svgPhoto(f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number } {
+function svgPhoto(f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, W: number, H: number, safe: Safe, lo: LogoOpts & { showName?: boolean } = {}): { svg: string; w: number; h: number } {
   // `scale` (opcional, 1 a 1,6): letras maiores pra chamar atenção (ex.: kit grátis).
   const s = (W / 1080) * Math.min(1.6, Math.max(1, Number(f.scale) || 1))
   const big = s > W / 1080 // letra maior → sombra de baixo mais forte (o texto continua legível)
@@ -195,7 +223,19 @@ function svgPhoto(f: F, b: Brand, bg: string | null, logo: string | null, sticke
   let y = H - safe.bottom - total
   const overlay = blocks.map(bl => { const svg = bl.draw(y); y += bl.h; return svg }).join('')
   const logoW = Math.round(W * 0.17), logoH = Math.round(logoW * 0.5)
-  const logoSvg = logo ? `<image href="${logo}" x="${W - safe.right - logoW}" y="${safe.top}" width="${logoW}" height="${logoH}" preserveAspectRatio="xMidYMid meet"/>` : ''
+  // Pílula atrás do logo PNG preparado quando ele some no fundo (a logo em si nunca é cortada nem distorcida).
+  const lx = W - safe.right - logoW
+  let logoPill = ''
+  if (logo && lo.backdrop) {
+    const dw = lo.aspect && lo.aspect > 0 ? Math.min(logoW, logoH * lo.aspect) : logoW, dh = lo.aspect && lo.aspect > 0 ? Math.min(logoH, logoW / lo.aspect) : logoH
+    const pad = Math.round(14 * s)
+    logoPill = `<rect x="${Math.round(lx + logoW / 2 - dw / 2 - pad)}" y="${Math.round(safe.top + logoH / 2 - dh / 2 - pad)}" width="${Math.round(dw + 2 * pad)}" height="${Math.round(dh + 2 * pad)}" rx="${Math.round(18 * s)}" fill="${lo.backdrop}" fill-opacity="0.92"/>`
+  }
+  // Sem logo (ou imagem de logo que é uma FOTO): o nome da marca em texto no canto, como no slide.
+  const nm = lo.showName && !logo ? stripEmoji(String(b.name ?? '')).toUpperCase().slice(0, 28) : ''
+  const nameSz = Math.max(18, Math.min(Math.round(34 * s), Math.floor((maxW * 0.55) / Math.max(1, nm.length * 0.68))))
+  const nameSvg = nm ? `<text x="${W - safe.right}" y="${safe.top + nameSz}" font-family="Poppins" font-size="${nameSz}" font-weight="700" fill="#ffffff" stroke="#000000" stroke-opacity="0.35" stroke-width="${Math.max(2, Math.round(4 * s))}" stroke-linejoin="round" paint-order="stroke" text-anchor="end">${esc(nm)}</text>` : ''
+  const logoSvg = logoPill + (logo ? `<image href="${logo}" x="${lx}" y="${safe.top}" width="${logoW}" height="${logoH}" preserveAspectRatio="xMidYMid meet"/>` : '') + nameSvg
   const stW = Math.round(W * 0.24)
   const stickerSvg = sticker ? `<image href="${sticker}" x="${safe.left}" y="${safe.top}" width="${stW}" height="${stW}" preserveAspectRatio="xMidYMid meet"/>` : ''
   // Selo no topo (opcional, ex.: kit grátis): pílula na cor da marca pra
@@ -326,18 +366,27 @@ function svgReview(f: F, b: Brand): { svg: string; w: number; h: number } {
 // TEMPLATES precisa espelhar exatamente isso). Sem match, cai em 'photo' —
 // é o mais genérico/flexível. 'slide' é interno (carrossel de slides do
 // creative-generate), não aparece na escolha de template do dono.
-function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, productImg: string | null, W: number, H: number, safe: Safe): { svg: string; w: number; h: number; overflow?: boolean } {
+interface LogoCtx { prepared: boolean; luma: number | null; aspect: number | null; showName: boolean }
+const NO_LOGO_CTX: LogoCtx = { prepared: false, luma: null, aspect: null, showName: false }
+function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: string | null, sticker: string | null, productImg: string | null, W: number, H: number, safe: Safe, lc: LogoCtx = NO_LOGO_CTX): { svg: string; w: number; h: number; overflow?: boolean } {
+  // Pílula atrás só com logo PNG preparado (luma conhecido); logo de sempre fica idêntica a antes.
+  const pill = (bgLuma: number | null) => logo && lc.prepared ? logoBackdrop(lc.luma, bgLuma) : null
+  const photoPill = (): string | null => {
+    if (!logo || !lc.prepared || typeof lc.luma !== 'number') return null
+    if (!bg) return pill(hexLuma(b.bg || '#0E0B0A'))
+    return lc.luma > 0.75 ? '#111111' : lc.luma < 0.15 ? '#ffffff' : null   // foto de fundo: só os extremos (claro/escuro demais)
+  }
   switch (template) {
-    case 'tweet': return svgTweet(f, b, logo)
-    case 'slide': { const r = svgSlideSystem(f, b, logo, measureFn); return { svg: r.svg, w: r.w, h: r.h, overflow: r.overflow } }
+    case 'tweet': return svgTweet(f, b, logo, lc.prepared, pill(hexLuma((f.theme || 'dark') === 'dark' ? '#15202b' : '#ffffff')), lc.aspect)
+    case 'slide': { const r = svgSlideSystem(f, b, logo, measureFn, { backdrop: pill(hexLuma(b.bg || '#0E0B0A')), aspect: lc.aspect }); return { svg: r.svg, w: r.w, h: r.h, overflow: r.overflow } }
     case 'product': return svgProduct(f, b, productImg)
     case 'problem': return svgProblem(f, b)
     case 'faq': return svgFaq(f, b)
     case 'trend': return svgTrend(f, b)
     case 'market_watch': return svgMarketWatch(f, b)
     case 'review': return svgReview(f, b)
-    case 'photo': return svgPhoto(f, b, bg, logo, sticker, W, H, safe)
-    default: return svgPhoto(f, b, bg, logo, sticker, W, H, safe)
+    case 'photo': return svgPhoto(f, b, bg, logo, sticker, W, H, safe, { backdrop: photoPill(), aspect: lc.aspect, showName: lc.showName })
+    default: return svgPhoto(f, b, bg, logo, sticker, W, H, safe, { backdrop: photoPill(), aspect: lc.aspect, showName: lc.showName })
   }
 }
 
@@ -413,7 +462,14 @@ Deno.serve(async (req) => {
     const bgData = bgUrl ? await toDataUri(bgUrl) : null
     // Avatar do Tweet Print = logo real da empresa (mesmo asset do Kit da
     // Marca em Estilos e Visuais) — sem logo, cai pras iniciais na svgTweet.
-    const logoData = (template === 'photo' || template === 'tweet' || template === 'slide') && brand.logoUrl ? await toDataUri(brand.logoUrl) : null
+    const wantsLogo = template === 'photo' || template === 'tweet' || template === 'slide'
+    const rl: ResolvedLogo = wantsLogo ? await resolveLogo(admin, companyId, brand) : { url: null, foto: false, prepared: false, luma: null, aspect: null }
+    let logoData = rl.url ? await toDataUri(rl.url) : null
+    let prepared = rl.prepared
+    if (!logoData && rl.prepared && brand.logoUrl) { logoData = await toDataUri(brand.logoUrl); prepared = false }   // PNG preparado indisponível → logo de sempre
+    // Nome da marca em texto (card de foto sem logo): só quando o chamador mandou o nome de verdade (não o padrão "Marca").
+    const showName = wantsLogo && !logoData && !!(body.brand as Partial<Brand> | undefined)?.name
+    const logoCtx: LogoCtx = { prepared, luma: rl.luma, aspect: rl.aspect, showName }
     const stickerData = template === 'photo' && body.sticker ? await toDataUri(String(body.sticker)) : null
     // Foco no Produto: a foto vem de fields.productImage (URL real da aba
     // Produtos, escolhida no FormatStudio ou passada pelo Diretor Criativo).
@@ -425,7 +481,7 @@ Deno.serve(async (req) => {
     const safe = (body.safe as Safe | undefined) ?? { top: Math.round(H * 0.06), right: Math.round(W * 0.08), bottom: Math.round(H * 0.09), left: Math.round(W * 0.08) }
 
     await ensureEngine()
-    const { svg, w, overflow } = buildSvg(template, fields, brand, bgData, logoData, stickerData, productImgData, W, H, safe)
+    const { svg, w, overflow } = buildSvg(template, fields, brand, bgData, logoData, stickerData, productImgData, W, H, safe, logoCtx)
     const png = renderPng(svg, w)
 
     const path = `renders/${companyId}/${crypto.randomUUID()}.png`
