@@ -55,7 +55,8 @@ const STRONG: RegExp[] = [
   // dica/pedido "pro corretor" com instrução
   /\b(?:dica|sugest[aã]o|pedido)\s+(?:pro|pra|para\s+o|para\s+a|pra\s+o)\s+corretor(?:a)?\b[^.!?\n]{0,60}\b(?:envi\w+|mand\w+|confirm\w+|revis\w+|confer\w+|adicion\w+|inclu\w+|preench\w+|inform\w+)/i,
   // vocativo "Corretor:" / "corretor," em qualquer posição + verbo/falta de dado
-  /\bcorretor(?:a)?\s*[:,]\s*[^.!?\n]{0,40}?\b(?:falt\w+|precis\w+|confirm\w+|revis\w+|confer\w+|envi\w+|inform\w+|verific\w+|ajust\w+)/i,
+  /\bcorretor(?:a)?\s*[:,]\s*[^.!?\n]{0,40}?\b(?:falt\w+|precis\w+|confir\w+|revis\w+|confer\w+|envi\w+|inform\w+|verific\w+|ajust\w+|ficou|ficaram)/i,
+  /\bcorretor(?:a)?\s*:\s*(?:(?:a|as|o|os)\s+)?(?:fotos?|imagens?|v[ií]deos?|material)\b/i,
   /\bme\s+(?:passar|passa|passe|enviar|envie|confirmar|confirme)\b[^.!?\n]{0,20},\s*corretor/i,
   // colchetes/parênteses curtos com ordem de conferir + DADO do imóvel
   new RegExp(`[\\[(]\\s*(?:confirmar|confirme|conferir|confira|revisar|revise|verificar|verifique|checar|validar|ajustar)\\s+(?:(?:a|o|os|as)\\s+)?${DATA}\\b[^\\])]{0,40}[\\])]`, 'i'),

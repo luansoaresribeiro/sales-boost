@@ -104,6 +104,8 @@ const bad2 = [
  'Dados faltando: não tenho o preço. Pode me passar, corretor?',
  'Por favor, corretor, revise os dados.',
 ]
+bad2.push('Corretor: a foto 2 ficou borrada.', 'Por favor, corretora, confira o preço no cadastro.', 'Por favor, corretor, confira o preço no cadastro.')
+good2.push('Corretor: Rafael Souza, CRECI 98765', 'Corretor responsável: João CRECI 123', 'Fale com o corretor Carlos')
 const ctx2 = t => `Apê lindo na Barra!\n\n${t}\n\n#imoveis`
 for (const t of good2) for (const f of [x => x, ctx2]) { const r = stripInternalNotes(f(t)); assert.equal(r.text, f(t), 'FALSO POSITIVO: ' + t); assert.equal(r.notes.length, 0) }
 for (const t of bad2) { const r = stripInternalNotes(ctx2(t)); assert.ok(r.notes.length, 'ESCAPOU: ' + t); assert.ok(r.text.startsWith('Apê lindo') && r.text.endsWith('#imoveis'), 'perdeu a legenda: ' + t); assert.equal(r.text.replace(/Apê lindo na Barra!|#imoveis|\s/g, ''), '', 'SOBROU: ' + t) }
