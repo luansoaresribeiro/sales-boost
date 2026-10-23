@@ -376,6 +376,23 @@ async function execute(admin: Supa, act: any): Promise<any> {
           if (Object.values(meta).some(v => v)) await admin.from('posts').update(meta).eq('id', postRow.id).eq('company_id', act.company_id)
         }
       } catch (e) { console.error('agent-actions: gravar pilar/receita no post falhou (ignorado):', e) }
+      // Rótulos da fase 3 (familia · pilar_ss) em bloco SEPARADO: se a migration das colunas faltar, só este
+      // bloco falha (e é logado) — o select acima continua sem elas. Só grava se houver valor.
+      try {
+        if (postRow?.id) {
+          const { data: lb, error: lerr } = await admin.from('marketing_ai_test_content').select('familia, pilar_ss').eq('id', act.ref_id).eq('company_id', act.company_id).maybeSingle()
+          if (lerr) console.error('agent-actions: ler familia/pilar_ss da peça falhou (ignorado):', lerr.message)
+          else {
+            const rotulos: Record<string, string> = {}
+            if (lb?.familia) rotulos.familia = String(lb.familia)
+            if (lb?.pilar_ss) rotulos.pilar_ss = String(lb.pilar_ss)
+            if (Object.keys(rotulos).length) {
+              const { error: uerr } = await admin.from('posts').update(rotulos).eq('id', postRow.id).eq('company_id', act.company_id)
+              if (uerr) console.error('agent-actions: gravar familia/pilar_ss no post falhou (ignorado):', uerr.message)
+            }
+          }
+        }
+      } catch (e) { console.error('agent-actions: gravar familia/pilar_ss no post falhou (ignorado):', e) }
       await admin.from('marketing_ai_test_content').delete().eq('id', act.ref_id).eq('company_id', act.company_id)
       if (mediaId) await recordInstagramPost(admin, act.company_id, mediaId, caption, coverUrl)
 
