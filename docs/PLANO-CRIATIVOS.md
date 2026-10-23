@@ -380,6 +380,47 @@ foi aplicado nem deployado** (migration e functions dependem de aprovação).
 cada peça mostra família, pilar e tema e que o texto usa público/mensagem/CTA
 da etapa do funil.
 
+**No ar em 2026-10-23 (aprovação do dono: "Pode continuar"):** migration
+`20261022150000_rotulos_familia_pilar_ss` aplicada na produção (as 18 linhas
+de `content_formats` de `imoveis_rio` com `family`); `catalog-package` v20,
+`strategy-generate` v30, `creative-generate` v73. Versões de volta, se
+precisar: v19 / v29 / v72. As telas (chips) só vão ao ar quando o PR entrar na
+main.
+
+**Divergência: a semana de teste rodou na produção, na Tespon, não no
+ensaio.** O banco de ensaio travou em "ligando" por mais de 25 min e o proxy
+recusou o endereço dele. O dono aprovou testar na Tespon (empresa de teste).
+Resultado (2026-10-23):
+
+- A estratégia (refresh) saiu com as 8 linhas do mix com `familia`,
+  `pilar_ss` e `tema`, nenhuma com pilar vazio.
+- As vagas foram montadas com o código real (`weekSlots` + `buildSlotIntent`)
+  e mandadas uma a uma por `plan_slot`, **só para a Tespon**, sem o
+  `run_weekly_plan` (esse roda para todas as empresas). As 3 vagas de vídeo
+  ficaram de fora para não gastar Higgsfield (~US$ 0,42 cada).
+- 8 peças nasceram, todas com família e pilar de SS. O funil chegou ao texto:
+  o carrossel de slides usou a mensagem "o que R$X compra na Barra vs. no
+  Leblon" e o CTA "Salva / Manda"; o "3 coisas perto" fechou com a pergunta
+  da enquete do funil ("Você pagaria R$ 3.000.000…? Sem julgamento"), com o
+  preço real do imóvel. No carrossel do imóvel, o CTA do funil "Comente
+  VISITA" foi trocado pela trava por "Me chama no direct" (não há resposta
+  aprovada).
+
+**Divergências achadas no teste (registradas, não corrigidas nesta fase):**
+
+- **A coluna `intent` só fica preenchida nas peças de post/carrossel e
+  vídeo.** O `catalog-package` recebe a intenção já como texto (`intentBlock`)
+  e usa no prompt, mas não grava o objeto. A dica FAQ não recebe intenção (já
+  previsto acima). Nada na tela lê `intent` hoje.
+- **Carrossel de slides sem chip de Tema:** o formato `carrossel_slides` tem
+  `pillar: "qualquer"` na ficha, e "qualquer" não vira tema. Mostra só Família
+  e Pilar de SS.
+- **Legenda falando com o corretor:** no carrossel do imóvel da Tespon, a IA
+  escreveu "⚠️ Sobre a metragem: os dados que recebi precisam de confirmação…".
+  A causa é o dado de teste do imóvel (7.373 m² para 4 quartos), mas o prompt
+  do `catalog-package` não proíbe recado ao corretor, como o do vídeo proíbe.
+  O dono pega isso na aprovação; vale uma correção pequena depois.
+
 **Ordem atualizada em 2026-10-22** (fase 1 e QUERO no ar): **3 (com A + B) →
 2 (com C) → 7 → 6 → 4 → 5**. A fase 3 vem primeiro porque os dados da
 estratégia já existem e só não chegam ao post — é o maior ganho pelo menor
