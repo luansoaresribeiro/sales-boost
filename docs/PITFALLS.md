@@ -406,6 +406,14 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
 - **Prazo de 15 min por trabalho:** um trabalho com muitos vídeos pode
   passar desse prazo e ser pego de novo. Com um servidor só, isso não
   acontece. Rever se um dia houver mais de um servidor.
+- **O Node da VPS NÃO se atualiza sozinho (2026-10-25).** O estúdio usa um
+  Node próprio em `/opt/salesboost-worker/node`, fixado em `NODE_VERSION`
+  no `public/vps/install.sh`. A atualização automática do Ubuntu não mexe
+  nele, e o `worker.mjs` se atualiza sozinho mas o Node não. Era
+  v20.18.1 (sem correções desde abril/2026); passou para v22.23.4 por causa
+  das falhas de segurança do Node de 21/10/2026. Depois do merge, alguém
+  precisa rodar na VPS o comando `update` do instalador. A versão em uso
+  aparece em `worker_nodes.info.node`.
 
 ## Botões do Telegram (aprovar pelo Telegram, 2026-10-12)
 
