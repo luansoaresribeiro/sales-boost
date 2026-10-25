@@ -4,6 +4,7 @@
 // da IA: o prompt recebe a regra pronta e, depois da IA, uma trava confere o
 // texto. Funções puras (testáveis fora do Deno). O CTA alternativo vem da
 // ficha do setor (config.ctas.sem_automacao) — regra 6.
+import { INTERNAL_NOTE_PREFIX, EMPTY_CAPTION_PREFIX } from './internalNotes.ts'
 
 export const DEFAULT_CTA_SEM_AUTOMACAO = 'Me chama no direct'
 /** Começo do aviso gravado em reasoning — o item-videos usa pra não apagá-lo. */
@@ -127,8 +128,11 @@ export function sanitizeCaptionCta(caption: string | null, cta: string | null, d
 export const queroNotice = (cta: string) =>
   `${QUERO_NOTICE_PREFIX} pra este imóvel: usei '${cta}'. Aprove a resposta em '🎬 Vídeos e resposta do QUERO' no imóvel pra usar 'Comente QUERO'.`
 
-/** Dado o reasoning atual, devolve só o aviso do QUERO (ou null) — pra ele sobreviver às trocas de reasoning. */
+/** Dado o reasoning atual, devolve só os avisos pro dono (ou null) — pra eles sobreviverem às trocas de reasoning.
+ *  Corta a partir do PRIMEIRO de 3 começos: aviso do QUERO, recado que saiu da legenda, legenda vazia
+ *  (a ordem gravada é QUERO, recado, vazio — então o corte mantém os que existirem). */
 export const keepQueroNotice = (reasoning: string | null | undefined): string | null => {
-  const i = (reasoning ?? '').indexOf(QUERO_NOTICE_PREFIX)
-  return i >= 0 ? (reasoning as string).slice(i) : null
+  const r = reasoning ?? ''
+  const idx = [QUERO_NOTICE_PREFIX, INTERNAL_NOTE_PREFIX, EMPTY_CAPTION_PREFIX].map(p => r.indexOf(p)).filter(i => i >= 0)
+  return idx.length ? r.slice(Math.min(...idx)) : null
 }
