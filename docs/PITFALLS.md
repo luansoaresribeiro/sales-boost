@@ -656,3 +656,23 @@ destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
   essa trava (só o `catalog-package`).
 - Quem mexer em `reasoning` das peças do `catalog-package`: o aviso do QUERO vem PRIMEIRO (o
   `keepQueroNotice` corta a partir do prefixo dele até o fim) e o recado da IA depois.
+
+## Pontas soltas do logo, aprendizado e legenda (2026-10-25)
+
+- **Texto impresso na imagem não passa pela trava de recado.** `stripPieceTexts` limpa só legenda e CTA
+  (colunas `caption`/`cta`). O que a IA escreve **dentro** do criativo (campos `card_*`, texto dos slides do
+  deck, headline do `brand-compose`) segue sem essa trava — o deck só passa pela do QUERO (`lockSlide`).
+  Se um recado aparecer impresso, é nova frente de trabalho, não bug da trava. `runFaqSlot` também não usa
+  a trava (texto vem de dica conferida).
+- **`creative-generate` agora USA a trava de recado** (a nota acima, "ainda não usa essa trava", ficou velha
+  em 2026-10-25). A ordem do `reasoning` agora é: Diretor · aviso do QUERO · recado que saiu · "A legenda
+  não saiu…". `keepQueroNotice` corta a partir do **primeiro** dos 3 começos — ao criar um aviso novo no
+  `reasoning` do vídeo, acrescente o prefixo dele ali, senão o `item-videos` o apaga.
+- **`resolveLogo` existe em dois lugares** (`render-format/index.ts` e `_shared/logoResolve.ts`) porque o
+  `render-format` está em produção e não foi mexido. Mudou a regra de logo? Mude nos dois.
+- **`backfill_logos`: `dry_run` é o padrão.** Sem `dry_run:false` ele só lista. Logo WebP (não decodifica)
+  nunca ganha `logo_meta` pelo backfill se a biblioteca de imagem também não carregou — fica em `remaining`
+  de propósito, pra não travar nova tentativa.
+- **Aprendizado por família/pilar lê `posts.familia`/`pilar_ss` à parte**: sem a migration `20261022150000`
+  o `select` falha, os 3 grupos novos ficam `insufficient_data` e o 80/20 antigo segue igual. Nunca junte
+  essas colunas no select principal de `fetchLearning`.

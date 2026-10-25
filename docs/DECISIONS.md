@@ -1778,3 +1778,17 @@ grátis de 30 s, acima — mantidos como histórico):
   o recado que sai aparece pro dono em `reasoning`. Não remove só por "corretor" nem só por ⚠️.
 - **Fora deste trabalho:** `brand-compose`, `creative-generate` (legenda) e o agrupamento do aprendizado por
   família/pilar (`learning.ts`). Detalhes e divergências em PLANO-CRIATIVOS → "Correções pós-fase 3".
+
+## 2026-10-25 — Pontas soltas pós-fase 3: backfill do logo, aprendizado por família e legenda em toda peça
+
+- **Decidido — backfill do logo:** ação manual `backfill_logos` no `brand-kit-suggest` (só `cron_secret`,
+  `dry_run` por padrão, lotes de até 10, sem cron novo). Logo do dono que parece foto não é gravado. Isso
+  **ajusta** a decisão de 2026-10-23 ("sem backfill automático"): continua sem automático, passa a existir sob
+  demanda, e só gasta IA (Haiku, ~US$ 0,003 por logo) quando o dono do produto roda de propósito.
+- **Decidido — aprendizado:** medir também por família, pilar de SS e família × pilar, **sem fatia sugerida**.
+  A frase "o que funcionou" é montada por código (nunca pela IA) e só aparece com 1º lugar único; o relatório
+  semanal ainda não existe, então a frase só aparece na estratégia (log do refresh).
+- **Decidido — legenda:** a trava de recado agora vale no `creative-generate` (foto, deck e vídeo), não só no
+  `catalog-package`. Texto impresso na imagem fica de fora (PITFALLS).
+- **Decidido — `brand-compose`:** usa o logo preparado, com a mesma regra do `render-format`; o
+  `render-format` não foi movido pra não mexer em produção.

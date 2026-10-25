@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { initWasm, Resvg } from 'https://esm.sh/@resvg/resvg-wasm@2.6.2'
 import { requirePaidAccess } from '../_shared/access.ts'
+import { resolveLogo } from '../_shared/logoResolve.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -106,11 +107,19 @@ Deno.serve(async (req) => {
     if (!headline) return json({ error: 'headline obrigatório' }, 400)
 
     let primary = '#FF6D29', logoUrl: string | null = null
+    let logoKind: 'prepared' | 'legacy' | 'foto' | 'none' = 'none'
     if (companyId) {
       const { data: dna } = await admin.from('brand_dna').select('colors, logo_url').eq('company_id', companyId).maybeSingle()
       const d = dna as { colors?: string[]; logo_url?: string | null } | null
       if (d?.colors?.[0] && /^#?[0-9a-fA-F]{3,8}$/.test(d.colors[0])) primary = d.colors[0].startsWith('#') ? d.colors[0] : `#${d.colors[0]}`
       if (d?.logo_url) logoUrl = d.logo_url
+      // Logo preparado (PNG transparente) quando existe; foto de perfil/rosto → sem logo; senão o de sempre.
+      // Tolerante: qualquer erro cai no logo de sempre (resolveLogo nunca lança).
+      if (logoUrl) {
+        const resolved = await resolveLogo(admin, companyId, { logoUrl })
+        logoUrl = resolved.url
+        logoKind = resolved.foto ? 'foto' : resolved.prepared ? 'prepared' : 'legacy'
+      }
     }
 
     const [imgUri, logoUri, fontRes] = await Promise.all([
@@ -127,7 +136,7 @@ Deno.serve(async (req) => {
     const png = resvg.render().asPng()
 
     const url = await upload(admin, png)
-    return json({ ok: true, url, primary, used_logo: !!logoUri, used_image: !!imgUri })
+    return json({ ok: true, url, primary, used_logo: !!logoUri, used_image: !!imgUri, logo: logoUri || logoKind === 'foto' ? logoKind : 'none' })
   } catch (err) {
     console.error('brand-compose error:', err)
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)
