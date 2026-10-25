@@ -13,7 +13,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { processLogoPixels, downscale, isSafeLogoUrl, type LogoMeta } from '../_shared/logoPng.ts'
-import { decodeImage, encodePng, svgToPng, fetchLogoBytes, toBase64, MAX_SVG_BYTES } from '../_shared/logoCodec.ts'
+import { decodeImage, encodePng, svgToPng, fetchLogoBytes, toBase64, probeLibs, MAX_SVG_BYTES } from '../_shared/logoCodec.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -272,6 +272,54 @@ async function generateAndSave(admin: ReturnType<typeof createClient>, anthropic
   return { ok: true, based_on: urls.length, suggestion: suggestion ?? undefined, logo_set: logoSet }
 }
 
+// ── backfill_logos ─────────────────────────────────────────────────────────────────────────
+const BACKFILL_DEADLINE_MS = 90_000
+const EST_USD_PER_LOGO = 0.003   // 1 chamada Haiku com imagem pequena
+const strList = (v: unknown): string[] => Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.length > 0) : []
+
+async function backfillLogos(admin: ReturnType<typeof createClient>, anthropicKey: string, body: Record<string, unknown>) {
+  const t0 = Date.now()
+  const dryRun = body.dry_run !== false
+  const limit = Math.min(10, Math.max(1, Math.floor(Number(body.limit ?? 5)) || 5))
+  const only = strList(body.only_company_ids), exclude = new Set(strList(body.exclude_company_ids))
+  const libs = await probeLibs()
+
+  const { data: rows, error } = await admin.from('brand_dna').select('company_id, logo_url').not('logo_url', 'is', null).neq('logo_url', '').is('logo_meta', null).order('company_id')
+  if (error) return { ok: false, error: `consulta falhou (migration do logo_meta aplicada?): ${error.message}`, libs }
+  const candidates = (rows ?? []).filter(r => (only.length ? only.includes(r.company_id as string) : true) && !exclude.has(r.company_id as string))
+
+  const results: { company_id: string; kind: string | null; png_url: string | null; bg_removed: boolean; decoded: boolean | null; warning: string | null; wrote: boolean }[] = []
+  const skipped: { company_id: string; reason: string }[] = []
+  let processed = 0, wrote = 0, visited = 0
+  for (const row of candidates) {
+    if (processed >= limit || Date.now() - t0 > BACKFILL_DEADLINE_MS) break
+    visited++
+    const companyId = row.company_id as string, logoUrl = row.logo_url as string
+    try {
+      // Sem acesso pago: não gasta IA — a não ser que o pedido nomeie a empresa de propósito (empresa de teste).
+      if (!only.includes(companyId) && !(await hasPaidAccess(admin, companyId))) { skipped.push({ company_id: companyId, reason: 'sem acesso pago' }); continue }
+      if (dryRun) { processed++; results.push({ company_id: companyId, kind: null, png_url: null, bg_removed: false, decoded: null, warning: null, wrote: false }); continue }
+      processed++
+      const run = await processLogo(admin, anthropicKey, companyId, { url: logoUrl })
+      const decoded = run.warning === 'formato' ? false : true
+      const res = { company_id: companyId, kind: run.meta.kind as string | null, png_url: run.meta.png_url, bg_removed: run.meta.bg_removed, decoded, warning: run.warning ?? null, wrote: false }
+      results.push(res)
+      if (run.error) { skipped.push({ company_id: companyId, reason: `erro: ${run.error}` }); continue }
+      if (run.warning === 'ia') { skipped.push({ company_id: companyId, reason: 'IA falhou — não gravou' }); continue }
+      if (run.warning === 'formato' && !libs.imagescript) { skipped.push({ company_id: companyId, reason: 'biblioteca de imagem não carregou — não gravou' }); continue }
+      if (run.meta.kind === 'foto' && !isIgLogo(logoUrl)) { skipped.push({ company_id: companyId, reason: 'logo do dono parece foto — não gravou' }); continue }
+      const meta = { ...run.meta, src: logoUrl, backfilled_at: new Date().toISOString() }   // logo_url nunca muda: src = o atual
+      const { data: upd, error: upErr } = await admin.from('brand_dna').update({ logo_meta: meta }).eq('company_id', companyId).is('logo_meta', null).select('company_id')
+      if (upErr) { skipped.push({ company_id: companyId, reason: `gravação falhou: ${upErr.message}` }); continue }
+      if (upd?.length) { wrote++; res.wrote = true }
+    } catch (e) {
+      console.error('backfill_logos: empresa', companyId, e)
+      skipped.push({ company_id: companyId, reason: `exceção: ${String(e).slice(0, 150)}` })
+    }
+  }
+  return { ok: true, dry_run: dryRun, processed, wrote, skipped, remaining: candidates.length - visited, est_cost_usd: Number((processed * EST_USD_PER_LOGO).toFixed(4)), libs, results, elapsed_ms: Date.now() - t0 }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
@@ -304,6 +352,14 @@ Deno.serve(async (req) => {
       else await admin.from('brand_dna').upsert({ company_id: companyId, logo_url: logoUrl, updated_at: new Date().toISOString() }, { onConflict: 'company_id' })
       if (run) await saveLogoMeta(admin, companyId, run.meta)
       return json({ ok: true, logo_set: true, colors_set: !!colors, kind: run?.meta.kind ?? null })
+    }
+
+    // Backfill do logo_meta (2026-10-25): empresas que já tinham logo ANTES da função de PNG transparente
+    // ficam com logo_meta nulo. Só com cron_secret; sequencial; nunca muda logo_url nem cria linha.
+    // dry_run (padrão true) NÃO chama IA nem grava: só lista quem seria processado e o custo estimado.
+    if (body.action === 'backfill_logos') {
+      if (!isCron) return json({ error: 'Unauthorized' }, 401)
+      return json(await backfillLogos(admin, anthropicKey, body))
     }
 
     // Modo cron: decide sozinho, uma vez por semana, só pra quem ainda não
