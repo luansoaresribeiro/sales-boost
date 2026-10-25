@@ -15,6 +15,8 @@ export interface SlideBrand { primary: string; name: string; bg?: string; text?:
 export type SlideFields = Record<string, string>
 export interface Tok { w: string; hl: boolean }
 export interface DrawnLine { text: string; x0: number; x1: number; y: number; size: number; bold: boolean; box: [number, number] }
+/** Opções do logo já preparado (PNG transparente): pílula atrás quando ele some no fundo; aspect = largura/altura do PNG. */
+export interface LogoOpts { backdrop?: string | null; aspect?: number | null }
 export interface SlideOut { svg: string; w: number; h: number; overflow: boolean; layout: string; drawn: DrawnLine[] }
 
 export const SLIDE_W = 1080
@@ -163,18 +165,27 @@ function arrowShape(x: number, cy: number, len: number, fill: string): string {
   return `<polygon points="${p.join(' ')}" fill="${fill}"/>`
 }
 
-function chrome(c: Ctx, f: SlideFields, b: SlideBrand, logo: string | null, page: number, total: number): string {
+function chrome(c: Ctx, f: SlideFields, b: SlideBrand, logo: string | null, page: number, total: number, lo: LogoOpts = {}): string {
   const H = SLIDE_H
   let s = ''
   const handleRaw = String(f.handle ?? '').trim().replace(/^@/, '')
   const handle = /^[A-Za-z0-9._]{1,30}$/.test(handleRaw) ? '@' + handleRaw : ''
   let hBox: [number, number]
   if (logo) {
+    // Pílula discreta (só com logo PNG preparado e contraste baixo): rect arredondado ATRÁS, a logo em si nunca é cortada nem distorcida.
+    if (lo.backdrop) {
+      const dw = lo.aspect && lo.aspect > 0 ? Math.min(260, 76 * lo.aspect) : 260
+      s += `<rect x="${M - 14}" y="${64 - 10}" width="${Math.round(dw + 28)}" height="96" rx="22" fill="${lo.backdrop}" fill-opacity="0.92"/>`
+    }
     s += `<image href="${logo}" x="${M}" y="64" width="260" height="76" preserveAspectRatio="xMinYMid meet"/>`
-    hBox = [380, RIGHT]
+    hBox = [lo.backdrop ? 410 : 380, RIGHT]
   } else {
-    const name = fitText(clean(f.name || b.name || '').toUpperCase().slice(0, 40), 480, { maxLines: 1 }, 34, 20, c.m)
-    s += blockSvg(c, name, M, 78, c.primary, true, 'start', [M, 570])
+    // "Marca" (qualquer caixa) é o nome padrão de quem não sabe o nome da empresa: nunca imprimir.
+    const nm = clean(f.name || b.name || '').trim()
+    if (nm && nm.toLowerCase() !== 'marca') {
+      const name = fitText(nm.toUpperCase().slice(0, 40), 480, { maxLines: 1 }, 34, 20, c.m)
+      s += blockSvg(c, name, M, 78, c.primary, true, 'start', [M, 570])
+    }
     hBox = [600, RIGHT]
   }
   if (handle) {
@@ -362,7 +373,7 @@ function layoutTexto(c: Ctx, f: SlideFields, first: boolean): string {
 }
 
 /** Desenha 1 slide. `measure` = largura real da fonte (ver render-format); logo = data URI ou null. */
-export function svgSlideSystem(f: SlideFields, b: SlideBrand, logo: string | null, measure: Measure): SlideOut {
+export function svgSlideSystem(f: SlideFields, b: SlideBrand, logo: string | null, measure: Measure, logoOpts: LogoOpts = {}): SlideOut {
   const bg = b.bg || '#0E0B0A'
   const text = b.text || (lum(bg) > 0.45 ? '#111111' : '#ffffff')
   const acc = pickAccent({ ...b, primary: b.primary || '#FF6D29' }, bg, text)
@@ -383,6 +394,6 @@ export function svgSlideSystem(f: SlideFields, b: SlideBrand, logo: string | nul
   c.maxY = Infinity   // rodapé e topo (logo, contador, arraste) sempre desenham
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDE_W}" height="${SLIDE_H}" viewBox="0 0 ${SLIDE_W} ${SLIDE_H}"><defs><clipPath id="bodyClip"><rect x="0" y="0" width="${SLIDE_W}" height="${BODY_LIMIT}"/></clipPath></defs><rect width="${SLIDE_W}" height="${SLIDE_H}" fill="${bg}"/>` +
     `<circle cx="${SLIDE_W}" cy="${SLIDE_H}" r="380" fill="${primary}" fill-opacity="0.07"/>` +
-    chrome(c, f, b, logo, page, total) + `<g clip-path="url(#bodyClip)">${body}</g></svg>`
+    chrome(c, f, b, logo, page, total, logoOpts) + `<g clip-path="url(#bodyClip)">${body}</g></svg>`
   return { svg, w: SLIDE_W, h: SLIDE_H, overflow: c.overflow, layout, drawn: c.drawn }
 }
