@@ -436,6 +436,16 @@ risco.
 Três pedidos do dono depois do teste da fase 3. Branch `claude/nifty-shannon-ysp818`;
 **nada foi aplicado nem deployado** (migration e functions dependem de "pode").
 
+**No ar em 2026-10-25** (PR #64 juntado; "pode" do dono para as functions):
+migration `20261023120000_brand_dna_logo_meta` aplicada; `agent-actions` v21,
+`catalog-package` v21, `brand-kit-suggest` v17, `render-format` v44 (voltar, se
+precisar: v20 / v20 / v16 / v43). Conferido na Tespon: slide com logo sem
+`logo_meta` sai como antes; pacote do imóvel (`carrossel_tour`) saiu sem recado ao
+corretor e com família/pilar gravados. **Ainda não conferido em produção:**
+`process_logo` (o botão "Preparar logo" precisa do login do dono — o import do
+imagescript via deno.land só roda de verdade aí) e a cópia dos rótulos para `posts`
+(precisa aprovar uma peça logado).
+
 ### 1. Logo em PNG transparente nos criativos
 
 **Problema:** o logo entrava como estava: JPG com fundo branco virava um quadrado branco
