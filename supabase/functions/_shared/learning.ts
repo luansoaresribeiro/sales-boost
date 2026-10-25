@@ -12,6 +12,8 @@ export type PostRow = {
   recipe: string | null
   format: string | null
   published_at: string | null
+  familia?: string | null      // rótulos novos (migration 20261022150000); ausentes em post antigo
+  pilar_ss?: string | null
 }
 export type PerfRow = { media_id: string; saves: number | null; shares: number | null }
 export type EventRow = {
@@ -29,8 +31,9 @@ export type LearningCfg = {
   weightConversa?: number   // conversas pesam mais que saves+shares
   weightIntent?: number     // saves + shares
   maintainTargetPct?: number // 80
+  labelsUnavailable?: boolean // não deu pra ler familia/pilar_ss (coluna ausente): os 3 grupos novos ficam sem dados
 }
-export type GroupKind = 'pillar' | 'recipe' | 'format'
+export type GroupKind = 'pillar' | 'recipe' | 'format' | 'familia' | 'pilar_ss' | 'familia_pilar'
 export type GroupStatus = 'maintain' | 'test' | 'insufficient_data'
 export type GroupResult = {
   key: string
@@ -53,6 +56,8 @@ export type LearningResult = {
     window_days: number
     posts_in_window: number
     posts_without_pillar: number
+    posts_without_familia: number
+    posts_without_pilar_ss: number
     posts_without_media_id: number
     events_attributed: number
     events_unattributed: number
@@ -60,7 +65,13 @@ export type LearningResult = {
   }
 }
 
-const KINDS: GroupKind[] = ['pillar', 'recipe', 'format']
+const KINDS: GroupKind[] = ['pillar', 'recipe', 'format', 'familia', 'pilar_ss', 'familia_pilar']
+// Grupos "de base" têm fatia sugerida (80/20); os 3 novos só medem (sem suggested_share_pct).
+const SHARE_KINDS: GroupKind[] = ['pillar', 'recipe', 'format']
+const LABELS: Record<GroupKind, string> = { pillar: 'pilar', recipe: 'receita', format: 'formato', familia: 'família', pilar_ss: 'pilar de Social Selling', familia_pilar: 'família × pilar' }
+export const labelOf = (kind: GroupKind): string => LABELS[kind]
+const keyOf = (p: PostRow, kind: GroupKind): string | null =>
+  kind === 'familia_pilar' ? (p.familia && p.pilar_ss ? `${p.familia} × ${p.pilar_ss}` : null) : (p[kind] ?? null)
 const DAY = 86400000
 
 export function computeEightyTwenty(posts: PostRow[], events: EventRow[], perf: PerfRow[], cfg: LearningCfg = {}): LearningResult {
@@ -100,6 +111,8 @@ export function computeEightyTwenty(posts: PostRow[], events: EventRow[], perf: 
   type Acc = { posts: number; days: Set<string>; conv: number; saves: number; shares: number; hasSaves: boolean; hasShares: boolean }
   const accs = new Map<string, { key: string; kind: GroupKind; a: Acc }>()
   const withoutPillar = inWindow.filter(p => !p.pillar).length
+  const withoutFamilia = inWindow.filter(p => !p.familia).length
+  const withoutPilarSs = inWindow.filter(p => !p.pilar_ss).length
   const withoutMedia = inWindow.filter(p => !p.instagram_media_id).length
 
   for (const p of inWindow) {
@@ -108,7 +121,8 @@ export function computeEightyTwenty(posts: PostRow[], events: EventRow[], perf: 
     const conv = mid ? (convBy.get(mid)?.size ?? 0) : 0
     const day = String(p.published_at).slice(0, 10)
     for (const kind of KINDS) {
-      const key = p[kind]
+      if (cfg.labelsUnavailable && !SHARE_KINDS.includes(kind)) continue
+      const key = keyOf(p, kind)
       if (!key) continue
       const id = `${kind}:${key}`
       const g = accs.get(id) ?? { key, kind, a: { posts: 0, days: new Set(), conv: 0, saves: 0, shares: 0, hasSaves: false, hasShares: false } }
@@ -145,6 +159,7 @@ export function computeEightyTwenty(posts: PostRow[], events: EventRow[], perf: 
       eligible.forEach((g, i) => { if (g.score !== prev) { rank = i + 1; prev = g.score }; g.rank = rank })
       let cum = 0
       for (const g of eligible) { g.status = cum < totalScore * target / 100 ? 'maintain' : 'test'; cum += g.score! }
+      if (!SHARE_KINDS.includes(kind)) { groups.push(...ofKind.sort((x, y) => (x.rank ?? 1e9) - (y.rank ?? 1e9) || y.posts - x.posts || x.key.localeCompare(y.key))); continue }
       const maintain = eligible.filter(g => g.status === 'maintain')
       const test = eligible.filter(g => g.status === 'test')
       const mTotal = test.length ? target : 100
@@ -162,6 +177,11 @@ export function computeEightyTwenty(posts: PostRow[], events: EventRow[], perf: 
   if (withoutPillar) warnings.push(`${withoutPillar} post(s) sem pilar gravado (publicados antes desta medição) ficaram fora do cálculo por pilar.`)
   if (withoutMedia) warnings.push(`${withoutMedia} post(s) sem id do Instagram — conversas não puderam ser ligadas a eles.`)
   if (evUnattributed) warnings.push(`${evUnattributed} conversa(s) não ligadas a nenhum post da janela.`)
+  if (cfg.labelsUnavailable) warnings.push('Não consegui ler família/pilar de Social Selling dos posts: esses grupos ficaram sem dados.')
+  else {
+    if (withoutFamilia) warnings.push(`${withoutFamilia} post(s) sem família gravada ficaram fora do cálculo por família.`)
+    if (withoutPilarSs) warnings.push(`${withoutPilarSs} post(s) sem pilar de Social Selling gravado ficaram fora do cálculo por pilar de SS e por família × pilar.`)
+  }
   if (statusBy.pillar === 'insufficient_data') warnings.push('Dados insuficientes por pilar: trate como desconhecido, não invente ranking.')
 
   return {
@@ -169,7 +189,7 @@ export function computeEightyTwenty(posts: PostRow[], events: EventRow[], perf: 
     status_by_kind: statusBy,
     groups,
     basis: {
-      window_days: windowDays, posts_in_window: inWindow.length, posts_without_pillar: withoutPillar,
+      window_days: windowDays, posts_in_window: inWindow.length, posts_without_pillar: withoutPillar, posts_without_familia: withoutFamilia, posts_without_pilar_ss: withoutPilarSs,
       posts_without_media_id: withoutMedia, events_attributed: evAttributed, events_unattributed: evUnattributed, warnings,
     },
   }
@@ -183,19 +203,49 @@ export async function fetchLearning(admin: any, companyId: string, cfg: Learning
   const { data: posts } = await admin.from('posts')
     .select('id, instagram_media_id, pillar, recipe, format, published_at')
     .eq('company_id', companyId).not('instagram_media_id', 'is', null).gte('published_at', sinceIso)
+  // Rótulos novos num select À PARTE e tolerante: sem a migration (coluna ausente) o select de cima segue intacto.
+  let labelsUnavailable = false
+  const postRows: PostRow[] = [...(posts ?? [])]
+  try {
+    const pids = postRows.map(p => p.id).filter(Boolean)
+    if (pids.length) {
+      const { data: lab, error } = await admin.from('posts').select('id, familia, pilar_ss').in('id', pids)
+      if (error) throw error
+      const by = new Map<string, { familia: string | null; pilar_ss: string | null }>((lab ?? []).map((l: { id: string; familia: string | null; pilar_ss: string | null }) => [l.id, l]))
+      for (const p of postRows) { const l = by.get(p.id as string); if (l) { p.familia = l.familia; p.pilar_ss = l.pilar_ss } }
+    }
+  } catch (e) { labelsUnavailable = true; console.error('learning: familia/pilar_ss indisponíveis (migration aplicada?)', e) }
   const ids = (posts ?? []).map((p: PostRow) => p.instagram_media_id).filter(Boolean)
   const [perf, ev] = await Promise.all([
     ids.length ? admin.from('instagram_content_performance').select('media_id, saves, shares').eq('company_id', companyId).in('media_id', ids) : { data: [] },
     admin.from('engagement_events').select('media_ref, intent_detected, ig_user_id, ig_user, created_at').eq('company_id', companyId).not('intent_detected', 'is', null).gte('created_at', sinceIso),
   ])
-  return computeEightyTwenty(posts ?? [], ev.data ?? [], perf.data ?? [], cfg)
+  return computeEightyTwenty(postRows, ev.data ?? [], perf.data ?? [], { ...cfg, labelsUnavailable })
+}
+
+// Frases prontas, montadas por CÓDIGO (sem IA), só do que foi medido: só sai se a combinação
+// família × pilar tem dados suficientes (status ok) e UM único grupo está em 1º lugar (empate = sem frase).
+export function learningHighlights(r: LearningResult): string[] {
+  if (r.status_by_kind?.familia_pilar !== 'ok') return []
+  const ranked = r.groups.filter(g => g.kind === 'familia_pilar' && g.rank === 1)
+  if (ranked.length !== 1) return []
+  const g = ranked[0]
+  const parts = [`${g.conversas} conversa(s)`]
+  if (g.saves != null) parts.push(`${g.saves} save(s)`)
+  if (g.shares != null) parts.push(`${g.shares} compartilhamento(s)`)
+  return [`Nos últimos ${r.basis.window_days} dias, a combinação ${g.key} foi a que mais gerou resposta do público (${parts.join(', ')} em ${g.posts} posts).`]
 }
 
 // Bloco ADITIVO pro prompt do strategy-generate (refresh).
 export function learningPromptBlock(r: LearningResult): string {
+  const hl = learningHighlights(r)
+  const extra = r.groups.filter(g => !SHARE_KINDS.includes(g.kind) && g.status !== 'insufficient_data')
+  const extraLines = extra.map(g => `- ${labelOf(g.kind)} "${g.key}": ${g.posts} posts, ${g.conversas} conversas, saves ${g.saves ?? 'desconhecido'}, shares ${g.shares ?? 'desconhecido'}, rank ${g.rank} (só medição, sem fatia sugerida)`)
+  const tail = (extraLines.length ? `Outros cortes medidos (só os que têm dados suficientes):\n${extraLines.join('\n')}\n` : '')
+    + (hl.length ? `Frases já prontas (cite só estas, não invente outras):\n${hl.map(h => `- ${h}`).join('\n')}\n` : '')
   if (r.status !== 'ok') {
-    return `\nAPRENDIZADO 80/20 (calculado de dados reais, janela ${r.basis.window_days} dias): dados insuficientes — trate como desconhecido, não afirme qual pilar/formato funciona melhor.\n`
+    return `\nAPRENDIZADO 80/20 (calculado de dados reais, janela ${r.basis.window_days} dias): dados insuficientes — trate como desconhecido, não afirme qual pilar/formato funciona melhor.\n${tail}`
   }
-  const lines = r.groups.map(g => `- ${g.kind} "${g.key}": ${g.posts} posts, ${g.conversas} conversas, saves ${g.saves ?? 'desconhecido'}, shares ${g.shares ?? 'desconhecido'}, ${g.status === 'insufficient_data' ? 'dados insuficientes' : `rank ${g.rank}, ${g.status === 'maintain' ? 'MANTER' : 'TESTAR'}, fatia sugerida ${g.suggested_share_pct}%`}`)
-  return `\nAPRENDIZADO 80/20 (calculado por código a partir de dados reais, janela ${r.basis.window_days} dias; conversas pesam mais que saves+shares; curtidas/alcance ignorados). Use estes números exatos, não invente outros:\n${lines.join('\n')}\n${r.basis.warnings.length ? 'Avisos: ' + r.basis.warnings.join(' ') + '\n' : ''}`
+  const lines = r.groups.filter(g => SHARE_KINDS.includes(g.kind)).map(g => `- ${g.kind} "${g.key}": ${g.posts} posts, ${g.conversas} conversas, saves ${g.saves ?? 'desconhecido'}, shares ${g.shares ?? 'desconhecido'}, ${g.status === 'insufficient_data' ? 'dados insuficientes' : `rank ${g.rank}, ${g.status === 'maintain' ? 'MANTER' : 'TESTAR'}, fatia sugerida ${g.suggested_share_pct}%`}`)
+  return `\nAPRENDIZADO 80/20 (calculado por código a partir de dados reais, janela ${r.basis.window_days} dias; conversas pesam mais que saves+shares; curtidas/alcance ignorados). Use estes números exatos, não invente outros:\n${lines.join('\n')}\n${tail}${r.basis.warnings.length ? 'Avisos: ' + r.basis.warnings.join(' ') + '\n' : ''}`
 }
