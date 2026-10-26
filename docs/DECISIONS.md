@@ -1814,3 +1814,7 @@ grátis de 30 s, acima — mantidos como histórico):
   não travar o carrossel de aluguel sem dica; os termos sensíveis (Lei do Inquilinato, Código Civil…) estão
   nos `regulated_terms` e acionam só a rede de segurança. Se o dono quiser aluguel como regulado, é acrescentar
   `aluguel` em `config.faq.regulated_categories` (SQL na ficha).
+- **Decidido pelo dono (2026-10-26) — aluguel vira tema REGULADO.** Migration
+  `20261026130000_aluguel_regulado.sql` acrescenta `aluguel` em `regulated_categories` e ajusta a nota do formato.
+  Carrossel de aluguel agora usa só dica liberada da categoria aluguel; sem dica, sai como dica geral. **Geral**
+  continua leve.

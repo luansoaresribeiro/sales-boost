@@ -676,6 +676,8 @@ números. Branch `claude/nifty-shannon-ysp818`; **nada foi aplicado nem deployad
 - **Aluguel e geral ficaram LEVES** (decisão do dono pendente): estão em `category_terms`, mas fora de
   `regulated_categories`. Peça de aluguel que cite "Lei do Inquilinato" ou "Código Civil" cai na rede de segurança
   (reescreve 1x; se continuar, avisa em `reasoning`).
+  - **Atualização 2026-10-26:** o dono decidiu que **aluguel é regulado** (migration
+    `20261026130000_aluguel_regulado.sql`). O texto acima vale só para **geral**, que segue leve.
 - **Estratégia antiga com `carrossel_slides` no `weekly_mix`:** não foi editada (regra do pedido); o apelido faz a
   vaga sair como educativo. Na próxima atualização da estratégia o catálogo já não lista `carrossel_slides`.
 - **Tema pelo Diretor:** como o "Gerar agora" e as vagas sem assunto não têm tema no título, a classificação
