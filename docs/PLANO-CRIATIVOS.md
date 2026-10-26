@@ -591,6 +591,15 @@ Testes (sem biblioteca externa): `node --experimental-strip-types scripts/test-i
 
 Fecha o que a seção "Correções pós-fase 3 (2026-10-23)" deixou de fora. Tudo em branch, nada publicado ainda.
 
+**Divergência (2026-10-26):** o `brand-kit-suggest` com o `backfill_logos` foi publicado antes do PR (v18;
+voltar = v17), a pedido do dono ("faça por mim" o primeiro "Preparar logo"). Rodado **só na Tespon**:
+`dry_run` → `libs: {imagescript: true, resvg: true}` (as duas bibliotecas carregam no servidor de verdade);
+depois `dry_run:false` → logo classificado `logo`, fundo branco removido, `png_url` gravado,
+`logo_url` intacto, custo ~US$ 0,003. Slides antes/depois (fundo escuro e claro) renderizados em produção:
+no claro o círculo azul fica limpo; no escuro ganha a pílula clara (logo escuro, contraste baixo).
+Contagem para o backfill do resto (26/10): **só 1 empresa** com logo e sem `logo_meta` — a do próprio
+Sales Boost. A Liga dos Sonhos não tem logo cadastrado, então não entra.
+
 - **Backfill do logo (`brand-kit-suggest`, ação `backfill_logos`).** Empresas que já tinham logo antes do PNG
   transparente ficam com `brand_dna.logo_meta` nulo (e o criativo cai no logo de sempre). A ação, só com
   `cron_secret`, preenche isso: `dry_run` (padrão `true`: não chama IA nem grava, só lista e estima custo),
