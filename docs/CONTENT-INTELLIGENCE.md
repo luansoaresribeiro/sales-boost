@@ -163,6 +163,12 @@ Na ficha `imoveis_rio`: `item_package` troca `reels_tour_fotos_reais` por
 `intro_avatar` e `post_vendido`; `ctas`/`hooks_by_pillar` ganham "Comente
 TOUR". Mudar a ficha em produção é SQL de produção (vai num PR).
 
+> **Atualização 2026-10-26 (em código, aguardando migration e deploy):** `carrossel_educativo` sai de
+> `planned` e passa a `live` como **o** carrossel educativo (o genérico `carrossel_slides` fica desligado na
+> ficha e vira apelido dele em `content_rules.format_aliases`). Tema regulado só usa dica liberada do
+> `dica_faq`; ver [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md#fase-2-decisão-c--em-código-2026-10-26). A frase
+> acima ("hoje a lista está vazia" / `planned`) fica como histórico.
+
 ## Catálogo de formatos → estratégia → calendário (2026-10-09)
 
 Implementado. A estratégia (Hermes, `strategy-generate`) agora enxerga

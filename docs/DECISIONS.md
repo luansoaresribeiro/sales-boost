@@ -1762,3 +1762,59 @@ grátis de 30 s, acima — mantidos como histórico):
   publicação.
 - **Migration:** `supabase/migrations/20261022150000_rotulos_familia_pilar_ss.sql`
   (aditiva; bloco DESFAZER no topo).
+
+## 2026-10-23 — Logo em PNG transparente, rótulos na publicação e legenda sem recado pro corretor (pós-fase 3)
+
+- **Pedido do dono:** (1) logo limpa nos criativos (hoje JPG com fundo branco vira quadrado branco; foto de
+  perfil vira "logo"); (2) `familia`/`pilar_ss` chegarem em `posts`; (3) a legenda nunca falar com o corretor.
+- **Decidido — logo:** o criativo usa um PNG transparente preparado pelo `brand-kit-suggest` (`process_logo`),
+  guardado em `brand_dna.logo_meta` (migration aditiva `20261023120000_brand_dna_logo_meta.sql`). Imagem que a
+  IA classifica como **foto** não vira logo (criativo usa o nome da marca em texto). Fundo só é removido se
+  for liso (flood-fill das bordas); senão a imagem não é mexida e o dono é avisado. Sem backfill automático
+  e sem trocar logo enviada pelo dono. Biblioteca: imagescript@1.3.0 (decodifica/codifica) + o resvg-wasm que o
+  `render-format` já usa (SVG) — sem custo novo.
+- **Decidido — rótulos:** `agent-actions` copia `familia`/`pilar_ss` num bloco à parte, tolerante.
+- **Decidido — legenda:** trava em código (`_shared/internalNotes.ts`) no `catalog-package` + prompt reforçado;
+  o recado que sai aparece pro dono em `reasoning`. Não remove só por "corretor" nem só por ⚠️.
+- **Fora deste trabalho:** `brand-compose`, `creative-generate` (legenda) e o agrupamento do aprendizado por
+  família/pilar (`learning.ts`). Detalhes e divergências em PLANO-CRIATIVOS → "Correções pós-fase 3".
+
+## 2026-10-25 — Pontas soltas pós-fase 3: backfill do logo, aprendizado por família e legenda em toda peça
+
+- **Decidido — backfill do logo:** ação manual `backfill_logos` no `brand-kit-suggest` (só `cron_secret`,
+  `dry_run` por padrão, lotes de até 10, sem cron novo). Logo do dono que parece foto não é gravado. Isso
+  **ajusta** a decisão de 2026-10-23 ("sem backfill automático"): continua sem automático, passa a existir sob
+  demanda, e só gasta IA (Haiku, ~US$ 0,003 por logo) quando o dono do produto roda de propósito.
+- **Decidido — aprendizado:** medir também por família, pilar de SS e família × pilar, **sem fatia sugerida**.
+  A frase "o que funcionou" é montada por código (nunca pela IA) e só aparece com 1º lugar único; o relatório
+  semanal ainda não existe, então a frase só aparece na estratégia (log do refresh).
+- **Decidido — legenda:** a trava de recado agora vale no `creative-generate` (foto, deck e vídeo), não só no
+  `catalog-package`. Texto impresso na imagem fica de fora (PITFALLS).
+- **Decidido — `brand-compose`:** usa o logo preparado, com a mesma regra do `render-format`; o
+  `render-format` não foi movido pra não mexer em produção.
+
+## 2026-10-26 — Carrossel educativo único com fonte (decisão C, fase 2 do PLANO-CRIATIVOS)
+
+- **Pedido do dono:** juntar `carrossel_slides` e `carrossel_educativo`. Tema regulado (jurídico,
+  financiamento, documentação, impostos — categorias do `dica_faq`) usa só dica liberada; sem dica liberada
+  daquele tema, sai como dica geral sem número, prazo, taxa nem nome de lei; tema leve continua livre com a
+  trava de números. A mudança na ficha de produção vai no PR.
+- **Decidido — um formato só:** `carrossel_educativo` (ficha) vira `live`; `carrossel_slides` fica
+  desligado na ficha de imóveis (`disabled_formats`) e vira apelido (`content_rules.format_aliases`), então
+  estratégia e vaga antigas continuam saindo, agora como educativo. O genérico `carrossel_slides` no código
+  não muda (outros setores). `weekly_mix` de estratégia nenhuma é alterado.
+- **Decidido — quem decide o tema é código + ficha:** termos da ficha (`config.faq.category_terms`) →
+  se não decidiu, uma pergunta barata à IA (resposta validada: fora da lista = leve). Termos regulados
+  (`regulated_terms`) e categorias reguladas (`regulated_categories`) também vivem na ficha (regra 6).
+- **Decidido — regras duras em código, não no prompt:** modo regulado só aceita números e termos que as dicas
+  têm; modo geral barra qualquer número, percentual, valor, prazo por extenso, "art.", "alíquota", nome de lei
+  e termo regulado; falhou → 1 reescrita → texto de reserva montado pelo código (resposta da dica / texto fixo
+  sem fato). No regulado ainda roda um verificador barato de afirmações.
+- **Pendente do dono:** **aluguel** e **geral** ficaram como tema LEVE (fora de `regulated_categories`) para
+  não travar o carrossel de aluguel sem dica; os termos sensíveis (Lei do Inquilinato, Código Civil…) estão
+  nos `regulated_terms` e acionam só a rede de segurança. Se o dono quiser aluguel como regulado, é acrescentar
+  `aluguel` em `config.faq.regulated_categories` (SQL na ficha).
+- **Decidido pelo dono (2026-10-26) — aluguel vira tema REGULADO.** Migration
+  `20261026130000_aluguel_regulado.sql` acrescenta `aluguel` em `regulated_categories` e ajusta a nota do formato.
+  Carrossel de aluguel agora usa só dica liberada da categoria aluguel; sem dica, sai como dica geral. **Geral**
+  continua leve.

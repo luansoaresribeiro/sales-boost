@@ -406,6 +406,14 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
 - **Prazo de 15 min por trabalho:** um trabalho com muitos vídeos pode
   passar desse prazo e ser pego de novo. Com um servidor só, isso não
   acontece. Rever se um dia houver mais de um servidor.
+- **O Node da VPS NÃO se atualiza sozinho (2026-10-25).** O estúdio usa um
+  Node próprio em `/opt/salesboost-worker/node`, fixado em `NODE_VERSION`
+  no `public/vps/install.sh`. A atualização automática do Ubuntu não mexe
+  nele, e o `worker.mjs` se atualiza sozinho mas o Node não. Era
+  v20.18.1 (sem correções desde abril/2026); passou para v22.23.4 por causa
+  das falhas de segurança do Node de 21/10/2026. Depois do merge, alguém
+  precisa rodar na VPS o comando `update` do instalador. A versão em uso
+  aparece em `worker_nodes.info.node`.
 
 ## Botões do Telegram (aprovar pelo Telegram, 2026-10-12)
 
@@ -613,3 +621,90 @@ pintava na cor primária (palavra em destaque, números, barra, botão) sumia.
 `slideSystem.pickAccent` escolhe a 1ª cor do kit que contrasta com o fundo
 (≥ 3:1) e se distingue do texto; sem nenhuma, usa a cor do texto e marca o
 destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
+
+## Logo em PNG transparente (2026-10-23)
+
+- **O bucket `post-images` só aceita png/jpeg/webp (≤ 5 MB): SVG nunca vai pra lá.** Logo em SVG é
+  rasterizado (resvg) na função e só o PNG sobe (`renders/<empresa>/logo-png-<uuid>.png`). WebP não
+  decodifica no imagescript 1.3.0: o logo fica como está, sem PNG, com aviso na tela.
+- **`brand_dna.logo_meta.src` precisa ser igual ao `logo_url` de agora.** O dono pode trocar o logo
+  (upload, link colado, Instagram) sem passar pelo pipeline; sem essa checagem o criativo sairia com o PNG do
+  logo velho. Quem lê (`render-format`, `BrandCard`, `AdaptModal`) usa `png_url` só se `src === logo_url`.
+  Todo `select` de `logo_meta` é separado e tolerante: com a migration pendente, `select('…, logo_meta')`
+  junto de outras colunas **derrubaria a leitura inteira**.
+- **O tirador de fundo só mexe em fundo LISO e só a partir das bordas** (flood-fill). Global apagaria o
+  branco das letras de dentro do logo. Cantos de cores diferentes = foto/ilustração = não mexe (e
+  `png_url:null` + aviso). Mudou o algoritmo? Rode `scripts/test-logo-png.mjs`.
+- **Nunca `preserveAspectRatio="slice"` nem `borderRadius`/círculo em logo** — corta o logo do cliente. Use
+  `meet`; o contraste baixo se resolve com pílula ATRÁS, não mexendo no logo.
+- **Classificação logo × foto:** foto de perfil do Instagram costuma ser rosto/fachada. `analyzeLogo` (Haiku)
+  devolve `kind`; `foto` → criativo usa o nome da marca em texto e as cores dela NÃO entram no Kit.
+- **Ambiente de trabalho sem deno.land/esm.sh:** o proxy do agente bloqueia esses domínios. Pra rodar o
+  `render-format` local use `deno` do npm com `--config` apontando `https://esm.sh/...` pra pacotes do npm
+  e stub do supabase-js (ver o harness descrito em PLANO-CRIATIVOS → "Correções pós-fase 3").
+
+## Recado da IA dentro da legenda (2026-10-23)
+
+- A IA, quando acha um dado estranho (7.373 m² num imóvel de 4 quartos), escreve **pro corretor** dentro da
+  legenda: "⚠️ Sobre a metragem: os dados que recebi precisam de confirmação antes de publicar…". O prompt
+  proibia só "pedido de dado" — não cobria **aviso/alerta/ressalva**. Agora `_shared/internalNotes.ts`
+  (`stripInternalNotes`) tira o recado em código e o `catalog-package` o põe no `reasoning`
+  ("Recado da IA que saiu da legenda: …"). **Frase nova que escapou?** Acrescente o caso em
+  `scripts/test-internal-notes.mjs` antes de mexer nas regras — e confira que "Fale com o corretor João",
+  "⚠️ Últimas unidades" e "Me passa seu contato" continuam passando.
+- Regra de ouro da trava: nunca remover só por "corretor" nem só por ⚠️. `creative-generate` ainda não usa
+  essa trava (só o `catalog-package`).
+- Quem mexer em `reasoning` das peças do `catalog-package`: o aviso do QUERO vem PRIMEIRO (o
+  `keepQueroNotice` corta a partir do prefixo dele até o fim) e o recado da IA depois.
+
+## Pontas soltas do logo, aprendizado e legenda (2026-10-25)
+
+- **Texto impresso na imagem não passa pela trava de recado.** `stripPieceTexts` limpa só legenda e CTA
+  (colunas `caption`/`cta`). O que a IA escreve **dentro** do criativo (campos `card_*`, texto dos slides do
+  deck, headline do `brand-compose`) segue sem essa trava — o deck só passa pela do QUERO (`lockSlide`).
+  Se um recado aparecer impresso, é nova frente de trabalho, não bug da trava. `runFaqSlot` também não usa
+  a trava (texto vem de dica conferida).
+- **`creative-generate` agora USA a trava de recado** (a nota acima, "ainda não usa essa trava", ficou velha
+  em 2026-10-25). A ordem do `reasoning` agora é: Diretor · aviso do QUERO · recado que saiu · "A legenda
+  não saiu…". `keepQueroNotice` corta a partir do **primeiro** dos 3 começos — ao criar um aviso novo no
+  `reasoning` do vídeo, acrescente o prefixo dele ali, senão o `item-videos` o apaga.
+- **`resolveLogo` existe em dois lugares** (`render-format/index.ts` e `_shared/logoResolve.ts`) porque o
+  `render-format` está em produção e não foi mexido. Mudou a regra de logo? Mude nos dois.
+- **`backfill_logos`: `dry_run` é o padrão.** Sem `dry_run:false` ele só lista. Logo WebP (não decodifica)
+  nunca ganha `logo_meta` pelo backfill se a biblioteca de imagem também não carregou — fica em `remaining`
+  de propósito, pra não travar nova tentativa.
+- **Aprendizado por família/pilar lê `posts.familia`/`pilar_ss` à parte**: sem a migration `20261022150000`
+  o `select` falha, os 3 grupos novos ficam `insufficient_data` e o 80/20 antigo segue igual. Nunca junte
+  essas colunas no select principal de `fetchLearning`.
+
+## Carrossel educativo com fonte (2026-10-26)
+
+- **Ordem segura:** migration `20261026120000_carrossel_educativo_unico.sql` → deploy do `creative-generate`.
+  Deploy sem a migration não quebra nada: a ficha sem `regulated_categories`/`regulated_terms` desliga o
+  guarda (`topicCfgOf` → null) e o carrossel sai como antes. (Pós-QA: "como antes" inclui a vaga `dica_faq` sem dica liberada, que volta a levar no ângulo
+  o texto "dica GERAL: sem número, prazo, taxa, valor nem nome de lei" — só quando o guarda está desligado.) Migration sem o deploy também é segura (o
+  apelido só é lido pelo código novo; o código antigo veria `carrossel_educativo` como `live` sem guarda).
+- **Validar em código, não no prompt.** `_shared/deckTopic.ts` (puro) tem os validadores; `_shared/deckGuard.ts`
+  tem o fluxo com IA. Frase nova que escapou do modo geral/regulado? Acrescente o caso em
+  `scripts/test-deck-topic.mjs` antes de mexer nas regex — e confira que "três erros comuns" e "Visite em
+  horários diferentes" continuam passando (número por extenso pequeno SEM unidade é permitido; `um/uma` ficam
+  de fora de propósito, "um dia você terá a chave").
+- **`dica geral` do `runFaqSlot` era só prompt.** A frase "dica GERAL: sem número…" que ia no ângulo da vaga
+  não era conferida por nada; agora a vaga `dica_faq` sem dica liberada manda `forceGeneral` e o texto passa
+  pelo validador do modo geral.
+- **Números do regulado = só os das dicas.** Ficha, insights, ideia e intenção da estratégia ficam FORA do
+  `allowed` e do prompt do modo regulado/geral (oferta e intenção também saem do prompt). Não "liberar de volta".
+- **Classificação do tema** olha título/ângulo da vaga + gancho e oferta do Diretor. O `name` do formato entra no
+  título: não ponha nomes de categoria no nome de um formato (o antigo "…financiamento, documentação" classificaria
+  qualquer peça como regulada).
+- **Reconferência no meio da geração:** `decideTopic` reconfere até 2 dicas vencidas da categoria (Tavily + IA),
+  como o `runFaqSlot`; isso soma alguns segundos ao limite de 150 s. As reescritas e o verificador rodam em
+  paralelo por slide; se os logs passarem de ~110 s, tirar a reconferência daqui.
+- **Texto de reserva em inglês é curto** (`company.language === 'en'`); a resposta da dica continua no idioma
+  em que foi escrita.
+- **Classificação do tema nunca lê o nome do formato** (pós-QA 2026-10-26). `job.name` é o nome do formato no
+  catálogo ("Carrossel educativo (dicas conferidas; tema leve livre)"), com palavras que viram termo de categoria
+  ("dicas"). Use `topicText({ titleIsFormat: true, … })`; o título só conta quando é a ideia do dono. E não ponha
+  palavra genérica ("dica", "dicas") em `category_terms`.
+- **Números do guarda = valor + unidade** (`faqCheck.numberFacts`): `1500` = `1.500,00`, `3,0%` = `3%`, mas
+  `30%` ≠ `3%` ≠ `30 dias` e `150.000` ≠ `1.500`. Comparar só dígitos deixava passar colisões.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useLang } from '../../../contexts/LanguageContext'
-import { CARD, MUTED, BORDER } from './shared'
+import { CARD, MUTED, BORDER, fetchLogoMeta, preferredLogo } from './shared'
 
 const ORANGE = '#FF6D29'
 
@@ -29,7 +29,7 @@ export default function BrandCard({ companyId }: { companyId: string }) {
       const d = dna as { colors?: string[]; logo_url?: string | null } | null
       const c = cfg as { target_audience?: string | null; brand_colors?: string[] | null } | null
       setColors((d?.colors?.length ? d.colors : c?.brand_colors) ?? [])
-      setLogo(d?.logo_url ?? null)
+      setLogo(preferredLogo(d?.logo_url, await fetchLogoMeta(companyId)))   // PNG preparado, se houver
       setIcp(c?.target_audience ?? null)
     })()
   }, [companyId])

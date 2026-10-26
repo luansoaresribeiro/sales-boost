@@ -5,7 +5,7 @@
 # Atualizar sem código novo:   curl -fsSL https://getsaleboost.com/vps/install.sh | sudo bash -s -- update
 # Remover tudo:                curl -fsSL https://getsaleboost.com/vps/install.sh | sudo bash -s -- uninstall
 #
-# O que faz: instala ffmpeg (apt) e o Node 20 oficial numa pasta própria
+# O que faz: instala ffmpeg (apt) e o Node 22 oficial numa pasta própria
 # (/opt/salesboost-worker, sem mexer no Node do sistema), cria o usuário
 # "sbworker" sem senha nem login, conecta com o código de 15 min e liga o
 # serviço systemd "salesboost-worker" com no máximo 1 CPU e 3 GB de memória
@@ -15,7 +15,7 @@ set -euo pipefail
 DIR=/opt/salesboost-worker
 ENV_FILE=/etc/salesboost-worker.env
 UNIT=/etc/systemd/system/salesboost-worker.service
-NODE_VERSION=v20.18.1
+NODE_VERSION=v22.23.4 # 2026-10-25: Node 20 sem correções de segurança; 22.23.4 corrige as falhas de 21/10
 SITE="${SB_SITE:-https://getsaleboost.com/vps}" # SB_SITE: só pra teste local
 
 say() { printf '\n\033[1;33m▶ %s\033[0m\n' "$*"; }

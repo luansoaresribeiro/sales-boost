@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
 import { useShowcase } from '../../../contexts/ShowcaseContext'
-import { MUTED, BORDER, D, SUPABASE_URL, inputStyle } from './shared'
+import { MUTED, BORDER, D, SUPABASE_URL, inputStyle, usableLogoMeta, fetchLogoMeta, type LogoMeta } from './shared'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -44,6 +44,13 @@ const TX = {
     typo: 'Tipografia', headFont: 'Fonte de título', headPh: 'Ex: Bricolage Grotesque', bodyFont: 'Fonte de corpo', bodyPh: 'Ex: Inter',
     composition: 'Composição', compPh: 'Regras de montagem: onde vai o logo, margens de segurança, alinhamento, densidade... Ex: logo sempre no canto inferior direito, muito respiro, texto grande e curto.',
     saving: 'Salvando...', save: 'Salvar Kit da Marca', saved: '✓ Salvo — a geração já usa',
+    logoHint: 'Envie o logo em PNG com fundo transparente (ou SVG). É assim que ele aparece limpo nos criativos.',
+    prevDark: 'Em fundo escuro', prevLight: 'Em fundo claro', preparing: 'Preparando o logo...', prepare: 'Preparar logo para criativos',
+    ready: '✓ Logo pronto para os criativos (PNG transparente).', readyKept: '✓ Logo pronto para os criativos.',
+    warnFoto: 'Essa imagem parece uma foto, não um logo. Seus criativos vão usar o nome da marca em texto. Envie o logo em PNG com fundo transparente.',
+    warnBg: 'Não consegui deixar o fundo desse logo transparente (o fundo não é liso). Os criativos usam o logo como ele está. Para sair limpo, envie o logo em PNG com fundo transparente.',
+    warnFormat: 'Esse formato de imagem não dá pra preparar. Envie o logo em PNG com fundo transparente.',
+    svgBig: 'O SVG passou de 500 KB. Exporte o logo em PNG com fundo transparente.', prepErr: 'Não consegui preparar o logo',
   },
   en: {
     builtKit: 'built the kit on its own, from', realPhotos: 'real photos', fetchedLogo: 'fetched the logo on its own',
@@ -64,6 +71,13 @@ const TX = {
     typo: 'Typography', headFont: 'Heading font', headPh: 'E.g. Bricolage Grotesque', bodyFont: 'Body font', bodyPh: 'E.g. Inter',
     composition: 'Layout', compPh: 'Layout rules: where the logo goes, safe margins, alignment, density... E.g. logo always bottom right, lots of breathing room, large short text.',
     saving: 'Saving...', save: 'Save Brand Kit', saved: '✓ Saved — generation already uses it',
+    logoHint: 'Upload the logo as a PNG with a transparent background (or SVG). That is how it shows up clean in your creatives.',
+    prevDark: 'On a dark background', prevLight: 'On a light background', preparing: 'Preparing the logo...', prepare: 'Prepare logo for creatives',
+    ready: '✓ Logo ready for creatives (transparent PNG).', readyKept: '✓ Logo ready for creatives.',
+    warnFoto: 'This image looks like a photo, not a logo. Your creatives will use the brand name as text. Upload the logo as a PNG with a transparent background.',
+    warnBg: 'I could not make this logo background transparent (the background is not flat). Creatives use the logo as it is. For a clean result, upload the logo as a PNG with a transparent background.',
+    warnFormat: 'This image format cannot be prepared. Upload the logo as a PNG with a transparent background.',
+    svgBig: 'The SVG is over 500 KB. Export the logo as a PNG with a transparent background.', prepErr: 'Could not prepare the logo',
   },
 } as const
 
@@ -110,6 +124,9 @@ export default function BrandKit({ companyId }: { companyId: string }) {
   const [logoMsg, setLogoMsg] = useState('')
   const [prevColors, setPrevColors] = useState<Kit['colors'] | null>(null)
   const [readingLogo, setReadingLogo] = useState(false)
+  const [logoMeta, setLogoMeta] = useState<LogoMeta | null>(null)
+  const [preparing, setPreparing] = useState(false)
+  const [procWarn, setProcWarn] = useState('')
 
   // Logo novo → a IA lê as cores do logo e já salva (brand-kit-suggest
   // from_logo). Fica um "Desfazer" com as cores de antes.
@@ -128,6 +145,29 @@ export default function BrandKit({ companyId }: { companyId: string }) {
     } catch (e) { setLogoMsg(e instanceof Error ? e.message : X.logoColorsErr) }
     setReadingLogo(false)
   }
+  // Lê logo_meta num select à parte e tolerante: sem a migration (coluna ausente) vira null e a tela segue como antes.
+  const loadMeta = useCallback(async () => {
+    setLogoMeta(await fetchLogoMeta(companyId))
+  }, [companyId])
+
+  // Prepara o logo pros criativos (PNG transparente, logo × foto) — brand-kit-suggest/process_logo.
+  const prepareLogo = async (extra: Record<string, unknown> = {}) => {
+    if (!session) return
+    setPreparing(true); setProcWarn(''); setLogoMsg('')
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/brand-kit-suggest`, {
+        method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'process_logo', ...extra }),
+      })
+      const d = await res.json().catch(() => ({})) as { logo_url?: string | null; warning?: string | null; colors?: Kit['colors'] | null; prev?: Kit['colors'] | null; error?: string }
+      if (!res.ok) throw new Error(d.error ?? X.prepErr)
+      if (d.logo_url) setLogo(d.logo_url)
+      if (d.warning === 'formato') setProcWarn(X.warnFormat)
+      if (d.colors) { setKit(k => ({ ...k, colors: d.colors! })); setPrevColors(d.prev ?? kit.colors); setLogoMsg(X.logoColors) }
+      await loadMeta()
+    } catch (e) { setLogoMsg(e instanceof Error ? e.message : X.prepErr) }
+    setPreparing(false)
+  }
+
   const undoColors = async () => {
     if (!prevColors) return
     const next = { ...kit, colors: prevColors }
@@ -144,9 +184,10 @@ export default function BrandKit({ companyId }: { companyId: string }) {
     setVoice(d?.voice ?? ''); setTone(d?.tone ?? ''); setAvoid(d?.avoid ?? '')
     setAutoGenerated(d?.auto_generated ?? true)
     setHasRow(!!d)
+    await loadMeta()
     setLoading(false)
     return !!d
-  }, [companyId])
+  }, [companyId, loadMeta])
 
   // Primeira visita sem kit nenhum: o agente decide sozinho na hora, sem
   // esperar o cron semanal. Silencioso — só mostra se conseguiu ou não.
@@ -190,8 +231,17 @@ export default function BrandKit({ companyId }: { companyId: string }) {
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setUploading(true)
+    setUploading(true); setProcWarn('')
     try {
+      // SVG: o bucket não aceita SVG — o texto do arquivo vai direto pra função, que devolve um PNG transparente.
+      if (file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)) {
+        if (file.size > 500 * 1024) { setLogoMsg(X.svgBig); return }
+        const svg = await file.text()
+        setAutoGenerated(false)
+        setUploading(false)
+        await prepareLogo({ svg, colors: true })
+        return
+      }
       const ext = (file.name.split('.').pop() || 'png').toLowerCase()
       const path = `renders/${companyId}/logo-${crypto.randomUUID()}.${ext}`
       const { error } = await supabase.storage.from('post-images').upload(path, file, { contentType: file.type || 'image/png', upsert: false })
@@ -205,7 +255,7 @@ export default function BrandKit({ companyId }: { companyId: string }) {
         await supabase.from('brand_dna').upsert({ company_id: companyId, logo_url: data.publicUrl }, { onConflict: 'company_id' })
         setAutoGenerated(false)
         setUploading(false)
-        await colorsFromLogo()
+        await prepareLogo({ colors: true })   // PNG transparente + logo × foto + cores (se for logo)
       }
     } finally { setUploading(false); if (fileRef.current) fileRef.current.value = '' }
   }
@@ -228,6 +278,10 @@ export default function BrandKit({ companyId }: { companyId: string }) {
   }
 
   const setColor = (group: 'primary' | 'accent', i: number, v: string) => setKit(k => ({ ...k, colors: { ...k.colors, [group]: k.colors[group].map((c, idx) => idx === i ? v : c) } }))
+
+  const meta = usableLogoMeta(logoMeta, logo)
+  const isFoto = meta?.kind === 'foto'
+  const preview = (meta && meta.png_url) || logo   // prefere o PNG preparado (anti logo velha: só se o meta é deste logo)
 
   if (loading) return <div style={{ fontSize: '12px', color: MUTED }}>{X.loading}</div>
 
@@ -268,27 +322,45 @@ export default function BrandKit({ companyId }: { companyId: string }) {
 
       {/* Logo */}
       <section>
-        <div style={{ fontSize: '11px', fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>{X.logo}</div>
+        <div style={{ fontSize: '11px', fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>{X.logo}</div>
+        <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '10px' }}>{X.logoHint}</div>
         <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ width: '90px', height: '90px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-            {logo ? <img src={logo} alt={X.logo} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} /> : <span style={{ fontSize: '10px', color: MUTED }}>{X.noLogo}</span>}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            {([['#0E0B0A', X.prevDark], ['#F5F1EA', X.prevLight]] as const).map(([bg, label]) => (
+              <div key={bg} style={{ textAlign: 'center' }}>
+                <div style={{ width: '90px', height: '90px', borderRadius: '10px', background: bg, border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '6px', boxSizing: 'border-box' }}>
+                  {preview ? <img src={preview} alt={X.logo} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} /> : <span style={{ fontSize: '10px', color: bg === '#0E0B0A' ? MUTED : '#666' }}>{logo ? '—' : X.noLogo}</span>}
+                </div>
+                <div style={{ fontSize: '9.5px', color: MUTED, marginTop: '3px' }}>{label}</div>
+              </div>
+            ))}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minWidth: '240px' }}>
-            <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{ display: 'none' }} />
-            <button onClick={() => fileRef.current?.click()} disabled={uploading} style={{ alignSelf: 'flex-start', padding: '8px 15px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontFamily: D }}>{uploading ? X.uploading : X.upload}</button>
+            <input ref={fileRef} type="file" accept="image/png,image/svg+xml" onChange={onFile} style={{ display: 'none' }} />
+            <button onClick={() => fileRef.current?.click()} disabled={uploading || preparing} style={{ alignSelf: 'flex-start', padding: '8px 15px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontFamily: D }}>{uploading ? X.uploading : X.upload}</button>
             <input value={logo} onChange={e => setLogo(e.target.value)} placeholder={X.logoPh} style={inputStyle} />
             {logo && (
-              <button onClick={async () => { await supabase.from('brand_dna').upsert({ company_id: companyId, logo_url: logo }, { onConflict: 'company_id' }); await colorsFromLogo() }} disabled={readingLogo}
-                style={{ alignSelf: 'flex-start', padding: '6px 12px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: ORANGE, fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>
-                {readingLogo ? X.readingLogo : X.fromLogo}
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button onClick={async () => { await supabase.from('brand_dna').upsert({ company_id: companyId, logo_url: logo }, { onConflict: 'company_id' }); await prepareLogo() }} disabled={preparing || readingLogo}
+                  style={{ padding: '6px 12px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: ORANGE, fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>
+                  {preparing ? X.preparing : X.prepare}
+                </button>
+                <button onClick={async () => { await supabase.from('brand_dna').upsert({ company_id: companyId, logo_url: logo }, { onConflict: 'company_id' }); await colorsFromLogo() }} disabled={readingLogo || preparing}
+                  style={{ padding: '6px 12px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: ORANGE, fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: D }}>
+                  {readingLogo ? X.readingLogo : X.fromLogo}
+                </button>
+              </div>
             )}
           </div>
         </div>
-        {(logoMsg || readingLogo) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px', fontSize: '11.5px', color: logoMsg.startsWith('🎨') || logoMsg === X.undone ? GREEN : readingLogo ? MUTED : '#f87171' }}>
-            <span>{readingLogo ? X.readingLogo : logoMsg}</span>
-            {prevColors && !readingLogo && <button onClick={undoColors} style={{ padding: '4px 10px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '7px', color: 'white', fontSize: '11px', cursor: 'pointer', fontFamily: D }}>↶ {X.undo}</button>}
+        {isFoto && <div style={{ marginTop: '10px', padding: '9px 13px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '9px', fontSize: '11.5px', color: '#FBBF24', lineHeight: 1.55 }}>{X.warnFoto}</div>}
+        {meta && !isFoto && !meta.png_url && !procWarn && <div style={{ marginTop: '10px', padding: '9px 13px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '9px', fontSize: '11.5px', color: '#FBBF24', lineHeight: 1.55 }}>{X.warnBg}</div>}
+        {procWarn && <div style={{ marginTop: '10px', padding: '9px 13px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: '9px', fontSize: '11.5px', color: '#FBBF24', lineHeight: 1.55 }}>{procWarn}</div>}
+        {meta && !isFoto && meta.png_url && !preparing && <div style={{ marginTop: '10px', fontSize: '11.5px', color: GREEN }}>{meta.bg_removed ? X.ready : X.readyKept}</div>}
+        {(logoMsg || readingLogo || preparing) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px', fontSize: '11.5px', color: logoMsg.startsWith('🎨') || logoMsg === X.undone ? GREEN : readingLogo || preparing ? MUTED : '#f87171' }}>
+            <span>{preparing ? X.preparing : readingLogo ? X.readingLogo : logoMsg}</span>
+            {prevColors && !readingLogo && !preparing && <button onClick={undoColors} style={{ padding: '4px 10px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '7px', color: 'white', fontSize: '11px', cursor: 'pointer', fontFamily: D }}>↶ {X.undo}</button>}
           </div>
         )}
       </section>

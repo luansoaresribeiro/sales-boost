@@ -12,6 +12,8 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
+import { processLogoPixels, downscale, isSafeLogoUrl, type LogoMeta } from '../_shared/logoPng.ts'
+import { decodeImage, encodePng, svgToPng, fetchLogoBytes, toBase64, probeLibs, MAX_SVG_BYTES } from '../_shared/logoCodec.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -96,39 +98,116 @@ Retorne SOMENTE um JSON:
   return null
 }
 
-// Cores a partir do LOGO (pedido do dono, 2026-10-15): entrou logo novo
-// (enviado à mão ou puxado do Instagram) → a IA lê o logo e devolve o sistema
-// de cores. Só cores que estão no logo (+ texto/fundo com contraste). SVG ou
-// link quebrado → null (fica o que já existia).
+// Análise do LOGO numa chamada só (pedido do dono, 2026-10-15; ampliada 2026-10-23): a IA diz
+// (1) se a imagem é mesmo um LOGO ou uma FOTO (rosto, fachada, produto…) e (2) o sistema de cores
+// da marca. Foto não vira logo nos criativos (cai no nome em texto) e as cores dela NÃO são usadas.
+// Falha da IA / link quebrado → null (o chamador trata como "logo", comportamento de antes).
 type Colors = Suggestion['colors']
+type LogoSource = { url: string } | { base64: string; media: 'image/png' | 'image/jpeg' }
+interface LogoAnalysis { kind: 'logo' | 'foto'; colors: Colors | null }
 const HEX = /^#[0-9a-fA-F]{6}$/
-async function colorsFromLogo(anthropicKey: string, logoUrl: string): Promise<Colors | null> {
-  if (!/^https:\/\//.test(logoUrl) || /\.svg(\?|$)/i.test(logoUrl)) return null
+async function analyzeLogo(anthropicKey: string, src: LogoSource): Promise<LogoAnalysis | null> {
+  if ('url' in src && (!/^https:\/\//.test(src.url) || /\.svg(\?|$)/i.test(src.url))) return null
   try {
+    const image = 'url' in src ? { type: 'image', source: { type: 'url', url: src.url } } : { type: 'image', source: { type: 'base64', media_type: src.media, data: src.base64 } }
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001', max_tokens: 300,
-        messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'url', url: logoUrl } }, { type: 'text', text: `Este é o logo de uma empresa. Extraia o sistema de cores DA MARCA a partir dele (não invente cor que não está no logo; ignore fundo branco/transparente de foto, a não ser que o logo seja só preto e branco).
-Responda SÓ em JSON: {"primary":["#hex","#hex"],"accent":["#hex","#hex"],"text":"#hex","bg":"#hex"}
-- "primary": as 2 cores principais do logo (se só tiver 1, repita uma versão mais escura dela).
-- "accent": 2 cores secundárias do logo (se não houver, tons da principal).
-- "text" e "bg": texto e fundo de post com bom contraste, combinando com o logo.` }] }],
+        model: 'claude-haiku-4-5-20251001', max_tokens: 350,
+        messages: [{ role: 'user', content: [image, { type: 'text', text: `Esta imagem foi enviada como o logo de uma empresa. Primeiro classifique:
+- "logo": marca/símbolo/letreiro/ícone/assinatura em texto — arte gráfica de marca, mesmo simples ou só com letras.
+- "foto": fotografia (pessoa/rosto, fachada, imóvel, produto, paisagem, selfie). Foto de perfil com o rosto de alguém é "foto".
+Depois extraia o sistema de cores DA MARCA a partir dela (não invente cor que não está na imagem; ignore fundo branco/transparente, a não ser que o logo seja só preto e branco). Se for "foto", pode devolver as cores mesmo assim (não serão usadas).
+Responda SÓ em JSON: {"kind":"logo"|"foto","primary":["#hex","#hex"],"accent":["#hex","#hex"],"text":"#hex","bg":"#hex"}
+- "primary": as 2 cores principais (se só tiver 1, repita uma versão mais escura dela).
+- "accent": 2 cores secundárias (se não houver, tons da principal).
+- "text" e "bg": texto e fundo de post com bom contraste, combinando com a marca.` }] }],
       }),
       signal: AbortSignal.timeout(30_000),
     })
-    if (!res.ok) { console.error('colorsFromLogo: IA recusou', res.status); return null }
+    if (!res.ok) { console.error('analyzeLogo: IA recusou', res.status); return null }
     const data = await res.json()
     const raw = String(data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
-    const c = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)) as Partial<Colors>
+    const c = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)) as Partial<Colors> & { kind?: string }
+    const kind: 'logo' | 'foto' = c.kind === 'foto' ? 'foto' : 'logo'
     const two = (a: unknown) => Array.isArray(a) ? a.map(String).filter(x => HEX.test(x)).slice(0, 2) : []
     const primary = two(c.primary), accent = two(c.accent)
-    if (!primary.length || !HEX.test(String(c.text)) || !HEX.test(String(c.bg))) return null
+    if (!primary.length || !HEX.test(String(c.text)) || !HEX.test(String(c.bg))) return { kind, colors: null }
     while (primary.length < 2) primary.push(primary[0])
     while (accent.length < 2) accent.push(accent[0] ?? primary[1])
-    return { primary, accent, text: String(c.text), bg: String(c.bg) }
-  } catch (e) { console.error('colorsFromLogo falhou', e); return null }
+    return { kind, colors: { primary, accent, text: String(c.text), bg: String(c.bg) } }
+  } catch (e) { console.error('analyzeLogo falhou', e); return null }
+}
+
+// ── PNG transparente do logo (2026-10-23) ──────────────────────────────────────────────────
+// Entrada: o logo_url atual, um link colado ou o TEXTO de um SVG. Saída: PNG ≤1024 px no bucket
+// post-images (renders/<empresa>/logo-png-<uuid>.png — o bucket só aceita png/jpeg/webp ≤5 MB,
+// por isso SVG nunca vai pro bucket como SVG) + logo_meta { src, png_url, kind, luma, bg_removed }.
+// Foto → só {kind:'foto'}. Fundo não liso → {kind:'logo', png_url:null} (não mexe). WebP/formato
+// que não decodifica → mantém o original, sem PNG, com aviso.
+interface LogoRun { meta: LogoMeta; colors: Colors | null; warning?: 'foto' | 'fundo' | 'formato' | 'ia'; logo_url?: string; error?: string }
+
+async function uploadPng(admin: ReturnType<typeof createClient>, companyId: string, png: Uint8Array): Promise<string | null> {
+  const path = `renders/${companyId}/logo-png-${crypto.randomUUID()}.png`
+  const { error } = await admin.storage.from('post-images').upload(path, png, { contentType: 'image/png', upsert: false })
+  if (error) { console.error('uploadPng falhou:', error.message); return null }
+  return admin.storage.from('post-images').getPublicUrl(path).data.publicUrl
+}
+
+async function processLogo(admin: ReturnType<typeof createClient>, anthropicKey: string, companyId: string, input: { url?: string; svg?: string }): Promise<LogoRun> {
+  const none = (src: string, kind: 'logo' | 'foto' = 'logo'): LogoMeta => ({ src, png_url: null, kind, luma: null, bg_removed: false })
+  const inUrl = input.url ?? ''
+  let svgPng: Uint8Array | null = null, original: Uint8Array | null = null, originalMime = ''
+  if (typeof input.svg === 'string') {
+    if (input.svg.length > MAX_SVG_BYTES) return { meta: none(inUrl), colors: null, error: 'SVG grande demais (máximo 500 KB).' }
+    svgPng = await svgToPng(input.svg)
+    if (!svgPng) return { meta: none(inUrl), colors: null, error: 'Não consegui ler esse SVG. Exporte o logo em PNG com fundo transparente.' }
+  } else {
+    if (!input.url || !isSafeLogoUrl(input.url)) return { meta: none(inUrl), colors: null, error: 'Endereço do logo não permitido (use um link https público).' }
+    const f = await fetchLogoBytes(input.url)
+    if ('error' in f) return { meta: none(inUrl), colors: null, error: f.error }
+    if (f.isSvg) { svgPng = await svgToPng(new TextDecoder().decode(f.bytes)); if (!svgPng) return { meta: none(inUrl), colors: null, warning: 'formato' } }
+    else { original = f.bytes; originalMime = f.mime }
+  }
+  const bytes = svgPng ?? original!
+  const img = await decodeImage(bytes)
+  const url = input.url ?? ''
+  // Classificação sobre a imagem inteira (reduzida), com o fundo original.
+  let analysis: LogoAnalysis | null = null
+  if (img) analysis = await analyzeLogo(anthropicKey, { base64: toBase64(await encodePng(downscale(img))), media: 'image/png' })
+  else if (url && originalMime) analysis = await analyzeLogo(anthropicKey, { url })
+  const kind = analysis?.kind ?? 'logo'
+  const colors = analysis?.colors ?? null
+  const iaWarn = analysis ? undefined : 'ia' as const
+
+  if (!img) return { meta: none(url, kind), colors, warning: 'formato' }            // WebP etc.: o original fica, sem PNG
+  if (kind === 'foto') return { meta: none(url, 'foto'), colors, warning: 'foto' }
+
+  const r = processLogoPixels(img)
+  // SVG sempre vira PNG (não existe SVG no bucket); PNG/JPEG só vira PNG novo se o fundo foi tratado.
+  const pngBytes = r ? await encodePng(r.img) : svgPng ? await encodePng(downscale(img)) : null
+  const pngUrl = pngBytes ? await uploadPng(admin, companyId, pngBytes) : null
+  if (svgPng && !pngUrl) return { meta: none(url), colors, error: 'Não consegui guardar o PNG do logo. Tente de novo.' }
+  const fromSvgText = !!svgPng && !input.url
+  const src = fromSvgText ? pngUrl! : url
+  const dims = r ? { w: r.img.width, h: r.img.height } : pngUrl ? { w: Math.min(img.width, 1024), h: Math.round(img.height * Math.min(1, 1024 / Math.max(img.width, img.height))) } : {}
+  const meta: LogoMeta = { src, png_url: pngUrl, kind: 'logo', luma: r?.luma ?? null, luma_lo: r?.luma_lo ?? null, luma_hi: r?.luma_hi ?? null, bg_removed: !!r?.bg_removed, ...dims }
+  return { meta, colors, logo_url: fromSvgText ? pngUrl! : undefined, warning: r ? iaWarn : 'fundo' }
+}
+
+// logo_meta num passo à parte e tolerante: sem a migration (coluna ausente) o logo segue como antes.
+async function saveLogoMeta(admin: ReturnType<typeof createClient>, companyId: string, meta: LogoMeta): Promise<boolean> {
+  try {
+    const { error } = await admin.from('brand_dna').upsert({ company_id: companyId, logo_meta: meta }, { onConflict: 'company_id' })
+    if (error) { console.error('brand-kit-suggest: logo_meta não gravado (migration aplicada?)', error.message); return false }
+    return true
+  } catch (e) { console.error('brand-kit-suggest: logo_meta falhou', e); return false }
+}
+
+// Roda o pipeline sem nunca derrubar quem chamou (cron/on_connect).
+async function processLogoSafe(admin: ReturnType<typeof createClient>, anthropicKey: string, companyId: string, url: string): Promise<LogoRun | null> {
+  try { return await processLogo(admin, anthropicKey, companyId, { url }) } catch (e) { console.error('processLogo falhou', e); return null }
 }
 
 // Salva só as cores no kit (preserva tipografia/composição) e devolve as
@@ -165,8 +244,10 @@ async function generateAndSave(admin: ReturnType<typeof createClient>, anthropic
 
   const urls = await gatherRealPhotoUrls(admin, companyId)
   let suggestion = urls.length >= 2 ? await askClaude(anthropicKey, urls) : null
-  // Logo novo do Instagram: as cores da marca saem do logo (fotos só dão a composição).
-  const logoColors = logoSet && logoUrl ? await colorsFromLogo(anthropicKey, logoUrl) : null
+  // Logo novo do Instagram: mesma chamada da IA classifica (logo × foto) e lê as cores — as cores
+  // da marca saem do logo (fotos só dão a composição); se a imagem for uma FOTO, as cores não valem.
+  const logoRun = logoSet && logoUrl ? await processLogoSafe(admin, anthropicKey, companyId, logoUrl) : null
+  const logoColors = logoRun && logoRun.meta.kind === 'logo' ? logoRun.colors : null
   if (logoColors) suggestion = { colors: logoColors, composition: suggestion?.composition ?? '' }
 
   if (!suggestion && !logoSet) {
@@ -186,8 +267,57 @@ async function generateAndSave(admin: ReturnType<typeof createClient>, anthropic
 
   const { error } = await admin.from('brand_dna').upsert(payload, { onConflict: 'company_id' })
   if (error) return { ok: false, error: error.message }
+  if (logoRun) await saveLogoMeta(admin, companyId, logoRun.meta)
 
   return { ok: true, based_on: urls.length, suggestion: suggestion ?? undefined, logo_set: logoSet }
+}
+
+// ── backfill_logos ─────────────────────────────────────────────────────────────────────────
+const BACKFILL_DEADLINE_MS = 90_000
+const EST_USD_PER_LOGO = 0.003   // 1 chamada Haiku com imagem pequena
+const strList = (v: unknown): string[] => Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.length > 0) : []
+
+async function backfillLogos(admin: ReturnType<typeof createClient>, anthropicKey: string, body: Record<string, unknown>) {
+  const t0 = Date.now()
+  const dryRun = body.dry_run !== false
+  const limit = Math.min(10, Math.max(1, Math.floor(Number(body.limit ?? 5)) || 5))
+  const only = strList(body.only_company_ids), exclude = new Set(strList(body.exclude_company_ids))
+  const libs = await probeLibs()
+
+  const { data: rows, error } = await admin.from('brand_dna').select('company_id, logo_url').not('logo_url', 'is', null).neq('logo_url', '').is('logo_meta', null).order('company_id')
+  if (error) return { ok: false, error: `consulta falhou (migration do logo_meta aplicada?): ${error.message}`, libs }
+  const candidates = (rows ?? []).filter(r => (only.length ? only.includes(r.company_id as string) : true) && !exclude.has(r.company_id as string))
+
+  const results: { company_id: string; kind: string | null; png_url: string | null; bg_removed: boolean; decoded: boolean | null; warning: string | null; wrote: boolean }[] = []
+  const skipped: { company_id: string; reason: string }[] = []
+  let processed = 0, wrote = 0, visited = 0
+  for (const row of candidates) {
+    if (processed >= limit || Date.now() - t0 > BACKFILL_DEADLINE_MS) break
+    visited++
+    const companyId = row.company_id as string, logoUrl = row.logo_url as string
+    try {
+      // Sem acesso pago: não gasta IA — a não ser que o pedido nomeie a empresa de propósito (empresa de teste).
+      if (!only.includes(companyId) && !(await hasPaidAccess(admin, companyId))) { skipped.push({ company_id: companyId, reason: 'sem acesso pago' }); continue }
+      if (dryRun) { processed++; results.push({ company_id: companyId, kind: null, png_url: null, bg_removed: false, decoded: null, warning: null, wrote: false }); continue }
+      processed++
+      const run = await processLogo(admin, anthropicKey, companyId, { url: logoUrl })
+      const decoded = run.warning === 'formato' ? false : true
+      const res = { company_id: companyId, kind: run.meta.kind as string | null, png_url: run.meta.png_url, bg_removed: run.meta.bg_removed, decoded, warning: run.warning ?? null, wrote: false }
+      results.push(res)
+      if (run.error) { skipped.push({ company_id: companyId, reason: `erro: ${run.error}` }); continue }
+      if (run.warning === 'ia') { skipped.push({ company_id: companyId, reason: 'IA falhou — não gravou' }); continue }
+      if (run.warning === 'formato' && (!libs.imagescript || !libs.resvg)) { skipped.push({ company_id: companyId, reason: 'biblioteca de imagem não carregou — não gravou' }); continue }
+      if (run.meta.kind === 'foto' && !isIgLogo(logoUrl)) { skipped.push({ company_id: companyId, reason: 'logo do dono parece foto — não gravou' }); continue }
+      const meta = { ...run.meta, src: logoUrl, backfilled_at: new Date().toISOString() }   // logo_url nunca muda: src = o atual
+      const { data: upd, error: upErr } = await admin.from('brand_dna').update({ logo_meta: meta }).eq('company_id', companyId).is('logo_meta', null).select('company_id')
+      if (upErr) { skipped.push({ company_id: companyId, reason: `gravação falhou: ${upErr.message}` }); continue }
+      if (upd?.length) { wrote++; res.wrote = true }
+    } catch (e) {
+      console.error('backfill_logos: empresa', companyId, e)
+      skipped.push({ company_id: companyId, reason: `exceção: ${String(e).slice(0, 150)}` })
+    }
+  }
+  return { ok: true, dry_run: dryRun, processed, wrote, skipped, remaining: candidates.length - visited, est_cost_usd: Number((processed * EST_USD_PER_LOGO).toFixed(4)), libs, results, elapsed_ms: Date.now() - t0 }
 }
 
 Deno.serve(async (req) => {
@@ -214,10 +344,22 @@ Deno.serve(async (req) => {
       if (!isIgLogo(bd?.logo_url as string | null)) return json({ ok: true, skipped: 'logo do dono' })
       const logoUrl = await fetchInstagramLogo(admin, companyId)
       if (!logoUrl) return json({ ok: false, error: 'sem foto de perfil' })
-      const colors = bd?.auto_generated === false ? null : await colorsFromLogo(anthropicKey, logoUrl)
+      // A classificação (logo × foto) roda sempre; as cores só entram quando o dono ainda não assumiu o kit
+      // e a imagem é de fato um logo.
+      const run = await processLogoSafe(admin, anthropicKey, companyId, logoUrl)
+      const colors = bd?.auto_generated === false || !run || run.meta.kind === 'foto' ? null : run.colors
       if (colors) await saveColors(admin, companyId, colors, { logo_url: logoUrl, auto_generated: true })
       else await admin.from('brand_dna').upsert({ company_id: companyId, logo_url: logoUrl, updated_at: new Date().toISOString() }, { onConflict: 'company_id' })
-      return json({ ok: true, logo_set: true, colors_set: !!colors })
+      if (run) await saveLogoMeta(admin, companyId, run.meta)
+      return json({ ok: true, logo_set: true, colors_set: !!colors, kind: run?.meta.kind ?? null })
+    }
+
+    // Backfill do logo_meta (2026-10-25): empresas que já tinham logo ANTES da função de PNG transparente
+    // ficam com logo_meta nulo. Só com cron_secret; sequencial; nunca muda logo_url nem cria linha.
+    // dry_run (padrão true) NÃO chama IA nem grava: só lista quem seria processado e o custo estimado.
+    if (body.action === 'backfill_logos') {
+      if (!isCron) return json({ error: 'Unauthorized' }, 401)
+      return json(await backfillLogos(admin, anthropicKey, body))
     }
 
     // Modo cron: decide sozinho, uma vez por semana, só pra quem ainda não
@@ -258,10 +400,36 @@ Deno.serve(async (req) => {
       const { data: bd } = await admin.from('brand_dna').select('logo_url').eq('company_id', company.id).maybeSingle()
       const logoUrl = bd?.logo_url as string | null
       if (!logoUrl) return json({ error: 'Envie o logo primeiro.' }, 400)
-      const colors = await colorsFromLogo(anthropicKey, logoUrl)
-      if (!colors) return json({ error: 'Não consegui ler as cores desse logo (use PNG ou JPG).' }, 400)
-      const prev = await saveColors(admin, company.id, colors)
-      return json({ ok: true, colors, prev })
+      const a = await analyzeLogo(anthropicKey, { url: logoUrl })
+      if (!a?.colors) return json({ error: 'Não consegui ler as cores desse logo (use PNG ou JPG).' }, 400)
+      if (a.kind === 'foto') return json({ error: 'Essa imagem parece uma foto, não um logo — não usei as cores dela. Envie o logo em PNG com fundo transparente.', kind: 'foto' }, 400)
+      const prev = await saveColors(admin, company.id, a.colors)
+      return json({ ok: true, colors: a.colors, prev })
+    }
+
+    // Prepara o logo pros criativos (PNG transparente + logo_meta). Entrada: o logo atual do Kit, um link
+    // colado (`url`, vira o logo do Kit) ou o texto de um SVG (`svg`, vira PNG no Kit). `colors:true` também
+    // grava as cores lidas do logo (só se for logo, não foto) e devolve as anteriores pra "desfazer".
+    if (body.action === 'process_logo') {
+      const svg = typeof body.svg === 'string' ? body.svg : null
+      const pasted = typeof body.url === 'string' && body.url.trim() ? body.url.trim() : null
+      if (svg !== null && (svg.length > MAX_SVG_BYTES || !/<svg[\s>]/i.test(svg))) return json({ error: 'SVG inválido ou grande demais (máximo 500 KB).' }, 400)
+      let url = pasted
+      if (svg === null && !url) {
+        const { data: bd } = await admin.from('brand_dna').select('logo_url').eq('company_id', company.id).maybeSingle()
+        url = (bd?.logo_url as string | null) || null
+        if (!url) return json({ error: 'Envie o logo primeiro.' }, 400)
+      }
+      if (url && !isSafeLogoUrl(url)) return json({ error: 'Endereço do logo não permitido (use um link https público).' }, 400)
+      const run = await processLogo(admin, anthropicKey, company.id, svg !== null ? { svg } : { url: url! })
+      if (run.error) return json({ error: run.error }, 400)
+      const logoUrl = run.logo_url ?? (svg === null ? url : null)
+      // Logo novo (SVG→PNG ou link colado) vira o logo do Kit; é do dono, então a empresa passa a ser "manual" no logo.
+      if (logoUrl && (run.logo_url || pasted)) await admin.from('brand_dna').upsert({ company_id: company.id, logo_url: logoUrl }, { onConflict: 'company_id' })
+      const metaSaved = await saveLogoMeta(admin, company.id, run.meta)
+      let colors: Colors | null = null, prev: Colors | null = null
+      if (body.colors === true && run.meta.kind === 'logo' && run.colors) { colors = run.colors; prev = await saveColors(admin, company.id, colors) }
+      return json({ ok: true, kind: run.meta.kind, png_url: run.meta.png_url, bg_removed: run.meta.bg_removed, luma: run.meta.luma, warning: run.warning ?? null, logo_url: logoUrl, meta_saved: metaSaved, colors, prev })
     }
 
     const result = await generateAndSave(admin, anthropicKey, company.id)
