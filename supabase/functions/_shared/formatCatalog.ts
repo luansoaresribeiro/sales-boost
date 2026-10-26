@@ -104,6 +104,23 @@ export async function fetchFormatCatalog(admin: SupaClient, verticalKey: string,
   return out
 }
 
+// Apelidos de formato da ficha (config.content_rules.format_aliases): formato antigo → formato novo
+// (ex.: carrossel_slides → carrossel_educativo). Só vale se o destino existe na ficha, está `live` e
+// não foi desligado; qualquer erro = sem apelidos (tolerante). Regra 6: o mapa vive na ficha.
+export async function fetchFormatAliases(admin: SupaClient, verticalKey: string): Promise<Record<string, string>> {
+  try {
+    const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
+    const cfg = data?.config as { content_formats?: unknown[]; content_rules?: { format_aliases?: unknown; disabled_formats?: unknown } } | null
+    const raw = cfg?.content_rules?.format_aliases
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+    const off = Array.isArray(cfg?.content_rules?.disabled_formats) ? (cfg!.content_rules!.disabled_formats as unknown[]).map(String) : []
+    const live = new Set((Array.isArray(cfg?.content_formats) ? cfg!.content_formats! : []).map(clean).filter((f): f is ContentFormat => !!f && f.status === 'live' && !off.includes(f.key)).map(f => f.key))
+    const out: Record<string, string> = {}
+    for (const [from, to] of Object.entries(raw as Record<string, unknown>)) if (/^[a-z0-9_]{2,60}$/.test(from) && typeof to === 'string' && live.has(to) && from !== to) out[from] = to
+    return out
+  } catch { return {} }
+}
+
 // Regras de conteúdo da ficha (regra 6): config.content_rules. Hoje só o
 // mínimo de vídeos por semana (decisão do dono 2026-10-14: "pelo menos uns 3
 // vídeos na semana e a estratégia, dependendo, pode jogar pra cima").

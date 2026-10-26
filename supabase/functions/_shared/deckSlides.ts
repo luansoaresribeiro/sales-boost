@@ -76,11 +76,13 @@ export function inventedNumbers(s: DeckSlide, allowed: Set<string>): string[] {
 export const numbersOf = (txt: string): Set<string> => new Set((txt.match(numRe) ?? []).map(n => n.replace(/[.,]/g, '')))
 
 /** Regras do prompt do carrossel (limites curtos por campo — o render mede o resto). */
-export function deckPromptRules(coverStyle: string, brandCta: string): string {
+/** Modo do tema (deckTopic.ts): regulado = só dicas conferidas; geral = sem fato; leve/ausente = como sempre foi. */
+export interface DeckTopicRules { mode: 'regulado' | 'geral' | 'leve'; tipCount?: number }
+export function deckPromptRules(coverStyle: string, brandCta: string, topic?: DeckTopicRules): string {
   const capa = coverStyle === 'pergunta' ? '"title" = uma PERGUNTA que o público se faz (até 70 caracteres)'
     : coverStyle === 'lista' ? '"title" = promessa curta (até 60 caracteres) e "items" = 3 a 4 linhas (até 45 caracteres cada) com o que vem nos próximos slides'
     : '"title" = gancho: afirmação forte (até 70 caracteres)'
-  return `- ESTE é um CARROSSEL DE SLIDES (design da marca, só texto na arte — sem foto): "slides" com 4 a 7 itens. Cada slide: {"layout","title","text","items","highlight","cta"}, em frases completas e curtas, NUNCA cortadas no meio, sem emoji, sem hashtag, sem setas.
+  return `- ESTE é um CARROSSEL DE SLIDES (design da marca, só texto na arte — sem foto): "slides" com ${topic?.mode === 'regulado' && topic.tipCount ? `${topic.tipCount + 2} itens (capa + ${topic.tipCount} slide${topic.tipCount > 1 ? 's' : ''} do meio, UM por dica, na ordem das dicas + fecho)` : '4 a 7 itens'}. Cada slide: {"layout","title","text","items","highlight","cta"}, em frases completas e curtas, NUNCA cortadas no meio, sem emoji, sem hashtag, sem setas.
   • 1º slide: "layout":"capa" — ${capa}; "text" = apoio opcional (até 100 caracteres).
   • slides do MEIO: um destes layouts por slide, variando entre eles:
       "lista" — "title" até 60 caracteres + "items" com 3 a 5 linhas separadas por \\n (até 80 caracteres cada);
@@ -89,17 +91,22 @@ export function deckPromptRules(coverStyle: string, brandCta: string): string {
       "destaque" — "text" = uma frase de até 110 caracteres; "title" opcional = rótulo de até 24 caracteres.
   • último slide: "layout":"fecho" — "title" = chamada final (até 60 caracteres); "text" = apoio opcional (até 100); "cta" = texto do botão (até 28 caracteres${brandCta ? `, ex.: "${brandCta}"` : ''}).
   • "highlight": 1 a 3 palavras do title/text, copiadas exatamente, pra pintar na cor da marca (ou vazio).
-  • NÚMEROS: só use número, preço, prazo ou estatística que esteja nos dados fornecidos acima. Na dúvida, escreva sem número.
+${topic?.mode === 'regulado'
+    ? '  • FATOS: use SÓ o que as DICAS CONFERIDAS abaixo dizem, sem acrescentar fato, número, prazo, taxa, lei, imposto nem programa. Números e nomes (leis, impostos, programas) exatamente como nas dicas.'
+    : topic?.mode === 'geral'
+      ? '  • SEM FATOS: dica GERAL e prática, sem número, prazo, taxa, valor, percentual nem nome de lei, imposto ou programa, e sem afirmar nenhuma regra.'
+      : '  • NÚMEROS: só use número, preço, prazo ou estatística que esteja nos dados fornecidos acima. Na dúvida, escreva sem número.'}
   Deixe "image" vazio.
 `
 }
 
 export const DECK_SLIDE_JSON = '[{"layout":"","title":"","text":"","items":"","highlight":"","cta":"","image":""}]'
 
-export function rewritePrompt(brandName: string, s: DeckSlide, reasons: { tooLong: boolean; numbers: string[] }): string {
+export function rewritePrompt(brandName: string, s: DeckSlide, reasons: { tooLong: boolean; numbers: string[]; extra?: string[] }): string {
   const why = [
     reasons.tooLong ? 'o texto não coube no quadro: escreva uma versão BEM mais curta (cerca de 60% do tamanho), com frases completas' : '',
     reasons.numbers.length ? `estes números não estão nos dados cadastrados e NÃO podem aparecer: ${reasons.numbers.join(', ')} — escreva sem número` : '',
+    ...(reasons.extra ?? []),
   ].filter(Boolean).join('; ')
   return `Você reescreve 1 slide de um carrossel de Instagram de "${brandName}". Motivo: ${why}.
 Slide atual (layout "${s.layout}"): ${JSON.stringify({ title: s.title, text: s.text, items: s.items, highlight: s.highlight, cta: s.cta })}

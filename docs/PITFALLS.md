@@ -676,3 +676,35 @@ destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
 - **Aprendizado por família/pilar lê `posts.familia`/`pilar_ss` à parte**: sem a migration `20261022150000`
   o `select` falha, os 3 grupos novos ficam `insufficient_data` e o 80/20 antigo segue igual. Nunca junte
   essas colunas no select principal de `fetchLearning`.
+
+## Carrossel educativo com fonte (2026-10-26)
+
+- **Ordem segura:** migration `20261026120000_carrossel_educativo_unico.sql` → deploy do `creative-generate`.
+  Deploy sem a migration não quebra nada: a ficha sem `regulated_categories`/`regulated_terms` desliga o
+  guarda (`topicCfgOf` → null) e o carrossel sai como antes. (Pós-QA: "como antes" inclui a vaga `dica_faq` sem dica liberada, que volta a levar no ângulo
+  o texto "dica GERAL: sem número, prazo, taxa, valor nem nome de lei" — só quando o guarda está desligado.) Migration sem o deploy também é segura (o
+  apelido só é lido pelo código novo; o código antigo veria `carrossel_educativo` como `live` sem guarda).
+- **Validar em código, não no prompt.** `_shared/deckTopic.ts` (puro) tem os validadores; `_shared/deckGuard.ts`
+  tem o fluxo com IA. Frase nova que escapou do modo geral/regulado? Acrescente o caso em
+  `scripts/test-deck-topic.mjs` antes de mexer nas regex — e confira que "três erros comuns" e "Visite em
+  horários diferentes" continuam passando (número por extenso pequeno SEM unidade é permitido; `um/uma` ficam
+  de fora de propósito, "um dia você terá a chave").
+- **`dica geral` do `runFaqSlot` era só prompt.** A frase "dica GERAL: sem número…" que ia no ângulo da vaga
+  não era conferida por nada; agora a vaga `dica_faq` sem dica liberada manda `forceGeneral` e o texto passa
+  pelo validador do modo geral.
+- **Números do regulado = só os das dicas.** Ficha, insights, ideia e intenção da estratégia ficam FORA do
+  `allowed` e do prompt do modo regulado/geral (oferta e intenção também saem do prompt). Não "liberar de volta".
+- **Classificação do tema** olha título/ângulo da vaga + gancho e oferta do Diretor. O `name` do formato entra no
+  título: não ponha nomes de categoria no nome de um formato (o antigo "…financiamento, documentação" classificaria
+  qualquer peça como regulada).
+- **Reconferência no meio da geração:** `decideTopic` reconfere até 2 dicas vencidas da categoria (Tavily + IA),
+  como o `runFaqSlot`; isso soma alguns segundos ao limite de 150 s. As reescritas e o verificador rodam em
+  paralelo por slide; se os logs passarem de ~110 s, tirar a reconferência daqui.
+- **Texto de reserva em inglês é curto** (`company.language === 'en'`); a resposta da dica continua no idioma
+  em que foi escrita.
+- **Classificação do tema nunca lê o nome do formato** (pós-QA 2026-10-26). `job.name` é o nome do formato no
+  catálogo ("Carrossel educativo (dicas conferidas; tema leve livre)"), com palavras que viram termo de categoria
+  ("dicas"). Use `topicText({ titleIsFormat: true, … })`; o título só conta quando é a ideia do dono. E não ponha
+  palavra genérica ("dica", "dicas") em `category_terms`.
+- **Números do guarda = valor + unidade** (`faqCheck.numberFacts`): `1500` = `1.500,00`, `3,0%` = `3%`, mas
+  `30%` ≠ `3%` ≠ `30 dias` e `150.000` ≠ `1.500`. Comparar só dígitos deixava passar colisões.

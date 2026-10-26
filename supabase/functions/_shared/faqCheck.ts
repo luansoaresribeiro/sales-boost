@@ -17,6 +17,12 @@ export interface FaqConfig {
   official_domains: string[]
   recheck_days: number
   topics: string
+  // Carrossel educativo (decisão C): categorias que só usam dica liberada, termos que
+  // classificam o tema e termos que carregam fato regulado. Tudo da ficha (regra 6);
+  // ficha sem eles = tudo "leve" como antes.
+  regulated_categories?: string[]
+  category_terms?: Record<string, string[]>
+  regulated_terms?: string[]
 }
 export type FaqStatus = 'geral' | 'conferida' | 'corrigida' | 'revisar' | 'aprovada_dono'
 export interface FaqCheck {
@@ -37,10 +43,16 @@ export async function fetchFaqConfig(admin: Admin, verticalKey: string | null): 
     const domains = raw.official_domains.map(d => String(d).toLowerCase().trim()).filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d))
     const categories = (Array.isArray(raw.categories) ? raw.categories : [])
       .filter(c => c && typeof c.key === 'string').map(c => ({ key: c.key, label: String(c.label ?? c.key) }))
+    const list = (v: unknown, max = 80) => (Array.isArray(v) ? v : []).map(x => String(x ?? '').trim()).filter(x => x.length >= 2 && x.length <= 60).slice(0, max)
+    const rawTerms = raw.category_terms && typeof raw.category_terms === 'object' ? raw.category_terms as Record<string, unknown> : {}
+    const category_terms: Record<string, string[]> = {}
+    for (const c of categories) { const t = list(rawTerms[c.key]); if (t.length) category_terms[c.key] = t }
     return {
       categories, official_domains: domains,
       recheck_days: Math.min(365, Math.max(7, Number(raw.recheck_days) || 60)),
       topics: String(raw.topics ?? '').slice(0, 1000),
+      regulated_categories: list(raw.regulated_categories, 20).filter(k => categories.some(c => c.key === k)),
+      category_terms, regulated_terms: list(raw.regulated_terms, 200),
     }
   } catch { return null }
 }
@@ -66,11 +78,12 @@ export function isDue(meta: FaqMeta | null | undefined, now = Date.now()): boole
   return !!c && (c.status === 'conferida' || c.status === 'corrigida') && !!c.next_check_at && Date.parse(c.next_check_at) <= now
 }
 
-export async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1200): Promise<string> {
+export const CHEAP_MODEL = 'claude-haiku-4-5-20251001'
+export async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1200, model = MODEL): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
   })
   if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`)
   const data = await res.json()
@@ -178,8 +191,38 @@ export async function checkAndSave(admin: Admin, row: FaqRow, opts: { anthropicK
   return { ...row, content: answer, meta }
 }
 
-// Números (com vírgula/ponto) que aparecem num texto — pra garantir que o
-// card resumido não inventa número que a dica conferida não tem.
-export function numbersIn(s: string): string[] {
-  return (s.match(/\d+(?:[.,]\d+)*/g) ?? []).map(n => n.replace(/[.,]/g, ''))
+// Números que aparecem num texto — pra garantir que o card/carrossel não inventa número que a dica
+// conferida não tem. Compara VALOR + UNIDADE, não dígitos soltos: "R$ 1500" = "R$ 1.500,00"; "3,0%" = "3%";
+// mas "30%" ≠ "3%" ≠ "30 dias" e "R$ 150.000" ≠ "R$ 1.500". Unidades: % (inclui "por cento"), R$ (inclui "reais"),
+// dia, mês, ano, semana, m². "150 mil" = 150000. Sem unidade = só o valor (não casa com número que tem unidade).
+/** Valor numérico no formato BR: "1.500,00" → "1500", "3,0" → "3", "1.500" → "1500", "2.5" → "2.5". */
+export function brNumber(raw: string): string {
+  let t = raw
+  const dots = (t.match(/\./g) ?? []).length, commas = (t.match(/,/g) ?? []).length
+  if (dots && commas) { const dec = Math.max(t.lastIndexOf('.'), t.lastIndexOf(',')); t = t.slice(0, dec).replace(/[.,]/g, '') + '.' + t.slice(dec + 1) }
+  else if (commas) t = commas === 1 ? t.replace(',', '.') : t.replace(/,/g, '')
+  else if (dots) t = t.split('.').slice(1).every(g => g.length === 3) ? t.replace(/\./g, '') : dots === 1 ? t : t.replace(/\./g, '')
+  const n = Number(t)
+  return Number.isFinite(n) ? String(n) : t
 }
+const normTxt = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+const UNIT_AFTER: [RegExp, string][] = [
+  [/^\s*(?:%|por\s?cento(?![a-z]))/, '%'], [/^\s*reais?(?![a-z])/, 'R$'], [/^\s*dias?(?![a-z])/, 'dia'], [/^\s*(?:mes|meses)(?![a-z])/, 'mes'],
+  [/^\s*anos?(?![a-z])/, 'ano'], [/^\s*semanas?(?![a-z])/, 'semana'], [/^\s*(?:m\u00b2|m2|metros?\s+quadrados?)(?![a-z0-9])/, 'm2'],
+]
+/** Cada número do texto como { raw: o que está escrito, key: "valor|unidade" }. */
+export function numberFacts(s: string): { raw: string; key: string }[] {
+  const n = normTxt(s), out: { raw: string; key: string }[] = []
+  for (const m of n.matchAll(/\d+(?:[.,]\d+)*/g)) {
+    const end = m.index! + m[0].length
+    let value = Number(brNumber(m[0])), rest = n.slice(end)
+    const mult = /^\s*(milhao|milhoes|mil)(?![a-z])/.exec(rest)
+    if (mult) { value *= mult[1] === 'mil' ? 1000 : 1e6; rest = rest.slice(mult[0].length) }
+    let unit = ''
+    if (/r\$\s*$/.test(n.slice(0, m.index))) unit = 'R$'
+    else for (const [re, u] of UNIT_AFTER) if (re.test(rest)) { unit = u; break }
+    out.push({ raw: m[0], key: `${Number.isFinite(value) ? String(value) : m[0]}|${unit}` })
+  }
+  return out
+}
+export const numbersIn = (s: string): string[] => numberFacts(s).map(f => f.key)

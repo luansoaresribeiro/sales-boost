@@ -413,6 +413,13 @@ Os posts que nascem daqui seguem a regra 1: só saem com aprovação do dono.
   Kit), rótulos na publicação (`agent-actions`) e legenda sem recado pro corretor (`catalog-package`).
   Detalhes e o que depende de aprovação: [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md#correções-pós-fase-3-2026-10-23).
 - **Próximas:** fase 2 (carrossel educativo com fonte, decisão C), 7, 6, 4, 5.
+- **Fase 2 (decisão C) — 🟡 em código, sem deploy nem migration (2026-10-26):** `carrossel_slides` e
+  `carrossel_educativo` viram um formato só. Tema regulado (jurídico, financiamento, documentação,
+  impostos) usa só dica liberada do `dica_faq`; sem dica liberada sai como dica geral sem número, prazo,
+  taxa nem lei; tema leve segue livre com a trava de números. Depende da migration
+  `20261026120000_carrossel_educativo_unico.sql` (o merge aprova) e do deploy do `creative-generate`
+  (`--no-verify-jwt`). Detalhes: [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md#fase-2-decisão-c--em-código-2026-10-26).
+- **Próximas:** 7, 6, 4, 5 (a fase 2 está em código, aguardando migration e deploy).
 
 ## Pedidos do dono (2026-10-20) — próximas frentes
 
