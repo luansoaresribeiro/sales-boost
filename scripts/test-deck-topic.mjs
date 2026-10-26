@@ -38,6 +38,8 @@ assert.equal(classifyByTerms('Bairro charmoso com praia e padaria boa', tcfg).ca
 ok('classificação por termos (nada acerta → null)')
 assert.equal(classifyByTerms('contrato de locação e fiador', tcfg).category, 'aluguel') // aluguel 2 acertos > juridico 1
 assert.equal(classifyByTerms('contrato de locação e fiador', tcfg).regulated, false)
+// ficha com aluguel regulado (migration 20261026130000): o mesmo tema vira regulado
+assert.equal(classifyByTerms('contrato de locação e fiador', { ...tcfg, regulated_categories: [...tcfg.regulated_categories, 'aluguel'] }).regulated, true)
 // empate entre regulada e leve → regulada (lado seguro)
 { const r = classifyByTerms('decoração e financiamento', tcfg); assert.equal(r.category, 'financiamento'); assert.equal(r.regulated, true) }
 ok('mais acertos vence; empate fica com a regulada')
