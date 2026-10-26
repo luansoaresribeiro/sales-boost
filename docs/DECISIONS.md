@@ -1792,3 +1792,25 @@ grátis de 30 s, acima — mantidos como histórico):
   `catalog-package`. Texto impresso na imagem fica de fora (PITFALLS).
 - **Decidido — `brand-compose`:** usa o logo preparado, com a mesma regra do `render-format`; o
   `render-format` não foi movido pra não mexer em produção.
+
+## 2026-10-26 — Carrossel educativo único com fonte (decisão C, fase 2 do PLANO-CRIATIVOS)
+
+- **Pedido do dono:** juntar `carrossel_slides` e `carrossel_educativo`. Tema regulado (jurídico,
+  financiamento, documentação, impostos — categorias do `dica_faq`) usa só dica liberada; sem dica liberada
+  daquele tema, sai como dica geral sem número, prazo, taxa nem nome de lei; tema leve continua livre com a
+  trava de números. A mudança na ficha de produção vai no PR.
+- **Decidido — um formato só:** `carrossel_educativo` (ficha) vira `live`; `carrossel_slides` fica
+  desligado na ficha de imóveis (`disabled_formats`) e vira apelido (`content_rules.format_aliases`), então
+  estratégia e vaga antigas continuam saindo, agora como educativo. O genérico `carrossel_slides` no código
+  não muda (outros setores). `weekly_mix` de estratégia nenhuma é alterado.
+- **Decidido — quem decide o tema é código + ficha:** termos da ficha (`config.faq.category_terms`) →
+  se não decidiu, uma pergunta barata à IA (resposta validada: fora da lista = leve). Termos regulados
+  (`regulated_terms`) e categorias reguladas (`regulated_categories`) também vivem na ficha (regra 6).
+- **Decidido — regras duras em código, não no prompt:** modo regulado só aceita números e termos que as dicas
+  têm; modo geral barra qualquer número, percentual, valor, prazo por extenso, "art.", "alíquota", nome de lei
+  e termo regulado; falhou → 1 reescrita → texto de reserva montado pelo código (resposta da dica / texto fixo
+  sem fato). No regulado ainda roda um verificador barato de afirmações.
+- **Pendente do dono:** **aluguel** e **geral** ficaram como tema LEVE (fora de `regulated_categories`) para
+  não travar o carrossel de aluguel sem dica; os termos sensíveis (Lei do Inquilinato, Código Civil…) estão
+  nos `regulated_terms` e acionam só a rede de segurança. Se o dono quiser aluguel como regulado, é acrescentar
+  `aluguel` em `config.faq.regulated_categories` (SQL na ficha).

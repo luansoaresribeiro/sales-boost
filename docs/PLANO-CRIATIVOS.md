@@ -628,6 +628,64 @@ Sales Boost. A Liga dos Sonhos não tem logo cadastrado, então não entra.
   `render-format` **não foi movido** (produção): a lógica existe em dois lugares, com comentário nos dois.
   A resposta do `brand-compose` ganhou `logo: 'prepared' | 'legacy' | 'foto' | 'none'`.
 
+## Fase 2 (decisão C) — em código (2026-10-26)
+
+Pedido do dono: juntar `carrossel_slides` e `carrossel_educativo`; tema regulado usa só dica liberada do
+`dica_faq`; sem dica liberada vira dica geral sem número, prazo, taxa nem lei; tema leve livre com a trava de
+números. Branch `claude/nifty-shannon-ysp818`; **nada foi aplicado nem deployado** (migration e deploy do
+`creative-generate`, função de cliente real, dependem de "pode").
+
+**O que entrou**
+
+- **`_shared/deckTopic.ts` (puro, testado em Node):** classificação por termos da ficha
+  (`category_terms`; mais acertos distintos vence, empate fica com a categoria regulada, nada = a IA decide);
+  escolha das dicas (até 4 `isPublishable` da categoria, as menos usadas); números permitidos = só os das dicas;
+  validadores dos 3 modos (regulado: números e `regulated_terms` presentes nas dicas, sem acento/maiúscula;
+  geral: barra dígito, %, R$, "reais", "por cento", número por extenso + dias/meses/anos/semanas/horas,
+  "art."/"artigo", "alíquota", "Lei <nome|número>" e qualquer termo regulado, mas deixa "três erros comuns";
+  leve: só avisa termo regulado); textos de reserva determinísticos (regulado: resposta da dica cortada em fim
+  de frase + "Fonte: <site>"; geral: texto fixo sem fato); `resolveAlias`.
+- **`_shared/deckGuard.ts`:** `decideTopic` (termos → pergunta barata ao Haiku, validada → tema regulado busca as
+  dicas `kind='faq'` da categoria, reconfere até 2 vencidas, usa até 4) e `guardDeck` (valida slides e legenda
+  depois da IA; reescreve 1x em paralelo; falhou → texto de reserva; no regulado, um verificador barato de
+  afirmações → reescrita 1x → reserva). `topicBlock` põe as dicas no prompt como ÚNICA fonte de fatos.
+- **`creative-generate`:** classifica dentro de `generateForCompany` quando `opts.deck` e a ficha tem faq (cobre a
+  ideia do dono e o "Gerar agora"); regulado/geral tiram intenção e oferta do prompt e usam como números
+  permitidos só os das dicas (geral: nenhum); 1 slide por dica entre capa e fecho; "Fonte: <site>" no fecho e na
+  legenda quando a dica tem fonte oficial; `used_count` das dicas sobe; `brief.deck_source = {mode, category,
+  tip_ids}` + linha em `reasoning`. O retry de overflow só aceita o slide reescrito se ele ainda passa no
+  validador do modo. Mantidos: `saveLabels`, `intent`, `decideVideoCta`/`lockSlide` (a validação nova roda DEPOIS),
+  `stripPieceTexts`. A vaga `dica_faq` sem dica liberada manda `forceGeneral`.
+- **Apelido de formato:** `faqCheck.fetchFaqConfig` lê `regulated_categories`, `category_terms`,
+  `regulated_terms` (tolerante); `formatCatalog.fetchFormatAliases` lê `content_rules.format_aliases` (só vale com
+  destino `live` e não desligado). `planWeekFromStrategy`, `makeNowJob` e `runPlanSlot` resolvem o apelido.
+- **Ficha (migration `20261026120000_carrossel_educativo_unico.sql`):** `carrossel_educativo` → `live`, família
+  `educativo`, nome "Carrossel educativo (dicas conferidas; tema leve livre)"; `disabled_formats` += `carrossel_slides`
+  (sem perder `post_card`); `format_aliases`; `config.faq` ganha `regulated_categories`
+  (`juridico`, `financiamento`, `documentacao`, `impostos`), `category_terms` e `regulated_terms`. Testada num
+  Postgres local: roda 2x sem mudar nada, preserva `post_card`, e o bloco REVERTER volta ao estado anterior.
+- **Tela:** o texto de `FaqTips.tsx` (PT/EN) diz que o carrossel educativo desses temas usa só dicas liberadas.
+- **Testes:** `node --experimental-strip-types scripts/test-deck-topic.mjs` (lê os termos da própria migration).
+
+**Divergências registradas**
+
+- **`allow_carrossel` não precisa ligar** (o plano da fase 2 dizia "ligado para esse formato"): o educativo é
+  sempre carrossel de slides (`opts.deck`), não passa pelo botão "considerar carrossel" da Área de Testes.
+- **A "dica geral" do `runFaqSlot` era só prompt:** o texto "dica GERAL: sem número…" ia no ângulo da vaga e nada
+  conferia. Agora é o modo geral validado por código (a vaga `dica_faq` sem dica liberada usa `forceGeneral`).
+- **Aluguel e geral ficaram LEVES** (decisão do dono pendente): estão em `category_terms`, mas fora de
+  `regulated_categories`. Peça de aluguel que cite "Lei do Inquilinato" ou "Código Civil" cai na rede de segurança
+  (reescreve 1x; se continuar, avisa em `reasoning`).
+- **Estratégia antiga com `carrossel_slides` no `weekly_mix`:** não foi editada (regra do pedido); o apelido faz a
+  vaga sair como educativo. Na próxima atualização da estratégia o catálogo já não lista `carrossel_slides`.
+- **Tema pelo Diretor:** como o "Gerar agora" e as vagas sem assunto não têm tema no título, a classificação
+  também lê o gancho e a oferta que o Diretor Criativo escolhe (uma chamada que já existia).
+- **Custo/tempo:** +1 chamada Haiku (classificação, só se os termos não decidem) e, no regulado, +1 ou +2 do
+  verificador; reescritas só quando o código acha problema. Sem custo de imagem novo.
+
+**Falta pro critério de pronto:** migration + deploy (`creative-generate` com `--no-verify-jwt`) e uma semana de
+teste numa empresa de teste com 2 educativos (um de tema regulado com dica liberada, um sem dica, um leve).
+
 ## Custos e Higgsfield
 
 - Educativo e Bairro: **custo de imagem ~zero** (montagem no servidor);

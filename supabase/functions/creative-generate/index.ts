@@ -20,7 +20,7 @@
  *     Testes liga isso, e auto_daily_test_image decide se gera imagem junto.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchContentRules, ensureMinVideos, labelMix, familyOf, type ContentPlan } from '../_shared/formatCatalog.ts'
+import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchFormatAliases, fetchContentRules, ensureMinVideos, labelMix, familyOf, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { applyQueroLock, buildSlotIntent, cleanIntent, cleanLabels, dropUnknownPilar, fetchSSPillars, intentBlock, type SlotIntent } from '../_shared/slotIntent.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
@@ -29,7 +29,9 @@ import { loadLessons, lessonsBlock, relearn } from '../_shared/contentLessons.ts
 import { deckPromptRules, DECK_SLIDE_JSON, lockSlide, inventedNumbers, normalizeDeck, normalizeSlide, numbersOf, pickCoverStyle, rewritePrompt, slideSummary, type DeckSlide } from '../_shared/deckSlides.ts'
 import { decideVideoCta, queroNotice, sanitizeCaptionCta } from '../_shared/videoCta.ts'
 import { stripPieceTexts, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
-import { checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
+import { callClaude as callModel, CHEAP_MODEL, checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
+import { decideTopic, guardDeck, loadGuardCfg, topicBlock, topicNote, type Ask, type TopicDecision } from '../_shared/deckGuard.ts'
+import { resolveAlias, tipNumbers } from '../_shared/deckTopic.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -461,6 +463,8 @@ interface GenOpts {
   // que a trend traz". Cada slide é um card do render-format (texto nítido da
   // marca, custo zero); a IA de imagem nunca escreve texto (regra 4).
   deck?: boolean
+  // Vaga de dica_faq sem dica liberada: o carrossel sai como dica geral (sem número, prazo, taxa nem lei), conferida em código.
+  forceGeneral?: boolean
 }
 
 // Rótulo único da peça (familia · pilar_ss · tema→pillar) + intenção que a guiou.
@@ -647,6 +651,18 @@ Decida o brief. Retorne APENAS um JSON:
   const automation = opts.itemId ? (await admin.from('engagement_automations').select('active, message, keywords').eq('company_id', company.id).eq('item_id', opts.itemId).maybeSingle()).data : null
   const fichaCtas = await fetchFichaCtas(admin, company.vertical_key)
   const quero = decideVideoCta(automation as { active?: boolean; message?: string; keywords?: string[] } | null, fichaCtas)
+  // Carrossel educativo com fonte (decisão C, PLANO-CRIATIVOS): o tema decide o modo — regulado (só dicas conferidas),
+  // geral (sem fato) ou leve (livre + trava de números). Setor sem faq/termos na ficha: null = fluxo de sempre.
+  const ask: Ask = (p, max, cheap) => callModel(anthropicKey, p, max, cheap ? CHEAP_MODEL : undefined)
+  let guardCfg: Awaited<ReturnType<typeof loadGuardCfg>> = null
+  let topic: TopicDecision | null = null
+  if (opts.deck) {
+    try {
+      guardCfg = await loadGuardCfg(admin, company.vertical_key ?? null)
+      if (guardCfg) topic = await decideTopic({ admin, ...guardCfg, text: [seed?.title, seed?.hook, seed?.angle, brief.hook_angle, brief.offer].filter(Boolean).join(' '), forceGeneral: opts.forceGeneral, ask, anthropicKey, company })
+    } catch (e) { console.error('creative-generate: classificação do tema falhou (segue como tema leve)', company.id, e); topic = null }
+  }
+  const strict = !!topic && topic.mode !== 'leve' // regulado/geral: só dicas ou nenhum fato — intenção e oferta da IA ficam fora do prompt
   const execPrompt = `${preamble(config, company, playbookBlock)}
 
 Você agora EXECUTA como esta personalidade: ${personaContent}
@@ -657,8 +673,8 @@ Siga fielmente o brief do Diretor Criativo:
 - Modelo de imagem: ${brief.template ?? 'livre'} — ${templateDesc[String(brief.template ?? 'livre')] ?? ''}
 - Ângulo do hook: ${brief.hook_angle ?? '—'}
 - CTA desejado: ${brief.cta ?? '—'}
-- Oferta: ${brief.offer ?? '—'}
-${intentTxt}${brief.template === 'product' && product ? `- Produto real desse post: "${product.title}" — a legenda precisa ser sobre ESTE produto especificamente.` : ''}
+- Oferta: ${strict ? '—' : brief.offer ?? '—'}
+${strict ? '' : intentTxt}${topic ? topicBlock(topic) : ''}${brief.template === 'product' && product ? `- Produto real desse post: "${product.title}" — a legenda precisa ser sobre ESTE produto especificamente.` : ''}
 ${frameworkContent ? `\nUse este framework de copy:\n${frameworkContent}` : ''}
 ${visualContent ? `\nConceito visual a evocar:\n${visualContent}` : ''}
 
@@ -667,7 +683,7 @@ ${visualRefs ? `\nReferências visuais da marca (Layouts & Estilos — inspire-s
 Escreva o post pronto pra publicar. Regras importantes:
 - "caption" é APENAS a legenda que vai no Instagram (texto pro público). NUNCA coloque nela instruções de imagem, descrição de foto nem "Slide 1/2/3".
 - Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
-${opts.deck ? deckPromptRules(coverStyle, quero.cta) : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
+${opts.deck ? deckPromptRules(coverStyle, quero.cta, topic ? { mode: topic.mode, tipCount: topic.tips.length } : undefined) : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
 - Depois de escrever, avalie o PRÓPRIO post: ele é forte/direto o suficiente pra também valer a pena repostar nos Stories tal como está (sem regerar nada)? Se sim, "story_worthy":true e "story_note": 1 frase curta dizendo por quê. Seja seletivo — nem todo post é bom pra Stories (ex: um card com muito texto lido rápido não funciona lá); só marque true quando fizer sentido de verdade.
 ${CARD_FIELD_INSTRUCTIONS[String(brief.template ?? '')] ?? ''}
 Retorne APENAS um JSON array:
@@ -696,11 +712,30 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   const sp = stripPieceTexts(post.caption ? String(post.caption) : null, post.cta ? String(post.cta) : null)
   const rawCta = sp.cta || (brief.cta ? stripPieceTexts(null, String(brief.cta)).cta : '') || null
   const lock = applyQueroLock(sp.caption || null, rawCta, automation as { active?: boolean; message?: string; keywords?: string[] } | null, fichaCtas)
-  const caption = lock.caption
+  let caption = lock.caption
   if (brief.cta) brief.cta = stripPieceTexts(null, String(brief.cta)).cta // os outros leitores de brief.cta (card/deck) também sem recado
   post.cta = rawCta ? lock.cta : null // CTA vazio fica vazio (não inventa CTA onde a IA não pôs); o deck lê post.cta
   // Avisos pro dono, nesta ordem: Diretor (brief.reasoning) · QUERO · recado que saiu · legenda vazia.
   brief.reasoning = [brief.reasoning, lock.notice, internalNotesNotice(sp.notes), sp.emptied ? EMPTY_CAPTION_NOTICE : null].filter(Boolean).join(' ') || brief.reasoning
+
+  // Carrossel de slides: validado e, se o tema pede, conferido ANTES de gravar — legenda e arte saem do mesmo texto conferido.
+  let deckSlides: DeckSlide[] = opts.deck && fmt === 'carrossel' ? normalizeDeck(Array.isArray(post.slides) ? post.slides : [], String(post.cta ?? quero.cta)).map(x => lockSlide(x, quero)) : []
+  let unitOk: ((i: number, s: DeckSlide) => boolean) | null = null
+  if (topic && guardCfg) {
+    try {
+      const g = await guardDeck({
+        topic, tcfg: guardCfg.tcfg, slides: deckSlides, caption: caption ?? '', expectDeck: opts.deck === true && fmt === 'carrossel', ctaText: String(post.cta ?? quero.cta),
+        lang: company.language, brand: company.business_name, ask, lockSlide: x => lockSlide(x, quero),
+        lockCaption: c => applyQueroLock(c, null, automation as { active?: boolean; message?: string; keywords?: string[] } | null, fichaCtas).caption ?? c,
+      })
+      deckSlides = g.slides; caption = g.caption || caption; unitOk = g.unitOk
+      brief.deck_source = { mode: topic.mode, category: topic.category, tip_ids: topic.mode === 'regulado' ? topic.tips.map(t => t.id) : [] }
+      brief.reasoning = [brief.reasoning, topicNote(topic), g.notes.length ? `Atenção: ${g.notes.join('; ')}.` : null].filter(Boolean).join(' ')
+    } catch (e) {
+      console.error('creative-generate: guarda do carrossel falhou', company.id, e)
+      if (strict) brief.reasoning = `${brief.reasoning ?? ''} Atenção: não consegui conferir o texto contra as dicas — confira tudo antes de aprovar.`.trim()
+    }
+  }
 
   const { data: inserted, error: insErr } = await admin.from('marketing_ai_test_content').insert({
     company_id: company.id, kind, idea, caption,
@@ -713,6 +748,11 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   }).select('id').single()
   if (insErr) throw new Error(insErr.message)
   await saveLabels(admin, inserted.id, opts.labels, opts.intent)
+  // Dica usada num carrossel regulado conta como usada (rodízio das menos usadas).
+  if (topic?.mode === 'regulado') {
+    await Promise.all(topic.tips.map(t => admin.from('marketing_ai_knowledge').update({ meta: { ...t.meta, used_count: (t.meta?.used_count ?? 0) + 1 } }).eq('id', t.id).eq('company_id', company.id)))
+      .catch((e: unknown) => console.error('creative-generate: used_count da dica não gravado', e))
+  }
 
   let mainImage: string | null = null
   let slides: { text: string; image_prompt: string; image_url: string | null; layout?: string }[] | null = null
@@ -743,9 +783,10 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
       // fecho), o render-format mede o texto de verdade e acusa `overflow`. Estourou (ou tem número que não veio
       // dos dados — regra 5)? 1 pedido de versão mais curta POR SLIDE, depois re-renderiza; se ainda
       // ainda estoura: o desenho descarta as linhas que passariam do rodapé e o reasoning avisa o dono ("slide apertado"). O dono aprova tudo antes de ir ao ar.
-      const deckSlides = normalizeDeck(Array.isArray(post.slides) ? post.slides : [], String(post.cta ?? quero.cta)).map(x => lockSlide(x, quero))
       const dataText = [preamble(config, company, playbookBlock), seedBlock, insights.map(i => `${i.title} ${i.description}`).join(' ')].join(' ')  // sem `idea`: é texto da própria IA, não dado
-      const allowed = numbersOf(dataText)
+      // regulado: só os números das dicas; geral: nenhum; leve: os dados cadastrados (como sempre foi).
+      const allowed = topic?.mode === 'regulado' ? tipNumbers(topic.tips) : topic?.mode === 'geral' ? new Set<string>() : numbersOf(dataText)
+      const strictWhy = topic?.mode === 'regulado' ? ['use só o que as dicas conferidas já dizem neste slide, sem acrescentar fato'] : topic?.mode === 'geral' ? ['sem número, prazo, taxa nem nome de lei'] : undefined
       const handle = String(company.instagram_username ?? '').replace(/^@/, '').trim()
       const renderSlide = (sl: DeckSlide, i: number) => renderGraphicCardFull(opts, company.id, 'slide', {
         layout: sl.layout, title: sl.title, text: sl.text, items: sl.items, highlight: sl.highlight, cta: sl.cta, cover_style: coverStyle,
@@ -757,11 +798,11 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
         const bad = inventedNumbers(cur, allowed)
         if (r?.overflow || bad.length) {
           try {
-            const raw = parseObj(await callClaude(anthropicKey, rewritePrompt(company.business_name, cur, { tooLong: !!r?.overflow, numbers: bad }), 600))
+            const raw = parseObj(await callClaude(anthropicKey, rewritePrompt(company.business_name, cur, { tooLong: !!r?.overflow, numbers: bad, extra: strictWhy }), 600))
             const next = normalizeSlide(raw, cur.layout === 'capa' || cur.layout === 'fecho' ? cur.layout : null, cur.cta)
             next.layout = cur.layout
             Object.assign(next, lockSlide(next, quero))
-            if (Object.keys(raw).length) { cur = next; r = (await renderSlide(cur, i)) ?? r }
+            if (Object.keys(raw).length && (!unitOk || unitOk(i, next))) { cur = next; r = (await renderSlide(cur, i)) ?? r }
           } catch (e) { console.error('creative-generate: slide mais curto falhou', company.id, i + 1, e) }
         }
         if (r?.overflow) {
@@ -1048,8 +1089,9 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
   const cronSecret = Deno.env.get('CRON_SECRET') ?? ''
   const since = new Date(Date.now() - 21 * 86400000).toISOString()
   const dates = [...new Set(slots.map(s => s.date))]
-  const [formats, { data: itemRows }, { data: usedRows }, { data: existingRows }] = await Promise.all([
+  const [formats, aliases, { data: itemRows }, { data: usedRows }, { data: existingRows }] = await Promise.all([
     fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
+    fetchFormatAliases(admin, company.vertical_key ?? 'generico'),
     admin.from('marketing_ai_knowledge').select('id, meta').eq('company_id', company.id).eq('kind', 'product'),
     admin.from('marketing_ai_test_content').select('item_id').eq('company_id', company.id).not('item_id', 'is', null).gte('created_at', since),
     admin.from('marketing_ai_test_content').select('planned_for, item_id, recipe').eq('company_id', company.id).in('planned_for', dates),
@@ -1090,7 +1132,9 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
     if (slot.producer === 'post') {
       // Formato que a ficha desligou (ex.: card "tipo tweet" em imóveis) e
       // ainda está numa estratégia antiga → sai como carrossel de slides.
-      const format = formats.some(f => f.key === slot.format) ? slot.format : DECK_FORMAT
+      // (carrossel_slides vira carrossel_educativo pelo apelido da ficha; sem apelido, fica como estava)
+      const wanted = resolveAlias(slot.format, aliases)
+      const format = formats.some(f => f.key === wanted) ? wanted : resolveAlias(DECK_FORMAT, aliases)
       jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format, ...labelsOf(slot) }); continue
     }
     if (slot.producer === 'item_video') {
@@ -1132,6 +1176,7 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
 // escolhido pelo dono ou o menos usado com 5+ fotos reais.
 async function makeNowJob(admin: SupaClient, company: Company, formatKey: string, itemId: string | null): Promise<SlotJob | string> {
   const formats = await fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id)
+  formatKey = resolveAlias(formatKey, await fetchFormatAliases(admin, company.vertical_key ?? 'generico'))
   const f = formats.find(x => x.key === formatKey && x.status === 'live' && x.producer !== 'dm')
   if (!f) return 'Esse tipo de criativo não está disponível agora.'
   const job: SlotJob = { date: '', producer: f.producer as SlotJob['producer'], name: f.name, pillar: f.pillar, purpose: 'Peça avulsa pedida pelo dono', format: f.key, familia: familyOf(f), tema: f.pillar }
@@ -1157,6 +1202,8 @@ async function makeNowJob(admin: SupaClient, company: Company, formatKey: string
 // date vazio = peça avulsa (botão "Gerar agora"), sem dia no calendário.
 async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Company, job: SlotJob, cronSecret: string): Promise<void> {
   try {
+    // Apelido de formato da ficha (carrossel_slides → carrossel_educativo): vaga de estratégia antiga segue valendo.
+    if (job.format) job = { ...job, format: resolveAlias(job.format, await fetchFormatAliases(admin, company.vertical_key ?? 'generico')) }
     if (job.producer === 'post') {
       // Vaga de dica: usa uma dica JÁ conferida (aba Dicas e FAQ). Sem dica
       // liberada, sai um carrossel de slides com o mesmo propósito.
@@ -1165,11 +1212,11 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
       // vai inteiro pro prompt. Sem ela (setor sem ficha de SS, vaga antiga/avulsa) fica como sempre foi.
       const ib = intentBlock(job.intent)
       const angleHead = job.intent ? `Pilar ${job.intent.pilar_ss_name}` : `Pilar ${job.pillar}`
-      const seed = { title: job.name, intent: ib || undefined, angle: `${angleHead}: ${job.purpose || 'serve a estratégia ativa'}${job.format === FAQ_FORMAT ? ' — dica GERAL: sem número, prazo, taxa, valor nem nome de lei (nada foi conferido em fonte oficial).' : ''}`, format: 'foto' }
+      const seed = { title: job.name, intent: ib || undefined, angle: `${angleHead}: ${job.purpose || 'serve a estratégia ativa'}`, format: 'foto' }
       // Só o card genérico (post_card, em setor que não desligou) usa o
       // caminho de imagem+template; qualquer outro formato de post — inclusive
       // um antigo que ficou numa estratégia — sai como carrossel de slides.
-      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: job.intent ?? null })
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', forceGeneral: job.format === FAQ_FORMAT, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: job.intent ?? null })
       return
     }
     if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }

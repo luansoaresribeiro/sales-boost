@@ -17,6 +17,12 @@ export interface FaqConfig {
   official_domains: string[]
   recheck_days: number
   topics: string
+  // Carrossel educativo (decisão C): categorias que só usam dica liberada, termos que
+  // classificam o tema e termos que carregam fato regulado. Tudo da ficha (regra 6);
+  // ficha sem eles = tudo "leve" como antes.
+  regulated_categories?: string[]
+  category_terms?: Record<string, string[]>
+  regulated_terms?: string[]
 }
 export type FaqStatus = 'geral' | 'conferida' | 'corrigida' | 'revisar' | 'aprovada_dono'
 export interface FaqCheck {
@@ -37,10 +43,16 @@ export async function fetchFaqConfig(admin: Admin, verticalKey: string | null): 
     const domains = raw.official_domains.map(d => String(d).toLowerCase().trim()).filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d))
     const categories = (Array.isArray(raw.categories) ? raw.categories : [])
       .filter(c => c && typeof c.key === 'string').map(c => ({ key: c.key, label: String(c.label ?? c.key) }))
+    const list = (v: unknown, max = 80) => (Array.isArray(v) ? v : []).map(x => String(x ?? '').trim()).filter(x => x.length >= 2 && x.length <= 60).slice(0, max)
+    const rawTerms = raw.category_terms && typeof raw.category_terms === 'object' ? raw.category_terms as Record<string, unknown> : {}
+    const category_terms: Record<string, string[]> = {}
+    for (const c of categories) { const t = list(rawTerms[c.key]); if (t.length) category_terms[c.key] = t }
     return {
       categories, official_domains: domains,
       recheck_days: Math.min(365, Math.max(7, Number(raw.recheck_days) || 60)),
       topics: String(raw.topics ?? '').slice(0, 1000),
+      regulated_categories: list(raw.regulated_categories, 20).filter(k => categories.some(c => c.key === k)),
+      category_terms, regulated_terms: list(raw.regulated_terms, 200),
     }
   } catch { return null }
 }
@@ -66,11 +78,12 @@ export function isDue(meta: FaqMeta | null | undefined, now = Date.now()): boole
   return !!c && (c.status === 'conferida' || c.status === 'corrigida') && !!c.next_check_at && Date.parse(c.next_check_at) <= now
 }
 
-export async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1200): Promise<string> {
+export const CHEAP_MODEL = 'claude-haiku-4-5-20251001'
+export async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1200, model = MODEL): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
   })
   if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`)
   const data = await res.json()
