@@ -178,7 +178,8 @@ export function computeEightyTwenty(posts: PostRow[], events: EventRow[], perf: 
   if (withoutMedia) warnings.push(`${withoutMedia} post(s) sem id do Instagram — conversas não puderam ser ligadas a eles.`)
   if (evUnattributed) warnings.push(`${evUnattributed} conversa(s) não ligadas a nenhum post da janela.`)
   if (cfg.labelsUnavailable) warnings.push('Não consegui ler família/pilar de Social Selling dos posts: esses grupos ficaram sem dados.')
-  else {
+  // Só avisa quando já existe algum post rotulado — sem nenhum, o prompt fica igual ao de antes (QA parte 2).
+  else if (withoutFamilia < inWindow.length || withoutPilarSs < inWindow.length) {
     if (withoutFamilia) warnings.push(`${withoutFamilia} post(s) sem família gravada ficaram fora do cálculo por família.`)
     if (withoutPilarSs) warnings.push(`${withoutPilarSs} post(s) sem pilar de Social Selling gravado ficaram fora do cálculo por pilar de SS e por família × pilar.`)
   }

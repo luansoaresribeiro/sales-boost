@@ -91,7 +91,11 @@ t('rótulos ausentes: grupos novos vazios, avisos e contadores', () => {
   const r = run(posts, [ev('a', 0, 'u1')], [], { now: NOW })
   assert.equal(r.status_by_kind.familia_pilar, 'insufficient_data'); assert.equal(r.groups.filter(x => x.kind === 'familia_pilar').length, 0)
   assert.equal(r.basis.posts_without_familia, 6); assert.equal(r.basis.posts_without_pilar_ss, 6)
-  assert.deepEqual(learningHighlights(r), []); assert.ok(r.basis.warnings.some(w => /sem família/.test(w)))
+  // Nenhum post rotulado: sem aviso novo, o prompt fica igual ao de antes (QA parte 2).
+  assert.deepEqual(learningHighlights(r), []); assert.ok(!r.basis.warnings.some(w => /sem família|sem pilar de Social/.test(w)))
+  // Com ao menos 1 post rotulado, os sem rótulo viram aviso.
+  const r2 = run([...posts, post('c', 0, true, { familia: 'fx' })], [], [], { now: NOW })
+  assert.ok(r2.basis.warnings.some(w => /sem família/.test(w)))
 })
 t('só um dos rótulos: não entra em família × pilar', () => {
   const posts = [0, 1, 2].map(i => post('a', i, true, { familia: 'fx' }))

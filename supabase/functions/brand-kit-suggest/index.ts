@@ -306,7 +306,7 @@ async function backfillLogos(admin: ReturnType<typeof createClient>, anthropicKe
       results.push(res)
       if (run.error) { skipped.push({ company_id: companyId, reason: `erro: ${run.error}` }); continue }
       if (run.warning === 'ia') { skipped.push({ company_id: companyId, reason: 'IA falhou — não gravou' }); continue }
-      if (run.warning === 'formato' && !libs.imagescript) { skipped.push({ company_id: companyId, reason: 'biblioteca de imagem não carregou — não gravou' }); continue }
+      if (run.warning === 'formato' && (!libs.imagescript || !libs.resvg)) { skipped.push({ company_id: companyId, reason: 'biblioteca de imagem não carregou — não gravou' }); continue }
       if (run.meta.kind === 'foto' && !isIgLogo(logoUrl)) { skipped.push({ company_id: companyId, reason: 'logo do dono parece foto — não gravou' }); continue }
       const meta = { ...run.meta, src: logoUrl, backfilled_at: new Date().toISOString() }   // logo_url nunca muda: src = o atual
       const { data: upd, error: upErr } = await admin.from('brand_dna').update({ logo_meta: meta }).eq('company_id', companyId).is('logo_meta', null).select('company_id')
