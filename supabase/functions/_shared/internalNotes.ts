@@ -23,7 +23,8 @@
 //    "Ops! Corretor, me passa a metragem" sai pelo vocativo.
 
 export const INTERNAL_NOTE_PREFIX = 'Recado da IA que saiu da legenda: '
-export const EMPTY_CAPTION_NOTICE = 'A legenda não saiu (a IA só escreveu um recado pro corretor, que foi retirado) — gere de novo.'
+export const EMPTY_CAPTION_PREFIX = 'A legenda não saiu'
+export const EMPTY_CAPTION_NOTICE = `${EMPTY_CAPTION_PREFIX} (a IA só escreveu um recado pro corretor, que foi retirado) — gere de novo.`
 
 const FLAG = /^[\s\u200d\ufe0f]*(?:⚠|🚨|❗)/u
 // Sinais de RECADO (a IA falando com quem publica, não com o público). Nada aqui marca só por palavra solta
@@ -120,4 +121,11 @@ export function stripInternalNotes(text: string): { text: string; notes: string[
 export function internalNotesNotice(notes: string[]): string | null {
   if (!notes.length) return null
   return INTERNAL_NOTE_PREFIX + notes.map(n => n.replace(/\s+/g, ' ')).join(' | ').slice(0, 500)
+}
+
+/** Legenda + CTA de uma peça: tira os recados dos dois. `emptied` = a legenda tinha texto e só sobrou recado (ficou vazia).
+ *  CTA que era só recado volta '' (quem chama usa o CTA do briefing). Entrada null/undefined vira '' (nada é inventado). */
+export function stripPieceTexts(caption: string | null | undefined, cta: string | null | undefined): { caption: string; cta: string; notes: string[]; emptied: boolean } {
+  const cap = stripInternalNotes(caption ?? ''), c = stripInternalNotes(cta ?? '')
+  return { caption: cap.text, cta: c.text, notes: [...cap.notes, ...c.notes], emptied: !!String(caption ?? '').trim() && !cap.text.trim() }
 }

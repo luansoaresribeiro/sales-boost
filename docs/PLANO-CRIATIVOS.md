@@ -587,6 +587,47 @@ Testes (sem biblioteca externa): `node --experimental-strip-types scripts/test-i
 - **Não mexido:** `creative-generate` (legenda de post/vídeo) — a mesma trava pode ser reutilizada lá
   num próximo PR.
 
+## Pontas soltas pós-fase 3 (2026-10-25)
+
+Fecha o que a seção "Correções pós-fase 3 (2026-10-23)" deixou de fora. Tudo em branch, nada publicado ainda.
+
+**Divergência (2026-10-26):** o `brand-kit-suggest` com o `backfill_logos` foi publicado antes do PR (v18;
+voltar = v17), a pedido do dono ("faça por mim" o primeiro "Preparar logo"). Rodado **só na Tespon**:
+`dry_run` → `libs: {imagescript: true, resvg: true}` (as duas bibliotecas carregam no servidor de verdade);
+depois `dry_run:false` → logo classificado `logo`, fundo branco removido, `png_url` gravado,
+`logo_url` intacto, custo ~US$ 0,003. Slides antes/depois (fundo escuro e claro) renderizados em produção:
+no claro o círculo azul fica limpo; no escuro ganha a pílula clara (logo escuro, contraste baixo).
+Contagem para o backfill do resto (26/10): **só 1 empresa** com logo e sem `logo_meta` — a do próprio
+Sales Boost. A Liga dos Sonhos não tem logo cadastrado, então não entra.
+
+- **Backfill do logo (`brand-kit-suggest`, ação `backfill_logos`).** Empresas que já tinham logo antes do PNG
+  transparente ficam com `brand_dna.logo_meta` nulo (e o criativo cai no logo de sempre). A ação, só com
+  `cron_secret`, preenche isso: `dry_run` (padrão `true`: não chama IA nem grava, só lista e estima custo),
+  `limit` (padrão 5, máx. 10), `only_company_ids[]`, `exclude_company_ids[]`; sequencial, prazo ~90 s; pula
+  empresa sem acesso pago (exceto nomeada em `only_company_ids`). Grava com `update … is('logo_meta', null)`
+  (nunca cria linha), `logo_url` nunca muda, o meta ganha `backfilled_at`. Não grava se a IA falhar, se a
+  biblioteca de imagem não carregou, nem se um logo **do dono** (que não é `logo-ig-*`) for classificado como
+  foto (só lista em `skipped`). Devolve `libs` (imagescript/resvg carregaram?). **Divergência do doc de
+  2026-10-23/DECISIONS** ("sem backfill automático"): continua sem cron — é uma chamada manual, a pedido.
+- **Aprendizado por família e pilar (`_shared/learning.ts`).** Além de pilar/receita/formato, agrupa por
+  `familia`, `pilar_ss` e `familia × pilar_ss` (só posts com os dois). Os 3 grupos novos só **medem** (sem
+  `suggested_share_pct`). Rótulos lidos num `select` à parte e tolerante (sem a coluna: os 3 ficam
+  `insufficient_data` + aviso). `learningHighlights` monta, **por código e sem IA**, uma frase só quando a
+  combinação família × pilar está `ok` e há **um único** 1º lugar (empate = sem frase). O refresh do
+  `strategy-generate` cita só essa frase; se o `what_changed` da IA não a trouxer, o código anexa
+  "Medido: …" em `reasoning` e `recommendation` do log da estratégia.
+- **Legenda sem recado pro corretor nas peças de foto, deck e vídeo.** `stripPieceTexts` (em
+  `_shared/internalNotes.ts`) roda no `creative-generate` (`generateForCompany` e `runVideoSlot`) **antes** da
+  trava do QUERO, em legenda e CTA; CTA que era só recado volta ao do briefing; `post.cta` limpo (o deck lê
+  ele). `reasoning` = Diretor · aviso do QUERO · recado que saiu · "legenda não saiu". O `keepQueroNotice`
+  passou a manter os 3 avisos no vídeo. **Fora:** `runFaqSlot` (texto vem de dica conferida; só ganhou a
+  linha "a legenda é pro público" no prompt). **Limite:** texto **impresso na imagem** (cards `card_*`, slides)
+  não passa por essa trava (ver PITFALLS).
+- **`brand-compose` usa o logo preparado.** `_shared/logoResolve.ts` (`resolveLogo`) tem a mesma lógica do
+  `render-format` (foto → sem logo; PNG preparado só se `src === logo_url`; erro → logo de sempre). O
+  `render-format` **não foi movido** (produção): a lógica existe em dois lugares, com comentário nos dois.
+  A resposta do `brand-compose` ganhou `logo: 'prepared' | 'legacy' | 'foto' | 'none'`.
+
 ## Custos e Higgsfield
 
 - Educativo e Bairro: **custo de imagem ~zero** (montagem no servidor);

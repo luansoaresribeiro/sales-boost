@@ -60,6 +60,15 @@ export async function svgToPng(svg: string, maxSide = 1024): Promise<Uint8Array 
   } catch (e) { console.error('logoCodec.svgToPng falhou (SVG inválido?):', e); return null }   // erro de SVG não invalida o resvg já iniciado
 }
 
+/** Diagnóstico: as duas libs carregam neste ambiente? (usado só pelo backfill_logos do brand-kit-suggest.) */
+export async function probeLibs(): Promise<{ imagescript: boolean; resvg: boolean; errors: string[] }> {
+  const errors: string[] = []
+  let imagescript = false, resvgOk = false
+  try { await lib(); imagescript = true } catch (e) { imageLib = null; errors.push(`imagescript: ${String(e).slice(0, 200)}`) }
+  try { await resvg(); resvgOk = true } catch (e) { resvgReady = null; errors.push(`resvg: ${String(e).slice(0, 200)}`) }
+  return { imagescript, resvg: resvgOk, errors }
+}
+
 export interface Fetched { bytes: Uint8Array; mime: string; isSvg: boolean }
 
 /** Baixa o logo colado pelo dono: só https público, até 5 MB (500 KB se SVG), 15 s, no máx. 3 redirecionamentos (cada um revalidado). */

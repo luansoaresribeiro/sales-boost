@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 // Roda: node --experimental-strip-types scripts/test-internal-notes.mjs
 // Frase nova de recado da IA que escapou? Acrescente o caso aqui ANTES de mexer nas regras de _shared/internalNotes.ts.
-import { stripInternalNotes, internalNotesNotice, INTERNAL_NOTE_PREFIX } from '../supabase/functions/_shared/internalNotes.ts'
+import { stripInternalNotes, internalNotesNotice, stripPieceTexts, INTERNAL_NOTE_PREFIX, EMPTY_CAPTION_NOTICE } from '../supabase/functions/_shared/internalNotes.ts'
+import { keepQueroNotice, queroNotice } from '../supabase/functions/_shared/videoCta.ts'
 const REAL = '⚠️ Sobre a metragem: os dados que recebi precisam de confirmação antes de publicar — prefiro não divulgar um número incorreto do que te passar informação errada. Me chama no direct e te passo a metragem confirmada junto com mais detalhes do imóvel.'
 const GOOD = 'Apartamento de 3 quartos na Barra, pertinho da praia. Luz natural o dia todo e varanda com vista aberta.'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
@@ -114,4 +115,16 @@ ok('listas do QA (rodada 2): boas passam, ruins saem')
 { const t = 'Linha 1\n\n\nLinha 2\n- item'; assert.equal(stripInternalNotes(t).text, t); ok('sem recado: texto idêntico (inclusive espaços)') }
 // o aviso
 { const a = internalNotesNotice(['x  y']); assert.ok(a.startsWith(INTERNAL_NOTE_PREFIX)); assert.equal(internalNotesNotice([]), null); ok('aviso com prefixo constante') }
+// stripPieceTexts (creative-generate): legenda + CTA
+{ const r = stripPieceTexts(`${GOOD}\n\n${REAL}`, 'Me chama no direct'); assert.equal(r.caption, GOOD); assert.equal(r.cta, 'Me chama no direct'); assert.equal(r.emptied, false); assert.equal(r.notes.length, 1); ok('stripPieceTexts: tira o recado, mantém legenda e CTA') }
+{ const r = stripPieceTexts(REAL, 'Corretor, confirme o preço antes de eu escrever.'); assert.equal(r.caption, ''); assert.equal(r.cta, ''); assert.equal(r.emptied, true); assert.equal(r.notes.length, 2); ok('stripPieceTexts: esvazia legenda e CTA que eram só recado') }
+{ const r = stripPieceTexts(null, undefined); assert.deepEqual(r, { caption: '', cta: '', notes: [], emptied: false }); ok('stripPieceTexts: vazio não é "esvaziado"') }
+for (const t of ['Fale com o corretor João pelo direct.', 'Aviso importante: o condomínio inclui água e gás.', 'Antes de publicar seu anúncio, tire fotos com luz natural.']) { const r = stripPieceTexts(t, 'Comente QUERO'); assert.equal(r.caption, t); assert.equal(r.cta, 'Comente QUERO'); assert.equal(r.emptied, false) }
+ok('stripPieceTexts: educativos passam intactos')
+// keepQueroNotice: item-videos preserva os 3 avisos
+{ const q = queroNotice('Me chama no direct'), rec = internalNotesNotice(['x']);
+  assert.equal(keepQueroNotice(`Vídeo sendo feito. ${q} ${rec}`), `${q} ${rec}`)           // QUERO não aprovado + recado
+  assert.equal(keepQueroNotice(`Vídeo sendo feito. ${rec} ${EMPTY_CAPTION_NOTICE}`), `${rec} ${EMPTY_CAPTION_NOTICE}`) // QUERO aprovado (sem aviso) + recado + vazio
+  assert.equal(keepQueroNotice(`Vídeo. ${EMPTY_CAPTION_NOTICE}`), EMPTY_CAPTION_NOTICE)
+  assert.equal(keepQueroNotice('Vídeo sendo feito.'), null); assert.equal(keepQueroNotice(null), null); ok('keepQueroNotice mantém QUERO, recado e legenda vazia') }
 console.log(`\n${n} grupos OK`)

@@ -58,7 +58,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { answerContextBlock } from '../_shared/answerContext.ts'
-import { fetchLearning, learningPromptBlock } from '../_shared/learning.ts'
+import { fetchLearning, learningPromptBlock, learningHighlights } from '../_shared/learning.ts'
 import { fetchContentRules, fetchFormatCatalog, formatCatalogBlock, sanitizeContentPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { setupMissing } from '../_shared/setupReady.ts'
@@ -768,7 +768,8 @@ async function runRefresh(admin: SupaClient, supabaseUrl: string, cronSecret: st
 
     // P2: números 80/20 calculados por código (aditivo; se falhar, prompt igual ao de antes).
     let learningBlock = ''
-    try { learningBlock = learningPromptBlock(await fetchLearning(admin, company.id)) } catch (e) { console.error('learning 80/20 falhou (ignorado):', e) }
+    let learningPhrases: string[] = []
+    try { const lr = await fetchLearning(admin, company.id); learningBlock = learningPromptBlock(lr); learningPhrases = learningHighlights(lr) } catch (e) { console.error('learning 80/20 falhou (ignorado):', e) }
 
     const prompt = `Você é Hermes, ATUALIZANDO uma estratégia ativa (refresh de rotina mensal, ou porque o check-up semanal pediu ajuste) — a TESE principal já está decidida e NÃO deve mudar aqui, só o plano tático (funil/metas/orçamento/prioridades) precisa refletir o que já funcionou até agora + os dados mais recentes.
 
@@ -826,10 +827,14 @@ Retorne APENAS um JSON:
       await admin.from('marketing_ai_strategy_goals').insert(goals.map(g => ({ ...g, strategy_id: strategyId })))
     }
 
+    // Frase medida (montada por código): se a IA não a citou, anexa — o número no log é sempre o medido.
+    const changed = String(parsed.what_changed ?? '')
+    const missing = learningPhrases.filter(f => !changed.includes(f))
+    const measured = missing.length ? ` Medido: ${missing.join(' ')}` : ''
     await admin.from('marketing_ai_strategy_log').insert({
       company_id: company.id, strategy_id: strategyId, decision_type: 'update',
-      recommendation: String(parsed.what_changed ?? 'Plano tático atualizado com dados novos.'),
-      reasoning: String(parsed.what_changed ?? ''), status: 'implemented',
+      recommendation: String(parsed.what_changed ?? 'Plano tático atualizado com dados novos.') + measured,
+      reasoning: changed + measured, status: 'implemented',
     })
     await logStrategyCost(admin, company.id, 'refresh', true)
   } catch (err) {

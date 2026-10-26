@@ -1,6 +1,6 @@
 // Roda: node --experimental-strip-types scripts/test-learning.mjs
 import assert from 'node:assert/strict'
-import { computeEightyTwenty as run } from '../supabase/functions/_shared/learning.ts'
+import { computeEightyTwenty as run, learningHighlights, learningPromptBlock } from '../supabase/functions/_shared/learning.ts'
 
 const NOW = Date.parse('2026-10-01T12:00:00Z')
 let n = 0
@@ -65,5 +65,47 @@ t('fora da janela de 56 dias é ignorado', () => {
   const old = [0, 1, 2].map(i => post('a', i, true, { published_at: new Date(NOW - (60 + i) * 86400000).toISOString() }))
   const r = run([...old, ...posts3('b')], [ev('b', 0, 'u1')], [], { now: NOW })
   assert.equal(r.basis.posts_in_window, 3)
+})
+
+// ── rótulos novos: família, pilar_ss, família × pilar ──
+const lp = (fam, ps, i, extra = {}) => post(`${fam}${ps}`, i, true, { familia: fam, pilar_ss: ps, ...extra })
+const combo = (r, k) => r.groups.find(x => x.kind === 'familia_pilar' && x.key === k)
+t('combo único em 1º: frase pronta por código', () => {
+  const posts = [0, 1, 2].flatMap(i => [lp('fx', 'p1', i), lp('fy', 'p2', i)])
+  const events = [ev('fxp1', 0, 'u1'), ev('fxp1', 1, 'u2'), ev('fyp2', 0, 'u3')]
+  const r = run(posts, events, [{ media_id: 'm_fxp1_0', saves: 2, shares: null }], { now: NOW })
+  assert.equal(r.status_by_kind.familia_pilar, 'ok')
+  assert.equal(combo(r, 'fx × p1').rank, 1); assert.equal(combo(r, 'fx × p1').suggested_share_pct, null)
+  const h = learningHighlights(r)
+  assert.equal(h.length, 1); assert.match(h[0], /fx × p1/); assert.match(h[0], /2 conversa/); assert.match(h[0], /2 save/); assert.doesNotMatch(h[0], /compartilhamento/)
+  assert.match(learningPromptBlock(r), /cite só estas/)
+})
+t('empate no 1º lugar: sem frase', () => {
+  const posts = [0, 1, 2].flatMap(i => [lp('fx', 'p1', i), lp('fy', 'p2', i)])
+  const r = run(posts, [ev('fxp1', 0, 'u1'), ev('fyp2', 0, 'u2')], [], { now: NOW })
+  assert.equal(r.status_by_kind.familia_pilar, 'ok'); assert.deepEqual(learningHighlights(r), [])
+  assert.doesNotMatch(learningPromptBlock(r), /cite só estas/)
+})
+t('rótulos ausentes: grupos novos vazios, avisos e contadores', () => {
+  const posts = [...posts3('a'), ...posts3('b')]
+  const r = run(posts, [ev('a', 0, 'u1')], [], { now: NOW })
+  assert.equal(r.status_by_kind.familia_pilar, 'insufficient_data'); assert.equal(r.groups.filter(x => x.kind === 'familia_pilar').length, 0)
+  assert.equal(r.basis.posts_without_familia, 6); assert.equal(r.basis.posts_without_pilar_ss, 6)
+  // Nenhum post rotulado: sem aviso novo, o prompt fica igual ao de antes (QA parte 2).
+  assert.deepEqual(learningHighlights(r), []); assert.ok(!r.basis.warnings.some(w => /sem família|sem pilar de Social/.test(w)))
+  // Com ao menos 1 post rotulado, os sem rótulo viram aviso.
+  const r2 = run([...posts, post('c', 0, true, { familia: 'fx' })], [], [], { now: NOW })
+  assert.ok(r2.basis.warnings.some(w => /sem família/.test(w)))
+})
+t('só um dos rótulos: não entra em família × pilar', () => {
+  const posts = [0, 1, 2].map(i => post('a', i, true, { familia: 'fx' }))
+  const r = run(posts, [], [], { now: NOW })
+  assert.equal(r.groups.filter(x => x.kind === 'familia').length, 1); assert.equal(r.groups.filter(x => x.kind === 'familia_pilar').length, 0)
+})
+t('labelsUnavailable: 3 tipos novos insuficientes + aviso', () => {
+  const posts = [0, 1, 2].flatMap(i => [lp('fx', 'p1', i), lp('fy', 'p2', i)])
+  const r = run(posts, [ev('fxp1', 0, 'u1')], [], { now: NOW, labelsUnavailable: true })
+  for (const k of ['familia', 'pilar_ss', 'familia_pilar']) assert.equal(r.status_by_kind[k], 'insufficient_data')
+  assert.ok(r.basis.warnings.some(w => /Não consegui ler família/.test(w)))
 })
 console.log(`\n${n} testes passaram`)

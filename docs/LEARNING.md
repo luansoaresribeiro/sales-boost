@@ -86,6 +86,17 @@ e `fetchLearning` (lê `posts` com pilar/receita/formato,
 - Limite conhecido: "DMs" ainda não têm fonte — só existem comentários
   com intenção em `engagement_events`; DMs recebidas não são gravadas.
 
+### Por família e pilar de Social Selling (2026-10-25)
+
+`computeEightyTwenty` agora também agrupa por `familia`, `pilar_ss` e `familia_pilar` ("família × pilar", só
+posts com os dois rótulos; colunas `posts.familia`/`pilar_ss`, migration `20261022150000`). Mesmas regras de
+elegibilidade e score; esses 3 grupos **não** têm `suggested_share_pct` (só medem). `basis` ganhou
+`posts_without_familia`/`posts_without_pilar_ss` + avisos; os rótulos são lidos num `select` à parte e
+tolerante (falhou → os 3 tipos viram `insufficient_data` + aviso, o resto segue). `learningHighlights` gera,
+por código, uma frase só se `familia_pilar` está `ok` e há um único rank 1. **Relatório semanal ainda não
+existe** (ver "Relatório semanal" abaixo): hoje a frase só aparece no `refresh` da estratégia (prompt "cite só
+estas, não invente" + "Medido: …" anexado ao log se a IA não citar).
+
 ## Memória do Agente de Conteúdo (implementado 2026-10-15)
 
 Aprende com o que **não agradou** — não depende de métrica do Instagram.

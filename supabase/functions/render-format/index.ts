@@ -71,6 +71,7 @@ async function toDataUri(url: string): Promise<string | null> {
 // nome da marca em texto); (2) logo_meta.src === logo atual E png_url → o PNG transparente preparado;
 // (3) senão o logo de sempre (brand.logoUrl), idêntico a antes. logo_meta só vale se src === logo atual
 // (anti logo velha) e a leitura é tolerante: sem a coluna/migration cai no (3).
+// CÓPIA em _shared/logoResolve.ts (usada pelo brand-compose) — esta não foi movida pra não mexer no render-format em produção; mude as duas juntas.
 interface ResolvedLogo { url: string | null; foto: boolean; prepared: boolean; luma: number | null; lo: number | null; hi: number | null; aspect: number | null }
 async function resolveLogo(admin: ReturnType<typeof createClient>, companyId: string, brand: { logoUrl?: string }): Promise<ResolvedLogo> {
   const legacy: ResolvedLogo = { url: brand.logoUrl ?? null, foto: false, prepared: false, luma: null, lo: null, hi: null, aspect: null }

@@ -28,6 +28,7 @@ import { privateFieldKeys } from '../_shared/nearbyPlaces.ts'
 import { loadLessons, lessonsBlock, relearn } from '../_shared/contentLessons.ts'
 import { deckPromptRules, DECK_SLIDE_JSON, lockSlide, inventedNumbers, normalizeDeck, normalizeSlide, numbersOf, pickCoverStyle, rewritePrompt, slideSummary, type DeckSlide } from '../_shared/deckSlides.ts'
 import { decideVideoCta, queroNotice, sanitizeCaptionCta } from '../_shared/videoCta.ts'
+import { stripPieceTexts, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
 import { checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 
 const cors = {
@@ -691,16 +692,20 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   const idea = post.idea ? String(post.idea) : null
   // Trava do QUERO (vale pra toda peça): sem resposta aprovada do imóvel (post solto não tem imóvel),
   // "Comente QUERO" vira o CTA alternativo da ficha. Decisão em código, depois da IA.
-  const rawCta = post.cta ? String(post.cta) : (brief.cta ? String(brief.cta) : null)
-  const lock = applyQueroLock(post.caption ? String(post.caption) : null, rawCta, automation as { active?: boolean; message?: string; keywords?: string[] } | null, fichaCtas)
+  // Antes da trava: recado da IA pro corretor ("⚠️ Sobre a metragem: …") sai da legenda e do CTA (2026-10-25).
+  const sp = stripPieceTexts(post.caption ? String(post.caption) : null, post.cta ? String(post.cta) : null)
+  const rawCta = sp.cta || (brief.cta ? stripPieceTexts(null, String(brief.cta)).cta : '') || null
+  const lock = applyQueroLock(sp.caption || null, rawCta, automation as { active?: boolean; message?: string; keywords?: string[] } | null, fichaCtas)
   const caption = lock.caption
-  if (rawCta) post.cta = lock.cta // CTA vazio fica vazio (não inventa CTA onde a IA não pôs)
-  if (lock.notice) brief.reasoning = `${brief.reasoning ?? ''} ${lock.notice}`.trim()
+  if (brief.cta) brief.cta = stripPieceTexts(null, String(brief.cta)).cta // os outros leitores de brief.cta (card/deck) também sem recado
+  post.cta = rawCta ? lock.cta : null // CTA vazio fica vazio (não inventa CTA onde a IA não pôs); o deck lê post.cta
+  // Avisos pro dono, nesta ordem: Diretor (brief.reasoning) · QUERO · recado que saiu · legenda vazia.
+  brief.reasoning = [brief.reasoning, lock.notice, internalNotesNotice(sp.notes), sp.emptied ? EMPTY_CAPTION_NOTICE : null].filter(Boolean).join(' ') || brief.reasoning
 
   const { data: inserted, error: insErr } = await admin.from('marketing_ai_test_content').insert({
     company_id: company.id, kind, idea, caption,
     hashtags: post.hashtags ? String(post.hashtags) : null,
-    cta: post.cta ? String(post.cta) : (brief.cta as string ?? null),
+    cta: post.cta ? String(post.cta) : null,
     format: fmt, reasoning: brief.reasoning as string ?? null,
     video_script: post.video_script ? String(post.video_script) : null, brief, personality,
     planned_for: opts.plannedFor ?? null,
@@ -1205,7 +1210,7 @@ ${chk.source_url ? `Fonte oficial: ${chk.source_title ?? ''} (${new URL(chk.sour
 - "card_question": a pergunta, curta (até 90 caracteres).
 - "card_answer": a resposta resumida pro card (até 130 caracteres). Copie números exatamente como estão; não acrescente nenhum número.
 - "caption": legenda que explica a resposta com calma, sem acrescentar fato, número ou lei que não esteja na resposta.${chk.source_url ? ' Termine com "Fonte: <nome do site oficial>".' : ''}
-${HONESTY_RULE} Sem emoji no card.${lessonsBlock(await loadLessons(admin, company.id))}
+${HONESTY_RULE} Sem emoji no card. A legenda é pro público do Instagram — nunca um recado pro corretor.${lessonsBlock(await loadLessons(admin, company.id))}
 Responda SÓ em JSON: {"card_question":"...","card_answer":"...","caption":"...","hashtags":"#a #b","cta":"..."}`, 900)) as typeof out
   } catch (e) { console.error('runFaqSlot: texto falhou', company.id, e); return false }
   const allowed = new Set(numbersIn(`${tip.title} ${tip.content}`))
@@ -1275,10 +1280,12 @@ ${HONESTY_RULE} A legenda é pro público do Instagram — nunca um recado pro c
 ${decision.promptRule}${lessonsBlock(await loadLessons(admin, company.id))}
 Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`, 700))
   } catch (e) { console.error('runVideoSlot: legenda falhou', company.id, e) }
-  const safe = sanitizeCaptionCta(cap.caption ? String(cap.caption) : null, cap.cta ? String(cap.cta) : null, decision)
+  // Recado da IA pro corretor sai da legenda/CTA antes da trava do QUERO (2026-10-25).
+  const sp = stripPieceTexts(cap.caption ? String(cap.caption) : null, cap.cta ? String(cap.cta) : null)
+  const safe = sanitizeCaptionCta(sp.caption || null, sp.cta || null, decision)
   if (safe.changed) console.log('runVideoSlot: CTA ajustado pela trava', company.id, decision.approved ? 'com QUERO' : 'sem QUERO')
   // Sem a resposta aprovada, o dono é avisado na peça (e o item-videos preserva o aviso).
-  const notice = decision.approved ? '' : queroNotice(decision.cta)
+  const notice = [decision.approved ? '' : queroNotice(decision.cta), internalNotesNotice(sp.notes) ?? '', sp.emptied ? EMPTY_CAPTION_NOTICE : ''].filter(Boolean).join(' ')
   const withNotice = (msg: string) => notice ? `${msg} ${notice}` : msg
   const { data: piece, error } = await admin.from('marketing_ai_test_content').insert({
     company_id: company.id, kind: 'organico', format: 'reel', idea: `${item.title} — vídeo`,
