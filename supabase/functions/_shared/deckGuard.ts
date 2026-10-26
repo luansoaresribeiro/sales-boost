@@ -5,7 +5,7 @@
 import { checkAndSave, fetchFaqConfig, getTavilyKey, parseJson, type FaqConfig, type FaqRow } from './faqCheck.ts'
 import { normalizeSlide, rewritePrompt, type DeckSlide } from './deckSlides.ts'
 import {
-  classifyByTerms, dueTips, generalFallbackCaption, generalFallbackDeck, norm, parseTopicAnswer, pickTips, slideText, tipFallbackCaption, tipFallbackDeck, tipSources,
+  classifyByTerms, dueTips, hostOf, generalFallbackCaption, generalFallbackDeck, norm, parseTopicAnswer, pickTips, slideText, tipFallbackCaption, tipFallbackDeck, tipSources,
   topicCfgOf, topicPrompt, validateGeneral, validateLight, validateRegulated, withSource, type DeckMode, type TopicCfg,
 } from './deckTopic.ts'
 
@@ -49,11 +49,14 @@ export async function decideTopic(a: { admin: Admin; cfg: FaqConfig; tcfg: Topic
   return { mode: 'regulado', category, label, tips, hosts: tipSources(tips, cfg.official_domains) }
 }
 
+/** Site oficial da dica (só se for um dos que valeram como fonte da peça; dica geral/aprovada pelo dono não tem). */
+const hostOfTip = (t: TopicDecision, x: FaqRow): string => { const h = hostOf(x.meta?.check?.source_url); return h && t.hosts.includes(h) ? h : '' }
+
 /** Bloco do prompt de escrita: as dicas são a ÚNICA fonte de fatos (regulado) ou a regra de dica geral. */
 export function topicBlock(t: TopicDecision): string {
   if (t.mode === 'regulado') {
-    return `\nMODO DICA CONFERIDA — tema regulado (${t.label}). As dicas abaixo foram conferidas em fonte oficial e são a ÚNICA fonte de fatos deste carrossel e da legenda:
-${t.tips.map((x, i) => `Dica ${i + 1} — Pergunta: ${x.title}\nResposta: ${x.content}`).join('\n')}
+    return `\nMODO DICA CONFERIDA — tema regulado (${t.label}). As dicas abaixo foram liberadas pelo dono${t.hosts.length ? ' (e conferidas em fonte oficial quando têm fonte)' : ''} e são a ÚNICA fonte de fatos deste carrossel e da legenda:
+${t.tips.map((x, i) => `Dica ${i + 1} — Pergunta: ${x.title}\nResposta: ${x.content}${hostOfTip(t, x) ? ` (fonte oficial: ${hostOfTip(t, x)})` : ''}`).join('\n')}
 ${t.hosts.length ? `Fonte oficial: ${t.hosts.join(', ')}. No slide final, "text" termina com "Fonte: ${t.hosts[0]}"; a legenda termina com "Fonte: ${t.hosts[0]}".` : ''}
 Regras: um slide do meio por dica, na ordem; explique com as palavras da resposta, sem acrescentar fato, exceção, número, prazo, taxa, lei, imposto ou programa que a resposta não diga. Se uma dica tem número ou nome de lei, copie exatamente. A legenda só explica o que as dicas dizem. Nada de números ou fatos vindos de outro lugar.\n`
   }
@@ -99,7 +102,7 @@ export async function guardDeck(a: {
   if (mode !== 'leve' && a.expectDeck && !slides.length) { slides = fb.map(s => ({ ...s })); notes.push('A IA não devolveu slides aproveitáveis; o carrossel usa o texto das dicas.') }
 
   const reasonFor = (issues: string[]): string[] => mode === 'regulado'
-    ? [`use SÓ o que estas dicas conferidas dizem, sem acrescentar fato, número, lei ou programa: ${tips.map(t => `"${t.title} → ${t.content.slice(0, 500)}"`).join(' | ')} (a versão atual traz algo fora delas: ${issues.join(', ')})`]
+    ? [`use SÓ o que estas dicas liberadas dizem, sem acrescentar fato, número, lei ou programa: ${tips.map(t => `"${t.title} → ${t.content.slice(0, 500)}"`).join(' | ')} (a versão atual traz algo fora delas: ${issues.join(', ')})`]
     : mode === 'geral'
       ? [`escreva dica GERAL: sem número, prazo, taxa, valor, percentual nem nome de lei, imposto ou programa (a versão atual traz: ${issues.join(', ')})`]
       : [`não cite estes termos de tema regulado: ${issues.join(', ')} — escreva de forma geral, sem eles`]

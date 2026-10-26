@@ -15,7 +15,7 @@
 --   update public.vertical_playbooks set config = jsonb_set(config, '{faq}', (config->'faq') - 'regulated_categories' - 'category_terms' - 'regulated_terms') where key = 'imoveis_rio' and config->'faq' is not null;
 --   update public.vertical_playbooks set config = jsonb_set(config, '{content_rules}', (config->'content_rules') - 'format_aliases') where key = 'imoveis_rio' and config->'content_rules' is not null;
 --   update public.vertical_playbooks set config = jsonb_set(config, '{content_rules,disabled_formats}', (select coalesce(jsonb_agg(x), '[]'::jsonb) from jsonb_array_elements(config->'content_rules'->'disabled_formats') x where x <> '"carrossel_slides"'::jsonb)) where key = 'imoveis_rio' and jsonb_typeof(config->'content_rules'->'disabled_formats') = 'array';
---   update public.vertical_playbooks set config = jsonb_set(config, '{content_formats}', (select jsonb_agg(case when f->>'key' = 'carrossel_educativo' then (f - 'notes' - 'media' - 'cost') || '{"name": "Carrossel educativo (financiamento, documentação)", "status": "planned"}'::jsonb else f end order by ord) from jsonb_array_elements(config->'content_formats') with ordinality as t(f, ord))) where key = 'imoveis_rio' and jsonb_typeof(config->'content_formats') = 'array';
+--   update public.vertical_playbooks set config = jsonb_set(config, '{content_formats}', (select jsonb_agg(case when f->>'key' = 'carrossel_educativo' then (f - 'notes' - 'media' - 'cost' - 'family') || '{"name": "Carrossel educativo (financiamento, documentação)", "status": "planned"}'::jsonb else f end order by ord) from jsonb_array_elements(config->'content_formats') with ordinality as t(f, ord))) where key = 'imoveis_rio' and jsonb_typeof(config->'content_formats') = 'array';
 
 -- 1) O formato da ficha sai de "planned" e vira o carrossel educativo (live). A estratégia passa
 --    a vê-lo no catálogo e pode colocá-lo no mix.
@@ -57,7 +57,7 @@ set config = jsonb_set(config, '{faq}', (config->'faq') || $json${
     "documentacao": ["documentação", "documentos", "certidão", "certidões", "matrícula", "escritura", "registro de imóveis", "cartório", "registro", "habite-se", "averbação", "certidão negativa"],
     "impostos": ["ITBI", "ITCMD", "IPTU", "imposto", "impostos", "taxas e impostos", "ganho de capital", "imposto de renda", "laudêmio", "taxa de incêndio", "tributo", "isenção", "alíquota"],
     "aluguel": ["aluguel", "alugar", "locação", "inquilino", "inquilinato", "locatário", "locador", "fiador", "caução", "seguro fiança", "título de capitalização", "contrato de locação"],
-    "geral": ["dica", "dicas", "visita", "visitar", "vistoria", "decoração", "mudança", "reforma", "primeiro imóvel", "primeira vez"]
+    "geral": ["visita", "visitar", "vistoria", "decoração", "mudança", "reforma", "primeiro imóvel", "primeira vez"]
   },
   "regulated_terms": ["ITBI", "ITCMD", "IPTU", "FGTS", "SFH", "SFI", "Minha Casa Minha Vida", "Lei do Inquilinato", "Código Civil", "Código de Defesa do Consumidor", "alíquota", "Selic", "CET", "laudêmio", "Tabela Price", "ganho de capital", "imposto de renda", "taxa de incêndio", "usucapião", "alienação fiduciária"]
 }$json$::jsonb)

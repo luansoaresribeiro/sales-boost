@@ -31,7 +31,7 @@ import { decideVideoCta, queroNotice, sanitizeCaptionCta } from '../_shared/vide
 import { stripPieceTexts, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
 import { callClaude as callModel, CHEAP_MODEL, checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 import { decideTopic, guardDeck, loadGuardCfg, topicBlock, topicNote, type Ask, type TopicDecision } from '../_shared/deckGuard.ts'
-import { resolveAlias, tipNumbers } from '../_shared/deckTopic.ts'
+import { resolveAlias, tipNumbers, topicText } from '../_shared/deckTopic.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -443,7 +443,7 @@ const MOD_LABEL: Record<string, string> = { organico: 'Post Orgânico', stories:
 interface GenOpts {
   bearer: string; isCron: boolean; cronSecret?: string
   // `intent` = texto da intenção da estratégia (intentBlock); só vem das vagas do calendário.
-  seed?: { title?: string; hook?: string; angle?: string; format?: string; intent?: string } | null
+  seed?: { title?: string; hook?: string; angle?: string; format?: string; intent?: string; titleIsFormat?: boolean } | null // titleIsFormat: o título é o nome do formato da vaga (não é assunto)
   // Rótulo único da peça (familia · pilar_ss · tema) + intenção, gravados depois do insert.
   labels?: { familia?: string; pilar_ss?: string; tema?: string }
   intent?: SlotIntent | null
@@ -659,7 +659,7 @@ Decida o brief. Retorne APENAS um JSON:
   if (opts.deck) {
     try {
       guardCfg = await loadGuardCfg(admin, company.vertical_key ?? null)
-      if (guardCfg) topic = await decideTopic({ admin, ...guardCfg, text: [seed?.title, seed?.hook, seed?.angle, brief.hook_angle, brief.offer].filter(Boolean).join(' '), forceGeneral: opts.forceGeneral, ask, anthropicKey, company })
+      if (guardCfg) topic = await decideTopic({ admin, ...guardCfg, text: topicText({ title: seed?.title, titleIsFormat: seed?.titleIsFormat, hook: seed?.hook, angle: seed?.angle, hookAngle: brief.hook_angle, offer: brief.offer }), forceGeneral: opts.forceGeneral, ask, anthropicKey, company })
     } catch (e) { console.error('creative-generate: classificação do tema falhou (segue como tema leve)', company.id, e); topic = null }
   }
   const strict = !!topic && topic.mode !== 'leve' // regulado/geral: só dicas ou nenhum fato — intenção e oferta da IA ficam fora do prompt
@@ -1046,7 +1046,7 @@ Retorne APENAS um JSON array, um item por dia, nesta ordem (sempre os 7 dias):
       // Com mix da estratégia: cada peça leva o formato/objetivo da vez (fila
       // intercalada). Sem estratégia: sem seed de propósito — ver comentário acima.
       const pick = mix.auto.length ? mix.auto[slot++ % mix.auto.length] : null
-      const seed = pick ? { title: pick.name, angle: `Pilar ${pick.pillar}: ${pick.purpose || 'serve a estratégia ativa'}`, format: 'foto' } : null  // (caminho antigo, sem mix da estratégia: sem intenção)
+      const seed = pick ? { title: pick.name, titleIsFormat: true, angle: `Pilar ${pick.pillar}: ${pick.purpose || 'serve a estratégia ativa'}`, format: 'foto' } : null  // (caminho antigo, sem mix da estratégia: sem intenção)
       try {
         await generateForCompany(admin, anthropicKey, company, 'organico', { ...auth, plannedFor: date, seed })
         planned++; ok++
@@ -1212,7 +1212,12 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
       // vai inteiro pro prompt. Sem ela (setor sem ficha de SS, vaga antiga/avulsa) fica como sempre foi.
       const ib = intentBlock(job.intent)
       const angleHead = job.intent ? `Pilar ${job.intent.pilar_ss_name}` : `Pilar ${job.pillar}`
-      const seed = { title: job.name, intent: ib || undefined, angle: `${angleHead}: ${job.purpose || 'serve a estratégia ativa'}`, format: 'foto' }
+      // Guarda ligado (ficha com categorias/termos regulados): a dica geral é conferida em código (forceGeneral). Desligado
+      // (deploy antes da migration): o fluxo antigo idêntico — a regra "dica GERAL" vai só no ângulo da vaga.
+      const guardOn = job.format === FAQ_FORMAT ? !!(await loadGuardCfg(admin, company.vertical_key ?? null).catch(() => null)) : false
+      const generalNote = job.format === FAQ_FORMAT && !guardOn ? ' — dica GERAL: sem número, prazo, taxa, valor nem nome de lei (nada foi conferido em fonte oficial).' : ''
+      // titleIsFormat: job.name é o nome do formato no catálogo, não o assunto — fora da classificação do tema.
+      const seed = { title: job.name, titleIsFormat: true, intent: ib || undefined, angle: `${angleHead}: ${job.purpose || 'serve a estratégia ativa'}${generalNote}`, format: 'foto' }
       // Só o card genérico (post_card, em setor que não desligou) usa o
       // caminho de imagem+template; qualquer outro formato de post — inclusive
       // um antigo que ficou numa estratégia — sai como carrossel de slides.

@@ -191,8 +191,38 @@ export async function checkAndSave(admin: Admin, row: FaqRow, opts: { anthropicK
   return { ...row, content: answer, meta }
 }
 
-// Números (com vírgula/ponto) que aparecem num texto — pra garantir que o
-// card resumido não inventa número que a dica conferida não tem.
-export function numbersIn(s: string): string[] {
-  return (s.match(/\d+(?:[.,]\d+)*/g) ?? []).map(n => n.replace(/[.,]/g, ''))
+// Números que aparecem num texto — pra garantir que o card/carrossel não inventa número que a dica
+// conferida não tem. Compara VALOR + UNIDADE, não dígitos soltos: "R$ 1500" = "R$ 1.500,00"; "3,0%" = "3%";
+// mas "30%" ≠ "3%" ≠ "30 dias" e "R$ 150.000" ≠ "R$ 1.500". Unidades: % (inclui "por cento"), R$ (inclui "reais"),
+// dia, mês, ano, semana, m². "150 mil" = 150000. Sem unidade = só o valor (não casa com número que tem unidade).
+/** Valor numérico no formato BR: "1.500,00" → "1500", "3,0" → "3", "1.500" → "1500", "2.5" → "2.5". */
+export function brNumber(raw: string): string {
+  let t = raw
+  const dots = (t.match(/\./g) ?? []).length, commas = (t.match(/,/g) ?? []).length
+  if (dots && commas) { const dec = Math.max(t.lastIndexOf('.'), t.lastIndexOf(',')); t = t.slice(0, dec).replace(/[.,]/g, '') + '.' + t.slice(dec + 1) }
+  else if (commas) t = commas === 1 ? t.replace(',', '.') : t.replace(/,/g, '')
+  else if (dots) t = t.split('.').slice(1).every(g => g.length === 3) ? t.replace(/\./g, '') : dots === 1 ? t : t.replace(/\./g, '')
+  const n = Number(t)
+  return Number.isFinite(n) ? String(n) : t
 }
+const normTxt = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+const UNIT_AFTER: [RegExp, string][] = [
+  [/^\s*(?:%|por\s?cento(?![a-z]))/, '%'], [/^\s*reais?(?![a-z])/, 'R$'], [/^\s*dias?(?![a-z])/, 'dia'], [/^\s*(?:mes|meses)(?![a-z])/, 'mes'],
+  [/^\s*anos?(?![a-z])/, 'ano'], [/^\s*semanas?(?![a-z])/, 'semana'], [/^\s*(?:m\u00b2|m2|metros?\s+quadrados?)(?![a-z0-9])/, 'm2'],
+]
+/** Cada número do texto como { raw: o que está escrito, key: "valor|unidade" }. */
+export function numberFacts(s: string): { raw: string; key: string }[] {
+  const n = normTxt(s), out: { raw: string; key: string }[] = []
+  for (const m of n.matchAll(/\d+(?:[.,]\d+)*/g)) {
+    const end = m.index! + m[0].length
+    let value = Number(brNumber(m[0])), rest = n.slice(end)
+    const mult = /^\s*(milhao|milhoes|mil)(?![a-z])/.exec(rest)
+    if (mult) { value *= mult[1] === 'mil' ? 1000 : 1e6; rest = rest.slice(mult[0].length) }
+    let unit = ''
+    if (/r\$\s*$/.test(n.slice(0, m.index))) unit = 'R$'
+    else for (const [re, u] of UNIT_AFTER) if (re.test(rest)) { unit = u; break }
+    out.push({ raw: m[0], key: `${Number.isFinite(value) ? String(value) : m[0]}|${unit}` })
+  }
+  return out
+}
+export const numbersIn = (s: string): string[] => numberFacts(s).map(f => f.key)

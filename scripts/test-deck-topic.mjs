@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 // (deckGuard.ts) e dos pontos de ficha (faqCheck/formatCatalog). Os termos vêm da MIGRATION de verdade.
 import {
   classifyByTerms, cutAtSentence, generalFallbackCaption, generalFallbackDeck, hasTerm, parseTopicAnswer, pickTips, resolveAlias, tipFallbackCaption, tipFallbackDeck, tipNumbers,
-  tipSources, topicCfgOf, validateGeneral, validateLight, validateRegulated, withSource,
+  tipSources, topicCfgOf, topicText, validateGeneral, validateLight, validateRegulated, withSource,
 } from '../supabase/functions/_shared/deckTopic.ts'
 import { decideTopic, guardDeck, topicBlock } from '../supabase/functions/_shared/deckGuard.ts'
 import { deckPromptRules, rewritePrompt } from '../supabase/functions/_shared/deckSlides.ts'
@@ -76,7 +76,7 @@ ok('fontes: só site oficial de dica conferida')
 
 // ── regulado: número/termo da dica passa, de fora falha ─────────────────────────────────
 const tips = [T1, T2]
-assert.ok(tipNumbers(tips).has('3'))
+assert.ok(tipNumbers(tips).has('3|%'))
 assert.deepEqual(validateRegulated(['O ITBI no Rio é de 3% sobre o valor do imóvel'], tips, RT), [])
 assert.deepEqual(validateRegulated(['Confira a certidão de IPTU antes de fechar'], tips, RT), [])
 { const v = validateRegulated(['A alíquota é 3,5%'], tips, RT); assert.ok(v.includes('número 3,5') && v.includes('aliquota')) }
@@ -102,6 +102,56 @@ for (const good of ['Visite em horários diferentes', 'três erros comuns', 'Doi
   assert.deepEqual(validateGeneral([good], RT), [], 'FALSO POSITIVO no geral: ' + good)
 }
 ok('geral deixa passar conselho sem fato ("três erros comuns")')
+
+
+// ── pós-QA 1: o tema vem do assunto, nunca do NOME do formato nem de rótulo do catálogo ──────────
+{
+  const FORMAT_NAME = 'Carrossel educativo (dicas conferidas; tema leve livre)' // nome real do formato na migration
+  assert.ok(sql.includes(FORMAT_NAME))
+  assert.ok(!faqJson.category_terms.geral.some(t => ['dica', 'dicas'].includes(t.toLowerCase()))) // genérico demais
+  const cls = (angle, hookAngle = '', offer = '') => classifyByTerms(topicText({ title: FORMAT_NAME, titleIsFormat: true, angle, hookAngle, offer }), tcfg)
+  for (const [angle, cat] of [['Pilar educacao: explicar o ITBI', 'impostos'], ['Pilar educacao: como usar o FGTS', 'financiamento'], ['Pilar educacao: pedir a matrícula atualizada', 'documentacao']]) {
+    const r = cls(angle); assert.equal(r.category, cat, angle); assert.equal(r.regulated, true, angle)
+  }
+  // o nome do formato sozinho não decide nada
+  assert.equal(cls('Pilar educacao: serve a estratégia ativa').category, null)
+  // ... e, mesmo se alguém passar o título por engano como texto, "dicas" não vira tema geral
+  assert.notEqual(classifyByTerms(`${FORMAT_NAME} ITBI`, tcfg).category, 'geral')
+  assert.equal(classifyByTerms(FORMAT_NAME, tcfg).category, null)
+  // ideia do dono: o título é assunto de verdade
+  assert.equal(classifyByTerms(topicText({ title: 'Como funciona o ITBI', angle: 'x' }), tcfg).category, 'impostos')
+  assert.equal(classifyByTerms('Dicas de decoração pra mudança', tcfg).category, 'geral')
+}
+ok('tema: nome do formato fora da classificação; ITBI/FGTS/matrícula = regulado; "dica(s)" não é termo de geral')
+
+// ── pós-QA 3: números por valor + unidade ────────────────────────────────────────────────
+{
+  const dica = [mk('n', 'Quanto custa?', 'A taxa é de 3% e vale por 30 dias. A entrada mínima é R$ 1.500,00.', 'impostos', chk('conferida'))]
+  const v = (t) => validateRegulated([t], dica, RT)
+  for (const good of ['Taxa de 3%', 'Taxa de 3,0%', 'Taxa de 3 por cento', 'Vale por 30 dias', 'Entrada de R$ 1500', 'Entrada de R$1.500', 'Entrada de R$ 1500,00', 'Entrada de 1.500 reais']) assert.deepEqual(v(good), [], 'deveria passar: ' + good)
+  for (const bad of ['Taxa de 30%', 'Taxa de 3,5%', 'Vale por 3 dias', 'Vale por 30 meses', 'Entrada de R$ 150.000', 'Entrada de R$ 150', 'Entrada de 1500', 'Entrada de R$ 15.000,00', 'Taxa de 30 por cento']) assert.ok(v(bad).length > 0, 'deveria barrar: ' + bad)
+  // colisões de dígitos que antes passavam
+  const d2 = [mk('m', 'q', 'Taxa de 3% em 30 dias.', 'impostos', chk('conferida'))]
+  assert.ok(validateRegulated(['Taxa de 30%'], d2, RT).length > 0); assert.ok(validateRegulated(['Taxa de 3,0 dias'], d2, RT).length > 0); assert.ok(validateRegulated(['Prazo de 3 dias'], d2, RT).length > 0)
+  assert.ok(validateRegulated(['Entrada de R$ 150.000'], [mk('k', 'q', 'Entrada de R$ 1.500,00', 'impostos', chk('conferida'))], RT).length > 0)
+  assert.deepEqual(validateRegulated(['Entrada de R$ 150 mil'], [mk('k', 'q', 'Entrada de R$ 150.000', 'impostos', chk('conferida'))], RT), [])
+  assert.deepEqual(validateRegulated(['Prazo de 12 meses'], [mk('k', 'q', 'Prazo de 12 meses', 'impostos', chk('conferida'))], RT), [])
+  assert.ok(validateRegulated(['Prazo de 12 anos'], [mk('k', 'q', 'Prazo de 12 meses', 'impostos', chk('conferida'))], RT).length > 0)
+  assert.ok(tipNumbers(dica).has('3|%') && tipNumbers(dica).has('1500|R$') && tipNumbers(dica).has('30|dia'))
+}
+ok('regulado compara valor BR + unidade: 1500 = 1.500,00; 3,0% = 3%; 30% ≠ 3%; 150.000 ≠ 1.500')
+
+// ── pós-QA 4: modo geral, falsos negativos ───────────────────────────────────────────────
+for (const bad of ['Pague metade do valor', 'o dobro da entrada', 'Dê um terço do preço', 'dois terços da renda', 'o triplo do valor', 'três quartos do valor', 'Metade da entrada', 'dois porcento', 'dois por cento', 'veja a Lei Federal', 'lei estadual', 'Lei Municipal', 'Pague o I.T.B.I.', 'saque o F.G.T.S.', 'o I P T U atrasado', 'ITBI', 'i. t. b. i.', 'F G T S', 'a S.F.H.']) {
+  assert.ok(validateGeneral([bad], RT).length > 0, 'ESCAPOU no geral: ' + bad)
+}
+for (const good of ['Peça a matrícula atualizada', 'três erros comuns', 'Peça a segunda via', 'O primeiro passo é visitar', 'Peça a certidão e a matrícula', 'Ele é a Pessoa e o Fiador', 'Compare o valor com calma', 'Metade da graça é visitar de dia']) {
+  assert.deepEqual(validateGeneral([good], RT), [], 'FALSO POSITIVO no geral: ' + good)
+}
+assert.ok(validateLight(['pague o I.T.B.I. antes'], RT).includes('ITBI'))
+assert.ok(validateRegulated(['paga-se o I.T.B.I.'], [mk('z', 'q', 'Sem imposto citado.', 'impostos', chk('conferida'))], RT).includes('ITBI'))
+assert.deepEqual(validateRegulated(['Paga-se o I.T.B.I.'], tips, RT), []) // a dica fala ITBI
+ok('geral barra fração de valor, porcento, siglas pontuadas/espaçadas, lei federal/estadual/municipal; não quebra "matrícula", "segunda via"')
 
 // ── leve: rede de segurança ─────────────────────────────────────────────────────────────
 assert.deepEqual(validateLight(['Como usar o FGTS na compra do primeiro imóvel'], RT), ['FGTS'])

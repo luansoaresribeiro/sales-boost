@@ -9,7 +9,7 @@
 //    termos regulados (ITBI, FGTS…) que escaparem.
 // Tudo que é do setor (categorias, termos, termos regulados) vem da ficha (config.faq, regra 6).
 
-import { isDue, isOfficial, isPublishable, numbersIn, type FaqConfig, type FaqRow } from './faqCheck.ts'
+import { isDue, isOfficial, isPublishable, numberFacts, numbersIn, type FaqConfig, type FaqRow } from './faqCheck.ts'
 import type { DeckSlide } from './deckSlides.ts'
 
 export type DeckMode = 'regulado' | 'geral' | 'leve'
@@ -54,6 +54,15 @@ export function classifyByTerms(text: string, cfg: TopicCfg): { category: string
   return best ? { category: best.key, regulated: cfg.regulated_categories.includes(best.key), hits: best.hits } : { category: null, regulated: false, hits: 0 }
 }
 
+/**
+ * Texto que decide o TEMA da peça: só o que é assunto de verdade (ângulo/pilar/propósito da vaga, gancho, ideia do dono, gancho e
+ * oferta do Diretor). O título da vaga só entra quando é a ideia do dono — numa vaga do calendário ele é o NOME DO FORMATO
+ * ("Carrossel educativo (dicas conferidas; tema leve livre)"), que não diz nada do tema e tem palavras do catálogo ("dicas").
+ */
+export function topicText(a: { title?: string; titleIsFormat?: boolean; hook?: string; angle?: string; hookAngle?: unknown; offer?: unknown }): string {
+  return [a.titleIsFormat ? '' : a.title, a.hook, a.angle, a.hookAngle, a.offer].filter(Boolean).join(' ')
+}
+
 /** Pergunta barata pra IA quando os termos não decidiram (≤ 200 tokens de resposta). */
 export function topicPrompt(text: string, cfg: TopicCfg): string {
   return `Classifique o TEMA principal deste conteúdo de Instagram numa destas categorias, ou "leve" se não for nenhuma delas.
@@ -78,6 +87,7 @@ export function pickTips(rows: FaqRow[], category: string, now = Date.now(), max
     .sort((a, b) => (a.meta?.used_count ?? 0) - (b.meta?.used_count ?? 0)).slice(0, max)
 }
 /** Números permitidos num carrossel regulado: SÓ os das dicas (nada de ficha, insight, ideia ou intenção). */
+/** Cada número vira "valor|unidade" (ver numberFacts): 1500 = 1.500,00; 3% ≠ 30% ≠ 3 dias. */
 export const tipNumbers = (tips: Pick<FaqRow, 'title' | 'content'>[]): Set<string> => new Set(numbersIn(tips.map(t => `${t.title} ${t.content}`).join(' ')))
 
 export const hostOf = (url?: string): string => { try { return url ? new URL(url).hostname.replace(/^www\./, '') : '' } catch { return '' } }
@@ -98,6 +108,8 @@ export const slideText = (s: DeckSlide): string => [s.title, s.text, s.items, s.
 
 const NUM_WORD = '(?:dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|cento|duzentos|duzentas|trezentos|trezentas|quatrocentos|quinhentos|seiscentos|setecentos|oitocentos|novecentos|mil|milhao|milhoes)'
 const UNIT = '(?:dias?|mes(?:es)?|anos?|semanas?|horas?|reais|por cento|salarios? minimos?|parcelas?)'
+// Fração de valor ("metade do valor", "o dobro da entrada", "um terço do preço").
+const FRACTION_RE = /(?<![a-z0-9])(?:metade|dobro|triplo|quadruplo|quintuplo|(?:um|dois|tres)\s+(?:terco|tercos)|(?:um|tres)\s+(?:quarto|quartos)|um\s+quinto)\s+d[oae]s?\s+(?:valor|entrada|preco|parcela|renda|salario|financiamento|imovel|aluguel|custo)(?![a-z0-9])/g
 // Fato "por extenso" (sem algarismo). Número pequeno SEM unidade ("três erros comuns") não entra.
 const FACT_RES: RegExp[] = [
   new RegExp(`(?<![a-z0-9])${NUM_WORD}(?:\\s+e\\s+${NUM_WORD})?\\s+${UNIT}(?![a-z0-9])`, 'g'),
@@ -105,6 +117,8 @@ const FACT_RES: RegExp[] = [
   /(?<![a-z0-9])aliquotas?(?![a-z0-9])/g,
   /(?<![a-z0-9])lei\s+(?:n[o.]?\s*)?\d/g,
   /(?<![a-z0-9])lei\s+d[oae]s?\s+[a-z]{3,}/g,
+  /(?<![a-z0-9])lei\s+(?:federal|estadual|municipal|complementar|ordinaria)(?![a-z0-9])/g,
+  FRACTION_RE,
 ]
 const LEI_NOME_RE = /(?<![\p{L}])Lei\s+\p{Lu}/gu // "Lei Geral…", "Lei Maria…" (maiúscula = nome próprio)
 const DIGIT_RE = /\d+(?:[.,]\d+)*/g
@@ -117,8 +131,12 @@ function factPhrases(text: string): string[] {
   return out
 }
 
+/** Junta siglas pontuadas/espaçadas (já normalizadas): "i.t.b.i." / "i p t u" → "itbi" / "iptu". Exige 3+ letras isoladas (não mexe em "a matrícula").
+ *  Uma letra-palavra colada na sigla ("o i p t u") também gera a sigla sem ela ("oiptu iptu oipt"). */
+export const squash = (n: string): string => n.replace(/(?<![a-z0-9])[a-z](?:(?:\.\s?|\s)[a-z]){2,}\.?(?![a-z0-9])/g, m => { const j = m.replace(/[^a-z]/g, ''); return `${j} ${j.slice(1)} ${j.slice(0, -1)}` })
+
 /** Termos regulados (da ficha) que aparecem no texto. */
-export const regulatedHits = (text: string, terms: string[]): string[] => { const n = norm(text); return terms.filter(t => hasTerm(n, t)) }
+export const regulatedHits = (text: string, terms: string[]): string[] => { const n = squash(norm(text)); return terms.filter(t => hasTerm(n, t)) }
 
 /** Modo geral: nenhum fato. Devolve o que foi pego (vazio = ok). Permite "três erros comuns" e "visite em horários diferentes". */
 export function validateGeneral(texts: string[], regulatedTerms: string[]): string[] {
@@ -127,7 +145,7 @@ export function validateGeneral(texts: string[], regulatedTerms: string[]): stri
   if (/%/.test(t)) out.add('percentual')
   if (/r\$/.test(n)) out.add('valor em R$')
   if (/(?<![a-z0-9])reais(?![a-z0-9])/.test(n)) out.add('valor em reais')
-  if (/por cento/.test(n)) out.add('por cento')
+  if (/por\s?cento/.test(n)) out.add('por cento')
   for (const p of factPhrases(t)) out.add(p)
   for (const r of regulatedHits(t, regulatedTerms)) out.add(r)
   return [...out]
@@ -135,8 +153,8 @@ export function validateGeneral(texts: string[], regulatedTerms: string[]): stri
 
 /** Modo regulado: só números e termos que as dicas têm. Devolve o que sobrou fora das dicas (vazio = ok). */
 export function validateRegulated(texts: string[], tips: Pick<FaqRow, 'title' | 'content'>[], regulatedTerms: string[]): string[] {
-  const t = texts.join('\n'), allowed = tipNumbers(tips), tn = norm(tips.map(x => `${x.title} ${x.content}`).join(' ')), out = new Set<string>()
-  for (const d of t.match(DIGIT_RE) ?? []) if (!allowed.has(d.replace(/[.,]/g, ''))) out.add(`número ${d}`)
+  const t = texts.join('\n'), allowed = tipNumbers(tips), tn = squash(norm(tips.map(x => `${x.title} ${x.content}`).join(' '))), out = new Set<string>()
+  for (const f of numberFacts(t)) if (!allowed.has(f.key)) out.add(`número ${f.raw}`)
   for (const p of factPhrases(t)) if (!tn.includes(p)) out.add(p)
   for (const r of regulatedHits(t, regulatedTerms)) if (!hasTerm(tn, r)) out.add(r)
   return [...out]

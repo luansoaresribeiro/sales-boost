@@ -683,6 +683,29 @@ números. Branch `claude/nifty-shannon-ysp818`; **nada foi aplicado nem deployad
 - **Custo/tempo:** +1 chamada Haiku (classificação, só se os termos não decidem) e, no regulado, +1 ou +2 do
   verificador; reescritas só quando o código acha problema. Sem custo de imagem novo.
 
+**Correções pós-QA (2026-10-26, mesmo branch; nada aplicado nem deployado)**
+
+1. **Tema não lê mais o nome do formato.** A classificação usava `seed.title`, que numa vaga do calendário é
+   "Carrossel educativo (dicas conferidas; tema leve livre)" — "dica/dicas" eram termos de `geral`, então ITBI/FGTS
+   (1 acerto) virava geral/leve. Agora `deckTopic.topicText` monta o texto (ângulo/pilar/propósito, gancho, ideia do
+   dono, gancho e oferta do Diretor) e deixa o título de fora quando `seed.titleIsFormat` (vagas do calendário e
+   caminho antigo da semana). "dica" e "dicas" saíram dos termos de `geral` na migration. Teste com o nome real do
+   formato: ITBI, FGTS e matrícula → regulado.
+2. **Guarda desligado = fluxo antigo idêntico.** Sem `regulated_categories` na ficha (deploy antes da migration), a
+   vaga `dica_faq` sem dica liberada volta a levar no ângulo "dica GERAL: sem número, prazo, taxa, valor nem nome de
+   lei". Com o guarda ligado, quem confere é o código (`forceGeneral`).
+3. **Números por valor + unidade** (`faqCheck.numberFacts`, usado também pelo card do `runFaqSlot`): formato BR
+   (`1.500,00` = `1500`; `3,0` = `3`; `150 mil` = `150000`) e unidade (%, R$, dia, mês, ano, semana, m²). Número com
+   unidade diferente da dica não casa (`30%` ≠ `3%` ≠ `30 dias`; `150.000` ≠ `1.500`).
+4. **Modo geral mais firme:** barra fração de valor ("metade/dobro/triplo/um terço… do valor/da entrada/do preço"),
+   "porcento", "Lei federal/estadual/municipal" e siglas pontuadas ou espaçadas (I.T.B.I., F.G.T.S., I P T U) antes de
+   casar `regulated_terms` (vale também no regulado e no leve). Continuam passando "Peça a matrícula atualizada",
+   "três erros comuns", "segunda via", "o primeiro passo".
+5. **Reverter da migration** agora também tira `family` do `carrossel_educativo` (volta idêntico ao original;
+   conferido num Postgres local: migration 2x sem mudança e REVERTER = estado inicial).
+6. **Prompt do modo regulado** diz "dicas liberadas pelo dono" e só cita fonte oficial na dica que tem uma (cada dica
+   mostra a própria fonte); a reescrita também diz "dicas liberadas".
+
 **Falta pro critério de pronto:** migration + deploy (`creative-generate` com `--no-verify-jwt`) e uma semana de
 teste numa empresa de teste com 2 educativos (um de tema regulado com dica liberada, um sem dica, um leve).
 
