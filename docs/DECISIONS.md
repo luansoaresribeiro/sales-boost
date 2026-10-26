@@ -1818,3 +1818,20 @@ grátis de 30 s, acima — mantidos como histórico):
   `20261026130000_aluguel_regulado.sql` acrescenta `aluguel` em `regulated_categories` e ajusta a nota do formato.
   Carrossel de aluguel agora usa só dica liberada da categoria aluguel; sem dica, sai como dica geral. **Geral**
   continua leve.
+
+## 2026-10-26 — Tudo automático: nenhum processo depende de botão manual (pedido do dono)
+
+- **Pedido do dono:** "tudo vai ser automatizado, então nos processos não devemos ter botões manuais."
+- **Regra:** cada etapa do ciclo roda sozinha (agendamento, gatilho no banco ou passo encadeado na
+  function). Botão na tela só pode existir como atalho opcional ("refazer agora"), nunca como única forma
+  de algo acontecer. A ÚNICA ação humana do processo é a **aprovação do dono** antes de ir ao público
+  (regra inviolável 1), pelo Telegram/Aprovações.
+- **Divergências encontradas no código (2026-10-26):**
+  - Kit de marca: logo **enviado por arquivo** já é preparado sozinho (PNG transparente); logo **colado
+    por link** só é preparado no botão "Preparar logo para criativos" (`BrandKit.tsx`).
+  - `backfill_logos` (`brand-kit-suggest`) só roda se alguém chamar com `cron_secret`; nenhum
+    agendamento chama. Logo trocado fora da tela (`logo_meta.src` ≠ `logo_url`) fica sem preparo até
+    alguém agir.
+  - Carrossel educativo de tema regulado depende de dica **liberada pelo dono** em Dicas e FAQ; sem
+    isso cai sempre no modo geral. Pendente do dono: liberação automática quando a dica é conferida
+    em fonte oficial, ou manter a liberação manual (é aprovação de conteúdo, regra 1).
