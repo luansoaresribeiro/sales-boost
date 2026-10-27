@@ -303,10 +303,10 @@ export default function ApprovalsPage() {
     try {
       const action = await proposeAgentAction(token, {
         company_id: companyId,
-        agent_key: 'content', agent_name: 'Conteúdo',
+        agent_key: 'content', agent_name: lang === 'en' ? 'Content' : 'Conteúdo',
         action_type: 'create_content', channel: 'instagram', source: 'manual',
         ref_type: 'marketing_ai_content', ref_id: item.id,
-        title: item.idea ?? 'Conteúdo',
+        title: item.idea ?? (lang === 'en' ? 'Content' : 'Conteúdo'),
         payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags },
         approve_now: true,
       })

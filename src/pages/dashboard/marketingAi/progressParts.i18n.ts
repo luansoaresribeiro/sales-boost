@@ -48,6 +48,11 @@ export function trProgress(lang: Lang, s: string): string {
   if (hit) return hit
   let m = s.match(/^Subir para (.+)$/)
   if (m) return `Move up to ${m[1]}`
+  m = s.match(/^há (\d+)(min|h)$/)
+  if (m) return `${m[1]}${m[2]} ago`
+  m = s.match(/^há (\d+) (dia|dias)$/)
+  if (m) return `${m[1]} ${m[1] === '1' ? 'day' : 'days'} ago`
+  if (s === 'agora') return 'just now'
   m = s.match(/^(\d+) leads qualificados$/)
   if (m) return `${m[1]} qualified leads`
   m = s.match(/^Enviar proposta para (\d+) (lead qualificado|leads qualificados)$/)

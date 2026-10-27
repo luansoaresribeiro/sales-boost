@@ -730,3 +730,20 @@ destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
 - **Edge function sem checagem de tipo local:** não há `deno` no ambiente; confira lint + testes Node e leia o diff.
 - **Refação automática respeita o relógio da invocação:** `creative-generate` tem teto de ~150 s por execução; `autoRedoOnce` só roda se passaram < 100 s desde o início de `generateForCompany` (`AUTO_REDO_MAX_ELAPSED_MS`). Passou disso → a peça fica pra decisão do dono (sem refação).
 - **Agendamento manual sugere 18h de Brasília**, não do navegador (`brtLocalInput` no `CalendarPostModal`, hora vinda de `PUBLISH_HOUR_BRT`); o `datetime-local` mostra no relógio local, mas o instante é o mesmo.
+
+## Idioma da tela × idioma do conteúdo (2026-10-27)
+
+- **São dois idiomas diferentes.** Tela = por usuário (`useLang()`): `sb_lang` explícito > `companies.language` > `'en'`.
+  Conteúdo gerado = `companies.language` (padrão `'en'` pra empresa nova). Não gravar `sb_lang` sozinho ao ler a
+  empresa — senão a troca de idioma da empresa nunca mais reflete na tela.
+- **Código fora do React** (libs, mensagens de erro) usa `getCurrentLang()`; ele lê o `sb_lang` na carga e o provider
+  o mantém em dia. Não reatribuir variável de módulo durante o render (o lint do React barra) — só em efeito/handler.
+- **`business_types.label` é chave, não texto.** Traduzir o valor quebra a ligação com a ficha (trigger
+  `sync_company_vertical_key`) e com o plano (`usePlanTier`). Use `businessTypeLabel(label, lang)` só pra mostrar.
+- **`progressGame.ts` nasce em PT e a tela traduz** por `trProgress` (mapa PT→EN em `progressParts.i18n.ts`): texto
+  novo gerado ali precisa de entrada no mapa, senão aparece em PT na tela em inglês (ex.: o "há 3h" da linha do tempo).
+- **Textos que a tela grava no banco** (título/agente/interpretação das ações do calendário) saem no idioma da tela
+  no momento do clique; ficam assim mesmo se o idioma mudar depois.
+- **Ainda em PT de propósito (fase 2):** resumo/interpretação do negócio que o cadastro e o "Entendimento do
+  negócio" montam pra IA ler (`buildContext`, `interpretation`), e `vocabulary.item/catalog` da ficha
+  (`imoveis_rio`) — vêm em PT até existir a ficha em inglês.

@@ -1871,3 +1871,36 @@ grátis de 30 s, acima — mantidos como histórico):
   `audio_transcription`). O bot mostra "🎤 Entendi: …" antes de responder, pra o dono ver o que foi entendido.
 - **Privacidade:** o áudio vai para a OpenAI para virar texto — atualizar `/privacidade` (pendente).
 - Foto/vídeo/arquivo no chat privado agora recebem aviso ("por enquanto entendo texto e áudio") em vez de silêncio.
+
+## 2026-10-27 — Inglês como idioma principal; mercado EUA inteiro
+
+- **Decisão do dono:** o Sales Boost passa a vender para os **EUA inteiros**, com o **inglês como idioma
+  principal**. Os brasileiros que já usam seguem em português (as 4 empresas atuais têm `companies.language = 'pt'`
+  e continuam assim). Esta entrada **não apaga** as decisões antigas (Brasil/Rio, PT-BR, R$) — elas ficam como
+  histórico e cada trecho antigo ganhou uma nota de divergência apontando pra cá.
+- **Fase 1 (feita nesta entrada) — só a tela e o padrão:**
+  - Idioma da **tela** é por usuário: escolha explícita (`localStorage['sb_lang']`) vence; sem escolha, segue
+    `companies.language` da empresa logada (`'pt'` → pt, qualquer outro → en); sem empresa (landing, visitante,
+    cadastro) → **inglês**. A regra não grava nada sozinha no navegador, pra a troca de idioma/empresa refletir.
+  - Idioma do **conteúdo gerado** (legendas, ganchos, CTA) é por empresa: `companies.language`, agora com padrão
+    `'en'` pra empresa nova (migration `20261027120000_ingles_padrao.sql`, aditiva: só linhas futuras; antes
+    fixa `'pt'` em quem estiver `null`).
+  - O seletor "Língua da empresa" saiu de Estilos e Visuais e foi pra **Configurações → Informações da empresa**
+    (bilíngue, rótulo diz que vale pro conteúdo gerado, não pra tela).
+  - Textos fixos que ainda estavam só em PT no painel do cliente foram traduzidos (CreativeAgent, tela de
+    erro de carregamento, mensagens de bloqueio de vitrine, rótulos gravados nas ações do calendário, etc.).
+  - `business_types.label` segue em PT como **chave** (liga à ficha e ao plano); só a **exibição** é traduzida
+    (`businessTypeLabel` em `src/lib/businessTypes.ts`).
+- **Fases pendentes (ver [ROADMAP.md](ROADMAP.md)):**
+  - **Fase 2:** conteúdo gerado em inglês de verdade (prompts das functions, travas em inglês — número inventado,
+    "Comente QUERO", recado da IA na legenda, carrossel educativo, etc.) e testes.
+  - **Fase 3:** ficha `real_estate_us` (vocabulário, perguntas do cadastro, catálogo, regras do setor nos EUA).
+  - **Fase 4:** dólar (US$), fuso/horário local, endereço com ZIP e termos do mercado (MLS, realtor, etc.).
+- **Decisões pendentes do dono (nada disso foi decidido):**
+  - Preço em **USD** (hoje R$ 2.449/mês e R$ 1.449/mês anual, nada convertido).
+  - Continuar **só imóveis** ou abrir outros setores nos EUA.
+  - **Horário de publicação local** (hoje 18h de Brasília).
+  - **Revisão jurídica EUA / Fair Housing** (publicidade imobiliária, termos, privacidade) antes de vender.
+  - O **Brasil continua** como mercado ou fica só como legado.
+- **Não verificado:** os depoimentos/cartões da landing com `São Paulo, Brasil` (`src/i18n.ts`) são decorativos
+  do cartão do herói; não dá pra saber se vêm de cliente real. Não foram alterados.

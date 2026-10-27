@@ -318,6 +318,15 @@ Telegram (`notifyMarketing()` → Cloudflare Worker `marketing-bot` →
 - Nunca expor chave de API no frontend — sempre via Edge Functions.
 - i18n desde o início — nunca string hardcoded na UI (seguido de forma
   inconsistente em componentes mais novos — débito técnico conhecido).
+- **Idioma (2026-10-27):** dois idiomas, dois donos. **Tela = por usuário**
+  (`LanguageContext`): escolha explícita em `localStorage['sb_lang']` vence; sem
+  escolha, `companies.language` da empresa logada (`'pt'` → pt, senão en); sem
+  empresa → `'en'`. A regra só lê, nunca grava o `sb_lang` sozinha. **Conteúdo
+  gerado = por empresa** (`companies.language`, padrão `'en'` desde a migration
+  `20261027120000_ingles_padrao.sql`; editado em Configurações). Código fora do
+  React lê a tela com `getCurrentLang()`. `business_types.label` é chave em PT
+  (ficha/plano): traduzir só na exibição (`businessTypeLabel`). Ver
+  [DECISIONS.md](DECISIONS.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro).
 - Deploy: `npm run build` → `npx wrangler deploy` (manual, sem CI/CD —
   ver P4 em [ROADMAP.md](ROADMAP.md)).
 

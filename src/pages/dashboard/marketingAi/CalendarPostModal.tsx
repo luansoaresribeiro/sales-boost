@@ -101,10 +101,10 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
     setBusy(p.id); setError(''); setOkMsg('')
     try {
       const action = await proposeAgentAction(token, {
-        company_id: companyId, agent_key: 'content', agent_name: 'Calendário',
+        company_id: companyId, agent_key: 'content', agent_name: lang === 'en' ? 'Calendar' : 'Calendário',
         action_type: 'create_content', channel: 'instagram', source: 'vault',
-        ref_type: 'marketing_ai_test_content', ref_id: p.id, title: p.idea ?? 'Post do calendário',
-        agent_interpretation: `Aprovado pelo dono no calendário (nota ${p.quality_score ?? '—'}).`,
+        ref_type: 'marketing_ai_test_content', ref_id: p.id, title: p.idea ?? (lang === 'en' ? 'Calendar post' : 'Post do calendário'),
+        agent_interpretation: lang === 'en' ? `Approved by the owner in the calendar (score ${p.quality_score ?? '—'}).` : `Aprovado pelo dono no calendário (nota ${p.quality_score ?? '—'}).`,
         payload: { idea: p.idea, caption: p.caption, hashtags: p.hashtags, cta: p.cta, image_url: p.image_url, media: p.media },
         approve_now: true,
       })
@@ -123,10 +123,10 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
     setBusy(item.id); setError(''); setOkMsg('')
     try {
       await proposeAgentAction(token, {
-        company_id: companyId, agent_key: 'content', agent_name: 'Calendário',
+        company_id: companyId, agent_key: 'content', agent_name: lang === 'en' ? 'Calendar' : 'Calendário',
         action_type: 'create_content', channel: 'instagram', source: 'vault',
-        ref_type: 'marketing_ai_test_content', ref_id: item.id, title: item.idea ?? 'Post do calendário',
-        agent_interpretation: `Aprovado pelo dono no calendário (nota ${item.quality_score ?? '—'}), agendado.`,
+        ref_type: 'marketing_ai_test_content', ref_id: item.id, title: item.idea ?? (lang === 'en' ? 'Calendar post' : 'Post do calendário'),
+        agent_interpretation: lang === 'en' ? `Approved by the owner in the calendar (score ${item.quality_score ?? '—'}), scheduled.` : `Aprovado pelo dono no calendário (nota ${item.quality_score ?? '—'}), agendado.`,
         payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags, cta: item.cta, image_url: item.image_url, media: item.media },
         scheduled_at: iso,
       })

@@ -93,6 +93,11 @@ setor). Teste de sanidade pra qualquer mudança: *"se eu trocar imóvel por
 procedimento estético, preciso mudar código? Se sim, está errado — vira
 ficha."*
 
+> **Divergência (2026-10-27):** o dono decidiu vender para os **EUA inteiros**, com o **inglês como idioma
+> principal** (os brasileiros atuais seguem em PT). Os trechos abaixo sobre Rio de Janeiro, PT-BR e R$ ficam como
+> estado do piloto atual — ver [DECISIONS.md](DECISIONS.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro).
+> Ficha `real_estate_us`, dólar, fuso e termos do mercado americano ainda não existem (fases 2-4).
+
 - **Ficha ativa:** `imoveis_rio`.
 - **ICP:** corretor autônomo ou imobiliária pequena (até ~10 corretores) no
   Rio de Janeiro. **Ajuste 2026-10-02 (dono):** público-alvo por agora =
@@ -140,6 +145,8 @@ beleza, saúde, food, clínicas, academias, franquias — que quer crescer sem
 precisar virar especialista em marketing.
 
 - Fase 1: Brasil (foco Rio de Janeiro) + brasileiros nos EUA.
+  > **Divergência (2026-10-27):** passou a ser EUA inteiro, em inglês, mantendo os brasileiros atuais em PT —
+  > ver [DECISIONS.md](DECISIONS.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro).
 - Decisor: o próprio dono, decisão rápida.
 
 ## Diferenciais competitivos
@@ -152,6 +159,8 @@ precisar virar especialista em marketing.
    redes e Maps.
 3. Diagnóstico de site grátis — porta de entrada / isca de lead qualificado.
 4. Um agente que EXECUTA, não só mostra relatório — em PT-BR, preço em R$.
+   > **Divergência (2026-10-27):** inglês como idioma principal e mercado EUA; preço em USD ainda é decisão
+   > pendente do dono — ver [DECISIONS.md](DECISIONS.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro).
 5. Ninguém faz: comparação de preços + cruzamento com reviews + plano de
    ação concreto + voz.
 

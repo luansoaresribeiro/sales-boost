@@ -8,10 +8,11 @@ import { useLang } from '../../contexts/LanguageContext'
 import { d } from '../../i18n-dash'
 import NotificationsCard from './settings/NotificationsCard'
 import BusinessUnderstandingCard from './settings/BusinessUnderstandingCard'
+import CompanyLanguageCard from './settings/CompanyLanguageCard'
 import AgentConfigTab from './marketingAi/AgentConfigTab'
 import ConnectionsTab from './marketingAi/ConnectionsTab'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
-import { fetchBusinessTypes, OTHER_BUSINESS_TYPE } from '../../lib/businessTypes'
+import { fetchBusinessTypes, businessTypeLabel, OTHER_BUSINESS_TYPE } from '../../lib/businessTypes'
 import { getTrialInfo } from '../../lib/trialState'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
@@ -150,7 +151,7 @@ function BusinessTypeField({ value, onChange, options, hint }: {
         style={{ width: '100%', padding: '11px 14px', boxSizing: 'border-box', background: '#150E08', border: `1px solid ${focused ? 'rgba(255,109,41,0.55)' : BORDER}`, borderRadius: '10px', color: selectValue ? 'white' : MUTED, fontSize: '14px', outline: 'none', cursor: 'pointer', appearance: 'none' }}
       >
         <option value="">{X.select}</option>
-        {options.map(o => <option key={o} value={o} style={{ background: '#150E08' }}>{o}</option>)}
+        {options.map(o => <option key={o} value={o} style={{ background: '#150E08' }}>{businessTypeLabel(o, lang)}</option>)}
         <option value={OTHER_BUSINESS_TYPE} style={{ background: '#150E08' }}>{X.otherSpecify}</option>
       </select>
       {showOther && (
@@ -464,6 +465,7 @@ export default function SettingsPage() {
           <SelectField label={X.mainGoal} value={goal} onChange={setGoal} options={GOALS} hint={X.goalHint} />
           <Field label={X.ticket} value={avgTicket} onChange={setAvgTicket} placeholder={X.ticketPh} type="number"
             hint={X.ticketHint} />
+          {companyId && <CompanyLanguageCard />}
         </SectionCard>
 
         {/* sempre renderizado: o sino de pendências rola até aqui (?section=entendimento) */}
