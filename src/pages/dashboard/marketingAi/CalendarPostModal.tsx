@@ -7,6 +7,7 @@ import { useLang, type Lang } from '../../../contexts/LanguageContext'
 import AdaptModal, { type VaultPost } from './AdaptModal'
 import { PieceChips } from './PieceLabels'
 import { proposeAgentAction, unscheduleAgentAction } from '../../../lib/agentActions'
+import { PUBLISH_HOUR_BRT, plannedPublishAt, publishWhenLabel } from '../../../lib/publishSlot'
 
 const GREEN = '#4ade80'
 const ORANGE = '#FF6D29'
@@ -21,6 +22,7 @@ const TX = {
     evaluating: '⏳ Sendo avaliada pela IA — a nota aparece em instantes.',
     planned: 'Planejada pra', approveHint: 'Nada vai ao ar sem o seu OK: 🚀 publica agora, 📅 marca o horário.',
     scheduledAt: '🕐 Agendado pra', cancelSched: 'Cancelar agendamento', confirm: 'Confirmar', publish: '🚀 Publicar agora', schedLater: '📅 Agendar',
+    approvePlanned: (when: string) => `✅ Aprovar — sai ${when}`, planHint: (when: string) => `Planejada pro futuro: aprovar agenda a publicação ${when} (horário padrão de Brasília). Nada sai antes disso. 🚀 publica já, 📅 escolhe outro horário.`,
     releaseAnyway: 'Liberar mesmo assim', toReview: 'Voltar pra revisão', del: 'Excluir', close: 'Fechar',
     adaptContent: '✨ Adaptar Conteúdo', adaptations: 'Adaptações', approvePub: 'Aprovar/Publicar',
     why: 'Por que excluir? O agente aprende com isso pra não repetir.', notePh: 'Quer explicar? (opcional)', delNoReason: 'Excluir sem motivo', cancel: 'Cancelar',
@@ -36,6 +38,7 @@ const TX = {
     evaluating: '⏳ Being reviewed by the AI — the score shows up shortly.',
     planned: 'Planned for', approveHint: 'Nothing goes live without your OK: 🚀 publishes now, 📅 picks a time.',
     scheduledAt: '🕐 Scheduled for', cancelSched: 'Cancel schedule', confirm: 'Confirm', publish: '🚀 Publish now', schedLater: '📅 Schedule',
+    approvePlanned: (when: string) => `✅ Approve — goes out ${when}`, planHint: (when: string) => `Planned for a future day: approving schedules the post for ${when} (default time, Brasília). Nothing goes out before then. 🚀 publishes now, 📅 picks another time.`,
     releaseAnyway: 'Release anyway', toReview: 'Back to review', del: 'Delete', close: 'Close',
     adaptContent: '✨ Adapt Content', adaptations: 'Adaptations', approvePub: 'Approve/Publish',
     why: 'Why delete it? The agent learns from this so it does not repeat it.', notePh: 'Want to explain? (optional)', delNoReason: 'Delete without a reason', cancel: 'Cancel',
@@ -44,6 +47,13 @@ const TX = {
   },
 } as const
 const fmtScheduled = (iso: string, lang: Lang) => new Date(iso).toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+// Sugestão do agendamento manual: o horário padrão de Brasília (mesma fonte do publishSlot) mostrado no relógio do navegador (datetime-local).
+const brtLocalInput = (day: string): string => {
+  const d = new Date(`${day}T${String(PUBLISH_HOUR_BRT).padStart(2, '0')}:00:00-03:00`)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
 
 type Post = TestPost & { kind?: string; planned_for?: string | null; recipe?: string | null }
 
@@ -69,7 +79,7 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
   const [scheduled, setScheduled] = useState<{ actionId: string; at: string } | null>(null)
   const [scheduling, setScheduling] = useState(false)
   // Sugere o dia planejado pelo calendário, às 18h.
-  const [scheduleValue, setScheduleValue] = useState(post.planned_for ? `${post.planned_for}T18:00` : '')
+  const [scheduleValue, setScheduleValue] = useState(post.planned_for && /^\d{4}-\d{2}-\d{2}$/.test(post.planned_for) ? brtLocalInput(post.planned_for) : '')
 
   const load = useCallback(async () => {
     const [{ data: row }, { data: a }, { data: sch }] = await Promise.all([
@@ -107,9 +117,9 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
   }
 
   // Agenda: aprovado agora, publicado pelo cron na hora marcada.
-  const schedule = async () => {
-    if (!scheduleValue) return
-    const iso = new Date(scheduleValue).toISOString()
+  const schedule = async (planIso?: string) => {
+    if (!planIso && !scheduleValue) return
+    const iso = planIso ?? new Date(scheduleValue).toISOString()
     setBusy(item.id); setError(''); setOkMsg('')
     try {
       await proposeAgentAction(token, {
@@ -187,6 +197,9 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
   }
 
   const isBusy = busy === item.id
+  // Peça planejada pra um dia futuro: aprovar AGENDA pro dia no horário padrão (o servidor tem a mesma regra no Telegram).
+  const plan = plannedPublishAt(item.planned_for)
+  const planWhen = plan ? publishWhenLabel(plan, lang) : ''
   const ready = item.status === 'vault'
   const evaluated = item.quality_score != null
   const btn = (color: string, bg: string): React.CSSProperties => ({ padding: '9px 12px', background: bg, border: `1px solid ${color}66`, borderRadius: '9px', color, fontSize: '12px', fontWeight: 700, cursor: isBusy ? 'default' : 'pointer', fontFamily: D })
@@ -250,18 +263,25 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
             </div>
           ) : ready ? (
             <>
-              <div style={{ fontSize: '10.5px', color: MUTED }}>{tx.approveHint}</div>
+              <div style={{ fontSize: '10.5px', color: MUTED }}>{plan ? tx.planHint(planWhen) : tx.approveHint}</div>
               {scheduling ? (
                 <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' }}>
                   <input type="datetime-local" value={scheduleValue} onChange={e => setScheduleValue(e.target.value)}
                     min={new Date(Date.now() + 5 * 60000).toISOString().slice(0, 16)}
                     style={{ flex: 1, minWidth: '170px', padding: '8px', background: 'rgba(255,255,255,0.04)', border: `1px solid ${BORDER}`, borderRadius: '9px', color: 'white', fontSize: '12px', fontFamily: D, colorScheme: 'dark' }} />
-                  <button onClick={schedule} disabled={isBusy || !scheduleValue} style={btn('#60a5fa', 'rgba(96,165,250,0.14)')}>{isBusy ? '...' : tx.confirm}</button>
+                  <button onClick={() => schedule()} disabled={isBusy || !scheduleValue} style={btn('#60a5fa', 'rgba(96,165,250,0.14)')}>{isBusy ? '...' : tx.confirm}</button>
                   <button onClick={() => setScheduling(false)} style={ghost}>✕</button>
                 </div>
               ) : (
                 <div style={{ display: 'flex', gap: '7px', flexWrap: 'wrap' }}>
-                  <button onClick={() => publish(item)} disabled={isBusy} style={{ ...btn(GREEN, 'rgba(74,222,128,0.14)'), flex: 1 }}>{isBusy ? '...' : tx.publish}</button>
+                  {plan ? (
+                    <>
+                      <button onClick={() => schedule(plan.iso)} disabled={isBusy} style={{ ...btn(GREEN, 'rgba(74,222,128,0.14)'), flex: 1 }}>{isBusy ? '...' : tx.approvePlanned(planWhen)}</button>
+                      <button onClick={() => publish(item)} disabled={isBusy} style={btn(GREEN, 'transparent')}>{tx.publish}</button>
+                    </>
+                  ) : (
+                    <button onClick={() => publish(item)} disabled={isBusy} style={{ ...btn(GREEN, 'rgba(74,222,128,0.14)'), flex: 1 }}>{isBusy ? '...' : tx.publish}</button>
+                  )}
                   <button onClick={() => setScheduling(true)} disabled={isBusy} style={btn('#60a5fa', 'transparent')}>{tx.schedLater}</button>
                   <button onClick={() => setStatus('draft')} disabled={isBusy} title={tx.toReview} style={ghost}>↩︎</button>
                   <button onClick={() => setAsking(true)} disabled={isBusy} title={tx.del} style={ghost}>🗑</button>

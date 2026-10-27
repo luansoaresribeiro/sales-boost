@@ -14,6 +14,8 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
+import { autoRedoEligible, newNumbers } from '../_shared/autoRedo.ts'
+import { stripPieceTexts } from '../_shared/internalNotes.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -340,10 +342,48 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       const testId = String(body.test_id ?? '')
       if (!testId) return json({ error: 'test_id é obrigatório' }, 400)
       const { data: tRow } = await admin.from('marketing_ai_test_content')
-        .select('id, idea, caption, hashtags, cta, format, image_url, scores, brief').eq('id', testId).eq('company_id', company.id).maybeSingle()
-      const t = tRow as { id: string; idea: string | null; caption: string | null; hashtags: string | null; cta: string | null; format: string | null; image_url: string | null; scores: Scores | null; brief: { template?: string } | null } | null
+        .select('id, idea, caption, hashtags, cta, format, image_url, scores, brief, status, item_id, recipe, reasoning, slides').eq('id', testId).eq('company_id', company.id).maybeSingle()
+      const t = tRow as { id: string; idea: string | null; caption: string | null; hashtags: string | null; cta: string | null; format: string | null; image_url: string | null; scores: Scores | null; brief: { template?: string } | null; status: string | null; item_id: string | null; recipe: string | null; reasoning: string | null; slides: unknown } | null
       if (!t) return json({ error: 'Post de teste não encontrado' }, 404)
       const config = await loadConfig(admin, company)
+
+      // ── Refação AUTOMÁTICA (2026-10-26, "Tudo automático"): chamada pelo creative-generate quando a peça não foi
+      // pro Vault por nota baixa. Só serviço, só texto, no máximo 1 vez por peça (brief.auto_redo), sem imagem nem
+      // Higgsfield (ver _shared/autoRedo.ts). Mantém planned_for e rótulos (só mexe em ideia/legenda/hashtags/CTA).
+      // Marca ANTES de reescrever: se algo falhar no meio, nunca tenta de novo.
+      if (isService && body.auto === true) {
+        const v = autoRedoEligible({ status: t.status, scores: t.scores, brief: t.brief as Record<string, unknown> | null, item_id: t.item_id, recipe: t.recipe, slides: t.slides }, COHERENCE_BAD_THRESHOLD)
+        if (!v.ok) return json({ ok: true, auto_redo: false, skipped: v.reason })
+        const before = t.scores?.coherence?.score ?? null
+        await admin.from('marketing_ai_test_content').update({ brief: { ...(t.brief ?? {}), auto_redo: true, auto_redo_at: new Date().toISOString() } }).eq('id', testId)
+        const up = parseJsonLoose<Record<string, string>>(await callClaude(anthropicKey, `${preamble(config, company)}
+
+Você é o Copywriter da agência. Reescreva/melhore o post mantendo o MESMO formato, corrigindo o problema de COERÊNCIA apontado pelo controle de qualidade: "${t.scores?.coherence?.comment ?? 'o post não faz sentido como uma peça única'}". Repense a ideia/legenda pra ela fazer sentido do início ao fim, mesmo que precise mudar o ângulo. REGRAS: não invente número, preço, prazo, taxa nem metragem (só use os que já estão no post atual); a legenda é pro público — nunca um recado, aviso ou pedido de dado pro corretor/dono.
+
+Post atual:
+- Ideia: ${t.idea ?? ''}
+- Legenda: ${t.caption ?? ''}
+- Hashtags: ${t.hashtags ?? ''}
+- CTA: ${t.cta ?? ''}
+
+Retorne APENAS um JSON: {"idea":"...","caption":"...","hashtags":"#...","cta":"..."}`, 1200))
+        const pieces = stripPieceTexts(up.caption ?? t.caption, up.cta ?? t.cta)
+        const next = { idea: up.idea ?? t.idea, caption: pieces.caption, hashtags: up.hashtags ?? t.hashtags, cta: pieces.cta }
+        const invented = newNumbers([t.idea, t.caption, t.hashtags, t.cta].join(' '), [next.idea, next.caption, next.hashtags, next.cta].join(' '))
+        if (pieces.emptied || invented.length) {
+          await admin.from('marketing_ai_test_content').update({ reasoning: [t.reasoning, `Refação automática descartada (${pieces.emptied ? 'a legenda nova saiu vazia' : `a IA inventou número: ${invented.join(', ')}`}) — texto original mantido; decida no painel.`].filter(Boolean).join(' · ') }).eq('id', testId)
+          return json({ ok: true, auto_redo: false, skipped: 'reescrita descartada' })
+        }
+        await admin.from('marketing_ai_test_content').update(next).eq('id', testId)
+        const { scores: ns, quality } = await scoreContent(anthropicKey, config, company, { idea: next.idea, caption: next.caption, hashtags: next.hashtags, cta: next.cta, format: t.format, imageUrl: t.image_url, feedPattern: await loadFeedPattern(admin, company.id) })
+        const passes = quality >= COHERENCE_BAD_THRESHOLD && (ns.visual_coherence?.score ?? 100) >= COHERENCE_BAD_THRESHOLD
+        await admin.from('marketing_ai_test_content').update({
+          scores: ns, quality_score: quality, ...(passes ? { status: 'vault' } : {}),
+          reasoning: [t.reasoning, `Refeita 1 vez sozinha (nota do texto ${before ?? '—'} → ${quality})${passes ? ' — passou e foi pra aprovação' : ' — ainda não passou; decida no painel'}.`].filter(Boolean).join(' · '),
+        }).eq('id', testId)
+        return json({ ok: true, auto_redo: true, regenerated: 'coherence', quality_score: quality, auto_vault: passes })
+      }
+
       const coherence = t.scores?.coherence
       const visual = t.scores?.visual_coherence
       const coherenceBad = (coherence?.score ?? 100) < COHERENCE_BAD_THRESHOLD

@@ -1,7 +1,7 @@
 // Roda: node --experimental-strip-types scripts/test-logo-png.mjs
 // Testa a lógica PURA de _shared/logoPng.ts com pixels sintéticos (sem biblioteca de imagem).
 import assert from 'node:assert/strict'
-import { processLogoPixels, meanLuma, lumaRange, imageDims, dimsOk, isSafeLogoUrl, usableLogoMeta, logoBackdrop, hexLuma, downscale } from '../supabase/functions/_shared/logoPng.ts'
+import { processLogoPixels, meanLuma, lumaRange, imageDims, dimsOk, isSafeLogoUrl, usableLogoMeta, logoBackdrop, hexLuma, downscale, shouldPrepareLogo } from '../supabase/functions/_shared/logoPng.ts'
 
 // imagem sintética: fundo `bg` (com ruído leve tipo JPEG) + retângulos {x,y,w,h,c}
 let seed = 7
@@ -103,5 +103,19 @@ t('usableLogoMeta: só vale pro logo atual (anti logo velha)', () => {
   const m = { src: 'https://a/x.png', png_url: 'https://a/p.png', kind: 'logo', luma: 0.3, bg_removed: true }
   assert.ok(usableLogoMeta(m, 'https://a/x.png')); assert.equal(usableLogoMeta(m, 'https://a/outra.png'), null)
   assert.equal(usableLogoMeta(null, 'x'), null); assert.equal(usableLogoMeta({ ...m, kind: 'x' }, m.src), null)
+})
+t('shouldPrepareLogo: meta ausente/velha dispara; recente não repete; foto não insiste', () => {
+  const L = 'https://a/x.png', now = Date.parse('2026-10-26T12:00:00Z')
+  const ok = { src: L, png_url: 'https://a/p.png', kind: 'logo', luma: 0.3, bg_removed: true }
+  assert.equal(shouldPrepareLogo(ok, L, now), false)                                   // já preparado
+  assert.equal(shouldPrepareLogo(null, L, now), true)                                   // sem meta
+  assert.equal(shouldPrepareLogo({ ...ok, src: 'https://a/velho.png' }, L, now), true)   // logo trocado
+  assert.equal(shouldPrepareLogo(null, null, now), false)                               // sem logo
+  const tried = (ms, st = 'started') => ({ attempt_src: L, attempted_at: new Date(now - ms).toISOString(), attempt_status: st })
+  assert.equal(shouldPrepareLogo(tried(10 * 60_000), L, now), false)                    // tentou há 10 min
+  assert.equal(shouldPrepareLogo(tried(61 * 60_000), L, now), true)                     // há 61 min tenta de novo
+  assert.equal(shouldPrepareLogo(tried(5 * 3600_000, 'foto'), L, now), false)           // foto: nunca insiste
+  assert.equal(shouldPrepareLogo({ ...tried(1000), attempt_src: 'https://a/outro.png' }, L, now), true) // tentativa era de outro logo
+  assert.equal(usableLogoMeta(tried(1000), L), null)                                    // marca sozinha nunca vale como logo
 })
 console.log(`\n${n} grupos OK`)

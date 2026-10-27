@@ -737,3 +737,24 @@ teste numa empresa de teste com 2 educativos (um de tema regulado com dica liber
 4. **Calendário rotulado pelas 4 famílias.**
 5. **Trends/notícias entram na intenção** — com fonte gravada (ver seção
    própria).
+
+## "Tudo automático" — o que mudou (2026-10-26, em código; sem deploy/migration aplicados)
+
+Complementa as seções acima sem apagar nada (decisões em [DECISIONS.md](DECISIONS.md)).
+
+- **Logo:** `BrandKit.save()` prepara o logo quando o salvo não tem `logo_meta` válido; `_shared/logoResolve.ts`
+  (`kickLogoPrepare`, também chamado pelo `resolveLogo` do `render-format`) dispara `brand-kit-suggest`
+  `prepare_logo` {company_id} (só `cron_secret`; reconfere pago; só a chamada da marca de tentativa mais nova segue).
+  **Divergência do texto de 2026-10-25:** o "backfill manual a pedido" continua existindo, mas não é mais o único
+  caminho — o logo se prepara na primeira peça. A peça que detecta usa o logo de sempre.
+- **Publicar no dia:** `_shared/publishSlot.ts` (18h Brasília). Tela (`CalendarPostModal`: "✅ Aprovar — sai dia X às 18h"
+  + "🚀 Publicar agora") e Telegram (`agent-actions` `telegram_decide`, `telegram-buddy`, `telegram-webhook`) agendam
+  via `scheduled_at` (cron `run-scheduled-actions-5min` já existente; nenhum cron novo). A peça agendada fica no
+  Vault até o cron publicar; 2º toque no Telegram não duplica.
+- **Resto da semana:** `creative-generate` `plan_rest_of_week` (semana segunda–domingo de Brasília, só dias > hoje,
+  mesma conta `weekSlots`; respeita pago, `auto_weekly_calendar=false` e "só quem ligou ou pagou"; vídeo segue o
+  teto do `item-videos`). `resolveContentPlan` agora é compartilhado com o cron de domingo (que não mudou).
+- **Refação automática:** `content-test` `regenerate` com `auto:true` (só serviço), regras em `_shared/autoRedo.ts`;
+  disparada no `generateForCompany` quando a peça não foi pro Vault.
+- **Dicas opção A:** ver DECISIONS; testes em `scripts/test-deck-topic.mjs`.
+- **Testes novos:** `scripts/test-publish-slot.mjs`, `scripts/test-auto-redo.mjs`, `shouldPrepareLogo` em `test-logo-png.mjs`.

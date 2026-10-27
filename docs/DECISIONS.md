@@ -1818,3 +1818,43 @@ grátis de 30 s, acima — mantidos como histórico):
   `20261026130000_aluguel_regulado.sql` acrescenta `aluguel` em `regulated_categories` e ajusta a nota do formato.
   Carrossel de aluguel agora usa só dica liberada da categoria aluguel; sem dica, sai como dica geral. **Geral**
   continua leve.
+
+## 2026-10-26 — "Tudo automático" (princípio do dono) + dicas opção A + horário padrão de publicação
+
+- **Princípio — "Tudo automático".** Nenhum processo pode depender de botão manual. Cada etapa roda sozinha
+  (agendamento, gatilho ou passo encadeado). Botão na tela só como atalho opcional ("refazer agora"). A **ÚNICA**
+  ação humana é a **aprovação do dono antes de ir ao público** (Telegram/Aprovações) — a regra 1 não muda.
+  Aplicado nesta rodada (tudo em código; deploy e migration dependem de "pode"):
+  1. **Logo preparado sozinho:** salvar o logo por link já prepara (igual ao upload); logo trocado por qualquer
+     caminho é preparado na primeira peça que notar (`kickLogoPrepare` → `brand-kit-suggest` `prepare_logo`,
+     em segundo plano, trava de 1 h em `logo_meta.attempted_at/attempt_src/attempt_status`, sem coluna nova).
+     Nunca troca o `logo_url` do dono; logo do dono que a IA acha "foto" não vira "foto" sozinho (só marca a
+     tentativa). O botão virou "Refazer o preparo do logo".
+  2. **Publicar no dia planejado:** aprovar peça com `planned_for` no futuro (dia de Brasília depois de hoje)
+     **agenda** pro dia no horário padrão; sem data/hoje/passado publica ao aprovar. "Publicar agora" ficou como atalho.
+  3. **Calendário assim que a estratégia nova fica pronta:** `strategy-generate` (2ª etapa, kind main) chama
+     `creative-generate` `plan_rest_of_week` — só amanhã até domingo, nada se faltarem < 2 dias; não duplica.
+  4. **Peça com nota ruim é refeita sozinha, no máx. 1 vez** (só texto; ver "Escopo" abaixo).
+- **Horário padrão de publicação: 18:00 (America/Sao_Paulo, offset fixo -03:00).** Não existe preferência de
+  horário por empresa no banco (`best_posting_hour` em `instagram_metrics` é medição, não escolha do dono), então
+  o horário é uma constante definida em **um lugar**: `supabase/functions/_shared/publishSlot.ts`
+  (`PUBLISH_HOUR_BRT`). A tela tem uma cópia só pra escrever "vai sair dia X às 18h" (`src/lib/publishSlot.ts`);
+  `scripts/test-publish-slot.mjs` falha se divergirem. Telegram: a mensagem da peça e os botões dizem
+  "Aprovar (sai dia X às 18h)"/"Sim, agendar pro dia X às 18h". O dono pode cancelar o agendamento no painel
+  enquanto a hora não chega. Se quiser outro horário (ou um por empresa), é mudar a constante / criar a preferência.
+- **Escopo da refação automática (conservador):** só reescreve o TEXTO (ideia, legenda, hashtags, CTA) quando a
+  nota de coerência do texto ficou ruim; no máx. 1 vez (`brief.auto_redo=true`, marcado ANTES de reescrever).
+  Fora: problema só visual, peça de imóvel/pacote/vídeo (dado real e custo Higgsfield), carrossel de tema
+  regulado, `runFaqSlot`/`runVideoSlot`/catalog-package. A reescrita não pode trazer número novo nem recado pro
+  corretor (senão é descartada e o original fica). Passou → vai pra aprovação; não passou → fica pra decisão do
+  dono. `planned_for` e rótulos não são tocados. Custo: 1 reescrita + 1 nota (Haiku), sem imagem. **Não consulta o teto em US$** (`fitsCap`) porque não gera mídia paga (nem Higgsfield nem imagem de IA); se um dia a refação passar a regerar imagem/vídeo, tem que checar o teto antes. Carrossel (peça com `slides`) também fica de fora: os slides já desenhados não mudam com o texto.
+- **Dicas — opção A (decisão do dono, 2026-10-26).** No **modo regulado** do carrossel educativo e na vaga
+  `dica_faq` de **categoria regulada**, a dica só é "liberada" sozinha quando conferida em fonte oficial:
+  status `conferida`|`corrigida`, `source_url` presente e dentro de `faq.official_domains` da ficha, e não vencida
+  (`next_check_at` no futuro; vencida = reconfere antes, como já fazia). `geral`, `revisar` e `aprovada_dono` sem
+  fonte oficial **deixam de valer** nesses casos → o carrossel sai no modo geral (sem número/prazo/taxa/lei).
+  **Categoria leve** (ou ficha sem `regulated_categories`): a vaga `dica_faq` segue como antes (geral e aprovada
+  pelo dono valem) — mínimo coerente, porque leve não carrega fato regulado. Código: `faqCheck.isOfficiallyReleased`
+  / `isUsableTip`, `deckTopic.pickTips(rows, categoria, official_domains, …)`. Texto da tela `FaqTips.tsx` (PT/EN) atualizado.
+- **Padrão de WhatsApp (migration `20261027120000_whatsapp_auto_reply_default_off.sql`):** resposta automática nasce
+  DESLIGADA (regra 1). Só muda o padrão de linhas futuras; os valores atuais o dono ajusta à mão.

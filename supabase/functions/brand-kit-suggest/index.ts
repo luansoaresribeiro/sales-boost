@@ -12,7 +12,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
-import { processLogoPixels, downscale, isSafeLogoUrl, type LogoMeta } from '../_shared/logoPng.ts'
+import { processLogoPixels, downscale, isSafeLogoUrl, usableLogoMeta, type LogoMeta } from '../_shared/logoPng.ts'
 import { decodeImage, encodePng, svgToPng, fetchLogoBytes, toBase64, probeLibs, MAX_SVG_BYTES } from '../_shared/logoCodec.ts'
 
 const cors = {
@@ -320,6 +320,34 @@ async function backfillLogos(admin: ReturnType<typeof createClient>, anthropicKe
   return { ok: true, dry_run: dryRun, processed, wrote, skipped, remaining: candidates.length - visited, est_cost_usd: Number((processed * EST_USD_PER_LOGO).toFixed(4)), libs, results, elapsed_ms: Date.now() - t0 }
 }
 
+// ── prepare_logo (2026-10-26, "Tudo automático") ───────────────────────────────────────────
+// Chamada em segundo plano por _shared/logoResolve.ts quando um criativo nota que o logo_meta falta ou é de
+// OUTRO logo. Roda o mesmo processLogo no logo_url ATUAL e grava logo_meta. NUNCA troca logo_url (só cria o
+// PNG ao lado). Mesmas travas do backfill: IA falhou / biblioteca de imagem não carregou → não grava (a marca
+// de tentativa segura 1 h); logo do DONO que a IA acha foto → não vira "foto" sozinho, a marca vira 'foto'.
+async function prepareLogoNow(admin: ReturnType<typeof createClient>, anthropicKey: string, companyId: string, attemptedAt: string | null) {
+  const { data: bd, error } = await admin.from('brand_dna').select('logo_url, logo_meta').eq('company_id', companyId).maybeSingle()
+  if (error || !bd) return { ok: false, skipped: 'sem linha de marca' }
+  const logoUrl = (bd.logo_url as string | null) || null
+  if (!logoUrl) return { ok: true, skipped: 'sem logo' }
+  const raw = (bd.logo_meta ?? {}) as Record<string, unknown>
+  if (usableLogoMeta(raw, logoUrl)) return { ok: true, skipped: 'já preparado' }
+  // Várias peças ao mesmo tempo gravam a marca; só a chamada da marca mais nova segue (as outras param aqui).
+  if (attemptedAt && raw.attempted_at !== attemptedAt) return { ok: true, skipped: 'outra chamada mais nova cuida' }
+  if (!(await hasPaidAccess(admin, companyId))) return { ok: true, skipped: 'sem acesso pago' }
+  const libs = await probeLibs()
+  const run = await processLogo(admin, anthropicKey, companyId, { url: logoUrl })
+  const setStatus = async (status: string) => { await admin.from('brand_dna').update({ logo_meta: { ...raw, attempted_at: new Date().toISOString(), attempt_src: logoUrl, attempt_status: status } }).eq('company_id', companyId).eq('logo_url', logoUrl) }
+  if (run.error) return { ok: false, skipped: `erro: ${run.error}` }
+  if (run.warning === 'ia') return { ok: false, skipped: 'IA falhou — não gravou' }
+  if (run.warning === 'formato' && (!libs.imagescript || !libs.resvg)) return { ok: false, skipped: 'biblioteca de imagem não carregou — não gravou' }
+  if (run.meta.kind === 'foto' && !isIgLogo(logoUrl)) { await setStatus('foto'); return { ok: true, skipped: 'logo do dono parece foto — não gravou' } }
+  const meta = { ...run.meta, src: logoUrl, prepared_by: 'auto' }
+  const { data: upd, error: upErr } = await admin.from('brand_dna').update({ logo_meta: meta }).eq('company_id', companyId).eq('logo_url', logoUrl).select('company_id')
+  if (upErr) return { ok: false, skipped: `gravação falhou: ${upErr.message}` }
+  return { ok: true, wrote: !!upd?.length, kind: meta.kind, png_url: meta.png_url, bg_removed: meta.bg_removed, warning: run.warning ?? null }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
@@ -352,6 +380,12 @@ Deno.serve(async (req) => {
       else await admin.from('brand_dna').upsert({ company_id: companyId, logo_url: logoUrl, updated_at: new Date().toISOString() }, { onConflict: 'company_id' })
       if (run) await saveLogoMeta(admin, companyId, run.meta)
       return json({ ok: true, logo_set: true, colors_set: !!colors, kind: run?.meta.kind ?? null })
+    }
+
+    if (body.action === 'prepare_logo') {
+      if (!isCron) return json({ error: 'Unauthorized' }, 401)
+      if (typeof body.company_id !== 'string' || !body.company_id) return json({ error: 'company_id obrigatório' }, 400)
+      return json(await prepareLogoNow(admin, anthropicKey, body.company_id, typeof body.attempted_at === 'string' ? body.attempted_at : null))
     }
 
     // Backfill do logo_meta (2026-10-25): empresas que já tinham logo ANTES da função de PNG transparente

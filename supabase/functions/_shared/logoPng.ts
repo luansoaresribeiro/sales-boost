@@ -199,6 +199,23 @@ export function usableLogoMeta(meta: unknown, currentLogoUrl: string | null | un
   return { src: m.src, png_url: typeof m.png_url === 'string' ? m.png_url : null, kind: m.kind, luma: typeof m.luma === 'number' ? m.luma : null, luma_lo: typeof m.luma_lo === 'number' ? m.luma_lo : null, luma_hi: typeof m.luma_hi === 'number' ? m.luma_hi : null, bg_removed: !!m.bg_removed, w: typeof m.w === 'number' ? m.w : undefined, h: typeof m.h === 'number' ? m.h : undefined }
 }
 
+// ── logo trocado por qualquer caminho → preparar sozinho (2026-10-26, "Tudo automático") ───────
+// Marca de tentativa guardada no PRÓPRIO jsonb logo_meta (sem coluna nova): attempted_at, attempt_src,
+// attempt_status ('started' | 'foto'). Sem `src`/`kind` válidos ela nunca vale como logo preparado
+// (usableLogoMeta continua devolvendo null), então a peça segue com o logo de sempre.
+export const LOGO_RETRY_MS = 60 * 60 * 1000
+
+/** Devolve true quando vale disparar o preparo em segundo plano. Pura. */
+export function shouldPrepareLogo(meta: unknown, currentLogoUrl: string | null | undefined, nowMs = Date.now()): boolean {
+  if (!currentLogoUrl) return false
+  if (usableLogoMeta(meta, currentLogoUrl)) return false                     // já preparado pra ESTE logo
+  const m = (meta && typeof meta === 'object' ? meta : {}) as { attempted_at?: unknown; attempt_src?: unknown; attempt_status?: unknown }
+  if (m.attempt_src !== currentLogoUrl) return true                          // nunca tentou este logo
+  if (m.attempt_status === 'foto') return false                              // IA disse foto: não insiste neste link
+  const t = typeof m.attempted_at === 'string' ? Date.parse(m.attempted_at) : NaN
+  return !Number.isFinite(t) || nowMs - t >= LOGO_RETRY_MS                   // tentou há menos de 1 h → espera
+}
+
 // ── URL colada pelo dono: só https público (nada de IP, localhost, rede interna) ─────────────
 export function isSafeLogoUrl(raw: string): boolean {
   let u: URL
