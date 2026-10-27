@@ -1858,3 +1858,16 @@ grátis de 30 s, acima — mantidos como histórico):
   / `isUsableTip`, `deckTopic.pickTips(rows, categoria, official_domains, …)`. Texto da tela `FaqTips.tsx` (PT/EN) atualizado.
 - **Padrão de WhatsApp (migration `20261027120000_whatsapp_auto_reply_default_off.sql`):** resposta automática nasce
   DESLIGADA (regra 1). Só muda o padrão de linhas futuras; os valores atuais o dono ajusta à mão.
+
+## 2026-10-27 — Áudio no Telegram: transcrição pela OpenAI, resposta pelo Claude
+
+- **Decisão do dono:** o bot do Telegram passa a entender áudio. A API da Anthropic não recebe áudio (só texto,
+  imagem e documento — conferido na doc da Messages API em 2026-10-27), então a **OpenAI (`whisper-1`) só
+  transcreve**; quem entende e responde continua sendo o Claude (`telegram-chat`). O dono preferiu Anthropic e,
+  sabendo que não dá, aprovou a OpenAI (chave já existente, usada na geração de imagem).
+- **Limites:** só chat privado, só chat ligado a exatamente 1 empresa (sem gastar com quem não conectou), até
+  2 minutos por áudio. Custo estimado ~US$ 0,006/min (preço conhecido; a página de preços da OpenAI não abriu do
+  ambiente de trabalho — conferir no painel da OpenAI), gravado em `agent_performance` (`task_key`
+  `audio_transcription`). O bot mostra "🎤 Entendi: …" antes de responder, pra o dono ver o que foi entendido.
+- **Privacidade:** o áudio vai para a OpenAI para virar texto — atualizar `/privacidade` (pendente).
+- Foto/vídeo/arquivo no chat privado agora recebem aviso ("por enquanto entendo texto e áudio") em vez de silêncio.
