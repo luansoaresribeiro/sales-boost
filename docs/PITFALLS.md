@@ -433,6 +433,15 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   conferir os toques pelos logs do `telegram-webhook`.
 - **Migration com cron:** `20261014100000_telegram_buddy.sql` aponta pra
   produção — no ensaio aplicar só a tabela e a flag.
+- **Um chat do Telegram ligado a duas empresas deixava o bot mudo
+  (2026-10-27).** O dono conectou a Tespon com o mesmo Telegram que já estava
+  na Sales Boost; o `telegram-chat` buscava a empresa com `.single()`, recebia
+  erro (2 linhas) e devolvia o aviso só pro `telegram-webhook`, que não repassa
+  o texto — nada chegava no Telegram. Agora: o `telegram-connect` desliga o
+  chat de qualquer outra empresa antes de ligar na nova (um chat ↔ uma
+  empresa), e o `telegram-chat` manda ele mesmo a mensagem quando não acha
+  exatamente 1 empresa. Regra: resposta pro usuário sai sempre da função que
+  conversa com o Telegram — nunca contar com o chamador repassar.
 
 ## Functions não checavam pagamento — usar `_shared/access.ts` (2026-10-13)
 

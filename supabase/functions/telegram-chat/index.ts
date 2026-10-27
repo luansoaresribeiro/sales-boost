@@ -194,14 +194,27 @@ Deno.serve(async (req) => {
 
     if (!chat_id || !message) return json({ error: 'chat_id e message são obrigatórios' }, 400)
 
-    const { data: company } = await admin.from('companies')
+    // limit(2) em vez de .single(): com 0 ou 2+ empresas no mesmo chat o .single() dava erro e o
+    // bot ficava mudo (o telegram-webhook não repassa o "reply" devolvido aqui). Agora a resposta
+    // vai direto pro Telegram em todos os casos.
+    const { data: companies } = await admin.from('companies')
       .select('id, business_name, business_type, city, goal, ai_profile')
       .eq('telegram_chat_id', chat_id)
-      .single()
+      .limit(2)
 
-    if (!company) {
-      return json({ reply: 'Para usar o chat, primeiro conecte sua conta com /conectar CÓDIGO.\nGere seu código em: https://getsaleboost.com/dashboard/settings' })
+    if (!companies || companies.length !== 1) {
+      const notice = companies?.length
+        ? 'Este Telegram está ligado a mais de uma empresa e eu não sei de qual responder. Gere um código novo em https://getsaleboost.com/dashboard/settings (logado na empresa que você quer usar) e mande /conectar CÓDIGO aqui — a conexão antiga é desligada sozinha.'
+        : 'Para usar o chat, primeiro conecte sua conta com /conectar CÓDIGO.\nGere seu código em: https://getsaleboost.com/dashboard/settings'
+      const res = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id, text: notice }),
+      })
+      if (!res.ok) console.error('Telegram send error:', await res.text())
+      return json({ reply: notice })
     }
+    const company = companies[0]
 
     let { data: conv } = await admin.from('telegram_conversations')
       .select('id')
