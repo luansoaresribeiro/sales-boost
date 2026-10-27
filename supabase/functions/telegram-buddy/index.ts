@@ -25,6 +25,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { pendingKeyboard, PANEL_LINKS, tg, brazilHour } from '../_shared/telegramButtons.ts'
+import { plannedPublishAt, publishWhenLabel } from '../_shared/publishSlot.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -102,7 +103,7 @@ async function runCompany(admin: Supa, c: Company): Promise<number> {
   const [{ data: actions }, { data: vault }, { data: leads }] = await Promise.all([
     fresh(admin.from('agent_actions').select('id, title, description, target, payload, agent_interpretation, created_at')
       .eq('company_id', c.id).eq('approval_status', 'PENDING').gte('created_at', since)).order('created_at', { ascending: false }).limit(10),
-    fresh(admin.from('marketing_ai_test_content').select('id, idea, caption, image_url, media, quality_score, created_at')
+    fresh(admin.from('marketing_ai_test_content').select('id, idea, caption, image_url, media, quality_score, planned_for, created_at')
       .eq('company_id', c.id).eq('status', 'vault').gte('created_at', since)).order('created_at', { ascending: false }).limit(10),
     fresh(admin.from('leads').select('id, name, channel, created_at')
       .eq('company_id', c.id).gte('created_at', since)).order('created_at', { ascending: false }).limit(10),
@@ -165,8 +166,12 @@ async function sendVault(chatId: number, v: Record<string, unknown>) {
   const photo = media.find(m => m?.url && m.type !== 'video')?.url ?? (v.image_url ? String(v.image_url) : '')
   const score = typeof v.quality_score === 'number' ? ` (nota ${v.quality_score})` : ''
   const fotos = media.length > 1 ? `\n\nÉ um carrossel com ${media.length} fotos/vídeos — veja tudo no painel.` : ''
-  const text = `Ficou pronto um post novo e ele passou no nosso controle de qualidade${score} ✨\n\n${cut(v.caption ?? v.idea, 650)}${fotos}\n\nQuer que eu publique no seu Instagram?`
-  const reply_markup = await pendingKeyboard('v', String(v.id), chatId)
+  // Peça planejada pra um dia futuro: aprovar agenda (sai no dia, no horário padrão) — a mensagem diz isso.
+  const plan = plannedPublishAt(v.planned_for)
+  const when = plan ? publishWhenLabel(plan) : null
+  const ask = when ? `Aprovando, ela vai sair no seu Instagram ${when} (ficou planejada pra esse dia). Posso aprovar?` : 'Quer que eu publique no seu Instagram?'
+  const text = `Ficou pronto um post novo e ele passou no nosso controle de qualidade${score} ✨\n\n${cut(v.caption ?? v.idea, 650)}${fotos}\n\n${ask}`
+  const reply_markup = await pendingKeyboard('v', String(v.id), chatId, when)
   if (photo) {
     const r = await tg('sendPhoto', { chat_id: chatId, photo, caption: cut(text, 1024), reply_markup })
     if (r.ok) return { ok: true, text }

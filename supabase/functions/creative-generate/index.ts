@@ -29,9 +29,10 @@ import { loadLessons, lessonsBlock, relearn } from '../_shared/contentLessons.ts
 import { deckPromptRules, DECK_SLIDE_JSON, lockSlide, inventedNumbers, normalizeDeck, normalizeSlide, numbersOf, pickCoverStyle, rewritePrompt, slideSummary, type DeckSlide } from '../_shared/deckSlides.ts'
 import { decideVideoCta, queroNotice, sanitizeCaptionCta } from '../_shared/videoCta.ts'
 import { stripPieceTexts, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
-import { callClaude as callModel, CHEAP_MODEL, checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isPublishable, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
+import { callClaude as callModel, CHEAP_MODEL, checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isUsableTip, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 import { decideTopic, guardDeck, loadGuardCfg, topicBlock, topicNote, type Ask, type TopicDecision } from '../_shared/deckGuard.ts'
 import { resolveAlias, tipNumbers, topicText } from '../_shared/deckTopic.ts'
+import { currentWeekBRT } from '../_shared/publishSlot.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -186,6 +187,18 @@ async function scoreTestContent(companyId: string, testId: string): Promise<bool
     body: JSON.stringify({ action: 'score', test_id: testId, company_id: companyId }),
   })
   if (!res.ok) throw new Error(`content-test score falhou: ${await res.text()}`)
+  const data = await res.json().catch(() => ({})) as { auto_vault?: boolean }
+  return !!data.auto_vault
+}
+
+async function autoRedoOnce(companyId: string, testId: string): Promise<boolean> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL'), serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!supabaseUrl || !serviceKey) return false
+  const res = await fetch(`${supabaseUrl}/functions/v1/content-test`, {
+    method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'regenerate', auto: true, test_id: testId, company_id: companyId }),
+  })
+  if (!res.ok) { await res.body?.cancel(); return false }
   const data = await res.json().catch(() => ({})) as { auto_vault?: boolean }
   return !!data.auto_vault
 }
@@ -920,6 +933,9 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   // chamava isso antes). Nunca derruba a geração se a avaliação falhar.
   let autoVault = false
   try { autoVault = await scoreTestContent(company.id, inserted.id) } catch (e) { console.error('creative-generate: score falhou', e) }
+  // "Tudo automático": nota baixa → refaz o TEXTO 1 vez sozinho (content-test regenerate, modo auto; ele mesmo
+  // recusa vídeo/imóvel/tema regulado/peça já refeita e só manda pro Vault se passar). Sem custo de imagem.
+  if (!autoVault) { try { autoVault = await autoRedoOnce(company.id, inserted.id) } catch (e) { console.error('creative-generate: refação automática falhou', e) } }
 
   return { id: inserted.id, image_generated: !!mainImage, slides: slides?.length ?? 0, personality, brief, auto_vault: autoVault }
 }
@@ -941,6 +957,58 @@ function nextWeekDates(): { iso: string; weekday: string }[] {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + startOffset + i)
     return { iso: d.toISOString().slice(0, 10), weekday: WD[d.getDay()] }
   })
+}
+
+// Mix da semana escolhido pela estratégia (Hermes) já completado (vídeo mínimo, rótulos): usado pelo cron de
+// domingo (planWeekForCompany) e pelo "resto da semana" (planRestOfWeek) — um lugar só.
+async function resolveContentPlan(admin: SupaClient, company: Company, stratRow: { content_plan?: unknown; funnel_plan?: unknown } | null): Promise<{ contentPlan: ContentPlan | null; funnelPlan: unknown; ssPillars: Awaited<ReturnType<typeof fetchSSPillars>> }> {
+  // O calendário segue as
+  // quantidades e os formatos; o que não dá pra gerar sozinho (vídeo, pacote
+  // do item, DM) volta como lista "pra fazer" pro dono.
+  const storedPlan = (stratRow?.content_plan ?? null) as ContentPlan | null
+  // Mínimo de vídeos da ficha vale também pra estratégia antiga (criada antes
+  // da regra) — sem precisar refazer a estratégia.
+  // Estratégia antiga (sem familia/pilar_ss/tema): o labelMix completa pelo catálogo e pelo
+  // fallback determinístico (funil do mesmo formato → rodízio entre os pilares da ficha).
+  const funnelPlan = stratRow?.funnel_plan ?? null
+  const ssPillars = await fetchSSPillars(admin, company.vertical_key)
+  const contentPlan = storedPlan && Array.isArray(storedPlan.weekly_mix) && storedPlan.weekly_mix.length
+    ? await (async () => {
+      const cat = await fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id)
+      const mixed = ensureMinVideos(storedPlan.weekly_mix, cat, (await fetchContentRules(admin, company.vertical_key ?? 'generico')).minVideosPerWeek)
+      return { ...storedPlan, weekly_mix: labelMix(mixed, new Map(cat.map(f => [f.key, f])), ssPillars.map(p => p.key), { funnel: funnelPlan }) }
+    })()
+    : storedPlan
+  return { contentPlan, funnelPlan, ssPillars }
+}
+
+// Calendário assim que a estratégia nova fica pronta (2026-10-26, "Tudo automático"): o strategy-generate chama
+// isto (cron_secret) quando grava a estratégia ativa. Planeja SÓ os dias que faltam da semana atual (amanhã até
+// domingo) pelo mesmo planWeekFromStrategy (alreadyFilled evita duplicar peça que já existe). Faltando menos de 2
+// dias, não faz nada (o cron de domingo cobre a semana seguinte). Mesmas travas do cron de domingo: acesso pago,
+// interruptor auto_weekly_calendar=false desliga, e só planeja quem ligou ou pagou. Teto de vídeo: o plan_slot do
+// item_video já confere (item-videos, teto de US$ 40).
+async function planRestOfWeek(admin: SupaClient, companyId: string): Promise<{ planned: number; skipped?: string }> {
+  const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', companyId).maybeSingle()
+  const company = companyRow as Company | null
+  if (!company) return { planned: 0, skipped: 'empresa não encontrada' }
+  if (!(await hasPaidAccess(admin, company.id))) return { planned: 0, skipped: 'sem plano' }
+  const { data: cfg } = await admin.from('marketing_ai_config').select('auto_weekly_calendar').eq('company_id', company.id).maybeSingle()
+  const flag = (cfg as { auto_weekly_calendar?: boolean | null } | null)?.auto_weekly_calendar
+  if (flag === false) return { planned: 0, skipped: 'calendário automático desligado' }
+  if (flag !== true) {
+    const { data: paid } = await admin.from('companies').select('id').eq('id', company.id).or('stripe_subscription_id.not.is.null,manual_access.eq.true').maybeSingle()
+    if (!paid) return { planned: 0, skipped: 'sem assinatura/liberação (o dono liga o calendário automático)' }
+  }
+  const { week, remaining } = currentWeekBRT()
+  if (remaining.length < 2) return { planned: 0, skipped: 'faltam menos de 2 dias (o cron de domingo cobre)' }
+  const { data: stratRow } = await admin.from('marketing_ai_strategies').select('content_plan, funnel_plan').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').order('updated_at', { ascending: false }).limit(1).maybeSingle()
+  const { contentPlan, funnelPlan, ssPillars } = await resolveContentPlan(admin, company, stratRow as { content_plan?: unknown; funnel_plan?: unknown } | null)
+  // Espalha o mix pelos 7 dias da semana de segunda a domingo (mesma conta da tela) e fica só com os que faltam.
+  const slots = weekSlots(contentPlan, week).filter(sl => remaining.includes(sl.date))
+  if (!slots.length) return { planned: 0, skipped: 'estratégia sem mix semanal' }
+  const r = await planWeekFromStrategy(admin, company, slots, contentPlan!, funnelPlan, ssPillars)
+  return { planned: r.planned }
 }
 
 // Calendário da Semana: PLANEJA a semana inteira (1 ou 2 posts orgânicos por
@@ -995,23 +1063,7 @@ async function planWeekForCompany(admin: SupaClient, anthropicKey: string, compa
     fetchWeekPillarOccupancy(admin, company.id, dates.map(d => d.iso), await fetchPillarWeights(admin, company.vertical_key ?? 'generico')),
     admin.from('marketing_ai_strategies').select('content_plan, funnel_plan').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').order('updated_at', { ascending: false }).limit(1).maybeSingle(),
   ])
-  // Mix da semana escolhido pela estratégia (Hermes): o calendário segue as
-  // quantidades e os formatos; o que não dá pra gerar sozinho (vídeo, pacote
-  // do item, DM) volta como lista "pra fazer" pro dono.
-  const storedPlan = (stratRow?.content_plan ?? null) as ContentPlan | null
-  // Mínimo de vídeos da ficha vale também pra estratégia antiga (criada antes
-  // da regra) — sem precisar refazer a estratégia.
-  // Estratégia antiga (sem familia/pilar_ss/tema): o labelMix completa pelo catálogo e pelo
-  // fallback determinístico (funil do mesmo formato → rodízio entre os pilares da ficha).
-  const funnelPlan = stratRow?.funnel_plan ?? null
-  const ssPillars = await fetchSSPillars(admin, company.vertical_key)
-  const contentPlan = storedPlan && Array.isArray(storedPlan.weekly_mix) && storedPlan.weekly_mix.length
-    ? await (async () => {
-      const cat = await fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id)
-      const mixed = ensureMinVideos(storedPlan.weekly_mix, cat, (await fetchContentRules(admin, company.vertical_key ?? 'generico')).minVideosPerWeek)
-      return { ...storedPlan, weekly_mix: labelMix(mixed, new Map(cat.map(f => [f.key, f])), ssPillars.map(p => p.key), { funnel: funnelPlan }) }
-    })()
-    : storedPlan
+  const { contentPlan, funnelPlan, ssPillars } = await resolveContentPlan(admin, company, stratRow)
   const mix = weeklyMixPlan(contentPlan)
   // Estratégia com mix semanal → o calendário é o plano dela, dia a dia
   // (weekSlots), sem a IA decidir cadência. Sem estratégia, vale o
@@ -1234,9 +1286,9 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
   } catch (e) { console.error('runPlanSlot falhou', company.id, job.date, e) }
 }
 
-// Vaga "Dica/FAQ conferida": pega a dica liberada menos usada (geral,
-// aprovada pelo dono, ou conferida em fonte oficial dentro do prazo —
-// vencida é reconferida antes), faz o card de pergunta e resposta
+// Vaga "Dica/FAQ conferida": pega a dica liberada menos usada. Categoria REGULADA da ficha: só dica conferida em
+// fonte oficial dentro do prazo (opção A, 2026-10-26); categoria leve: geral, aprovada pelo dono ou conferida
+// (vencida é reconferida antes), faz o card de pergunta e resposta
 // (render-format "faq") e a legenda só com o que a dica diz. O card nunca
 // pode trazer número que a dica não tem. Devolve false se não tiver dica.
 const FAQ_FORMAT = 'dica_faq'
@@ -1248,7 +1300,7 @@ async function runFaqSlot(admin: SupaClient, anthropicKey: string, company: Comp
   const ctx = { anthropicKey, tavilyKey: await getTavilyKey(admin), cfg, city: company.city ?? '', companyId: company.id }
   // Vencidas: reconfere (no máximo 2 por vaga) antes de escolher.
   for (const r of rows.filter(r => isDue(r.meta)).slice(0, 2)) Object.assign(r, await checkAndSave(admin, r, ctx))
-  const tip = rows.filter(r => isPublishable(r.meta)).sort((a, b) => (a.meta?.used_count ?? 0) - (b.meta?.used_count ?? 0))[0]
+  const tip = rows.filter(r => isUsableTip(r.meta, cfg)).sort((a, b) => (a.meta?.used_count ?? 0) - (b.meta?.used_count ?? 0))[0]
   if (!tip) return false
   const chk = tip.meta!.check!
   const label = cfg.categories.find(c => c.key === tip.meta?.category)?.label ?? 'Dica'
@@ -1403,6 +1455,14 @@ Deno.serve(async (req) => {
       if (okJob.pilar_ss !== job.pilar_ss) okJob.intent = null
       if (okJob.intent && !ssKeys.some(p => p.key === okJob.intent?.pilar_ss)) okJob.intent = null
       EdgeRuntime.waitUntil(runPlanSlot(admin, anthropicKey, company, okJob, cronSecretEnv))
+      return json({ ok: true, accepted: true }, 202)
+    }
+
+    // ── Resto da semana, logo que a estratégia nova fica pronta (chamado pelo strategy-generate) ──
+    if (cronSecretEnv && body.cron_secret === cronSecretEnv && body.action === 'plan_rest_of_week' && typeof body.company_id === 'string') {
+      const companyId = body.company_id
+      // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
+      EdgeRuntime.waitUntil(planRestOfWeek(admin, companyId).then(r => console.log('plan_rest_of_week', companyId, JSON.stringify(r))).catch(e => console.error('plan_rest_of_week falhou', companyId, e)))
       return json({ ok: true, accepted: true }, 202)
     }
 

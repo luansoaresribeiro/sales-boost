@@ -10,6 +10,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { parseButton, verifyButton, pendingKeyboard, confirmKeyboard, tg } from '../_shared/telegramButtons.ts'
+import { plannedPublishAt, publishWhenLabel } from '../_shared/publishSlot.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -106,7 +107,17 @@ async function handleFreeText(admin: SupaClient, token: string, chatId: number, 
 // "Aprovar" → troca os botões por "Tem certeza?" → "Sim" → agent-actions
 // (que confere a assinatura de novo e só então publica/envia). Só vale em
 // conversa privada e só pra quem recebeu o botão (assinatura presa ao chat).
-async function handleCallback(cb: TelegramCallback, supabaseUrl: string): Promise<void> {
+// "dia 28/10 às 18h" quando a peça do Vault está planejada pra um dia futuro (aprovar agenda); senão null.
+async function vaultWhen(admin: SupaClient, kind: string, id: string): Promise<string | null> {
+  if (kind !== 'v') return null
+  try {
+    const { data } = await admin.from('marketing_ai_test_content').select('planned_for').eq('id', id).maybeSingle()
+    const plan = plannedPublishAt((data as { planned_for?: unknown } | null)?.planned_for)
+    return plan ? publishWhenLabel(plan) : null
+  } catch { return null }
+}
+
+async function handleCallback(cb: TelegramCallback, supabaseUrl: string, admin: SupaClient): Promise<void> {
   const answer = (text: string) => tg('answerCallbackQuery', { callback_query_id: cb.id, text, show_alert: false })
   const chat = cb.message?.chat
   const btn = parseButton(cb.data ?? '')
@@ -115,12 +126,13 @@ async function handleCallback(cb: TelegramCallback, supabaseUrl: string): Promis
   const where = { chat_id: chat.id, message_id: cb.message.message_id }
 
   if (btn.op === 'A') {
-    await tg('editMessageReplyMarkup', { ...where, reply_markup: await confirmKeyboard(btn.kind, btn.id, chat.id) })
-    await answer(btn.kind === 'v' ? 'Tem certeza? Vai pro Instagram de verdade.' : 'Tem certeza? Vai ser enviado de verdade.')
+    const when = await vaultWhen(admin, btn.kind, btn.id)
+    await tg('editMessageReplyMarkup', { ...where, reply_markup: await confirmKeyboard(btn.kind, btn.id, chat.id, when) })
+    await answer(btn.kind === 'v' ? (when ? `Tem certeza? Vai sair no Instagram ${when}.` : 'Tem certeza? Vai pro Instagram de verdade.') : 'Tem certeza? Vai ser enviado de verdade.')
     return
   }
   if (btn.op === 'B') {
-    await tg('editMessageReplyMarkup', { ...where, reply_markup: await pendingKeyboard(btn.kind, btn.id, chat.id) })
+    await tg('editMessageReplyMarkup', { ...where, reply_markup: await pendingKeyboard(btn.kind, btn.id, chat.id, await vaultWhen(admin, btn.kind, btn.id)) })
     await answer('Ok, nada foi feito.')
     return
   }
@@ -202,7 +214,7 @@ Deno.serve(async (req) => {
     if (update.callback_query) {
       // Responde ao Telegram na hora e processa em segundo plano: publicar
       // pode levar ~30s e, sem resposta, o Telegram reenvia o mesmo toque.
-      const work = handleCallback(update.callback_query, supabaseUrl).catch(e => console.error('telegram-webhook callback:', e))
+      const work = handleCallback(update.callback_query, supabaseUrl, admin).catch(e => console.error('telegram-webhook callback:', e))
       // deno-lint-ignore no-explicit-any
       const rt = (globalThis as any).EdgeRuntime
       if (rt?.waitUntil) rt.waitUntil(work); else await work

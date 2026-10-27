@@ -14,7 +14,7 @@ import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 const ORANGE = '#FF6D29'
 const TX = {
   pt: {
-    intro: 'Dúvidas que seus clientes têm (jurídico, financiamento, documentação). A IA confere cada dica com número ou regra em site oficial do governo antes de ela poder virar post. Toda semana o calendário usa uma dica liberada. O carrossel educativo de tema jurídico, financiamento, documentação, impostos ou aluguel também usa só dicas liberadas daquele tema; sem dica liberada, sai como dica geral, sem número, prazo, taxa nem nome de lei.',
+    intro: 'Dúvidas que seus clientes têm (jurídico, financiamento, documentação). A IA confere cada dica com número ou regra em site oficial do governo antes de ela poder virar post. Uma dica só é liberada sozinha quando foi conferida em site oficial (status conferida ou corrigida, com o link do site oficial) e a conferência ainda está no prazo; dica geral, "precisa revisar" ou aprovada por você sem fonte oficial não conta nos temas regulados. Toda semana o calendário usa uma dica liberada. O carrossel educativo e a dica da semana de tema jurídico, financiamento, documentação, impostos ou aluguel usam só dicas liberadas desse jeito; sem nenhuma, o carrossel sai como dica geral, sem número, prazo, taxa nem nome de lei. Em tema leve a dica geral ou aprovada por você continua valendo.',
     suggest: '✨ Sugerir dicas', suggesting: 'Escrevendo e conferindo em fonte oficial... (até 1 min)', write: '＋ Escrever uma',
     q: 'Pergunta', a: 'Resposta', cat: 'Categoria', save: 'Salvar e conferir', saving: 'Conferindo...', cancel: 'Cancelar',
     none: 'Nenhuma dica ainda. Clique em "Sugerir dicas" ou escreva a sua.',
@@ -26,7 +26,7 @@ const TX = {
     used: (n: number) => `usada em ${n} post${n === 1 ? '' : 's'}`, err: 'Não deu certo. Tente de novo.',
   },
   en: {
-    intro: 'Questions your clients ask (legal, financing, paperwork). The AI checks every tip with a number or rule against an official government site before it can become a post. Every week the calendar uses one cleared tip. The educational carousel on legal, financing, paperwork, tax or rental topics also uses only cleared tips on that topic; with none cleared, it comes out as a general tip, with no number, deadline, rate or law name.',
+    intro: 'Questions your clients ask (legal, financing, paperwork). The AI checks every tip with a number or rule against an official government site before it can become a post. A tip is cleared on its own only when it was checked on an official site (status checked or corrected, with the official site link) and the check is still in date; general tips, "needs review" tips, or tips you approved without an official source do not count on regulated topics. Every week the calendar uses one cleared tip. The educational carousel and the weekly tip on legal, financing, paperwork, tax or rental topics use only tips cleared this way; with none, the carousel comes out as a general tip, with no number, deadline, rate or law name. On light topics a general tip or one you approved still counts.',
     suggest: '✨ Suggest tips', suggesting: 'Writing and checking official sources... (up to 1 min)', write: '＋ Write one',
     q: 'Question', a: 'Answer', cat: 'Category', save: 'Save and check', saving: 'Checking...', cancel: 'Cancel',
     none: 'No tips yet. Click "Suggest tips" or write your own.',

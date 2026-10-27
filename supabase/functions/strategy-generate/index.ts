@@ -659,6 +659,22 @@ Retorne APENAS um JSON:
       })
     }
     lap('goals + campaign draft gravados')
+
+    // "Tudo automático" (2026-10-26): estratégia nova ativa → o calendário dos dias que FALTAM da semana atual
+    // (amanhã até domingo) é planejado já, sem esperar o domingo nem um botão. Quem decide se há o que fazer é o
+    // creative-generate (acesso pago, interruptor do calendário, "menos de 2 dias não faz nada", sem duplicar).
+    // Só espera o aceite (202); nunca derruba a estratégia que acabou de ficar pronta.
+    if (String(row.kind) === 'main') {
+      try {
+        const res = await fetch(`${supabaseUrl}/functions/v1/creative-generate`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}` },
+          body: JSON.stringify({ action: 'plan_rest_of_week', company_id: companyId, cron_secret: cronSecret }),
+          signal: AbortSignal.timeout(20_000),
+        })
+        await res.body?.cancel()
+        if (!res.ok) console.error(`strategy-generate step2[${strategyId}]: plan_rest_of_week recusado (HTTP ${res.status})`)
+      } catch (e) { console.error(`strategy-generate step2[${strategyId}]: falha ao pedir o calendário do resto da semana:`, e) }
+    }
   } catch (e) {
     await markFailed(e instanceof Error ? e.message : String(e))
   }

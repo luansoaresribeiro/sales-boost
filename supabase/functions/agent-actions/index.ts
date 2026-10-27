@@ -23,6 +23,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { parseButton, verifyButton, type ButtonKind, type ButtonOp } from '../_shared/telegramButtons.ts'
 import { requirePaidAccess } from '../_shared/access.ts'
+import { plannedPublishAt, publishWhenLabel } from '../_shared/publishSlot.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -134,18 +135,31 @@ async function telegramDecide(admin: Supa, b: any) {
   const { data: claimed } = await admin.from('marketing_ai_test_content').update({ status: 'publishing' })
     .eq('id', id).eq('status', 'vault').select('*').maybeSingle()
   if (!claimed) return json({ ok: false, message: 'Esse post já saiu do Vault (publicado ou movido no painel).' })
+  // Peça planejada pra um dia FUTURO do calendário: aprovar agenda pro dia no horário padrão (_shared/publishSlot.ts);
+  // o cron run-scheduled-actions-5min publica. Sem data, de hoje ou de dia passado: publica ao aprovar, como sempre.
+  const plan = plannedPublishAt(claimed.planned_for)
+  if (plan) {
+    const { data: dup } = await admin.from('agent_actions').select('id').eq('company_id', company.id).eq('ref_type', 'marketing_ai_test_content').eq('ref_id', id).eq('execution_status', 'QUEUED').not('scheduled_at', 'is', null).limit(1).maybeSingle()
+    if (dup) {
+      await admin.from('marketing_ai_test_content').update({ status: 'vault' }).eq('id', id).eq('status', 'publishing')
+      return json({ ok: true, message: `✅ Esse post já está aprovado e agendado (${publishWhenLabel(plan)}).` })
+    }
+  }
   const res = await proposeAction(admin, company.id, {
     agent_key: 'content', agent_name: 'Vault', action_type: 'create_content', channel: 'instagram', source: 'telegram',
     ref_type: 'marketing_ai_test_content', ref_id: id, title: claimed.idea ?? 'Post do Vault',
-    agent_interpretation: `Aprovado pelo dono no Telegram (nota de qualidade ${claimed.quality_score ?? '—'}).`,
+    agent_interpretation: `Aprovado pelo dono no Telegram (nota de qualidade ${claimed.quality_score ?? '—'})${plan ? `, agendado pro dia planejado (${publishWhenLabel(plan)})` : ''}.`,
     payload: { idea: claimed.idea, caption: claimed.caption, hashtags: claimed.hashtags, cta: claimed.cta, image_url: claimed.image_url, media: claimed.media },
+    ...(plan ? { scheduled_at: plan.iso } : {}),
   }, false, true, company.user_id)
   const out = await res.json().catch(() => ({})) as { action?: { execution_status?: string; execution_error?: string; execution_result?: { published_to_instagram?: boolean } }; error?: string }
   const a = out.action
   // Só devolve pro Vault se a ação nem chegou a ser criada. Se foi criada, o
   // executor já cuidou (virou post, ou falhou e dá pra tentar de novo pela
   // Central) — devolver aqui arriscaria publicar duas vezes.
-  if (!a) await admin.from('marketing_ai_test_content').update({ status: 'vault' }).eq('id', id).eq('status', 'publishing')
+  // Agendada: a peça fica no Vault até o cron publicar (igual ao botão "Agendar" do painel); o 2º toque cai no dup acima.
+  if (!a || plan) await admin.from('marketing_ai_test_content').update({ status: 'vault' }).eq('id', id).eq('status', 'publishing')
+  if (plan && a) return json({ ok: true, message: `✅ Aprovado! Vai sair no Instagram ${publishWhenLabel(plan)}. Até lá você ainda pode cancelar o agendamento no painel.` })
   if (a?.execution_status === 'EXECUTED' && a.execution_result?.published_to_instagram) return json({ ok: true, message: '🎉 Publicado no Instagram!' })
   if (a?.execution_status === 'FAILED') return json({ ok: false, message: `⚠️ Aprovado, mas não publicou: ${a.execution_error ?? 'erro desconhecido'}` })
   return json({ ok: !!a, message: a ? '✅ Aprovado e salvo na aba Posts.' : `⚠️ Não consegui aprovar: ${out.error ?? 'erro desconhecido'}` })

@@ -708,3 +708,14 @@ destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
   palavra genérica ("dica", "dicas") em `category_terms`.
 - **Números do guarda = valor + unidade** (`faqCheck.numberFacts`): `1500` = `1.500,00`, `3,0%` = `3%`, mas
   `30%` ≠ `3%` ≠ `30 dias` e `150.000` ≠ `1.500`. Comparar só dígitos deixava passar colisões.
+
+## "Tudo automático" (2026-10-26)
+
+- **Marca de tentativa do logo vive dentro de `logo_meta`:** sem `src`/`kind` válidos ela nunca vale como logo
+  preparado (`usableLogoMeta` → null); não "limpe" campos extras ao gravar o meta (perde a trava de 1 h). O
+  `backfill_logos` (`logo_meta is null`) deixa de pegar empresa que já tem só a marca.
+- **Peça agendada continua no Vault** (status `vault` + ação `QUEUED` com `scheduled_at`); listas que mostram
+  "a aprovar" precisam filtrar as agendadas (já filtram). No Telegram o claim usa `publishing` e volta pra `vault`.
+- **`pickTips` mudou de assinatura** (`rows, categoria, official_domains, now, max`); `isPublishable` só vale pra
+  categoria leve — no regulado use `isOfficiallyReleased`.
+- **Edge function sem checagem de tipo local:** não há `deno` no ambiente; confira lint + testes Node e leia o diff.
