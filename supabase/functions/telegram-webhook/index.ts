@@ -21,7 +21,8 @@ const BOT_USERNAME = 'luansoaresribeirobot'
 type SupaClient = ReturnType<typeof createClient>
 
 interface TelegramChat { id: number; type: string }
-interface TelegramMessage { message_id?: number; chat: TelegramChat; text?: string }
+interface TelegramAudio { file_id: string; duration?: number; file_size?: number }
+interface TelegramMessage { message_id?: number; chat: TelegramChat; text?: string; voice?: TelegramAudio; audio?: TelegramAudio }
 interface TelegramCallback { id: string; from: { id: number }; data?: string; message?: TelegramMessage }
 interface TelegramUpdate { message?: TelegramMessage; edited_message?: TelegramMessage; callback_query?: TelegramCallback }
 
@@ -101,6 +102,68 @@ async function handleFreeText(admin: SupaClient, token: string, chatId: number, 
   } catch (err) {
     await sendMessage(token, chatId, `❌ Falha ao processar: ${err instanceof Error ? err.message : 'erro desconhecido'}`)
   }
+}
+
+// Áudio no chat privado: o Claude não recebe áudio, então a OpenAI só converte a fala em texto
+// (whisper-1, ~US$ 0,006/min) e o texto segue pro telegram-chat como se tivesse sido digitado.
+// Só transcreve chat ligado a exatamente 1 empresa (não gasta com quem não conectou) e até 2 min.
+const AUDIO_MAX_SECONDS = 120
+const WHISPER_USD_PER_MIN = 0.006
+
+async function openAiKey(admin: SupaClient): Promise<string | null> {
+  const env = Deno.env.get('OPENAI_API_KEY')
+  if (env) return env
+  const { data } = await admin.from('_app_config').select('value').eq('key', 'openai_api_key').maybeSingle()
+  return (data as { value?: string } | null)?.value ?? null
+}
+
+async function handleVoice(admin: SupaClient, token: string, chatId: number, audio: TelegramAudio, supabaseUrl: string, webhookSecret: string): Promise<void> {
+  const { data: companies } = await admin.from('companies').select('id').eq('telegram_chat_id', chatId).limit(2)
+  if (companies?.length !== 1) {
+    // Sem gastar com transcrição: o telegram-chat já explica como conectar (ou o conflito de 2 empresas).
+    await handleFreeText(admin, token, chatId, '(áudio)', supabaseUrl, webhookSecret)
+    return
+  }
+  const companyId = (companies[0] as { id: string }).id
+  if ((audio.duration ?? 0) > AUDIO_MAX_SECONDS) {
+    await sendMessage(token, chatId, '🎤 Esse áudio passou de 2 minutos. Manda um mais curto (ou escreve) que eu respondo.')
+    return
+  }
+  const fail = (why: string) => sendMessage(token, chatId, `🎤 Não consegui entender o áudio (${why}). Tenta de novo ou escreve a mensagem.`)
+  const key = await openAiKey(admin)
+  if (!key) { console.error('telegram-webhook: OPENAI_API_KEY ausente'); await fail('transcrição indisponível agora'); return }
+
+  let text = ''
+  try {
+    const info = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(audio.file_id)}`).then(r => r.json()) as { ok?: boolean; result?: { file_path?: string } }
+    const path = info.result?.file_path
+    if (!info.ok || !path) { await fail('não consegui baixar'); return }
+    const file = await fetch(`https://api.telegram.org/file/bot${token}/${path}`)
+    if (!file.ok) { await fail('não consegui baixar'); return }
+    const form = new FormData()
+    form.append('file', new Blob([await file.arrayBuffer()], { type: 'audio/ogg' }), path.split('/').pop() || 'audio.ogg')
+    form.append('model', 'whisper-1')
+    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form, signal: AbortSignal.timeout(60_000),
+    })
+    if (!res.ok) { console.error('telegram-webhook: transcrição falhou', res.status, await res.text().catch(() => '')); await fail('erro na transcrição'); return }
+    text = String(((await res.json()) as { text?: string }).text ?? '').trim()
+  } catch (err) {
+    console.error('telegram-webhook: áudio falhou', err)
+    await fail('erro na transcrição')
+    return
+  }
+
+  // Custo no mesmo diário dos outros gastos de IA (teto de custo, regra 7).
+  await admin.from('agent_performance').insert({
+    company_id: companyId, agent_role: 'telegram', task_key: 'audio_transcription',
+    task_description: 'Transcrição de áudio do Telegram (OpenAI whisper-1)', success: !!text,
+    cost_usd: Math.round(Math.max(1, audio.duration ?? 1) / 60 * WHISPER_USD_PER_MIN * 10000) / 10000, latency_ms: 0,
+  }).then(({ error }) => { if (error) console.error('telegram-webhook: custo não gravado', error.message) })
+
+  if (!text) { await fail('não ouvi nada'); return }
+  await sendMessage(token, chatId, `🎤 Entendi: “${text.length > 300 ? `${text.slice(0, 299)}…` : text}”`)
+  await handleFreeText(admin, token, chatId, text, supabaseUrl, webhookSecret)
 }
 
 // Toque num botão de aprovação (mensagens do telegram-buddy). Fluxo:
@@ -221,6 +284,19 @@ Deno.serve(async (req) => {
       return json({ ok: true })
     }
     const message = update.message ?? update.edited_message
+    if (message && !message.text && message.chat.type === 'private') {
+      const audio = message.voice ?? message.audio
+      if (audio?.file_id && update.message) {
+        // Baixar + transcrever + responder pode passar de 10s: responde ao Telegram já (senão ele reenvia).
+        const work = handleVoice(admin, token, message.chat.id, audio, supabaseUrl, webhookSecret).catch(e => console.error('telegram-webhook voz:', e))
+        // deno-lint-ignore no-explicit-any
+        const rt = (globalThis as any).EdgeRuntime
+        if (rt?.waitUntil) rt.waitUntil(work); else await work
+      } else if (update.message) {
+        await sendMessage(token, message.chat.id, 'Por enquanto eu entendo mensagem escrita e áudio. Foto, vídeo e arquivo ainda não — manda por texto que eu respondo.')
+      }
+      return json({ ok: true })
+    }
     if (!message?.text) return json({ ok: true })
 
     await routeMessage(admin, token, message.chat.id, message.chat.type, message.text, supabaseUrl, webhookSecret)
