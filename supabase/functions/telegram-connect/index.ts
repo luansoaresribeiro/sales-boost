@@ -37,6 +37,9 @@ Deno.serve(async (req) => {
       .single()
 
     if (!findErr && row) {
+      // Um chat ↔ uma empresa: desliga este chat de qualquer outra empresa antes de ligar na nova
+      // (com 2 empresas no mesmo chat o telegram-chat não sabia de qual responder e ficava mudo).
+      await admin.from('companies').update({ telegram_chat_id: null }).eq('telegram_chat_id', chat_id).neq('id', row.company_id)
       // Link chat_id to company
       await admin.from('companies').update({ telegram_chat_id: chat_id }).eq('id', row.company_id)
 
