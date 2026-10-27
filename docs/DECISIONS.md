@@ -1847,7 +1847,7 @@ grátis de 30 s, acima — mantidos como histórico):
   Fora: problema só visual, peça de imóvel/pacote/vídeo (dado real e custo Higgsfield), carrossel de tema
   regulado, `runFaqSlot`/`runVideoSlot`/catalog-package. A reescrita não pode trazer número novo nem recado pro
   corretor (senão é descartada e o original fica). Passou → vai pra aprovação; não passou → fica pra decisão do
-  dono. `planned_for` e rótulos não são tocados. Custo: 1 reescrita + 1 nota (Haiku), sem imagem.
+  dono. `planned_for` e rótulos não são tocados. Custo: 1 reescrita + 1 nota (Haiku), sem imagem. **Não consulta o teto em US$** (`fitsCap`) porque não gera mídia paga (nem Higgsfield nem imagem de IA); se um dia a refação passar a regerar imagem/vídeo, tem que checar o teto antes. Carrossel (peça com `slides`) também fica de fora: os slides já desenhados não mudam com o texto.
 - **Dicas — opção A (decisão do dono, 2026-10-26).** No **modo regulado** do carrossel educativo e na vaga
   `dica_faq` de **categoria regulada**, a dica só é "liberada" sozinha quando conferida em fonte oficial:
   status `conferida`|`corrigida`, `source_url` presente e dentro de `faq.official_domains` da ficha, e não vencida

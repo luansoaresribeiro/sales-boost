@@ -7,7 +7,7 @@ import { useLang, type Lang } from '../../../contexts/LanguageContext'
 import AdaptModal, { type VaultPost } from './AdaptModal'
 import { PieceChips } from './PieceLabels'
 import { proposeAgentAction, unscheduleAgentAction } from '../../../lib/agentActions'
-import { plannedPublishAt, publishWhenLabel } from '../../../lib/publishSlot'
+import { PUBLISH_HOUR_BRT, plannedPublishAt, publishWhenLabel } from '../../../lib/publishSlot'
 
 const GREEN = '#4ade80'
 const ORANGE = '#FF6D29'
@@ -48,6 +48,13 @@ const TX = {
 } as const
 const fmtScheduled = (iso: string, lang: Lang) => new Date(iso).toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 
+// Sugestão do agendamento manual: o horário padrão de Brasília (mesma fonte do publishSlot) mostrado no relógio do navegador (datetime-local).
+const brtLocalInput = (day: string): string => {
+  const d = new Date(`${day}T${String(PUBLISH_HOUR_BRT).padStart(2, '0')}:00:00-03:00`)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 type Post = TestPost & { kind?: string; planned_for?: string | null; recipe?: string | null }
 
 // Peça do calendário aberta (substitui a antiga aba Vault — decisão do dono
@@ -72,7 +79,7 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
   const [scheduled, setScheduled] = useState<{ actionId: string; at: string } | null>(null)
   const [scheduling, setScheduling] = useState(false)
   // Sugere o dia planejado pelo calendário, às 18h.
-  const [scheduleValue, setScheduleValue] = useState(post.planned_for ? `${post.planned_for}T18:00` : '')
+  const [scheduleValue, setScheduleValue] = useState(post.planned_for && /^\d{4}-\d{2}-\d{2}$/.test(post.planned_for) ? brtLocalInput(post.planned_for) : '')
 
   const load = useCallback(async () => {
     const [{ data: row }, { data: a }, { data: sch }] = await Promise.all([

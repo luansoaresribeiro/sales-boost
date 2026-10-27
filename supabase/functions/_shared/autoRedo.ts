@@ -13,6 +13,7 @@ export interface RedoPiece {
   brief?: Record<string, unknown> | null
   item_id?: string | null
   recipe?: string | null
+  slides?: unknown
 }
 
 export function autoRedoEligible(p: RedoPiece, badBelow = 50): { ok: boolean; reason: string } {
@@ -22,6 +23,7 @@ export function autoRedoEligible(p: RedoPiece, badBelow = 50): { ok: boolean; re
   const c = p.scores?.coherence?.score
   if (typeof c !== 'number' || c >= badBelow) return { ok: false, reason: 'o problema não é o texto' }
   if (p.item_id || p.recipe) return { ok: false, reason: 'peça de imóvel/pacote/vídeo (dado real ou custo pago)' }
+  if (Array.isArray(p.slides) && p.slides.length) return { ok: false, reason: 'carrossel (slides já desenhados não mudam com o texto)' }
   const ds = brief.deck_source as { mode?: unknown } | undefined
   if (ds && ds.mode === 'regulado') return { ok: false, reason: 'carrossel de tema regulado (texto vem de dica conferida)' }
   return { ok: true, reason: 'ok' }

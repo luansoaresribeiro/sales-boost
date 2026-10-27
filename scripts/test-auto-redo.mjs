@@ -26,6 +26,10 @@ t('carrossel de tema regulado: não refaz; geral/leve pode', () => {
   assert.equal(autoRedoEligible({ ...bad, brief: { deck_source: { mode: 'regulado' } } }).ok, false)
   assert.equal(autoRedoEligible({ ...bad, brief: { deck_source: { mode: 'geral' } } }).ok, true)
 })
+t('carrossel (slides já desenhados): não refaz', () => {
+  assert.equal(autoRedoEligible({ ...bad, slides: [{ text: 'a' }] }).ok, false)
+  assert.equal(autoRedoEligible({ ...bad, slides: [] }).ok, true); assert.equal(autoRedoEligible({ ...bad, slides: null }).ok, true)
+})
 t('reescrita não pode inventar número', () => {
   assert.deepEqual(newNumbers('Visita 10 min, 3 fotos', 'Visita em 10 min, 3 fotos'), [])
   assert.deepEqual(newNumbers('Taxa baixa', 'Taxa de 8,5% ao ano'), ['85'])

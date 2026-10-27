@@ -191,6 +191,8 @@ async function scoreTestContent(companyId: string, testId: string): Promise<bool
   return !!data.auto_vault
 }
 
+// Só refaz se a invocação ainda tem folga: passou de ~100 s desde o início → deixa a peça pra decisão do dono.
+const AUTO_REDO_MAX_ELAPSED_MS = 100_000
 async function autoRedoOnce(companyId: string, testId: string): Promise<boolean> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL'), serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   if (!supabaseUrl || !serviceKey) return false
@@ -499,6 +501,7 @@ async function saveLabels(admin: SupaClient, id: string, l?: { familia?: string;
 // O núcleo da geração — usado tanto pelo modo interativo (1 empresa, o
 // dono clicou) quanto pelo lote diário (várias empresas, cron).
 async function generateForCompany(admin: SupaClient, anthropicKey: string, company: Company, kind: string, opts: GenOpts) {
+  const startedAt = Date.now()   // tempo de parede da invocação (teto de 150 s): a refação automática só roda se sobrar folga
   // Fluxo antigo fechado (dono, 2026-10-15): se a ficha do setor desligou o
   // card genérico (post_card — imagem de IA/tweet), QUALQUER pedido de post
   // solto (botão de ideia, cron diário antigo, estratégia antiga) sai como
@@ -935,7 +938,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   try { autoVault = await scoreTestContent(company.id, inserted.id) } catch (e) { console.error('creative-generate: score falhou', e) }
   // "Tudo automático": nota baixa → refaz o TEXTO 1 vez sozinho (content-test regenerate, modo auto; ele mesmo
   // recusa vídeo/imóvel/tema regulado/peça já refeita e só manda pro Vault se passar). Sem custo de imagem.
-  if (!autoVault) { try { autoVault = await autoRedoOnce(company.id, inserted.id) } catch (e) { console.error('creative-generate: refação automática falhou', e) } }
+  if (!autoVault && Date.now() - startedAt < AUTO_REDO_MAX_ELAPSED_MS) { try { autoVault = await autoRedoOnce(company.id, inserted.id) } catch (e) { console.error('creative-generate: refação automática falhou', e) } }
 
   return { id: inserted.id, image_generated: !!mainImage, slides: slides?.length ?? 0, personality, brief, auto_vault: autoVault }
 }

@@ -342,8 +342,8 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       const testId = String(body.test_id ?? '')
       if (!testId) return json({ error: 'test_id é obrigatório' }, 400)
       const { data: tRow } = await admin.from('marketing_ai_test_content')
-        .select('id, idea, caption, hashtags, cta, format, image_url, scores, brief, status, item_id, recipe, reasoning').eq('id', testId).eq('company_id', company.id).maybeSingle()
-      const t = tRow as { id: string; idea: string | null; caption: string | null; hashtags: string | null; cta: string | null; format: string | null; image_url: string | null; scores: Scores | null; brief: { template?: string } | null; status: string | null; item_id: string | null; recipe: string | null; reasoning: string | null } | null
+        .select('id, idea, caption, hashtags, cta, format, image_url, scores, brief, status, item_id, recipe, reasoning, slides').eq('id', testId).eq('company_id', company.id).maybeSingle()
+      const t = tRow as { id: string; idea: string | null; caption: string | null; hashtags: string | null; cta: string | null; format: string | null; image_url: string | null; scores: Scores | null; brief: { template?: string } | null; status: string | null; item_id: string | null; recipe: string | null; reasoning: string | null; slides: unknown } | null
       if (!t) return json({ error: 'Post de teste não encontrado' }, 404)
       const config = await loadConfig(admin, company)
 
@@ -352,7 +352,7 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       // Higgsfield (ver _shared/autoRedo.ts). Mantém planned_for e rótulos (só mexe em ideia/legenda/hashtags/CTA).
       // Marca ANTES de reescrever: se algo falhar no meio, nunca tenta de novo.
       if (isService && body.auto === true) {
-        const v = autoRedoEligible({ status: t.status, scores: t.scores, brief: t.brief as Record<string, unknown> | null, item_id: t.item_id, recipe: t.recipe }, COHERENCE_BAD_THRESHOLD)
+        const v = autoRedoEligible({ status: t.status, scores: t.scores, brief: t.brief as Record<string, unknown> | null, item_id: t.item_id, recipe: t.recipe, slides: t.slides }, COHERENCE_BAD_THRESHOLD)
         if (!v.ok) return json({ ok: true, auto_redo: false, skipped: v.reason })
         const before = t.scores?.coherence?.score ?? null
         await admin.from('marketing_ai_test_content').update({ brief: { ...(t.brief ?? {}), auto_redo: true, auto_redo_at: new Date().toISOString() } }).eq('id', testId)

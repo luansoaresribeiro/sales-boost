@@ -20,9 +20,9 @@ const TX = {
     none: 'Nenhuma dica ainda. Clique em "Sugerir dicas" ou escreva a sua.',
     geral: '✓ Dica geral — aprovada sozinha (sem número nem regra)',
     conferida: (d: string) => `✓ Conferida pela IA em ${d}`, corrigida: (d: string) => `✓ Conferida e corrigida pela IA em ${d}`,
-    revisar: '⚠ Precisa revisar — não achei fonte oficial', aprovada: '✓ Aprovada por você', vencida: '⏳ Passou de 60 dias — reconferindo antes de usar',
+    revisar: '⚠ Precisa revisar — não achei fonte oficial', aprovada: '✓ Aprovada por você — vale em temas leves; em temas regulados só com fonte oficial', vencida: '⏳ Passou de 60 dias — reconferindo antes de usar',
     source: 'fonte', was: 'Antes estava:', approve: 'Aprovar mesmo assim', recheck: 'Conferir de novo', edit: 'Editar', del: 'Apagar',
-    confirmDel: 'Apagar esta dica?', confirmApprove: 'Você confere que esta dica está certa? Ela vai poder virar post (que ainda passa pela sua aprovação).',
+    confirmDel: 'Apagar esta dica?', confirmApprove: 'Você confere que esta dica está certa? Em temas leves ela vai poder virar post. Em temas regulados (jurídico, financiamento, documentação, impostos, aluguel — conforme a ficha do seu setor), só com fonte oficial: aprovar à mão não basta. O post ainda passa pela sua aprovação.',
     used: (n: number) => `usada em ${n} post${n === 1 ? '' : 's'}`, err: 'Não deu certo. Tente de novo.',
   },
   en: {
@@ -32,9 +32,9 @@ const TX = {
     none: 'No tips yet. Click "Suggest tips" or write your own.',
     geral: '✓ General tip — auto-approved (no number or rule)',
     conferida: (d: string) => `✓ Checked by AI on ${d}`, corrigida: (d: string) => `✓ Checked and corrected by AI on ${d}`,
-    revisar: '⚠ Needs review — no official source found', aprovada: '✓ Approved by you', vencida: '⏳ Over 60 days old — rechecking before use',
+    revisar: '⚠ Needs review — no official source found', aprovada: '✓ Approved by you — counts on light topics; on regulated topics only with an official source', vencida: '⏳ Over 60 days old — rechecking before use',
     source: 'source', was: 'It used to say:', approve: 'Approve anyway', recheck: 'Check again', edit: 'Edit', del: 'Delete',
-    confirmDel: 'Delete this tip?', confirmApprove: 'Do you confirm this tip is correct? It can become a post (which still needs your approval).',
+    confirmDel: 'Delete this tip?', confirmApprove: 'Do you confirm this tip is correct? On light topics it can become a post. On regulated topics (legal, financing, paperwork, taxes, rental — as set in your sector profile), only with an official source: approving by hand is not enough. The post still needs your approval.',
     used: (n: number) => `used in ${n} post${n === 1 ? '' : 's'}`, err: 'Something went wrong. Please try again.',
   },
 } as const

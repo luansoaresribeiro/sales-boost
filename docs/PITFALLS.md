@@ -719,3 +719,5 @@ destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
 - **`pickTips` mudou de assinatura** (`rows, categoria, official_domains, now, max`); `isPublishable` só vale pra
   categoria leve — no regulado use `isOfficiallyReleased`.
 - **Edge function sem checagem de tipo local:** não há `deno` no ambiente; confira lint + testes Node e leia o diff.
+- **Refação automática respeita o relógio da invocação:** `creative-generate` tem teto de ~150 s por execução; `autoRedoOnce` só roda se passaram < 100 s desde o início de `generateForCompany` (`AUTO_REDO_MAX_ELAPSED_MS`). Passou disso → a peça fica pra decisão do dono (sem refação).
+- **Agendamento manual sugere 18h de Brasília**, não do navegador (`brtLocalInput` no `CalendarPostModal`, hora vinda de `PUBLISH_HOUR_BRT`); o `datetime-local` mostra no relógio local, mas o instante é o mesmo.
