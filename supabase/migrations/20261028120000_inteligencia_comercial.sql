@@ -13,7 +13,7 @@
 -- COMO REVERTER (nada mais depende destas tabelas):
 --   drop table if exists public.growth_opportunities;
 --   drop table if exists public.market_signals;
---   update public.vertical_playbooks set config = config - 'opportunity_fields' where key = 'imoveis_rio';
+--   update public.vertical_playbooks set config = (config - 'opportunity_fields') - 'opportunity_texts' where key = 'imoveis_rio';
 
 begin;
 
@@ -103,12 +103,38 @@ create policy growth_opportunities_update_own on public.growth_opportunities
 revoke update on public.growth_opportunities from anon, authenticated;
 grant update (status, decided_at, decided_by) on public.growth_opportunities to authenticated;
 
--- Ficha do setor (regra 6): QUAIS campos do catálogo dizem região/preço/tipo/quartos/negócio.
--- O motor só lê estes papéis; os rótulos vêm de config.catalog_fields. Setor sem esta chave
--- simplesmente não tem o motor (a function responde com aviso).
+-- Ficha do setor (regra 6): (1) QUAIS campos do catálogo dizem região/preço/tipo/quartos/negócio — o motor só lê
+-- estes papéis, os rótulos vêm de config.catalog_fields; (2) os textos de setor do motor, em pt/en (causas
+-- possíveis de pouca reação, ressalva do prompt, exemplos de público). Sem estas chaves o motor usa textos
+-- genéricos; setor sem opportunity_fields simplesmente não tem o motor (a function responde com aviso).
+-- Aditivo: só acrescenta chaves à ficha de imoveis_rio (reverter: ver topo).
 update public.vertical_playbooks
-set config = jsonb_set(coalesce(config, '{}'::jsonb), '{opportunity_fields}',
-  '{"location":"bairro","price":"preco","type":"tipo","bedrooms":"quartos","deal":"venda_ou_aluguel"}'::jsonb, true),
+set config = jsonb_set(
+      jsonb_set(coalesce(config, '{}'::jsonb), '{opportunity_fields}',
+        '{"location":"bairro","price":"preco","type":"tipo","bedrooms":"quartos","deal":"venda_ou_aluguel"}'::jsonb, true),
+      '{opportunity_texts}',
+      $json${
+        "low_traction_hypotheses": {
+          "pt": [
+            "Possível causa: o preço anunciado pode estar acima do que o público dessa região procura — precisa ser comparado com anúncios parecidos.",
+            "Possível causa: as fotos podem não estar mostrando o melhor do imóvel (poucas, escuras ou sem o ambiente que mais vende).",
+            "Possível causa: a comunicação pode estar genérica, sem dizer pra quem o imóvel serve nem por que olhar agora."
+          ],
+          "en": [
+            "Possible cause: the listed price may be above what buyers in this area are looking for — it needs to be compared with similar listings.",
+            "Possible cause: the photos may not show the best of the property (few, dark, or missing the room that sells most).",
+            "Possible cause: the messaging may be generic, not saying who the property is for or why to look now."
+          ]
+        },
+        "caveat": {
+          "pt": "Preço anunciado não é preço de venda; interesse de busca não é comprador.",
+          "en": "Listed price is not sale price; search interest is not a buyer."
+        },
+        "audience_hint": {
+          "pt": "\"quem busca perto do trabalho\", \"quem quer trocar por algo maior\", \"investidores em aluguel por temporada\"",
+          "en": "\"people looking close to work\", \"people trading up to more space\", \"short-term rental investors\""
+        }
+      }$json$::jsonb, true),
     updated_at = now()
 where key = 'imoveis_rio';
 

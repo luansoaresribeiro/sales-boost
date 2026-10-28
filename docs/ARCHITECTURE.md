@@ -434,9 +434,17 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
   nem chama a IA. Custo vai pra `agent_performance` (`task_key='run_opportunities'`). Auth: JWT da empresa +
   `requirePaidAccess` (vitrine bloqueada; a tela abre o modal de plano). Chamadas repetidas em < 90 s reaproveitam
   a rodada anterior (não gasta IA de novo). Roda **antes** do `getConfig`: não exige o Marketing AI configurado.
+- **Texto de setor na ficha (regra 6):** `config.opportunity_fields` (papéis dos campos) e `config.opportunity_texts`
+  (pt/en: causas possíveis de pouca reação, ressalva do prompt, exemplos de público), ambos na migration. Sem
+  `opportunity_texts` valem textos genéricos do código ("valor anunciado", "localização", "categoria do item").
+- **Prompt:** fatos e candidatos vão dentro de um bloco `<dados>…</dados>` com instrução de que é dado, nunca
+  instrução; todo texto vindo do banco (títulos, notas de concorrente, sinais, tendências) é saneado — uma linha,
+  sem `<` `>`, ~200 caracteres (`promptSafe`).
+- **Rodada repetida:** o marcador é a última execução bem-sucedida de `run_opportunities` em `agent_performance`
+  nos últimos 90 s (gravada mesmo com 0 oportunidades), não a última linha de `growth_opportunities`.
 - **Validação em código:** evidência `fact`/`data` sempre vem do fato guardado (texto, fonte e data do banco) —
   id inexistente é descartado; número no texto que não esteja nos fatos → a **frase** sai (campo vazio cai no
-  texto padrão do código); termo de classe protegida → a frase sai (no público, vira vazio); a IA só acrescenta
+  texto padrão do código); termo de classe protegida (lista ampla PT/EN: situação familiar — filhos, crianças, famílias —, raça/cor, religião, origem, deficiência, sexo/gênero/orientação/estado civil, idade; falso positivo é preferível) → a frase sai (no público, vira vazio); número vale por **valor + unidade** ("60 dias" não libera "60%"; moeda só se o fato for o preço; quartos só se o fato for quartos); a IA só acrescenta
   `hypothesis`. Confiança é do código: `needs_validation` se for hipótese (low_traction), tiver < 2 evidências ou
   houver ressalva (Instagram desconectado, 1 fonte só, poucos posts, coleta velha); senão `high` (≥4
   evidências e ≥3 fontes independentes), `medium` (≥2 e ≥2) ou `low`.

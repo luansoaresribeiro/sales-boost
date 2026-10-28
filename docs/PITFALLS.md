@@ -769,3 +769,8 @@ destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
   conectado e a tela sempre mostra a fonte ("Posts registrados no Sales Boost").
 - **`growth_opportunities`: cliente só altera 3 colunas** (grant por coluna, não só RLS). Coluna nova que a tela
   precise editar exige `grant update (coluna)` na migration.
+- **Filtro de classe protegida (Fair Housing) é por palavra:** "família/filhos/crianças", "branco/preto", "jovens", "igreja"… saem
+  da frase mesmo em sentido inocente ("paredes brancas", "perto da igreja matriz" como referência). É de propósito. Frase
+  nova que escapou? Acrescente o caso em `scripts/test-opportunity-engine.mjs` antes de mexer na lista de `opportunityOutput.ts`.
+- **Número com unidade:** o preço e os quartos do catálogo são marcados (`Fact.numTags`) pelo código; sem a marca, "R$ 1.200.000" na
+  saída da IA não passa mesmo que o valor esteja no fato.

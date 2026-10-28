@@ -22,7 +22,7 @@ const TX = {
     loading: 'Carregando…', none: 'Ainda não há oportunidades. Clique em “Encontrar oportunidades”.',
     ranNone: 'Nenhuma oportunidade tem evidência suficiente ainda. Veja o que falta abaixo.',
     ranReused: 'Uma busca acabou de rodar — mostrando o resultado dela.', ranOk: (n: number) => `${n} ${n === 1 ? 'oportunidade encontrada' : 'oportunidades encontradas'}.`,
-    latest: 'Última busca', earlier: 'Aprovadas em buscas anteriores', dismissed: (n: number) => `${n} descartada${n === 1 ? '' : 's'} nesta busca (escondida${n === 1 ? '' : 's'}).`,
+    latest: 'Última busca', earlier: 'Aprovadas em buscas anteriores', dismissed: (n: number) => `${n} descartada${n === 1 ? '' : 's'}`, showDismissed: 'mostrar', hideDismissed: 'esconder',
     missingTitle: 'O que falta pra achar mais',
     mCatalog: 'Cadastre imóveis no catálogo (com bairro, preço e fotos).',
     mIg: 'Conecte o Instagram para medir posts e conversas.',
@@ -38,7 +38,7 @@ const TX = {
     loading: 'Loading…', none: 'No opportunities yet. Click “Find opportunities”.',
     ranNone: 'No opportunity has enough evidence yet. See what is missing below.',
     ranReused: 'A search just ran — showing its result.', ranOk: (n: number) => `${n} ${n === 1 ? 'opportunity found' : 'opportunities found'}.`,
-    latest: 'Latest search', earlier: 'Approved in earlier searches', dismissed: (n: number) => `${n} dismissed in this search (hidden).`,
+    latest: 'Latest search', earlier: 'Approved in earlier searches', dismissed: (n: number) => `${n} dismissed`, showDismissed: 'show', hideDismissed: 'hide',
     missingTitle: 'What is missing to find more',
     mCatalog: 'Add properties to the catalog (with neighborhood, price and photos).',
     mIg: 'Connect Instagram so posts and conversations can be measured.',
@@ -60,6 +60,7 @@ export default function GrowthOpportunitiesPage() {
   const [counts, setCounts] = useState<{ catalog: number; signals: number; competitors: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
+  const [showDismissed, setShowDismissed] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -89,12 +90,12 @@ export default function GrowthOpportunitiesPage() {
   useEffect(() => { void load() }, [load])
 
   const latestRun = rows[0]?.run_id ?? null
-  const { latest, earlier, hiddenCount } = useMemo(() => {
+  const { latest, earlier, dismissedList } = useMemo(() => {
     const inRun = rows.filter(o => latestRun && o.run_id === latestRun)
     return {
       latest: inRun.filter(o => o.status !== 'dismissed').sort((a, b) => (a.priority_rank ?? 99) - (b.priority_rank ?? 99)),
       earlier: rows.filter(o => o.status === 'approved' && o.run_id !== latestRun),
-      hiddenCount: inRun.filter(o => o.status === 'dismissed').length,
+      dismissedList: inRun.filter(o => o.status === 'dismissed').sort((a, b) => (a.priority_rank ?? 99) - (b.priority_rank ?? 99)),
     }
   }, [rows, latestRun])
 
@@ -148,7 +149,19 @@ export default function GrowthOpportunitiesPage() {
               {rows.length === 0 && <div style={{ padding: '24px', textAlign: 'center', color: MUTED, fontSize: '13px', border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>{t.none}</div>}
               {latest.length > 0 && <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{t.latest}</div>}
               {latest.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} busy={busyId === o.id} onDecide={s => decide(o, s)} />)}
-              {hiddenCount > 0 && <div style={{ fontSize: '11.5px', color: MUTED }}>{t.dismissed(hiddenCount)}</div>}
+              {dismissedList.length > 0 && (
+                <div>
+                  <button onClick={() => setShowDismissed(v => !v)} aria-expanded={showDismissed}
+                    style={{ background: 'transparent', border: 'none', padding: 0, color: MUTED, fontSize: '12px', cursor: 'pointer', fontFamily: D }}>
+                    {t.dismissed(dismissedList.length)} — <span style={{ color: ORANGE, textDecoration: 'underline' }}>{showDismissed ? t.hideDismissed : t.showDismissed}</span>
+                  </button>
+                  {showDismissed && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px', opacity: 0.75 }}>
+                      {dismissedList.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} busy={busyId === o.id} onDecide={s => decide(o, s)} />)}
+                    </div>
+                  )}
+                </div>
+              )}
               {earlier.length > 0 && <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginTop: '6px' }}>{t.earlier}</div>}
               {earlier.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} busy={busyId === o.id} onDecide={s => decide(o, s)} />)}
             </>

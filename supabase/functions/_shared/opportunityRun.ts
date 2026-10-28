@@ -8,7 +8,7 @@
 // e agent_performance — nada é publicado ou enviado (regra 1).
 import {
   buildCandidates, type CatalogItem, type CompetitorRow, type EngineInput, type EventRow, type FieldMap, type Lang,
-  type PostRow, type SignalRow, type TrendRow,
+  type OppTexts, type PostRow, type SignalRow, type TrendRow,
 } from './opportunityEngine.ts'
 import { MAX_CANDIDATES_TO_LLM, buildPrompt, compareScored, finalize, parseLlm, score } from './opportunityOutput.ts'
 
@@ -36,15 +36,28 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
   const lang: Lang = co.language === 'en' ? 'en' : 'pt'
 
   // Duplo clique / chamada repetida: reaproveita a rodada recém-criada.
-  const { data: last } = await admin.from('growth_opportunities').select('run_id, created_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  if (last?.created_at && Date.now() - Date.parse(last.created_at) < REUSE_WINDOW_MS) return { ok: true, status: 200, run_id: last.run_id ?? null, generated: 0, considered: 0, reused: true }
+  // O marcador é a última execução desta action em agent_performance (gravada MESMO quando saem 0 oportunidades,
+  // que não deixam linha em growth_opportunities); só conta execução que deu certo (falha não trava a nova tentativa).
+  const sinceReuse = new Date(Date.now() - REUSE_WINDOW_MS).toISOString()
+  const [{ data: recentRun }, { data: lastOpp }] = await Promise.all([
+    admin.from('agent_performance').select('created_at').eq('company_id', companyId).eq('task_key', 'run_opportunities').eq('success', true).gte('created_at', sinceReuse).limit(1).maybeSingle(),
+    admin.from('growth_opportunities').select('run_id, created_at').eq('company_id', companyId).gte('created_at', sinceReuse).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+  ])
+  if (recentRun || lastOpp) return { ok: true, status: 200, run_id: lastOpp?.run_id ?? null, generated: 0, considered: 0, reused: true }
 
   // Ficha do setor (regra 6): quais campos são região/preço/tipo/quartos e como se chamam.
   const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', co.vertical_key ?? '').eq('enabled', true).maybeSingle()
-  const cfg = (pb?.config ?? {}) as { opportunity_fields?: FieldMap; catalog_fields?: { required?: { key: string; label?: Bilingual }[]; optional?: { key: string; label?: Bilingual; private?: boolean }[] }; vocabulary?: { item?: string } }
+  const cfg = (pb?.config ?? {}) as { opportunity_fields?: FieldMap; catalog_fields?: { required?: { key: string; label?: Bilingual }[]; optional?: { key: string; label?: Bilingual; private?: boolean }[] }; vocabulary?: { item?: string }; opportunity_texts?: { low_traction_hypotheses?: Record<string, string[]>; caveat?: Bilingual; audience_hint?: Bilingual } }
   const fieldMap = cfg.opportunity_fields
   if (!fieldMap?.location) {
     return { ok: false, status: 400, generated: 0, considered: 0, error: lang === 'en' ? 'This business type does not have opportunity fields set up yet.' : 'Este setor ainda não tem os campos de oportunidades configurados na ficha.' }
+  }
+  // Textos de setor (regra 6) vêm da ficha; faltando, valem os genéricos do motor.
+  const ot = cfg.opportunity_texts
+  const texts: OppTexts = {
+    hypotheses: ot?.low_traction_hypotheses?.[lang]?.filter(x => typeof x === 'string' && x.trim()) ?? undefined,
+    caveat: pick(ot?.caveat, lang) || undefined,
+    audienceHint: pick(ot?.audience_hint, lang) || undefined,
   }
   const labels: Record<string, string> = {}
   for (const f of [...(cfg.catalog_fields?.required ?? []), ...(cfg.catalog_fields?.optional ?? [])]) labels[f.key] = pick(f.label, lang).replace(/\s*\(.*\)\s*$/, '')
@@ -68,7 +81,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
   const catalog: CatalogItem[] = items.map(i => ({ id: i.id, title: i.title, fields: i.meta?.fields ?? {}, photoCount: i.meta?.photos?.length ?? 0 }))
   const input: EngineInput = {
     lang, now: new Date(), windowDays: WINDOW_DAYS, fieldMap, labels, itemLabel: cfg.vocabulary?.item ?? 'Item',
-    catalog, posts, events, competitors, trends, signals, instagramConnected: !!co.instagram_user_id,
+    catalog, posts, events, competitors, trends, signals, instagramConnected: !!co.instagram_user_id, texts,
   }
   const { facts, candidates } = buildCandidates(input)
   if (candidates.length === 0) return { ok: true, status: 200, run_id: null, generated: 0, considered: 0 }
@@ -77,7 +90,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
   const top = candidates.map(c => score(c, facts)).sort(compareScored).slice(0, MAX_CANDIDATES_TO_LLM).map(s => s.c)
   const usedFactIds = new Set(top.flatMap(c => c.fact_ids))
   const sentFacts = facts.filter(f => usedFactIds.has(f.id))
-  const prompt = buildPrompt({ lang, businessName: String(co.business_name ?? ''), itemLabel: input.itemLabel, facts: sentFacts, candidates: top, windowDays: WINDOW_DAYS })
+  const prompt = buildPrompt({ lang, businessName: String(co.business_name ?? ''), itemLabel: input.itemLabel, facts: sentFacts, candidates: top, windowDays: WINDOW_DAYS, texts })
 
   let answer: { text: string; tokens: number }
   try {

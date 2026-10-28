@@ -17,7 +17,7 @@ const GREEN = '#4ade80'
 const TX = {
   pt: {
     problem: 'Problema comercial', evidence: 'Evidências', items: 'Imóveis ligados', audience: 'Público', action: 'Ação sugerida', measure: 'Como medir',
-    why: (n: number | null) => (n ? `Por que está em ${n}º` : 'Por quê'), approve: 'Aprovar', dismiss: 'Descartar', undo: 'Desfazer', approved: 'Aprovada',
+    why: (n: number | null) => (n ? `Por que está em ${n}º` : 'Por quê'), approve: 'Aprovar', dismiss: 'Descartar', undo: 'Desfazer', approved: 'Aprovada', dismissedBadge: 'Descartada',
     approveHint: 'Aprovar só guarda a sua decisão — nada é publicado ou enviado.',
     ev: { fact: 'Fato', data: 'Dado', hypothesis: 'Hipótese' }, conf: { high: 'Confiança alta', medium: 'Confiança média', low: 'Confiança baixa', needs_validation: 'Precisa validar' },
     kinds: { content_gap: 'Falta de conteúdo', low_traction: 'Pouca reação', unmet_demand: 'Demanda sem resposta', positioning: 'Posicionamento', market_change: 'Mudança de mercado', other: 'Outra' } as Record<string, string>,
@@ -25,7 +25,7 @@ const TX = {
   },
   en: {
     problem: 'Commercial problem', evidence: 'Evidence', items: 'Linked properties', audience: 'Audience', action: 'Suggested action', measure: 'How to measure',
-    why: (n: number | null) => (n ? `Why it is #${n}` : 'Why'), approve: 'Approve', dismiss: 'Dismiss', undo: 'Undo', approved: 'Approved',
+    why: (n: number | null) => (n ? `Why it is #${n}` : 'Why'), approve: 'Approve', dismiss: 'Dismiss', undo: 'Undo', approved: 'Approved', dismissedBadge: 'Dismissed',
     approveHint: 'Approving only saves your decision — nothing is published or sent.',
     ev: { fact: 'Fact', data: 'Data', hypothesis: 'Hypothesis' }, conf: { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence', needs_validation: 'Needs validation' },
     kinds: { content_gap: 'Content gap', low_traction: 'Low traction', unmet_demand: 'Unmet demand', positioning: 'Positioning', market_change: 'Market change', other: 'Other' } as Record<string, string>,
@@ -66,6 +66,7 @@ export default function OpportunityCard({ o, itemNames, busy, onDecide }: {
         {o.priority_rank && <span style={{ fontSize: '10px', fontWeight: 800, padding: '2px 9px', borderRadius: '99px', background: 'rgba(255,109,41,0.14)', color: ORANGE }}>#{o.priority_rank}</span>}
         {o.kind && <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 9px', borderRadius: '99px', border: `1px solid ${BORDER}`, color: MUTED }}>{t.kinds[o.kind] ?? o.kind}</span>}
         <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 9px', borderRadius: '99px', border: `1px solid ${color}55`, color }}>{t.conf[o.confidence]}</span>
+        {o.status === 'dismissed' && <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 9px', borderRadius: '99px', border: `1px solid ${BORDER}`, color: MUTED }}>{t.dismissedBadge}</span>}
         {o.status === 'approved' && <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 9px', borderRadius: '99px', border: `1px solid ${GREEN}55`, color: GREEN }}>✓ {t.approved}</span>}
       </div>
       <div style={{ fontSize: '15px', fontWeight: 800, color: 'white', lineHeight: 1.35 }}>{o.title}</div>

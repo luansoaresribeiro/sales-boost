@@ -17,7 +17,11 @@ export type OppKind = 'content_gap' | 'low_traction' | 'unmet_demand' | 'positio
 
 export interface Evidence { type: EvType; text: string; source: string | null; date: string | null }
 // fact = contado dos dados da própria empresa; data = coletado de fora (concorrente, sinal de mercado, tendência).
-export interface Fact { id: string; type: 'fact' | 'data'; text: string; source: string; date: string | null; origin: string }
+// numTags: números do texto que o código SABE a unidade (preço = cur, quartos = bed) — a validação de unidade usa isso.
+export interface NumTag { value: string; unit: 'cur' | 'bed' }
+export interface Fact { id: string; type: 'fact' | 'data'; text: string; source: string; date: string | null; origin: string; numTags?: NumTag[] }
+// Textos de setor vêm da FICHA (config.opportunity_texts, regra 6); sem eles valem os genéricos abaixo.
+export interface OppTexts { hypotheses?: string[]; caveat?: string; audienceHint?: string }
 
 export interface FieldMap { location: string; price?: string; type?: string; bedrooms?: string; deal?: string }
 export interface CatalogItem { id: string; title: string; fields: Record<string, unknown>; photoCount: number }
@@ -41,6 +45,7 @@ export interface EngineInput {
   trends: TrendRow[]
   signals: SignalRow[]
   instagramConnected: boolean
+  texts?: OppTexts // já no idioma de `lang`
 }
 
 export interface Candidate {
@@ -78,20 +83,23 @@ const AI_SOURCES = /^(ai|ia|llm|claude|gpt|model|modelo|sonnet|haiku|raciocinio|
 
 class FactBook {
   facts: Fact[] = []
-  add(type: 'fact' | 'data', text: string, source: string, date: string | null, origin: string): string {
+  add(type: 'fact' | 'data', text: string, source: string, date: string | null, origin: string, numTags?: NumTag[]): string {
     const dup = this.facts.find(f => f.text === text && f.source === source)
     if (dup) return dup.id
     const id = `F${this.facts.length + 1}`
-    this.facts.push({ id, type, text, source, date, origin })
+    this.facts.push({ id, type, text, source, date, origin, ...(numTags?.length ? { numTags } : {}) })
     return id
   }
 }
 
-function describeItem(it: CatalogItem, inp: EngineInput): string {
+function describeItem(it: CatalogItem, inp: EngineInput): { text: string; tags: NumTag[] } {
   const f = it.fields, fm = inp.fieldMap
   const val = (k?: string) => (k && f[k] != null && String(f[k]).trim() !== '' ? String(f[k]).trim().slice(0, 60) : '')
   const part = (k?: string) => (val(k) ? `${inp.labels[k as string] ?? k}: ${val(k)}` : '')
-  return [it.title, part(fm.type), part(fm.location), part(fm.deal), part(fm.bedrooms), part(fm.price)].filter(Boolean).join(' · ')
+  const tags: NumTag[] = []
+  if (val(fm.price)) tags.push({ value: val(fm.price), unit: 'cur' })
+  if (val(fm.bedrooms)) tags.push({ value: val(fm.bedrooms), unit: 'bed' })
+  return { text: [it.title, part(fm.type), part(fm.location), part(fm.deal), part(fm.bedrooms), part(fm.price)].filter(Boolean).join(' · '), tags }
 }
 
 export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: Candidate[] } {
@@ -109,7 +117,7 @@ export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: 
 
   const posts = inp.posts.filter(p => inWin(p.created_at) || inWin(p.published_at))
   const postsOfItem = (id: string) => posts.filter(p => p.item_id === id)
-  const catalogFact = (it: CatalogItem) => book.add('fact', describeItem(it, inp), srcCatalog, null, 'catalog')
+  const catalogFact = (it: CatalogItem) => { const d = describeItem(it, inp); return book.add('fact', d.text, srcCatalog, null, 'catalog', d.tags) }
 
   const regionOf = (it: CatalogItem) => String(inp.fieldMap.location && it.fields[inp.fieldMap.location] != null ? it.fields[inp.fieldMap.location] : '').trim()
   const byRegion = new Map<string, { name: string; items: CatalogItem[] }>()
@@ -161,15 +169,15 @@ export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: 
       ids.push(book.add('fact', tr(lang, `Nenhum comentário registrado nesse${k === 1 ? '' : 's'} post${k === 1 ? '' : 's'} no período.`, `No comment registered on ${k === 1 ? 'that post' : 'those posts'} in the period.`), srcEvents, today, 'events'))
       candidates.push({
         id: '', kind: 'low_traction', item_ids: [x.it.id], fact_ids: ids, region: regionOf(x.it) || null, forceHypothesis: true,
-        hypotheses: [
-          tr(lang, 'Possível causa: o preço anunciado pode estar acima do que o público dessa região procura — precisa ser comparado com anúncios parecidos.', 'Possible cause: the listed price may be above what buyers in this region are looking for — it needs to be compared with similar listings.'),
-          tr(lang, 'Possível causa: as fotos podem não estar mostrando o melhor do item (poucas, escuras ou sem o ambiente que mais vende).', 'Possible cause: the photos may not show the best of the item (few, dark, or missing the space that sells most).'),
+        hypotheses: inp.texts?.hypotheses?.length ? inp.texts.hypotheses : [
+          tr(lang, 'Possível causa: o valor anunciado pode estar acima do que o público dessa região procura — precisa ser comparado com anúncios parecidos.', 'Possible cause: the listed value may be above what the audience in this region is looking for — it needs to be compared with similar listings.'),
+          tr(lang, 'Possível causa: as fotos podem não estar mostrando o melhor do item (poucas, escuras ou sem o que mais chama atenção).', 'Possible cause: the photos may not show the best of the item (few, dark, or missing what stands out most).'),
           tr(lang, 'Possível causa: a comunicação pode estar genérica, sem dizer pra quem o item serve nem por que olhar agora.', 'Possible cause: the messaging may be generic, not saying who the item is for or why to look now.'),
         ],
         validationReasons: [tr(lang, 'Sem conversa não dá pra saber a causa: é hipótese até alguém testar.', 'Without conversations the cause is unknown: it stays a hypothesis until someone tests it.')],
         fallback: {
           title: tr(lang, `"${x.it.title}" foi publicado mas não gerou conversa`, `"${x.it.title}" was published but started no conversation`),
-          problem: tr(lang, 'O item teve post no período e nenhum comentário chegou. Pode ser preço, fotos ou comunicação — ainda é hipótese.', 'The item had a post in the period and no comment came in. It could be price, photos or messaging — still a hypothesis.'),
+          problem: tr(lang, 'O item teve post no período e nenhum comentário chegou. Pode ser o valor anunciado, as fotos ou a comunicação — ainda é hipótese.', 'The item had a post in the period and no comment came in. It could be the listed value, the photos or the messaging — still a hypothesis.'),
           action: tr(lang, 'Testar uma mudança por vez (ex.: outra foto de capa ou outro gancho) e comparar.', 'Test one change at a time (e.g. another cover photo or another hook) and compare.'),
           measure: tr(lang, 'Comparar os comentários e mensagens do próximo post com este.', 'Compare the comments and messages of the next post with this one.'),
         },
