@@ -1904,3 +1904,41 @@ grátis de 30 s, acima — mantidos como histórico):
   - O **Brasil continua** como mercado ou fica só como legado.
 - **Não verificado:** os depoimentos/cartões da landing com `São Paulo, Brasil` (`src/i18n.ts`) são decorativos
   do cartão do herói; não dá pra saber se vêm de cliente real. Não foram alterados.
+
+## 2026-10-28 — Inteligência comercial para imobiliárias (Opportunity Engine)
+
+- **Decisão do dono (aprovou a Etapa 1 com "PODE"):** novo posicionamento — *"Inteligência comercial para
+  imobiliárias. Identificamos oportunidades no seu mercado, conectamos essas oportunidades aos imóveis da sua
+  imobiliária e ajudamos seus corretores a transformar isso em ações para gerar demanda."* O texto de
+  posicionamento antigo (growth engine / parceiro de crescimento) **não foi apagado** — ganhou nota de
+  divergência em [PRODUCT.md](PRODUCT.md).
+- **Cliente = imobiliária com equipe de corretores.** O corretor autônomo continua podendo usar (é o caso de
+  uma equipe de 1). Isso ainda não muda o modelo de conta: hoje é 1 login por empresa; equipe, convite e papéis
+  são a Etapa 7 do [ROADMAP.md](ROADMAP.md) (mexe em RLS — alteração arriscada).
+- **Mesmo sistema no Brasil e nos EUA, piloto no Rio.** O que é de país ou de setor mora na ficha
+  (`vertical_playbooks`, regra 6): a Etapa 1 já lê da ficha quais campos do catálogo são região/preço/tipo/
+  quartos/negócio (`config.opportunity_fields`) e os rótulos (`config.catalog_fields`).
+- **Convivência com 2026-10-27:** o inglês **continua** o idioma padrão da tela e do conteúdo de empresa nova.
+  A tela "Oportunidades" é bilíngue e o motor escreve no idioma de `companies.language`. As empresas atuais
+  (todas `'pt'`) seguem em português. Nada da decisão anterior foi revertido.
+- **Regra de evidência (vale pra tudo daqui em diante):** toda oportunidade carrega evidências rotuladas —
+  **Fato** (contado dos dados da própria empresa), **Dado** (coletado de fora: concorrente, notícia, tendência)
+  ou **Hipótese** (o que ninguém verificou) — cada uma com **fonte e data reais** (`null` se não houver data;
+  nunca inventada). Pouca evidência = **"Precisa validar"**; o motor pode devolver menos de 3 oportunidades e
+  a tela diz o que falta. Sem promessa ("+X% de vendas"), sem número fora dos fatos (trava em código), sem
+  público por classe protegida (raça, cor, religião, sexo, deficiência, situação familiar, origem — Fair Housing).
+  A IA só **redige** em cima dos fatos; fatos, confiança e prioridade são calculados em código.
+- **Por que só 2 tabelas novas (`market_signals`, `growth_opportunities`) e por que não reaproveitar
+  `opportunities`/`campaigns`:** `opportunities` já existe com **outro significado** (receita/lead detectada por
+  `detect-opportunities`, `hermes-proxy`, `monthly-report`, popup de progresso) e `campaigns` é o objeto de
+  campanha do Marketing AI; misturar quebraria essas telas e contaminaria os números. O catálogo, os posts, os
+  concorrentes e as tendências **já existem** e são só lidos. Nenhuma function nova (limite de functions do
+  Supabase, [PITFALLS.md](PITFALLS.md)): o motor é `action: 'run_opportunities'` no `marketing-ai`.
+- **Etapa 1 entregue (este PR):** motor + tela `/dashboard/opportunities` + 2 tabelas + chave na ficha. **Não
+  publica nada**, não grava em conta real; só lê e grava em `growth_opportunities`. Plano das Etapas 2–7 no
+  [ROADMAP.md](ROADMAP.md).
+- **Decisões pendentes do dono (nada disso foi decidido):**
+  - **Preço para imobiliária com equipe** (em R$ e em US$) — hoje o preço é por conta/empresa.
+  - **Custo de um provedor de notícias** (Etapa 3): qual, quanto, teto mensal.
+  - **Revisão jurídica EUA / Fair Housing** antes de vender nos EUA (já pendente em 2026-10-27; agora também
+    cobre o texto de "público" das oportunidades).

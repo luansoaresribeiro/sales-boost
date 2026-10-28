@@ -29,6 +29,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
+import { runOpportunities } from '../_shared/opportunityRun.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -158,6 +159,19 @@ async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1200
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
   const data = await res.json()
   return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+}
+
+// Mesma Claude/modelo das outras actions, mas devolvendo também os tokens (custo vai pra agent_performance).
+async function callClaudeWithUsage(anthropicKey: string, prompt: string, maxTokens: number): Promise<{ text: string; tokens: number }> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    signal: AbortSignal.timeout(100_000), // abaixo do teto de 150s da function (PITFALLS)
+  })
+  if (!res.ok) throw new Error(`Claude error: ${(await res.text()).slice(0, 300)}`)
+  const data = await res.json()
+  return { text: (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim(), tokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0) }
 }
 
 function parseJsonArray<T>(raw: string): T[] {
@@ -684,9 +698,17 @@ Deno.serve(async (req) => {
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
     const noPlan = await requirePaidAccess(admin, company.id)
     if (noPlan) return noPlan
-    ;(company as Company).businessContext = await loadBusinessContext(admin, company.id)
 
     const action = body.action as string
+    // Opportunity Engine (Inteligência comercial, 2026-10-28): lê só dados da empresa e grava em
+    // growth_opportunities — nada é publicado. Fica ANTES do getConfig de propósito: não depende da
+    // configuração do Marketing AI (a Tespon pode não ter). Lógica em _shared/opportunityRun.ts.
+    if (action === 'run_opportunities') {
+      const r = await runOpportunities(admin, company.id as string, (prompt, maxTokens) => callClaudeWithUsage(anthropicKey, prompt, maxTokens))
+      const { status, ...rest } = r
+      return json(rest, status)
+    }
+    ;(company as Company).businessContext = await loadBusinessContext(admin, company.id)
     const config = await getConfig(admin, company.id)
     if (!config) return json({ error: 'Configure o Marketing AI primeiro (aba Configurações).' }, 400)
 
@@ -762,7 +784,7 @@ Deno.serve(async (req) => {
       return json({ ok: true })
     }
 
-    return json({ error: 'action inválida. Use run_tracking, run_competitors, run_content, run_trends, run_strategy, chat, run_experiment, conclude_experiment ou generate_report.' }, 400)
+    return json({ error: 'action inválida. Use run_tracking, run_competitors, run_content, run_trends, run_strategy, run_opportunities, chat, run_experiment, conclude_experiment ou generate_report.' }, 400)
   } catch (err) {
     console.error('marketing-ai error:', err)
     return json({ error: String(err) }, 500)

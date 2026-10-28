@@ -19,6 +19,7 @@ import DiagnosticsPage from './pages/dashboard/DiagnosticsPage.tsx'
 import InsightsPage from './pages/dashboard/InsightsPage.tsx'
 import SettingsPage from './pages/dashboard/SettingsPage.tsx'
 import OpportunitiesPage from './pages/dashboard/OpportunitiesPage.tsx'
+import GrowthOpportunitiesPage from './pages/dashboard/GrowthOpportunitiesPage.tsx'
 import MarketingAiHubPage from './pages/dashboard/MarketingAiHubPage.tsx'
 import BusinessProgressPage from './pages/dashboard/BusinessProgressPage.tsx'
 import TrialSummaryPage from './pages/dashboard/TrialSummaryPage.tsx'
@@ -162,6 +163,8 @@ function RouterRoot() {
         <Route path="trial" element={<TrialSummaryPage />} />
         <Route path="access-blocked" element={<AccessBlockedPage />} />
         <Route path="oportunidades" element={<OpportunitiesPage />} />
+        {/* Inteligência comercial (2026-10-28): tabela growth_opportunities — outra coisa que a /oportunidades acima. */}
+        <Route path="opportunities" element={<GrowthOpportunitiesPage />} />
         <Route path="concorrentes" element={<Navigate to="/dashboard/marketing-ai/dados" replace />} />
         <Route path="aprovacoes" element={<ApprovalsPage />} />
         <Route path="relatorio" element={<ReportPage />} />
