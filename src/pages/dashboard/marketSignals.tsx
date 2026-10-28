@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { bi, type Bilingual } from '../../lib/verticalPlaybook'
 import { CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
@@ -23,7 +23,7 @@ const TX = {
     saved: "Sinal salvo. Clique em 'Encontrar oportunidades' para o sistema considerar (há um intervalo de 90 segundos entre buscas).",
     listTitle: 'Sinais cadastrados', empty: 'Nenhum sinal cadastrado ainda.', del: 'Apagar', confirmDel: 'Apagar este sinal?',
     eTitle: 'Informe o título.', eSource: 'Informe o nome da fonte.', eUrl: 'O link precisa começar com http:// ou https:// e ser válido.', eDate: 'Informe a data (não pode ser futura).',
-    eSave: 'Não consegui salvar. Tente de novo.', eDel: 'Não consegui apagar. Tente de novo.', loading: 'Carregando…',
+    eSave: 'Não consegui salvar. Tente de novo.', eDel: 'Não consegui apagar. Tente de novo.', loading: 'Carregando…', eLoad: 'Não consegui carregar os sinais.', retry: 'Tentar de novo',
     kinds: { news: 'Notícia', launch: 'Lançamento', infrastructure: 'Obra/infraestrutura', economy: 'Economia/juros', tourism: 'Turismo', rental: 'Aluguel', listing_price: 'Preço anunciado', supply: 'Oferta de imóveis', other: 'Outro' } as Record<Kind, string>,
   },
   en: {
@@ -35,7 +35,7 @@ const TX = {
     saved: "Signal saved. Click 'Find opportunities' for the system to consider it (there is a 90-second gap between searches).",
     listTitle: 'Saved signals', empty: 'No signals yet.', del: 'Delete', confirmDel: 'Delete this signal?',
     eTitle: 'Enter the title.', eSource: 'Enter the source name.', eUrl: 'The link must start with http:// or https:// and be valid.', eDate: 'Enter the date (cannot be in the future).',
-    eSave: 'Could not save. Try again.', eDel: 'Could not delete. Try again.', loading: 'Loading…',
+    eSave: 'Could not save. Try again.', eDel: 'Could not delete. Try again.', loading: 'Loading…', eLoad: 'Could not load the signals.', retry: 'Try again',
     kinds: { news: 'News', launch: 'Launch', infrastructure: 'Works/infrastructure', economy: 'Economy/interest rates', tourism: 'Tourism', rental: 'Rental', listing_price: 'Listed price', supply: 'Property supply', other: 'Other' } as Record<Kind, string>,
   },
 } as const
@@ -58,11 +58,14 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
   const [regionLabel, setRegionLabel] = useState('')
   const [f, setF] = useState({ kind: 'news' as Kind, title: '', summary: '', region: '', source: '', url: '', date: '' })
   const [saving, setSaving] = useState(false)
+  const [loadErr, setLoadErr] = useState(false)
+  const busy = useRef(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const loadList = useCallback(async () => {
     const { data, error } = await supabase.from('market_signals').select('id, kind, region, title, source_name, source_url, observed_at')
       .eq('company_id', companyId).order('observed_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(50)
+    setLoadErr(!!error)
     setList(error ? [] : (data ?? []) as Signal[])
   }, [companyId])
 
@@ -92,25 +95,27 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
 
   const save = async () => {
     if (readOnly) { openPlanModal(); return }
-    if (saving) return
+    if (busy.current) return
     const title = f.title.trim(), source = f.source.trim(), url = f.url.trim(), region = f.region.trim(), summary = f.summary.trim()
     const err = !title ? t.eTitle : !source ? t.eSource : url && (url.length > LIM.url || !validUrl(url)) ? t.eUrl : !f.date || f.date > localToday() ? t.eDate : ''
     if (err) { setMsg({ ok: false, text: err }); return }
-    setSaving(true); setMsg(null)
+    busy.current = true; setSaving(true); setMsg(null)
     const { error } = await supabase.from('market_signals').insert({
       company_id: companyId, kind: f.kind, title: title.slice(0, LIM.title), summary: summary ? summary.slice(0, LIM.summary) : null,
       region: region ? region.slice(0, LIM.region) : null, source_name: source.slice(0, LIM.source), source_url: url || null, observed_at: f.date, collected_by: 'manual',
     })
     if (error) setMsg({ ok: false, text: t.eSave })
     else { setMsg({ ok: true, text: t.saved }); setF(p => ({ ...p, title: '', summary: '', source: '', url: '' })); await loadList(); onChanged() }
-    setSaving(false)
+    busy.current = false; setSaving(false)
   }
 
   const remove = async (s: Signal) => {
     if (readOnly) { openPlanModal(); return }
-    if (!window.confirm(t.confirmDel)) return
+    if (busy.current || !window.confirm(t.confirmDel)) return
+    busy.current = true
     const { error } = await supabase.from('market_signals').delete().eq('id', s.id).eq('company_id', companyId)
     if (error) setMsg({ ok: false, text: t.eDel }); else { setMsg(null); await loadList(); onChanged() }
+    busy.current = false
   }
 
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF(p => ({ ...p, [k]: e.target.value }))
@@ -149,6 +154,7 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
 
       <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', margin: '18px 0 8px' }}>{t.listTitle}</div>
       {list === null ? <div style={{ color: MUTED, fontSize: '12.5px' }}>{t.loading}</div>
+        : loadErr ? <div style={{ color: '#F87171', fontSize: '12.5px' }}>{t.eLoad} <button type="button" onClick={() => { setList(null); void loadList() }} style={{ background: 'none', border: 'none', color: ORANGE, cursor: 'pointer', fontSize: '12.5px', padding: 0 }}>{t.retry}</button></div>
         : list.length === 0 ? <div style={{ color: MUTED, fontSize: '12.5px' }}>{t.empty}</div>
         : (
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
