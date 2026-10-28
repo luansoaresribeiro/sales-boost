@@ -485,8 +485,11 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     palavra-chave vira o alternativo da ficha (`ctas.sem_automacao`; inglês: "Send us a DM") e o plano marca
     `cta_replaced`. Custo (inclusive falha) em `agent_performance`, `task_key='create_opportunity_plan'`, com
     `task_description` começando por `opp:<id>`.
-  - **Limite:** 5 planos/empresa/24 h (429 com mensagem pt/en); com 429 a oportunidade fica sem plano e o cron gera
-    depois. Plano já existente nunca é regerado.
+  - **Limite:** 5 planos/empresa/24 h (429 com mensagem pt/en), contando também tentativas em andamento (linha
+    `create_opportunity_plan_start` gravada antes da IA; falha devolve a vaga); no máx. 2 falhas por oportunidade em 24 h
+    (vale para aprovar e para o cron). Com 429 a oportunidade fica sem plano e o cron gera depois. Plano já existente nunca
+    é regerado. Desfazer/descartar a oportunidade zera `plan_approved_at`; o plano gerado em segundo plano só é gravado
+    se a oportunidade ainda está aprovada. Busca que falhou há < 6 h não é repetida pelo cron.
   - **Rodadas automáticas (`cron_opportunities`):** por empresa elegível (`auto_strategy=true`, interruptor geral
     `hermes_config.auto_strategy_enabled`, `hasPaidAccess`, ativa, ficha com `opportunity_fields`): roda a busca se a
     última rodada (`agent_performance` `run_opportunities` com sucesso — agora gravada também com 0 candidatos) tem > 7

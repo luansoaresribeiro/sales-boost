@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 // Plano da oportunidade (Etapa 4A): conferência em código do que a IA escreve (número, Fair Housing, promessa,
 // formato, imóveis fora da oportunidade, CTA sem automação).
 import { finalizePlan, parsePlan, buildPlanPrompt, hasPromise, asksForComment, MAX_PLANS_PER_DAY } from '../supabase/functions/_shared/opportunityPlan.ts'
-import { shouldRunOpportunities, RERUN_AFTER_MS } from '../supabase/functions/_shared/opportunityCron.ts'
-import { decideOpportunity } from '../supabase/functions/_shared/opportunityPlanRun.ts'
+import { shouldRunOpportunities, cronOpportunities, RERUN_AFTER_MS } from '../supabase/functions/_shared/opportunityCron.ts'
+import { decideOpportunity, createOpportunityPlan } from '../supabase/functions/_shared/opportunityPlanRun.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
 const fieldMap = { location: 'bairro', price: 'preco', type: 'tipo', bedrooms: 'quartos', deal: 'venda_ou_aluguel' }
@@ -120,20 +120,77 @@ const run = (over = {}, o = opp, extra = {}) => finalizePlan({ lang: 'pt', opp: 
 {
   const UUID = '11111111-1111-1111-1111-111111111111'
   const mk = (row) => { const calls = []; const q = { upd: null, eq: [] }
-    const chain = (table) => ({ update: (p) => { q.upd = p; return chain(table) }, select: () => chain(table), eq: (k, v) => { q.eq.push([k, v]); return chain(table) },
+    const chain = (table) => ({ gte: () => chain(table), like: () => chain(table), in: () => chain(table), is: () => chain(table), limit: () => chain(table), order: () => chain(table), insert: async () => ({}), update: (p) => { q.upd = p; return chain(table) }, select: () => chain(table), eq: (k, v) => { q.eq.push([k, v]); return chain(table) },
       maybeSingle: async () => (table === 'companies' ? { data: { language: 'pt' } } : { data: row ? { id: UUID, ...q.upd, plan: row.plan } : null, error: null }) })
     return { admin: { from: (t) => chain(t) }, q, calls } }
   const defers = []; const defer = (p) => defers.push(p); const llm = async () => { throw new Error('sem IA no teste') }
+  const quiet = console.error; console.error = () => {}
   let m = mk({ plan: null })
   let r = await decideOpportunity(m.admin, 'C1', 'U1', UUID, 'approved', llm, defer)
   assert.equal(r.status, 200); assert.equal(defers.length, 1); assert.ok(m.q.eq.some(([k, v]) => k === 'company_id' && v === 'C1')); assert.equal(m.q.upd.decided_by, 'U1')
-  await Promise.all(defers)
+  await Promise.all(defers) // o plano em segundo plano falha de propósito (llm de mentira) e é engolido
   m = mk({ plan: { objective: 'x' } }); r = await decideOpportunity(m.admin, 'C1', 'U1', UUID, 'approved', llm, defer); assert.equal(defers.length, 1) // já tem plano
   m = mk({ plan: null }); r = await decideOpportunity(m.admin, 'C1', 'U1', UUID, 'dismissed', llm, defer); assert.equal(defers.length, 1) // descartar não cria plano
   m = mk({ plan: null }); r = await decideOpportunity(m.admin, 'C1', 'U1', UUID, 'suggested', llm, defer); assert.equal(m.q.upd.decided_at, null); assert.equal(defers.length, 1)
   assert.equal((await decideOpportunity(m.admin, 'C1', 'U1', UUID, 'hack', llm, defer)).status, 400)
   assert.equal((await decideOpportunity(m.admin, 'C1', 'U1', 'x', 'approved', llm, defer)).status, 400)
   m = mk(null); assert.equal((await decideOpportunity(m.admin, 'C1', 'U1', UUID, 'approved', llm, defer)).status, 404)
+  console.error = quiet
   ok('decide_opportunity: filtra por empresa, valida status, só dispara o plano ao aprovar sem plano')
+}
+// ── Fake de banco por tabela para os testes de limite / cron
+function fakeDb(handlers, log = []) {
+  const chain = (table) => { const f = { table, filters: [], op: 'select', payload: null }
+    const c = {}
+    for (const m of ['select', 'eq', 'like', 'gte', 'is', 'in', 'limit', 'order', 'neq']) c[m] = (...a) => { if (m === 'select' && f.op !== 'update') f.op = 'select'; if (m !== 'select' && m !== 'limit' && m !== 'order') f.filters.push([m, ...a]); return c }
+    c.update = (p) => { f.op = 'update'; f.payload = p; return c }
+    c.insert = async (p) => { log.push({ table, op: 'insert', payload: p }); return { data: null, error: null } }
+    const run = async () => { log.push({ table, op: f.op, filters: f.filters, payload: f.payload }); return (handlers[table] ?? (() => ({ data: null })))(f) }
+    c.maybeSingle = run; c.then = (res, rej) => run().then(res, rej)
+    return c }
+  return { from: chain, log }
+}
+const UUID2 = '22222222-2222-2222-2222-222222222222'
+const planHandlers = ({ started, failed, oppFails = 0, plan = null }) => ({
+  companies: () => ({ data: { id: 'C1', business_name: 'X', language: 'pt', vertical_key: 'v' } }),
+  growth_opportunities: (f) => f.op === 'update' ? { data: [{ id: UUID2 }], error: null } : ({ data: { id: UUID2, status: 'approved', title: 't', evidence: [], item_ids: [], plan } }),
+  vertical_playbooks: () => ({ data: { config: { opportunity_fields: { location: 'bairro' } } } }),
+  agent_performance: (f) => { const key = f.filters.find(x => x[1] === 'task_key')?.[2]; const isFail = f.filters.some(x => x[1] === 'success' && x[2] === false); const like = f.filters.some(x => x[0] === 'like')
+    return { count: key === 'create_opportunity_plan_start' ? started : like ? oppFails : isFail ? failed : 0 } },
+})
+{
+  const good2 = JSON.stringify({ ...good(), value_proposition: 'Um apartamento bem localizado.', item_ids: [] })
+  let calls = 0; const llm = async () => { calls++; return { text: good2, tokens: 10 } }
+  // 5 já começados em 24h → 429, IA nem chamada
+  let r = await createOpportunityPlan(fakeDb(planHandlers({ started: 5, failed: 0 })), 'C1', UUID2, llm)
+  assert.equal(r.status, 429); assert.equal(r.code, 'daily_limit'); assert.equal(calls, 0)
+  // 5 começados, 1 falhou → 4 usados → passa e grava linha "começou" antes da IA
+  const db = fakeDb(planHandlers({ started: 5, failed: 1 }))
+  r = await createOpportunityPlan(db, 'C1', UUID2, llm); assert.equal(r.status, 200, JSON.stringify(r)); assert.equal(calls, 1)
+  const ins = db.log.filter(x => x.op === 'insert').map(x => x.payload.task_key); assert.deepEqual(ins, ['create_opportunity_plan_start', 'create_opportunity_plan'])
+  assert.ok(db.log.find(x => x.op === 'update' && x.filters.some(f => f[1] === 'status' && f[2] === 'approved')), 'update do plano filtra status=approved')
+  // 4 começados → passa; 2 falhas da oportunidade → barra sem gastar
+  r = await createOpportunityPlan(fakeDb(planHandlers({ started: 4, failed: 0, oppFails: 2 })), 'C1', UUID2, llm); assert.equal(r.code, 'failures'); assert.equal(calls, 1)
+  // plano já existe → não chama IA nem conta
+  r = await createOpportunityPlan(fakeDb(planHandlers({ started: 9, failed: 0, plan: { objective: 'x' } })), 'C1', UUID2, llm); assert.equal(r.reused, true); assert.equal(calls, 1)
+  // oportunidade descartada no meio: update não acha linha aprovada → não grava e devolve a vaga (log de falha)
+  const h = planHandlers({ started: 0, failed: 0 }); h.growth_opportunities = (f) => f.op === 'update' ? { data: [], error: null } : { data: { id: UUID2, status: 'approved', title: 't', evidence: [], item_ids: [], plan: null } }
+  const d2 = fakeDb(h); r = await createOpportunityPlan(d2, 'C1', UUID2, llm); assert.equal(r.status, 409)
+  assert.equal(d2.log.filter(x => x.op === 'insert').at(-1).payload.success, false)
+  ok('plano: limite de 5/dia conta tentativas em andamento (falha devolve vaga); 2 falhas por oportunidade; não grava se foi descartada')
+}
+// ── cron: só empresas com auto_strategy=true e ativas; interruptor geral; falha recente não repete
+{
+  const db = fakeDb({ hermes_config: () => ({ data: { auto_strategy_enabled: true } }), companies: () => ({ data: [] }) })
+  await cronOpportunities(db, async () => ({ text: '', tokens: 0 }))
+  const q = db.log.find(x => x.table === 'companies'); assert.ok(q.filters.some(f => f[1] === 'auto_strategy' && f[2] === true), 'filtra auto_strategy=true (Liga dos Sonhos fica de fora)'); assert.ok(q.filters.some(f => f[1] === 'active' && f[2] === true))
+  const off = fakeDb({ hermes_config: () => ({ data: { auto_strategy_enabled: false } }) })
+  const r = await cronOpportunities(off, async () => ({ text: '', tokens: 0 })); assert.ok(r.skipped_reason); assert.ok(!off.log.some(x => x.table === 'companies'))
+  const now = Date.parse('2026-10-28T12:00:00Z'), h = 3600000
+  assert.equal(shouldRunOpportunities(null, null, now, now - 2 * h), false) // falhou há 2 h
+  assert.equal(shouldRunOpportunities(null, null, now, now - 7 * h), true) // faz > 6 h
+  assert.equal(shouldRunOpportunities(now - 10 * 86400000, null, now, now - 1 * h), false)
+  assert.equal(shouldRunOpportunities(now - 10 * 86400000, null, now, now - 20 * 86400000), true) // falha mais antiga que o sucesso
+  ok('cron: seletor exige auto_strategy=true e ativa; interruptor geral; falha recente (< 6 h) não repete')
 }
 console.log(`\n${n} grupos ok`)

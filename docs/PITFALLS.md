@@ -777,9 +777,11 @@ destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
 
 ## Plano da oportunidade: duplo disparo e cron genérico do `marketing-ai` (2026-10-29)
 
-- O plano é criado em segundo plano ao aprovar a oportunidade. Não há marcador "em andamento": aprovar, desfazer e
-  aprovar de novo em poucos segundos pode disparar duas gerações (o segundo `update` do plano vence). O freio é o
-  limite de 5 planos/dia e o fato de plano existente nunca ser regerado depois de gravado.
+- O plano é criado em segundo plano ao aprovar a oportunidade. Para o limite de 5/dia valer mesmo com cliques
+  rápidos, cada tentativa grava uma linha `create_opportunity_plan_start` em `agent_performance` ANTES da IA (conta
+  no limite na hora); falha devolve a vaga (a linha de falha desconta a de início). Ainda existe uma janelinha de
+  milissegundos entre contar e gravar (não é atômico), por isso o limite pode estourar em 1 no pior caso. Também: no
+  máx. 2 falhas por oportunidade em 24 h, e o plano só é gravado se a oportunidade ainda está `approved`.
 - O ramo de cron do `marketing-ai` (`cron_secret` no corpo) sem `action` roda o pipeline inteiro de TODAS as empresas
   ativas. `cron_opportunities` é tratado **antes** dele; qualquer action de cron nova precisa ficar antes também, senão
   cai no pipeline genérico e gasta IA/Apify de todos.

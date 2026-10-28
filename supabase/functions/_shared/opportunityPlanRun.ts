@@ -13,11 +13,13 @@ import type { Llm } from './opportunityRun.ts'
 
 type Admin = { from: (t: string) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
 export const TASK_KEY = 'create_opportunity_plan'
+export const START_KEY = 'create_opportunity_plan_start' // linha gravada antes da IA (conta no limite diário)
+const MAX_FAILS_PER_OPP_PER_DAY = 2
 const DAY_MS = 24 * 3600_000
 
 export interface PlanRunResult {
   ok: boolean; status: number; error?: string; plan?: OpportunityPlan | null; plan_generated_at?: string | null
-  plan_approved_at?: string | null; reused?: boolean; plans_left_today?: number
+  plan_approved_at?: string | null; reused?: boolean; plans_left_today?: number; code?: 'daily_limit' | 'failures'
 }
 type Bilingual = { pt?: string; en?: string } | string | undefined
 const pick = (b: Bilingual, lang: Lang): string => (typeof b === 'string' ? b : b?.[lang] ?? b?.pt ?? '')
@@ -41,15 +43,6 @@ export async function createOpportunityPlan(admin: Admin, companyId: string, opp
 
   // Plano já existe (duplo clique / cron concorrente): devolve o que está salvo. Não há "refazer".
   if (row.plan) return { ok: true, status: 200, plan: row.plan, plan_generated_at: row.plan_generated_at, plan_approved_at: row.plan_approved_at ?? null, reused: true }
-
-  // Limite do dono: no máximo 5 planos por empresa nas últimas 24 h (execuções bem-sucedidas; falha não gasta o limite).
-  const { count } = await admin.from('agent_performance').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('task_key', TASK_KEY).eq('success', true)
-    .gte('created_at', new Date(Date.now() - DAY_MS).toISOString())
-  if ((count ?? 0) >= MAX_PLANS_PER_DAY) {
-    return { ok: false, status: 429, plans_left_today: 0, error: tr(lang,
-      `Limite de ${MAX_PLANS_PER_DAY} planos por dia atingido. Você poderá criar outro nas próximas 24 horas.`,
-      `Daily limit of ${MAX_PLANS_PER_DAY} plans reached. You can create another one within the next 24 hours.`) }
-  }
 
   // Ficha do setor (regra 6): papéis dos campos, rótulos, vocabulário, ressalva, CTA alternativo.
   const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', co.vertical_key ?? '').eq('enabled', true).maybeSingle()
@@ -77,6 +70,28 @@ export async function createOpportunityPlan(admin: Admin, companyId: string, opp
     caveat: pick(cfg.opportunity_texts?.caveat, lang) || undefined, audienceHint: pick(cfg.opportunity_texts?.audience_hint, lang) || undefined, ctaAlt,
   })
 
+  // Freios de custo, logo antes da IA (depois de todas as validações, pra um 400 não gastar vaga):
+  // (a) no máx. 2 falhas por oportunidade em 24 h — aprovar/desfazer/aprovar com a IA falhando não gasta a cada clique;
+  const since = new Date(Date.now() - DAY_MS).toISOString()
+  const { count: fails } = await admin.from('agent_performance').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('task_key', TASK_KEY).eq('success', false)
+    .like('task_description', `opp:${row.id}%`).gte('created_at', since)
+  if ((fails ?? 0) >= MAX_FAILS_PER_OPP_PER_DAY) {
+    return { ok: false, status: 429, code: 'failures', error: tr(lang, 'A IA falhou algumas vezes neste plano. O sistema tenta de novo mais tarde, sozinho.', 'The AI failed a few times on this plan. The system will retry later on its own.') }
+  }
+  // (b) no máx. 5 planos por empresa em 24 h. Cada tentativa grava uma linha "começou" ANTES da IA, então tentativas
+  // em andamento já contam; falha devolve a vaga (a linha de falha desconta a de início).
+  const [{ count: started24 }, { count: failed24 }] = await Promise.all([
+    admin.from('agent_performance').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('task_key', START_KEY).gte('created_at', since),
+    admin.from('agent_performance').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('task_key', TASK_KEY).eq('success', false).gte('created_at', since),
+  ])
+  const used = Math.max(0, (started24 ?? 0) - (failed24 ?? 0))
+  if (used >= MAX_PLANS_PER_DAY) {
+    return { ok: false, status: 429, code: 'daily_limit', plans_left_today: 0, error: tr(lang,
+      `Limite de ${MAX_PLANS_PER_DAY} planos por dia atingido. O plano sai quando houver vaga, nas próximas 24 horas.`,
+      `Daily limit of ${MAX_PLANS_PER_DAY} plans reached. The plan will be made when there is room, within the next 24 hours.`) }
+  }
+  try { await admin.from('agent_performance').insert({ company_id: companyId, agent_role: 'cmo', task_key: START_KEY, task_description: `opp:${row.id} começou`, success: true, tokens_used: 0 }) } catch { /* não-fatal */ }
+
   let answer: { text: string; tokens: number }
   try {
     answer = await llm(prompt, 2000)
@@ -97,13 +112,18 @@ export async function createOpportunityPlan(admin: Admin, companyId: string, opp
 
   // Refazer o plano zera a aprovação: o dono aprova o que está na tela, não um plano antigo.
   const now = new Date().toISOString()
-  const { error } = await admin.from('growth_opportunities').update({ plan: res.plan, plan_generated_at: now, plan_approved_at: null }).eq('id', row.id).eq('company_id', companyId)
+  // Só grava se a oportunidade AINDA está aprovada (pode ter sido descartada enquanto a IA trabalhava).
+  const { data: saved, error } = await admin.from('growth_opportunities').update({ plan: res.plan, plan_generated_at: now, plan_approved_at: null }).eq('id', row.id).eq('company_id', companyId).eq('status', 'approved').select('id')
   if (error) {
     await logCost(admin, companyId, row.id, started, answer.tokens, false, error.message)
     return { ok: false, status: 500, error: `growth_opportunities: ${error.message}` }
   }
+  if (!saved || saved.length === 0) {
+    await logCost(admin, companyId, row.id, started, answer.tokens, false, 'oportunidade deixou de estar aprovada')
+    return { ok: false, status: 409, error: tr(lang, 'A oportunidade deixou de estar aprovada; o plano não foi salvo.', 'The opportunity is no longer approved; the plan was not saved.') }
+  }
   await logCost(admin, companyId, row.id, started, answer.tokens, true, 'plano criado')
-  return { ok: true, status: 200, plan: res.plan, plan_generated_at: now, plan_approved_at: null, plans_left_today: Math.max(0, MAX_PLANS_PER_DAY - (count ?? 0) - 1) }
+  return { ok: true, status: 200, plan: res.plan, plan_generated_at: now, plan_approved_at: null, plans_left_today: Math.max(0, MAX_PLANS_PER_DAY - used - 1) }
 }
 
 // Aprovar (ou desfazer) o PLANO. Só guarda a decisão: nada é publicado nem enviado.
@@ -140,7 +160,8 @@ export async function decideOpportunity(admin: Admin, companyId: string, userId:
   const lang: Lang = co?.language === 'en' ? 'en' : 'pt'
   if (!isUuid(opportunityId)) return { ok: false, status: 400, error: tr(lang, 'opportunity_id é obrigatório.', 'opportunity_id is required.') }
   if (status !== 'approved' && status !== 'dismissed' && status !== 'suggested') return { ok: false, status: 400, error: tr(lang, 'status inválido.', 'Invalid status.') }
-  const patch = status === 'suggested' ? { status, decided_at: null, decided_by: null } : { status, decided_at: new Date().toISOString(), decided_by: userId }
+  // Desfazer ou descartar zera a aprovação do plano (o plano em si fica guardado).
+  const patch = status === 'suggested' ? { status, decided_at: null, decided_by: null, plan_approved_at: null } : status === 'dismissed' ? { status, decided_at: new Date().toISOString(), decided_by: userId, plan_approved_at: null } : { status, decided_at: new Date().toISOString(), decided_by: userId }
   const { data: row, error } = await admin.from('growth_opportunities').update(patch).eq('id', opportunityId).eq('company_id', companyId)
     .select('id, status, decided_at, decided_by, plan, plan_generated_at, plan_approved_at').maybeSingle()
   if (error) return { ok: false, status: 500, error: `growth_opportunities: ${error.message}` }

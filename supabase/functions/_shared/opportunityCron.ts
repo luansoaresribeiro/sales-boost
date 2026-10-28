@@ -6,23 +6,25 @@
 // Por empresa elegível (mesmo critério do cron de estratégia: companies.auto_strategy=true — a Liga dos Sonhos fica
 // de fora — + interruptor geral hermes_config.auto_strategy_enabled + hasPaidAccess; e empresa ativa):
 //  (a) roda a busca de oportunidades se a última rodada tem > 7 dias OU há sinal de mercado novo desde ela;
-//  (b) cria o plano das oportunidades APROVADAS que ainda não têm (rede de segurança do plano automático),
-//      respeitando 5 planos/dia e no máx. 2 falhas por oportunidade em 24 h (sem loop de gasto).
+//  (b) cria o plano das oportunidades APROVADAS que ainda não têm (rede de segurança do plano automático);
+//      os freios (5 planos/dia, 2 falhas por oportunidade em 24 h) moram em createOpportunityPlan.
+// Busca que falhou há < 6 h não é tentada de novo (e não ocupa vaga das 3 empresas).
 // Cabe nos 150 s: poucas empresas por chamada e nenhum trabalho de IA novo depois de 40 s (uma chamada à IA leva
 // no máx. 100 s). O que sobrar fica para a próxima chamada do agendamento.
 import { hasPaidAccess } from './access.ts'
 import { runOpportunities, type Llm } from './opportunityRun.ts'
 import { MAX_PLANS_PER_DAY } from './opportunityPlan.ts'
-import { TASK_KEY as PLAN_TASK, createOpportunityPlan } from './opportunityPlanRun.ts'
+import { createOpportunityPlan } from './opportunityPlanRun.ts'
 
 type Admin = { from: (t: string) => any; rpc?: any } // eslint-disable-line @typescript-eslint/no-explicit-any
 export const RERUN_AFTER_MS = 7 * 24 * 3600_000
+export const RETRY_AFTER_FAIL_MS = 6 * 3600_000
 export const COMPANIES_PER_CALL = 3
 export const START_NEW_AI_UNTIL_MS = 40_000
-const MAX_PLAN_FAILS_PER_DAY = 2
 
 /** Roda a busca? Sem rodada anterior, rodada com > 7 dias, ou sinal de mercado criado depois da última rodada. */
-export function shouldRunOpportunities(lastRunMs: number | null, latestSignalMs: number | null, nowMs: number): boolean {
+export function shouldRunOpportunities(lastRunMs: number | null, latestSignalMs: number | null, nowMs: number, lastFailMs: number | null = null): boolean {
+  if (lastFailMs != null && Number.isFinite(lastFailMs) && nowMs - lastFailMs < RETRY_AFTER_FAIL_MS && (lastRunMs == null || lastFailMs > lastRunMs)) return false // falhou há pouco: não tenta a cada chamada
   if (lastRunMs == null || !Number.isFinite(lastRunMs)) return true
   if (nowMs - lastRunMs > RERUN_AFTER_MS) return true
   return latestSignalMs != null && Number.isFinite(latestSignalMs) && latestSignalMs > lastRunMs
@@ -58,13 +60,14 @@ export async function cronOpportunities(admin: Admin, llm: Llm, started = Date.n
       if (!(pb?.config as { opportunity_fields?: { location?: string } } | null)?.opportunity_fields?.location) continue // setor sem o motor
       sum.companies_checked++
 
-      const [{ data: lastRun }, { data: lastSignal }, { data: pending }] = await Promise.all([
+      const [{ data: lastRun }, { data: lastFail }, { data: lastSignal }, { data: pending }] = await Promise.all([
         admin.from('agent_performance').select('created_at').eq('company_id', c.id).eq('task_key', 'run_opportunities').eq('success', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        admin.from('agent_performance').select('created_at').eq('company_id', c.id).eq('task_key', 'run_opportunities').eq('success', false).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         admin.from('market_signals').select('created_at').eq('company_id', c.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         admin.from('growth_opportunities').select('id').eq('company_id', c.id).eq('status', 'approved').is('plan', null).order('decided_at', { ascending: true }).limit(MAX_PLANS_PER_DAY),
       ])
       let did = false
-      if (shouldRunOpportunities(ms(lastRun?.created_at), ms(lastSignal?.created_at), Date.now())) {
+      if (shouldRunOpportunities(ms(lastRun?.created_at), ms(lastSignal?.created_at), Date.now(), ms(lastFail?.created_at))) {
         const r = await runOpportunities(admin, c.id, llm)
         if (!r.ok) console.error(`[cron_opportunities] ${c.id} run: ${r.status} ${r.error}`)
         else sum.ran++
@@ -72,13 +75,10 @@ export async function cronOpportunities(admin: Admin, llm: Llm, started = Date.n
       }
       for (const o of (pending ?? []) as { id: string }[]) {
         if (!aiWindowOpen()) break
-        const { count } = await admin.from('agent_performance').select('id', { count: 'exact', head: true }).eq('company_id', c.id).eq('task_key', PLAN_TASK).eq('success', false)
-          .like('task_description', `opp:${o.id}%`).gte('created_at', new Date(Date.now() - 24 * 3600_000).toISOString())
-        if ((count ?? 0) >= MAX_PLAN_FAILS_PER_DAY) continue
         const r = await createOpportunityPlan(admin, c.id, o.id, llm)
-        did = true
+        if (r.code !== 'failures' && r.code !== 'daily_limit') did = true // pular por falhas/limite não ocupa vaga das 3
         if (r.ok && !r.reused) sum.plans++
-        if (r.status === 429) break // limite do dia desta empresa: o resto fica pra amanhã
+        if (r.code === 'daily_limit') break // limite do dia desta empresa: o resto fica pra amanhã
       }
       if (did) worked++
     } catch (e) {
