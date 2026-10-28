@@ -393,7 +393,61 @@ engagement_automations (id, company_id, name, active, trigger_type,
 engagement_events (id, company_id, automation_id, channel, ig_user,
   ig_user_id, comment_text, media_ref, intent_detected, ai_interpretation,
   action_type, action_message, status, agent_action_id, error, created_at)
+market_signals (id, company_id, kind, region, title, summary, source_name,
+  source_url, observed_at, collected_by, meta, created_at)
+  -- 2026-10-28 (migration 20261028120000): sinal de mercado com fonte e data.
+  -- Etapa 1: vazia; a Etapa 2 deixa o cliente colar à mão (RLS de escrita já existe).
+growth_opportunities (id, company_id, kind, title, description,
+  commercial_problem, evidence jsonb [{type: fact|data|hypothesis, text,
+  source, date}], item_ids uuid[], audience, suggested_action,
+  how_to_measure, confidence, needs_validation, status, priority_rank,
+  priority_reasons jsonb, run_id, decided_at, decided_by, strategy_id,
+  created_at)
+  -- 2026-10-28: saída do Opportunity Engine. Cliente lê e só altera
+  -- status/decided_at/decided_by (grant por coluna); criar é só pela function.
+  -- ATENÇÃO nomes: `opportunities` (acima) e `campaigns` têm OUTRO significado
+  -- e NÃO são estas tabelas — ver PITFALLS.md.
 ```
+
+## Opportunity Engine (Inteligência comercial, 2026-10-28) — 🟡 até teste em produção
+
+Decisão: [DECISIONS.md](DECISIONS.md#2026-10-28--inteligência-comercial-para-imobiliárias-opportunity-engine).
+Código: `supabase/functions/_shared/opportunityEngine.ts` (fatos + candidatos), `opportunityOutput.ts` (prompt,
+validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action: 'run_opportunities'` em
+`marketing-ai/index.ts`. Tela: `/dashboard/opportunities` (`GrowthOpportunitiesPage.tsx`). Teste de lógica pura:
+`node --experimental-strip-types scripts/test-opportunity-engine.mjs`.
+
+- **Entradas (só leitura):** catálogo (`marketing_ai_knowledge` kind='product', campos de `meta.fields` lidos pelos
+  papéis da ficha `config.opportunity_fields`), `posts` e `engagement_events` dos últimos 60 dias (vínculo
+  comentário → item: `media_ref` = `posts.instagram_media_id` → `posts.item_id`), `marketing_ai_competitors`,
+  `marketing_ai_trends`, `market_signals`. `leads` não entra: não há vínculo lead → imóvel no banco.
+- **Passo A (código, sem IA) — candidatos por regra:** `content_gap` (bairro do catálogo sem NENHUM post — qualquer
+  status — em 60 dias); `low_traction` (item COM post publicado e zero comentários nesses posts; **sempre
+  hipótese**, causas possíveis preço/fotos/comunicação; exige Instagram conectado); `positioning` (hashtag que ≥2
+  concorrentes repetem e a empresa não usa; notas do concorrente entram como "dado"); `market_change` (sinal ou
+  tendência **com fonte** citando um bairro onde há item do catálogo; tendência cuja fonte é a própria IA é
+  ignorada). `unmet_demand` existe no schema mas ainda não tem regra. Cada fato tem `type` (fact/data), `source`
+  e `date` real (`null` quando o dado não tem data; "contei agora" usa a data de hoje).
+- **Passo B (IA):** Claude (`claude-sonnet-4-6`, mesmo cliente do marketing-ai) recebe SÓ fatos + candidatos
+  (no máx. 5, os de melhor prioridade) e devolve JSON com até 3 oportunidades redigidas. Idioma =
+  `companies.language`. Síncrono (1 chamada, `AbortSignal` de 100 s, abaixo do teto de 150 s); sem candidato
+  nem chama a IA. Custo vai pra `agent_performance` (`task_key='run_opportunities'`). Auth: JWT da empresa +
+  `requirePaidAccess` (vitrine bloqueada; a tela abre o modal de plano). Chamadas repetidas em < 90 s reaproveitam
+  a rodada anterior (não gasta IA de novo). Roda **antes** do `getConfig`: não exige o Marketing AI configurado.
+- **Validação em código:** evidência `fact`/`data` sempre vem do fato guardado (texto, fonte e data do banco) —
+  id inexistente é descartado; número no texto que não esteja nos fatos → a **frase** sai (campo vazio cai no
+  texto padrão do código); termo de classe protegida → a frase sai (no público, vira vazio); a IA só acrescenta
+  `hypothesis`. Confiança é do código: `needs_validation` se for hipótese (low_traction), tiver < 2 evidências ou
+  houver ressalva (Instagram desconectado, 1 fonte só, poucos posts, coleta velha); senão `high` (≥4
+  evidências e ≥3 fontes independentes), `medium` (≥2 e ≥2) ou `low`.
+- **Prioridade explicável (código):** (1) nº de evidências com fonte, (2) nº de imóveis ligados, (3) fontes
+  independentes; "precisa validar" sempre depois das com base. `priority_reasons` são frases geradas pelo código.
+  Nenhuma pontuação inventada.
+- **Tabelas:** `market_signals`, `growth_opportunities` (ver "Modelo de dados"). Sem cron. A tela mostra a rodada
+  mais recente (sem as descartadas) + as aprovadas de rodadas anteriores; o que falta pra achar mais é calculado
+  na tela a partir de contagens (nada é persistido).
+- **Estado:** 🟡 código e teste de lógica prontos; falta aplicar a migration em produção (depois do merge), fazer
+  o deploy do `marketing-ai` e rodar na Tespon. A Etapa 1 **não** publica nem envia nada.
 
 ## Estado atual do código
 

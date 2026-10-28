@@ -747,3 +747,25 @@ destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
 - **Ainda em PT de propósito (fase 2):** resumo/interpretação do negócio que o cadastro e o "Entendimento do
   negócio" montam pra IA ler (`buildContext`, `interpretation`), e `vocabulary.item/catalog` da ficha
   (`imoveis_rio`) — vêm em PT até existir a ficha em inglês.
+
+## Colisão de nomes: `opportunities` / `campaigns` × tabelas novas de oportunidade (2026-10-28)
+
+- **`opportunities` já existe e significa outra coisa:** oportunidade de receita/lead detectada por
+  `detect-opportunities` (e lida por `hermes-proxy`, `monthly-report`, popup de progresso, `/dashboard/oportunidades`).
+  A "Inteligência comercial" usa **`growth_opportunities`** (e `market_signals`) — nunca escrever o motor novo em
+  `opportunities`, nunca ler `growth_opportunities` como se fosse a antiga. `campaigns` (objeto de campanha do
+  Marketing AI) também **não** é reaproveitada: a ligação oportunidade → campanha/estratégia (Etapa 4) usa
+  `growth_opportunities.strategy_id`.
+- **Duas telas, duas rotas:** `/dashboard/oportunidades` (`OpportunitiesPage.tsx`, tabela antiga, fora do menu) ×
+  `/dashboard/opportunities` (`GrowthOpportunitiesPage.tsx`, motor novo, no menu como "Oportunidades"/"Opportunities").
+  Busca por "opportunities" no código mistura as duas: confira a tabela antes de editar.
+- **O motor depende da ficha:** sem `vertical_playbooks.config.opportunity_fields` a function responde 400
+  ("setor ainda não tem os campos de oportunidades"). A migration `20261028120000_inteligencia_comercial.sql` põe
+  a chave em `imoveis_rio`; ordem segura: migration → deploy do `marketing-ai`. Deploy antes da migration não
+  quebra nada (só responde esse 400; a tela mostra o erro).
+- **`posts.item_id`/`instagram_media_id` ligam post a imóvel e comentário a imóvel.** Post sem `item_id` (feito
+  fora do catálogo) não conta pro imóvel: o motor pode sugerir "sem post" para um imóvel que a imobiliária
+  divulgou por fora. Por isso `content_gap`/`low_traction` viram "Precisa validar" quando o Instagram não está
+  conectado e a tela sempre mostra a fonte ("Posts registrados no Sales Boost").
+- **`growth_opportunities`: cliente só altera 3 colunas** (grant por coluna, não só RLS). Coluna nova que a tela
+  precise editar exige `grant update (coluna)` na migration.

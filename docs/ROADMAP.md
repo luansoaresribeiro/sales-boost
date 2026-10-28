@@ -464,3 +464,37 @@ Ver [DECISIONS.md](DECISIONS.md#2026-10-27--inglês-como-idioma-principal-mercad
   18h de Brasília), endereço com ZIP, termos do mercado americano.
 - [ ] **Decisões do dono pendentes:** preço em USD; só imóveis ou outros setores; horário local; revisão jurídica
   EUA/Fair Housing; se o Brasil continua como mercado.
+
+## Inteligência comercial (visão 2026-10-28)
+
+Ver [DECISIONS.md](DECISIONS.md#2026-10-28--inteligência-comercial-para-imobiliárias-opportunity-engine) e o bloco
+"Opportunity Engine" em [ARCHITECTURE.md](ARCHITECTURE.md). Regra de evidência em todas as etapas: fato/dado/
+hipótese, fonte + data, "precisa validar", nunca número inventado, nada publicado sem aprovação.
+
+- [ ] **Etapa 1 — motor + tela de oportunidades (este PR; 🟡 até teste em produção).** `run_opportunities` no
+  `marketing-ai`, tabelas `market_signals`/`growth_opportunities`, tela `/dashboard/opportunities`. *Pronto
+  quando:* migration aplicada, `marketing-ai` deployado, e na Tespon (1 imóvel, 8 concorrentes, 0 posts) o botão
+  devolve ≥1 oportunidade com evidência rotulada e fonte/data, ou diz o que falta — sem número inventado e sem
+  nada publicado; aprovar/descartar grava o status.
+- [ ] **Etapa 2 — colar sinal de mercado à mão.** Tela para o cliente colar notícia/lançamento/obra (título,
+  região, fonte, link, data) em `market_signals` (`collected_by='manual'`). *Pronto quando:* um sinal colado com
+  fonte aparece como "Dado" numa oportunidade `market_change` do bairro certo; sem fonte, não entra.
+- [ ] **Etapa 3 — notícias automáticas.** Coletar sinais sozinho (`collected_by='system'`). **Depende de decisão do
+  dono:** provedor de notícias, custo e teto mensal (pendente). *Pronto quando:* a coleta respeita o teto, cada
+  sinal tem fonte + data, e o dono aprova/descarta antes de virar evidência.
+- [ ] **Etapa 4 — oportunidade aprovada → estratégia → peças.** Ligar `growth_opportunities.strategy_id` ao
+  `strategy-generate` e às peças do calendário. **Alteração arriscada** (function de cliente real: aprovação do
+  dono antes do deploy). *Pronto quando:* aprovar uma oportunidade gera uma iniciativa de estratégia citando a
+  evidência, e as peças continuam passando pela Central de Aprovações.
+- [ ] **Etapa 5 — link rastreável, página do imóvel e encaminhar ao corretor.** Link com origem, página do imóvel,
+  repasse da conversa ao corretor certo. Toca o `instagram-webhook` (**arriscado**). *Pronto quando:* uma visita
+  pedida pelo link aparece com a origem (oportunidade/peça) e chega ao corretor sem mensagem automática sem
+  aprovação.
+- [ ] **Etapa 6 — resultados (visitas, propostas, vendas).** Só com atribuição comprovada (origem registrada);
+  sem atribuição, "sem dado" — nunca estimativa. *Pronto quando:* cada número na tela tem origem rastreável e o
+  que não tem fica borrado/"sem dado".
+- [ ] **Etapa 7 — equipe de corretores.** Convite, papéis (dono/gestor/corretor) e RLS por papel. **Arriscado**
+  (mexe em autenticação e RLS). *Pronto quando:* um corretor convidado vê só o que o papel permite, testado com
+  conta sintética, sem tocar dados de cliente real.
+- **Pendentes do dono (não decididos):** preço para imobiliária com equipe (R$ e US$); custo de provedor de
+  notícias (Etapa 3); revisão jurídica EUA/Fair Housing.

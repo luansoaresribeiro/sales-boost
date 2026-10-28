@@ -35,6 +35,12 @@ resultados e se adapta.
 > likes, queremos que o negócio cresça."
 > "Não tira férias, não pede aumento, trabalha de madrugada."
 
+> **Divergência (2026-10-28):** o posicionamento passou a ser **"Inteligência comercial para imobiliárias.
+> Identificamos oportunidades no seu mercado, conectamos essas oportunidades aos imóveis da sua imobiliária e
+> ajudamos seus corretores a transformar isso em ações para gerar demanda."** O texto acima fica como
+> histórico (a base — dados reais, aprovação do dono — continua valendo). Ver
+> [DECISIONS.md](DECISIONS.md#2026-10-28--inteligência-comercial-para-imobiliárias-opportunity-engine).
+
 A estratégia vem de **dados reais** (Data Agent — ver [ARCHITECTURE.md](ARCHITECTURE.md)),
 não só da URL que o cliente colou no diagnóstico gratuito.
 
@@ -148,6 +154,9 @@ precisar virar especialista em marketing.
   > **Divergência (2026-10-27):** passou a ser EUA inteiro, em inglês, mantendo os brasileiros atuais em PT —
   > ver [DECISIONS.md](DECISIONS.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro).
 - Decisor: o próprio dono, decisão rápida.
+  > **Divergência (2026-10-28):** o cliente-alvo passou a ser a **imobiliária com equipe de corretores** (o
+  > corretor autônomo continua podendo usar). Decisor e preço para equipe seguem **pendentes** — ver
+  > [DECISIONS.md](DECISIONS.md#2026-10-28--inteligência-comercial-para-imobiliárias-opportunity-engine).
 
 ## Diferenciais competitivos
 
