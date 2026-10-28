@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { identifyCompany, resetAnalytics } from '../lib/analytics'
+import { useLang, langFromCompany } from './LanguageContext'
 
 export interface CompanyData {
   id: string
@@ -100,6 +101,13 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   }, [user])
 
   useEffect(() => { fetchCompany() }, [fetchCompany])
+
+  // Idioma da tela quando o usuário não escolheu um (sb_lang): segue a língua
+  // da empresa. Sem empresa (visitante, cadastro, owner) → null → 'en'.
+  const { setCompanyLang } = useLang()
+  const companyLanguage = company?.language
+  const hasCompany = !!company
+  useEffect(() => { setCompanyLang(hasCompany ? langFromCompany(companyLanguage) : null) }, [hasCompany, companyLanguage, setCompanyLang])
 
   return (
     <CompanyContext.Provider value={{ company, access, loading: loading || (!!user && loadedFor !== user.id), loadError, refreshCompany: fetchCompany }}>

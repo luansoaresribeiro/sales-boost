@@ -447,3 +447,20 @@ Os posts que nascem daqui seguem a regra 1: só saem com aprovação do dono.
    - garantir que os concorrentes encontrados são os reais.
 
    Ganha um plano próprio.
+
+## Inglês como idioma principal / mercado EUA (decisão do dono 2026-10-27)
+
+Ver [DECISIONS.md](DECISIONS.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro).
+
+- [x] **Fase 1 — tela e padrão:** inglês como padrão da tela, regra tela por usuário × conteúdo por empresa,
+  seletor "Língua da empresa" em Configurações, textos fixos traduzidos, migration `20261027120000_ingles_padrao.sql`
+  (aplicar em produção só depois do merge, é aditiva).
+- [ ] **Fase 2 — conteúdo gerado em inglês + travas em inglês:** prompts das functions por `companies.language`;
+  travas de honestidade (número inventado, "Comente QUERO", recado da IA, carrossel educativo/dicas) funcionando
+  em inglês. Critério de pronto: empresa de teste em `'en'` gera legenda, carrossel e vídeo sem uma palavra em PT.
+- [ ] **Fase 3 — ficha `real_estate_us`:** vocabulário, perguntas do cadastro, campos do catálogo e regras do
+  setor para os EUA (tudo na ficha, nunca em código — regra 6). Depende da revisão jurídica EUA/Fair Housing.
+- [ ] **Fase 4 — dólar, fuso, ZIP e termos:** preço em USD (decisão do dono), horário de publicação local (hoje
+  18h de Brasília), endereço com ZIP, termos do mercado americano.
+- [ ] **Decisões do dono pendentes:** preço em USD; só imóveis ou outros setores; horário local; revisão jurídica
+  EUA/Fair Housing; se o Brasil continua como mercado.

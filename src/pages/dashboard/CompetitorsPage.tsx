@@ -255,8 +255,8 @@ export default function CompetitorsPage() {
     const competitorList = competitors.map(c => {
       const dist = c.distance_m != null
         ? (c.distance_m >= 1000 ? `${(c.distance_m / 1000).toFixed(1)}km` : `${c.distance_m}m`)
-        : 'distância desconhecida'
-      const price = c.price_level ? '$'.repeat(c.price_level) : 'preço desconhecido'
+        : (lang === 'en' ? 'distance unknown' : 'distância desconhecida')
+      const price = c.price_level ? '$'.repeat(c.price_level) : (lang === 'en' ? 'price unknown' : 'preço desconhecido')
       return `- ${c.name}: ${c.rating ? `${c.rating}★` : X.noRating} | ${c.review_count > 0 ? `${c.review_count} ${X.reviews}` : X.noReviews} | ${price} | ${dist} ${X.away}`
     }).join('\n')
 

@@ -1,6 +1,8 @@
 // Cliente da Central de Approvals (edge function `agent-actions`).
 // Todo agente/produtor PROPÕE aqui; o motor decide auto vs manual; o dono
 // aprova/rejeita/edita. Nada executa fora deste caminho.
+import { getCurrentLang } from '../contexts/LanguageContext'
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 
 export type ApprovalStatus = 'PENDING' | 'AUTO_APPROVED' | 'APPROVED' | 'REJECTED' | 'EDITED' | 'CANCELLED'
@@ -45,7 +47,7 @@ async function call(token: string, body: Record<string, unknown>): Promise<{ act
     body: JSON.stringify(body),
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.error ?? (localStorage.getItem('sb_lang') === 'en' ? 'Approvals Center error' : 'Erro na Central de Approvals'))
+  if (!res.ok) throw new Error(data.error ?? (getCurrentLang() === 'en' ? 'Approvals Center error' : 'Erro na Central de Approvals'))
   return data
 }
 

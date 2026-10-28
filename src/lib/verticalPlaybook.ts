@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { getCurrentLang } from '../contexts/LanguageContext'
 
 // Tipos + busca + validação das perguntas extras de uma ficha de setor
 // (vertical_playbooks.config.onboarding_questions). Usado tanto no
@@ -93,7 +94,7 @@ export async function fetchCatalogSchema(verticalKey: string): Promise<CatalogSc
     if (required.length === 0 && optional.length === 0) return null
     return {
       itemLabel: config.vocabulary?.item ?? 'Item',
-      catalogLabel: config.vocabulary?.catalog ?? 'Catálogo',
+      catalogLabel: config.vocabulary?.catalog ?? (getCurrentLang() === 'en' ? 'Catalog' : 'Catálogo'),
       required, optional,
       importMap: config.catalog_import?.fields ? config.catalog_import : undefined,
       nearby: Array.isArray(config.nearby_places?.categories) && config.nearby_places.categories.length > 0,

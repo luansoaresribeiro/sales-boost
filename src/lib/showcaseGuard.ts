@@ -19,6 +19,7 @@
 // notificações/Telegram e configurações de conta.
 
 // null = bloqueia a function inteira; lista = só essas `action` (ou o teste do corpo).
+import { getCurrentLang } from '../contexts/LanguageContext'
 type Rule = null | { actions?: string[]; bodyFlag?: string }
 
 const PAID_FUNCTIONS: Record<string, Rule> = {
@@ -62,7 +63,7 @@ const ALLOWED_WRITE_TABLES = new Set([
   'marketing_ai_knowledge', 'brand_dna', 'marketing_ai_config',
 ])
 
-export const PLAN_REQUIRED = { error: 'Disponível no plano', code: 'plan_required' } as const
+export const planRequired = () => ({ error: getCurrentLang() === 'en' ? 'Available on a paid plan' : 'Disponível no plano', code: 'plan_required' }) as const
 
 function readBody(body: BodyInit | null | undefined): Record<string, unknown> {
   if (typeof body !== 'string') return {}
@@ -101,7 +102,7 @@ export function installShowcaseGuard(onBlocked: () => void): () => void {
     const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
     if (shouldBlock(url, method, init?.body, supabaseUrl)) {
       onBlocked()
-      return new Response(JSON.stringify(PLAN_REQUIRED), { status: 402, headers: { 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify(planRequired()), { status: 402, headers: { 'Content-Type': 'application/json' } })
     }
     const res = await original.call(window, input, init)
     if (res.status === 402 && supabaseUrl && url.startsWith(`${supabaseUrl}/functions/v1/`)) {

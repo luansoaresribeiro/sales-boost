@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { LanguageProvider } from './contexts/LanguageContext'
+import { LanguageProvider, useLang } from './contexts/LanguageContext'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import './lib/analytics' // inicializa o PostHog antes da app renderizar
 import './lib/facebookSdk' // carrega o Facebook SDK (JS) — exigência da Meta
@@ -47,13 +47,16 @@ const Spinner = () => (
   </div>
 )
 
-const LoadRetry = ({ onRetry }: { onRetry: () => void }) => (
+const LoadRetry = ({ onRetry }: { onRetry: () => void }) => {
+  const en = useLang().lang === 'en'
+  return (
   <div style={{ minHeight: '100vh', background: '#0E0B0A', display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center', justifyContent: 'center', padding: '16px', textAlign: 'center', fontFamily: "'Bricolage Grotesque', system-ui, sans-serif" }}>
-    <div style={{ color: 'white', fontSize: '15px', fontWeight: 700 }}>Não foi possível carregar sua conta agora.</div>
-    <div style={{ color: '#BABABA', fontSize: '13px' }}>Verifique sua internet e tente de novo.</div>
-    <button onClick={onRetry} style={{ padding: '10px 20px', background: '#FF6D29', color: '#000', fontWeight: 700, fontSize: '13px', border: 'none', borderRadius: '9px', cursor: 'pointer' }}>Tentar de novo</button>
+    <div style={{ color: 'white', fontSize: '15px', fontWeight: 700 }}>{en ? 'We could not load your account right now.' : 'Não foi possível carregar sua conta agora.'}</div>
+    <div style={{ color: '#BABABA', fontSize: '13px' }}>{en ? 'Check your internet connection and try again.' : 'Verifique sua internet e tente de novo.'}</div>
+    <button onClick={onRetry} style={{ padding: '10px 20px', background: '#FF6D29', color: '#000', fontWeight: 700, fontSize: '13px', border: 'none', borderRadius: '9px', cursor: 'pointer' }}>{en ? 'Try again' : 'Tentar de novo'}</button>
   </div>
-)
+  )
+}
 
 // Página inicial do dashboard: cai no Marketing AI (agente principal). Se o
 // owner desligou o Marketing AI dessa empresa, cai em Atividades.
