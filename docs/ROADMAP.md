@@ -476,7 +476,7 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
   quando:* migration aplicada, `marketing-ai` deployado, e na Tespon (1 imóvel, 8 concorrentes, 0 posts) o botão
   devolve ≥1 oportunidade com evidência rotulada e fonte/data, ou diz o que falta — sem número inventado e sem
   nada publicado; aprovar/descartar grava o status.
-- [ ] **Etapa 2 — colar sinal de mercado à mão.** Tela para o cliente colar notícia/lançamento/obra (título,
+- [ ] **Etapa 2 — colar sinal de mercado à mão (🟡 código pronto no PR; falta teste em produção).** Tela para o cliente colar notícia/lançamento/obra (título,
   região, fonte, link, data) em `market_signals` (`collected_by='manual'`). *Pronto quando:* um sinal colado com
   fonte aparece como "Dado" numa oportunidade `market_change` do bairro certo; sem fonte, não entra.
 - [ ] **Etapa 3 — notícias automáticas.** Coletar sinais sozinho (`collected_by='system'`). **Depende de decisão do

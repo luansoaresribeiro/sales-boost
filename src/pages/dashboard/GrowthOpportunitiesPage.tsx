@@ -5,6 +5,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useShowcase } from '../../contexts/ShowcaseContext'
 import { supabase } from '../../lib/supabase'
 import { callMarketingAi, CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
+import MarketSignals from './marketSignals'
 import OpportunityCard, { type Opportunity } from './opportunityCard'
 
 // "Oportunidades" (Inteligência comercial para imobiliárias — Etapa 1, decisão do dono
@@ -26,7 +27,7 @@ const TX = {
     missingTitle: 'O que falta pra achar mais',
     mCatalog: 'Cadastre imóveis no catálogo (com bairro, preço e fotos).',
     mIg: 'Conecte o Instagram para medir posts e conversas.',
-    mSignals: 'Cole notícias e sinais de mercado (a tela para colar chega na próxima etapa).',
+    mSignals: 'Cole notícias e sinais de mercado, com fonte e data, na seção “Sinais de mercado” abaixo.',
     mComp: 'Monitore pelo menos 2 concorrentes com hashtags coletadas.',
     errDecide: 'Não consegui salvar a decisão. Tente de novo.', errRun: 'Erro ao buscar oportunidades',
   },
@@ -42,7 +43,7 @@ const TX = {
     missingTitle: 'What is missing to find more',
     mCatalog: 'Add properties to the catalog (with neighborhood, price and photos).',
     mIg: 'Connect Instagram so posts and conversations can be measured.',
-    mSignals: 'Paste market news and signals (the paste screen arrives in the next step).',
+    mSignals: 'Paste market news and signals, with source and date, in the “Market signals” section below.',
     mComp: 'Monitor at least 2 competitors with collected hashtags.',
     errDecide: 'Could not save the decision. Try again.', errRun: 'Error finding opportunities',
   },
@@ -176,6 +177,8 @@ export default function GrowthOpportunitiesPage() {
             </div>
           )}
         </div>
+
+        {companyId && <MarketSignals lang={lang} companyId={companyId} verticalKey={company?.vertical_key ?? null} readOnly={readOnly} openPlanModal={openPlanModal} onChanged={() => { void load() }} />}
       </div>
     </div>
   )
