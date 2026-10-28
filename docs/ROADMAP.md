@@ -486,6 +486,16 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
   `strategy-generate` e às peças do calendário. **Alteração arriscada** (function de cliente real: aprovação do
   dono antes do deploy). *Pronto quando:* aprovar uma oportunidade gera uma iniciativa de estratégia citando a
   evidência, e as peças continuam passando pela Central de Aprovações.
+  - **Divergência (2026-10-29, ver [DECISIONS.md](DECISIONS.md)):** a Etapa 4 foi dividida e o caminho mudou — o
+    texto acima (iniciativa de estratégia ligada ao `strategy_id`, via `strategy-generate`) **não vai ser seguido
+    por enquanto**. **4A — plano da oportunidade (🟡 código pronto no PR; falta migration, deploy e teste em
+    produção):** aprovar a oportunidade cria sozinho um mini-plano no `marketing-ai` (formato sugerido como
+    consequência do objetivo, limite de 5 planos/dia/empresa); o dono aprova o plano. *Pronto quando:* na Tespon,
+    aprovar uma oportunidade gera um plano com evidências citadas, sem número inventado e sem "Comente QUERO". **4B —
+    gerar as peças a partir do plano aprovado (pendente, outro PR):** continuam passando pela Central de Aprovações.
+  - **Tudo automático (2026-10-29):** a Etapa 1 **deixou de ter botão manual** "Encontrar oportunidades": a busca roda
+    sozinha (`cron_opportunities`, semanal ou com sinal novo). O agendamento ainda **não foi criado** (pendente de
+    aprovação do dono).
 - [ ] **Etapa 5 — link rastreável, página do imóvel e encaminhar ao corretor.** Link com origem, página do imóvel,
   repasse da conversa ao corretor certo. Toca o `instagram-webhook` (**arriscado**). *Pronto quando:* uma visita
   pedida pelo link aparece com a origem (oportunidade/peça) e chega ao corretor sem mensagem automática sem

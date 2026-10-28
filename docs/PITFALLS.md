@@ -774,3 +774,15 @@ destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
   nova que escapou? Acrescente o caso em `scripts/test-opportunity-engine.mjs` antes de mexer na lista de `opportunityOutput.ts`.
 - **Número com unidade:** o preço e os quartos do catálogo são marcados (`Fact.numTags`) pelo código; sem a marca, "R$ 1.200.000" na
   saída da IA não passa mesmo que o valor esteja no fato.
+
+## Plano da oportunidade: duplo disparo e cron genérico do `marketing-ai` (2026-10-29)
+
+- O plano é criado em segundo plano ao aprovar a oportunidade. Não há marcador "em andamento": aprovar, desfazer e
+  aprovar de novo em poucos segundos pode disparar duas gerações (o segundo `update` do plano vence). O freio é o
+  limite de 5 planos/dia e o fato de plano existente nunca ser regerado depois de gravado.
+- O ramo de cron do `marketing-ai` (`cron_secret` no corpo) sem `action` roda o pipeline inteiro de TODAS as empresas
+  ativas. `cron_opportunities` é tratado **antes** dele; qualquer action de cron nova precisa ficar antes também, senão
+  cai no pipeline genérico e gasta IA/Apify de todos.
+- A tela lê a data da última análise de `agent_performance`; se o RLS dessa tabela não deixar o cliente ler, cai na
+  data da última oportunidade (rodadas sem resultado não aparecem).
+

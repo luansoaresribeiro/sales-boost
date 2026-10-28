@@ -30,6 +30,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { runOpportunities } from '../_shared/opportunityRun.ts'
+import { approveOpportunityPlan, decideOpportunity } from '../_shared/opportunityPlanRun.ts'
+import { cronOpportunities, runInBackground } from '../_shared/opportunityCron.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -671,6 +673,11 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
     const isCron = cronSecretEnv && body.cron_secret === cronSecretEnv
 
+    // Rodadas automáticas de oportunidades (cron_secret no corpo, como os outros crons). Responde na hora e trabalha em segundo plano.
+    if (isCron && body.action === 'cron_opportunities') {
+      runInBackground(cronOpportunities(admin, (prompt, maxTokens) => callClaudeWithUsage(anthropicKey, prompt, maxTokens)).then(r => console.log('cron_opportunities:', JSON.stringify(r))).catch(e => console.error('cron_opportunities:', String(e))))
+      return json({ ok: true, cron: true, started: true })
+    }
     if (isCron) {
       const disabled = await getDisabledMarketingAiTools(admin)
       const { data: companies } = await admin.from('companies').select('id, business_name, business_type, city, instagram_url, goal').eq('active', true)
@@ -706,6 +713,16 @@ Deno.serve(async (req) => {
     if (action === 'run_opportunities') {
       const r = await runOpportunities(admin, company.id as string, (prompt, maxTokens) => callClaudeWithUsage(anthropicKey, prompt, maxTokens))
       const { status, ...rest } = r
+      return json(rest, status)
+    }
+    // Etapa 4A (tudo automático): o dono só aprova/descarta; aprovar cria o plano sozinho em segundo plano.
+    // Lógica em _shared/opportunityPlanRun.ts. Aprovar o PLANO continua manual (é aprovação). Nada é publicado.
+    if (action === 'decide_opportunity') {
+      const { status, ...rest } = await decideOpportunity(admin, company.id as string, user.id, body.opportunity_id, body.status, (prompt, maxTokens) => callClaudeWithUsage(anthropicKey, prompt, maxTokens), runInBackground)
+      return json(rest, status)
+    }
+    if (action === 'approve_opportunity_plan') {
+      const { status, ...rest } = await approveOpportunityPlan(admin, company.id as string, body.opportunity_id, body.undo === true)
       return json(rest, status)
     }
     ;(company as Company).businessContext = await loadBusinessContext(admin, company.id)
@@ -784,7 +801,7 @@ Deno.serve(async (req) => {
       return json({ ok: true })
     }
 
-    return json({ error: 'action inválida. Use run_tracking, run_competitors, run_content, run_trends, run_strategy, run_opportunities, chat, run_experiment, conclude_experiment ou generate_report.' }, 400)
+    return json({ error: 'action inválida. Use run_tracking, run_competitors, run_content, run_trends, run_strategy, run_opportunities, decide_opportunity, approve_opportunity_plan, chat, run_experiment, conclude_experiment ou generate_report.' }, 400)
   } catch (err) {
     console.error('marketing-ai error:', err)
     return json({ error: String(err) }, 500)

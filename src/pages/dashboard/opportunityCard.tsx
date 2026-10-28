@@ -1,5 +1,6 @@
 import { useLang } from '../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
+import OpportunityPlan, { type PlanData, type PlanPatch } from './opportunityPlan'
 
 // Cartão de uma oportunidade (Inteligência comercial — Etapa 1). Só mostra: a decisão
 // (aprovar/descartar) sobe pro pai. Nada daqui publica ou envia (regra 1).
@@ -10,7 +11,8 @@ export interface Opportunity {
   evidence: Evidence[] | null; item_ids: string[] | null; audience: string | null; suggested_action: string | null
   how_to_measure: string | null; confidence: 'high' | 'medium' | 'low' | 'needs_validation'; needs_validation: boolean
   status: 'suggested' | 'approved' | 'dismissed'; priority_rank: number | null; priority_reasons: string[] | null
-  run_id: string | null; created_at: string
+  run_id: string | null; created_at: string; decided_at?: string | null
+  plan?: PlanData | null; plan_generated_at?: string | null; plan_approved_at?: string | null // Etapa 4A (migration 20261029120000)
 }
 
 const GREEN = '#4ade80'
@@ -18,7 +20,7 @@ const TX = {
   pt: {
     problem: 'Problema comercial', evidence: 'Evidências', items: 'Imóveis ligados', audience: 'Público', action: 'Ação sugerida', measure: 'Como medir',
     why: (n: number | null) => (n ? `Por que está em ${n}º` : 'Por quê'), approve: 'Aprovar', dismiss: 'Descartar', undo: 'Desfazer', approved: 'Aprovada', dismissedBadge: 'Descartada',
-    approveHint: 'Aprovar só guarda a sua decisão — nada é publicado ou enviado.',
+    approveHint: 'Aprovar monta o plano sozinho — nada é publicado ou enviado.',
     ev: { fact: 'Fato', data: 'Dado', hypothesis: 'Hipótese' }, conf: { high: 'Confiança alta', medium: 'Confiança média', low: 'Confiança baixa', needs_validation: 'Precisa validar' },
     kinds: { content_gap: 'Falta de conteúdo', low_traction: 'Pouca reação', unmet_demand: 'Demanda sem resposta', positioning: 'Posicionamento', market_change: 'Mudança de mercado', other: 'Outra' } as Record<string, string>,
     noDate: 'sem data', source: 'Fonte',
@@ -26,7 +28,7 @@ const TX = {
   en: {
     problem: 'Commercial problem', evidence: 'Evidence', items: 'Linked properties', audience: 'Audience', action: 'Suggested action', measure: 'How to measure',
     why: (n: number | null) => (n ? `Why it is #${n}` : 'Why'), approve: 'Approve', dismiss: 'Dismiss', undo: 'Undo', approved: 'Approved', dismissedBadge: 'Dismissed',
-    approveHint: 'Approving only saves your decision — nothing is published or sent.',
+    approveHint: 'Approving builds the plan automatically — nothing is published or sent.',
     ev: { fact: 'Fact', data: 'Data', hypothesis: 'Hypothesis' }, conf: { high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence', needs_validation: 'Needs validation' },
     kinds: { content_gap: 'Content gap', low_traction: 'Low traction', unmet_demand: 'Unmet demand', positioning: 'Positioning', market_change: 'Market change', other: 'Other' } as Record<string, string>,
     noDate: 'no date', source: 'Source',
@@ -51,8 +53,8 @@ function Block({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export default function OpportunityCard({ o, itemNames, busy, onDecide }: {
-  o: Opportunity; itemNames: Record<string, string>; busy: boolean; onDecide: (status: Opportunity['status']) => void
+export default function OpportunityCard({ o, itemNames, busy, onDecide, onPlan }: {
+  o: Opportunity; itemNames: Record<string, string>; busy: boolean; onDecide: (status: Opportunity['status']) => void; onPlan: (patch: Partial<PlanPatch>) => void
 }) {
   const { lang } = useLang()
   const t = TX[lang]
@@ -109,6 +111,7 @@ export default function OpportunityCard({ o, itemNames, busy, onDecide }: {
         )}
       </div>
       {o.status === 'suggested' && <div style={{ fontSize: '10.5px', color: MUTED, marginTop: '8px' }}>{t.approveHint}</div>}
+      {o.status === 'approved' && <OpportunityPlan opportunityId={o.id} plan={o.plan ?? null} approvedAt={o.plan_approved_at ?? null} itemNames={itemNames} decidedAt={o.decided_at ?? null} onChange={onPlan} />}
     </div>
   )
 }

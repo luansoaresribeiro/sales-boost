@@ -1942,3 +1942,33 @@ grátis de 30 s, acima — mantidos como histórico):
   - **Custo de um provedor de notícias** (Etapa 3): qual, quanto, teto mensal.
   - **Revisão jurídica EUA / Fair Housing** antes de vender nos EUA (já pendente em 2026-10-27; agora também
     cobre o texto de "público" das oportunidades).
+
+## 2026-10-29 — Inteligência comercial, Etapa 4: plano (A) e peças (B); tudo automático
+
+- **Etapa 4 dividida em duas partes.** **A — plano da oportunidade** (este trabalho): oportunidade aprovada →
+  mini-plano (público, objetivo, problema do comprador, proposta de valor, mensagem principal, canal, formato
+  sugerido com motivo, CTA, como medir, imóveis ligados, evidências citadas, hipóteses). **B — gerar as peças**
+  (outro PR, depois). O plano nunca publica nada; o dono ainda aprova o plano e, na Parte B, cada peça.
+- **Opção escolhida: "mini-plano" dentro do `marketing-ai`**, em vez de o `strategy-generate` ler as oportunidades.
+  Motivo: `strategy-generate` é function de cliente real (mexer exige aprovação e deploy arriscado) e, ali, o
+  formato já vem decidido pela estratégia; no mini-plano o **formato é consequência** do objetivo e da mensagem.
+  Isto **diverge** do texto antigo da Etapa 4 no [ROADMAP.md](ROADMAP.md) ("iniciativa de estratégia ligada ao
+  `strategy_id`"), que foi mantido e anotado, não apagado. `growth_opportunities.strategy_id` segue sem uso.
+- **Limite de 5 planos por empresa por dia** (decisão do dono; janela móvel de 24 h, contando execuções
+  bem-sucedidas em `agent_performance`, `task_key='create_opportunity_plan'`). Falha não gasta o limite, mas o cron
+  tenta no máximo 2 vezes por oportunidade a cada 24 h. O **teto mensal de custo de IA hoje não conta texto**: o
+  limite diário é o único freio do plano.
+- **"Tudo automático" (princípio de 2026-10-26) vale aqui; a ÚNICA ação humana é aprovar/descartar.** Mudanças
+  pedidas pelo dono: (1) **sem botão "Criar/Refazer plano"** — aprovar a oportunidade (`decide_opportunity`) cria o
+  plano sozinho em segundo plano; (2) **o botão "Encontrar oportunidades" da Etapa 1 foi removido** — a busca roda
+  sozinha (`cron_opportunities`: semanal e quando entra sinal de mercado novo); (3) aprovar o **plano** continua
+  manual (é aprovação, não geração). A action `run_opportunities` continua existindo no servidor (usada pelo
+  cron), só não há mais botão.
+- **Quem é tocado pelo cron:** mesmo critério do cron de estratégia — `companies.auto_strategy=true` (a Liga dos
+  Sonhos fica de fora), interruptor geral `hermes_config.auto_strategy_enabled`, `hasPaidAccess` (vitrine e
+  bloqueados fora) e empresa ativa.
+- **Agendamento NÃO foi criado** (alteração arriscada): o SQL sugerido está em [ARCHITECTURE.md](ARCHITECTURE.md),
+  bloco do motor, esperando o dono.
+- **CTA do plano:** o plano não liga a um imóvel com resposta automática aprovada; por isso "Comente PALAVRA" é
+  trocado pelo CTA alternativo da ficha (`ctas.sem_automacao`; em inglês, "Send us a DM").
+

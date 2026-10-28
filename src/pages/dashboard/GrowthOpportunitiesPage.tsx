@@ -7,11 +7,13 @@ import { supabase } from '../../lib/supabase'
 import { callMarketingAi, CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
 import MarketSignals from './marketSignals'
 import OpportunityCard, { type Opportunity } from './opportunityCard'
+import { PLAN_WAIT_MS } from './opportunityPlan'
 
-// "Oportunidades" (Inteligência comercial para imobiliárias — Etapa 1, decisão do dono
-// 2026-10-28). O botão chama marketing-ai → run_opportunities (fatos contados do banco + IA só
-// pra redigir). Mostra a rodada mais recente + as já aprovadas. Aprovar/descartar só guarda a
-// decisão: nada é publicado ou enviado daqui (regra 1). Não confundir com a tela antiga
+// "Oportunidades" (Inteligência comercial para imobiliárias — decisão do dono 2026-10-28). Tudo AUTOMÁTICO
+// (princípio "Tudo automático"): a busca roda sozinha (marketing-ai → cron_opportunities: semanal e quando entra
+// sinal novo) e não há botão de gerar. A única ação humana é aprovar/descartar (marketing-ai → decide_opportunity;
+// aprovar cria o plano sozinho). Mostra a rodada mais recente + as já aprovadas. Nada é publicado ou enviado
+// daqui (regra 1). Não confundir com a tela antiga
 // /dashboard/oportunidades (tabela `opportunities`, outra coisa — ver docs/PITFALLS.md).
 
 const TX = {
@@ -19,33 +21,29 @@ const TX = {
     title: 'Oportunidades',
     sub: 'Onde o seu mercado e o seu catálogo se encontram — com a evidência de cada uma e o que falta pra ter certeza.',
     notice: 'Preço anunciado não é preço de venda; interesse de busca não é comprador. Nada é publicado daqui.',
-    run: 'Encontrar oportunidades', running: 'Procurando… pode levar até 1 minuto', plan: 'Disponível no plano — ver planos',
-    loading: 'Carregando…', none: 'Ainda não há oportunidades. Clique em “Encontrar oportunidades”.',
-    ranNone: 'Nenhuma oportunidade tem evidência suficiente ainda. Veja o que falta abaixo.',
-    ranReused: 'Uma busca acabou de rodar — mostrando o resultado dela.', ranOk: (n: number) => `${n} ${n === 1 ? 'oportunidade encontrada' : 'oportunidades encontradas'}.`,
+    next: 'Próxima análise automática: semanal (e quando você cadastra um sinal novo).', lastRun: (d: string) => `Última análise: ${d}.`, noRun: 'A primeira análise acontece sozinha na próxima rodada.',
+    loading: 'Carregando…', none: 'Ainda não há oportunidades. A análise roda sozinha — veja abaixo o que ajuda a achar mais.',
     latest: 'Última busca', earlier: 'Aprovadas em buscas anteriores', dismissed: (n: number) => `${n} descartada${n === 1 ? '' : 's'}`, showDismissed: 'mostrar', hideDismissed: 'esconder',
     missingTitle: 'O que falta pra achar mais',
     mCatalog: 'Cadastre imóveis no catálogo (com bairro, preço e fotos).',
     mIg: 'Conecte o Instagram para medir posts e conversas.',
     mSignals: 'Cole notícias e sinais de mercado, com fonte e data, na seção “Sinais de mercado” abaixo.',
     mComp: 'Monitore pelo menos 2 concorrentes com hashtags coletadas.',
-    errDecide: 'Não consegui salvar a decisão. Tente de novo.', errRun: 'Erro ao buscar oportunidades',
+    errDecide: 'Não consegui salvar a decisão. Tente de novo.',
   },
   en: {
     title: 'Opportunities',
     sub: 'Where your market and your catalog meet — with the evidence for each one and what is missing to be sure.',
     notice: 'Listed price is not sale price; search interest is not a buyer. Nothing is published from here.',
-    run: 'Find opportunities', running: 'Looking… this can take up to 1 minute', plan: 'Available on a paid plan — see plans',
-    loading: 'Loading…', none: 'No opportunities yet. Click “Find opportunities”.',
-    ranNone: 'No opportunity has enough evidence yet. See what is missing below.',
-    ranReused: 'A search just ran — showing its result.', ranOk: (n: number) => `${n} ${n === 1 ? 'opportunity found' : 'opportunities found'}.`,
+    next: 'Next automatic analysis: weekly (and when you add a new signal).', lastRun: (d: string) => `Last analysis: ${d}.`, noRun: 'The first analysis runs by itself in the next automatic round.',
+    loading: 'Loading…', none: 'No opportunities yet. The analysis runs by itself — see below what helps find more.',
     latest: 'Latest search', earlier: 'Approved in earlier searches', dismissed: (n: number) => `${n} dismissed`, showDismissed: 'show', hideDismissed: 'hide',
     missingTitle: 'What is missing to find more',
     mCatalog: 'Add properties to the catalog (with neighborhood, price and photos).',
     mIg: 'Connect Instagram so posts and conversations can be measured.',
     mSignals: 'Paste market news and signals, with source and date, in the “Market signals” section below.',
     mComp: 'Monitor at least 2 competitors with collected hashtags.',
-    errDecide: 'Could not save the decision. Try again.', errRun: 'Error finding opportunities',
+    errDecide: 'Could not save the decision. Try again.',
   },
 } as const
 
@@ -53,28 +51,31 @@ export default function GrowthOpportunitiesPage() {
   const { lang } = useLang()
   const t = TX[lang]
   const { company } = useCompany()
-  const { user, session } = useAuth()
+  const { session } = useAuth()
   const { readOnly, openPlanModal } = useShowcase()
   const companyId = company?.id ?? null
   const [rows, setRows] = useState<Opportunity[]>([])
   const [itemNames, setItemNames] = useState<Record<string, string>>({})
   const [counts, setCounts] = useState<{ catalog: number; signals: number; competitors: number } | null>(null)
   const [loading, setLoading] = useState(true)
-  const [running, setRunning] = useState(false)
+  const [lastRunAt, setLastRunAt] = useState<string | null>(null)
   const [showDismissed, setShowDismissed] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const load = useCallback(async () => {
     if (!companyId) return
-    const [opps, cat, sig, comp] = await Promise.all([
+    const [opps, cat, sig, comp, perf] = await Promise.all([
       supabase.from('growth_opportunities').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(60),
       supabase.from('marketing_ai_knowledge').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('kind', 'product'),
       supabase.from('market_signals').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
       supabase.from('marketing_ai_competitors').select('id, hashtags_used').eq('company_id', companyId).limit(50),
+      // Última rodada (mesmo sem resultado). Se a tabela não for legível pelo cliente, cai na data da última oportunidade.
+      supabase.from('agent_performance').select('created_at').eq('company_id', companyId).eq('task_key', 'run_opportunities').eq('success', true).order('created_at', { ascending: false }).limit(1),
     ])
     const list = ((opps.data ?? []) as Opportunity[])
     setRows(list)
+    setLastRunAt((perf.data as { created_at: string }[] | null)?.[0]?.created_at ?? list[0]?.created_at ?? null)
     // Tabela ausente (migration pendente) = sem sinais, sem quebrar a tela.
     setCounts({
       catalog: cat.count ?? 0, signals: sig.error ? 0 : (sig.count ?? 0),
@@ -100,25 +101,25 @@ export default function GrowthOpportunitiesPage() {
     }
   }, [rows, latestRun])
 
-  const run = async () => {
-    if (readOnly) { openPlanModal(); return }
-    if (running || !session?.access_token) return
-    setRunning(true); setMsg(null)
-    try {
-      const r = await callMarketingAi(session.access_token, 'run_opportunities') as { generated?: number; reused?: boolean }
-      await load()
-      setMsg(r.reused ? { ok: true, text: t.ranReused } : (r.generated ?? 0) > 0 ? { ok: true, text: t.ranOk(r.generated ?? 0) } : { ok: false, text: t.ranNone })
-    } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : t.errRun }) }
-    setRunning(false)
-  }
+  // Plano em construção (aprovada há < 2 min e ainda sem plano): recarrega a cada 10 s até aparecer ou passar o prazo.
+  const waitingPlan = rows.some(o => o.status === 'approved' && !o.plan && o.decided_at && Date.now() - Date.parse(o.decided_at) < PLAN_WAIT_MS)
+  useEffect(() => {
+    if (!waitingPlan) return
+    const id = setInterval(() => { void load() }, 10_000)
+    return () => clearInterval(id)
+  }, [waitingPlan, load])
 
   const decide = async (o: Opportunity, status: Opportunity['status']) => {
+    if (readOnly) { openPlanModal(); return }
+    if (!session?.access_token) return
     setBusyId(o.id); setMsg(null)
-    const patch = status === 'suggested' ? { status, decided_at: null, decided_by: null } : { status, decided_at: new Date().toISOString(), decided_by: user?.id ?? null }
-    const { error } = await supabase.from('growth_opportunities').update(patch).eq('id', o.id)
-    if (error) setMsg({ ok: false, text: t.errDecide }); else setRows(prev => prev.map(x => (x.id === o.id ? { ...x, ...patch } as Opportunity : x)))
+    try {
+      const r = await callMarketingAi(session.access_token, 'decide_opportunity', { opportunity_id: o.id, status }) as { opportunity?: Partial<Opportunity> }
+      if (r.opportunity) setRows(prev => prev.map(x => (x.id === o.id ? { ...x, ...r.opportunity } as Opportunity : x)))
+    } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : t.errDecide }) }
     setBusyId(null)
   }
+  const patchRow = (id: string, p: Partial<Opportunity>) => setRows(prev => prev.map(x => (x.id === id ? { ...x, ...p } : x)))
 
   const missing: string[] = []
   if (counts) {
@@ -138,10 +139,9 @@ export default function GrowthOpportunitiesPage() {
       <div style={{ padding: '20px', maxWidth: '820px' }}>
         <div role="note" style={{ fontSize: '12px', color: 'rgba(255,255,255,0.86)', background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '10px', padding: '9px 12px', marginBottom: '14px', lineHeight: 1.5 }}>{t.notice}</div>
 
-        <button onClick={run} disabled={running} aria-disabled={readOnly || running} title={readOnly ? t.plan : undefined}
-          style={{ padding: '12px 22px', background: readOnly ? 'rgba(255,255,255,0.08)' : ORANGE, color: readOnly ? MUTED : '#000', fontWeight: 800, fontSize: '13.5px', border: 'none', borderRadius: '10px', cursor: running ? 'default' : 'pointer', opacity: running ? 0.7 : 1, fontFamily: D }}>
-          {running ? t.running : readOnly ? `🔒 ${t.run}` : t.run}
-        </button>
+        <div style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>
+          {t.next} {lastRunAt ? t.lastRun(new Date(lastRunAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR')) : t.noRun}
+        </div>
         {msg && <div role="status" style={{ fontSize: '12.5px', marginTop: '10px', color: msg.ok ? '#4ade80' : '#FBBF24' }}>{msg.text}</div>}
 
         <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -149,7 +149,7 @@ export default function GrowthOpportunitiesPage() {
             <>
               {rows.length === 0 && <div style={{ padding: '24px', textAlign: 'center', color: MUTED, fontSize: '13px', border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>{t.none}</div>}
               {latest.length > 0 && <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{t.latest}</div>}
-              {latest.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} busy={busyId === o.id} onDecide={s => decide(o, s)} />)}
+              {latest.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
               {dismissedList.length > 0 && (
                 <div>
                   <button onClick={() => setShowDismissed(v => !v)} aria-expanded={showDismissed}
@@ -158,13 +158,13 @@ export default function GrowthOpportunitiesPage() {
                   </button>
                   {showDismissed && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px', opacity: 0.75 }}>
-                      {dismissedList.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} busy={busyId === o.id} onDecide={s => decide(o, s)} />)}
+                      {dismissedList.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
                     </div>
                   )}
                 </div>
               )}
               {earlier.length > 0 && <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginTop: '6px' }}>{t.earlier}</div>}
-              {earlier.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} busy={busyId === o.id} onDecide={s => decide(o, s)} />)}
+              {earlier.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
             </>
           )}
 
