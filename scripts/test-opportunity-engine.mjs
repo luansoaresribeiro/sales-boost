@@ -147,7 +147,7 @@ const base = (over = {}) => ({
 {
   const BAD = [
     // do QA
-    'bairro tranquilo, sem crianças', 'adults only', 'pessoa branca', 'Asian buyers', 'pessoas de fé', 'near a church', 'brasileiros', 'gringos', 'cadeira de rodas', 'idosos', 'retirees',
+    'bairro tranquilo, sem crianças', 'adults only', 'adults-only', 'para um homem', 'ideal for a woman', 'casais', 'young couples', 'newlyweds', 'pessoa branca', 'Asian buyers', 'pessoas de fé', 'near a church', 'brasileiros', 'gringos', 'cadeira de rodas', 'idosos', 'retirees',
     // situação familiar
     'sem filhos', 'no kids', 'childless', 'quem tem filhos', 'crianças', 'kids', 'children', 'ideal para famílias', 'family-friendly', 'famílias com crianças', 'mães', 'pais', 'mothers', 'fathers', 'grávida', 'pregnant',
     // raça/cor

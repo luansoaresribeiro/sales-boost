@@ -39,7 +39,7 @@ const tr = (lang: Lang, pt: string, en: string) => (lang === 'en' ? en : pt)
 // custa uma frase (ex.: "paredes brancas"); falso negativo seria discriminação publicada com a nossa assinatura.
 const PROTECTED_TERMS = [
   // situação familiar
-  'famili\\w*', 'family', 'families', 'filh[oa]s?', 'filhinh\\w*', 'crianc\\w*', 'kids?', 'child', 'children', 'childless', 'childfree', 'baby', 'babies', 'bebes?', 'adults? only', 'adultos? apenas',
+  'famili\\w*', 'family', 'families', 'filh[oa]s?', 'filhinh\\w*', 'crianc\\w*', 'kids?', 'child', 'children', 'childless', 'childfree', 'baby', 'babies', 'bebes?', 'adults?[ -]only', 'adultos?[ -]apenas',
   'maes?', 'mae solo', 'pais', 'mothers?', 'fathers?', 'moms?', 'dads?', 'parents?', 'gravid\\w*', 'gestantes?', 'pregnan\\w*', 'situacao familiar', 'familial status',
   // raça, cor, etnia
   'raca\\w*', 'racial\\w*', 'racis\\w*', 'race', 'races', 'etnia\\w*', 'etnic\\w*', 'ethnic\\w*', 'ethnicity', 'cor da pele', 'de cor', 'of colou?r', 'colou?red', 'skin colou?r', 'colou?r',
@@ -52,8 +52,8 @@ const PROTECTED_TERMS = [
   // deficiência
   'cadeira de rodas', 'wheelchairs?', 'cadeirante\\w*', 'deficien\\w*', 'disab\\w*', 'handicap\\w*', 'mentally ill', 'mental illness', 'doente mental', 'doentes mentais', 'autis\\w*', 'surd[oa]s?', 'cegos?', 'blind', 'deaf',
   // sexo, gênero, orientação, estado civil
-  'sexo', 'sexual\\w*', 'genero', 'gender', 'homens?', 'mulher(?:es)?', 'men', 'women', 'males?', 'females?', 'men only', 'women only', 'gays?', 'lesbica\\w*', 'lesbians?', 'lgbt\\w*', 'homossex\\w*', 'homosexual\\w*', 'transgener\\w*', 'transexual\\w*',
-  'solteir\\w*', 'casad[oa]s?', 'married', 'divorc\\w*', 'viuv\\w*', 'widow\\w*', 'estado civil', 'marital status', 'single (?:mothers?|fathers?|parents?|women|men)',
+  'sexo', 'sexual\\w*', 'genero', 'gender', 'homem', 'homens', 'mulher(?:es)?', 'man', 'men', 'woman', 'women', 'males?', 'females?', 'men only', 'women only', 'gays?', 'lesbica\\w*', 'lesbians?', 'lgbt\\w*', 'homossex\\w*', 'homosexual\\w*', 'transgener\\w*', 'transexual\\w*',
+  'solteir\\w*', 'casad[oa]s?', 'casal', 'casais', 'couples?', 'newlyweds?', 'married', 'divorc\\w*', 'viuv\\w*', 'widow\\w*', 'estado civil', 'marital status', 'single (?:mothers?|fathers?|parents?|women|men)',
   // idade
   'idos[oa]s?', 'terceira idade', 'melhor idade', 'jovens?', 'young', 'youth', 'elderly', 'seniors?', 'senior citizens?', 'retirees?', 'retired', 'aposentad\\w*', 'velh[oa]s?', 'old people', 'older', 'millennials?', 'gen z', 'idade', 'adolescent\\w*', 'teen\\w*',
 ]
