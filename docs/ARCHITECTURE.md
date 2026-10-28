@@ -454,6 +454,15 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
 - **Tabelas:** `market_signals`, `growth_opportunities` (ver "Modelo de dados"). Sem cron. A tela mostra a rodada
   mais recente (sem as descartadas) + as aprovadas de rodadas anteriores; o que falta pra achar mais é calculado
   na tela a partir de contagens (nada é persistido).
+- **Etapa 2 — entrada manual de sinais (2026-10-28):** a seção "Sinais de mercado" da tela de Oportunidades
+  (`src/pages/dashboard/marketSignals.tsx`) grava direto em `market_signals` com o supabase-js (RLS da empresa;
+  `collected_by='manual'`), sem function nem migration. Exige título, nome da fonte e data (não futura) porque o
+  motor descarta sinal sem título ou sem fonte; link opcional (http/https). A região sugere (datalist) os valores
+  do campo de localização (`config.opportunity_fields.location`) dos itens do catálogo; o rótulo vem da ficha.
+  Lista os 50 mais recentes, com apagar (confirmação). Vitrine: botões com cadeado abrem o modal de plano —
+  `market_signals` **não** está em `ALLOWED_WRITE_TABLES` do `showcaseGuard`, então o guard também bloqueia a
+  escrita. Salvar não roda o motor: o aviso manda clicar em "Encontrar oportunidades" (intervalo de 90 s).
+  Divergência: o motor casa região por texto normalizado (igual/contida), então grafia diferente do catálogo não liga.
 - **Estado:** 🟡 código e teste de lógica prontos; falta aplicar a migration em produção (depois do merge), fazer
   o deploy do `marketing-ai` e rodar na Tespon. A Etapa 1 **não** publica nem envia nada.
 
