@@ -2019,3 +2019,18 @@ grátis de 30 s, acima — mantidos como histórico):
   "em alta", "ticket elevado") só vale se estiver nos fatos — prompt **e** filtro em código (lista na ficha,
   `opportunity_texts.market_claims`, com fallback genérico); a ação sugerida não manda "publicar com fotos" para item
   sem foto — a primeira ação passa a ser adicionar fotos reais.
+
+## 2026-10-30 — Inteligência comercial, Etapa 3: notícias de mercado automáticas
+
+- **O que é:** o sistema busca sozinho (Tavily, que o projeto já usa; sem botão — princípio "Tudo automático") notícias da
+  região dos imóveis do catálogo e grava em `market_signals` com `collected_by='system'`, com fonte (domínio + link) e a
+  data da própria fonte. Roda dentro do cron `cron_opportunities`, antes de decidir a rodada: sinal novo dispara a
+  rodada e a oportunidade `market_change` aparece sozinha.
+- **Divergência do ROADMAP (registrada, não apagada):** o ROADMAP previa que o dono aprovasse cada sinal antes de virar
+  evidência. Decidido: o sinal automático entra como **"Dado" com fonte e data**, a tela mostra o selo "Automático" e o dono
+  pode **apagar**; a aprovação humana continua na **oportunidade** (e no plano e nas peças), nada vai ao público sem ela.
+- **Sem número inventado:** filtros em código — sem data válida, data futura ou > 30 dias, região fora do título/trecho,
+  portal de anúncio (lista na ficha), link não-https: descartado. O resumo é um trecho da fonte, saneado.
+- **Custo:** 1 busca Tavily básica por região; no máx. 3 buscas e 5 sinais novos por empresa a cada 7 dias e teto global
+  mensal `MARKET_NEWS_MONTHLY_CAP` (padrão 120). Erro/429/sem chave: registra e para, sem nova tentativa em laço. O
+  interruptor `insight_sources` (tavily) desligado no painel Owner também desliga esta coleta.

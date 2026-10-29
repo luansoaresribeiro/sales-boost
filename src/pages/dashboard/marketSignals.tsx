@@ -17,6 +17,7 @@ const TX = {
   pt: {
     title: 'Sinais de mercado',
     intro: 'Cole aqui notícias, lançamentos, obras ou preços anunciados que você viu. Com fonte e data, o sistema liga aos seus imóveis da mesma região e usa como prova nas oportunidades. Preço anunciado não é preço de venda.',
+    auto: 'Automático', autoNote: 'O sistema também busca notícias da região dos seus imóveis toda semana, com fonte e data. Apague o que não fizer sentido.',
     needSource: 'A fonte é obrigatória: sinal sem fonte é ignorado pelo sistema. Use o mesmo nome de região do seu catálogo para a ligação funcionar.',
     kind: 'Tipo', t: 'Título', summary: 'Resumo (opcional)', region: 'Região', source: 'Nome da fonte', url: 'Link da fonte (recomendado)', date: 'Data em que foi publicado/visto',
     save: 'Salvar sinal', saving: 'Salvando…', plan: 'Disponível no plano — ver planos',
@@ -29,6 +30,7 @@ const TX = {
   en: {
     title: 'Market signals',
     intro: 'Paste here news, launches, works or listed prices you have seen. With a source and date, the system links them to your properties in the same region and uses them as proof in opportunities. Listed price is not sale price.',
+    auto: 'Automatic', autoNote: 'The system also searches for news about the region of your properties every week, with source and date. Delete whatever does not make sense.',
     needSource: 'The source is required: a signal without a source is ignored by the system. Use the same region name as your catalog so the link works.',
     kind: 'Type', t: 'Title', summary: 'Summary (optional)', region: 'Region', source: 'Source name', url: 'Source link (recommended)', date: 'Date it was published/seen',
     save: 'Save signal', saving: 'Saving…', plan: 'Available on a paid plan — see plans',
@@ -40,7 +42,7 @@ const TX = {
   },
 } as const
 
-interface Signal { id: string; kind: string; region: string | null; title: string; source_name: string | null; source_url: string | null; observed_at: string | null }
+interface Signal { id: string; kind: string; region: string | null; title: string; source_name: string | null; source_url: string | null; observed_at: string | null; collected_by: string | null }
 
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const fmtDate = (s: string | null) => (s ? s.split('-').reverse().join('/') : '')
@@ -63,7 +65,7 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const loadList = useCallback(async () => {
-    const { data, error } = await supabase.from('market_signals').select('id, kind, region, title, source_name, source_url, observed_at')
+    const { data, error } = await supabase.from('market_signals').select('id, kind, region, title, source_name, source_url, observed_at, collected_by')
       .eq('company_id', companyId).order('observed_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(50)
     setLoadErr(!!error)
     setList(error ? [] : (data ?? []) as Signal[])
@@ -125,6 +127,7 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
       <h2 style={{ fontFamily: D, fontSize: '1.05rem', fontWeight: 800, color: 'white', margin: '0 0 6px' }}>{t.title}</h2>
       <p style={{ color: MUTED, fontSize: '12.5px', lineHeight: 1.55, margin: '0 0 6px' }}>{t.intro}</p>
       <p style={{ color: '#FBBF24', fontSize: '12px', lineHeight: 1.5, margin: '0 0 14px' }}>{t.needSource}</p>
+      <p style={{ color: MUTED, fontSize: '12px', lineHeight: 1.5, margin: '-6px 0 14px' }}>{t.autoNote}</p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
         <div><label style={label} htmlFor="ms-kind">{t.kind}</label>
@@ -161,7 +164,9 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
             {list.map(s => (
               <li key={s.id} style={{ border: `1px solid ${BORDER}`, borderRadius: '10px', padding: '10px 12px', display: 'flex', gap: '10px', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <div style={{ minWidth: 0, fontSize: '12.5px', lineHeight: 1.5 }}>
-                  <div style={{ color: 'white', fontWeight: 700, overflowWrap: 'anywhere' }}>{s.title}</div>
+                  <div style={{ color: 'white', fontWeight: 700, overflowWrap: 'anywhere' }}>
+                    {s.collected_by === 'system' && <span style={{ display: 'inline-block', marginRight: '6px', padding: '1px 7px', borderRadius: '999px', border: `1px solid ${ORANGE}`, color: ORANGE, fontSize: '10.5px', fontWeight: 700, verticalAlign: 'middle' }}>{t.auto}</span>}
+                    {s.title}</div>
                   <div style={{ color: MUTED, overflowWrap: 'anywhere' }}>
                     {[t.kinds[s.kind as Kind] ?? s.kind, s.region, fmtDate(s.observed_at)].filter(Boolean).join(' · ')}
                     {' · '}

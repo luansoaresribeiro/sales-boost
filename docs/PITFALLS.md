@@ -815,3 +815,15 @@ funcionar sem aviso. Achado no teste da Etapa 4B na Tespon: as linhas `create_op
 planos/dia, o limite de 6 peças/dia, a retentativa única e o "rascunho excluído nunca volta" estavam desligados.
 Regra: todo `insert` em `agent_performance` passa `latency_ms` (0 quando não houver medida) e, se a linha for usada como
 trava/contador, confere o `error` retornado.
+
+## Notícias automáticas (Etapa 3, 2026-10-30)
+
+- **Contador de buscas = linhas `market_news_search` em `agent_performance`.** Cada busca (inclusive a que falhou) grava uma
+  linha ANTES de seguir; se o insert for recusado, a coleta para (nunca busca sem contar). `latency_ms` é obrigatório (ver
+  entrada acima). O teto global mensal conta as últimas 30 dias, de todas as empresas.
+- **Apagar um sinal automático não o "bloqueia":** a mesma notícia pode voltar numa busca futura enquanto estiver dentro da
+  janela de 30 dias (o índice único só impede duplicata enquanto a linha existe). Se incomodar, guardar os links
+  descartados (hoje não guarda).
+- **A coleta roda dentro do orçamento do cron:** só começa uma busca antes dos 40 s (`canStart`), com 12 s por busca; o
+  que não coube fica para a próxima chamada (a cada 6 h).
+- **Tavily `published_date` pode faltar** em resultados de `topic:'news'`; sem data a notícia é descartada de propósito.
