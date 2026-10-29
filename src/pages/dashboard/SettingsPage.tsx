@@ -9,6 +9,7 @@ import { d } from '../../i18n-dash'
 import NotificationsCard from './settings/NotificationsCard'
 import BusinessUnderstandingCard from './settings/BusinessUnderstandingCard'
 import CompanyLanguageCard from './settings/CompanyLanguageCard'
+import BrokersCard from './settings/BrokersCard'
 import AgentConfigTab from './marketingAi/AgentConfigTab'
 import ConnectionsTab from './marketingAi/ConnectionsTab'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
@@ -472,6 +473,8 @@ export default function SettingsPage() {
         <div id="section-entendimento">
           {companyId && <BusinessUnderstandingCard companyId={companyId} />}
         </div>
+
+        {companyId && <BrokersCard companyId={companyId} />}
 
         <SectionCard id="section-salvar" title={X.save}>
           {saveError && (

@@ -869,3 +869,22 @@ trava/contador, confere o `error` retornado.
   em `link_events`: 300 `view` e 60 `click_*` (acima disso a página abre/redireciona normalmente, só não grava) — trocar de
   user-agent ou IP não enche a tabela. (3) O IP do hash vem de `cf-connecting-ip` (a Cloudflare define; o cliente não forja);
   `x-forwarded-for` (forjável) e `x-real-ip` são só reserva. Se um dia o tráfego não passar pela Cloudflare, o hash deixa de ser confiável.
+
+## Etapas 6 e 7 (corretor sem login + resultados) — armadilhas (2026-10-30)
+
+- **`assign_next_broker` só roda pela service role** (revoke de public/anon/authenticated): chamar do navegador falha de propósito. Se
+  `for update skip locked` encontrar todos os corretores travados por outro lead simultâneo, devolve `null` e o lead entra sem corretor
+  (aceito; o dono encaminha à mão). O rodízio só avança depois dos limites de lead — lead repetido/barrado não gasta a vez de ninguém.
+- **Migration pendente não pode derrubar tela nem lead:** o Funil tenta a consulta com as colunas novas e cai na antiga; o rodízio
+  falhando = lead sem `assigned_broker_id`; `opportunity_results` ausente = card sem bloco de resultados. Tudo registrado em log.
+- **DDI do corretor vem da ficha** (`config.public_page.country_code`), no navegador e na página pública. ~~Primeira versão punha `55`
+  fixo no navegador~~ (achado do QA: corretor dos EUA com 10 dígitos viraria um número aleatório do Brasil). Hoje: número digitado com
+  "+" vale como está; sem DDI na ficha e sem "+", o botão "Encaminhar" some — nunca chutar país. O servidor (`publicPage.ts`) ainda
+  cai em `55` quando a ficha não tem `country_code` (comportamento anterior, não regressão; ficha nova deve trazer o campo).
+- **Moeda fixa em BRL (dívida):** a soma de vendas em Resultados e os valores do Funil (`fmtBRL`) mostram "R$" mesmo em inglês. Antes
+  de cliente nos EUA, a moeda precisa vir da ficha/empresa (ex.: `config.currency`).
+- **Rodízio antes do insert:** o corretor é escolhido antes de gravar o lead; se o insert falhar, a vez dele é gasta sem lead. Só afeta
+  a justiça do rodízio, não o lead.
+- **"Qualificado" = visita agendada** é uma convenção (o funil não tem etapa de visita); `visit_at` só reflete isso. 0 não é "sem
+  dado": sem `tracked_link` a oportunidade mostra "sem dado"; com link, 0 é 0.
+- **Telefone do corretor é público no clique:** o `wa.me` do botão da página expõe o número de quem recebeu o lead mais recente.

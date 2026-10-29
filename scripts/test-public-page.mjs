@@ -159,7 +159,7 @@ function memDb(seed = {}, opts = {}) {
     }
     return q
   }
-  const db = { from, tables: t, rpc: () => ({ maybeSingle: async () => ({ data: opts.access ?? { source: 'paid' }, error: null }) }) }
+  const db = { from, tables: t, rpc: (fn, args) => (fn === 'assign_next_broker' ? Promise.resolve(opts.assign ? opts.assign(args) : { data: null, error: null }) : { maybeSingle: async () => ({ data: opts.access ?? { source: 'paid' }, error: null }) }) }
   return db
 }
 
@@ -353,6 +353,24 @@ const handle = (db, action, body, c = ctx) => handlePublicPage(db, action, body,
   assert.equal(await withDmLink(db, 'C1', 'I1', 'pt', RAW, msg), msg); ok('QUERO: não repete')
   assert.match(await withDmLink(db, 'C1', 'I1', 'en', RAW, 'Hi!'), /More photos and details: /); ok('QUERO: inglês')
   const off = memDb({ ...baseSeed(), public_pages: [] }); assert.equal(await withDmLink(off, 'C1', 'I1', 'pt', RAW, 'Oi'), 'Oi'); assert.equal(await withDmLink(db, 'C1', 'I1', 'pt', undefined, 'Oi'), 'Oi'); ok('QUERO: sem página aprovada ou sem ficha, a mensagem fica igual')
+}
+
+// --- corretores (Etapa 7 mínima)
+{
+  const BR = '11111111-1111-4111-8111-111111111111'
+  const body = { code: CODE, name: 'Maria Silva', contact: '(21) 97777-6666', consent: true, website: '' }
+  const seed = () => ({ ...baseSeed(), brokers: [{ id: BR, company_id: 'C1', active: true, phone: '(21) 91234-5678', last_assigned_at: '2026-10-30T10:00:00Z' }] })
+  const db = memDb(seed(), { assign: () => ({ data: BR, error: null }) })
+  await handle(db, 'public_page_lead', body)
+  assert.equal(db.tables.leads[0].assigned_broker_id, BR); ok('lead: grava o corretor da vez (assigned_broker_id)')
+  const noB = memDb(baseSeed()); await handle(noB, 'public_page_lead', body); assert.equal(noB.tables.leads.length, 1); assert.ok(!('assigned_broker_id' in noB.tables.leads[0])); ok('lead sem corretor / sem função no banco: lead entra do mesmo jeito')
+  const bad = memDb(baseSeed(), { assign: () => ({ data: null, error: { message: 'nao existe' } }) }); await handle(bad, 'public_page_lead', body); assert.equal(bad.tables.leads.length, 1); ok('erro no rodízio não derruba o lead')
+  let calls = 0; const dup = memDb(seed(), { assign: () => { calls++; return { data: BR, error: null } } }); await handle(dup, 'public_page_lead', body); await handle(dup, 'public_page_lead', body); assert.equal(dup.tables.leads.length, 1); assert.equal(calls, 1); ok('lead repetido (duplicado) não gira o rodízio')
+  const ev = memDb(seed()); const r = await handle(ev, 'public_page_event', { code: CODE, event: 'click_whatsapp' })
+  assert.ok(r.body.url.startsWith('https://wa.me/5521912345678?text=')); assert.equal(ev.tables.link_events[0].broker_id, BR); ok('clique no WhatsApp: telefone do corretor + broker_id no evento')
+  const inat = memDb({ ...seed(), brokers: [{ id: BR, company_id: 'C1', active: false, phone: '(21) 91234-5678', last_assigned_at: '2026-10-30T10:00:00Z' }] }); const r2 = await handle(inat, 'public_page_event', { code: CODE, event: 'click_whatsapp' })
+  assert.ok(r2.body.url.startsWith('https://wa.me/5521999999999?text=')); assert.ok(!('broker_id' in inat.tables.link_events[0])); ok('clique: corretor inativo/sem lead recebido → telefone da empresa')
+  const g = await handle(memDb(seed()), 'public_page_get', { code: CODE }); assert.ok(!JSON.stringify(g.body).includes('91234')); ok('get nunca expõe o telefone do corretor')
 }
 
 console.log(`\n${n} verificações ok`)

@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { callMarketingAi, CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
 import MarketSignals from './marketSignals'
 import OpportunityCard, { type Opportunity } from './opportunityCard'
+import type { OppResultRow } from './resultsBrokers'
 import { PIECES_WAIT_MS, PLAN_WAIT_MS, type PieceStats } from './opportunityPlan'
 
 // "Oportunidades" (Inteligência comercial para imobiliárias — decisão do dono 2026-10-28). Tudo AUTOMÁTICO
@@ -59,6 +60,8 @@ export default function GrowthOpportunitiesPage() {
   const [counts, setCounts] = useState<{ catalog: number; signals: number; competitors: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [pieceStats, setPieceStats] = useState<Record<string, PieceStats>>({})
+  const [results, setResults] = useState<Record<string, OppResultRow>>({})
+  const [linkCodes, setLinkCodes] = useState<Record<string, string[]>>({})
   const [lastRunAt, setLastRunAt] = useState<string | null>(null)
   const [showDismissed, setShowDismissed] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -95,6 +98,18 @@ export default function GrowthOpportunitiesPage() {
       if (!posts.error) for (const r of (posts.data ?? []) as { opportunity_id: string | null }[]) bump(r.opportunity_id, 'approved')
       setPieceStats(st)
     } else setPieceStats({})
+    // Etapa 6: resultados por oportunidade aprovada. Função/tabela ausente (migration pendente) = erro → sem bloco, sem quebrar a tela.
+    const approvedIds = list.filter(o => o.status === 'approved').map(o => o.id)
+    if (approvedIds.length) {
+      const [res, links] = await Promise.all([
+        supabase.rpc('opportunity_results', { p_company: companyId }),
+        supabase.from('tracked_links').select('code, opportunity_id').eq('company_id', companyId).in('opportunity_id', approvedIds),
+      ])
+      setResults(res.error ? {} : Object.fromEntries(((res.data ?? []) as OppResultRow[]).map(r => [r.opportunity_id, r])))
+      const codes: Record<string, string[]> = {}
+      if (!links.error) for (const l of (links.data ?? []) as { code: string; opportunity_id: string }[]) (codes[l.opportunity_id] ??= []).push(l.code)
+      setLinkCodes(codes)
+    } else { setResults({}); setLinkCodes({}) }
     const ids = [...new Set(list.flatMap(o => o.item_ids ?? []))]
     if (ids.length) {
       const { data } = await supabase.from('marketing_ai_knowledge').select('id, title').in('id', ids)
@@ -165,7 +180,7 @@ export default function GrowthOpportunitiesPage() {
             <>
               {rows.length === 0 && <div style={{ padding: '24px', textAlign: 'center', color: MUTED, fontSize: '13px', border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>{t.none}</div>}
               {latest.length > 0 && <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{t.latest}</div>}
-              {latest.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
+              {latest.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} results={results[o.id]} linkCodes={linkCodes[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
               {dismissedList.length > 0 && (
                 <div>
                   <button onClick={() => setShowDismissed(v => !v)} aria-expanded={showDismissed}
@@ -174,13 +189,13 @@ export default function GrowthOpportunitiesPage() {
                   </button>
                   {showDismissed && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px', opacity: 0.75 }}>
-                      {dismissedList.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
+                      {dismissedList.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} results={results[o.id]} linkCodes={linkCodes[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
                     </div>
                   )}
                 </div>
               )}
               {earlier.length > 0 && <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginTop: '6px' }}>{t.earlier}</div>}
-              {earlier.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
+              {earlier.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} results={results[o.id]} linkCodes={linkCodes[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
             </>
           )}
 

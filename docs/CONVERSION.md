@@ -114,3 +114,15 @@ vez de duplicar no CLAUDE.md.
   rastreável (canal `dm`), então quem clicar nele e preencher o formulário passa a ter origem.
 - **Nunca automático:** nada é enviado ao visitante ao receber o lead; responder é com o dono (regra de ouro). Encaminhar ao
   corretor certo é a Etapa 7.
+
+## 2026-10-30 — Etapa 7 mínima: corretor e encaminhamento
+
+- **Corretor = contato, sem login** (tabela `brokers`; card "Corretores" em Configurações, com cadeado na vitrine). O lead da página
+  pública recebe `assigned_broker_id` (rodízio no banco, só lead gira). No cartão do lead do Funil aparece "Corretor: X" e o botão
+  **Encaminhar por WhatsApp**: abre `wa.me/<corretor>?text=<resumo>` (nome, contato, imóvel, mensagem) — o dono toca em enviar;
+  **nada é enviado automaticamente**.
+- **Clique no WhatsApp da página:** usa o corretor ativo que recebeu o lead mais recentemente (grava `link_events.broker_id`); sem
+  corretor, o telefone da empresa. O `get` da página nunca devolve o telefone do corretor.
+  `link_events.broker_id` é **indicativo, não exato**: é o corretor do lead mais recente, não necessariamente quem "atende" aquele visitante.
+- **Funil e resultados:** mover o lead para Qualificado/Proposta/Venda carimba visita/proposta/fechado e oferece valor opcional
+  (ver [LEARNING.md](LEARNING.md)). Lead de DM/comentário continua sem corretor (rodízio só na página pública).
