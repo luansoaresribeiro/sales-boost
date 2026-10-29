@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 // código sem ambíguos, 404 uniforme, wa.me/ig.me, frase com link uma vez só, e o fluxo de banco com um banco em memória.
 import {
   CODE_ALPHABET, CODE_LENGTH, NOT_FOUND_BODY, appendLinkOnce, consentText, generateCode, instagramHandle, instagramUrl, isBot, isValidCode,
-  leadLimit, linkLine, parsePublicPageConfig, publicFields, publicLink, publicPhotos, validateLead, visitorHash, whatsappNumber, whatsappUrl,
+  clientIp, leadLimit, linkLine, parsePublicPageConfig, publicFields, publicLink, publicPhotos, validateLead, visitorHash, whatsappNumber, whatsappUrl,
 } from '../supabase/functions/_shared/publicPage.ts'
 import { attachTrackedLinks, ensureTrackedLink, getPublicPageState, handlePublicPage, setPublicPage, withDmLink } from '../supabase/functions/_shared/publicPageRun.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
@@ -214,6 +214,27 @@ const handle = (db, action, body, c = ctx) => handlePublicPage(db, action, body,
   const semDm = memDb({ ...baseSeed(), public_pages: [{ item_id: 'I1', company_id: 'C1', enabled: true, contact_phone: null, contact_ig: null }] }); assert.deepEqual((await handle(semDm, 'public_page_get', { code: CODE })).body.buttons, { whatsapp: false, dm: false }); ok('get: sem contato aprovado, sem botão')
   const en = memDb({ ...baseSeed(), companies: [{ ...baseSeed().companies[0], language: 'en' }] }); const re = (await handle(en, 'public_page_get', { code: CODE })).body; assert.equal(re.lang, 'en'); assert.equal(re.fields[0].value, 'Apartment'); ok('get: idioma da empresa')
   const falha = memDb(baseSeed(), { fail: { 'link_events.insert': 'x' } }); assert.equal((await handle(falha, 'public_page_get', { code: CODE })).status, 200); ok('get: falha ao gravar a visita não derruba a página')
+}
+
+// --- 400 não revela o código; tetos por link por hora; IP
+{
+  const real = memDb(baseSeed()), fake = memDb(baseSeed())
+  for (const [action, extra] of [['public_page_event', { event: 'view' }], ['public_page_event', {}], ['public_page_lead', { name: 'A', contact: 'x', consent: true }], ['public_page_lead', { name: 'Maria Silva', contact: '21999999999', consent: false }], ['public_page_lead', { name: 'Maria Silva', contact: '21999999999', consent: true, website: 'spam' }]]) {
+    const a = await handle(real, action, { code: CODE, ...extra }), b = await handle(fake, action, { code: 'zzzzzzzz', ...extra }), c = await handle(fake, action, { ...extra })
+    assert.deepEqual([a.status, a.body], [b.status, b.body]); assert.deepEqual([a.status, a.body], [c.status, c.body])
+  }
+  ok('400/200 de validação idênticos para código existente, inexistente e ausente')
+  assert.equal(real.tables.leads.length, 0); ok('validação barrada não grava nada')
+  const now = new Date().toISOString(), mk = (ev, n) => Array.from({ length: n }, (_, i) => ({ id: `${ev}${i}`, link_id: 'L1', event: ev, visitor_hash: `h${i}`, created_at: now }))
+  const sv = baseSeed(); sv.link_events = mk('view', 300); const dv = memDb(sv)
+  assert.equal((await handle(dv, 'public_page_get', { code: CODE })).status, 200); assert.equal(dv.tables.link_events.length, 300); ok('view: 300/h no link = página abre, mas não registra')
+  const sv2 = baseSeed(); sv2.link_events = mk('view', 299); const dv2 = memDb(sv2); await handle(dv2, 'public_page_get', { code: CODE }); assert.equal(dv2.tables.link_events.length, 300); ok('view: abaixo do teto registra')
+  const sc = baseSeed(); sc.link_events = mk('click_dm', 60); const dc = memDb(sc)
+  const rc = await handle(dc, 'public_page_event', { code: CODE, event: 'click_whatsapp' }); assert.equal(rc.status, 200); assert.ok(rc.body.url); assert.equal(dc.tables.link_events.length, 60); ok('click: 60/h no link = redireciona, mas não registra')
+  const sc2 = baseSeed(); sc2.link_events = mk('click_dm', 59); const dc2 = memDb(sc2); await handle(dc2, 'public_page_event', { code: CODE, event: 'click_dm' }); assert.equal(dc2.tables.link_events.length, 60); ok('click: abaixo do teto registra')
+  const old = baseSeed(); old.link_events = mk('view', 300).map(e => ({ ...e, created_at: new Date(Date.now() - 2 * 3600_000).toISOString() })); const dold = memDb(old); await handle(dold, 'public_page_get', { code: CODE }); assert.equal(dold.tables.link_events.length, 301); ok('view: eventos de mais de 1 h não contam no teto')
+  const h = o => ({ get: k => o[k] ?? null })
+  assert.equal(clientIp(h({ 'cf-connecting-ip': '1.1.1.1', 'x-forwarded-for': '6.6.6.6, 2.2.2.2' })), '1.1.1.1'); assert.equal(clientIp(h({ 'x-forwarded-for': '6.6.6.6, 2.2.2.2' })), '6.6.6.6'); assert.equal(clientIp(h({ 'x-real-ip': '3.3.3.3' })), '3.3.3.3'); assert.equal(clientIp(h({})), ''); ok('IP: cf-connecting-ip primeiro; x-forwarded-for só como reserva')
 }
 
 // --- public_page_event

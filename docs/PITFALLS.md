@@ -863,3 +863,9 @@ trava/contador, confere o `error` retornado.
 - **Vitrine:** em conta sem plano o botão aparece com cadeado e abre o modal de plano (`marketing-ai` é inteiro bloqueado pelo
   guard de vitrine). A página pública de uma empresa que perdeu o plano sai do ar (404) sozinha.
 - **`public/_headers`** (noindex no cabeçalho) só vale no Cloudflare Workers Assets; se o site mudar de hospedagem, refaça.
+- **Ajustes pós-QA (Etapa 5):** (1) `event` e os campos do lead são validados ANTES de consultar o código — o 400 (e o falso
+  sucesso do honeypot) é igual para código existente, inexistente ou ausente. Só o **429** do formulário (limite estourado) ainda
+  só aparece para código válido: aceito de propósito, porque o visitante precisa saber que deve esperar. (2) Tetos por link por hora
+  em `link_events`: 300 `view` e 60 `click_*` (acima disso a página abre/redireciona normalmente, só não grava) — trocar de
+  user-agent ou IP não enche a tabela. (3) O IP do hash vem de `cf-connecting-ip` (a Cloudflare define; o cliente não forja);
+  `x-forwarded-for` (forjável) e `x-real-ip` são só reserva. Se um dia o tráfego não passar pela Cloudflare, o hash deixa de ser confiável.

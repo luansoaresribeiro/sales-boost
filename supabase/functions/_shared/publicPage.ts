@@ -10,7 +10,7 @@ export const CODE_LENGTH = 8
 export const CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789'
 export const MAX_PUBLIC_PHOTOS = 10
 export const DEFAULT_MIN_PHOTOS = 3
-export const LIMITS = { visitorPerHour: 3, linkPerDay: 20, dedupeHours: 24 } as const
+export const LIMITS = { visitorPerHour: 3, linkPerDay: 20, dedupeHours: 24, viewPerLinkHour: 300, clickPerLinkHour: 60 } as const
 export const NAME_MIN = 2
 export const NAME_MAX = 80
 export const MESSAGE_MAX = 500
@@ -208,6 +208,8 @@ export async function visitorHash(ip: string, ua: string, dayIso: string, salt: 
 }
 const BOT_RE = /bot|crawl|spider|slurp|facebookexternalhit|facebot|whatsapp|telegram|preview|headless|python-requests|curl\/|wget|httpclient|monitor|lighthouse|pingdom|uptime/i
 export const isBot = (ua: string | null | undefined): boolean => !ua || ua.length < 10 || BOT_RE.test(ua)
+// IP só para o hash (nunca guardado). Prefere `cf-connecting-ip` (a Cloudflare define e o cliente não consegue forjar);
+// `x-forwarded-for` (primeiro item, que o cliente pode forjar) e `x-real-ip` são só reserva quando o primeiro não vem.
 export const clientIp = (h: { get: (k: string) => string | null }): string => (h.get('cf-connecting-ip') || (h.get('x-forwarded-for') ?? '').split(',')[0] || h.get('x-real-ip') || '').trim()
 
 // ── link na legenda / DM ──

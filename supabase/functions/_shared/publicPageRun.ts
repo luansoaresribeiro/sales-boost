@@ -98,6 +98,17 @@ async function logEvent(admin: Admin, live: Live, event: string, hash: string, l
 export const PUBLIC_ACTIONS = ['public_page_get', 'public_page_event', 'public_page_lead'] as const
 
 export async function handlePublicPage(admin: Admin, action: string, body: Record<string, unknown>, ctx: PublicCtx): Promise<Reply> {
+  // Validação do corpo ANTES de consultar o código: um 400 nunca pode revelar que o código existe (mesma resposta para código
+  // válido e inválido). Só depois vem o 404 uniforme.
+  let parsed: ReturnType<typeof validateLead> | null = null
+  if (action === 'public_page_event' && body.event !== 'click_whatsapp' && body.event !== 'click_dm') return { status: 400, body: { error: 'invalid_event' } }
+  if (action === 'public_page_lead') {
+    parsed = validateLead(body)
+    if (!parsed.ok) {
+      if (parsed.error === 'honeypot') return { status: 200, body: { ok: true } } // robô: finge sucesso, não grava nada
+      return { status: 400, body: { error: 'invalid', field: parsed.error } }
+    }
+  }
   const live = await loadLive(admin, body.code)
   if (!live) return NOT_FOUND
   try {
@@ -105,9 +116,13 @@ export async function handlePublicPage(admin: Admin, action: string, body: Recor
     if (action === 'public_page_get') {
       if (!isBot(ctx.ua)) {
         // 1 visita por visitante, por link, por dia (o hash já muda a cada dia).
-        const { count, error } = await admin.from('link_events').select('id', { count: 'exact', head: true }).eq('link_id', live.link.id).eq('event', 'view').eq('visitor_hash', hash)
-        if (error) console.error('[public_page] view leitura:', error.message)
-        else if ((count ?? 0) === 0) await logEvent(admin, live, 'view', hash)
+        const [mine, hour] = await Promise.all([
+          admin.from('link_events').select('id', { count: 'exact', head: true }).eq('link_id', live.link.id).eq('event', 'view').eq('visitor_hash', hash),
+          admin.from('link_events').select('id', { count: 'exact', head: true }).eq('link_id', live.link.id).eq('event', 'view').gte('created_at', isoAgo(HOUR_MS)),
+        ])
+        if (mine.error || hour.error) console.error('[public_page] view leitura:', (mine.error ?? hour.error).message)
+        // Teto por link por hora: trocar user-agent/IP não enche a tabela (a página continua abrindo, só não registra).
+        else if ((mine.count ?? 0) === 0 && (hour.count ?? 0) < LIMITS.viewPerLinkHour) await logEvent(admin, live, 'view', hash)
       }
       const cc = live.cfg.country_code
       return { status: 200, body: {
@@ -119,21 +134,21 @@ export async function handlePublicPage(admin: Admin, action: string, body: Recor
     }
 
     if (action === 'public_page_event') {
-      const ev = body.event
-      if (ev !== 'click_whatsapp' && ev !== 'click_dm') return { status: 400, body: { error: 'invalid_event' } }
+      const ev = body.event as 'click_whatsapp' | 'click_dm'
       const url = ev === 'click_whatsapp' ? whatsappUrl(live.page.contact_phone, live.title, live.lang, live.cfg.country_code) : instagramUrl(live.page.contact_ig)
       if (!url) return NOT_FOUND // botão que a página não oferece
-      const { count } = await admin.from('link_events').select('id', { count: 'exact', head: true }).eq('link_id', live.link.id).eq('visitor_hash', hash).in('event', ['click_whatsapp', 'click_dm']).gte('created_at', isoAgo(HOUR_MS))
-      if ((count ?? 0) < 30) await logEvent(admin, live, ev, hash) // acima disso o visitante ainda é redirecionado, só não enche o banco
+      const [mine, hour] = await Promise.all([
+        admin.from('link_events').select('id', { count: 'exact', head: true }).eq('link_id', live.link.id).eq('visitor_hash', hash).in('event', ['click_whatsapp', 'click_dm']).gte('created_at', isoAgo(HOUR_MS)),
+        admin.from('link_events').select('id', { count: 'exact', head: true }).eq('link_id', live.link.id).in('event', ['click_whatsapp', 'click_dm']).gte('created_at', isoAgo(HOUR_MS)),
+      ])
+      // Acima dos tetos (30/visitante/hora e 60/link/hora) o visitante ainda é redirecionado, só não enche o banco.
+      if (!mine.error && !hour.error && (mine.count ?? 0) < 30 && (hour.count ?? 0) < LIMITS.clickPerLinkHour) await logEvent(admin, live, ev, hash)
       return { status: 200, body: { ok: true, url } }
     }
 
     // public_page_lead
-    const v = validateLead(body)
-    if (!v.ok) {
-      if (v.error === 'honeypot') return { status: 200, body: { ok: true } } // robô: finge sucesso, não grava nada
-      return { status: 400, body: { error: 'invalid', field: v.error } }
-    }
+    const v = parsed
+    if (!v || !v.ok) return NOT_FOUND // inalcançável: já validado acima
     const [visitor, linkDay, dup] = await Promise.all([
       admin.from('link_events').select('id', { count: 'exact', head: true }).eq('event', 'lead').eq('visitor_hash', hash).gte('created_at', isoAgo(HOUR_MS)),
       admin.from('link_events').select('id', { count: 'exact', head: true }).eq('event', 'lead').eq('link_id', live.link.id).gte('created_at', isoAgo(DAY_MS)),
