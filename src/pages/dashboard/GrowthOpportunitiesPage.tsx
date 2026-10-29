@@ -90,9 +90,9 @@ export default function GrowthOpportunitiesPage() {
         supabase.from('posts').select('opportunity_id').eq('company_id', companyId).in('opportunity_id', withPlan),
       ])
       const st: Record<string, PieceStats> = {}
-      const bump = (id: string | null, k: keyof PieceStats) => { if (id) (st[id] ??= { ready: 0, review: 0 })[k]++ }
+      const bump = (id: string | null, k: keyof PieceStats) => { if (id) (st[id] ??= { ready: 0, review: 0, approved: 0 })[k]++ }
       if (!drafts.error) for (const r of (drafts.data ?? []) as { opportunity_id: string | null; status: string | null }[]) bump(r.opportunity_id, r.status === 'vault' ? 'ready' : 'review')
-      if (!posts.error) for (const r of (posts.data ?? []) as { opportunity_id: string | null }[]) bump(r.opportunity_id, 'ready')
+      if (!posts.error) for (const r of (posts.data ?? []) as { opportunity_id: string | null }[]) bump(r.opportunity_id, 'approved')
       setPieceStats(st)
     } else setPieceStats({})
     const ids = [...new Set(list.flatMap(o => o.item_ids ?? []))]
@@ -118,7 +118,7 @@ export default function GrowthOpportunitiesPage() {
   // Plano em construção (aprovada há < 2 min e ainda sem plano): recarrega a cada 10 s até aparecer ou passar o prazo.
   const waitingPlan = rows.some(o => o.status === 'approved' && !o.plan && o.decided_at && Date.now() - Date.parse(o.decided_at) < PLAN_WAIT_MS)
   // Peças em construção (plano aprovado há < 15 min e ainda sem nenhuma peça): mesmo recarregamento a cada 10 s.
-  const waitingPieces = rows.some(o => o.status === 'approved' && o.plan_approved_at && !(pieceStats[o.id]?.ready || pieceStats[o.id]?.review) && Date.now() - Date.parse(o.plan_approved_at) < PIECES_WAIT_MS)
+  const waitingPieces = rows.some(o => o.status === 'approved' && o.plan_approved_at && !(pieceStats[o.id]?.ready || pieceStats[o.id]?.review || pieceStats[o.id]?.approved) && Date.now() - Date.parse(o.plan_approved_at) < PIECES_WAIT_MS)
   useEffect(() => {
     if (!waitingPlan && !waitingPieces) return
     const id = setInterval(() => { void load() }, 10_000)

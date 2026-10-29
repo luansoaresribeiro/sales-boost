@@ -20,8 +20,8 @@ export interface PlanData {
   pieces_count?: number
   pieces_info?: { requested_format: string; used_format: string; video_deferred: boolean; dispatched: number; notes: string[]; at: string }
 }
-/** Peças desta oportunidade: prontas (na Central de Aprovações ou já aprovadas) e em revisão de qualidade. */
-export interface PieceStats { ready: number; review: number }
+/** Peças desta oportunidade: rascunhos pendentes na Central (ready), em revisão de qualidade (review) e já aprovadas/publicadas (approved). */
+export interface PieceStats { ready: number; review: number; approved: number }
 // Depois de aprovado o plano, a tela espera as peças por até 15 min antes de dizer "próxima rodada".
 export const PIECES_WAIT_MS = 15 * 60_000
 export const PLAN_WAIT_MS = 2 * 60_000 // quanto tempo a tela espera o plano sair antes de dizer "próxima rodada"
@@ -32,7 +32,7 @@ const TX = {
   pt: {
     building: 'Montando o plano…', later: 'O plano sai na próxima rodada automática.', approve: 'Aprovar plano', unapprove: 'Desfazer aprovação', approvedBadge: 'Plano aprovado', draftBadge: 'Plano ainda não aprovado',
     fixed: 'Nada é publicado daqui. Aprovado o plano, as peças nascem sozinhas como rascunho na Central de Aprovações — você aprova uma a uma.',
-    makingPieces: 'Gerando as peças…', piecesLater: 'As peças saem na próxima rodada automática.', piecesReady: (n: number) => `${n} ${n === 1 ? 'peça' : 'peças'} na Central de Aprovações`, piecesReview: (n: number) => `${n} em revisão de qualidade`, openApprovals: 'Abrir a Central de Aprovações', pieces: 'Peças', piecesNotes: 'Sobre as peças', title: 'Plano da oportunidade', hint: 'O plano transforma esta oportunidade em uma ação: público, mensagem e formato. É criado sozinho depois que você aprova a oportunidade.',
+    makingPieces: 'Gerando as peças…', piecesLater: 'As peças saem na próxima rodada automática.', piecesReady: (n: number) => `${n} ${n === 1 ? 'peça' : 'peças'} na Central de Aprovações`, piecesReview: (n: number) => `${n} em revisão de qualidade`, piecesApproved: (n: number) => `${n} ${n === 1 ? 'aprovada' : 'aprovadas'}`, openApprovals: 'Abrir a Central de Aprovações', pieces: 'Peças', piecesNotes: 'Sobre as peças', title: 'Plano da oportunidade', hint: 'O plano transforma esta oportunidade em uma ação: público, mensagem e formato. É criado sozinho depois que você aprova a oportunidade.',
     audience: 'Público', objective: 'Objetivo', problem: 'Problema do comprador', value: 'Proposta de valor', message: 'Mensagem principal', channel: 'Canal', format: 'Formato sugerido', cta: 'Chamada final (CTA)',
     measure: 'Como medir', items: 'Imóveis ligados', evidence: 'Evidências citadas', hypotheses: 'Hipóteses (ainda não verificadas)',
     formats: { carousel: 'Carrossel', reel: 'Vídeo curto (Reel)', post: 'Post com foto', story: 'Story' } as Record<string, string>,
@@ -43,7 +43,7 @@ const TX = {
   en: {
     building: 'Building the plan…', later: 'The plan will come out in the next automatic round.', approve: 'Approve plan', unapprove: 'Undo approval', approvedBadge: 'Plan approved', draftBadge: 'Plan not approved yet',
     fixed: 'Nothing is published from here. Once the plan is approved, the pieces are made automatically as drafts in the Approvals center — you approve them one by one.',
-    makingPieces: 'Making the pieces…', piecesLater: 'The pieces will come out in the next automatic round.', piecesReady: (n: number) => `${n} ${n === 1 ? 'piece' : 'pieces'} in the Approvals center`, piecesReview: (n: number) => `${n} in quality review`, openApprovals: 'Open the Approvals center', pieces: 'Pieces', piecesNotes: 'About the pieces', title: 'Opportunity plan', hint: 'The plan turns this opportunity into an action: audience, message and format. It is created automatically after you approve the opportunity.',
+    makingPieces: 'Making the pieces…', piecesLater: 'The pieces will come out in the next automatic round.', piecesReady: (n: number) => `${n} ${n === 1 ? 'piece' : 'pieces'} in the Approvals center`, piecesReview: (n: number) => `${n} in quality review`, piecesApproved: (n: number) => `${n} approved`, openApprovals: 'Open the Approvals center', pieces: 'Pieces', piecesNotes: 'About the pieces', title: 'Opportunity plan', hint: 'The plan turns this opportunity into an action: audience, message and format. It is created automatically after you approve the opportunity.',
     audience: 'Audience', objective: 'Objective', problem: 'Buyer problem', value: 'Value proposition', message: 'Key message', channel: 'Channel', format: 'Suggested format', cta: 'Call to action (CTA)',
     measure: 'How to measure', items: 'Linked properties', evidence: 'Evidence cited', hypotheses: 'Hypotheses (not verified yet)',
     formats: { carousel: 'Carousel', reel: 'Short video (Reel)', post: 'Photo post', story: 'Story' } as Record<string, string>,
@@ -95,9 +95,10 @@ export default function OpportunityPlan({ plan, opportunityId, decidedAt, approv
   const btn = (bg: string, fg: string, border?: string) => ({ padding: '9px 18px', background: bg, color: fg, fontWeight: 700, fontSize: '12.5px', border: border ?? 'none', borderRadius: '9px', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: D } as const)
   const lock = readOnly ? '🔒 ' : ''
   // Peças: prontas = rascunho na Central de Aprovações (ou já aprovadas); "gerando" até 15 min depois da aprovação do plano.
-  const ready = pieces?.ready ?? 0, review = pieces?.review ?? 0
+  const ready = pieces?.ready ?? 0, review = pieces?.review ?? 0, approvedN = pieces?.approved ?? 0
+  const total = ready + review + approvedN
   const approvedMs = approvedAt ? Date.parse(approvedAt) : NaN
-  const makingPieces = !!approvedAt && ready + review === 0 && Number.isFinite(approvedMs) && Date.now() - approvedMs < PIECES_WAIT_MS
+  const makingPieces = !!approvedAt && total === 0 && Number.isFinite(approvedMs) && Date.now() - approvedMs < PIECES_WAIT_MS
   const names = (plan?.item_ids ?? []).map(id => itemNames[id]).filter(Boolean)
 
   return (
@@ -146,9 +147,9 @@ export default function OpportunityPlan({ plan, opportunityId, decidedAt, approv
           )}
           {approvedAt && (
             <Row label={t.pieces}>
-              {ready + review > 0 ? (
+              {total > 0 ? (
                 <div role="status">
-                  <b>{ready > 0 ? t.piecesReady(ready) : t.piecesReview(review)}</b>{ready > 0 && review > 0 ? ` · ${t.piecesReview(review)}` : ''}
+                  <b>{[ready > 0 && t.piecesReady(ready), review > 0 && t.piecesReview(review), approvedN > 0 && t.piecesApproved(approvedN)].filter(Boolean).join(' · ')}</b>
                   {ready > 0 && <div style={{ marginTop: '4px' }}><Link to="/dashboard/aprovacoes" style={{ color: ORANGE, fontWeight: 700, fontSize: '12px' }}>{t.openApprovals} →</Link></div>}
                 </div>
               ) : <div role="status" style={{ color: makingPieces || piecesGeneratedAt ? ORANGE : MUTED, fontWeight: 700 }}>{makingPieces || (piecesGeneratedAt && Date.now() - Date.parse(piecesGeneratedAt) < PIECES_WAIT_MS) ? t.makingPieces : t.piecesLater}</div>}

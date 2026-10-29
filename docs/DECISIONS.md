@@ -2010,7 +2010,7 @@ grátis de 30 s, acima — mantidos como histórico):
   `agent_performance` `task_key='opportunity_pieces'`, uma linha por peça despachada). As peças contam no caminho de
   custo que o calendário já usa (mesma IA/teto do `creative-generate`).
 - **Idempotência:** `growth_opportunities.pieces_generated_at` é reservado de forma atômica antes de despachar; plano
-  que já tem peça (rascunho ou post) não gera de novo. Despachado há > 30 min sem nenhuma peça → 1 retentativa pelo cron.
+  que já tem peça (rascunho ou post) não gera de novo. Despachado há > 30 min e **nenhuma peça jamais existiu** → 1 retentativa única (linha `opportunity_pieces_retry`). Peça que já existiu e foi excluída pelo dono (marca `opportunity_piece_created`) **nunca** é regerada sozinha.
 - **Vínculo:** `opportunity_id` em `marketing_ai_test_content` e `posts` (copiado na aprovação, como `item_id`) — a
   Etapa 6 poderá medir por oportunidade.
 - **O mapa formato-do-plano → formato-do-catálogo vive na ficha** (`config.opportunity_pieces`, regra 6); setor sem

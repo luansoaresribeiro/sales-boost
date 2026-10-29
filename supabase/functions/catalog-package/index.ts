@@ -407,6 +407,7 @@ Deno.serve(async (req) => {
           try {
             const { error: oerr } = await admin.from('marketing_ai_test_content').update({ opportunity_id: opportunityId }).eq('id', row!.id)
             if (oerr) console.error('catalog-package: opportunity_id não gravado (migration aplicada?)', oerr.message)
+            else await admin.from('agent_performance').insert({ company_id: company.id, agent_role: 'cmo', task_key: 'opportunity_piece_created', task_description: `opp:${opportunityId} peça ${row!.id}`, tokens_used: 0, success: true }) // marca que a peça existiu (a exclusão do rascunho não a apaga)
           } catch (e) { console.error('catalog-package: opportunity_id falhou', e) }
         }
         await scoreTestContent(supabaseUrl, serviceKey, company.id as string, row!.id as string)

@@ -538,8 +538,8 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
   - **Cron:** `cron_opportunities` passa a também pedir as peças dos planos aprovados sem peças (só despacha; sem IA, não
     ocupa vaga das 3 empresas). Resumo agora traz `pieces`.
   - **Tela:** oportunidade com plano aprovado mostra "Gerando as peças…" (recarrega a cada 10 s por 15 min), depois
-    "N peças na Central de Aprovações" com link para `/dashboard/aprovacoes` (+ "M em revisão de qualidade" se alguma não
-    chegou ao vault). Na Central, a peça mostra o selo "Da oportunidade: <título>".
+    "N peças na Central de Aprovações" com link para `/dashboard/aprovacoes` (só rascunhos pendentes; "M em revisão de qualidade" se alguma não
+    chegou ao vault e "K aprovadas" para os posts já aprovados/publicados). Na Central, a peça mostra o selo "Da oportunidade: <título>".
   - **Qualidade:** `claimGuard`/`hasUnsupportedClaim` (opportunityOutput.ts) tiram frases com adjetivo de mercado sem
     dado nos fatos (lista: ficha `opportunity_texts.market_claims`, senão `DEFAULT_MARKET_CLAIMS`); `photoCounts` entra no
     prompt do `run_opportunities` e do plano, e `actionForPhotos` troca a ação por "adicionar fotos reais" quando o item

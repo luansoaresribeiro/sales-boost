@@ -62,13 +62,19 @@ const dec = (plan, over = {}) => decidePieces({ plan: { format_suggestion: 'caro
 // ── idempotência
 {
   const now = Date.parse('2026-10-29T12:00:00Z'), iso = (ms) => new Date(ms).toISOString()
-  assert.equal(idempotency({ generatedAt: null, existingPieces: 0, nowMs: now, loggedRows: 0 }), 'go')
-  assert.equal(idempotency({ generatedAt: null, existingPieces: 2, nowMs: now, loggedRows: 0 }), 'already')
-  assert.equal(idempotency({ generatedAt: iso(now - 60_000), existingPieces: 0, nowMs: now, loggedRows: 2 }), 'already', 'despachado há 1 min: espera')
-  assert.equal(idempotency({ generatedAt: iso(now - STALE_DISPATCH_MS - 1000), existingPieces: 0, nowMs: now, loggedRows: 2 }), 'retry', 'despachado há > 30 min e nenhuma peça: tenta de novo')
-  assert.equal(idempotency({ generatedAt: iso(now - STALE_DISPATCH_MS - 1000), existingPieces: 0, nowMs: now, loggedRows: 4 }), 'already', 'só uma segunda tentativa por plano')
-  assert.equal(idempotency({ generatedAt: iso(now - 9e9), existingPieces: 1, nowMs: now, loggedRows: 2 }), 'already')
-  ok('idempotência: peça existente ou despacho recente → não gera; sem peça após 30 min → 1 retentativa')
+  const base = { generatedAt: null, existingPieces: 0, everCreated: 0, retried: false, nowMs: now }
+  const stale = iso(now - STALE_DISPATCH_MS - 1000)
+  assert.equal(idempotency(base), 'go')
+  assert.equal(idempotency({ ...base, existingPieces: 2 }), 'already')
+  assert.equal(idempotency({ ...base, generatedAt: iso(now - 60_000) }), 'already', 'despachado há 1 min: espera')
+  // falhou em segundo plano (nenhuma peça jamais existiu): 1 retentativa, igual para 1, 2 ou 3 peças pedidas
+  assert.equal(idempotency({ ...base, generatedAt: stale }), 'retry', 'despachado há > 30 min e nenhuma peça jamais existiu → retenta')
+  assert.equal(idempotency({ ...base, generatedAt: stale, retried: true }), 'already', 'retentativa é única (qualquer quantidade de peças pedidas)')
+  // o dono EXCLUIU o rascunho: a peça já existiu → nunca regera sozinho
+  assert.equal(idempotency({ ...base, generatedAt: stale, everCreated: 1 }), 'already', 'rascunho excluído não volta')
+  assert.equal(idempotency({ ...base, generatedAt: stale, everCreated: 2 }), 'already')
+  assert.equal(idempotency({ ...base, generatedAt: iso(now - 9e9), existingPieces: 1 }), 'already')
+  ok('idempotência: peça existente/excluída ou despacho recente → não gera; falha em segundo plano → 1 retentativa única')
 }
 // ── mapa da ficha (regra 6)
 {
@@ -114,6 +120,8 @@ const dec = (plan, over = {}) => decidePieces({ plan: { format_suggestion: 'caro
   const gf = claimGuard('pt', ['x'], ['premium'])
   assert.ok(!hasUnsupportedClaim('bairro disputado', gf), 'lista da ficha substitui a genérica'); assert.ok(hasUnsupportedClaim('serviço premium', gf))
   const ge = claimGuard('en', ['x']); assert.ok(hasUnsupportedClaim('A competitive, upscale area.', ge)); assert.ok(!hasUnsupportedClaim('Three bedrooms.', ge))
+  const gw = claimGuard('en', ['x']); assert.ok(!hasUnsupportedClaim('We appreciate your visit; primer coat; a primed wall.', gw), 'borda de palavra: appreciate/primer não pegam'); assert.ok(hasUnsupportedClaim('A prime location.', gw)); assert.ok(hasUnsupportedClaim('Appreciating values.', gw))
+  const gp = claimGuard('pt', ['x']); assert.ok(!hasUnsupportedClaim('Nobreza de materiais; luxuoso acabamento; concorrencia.', gp), 'sem radical amplo'); assert.ok(hasUnsupportedClaim('Imóveis valorizados.', gp)); assert.ok(hasUnsupportedClaim('Mercado EM ALTA.', gp))
   ok('afirmação de mercado ("disputado", "alto padrão", "ticket elevado"…) sai se não está nos fatos; ficha pode trocar a lista; EN também')
 }
 const fieldMap = { location: 'bairro', price: 'preco', type: 'tipo', bedrooms: 'quartos', deal: 'venda_ou_aluguel' }
@@ -172,13 +180,13 @@ function fakeDb(h) {
     return c }
   return { from: chain, log }
 }
-const handlers = ({ plan, generatedAt = null, drafts = 0, posts = 0, used = 0, logged = 0, claim = [{ id: OPP }], status = 'approved', approved = '2026-10-29T10:00:00Z' }) => ({
+const handlers = ({ plan, generatedAt = null, drafts = 0, posts = 0, used = 0, created = 0, retried = 0, claim = [{ id: OPP }], status = 'approved', approved = '2026-10-29T10:00:00Z' }) => ({
   companies: () => ({ data: { language: 'pt' } }),
   growth_opportunities: (f) => f.op === 'update' ? (f.payload.plan ? { data: null, error: null } : { data: claim, error: null }) : { data: { id: OPP, status, plan, plan_approved_at: approved, pieces_generated_at: generatedAt, item_ids: [I1] }, error: null },
   marketing_ai_test_content: () => ({ count: drafts, error: null }),
   posts: () => ({ count: posts, error: null }),
   marketing_ai_knowledge: () => ({ data: [{ id: I1, meta: { photos: new Array(8).fill({}) } }, { id: I3, meta: { photos: [{}] } }] }),
-  agent_performance: (f) => ({ count: f.filters.some(x => x[0] === 'like') ? logged : used }),
+  agent_performance: (f) => { const k = f.filters.find(x => x[1] === 'task_key')?.[2]; return { count: k === 'opportunity_piece_created' ? created : k === 'opportunity_pieces_retry' ? retried : used } },
 })
 {
   const plan = { ...goodPlan(), item_ids: [I1, I3], pieces_count: 2 }
@@ -201,9 +209,14 @@ const handlers = ({ plan, generatedAt = null, drafts = 0, posts = 0, used = 0, l
   // outra chamada ganhou a reserva (update não achou linha) → não despacha
   r = await generateOpportunityPieces(fakeDb(handlers({ plan, claim: [] })), CO, OPP, dispatch); assert.equal(r.reused, true); assert.equal(calls.length, 0)
   // rede de segurança: despachado há 1 h, nenhuma peça → tenta de novo, reservando só se o valor antigo continua igual
-  const old = new Date(Date.now() - 3600_000).toISOString(); db = fakeDb(handlers({ plan, generatedAt: old, logged: 2 }))
+  const old = new Date(Date.now() - 3600_000).toISOString(); db = fakeDb(handlers({ plan, generatedAt: old }))
   r = await generateOpportunityPieces(db, CO, OPP, dispatch); assert.equal(r.dispatched, 2)
   assert.ok(db.log.find(x => x.op === 'update' && x.payload.pieces_generated_at).filters.some(f => f[0] === 'eq' && f[1] === 'pieces_generated_at' && f[2] === old))
+  assert.ok(db.log.some(x => x.op === 'insert' && x.payload.task_key === 'opportunity_pieces_retry'), 'grava a linha da retentativa')
+  // retentativa já feita → não repete; rascunho excluído pelo dono (peça já existiu) → não regera
+  calls.length = 0
+  r = await generateOpportunityPieces(fakeDb(handlers({ plan, generatedAt: old, retried: 1 })), CO, OPP, dispatch); assert.equal(r.reused, true); assert.equal(calls.length, 0)
+  r = await generateOpportunityPieces(fakeDb(handlers({ plan, generatedAt: old, created: 2, drafts: 0, posts: 0 })), CO, OPP, dispatch); assert.equal(r.reused, true); assert.equal(calls.length, 0)
   ok('idempotência na geração: peça/post existente, despacho recente e reserva perdida não geram; retentativa só com o valor antigo')
 
   // limite diário: 6 usadas → nada despachado, nada reservado

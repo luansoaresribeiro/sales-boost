@@ -112,14 +112,15 @@ export function numbersAllowed(s: string, allowed: AllowedNumbers): boolean {
 
 // ── Afirmações de mercado sem dado ("bairro disputado", "ticket elevado") ──────────────────────────────────────────
 // A IA escreveu opinião de mercado sem base na 1ª rodada real (Tespon, 2026-10-29). Adjetivo de mercado só vale se o
-// MESMO termo (radical) aparece nos fatos. A lista vem da ficha (opportunity_texts.market_claims, pt/en — regra 6);
-// sem ela, vale esta genérica. Cada termo é um radical: "valorizad" cobre valorizado/valorizada.
+// MESMO termo aparece nos fatos. A lista vem da ficha (opportunity_texts.market_claims, pt/en — regra 6); sem ela, vale
+// esta genérica. Cada item é uma PALAVRA ou EXPRESSÃO inteira (borda de palavra, sem acento/maiúscula): "appreciating" não
+// pega "appreciate" e "prime location" não pega "primer". Flexões entram na lista de propósito.
 export const DEFAULT_MARKET_CLAIMS: Record<Lang, string[]> = {
-  pt: ['disputad', 'concorrid', 'valorizad', 'valorizacao', 'alto padrao', 'nobre', 'em alta', 'badalad', 'cobicad', 'ticket elevad', 'ticket alto', 'procuradissim', 'muito procurad', 'bairro quente', 'mercado aquecid', 'alta demanda', 'luxo', 'sofisticad'],
-  en: ['competitive', 'in demand', 'high demand', 'hot market', 'hot neighborhood', 'upscale', 'high-end', 'high end', 'prime', 'sought-after', 'sought after', 'booming', 'appreciat', 'luxury', 'high ticket', 'premium', 'coveted'],
+  pt: ['disputado', 'disputada', 'disputados', 'disputadas', 'concorrido', 'concorrida', 'valorizado', 'valorizada', 'valorizados', 'valorizadas', 'valorizacao', 'alto padrao', 'nobre', 'nobres', 'em alta', 'badalado', 'badalada', 'cobicado', 'cobicada', 'ticket elevado', 'ticket alto', 'muito procurado', 'muito procurada', 'bairro quente', 'mercado aquecido', 'alta demanda', 'luxo', 'sofisticado', 'sofisticada'],
+  en: ['competitive', 'in demand', 'high demand', 'hot market', 'hot neighborhood', 'upscale', 'high-end', 'high end', 'prime location', 'sought-after', 'sought after', 'booming', 'appreciating', 'appreciation', 'luxury', 'high ticket', 'premium', 'coveted'],
 }
 export interface ClaimGuard { terms: string[]; factsNorm: string }
-const claimRe = (t: string) => new RegExp('(?:^|[^a-z])' + norm(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[a-z]*')
+const claimRe = (t: string) => new RegExp('(?:^|[^a-z])' + norm(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[^a-z])')
 /** Monta a trava: termos (ficha ou genéricos) + o texto dos fatos em que eles podem aparecer. */
 export function claimGuard(lang: Lang, factTexts: string[], fichaTerms?: string[] | null): ClaimGuard {
   const terms = (fichaTerms?.length ? fichaTerms : DEFAULT_MARKET_CLAIMS[lang]).filter(t => typeof t === 'string' && t.trim())

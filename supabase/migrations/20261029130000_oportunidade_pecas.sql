@@ -10,7 +10,7 @@
 -- Ficha do setor (regra 6 — nada de setor no código): imoveis_rio ganha
 --   opportunity_pieces       formato do plano (carousel/post/story) → formato do catálogo da ficha, com foto real (item)
 --                            ou só texto (text). Vídeo e DM nunca entram aqui (custo extra / envio).
---   opportunity_texts.market_claims  adjetivos de mercado (radicais, pt/en) que a IA só pode usar se estiverem nos fatos.
+--   opportunity_texts.market_claims  adjetivos/expressões de mercado inteiros (borda de palavra, pt/en) que a IA só pode usar se estiverem nos fatos.
 -- Setor sem esses textos usa os genéricos do código (carrossel de slides; lista genérica de afirmações).
 --
 -- Como reverter (as colunas só guardam o vínculo; nenhuma peça é apagada):
@@ -47,11 +47,11 @@ set config = jsonb_set(coalesce(config, '{}'::jsonb), '{opportunity_pieces}', $j
 where key = 'imoveis_rio'
   and (config->'opportunity_pieces') is null;
 
--- Ficha: adjetivos de mercado que exigem dado (radicais, sem acento; "valorizad" cobre valorizado/valorizada).
+-- Ficha: adjetivos/expressões de mercado que exigem dado (palavra inteira, sem acento; flexões listadas).
 update public.vertical_playbooks
 set config = jsonb_set(config, '{opportunity_texts,market_claims}', $json${
-  "pt": ["disputad", "concorrid", "valorizad", "valorizacao", "alto padrao", "nobre", "em alta", "badalad", "cobicad", "ticket elevad", "ticket alto", "muito procurad", "bairro quente", "mercado aquecid", "alta demanda", "luxo", "sofisticad"],
-  "en": ["competitive", "in demand", "high demand", "hot market", "hot neighborhood", "upscale", "high-end", "prime", "sought-after", "booming", "appreciat", "luxury", "high ticket", "premium", "coveted"]
+  "pt": ["disputado", "disputada", "disputados", "disputadas", "concorrido", "concorrida", "valorizado", "valorizada", "valorizados", "valorizadas", "valorizacao", "alto padrao", "nobre", "nobres", "em alta", "badalado", "badalada", "cobicado", "cobicada", "ticket elevado", "ticket alto", "muito procurado", "muito procurada", "bairro quente", "mercado aquecido", "alta demanda", "luxo", "sofisticado", "sofisticada"],
+  "en": ["competitive", "in demand", "high demand", "hot market", "hot neighborhood", "upscale", "high-end", "high end", "prime location", "sought-after", "sought after", "booming", "appreciating", "appreciation", "luxury", "high ticket", "premium", "coveted"]
 }$json$::jsonb, true)
 where key = 'imoveis_rio'
   and jsonb_typeof(config->'opportunity_texts') = 'object'

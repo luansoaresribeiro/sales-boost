@@ -32,16 +32,21 @@ export function videoFree(f: unknown): { format: PieceFormat; videoDeferred: boo
 export type Skip = 'already' | 'daily_limit' | 'nothing'
 export interface PiecesDecision { specs: PieceSpec[]; format: PieceFormat; videoDeferred: boolean; notes: string[]; skip?: Skip }
 
+export const RETRY_TASK_KEY = 'opportunity_pieces_retry' // linha gravada ao retentar: a retentativa é ÚNICA por oportunidade
+export const CREATED_TASK_KEY = 'opportunity_piece_created' // linha gravada quando uma peça realmente nasce (sobrevive à exclusão do rascunho)
+
 /**
- * Idempotência. `go` = pode despachar; `retry` = despachado há mais de 30 min e NENHUMA peça apareceu (a geração em segundo
- * plano falhou) — só uma segunda tentativa por plano; `already` = não faz nada. `loggedRows` = linhas 'opportunity_pieces'
- * deste plano nas últimas 24 h (uma por peça despachada: até 3 por tentativa).
+ * Idempotência. `go` = pode despachar; `retry` = despachado há > 30 min e NENHUMA peça jamais existiu (a geração em segundo
+ * plano falhou) e ainda não houve retentativa; `already` = não faz nada.
+ *  - `everCreated` = linhas 'opportunity_piece_created' (sem janela de tempo): se o dono EXCLUIU o rascunho, a peça já existiu
+ *    e NUNCA é regerada sozinha;
+ *  - `retried` = existe linha 'opportunity_pieces_retry' desta oportunidade (retentativa única, vale com 1, 2 ou 3 peças pedidas).
  */
-export function idempotency(opts: { generatedAt: string | null; existingPieces: number; nowMs: number; loggedRows: number }): 'go' | 'retry' | 'already' {
-  if (opts.existingPieces > 0) return 'already'
+export function idempotency(opts: { generatedAt: string | null; existingPieces: number; everCreated: number; retried: boolean; nowMs: number }): 'go' | 'retry' | 'already' {
+  if (opts.existingPieces > 0 || opts.everCreated > 0) return 'already'
   if (!opts.generatedAt) return 'go'
   const at = Date.parse(opts.generatedAt)
-  if (Number.isFinite(at) && opts.nowMs - at > STALE_DISPATCH_MS && opts.loggedRows <= MAX_PIECES_PER_PLAN) return 'retry'
+  if (Number.isFinite(at) && opts.nowMs - at > STALE_DISPATCH_MS && !opts.retried) return 'retry'
   return 'already'
 }
 

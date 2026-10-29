@@ -492,8 +492,9 @@ async function saveLabels(admin: SupaClient, id: string, l?: { familia?: string;
   // Etapa 4B: vínculo com a oportunidade num UPDATE à parte (se a coluna ainda não existe, os rótulos abaixo não se perdem).
   if (opportunityId) {
     try {
-      const { error } = await admin.from('marketing_ai_test_content').update({ opportunity_id: opportunityId }).eq('id', id)
+      const { data: up, error } = await admin.from('marketing_ai_test_content').update({ opportunity_id: opportunityId }).eq('id', id).select('company_id').maybeSingle()
       if (error) console.error('saveLabels: opportunity_id não gravado (migration aplicada?)', id, error.message)
+      else if (up?.company_id) await admin.from('agent_performance').insert({ company_id: up.company_id, agent_role: 'cmo', task_key: 'opportunity_piece_created', task_description: `opp:${opportunityId} peça ${id}`, tokens_used: 0, success: true }) // marca que a peça existiu (excluir o rascunho não a apaga)
     } catch (e) { console.error('saveLabels: opportunity_id falhou', id, e) }
   }
   const upd: Record<string, unknown> = {}

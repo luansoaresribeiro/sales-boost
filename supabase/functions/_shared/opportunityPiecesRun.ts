@@ -8,7 +8,7 @@
 // duplo clique não geram de novo: `pieces_generated_at` é reservado de forma atômica ANTES de despachar.
 import type { Lang } from './opportunityEngine.ts'
 import type { OpportunityPlan } from './opportunityPlan.ts'
-import { PIECES_TASK_KEY, decidePieces, idempotency, type PieceSpec } from './opportunityPieces.ts'
+import { CREATED_TASK_KEY, PIECES_TASK_KEY, RETRY_TASK_KEY, decidePieces, idempotency, type PieceSpec } from './opportunityPieces.ts'
 
 // deno-lint-ignore no-explicit-any
 type Admin = { from: (t: string) => any }
@@ -37,15 +37,17 @@ export async function generateOpportunityPieces(admin: Admin, companyId: string,
     const { count, error } = await admin.from(table).select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq(col, opportunityId)
     return error ? null : (count ?? 0)
   }
-  const [drafts, posts, { count: logged }, { count: usedToday }] = await Promise.all([
+  const [drafts, posts, { count: created }, { count: retriedRows }, { count: usedToday }] = await Promise.all([
     countOf('marketing_ai_test_content', 'opportunity_id'),
     countOf('posts', 'opportunity_id'),
-    admin.from('agent_performance').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('task_key', PIECES_TASK_KEY).eq('success', true).like('task_description', `opp:${row.id}%`).gte('created_at', since),
+    // Sem janela de tempo: peça que já existiu (mesmo com o rascunho excluído depois) nunca é regerada sozinha.
+    admin.from('agent_performance').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('task_key', CREATED_TASK_KEY).like('task_description', `opp:${row.id}%`),
+    admin.from('agent_performance').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('task_key', RETRY_TASK_KEY).like('task_description', `opp:${row.id}%`),
     admin.from('agent_performance').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('task_key', PIECES_TASK_KEY).eq('success', true).gte('created_at', since),
   ])
   if (drafts === null) return { ok: false, status: 503, code: 'migration_pending', error: 'marketing_ai_test_content.opportunity_id ausente (migration pendente).' }
   const existing = drafts + (posts ?? 0) // a peça aprovada vira post e some dos rascunhos: conta os dois
-  const idem = idempotency({ generatedAt: row.pieces_generated_at ?? null, existingPieces: existing, nowMs: Date.now(), loggedRows: logged ?? 0 })
+  const idem = idempotency({ generatedAt: row.pieces_generated_at ?? null, existingPieces: existing, everCreated: created ?? 0, retried: (retriedRows ?? 0) > 0, nowMs: Date.now() })
   if (idem === 'already') return { ok: true, status: 200, reused: true, dispatched: 0 }
 
   // Fotos reais dos itens do plano (regra 4): quantas cada um tem decide se vira peça de foto ou de texto.
@@ -66,6 +68,11 @@ export async function generateOpportunityPieces(admin: Admin, companyId: string,
   const { data: claimed, error: claimErr } = await claim.select('id')
   if (claimErr) return { ok: false, status: 503, code: 'migration_pending', error: `growth_opportunities: ${claimErr.message}` }
   if (!claimed || claimed.length === 0) return { ok: true, status: 200, reused: true, dispatched: 0 }
+
+  // Retentativa explícita e única: a linha é gravada logo após a reserva (quem perdeu a reserva não chega aqui).
+  if (idem === 'retry') {
+    try { await admin.from('agent_performance').insert({ company_id: companyId, agent_role: 'cmo', task_key: RETRY_TASK_KEY, task_description: `opp:${row.id} retentativa`, tokens_used: 0, success: true }) } catch { /* não-fatal */ }
+  }
 
   // Despacho: cada peça é uma chamada própria (relógio próprio de 150 s no creative-generate); esperamos só o aceite.
   const results = await Promise.all(decision.specs.map(async (spec: PieceSpec) => {
