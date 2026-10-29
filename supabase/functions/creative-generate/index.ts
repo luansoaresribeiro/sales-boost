@@ -33,6 +33,7 @@ import { callClaude as callModel, CHEAP_MODEL, checkAndSave, fetchFaqConfig, get
 import { decideTopic, guardDeck, loadGuardCfg, topicBlock, topicNote, type Ask, type TopicDecision } from '../_shared/deckGuard.ts'
 import { resolveAlias, tipNumbers, topicText } from '../_shared/deckTopic.ts'
 import { currentWeekBRT } from '../_shared/publishSlot.ts'
+import { buildOpportunityJob } from '../_shared/opportunityPieceJob.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -464,6 +465,8 @@ interface GenOpts {
   intent?: SlotIntent | null
   // Imóvel ligado à peça (só a trava do QUERO usa hoje; post solto não tem).
   itemId?: string | null
+  // Etapa 4B: oportunidade que originou a peça (vem de buildOpportunityJob, já conferida no banco). Gravada em saveLabels.
+  opportunityId?: string | null
   ideaId?: string | null
   skipImage?: boolean
   // Escolha manual do dono no botão "Gerar post de teste": undefined/null =
@@ -485,7 +488,15 @@ interface GenOpts {
 // Rótulo único da peça (familia · pilar_ss · tema→pillar) + intenção que a guiou.
 // UPDATE separado e tolerante, NUNCA no insert: se a migration das colunas ainda não
 // foi aplicada, a peça nasce sem rótulo mas nasce (docs/PITFALLS.md).
-async function saveLabels(admin: SupaClient, id: string, l?: { familia?: string; pilar_ss?: string; tema?: string } | null, intent?: SlotIntent | null): Promise<void> {
+async function saveLabels(admin: SupaClient, id: string, l?: { familia?: string; pilar_ss?: string; tema?: string } | null, intent?: SlotIntent | null, opportunityId?: string | null): Promise<void> {
+  // Etapa 4B: vínculo com a oportunidade num UPDATE à parte (se a coluna ainda não existe, os rótulos abaixo não se perdem).
+  if (opportunityId) {
+    try {
+      const { data: up, error } = await admin.from('marketing_ai_test_content').update({ opportunity_id: opportunityId }).eq('id', id).select('company_id').maybeSingle()
+      if (error) console.error('saveLabels: opportunity_id não gravado (migration aplicada?)', id, error.message)
+      else if (up?.company_id) await admin.from('agent_performance').insert({ company_id: up.company_id, agent_role: 'cmo', task_key: 'opportunity_piece_created', task_description: `opp:${opportunityId} peça ${id}`, tokens_used: 0, success: true }) // marca que a peça existiu (excluir o rascunho não a apaga)
+    } catch (e) { console.error('saveLabels: opportunity_id falhou', id, e) }
+  }
   const upd: Record<string, unknown> = {}
   if (l?.familia) upd.familia = l.familia
   if (l?.pilar_ss) upd.pilar_ss = l.pilar_ss
@@ -763,7 +774,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
     story_worthy: !!post.story_worthy, story_note: post.story_note ? String(post.story_note) : null,
   }).select('id').single()
   if (insErr) throw new Error(insErr.message)
-  await saveLabels(admin, inserted.id, opts.labels, opts.intent)
+  await saveLabels(admin, inserted.id, opts.labels, opts.intent, opts.opportunityId)
   // Dica usada num carrossel regulado conta como usada (rodízio das menos usadas).
   if (topic?.mode === 'regulado') {
     await Promise.all(topic.tips.map(t => admin.from('marketing_ai_knowledge').update({ meta: { ...t.meta, used_count: (t.meta?.used_count ?? 0) + 1 } }).eq('id', t.id).eq('company_id', company.id)))
@@ -1136,7 +1147,7 @@ const VIDEO_RECIPE = 'video_imovel'
 const DECK_FORMAT = 'carrossel_slides' // genérico (formatCatalog.ts)
 // familia/pilar_ss/tema = rótulo único da peça (tema = pilar de conteúdo da ficha, gravado em `pillar`);
 // intent = a intenção da estratégia pra esta vaga (buildSlotIntent). Todos opcionais (vaga antiga/avulsa).
-interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string; familia?: string; pilar_ss?: string; tema?: string; intent?: SlotIntent | null }
+interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string; familia?: string; pilar_ss?: string; tema?: string; intent?: SlotIntent | null; opportunity_id?: string }
 
 async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: ReturnType<typeof weekSlots>, plan: ContentPlan, funnelPlan: unknown = null, ssPillars: { key: string; name: string; why?: string }[] = []): Promise<{ planned: number; days: { date: string; posts: number; note: string }[]; todo: { format: string; name: string; per_week: number; purpose: string }[] }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -1262,11 +1273,12 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
     if (job.producer === 'post') {
       // Vaga de dica: usa uma dica JÁ conferida (aba Dicas e FAQ). Sem dica
       // liberada, sai um carrossel de slides com o mesmo propósito.
-      if (job.format === FAQ_FORMAT && await runFaqSlot(admin, anthropicKey, company, job)) return
+      // Peça de oportunidade nunca vira a dica da FAQ (ela ignora a intenção do plano).
+      if (job.format === FAQ_FORMAT && !job.opportunity_id && await runFaqSlot(admin, anthropicKey, company, job)) return
       // Com intenção (setor com Social Selling): o ângulo é o pilar de Social Selling + o texto da intenção
       // vai inteiro pro prompt. Sem ela (setor sem ficha de SS, vaga antiga/avulsa) fica como sempre foi.
       const ib = intentBlock(job.intent)
-      const angleHead = job.intent ? `Pilar ${job.intent.pilar_ss_name}` : `Pilar ${job.pillar}`
+      const angleHead = job.intent?.opportunity ? 'Oportunidade aprovada pelo dono' : job.intent ? `Pilar ${job.intent.pilar_ss_name}` : `Pilar ${job.pillar}`
       // Guarda ligado (ficha com categorias/termos regulados): a dica geral é conferida em código (forceGeneral). Desligado
       // (deploy antes da migration): o fluxo antigo idêntico — a regra "dica GERAL" vai só no ângulo da vaga.
       const guardOn = job.format === FAQ_FORMAT ? !!(await loadGuardCfg(admin, company.vertical_key ?? null).catch(() => null)) : false
@@ -1276,13 +1288,13 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
       // Só o card genérico (post_card, em setor que não desligou) usa o
       // caminho de imagem+template; qualquer outro formato de post — inclusive
       // um antigo que ficou numa estratégia — sai como carrossel de slides.
-      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', forceGeneral: job.format === FAQ_FORMAT, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: job.intent ?? null })
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', forceGeneral: job.format === FAQ_FORMAT, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: job.intent ?? null, opportunityId: job.opportunity_id ?? null })
       return
     }
     if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }
     const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/catalog-package`, {
       method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ item_id: job.item_id, only_recipe: job.recipe, planned_for: job.date || undefined, loose: !job.date, cron_secret: cronSecret, company_id: company.id, intent: intentBlock(job.intent) || undefined, familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }),
+      body: JSON.stringify({ item_id: job.item_id, only_recipe: job.recipe, planned_for: job.date || undefined, loose: !job.date, cron_secret: cronSecret, company_id: company.id, intent: intentBlock(job.intent) || undefined, familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar, ...(job.opportunity_id ? { opportunity_id: job.opportunity_id } : {}) }),
     })
     const r = await res.json().catch(() => ({})) as { error?: string; generated?: unknown[] }
     if (!res.ok || !r.generated?.length) console.error('runPlanSlot: catalog-package sem peça', company.id, job.date, job.recipe, res.status, r.error)
@@ -1443,6 +1455,20 @@ Deno.serve(async (req) => {
 
     // ── Uma vaga do calendário (despachada por planWeekFromStrategy) ──
     if (cronSecretEnv && body.cron_secret === cronSecretEnv && body.action === 'plan_slot' && typeof body.company_id === 'string') {
+      // Etapa 4B: peça de uma OPORTUNIDADE aprovada (despachada por opportunityPiecesRun, marketing-ai). Só aqui — chamada
+      // interna autenticada por cron_secret — `opportunity_id` vale; o `make_now` (login do dono) e o corpo da vaga do
+      // calendário o ignoram. Nada do corpo é confiado: o plano é recarregado do banco (por empresa) e precisa estar aprovado.
+      if (body.opportunity_id !== undefined) {
+        const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', body.company_id).maybeSingle()
+        const company = companyRow as Company | null
+        if (!company) return json({ error: 'empresa não encontrada' }, 404)
+        if (!(await hasPaidAccess(admin, company.id))) return json({ error: 'sem plano' }, 402)
+        const r = await buildOpportunityJob(admin, company, body.opportunity_id, body.piece, DECK_FORMAT)
+        if (!r.ok) return json({ error: r.error }, r.status)
+        // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
+        EdgeRuntime.waitUntil(runPlanSlot(admin, anthropicKey, company, r.job, cronSecretEnv))
+        return json({ ok: true, accepted: true, mode: r.mode }, 202)
+      }
       const rawJob = body.slot as SlotJob | undefined
       // Campos novos (rótulo + intenção) revalidados: lista fixa / formato fixo / slice.
       const job = rawJob ? { ...rawJob, familia: undefined, pilar_ss: undefined, tema: undefined, ...cleanLabels(rawJob), intent: cleanIntent(rawJob.intent) } as SlotJob : undefined

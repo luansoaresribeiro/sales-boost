@@ -21,7 +21,7 @@ export interface Evidence { type: EvType; text: string; source: string | null; d
 export interface NumTag { value: string; unit: 'cur' | 'bed' }
 export interface Fact { id: string; type: 'fact' | 'data'; text: string; source: string; date: string | null; origin: string; numTags?: NumTag[] }
 // Textos de setor vêm da FICHA (config.opportunity_texts, regra 6); sem eles valem os genéricos abaixo.
-export interface OppTexts { hypotheses?: string[]; caveat?: string; audienceHint?: string }
+export interface OppTexts { hypotheses?: string[]; caveat?: string; audienceHint?: string; marketClaims?: string[] }
 
 export interface FieldMap { location: string; price?: string; type?: string; bedrooms?: string; deal?: string }
 export interface CatalogItem { id: string; title: string; fields: Record<string, unknown>; photoCount: number }

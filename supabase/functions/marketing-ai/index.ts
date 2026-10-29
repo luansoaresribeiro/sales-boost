@@ -32,6 +32,7 @@ import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { runOpportunities } from '../_shared/opportunityRun.ts'
 import { approveOpportunityPlan, decideOpportunity } from '../_shared/opportunityPlanRun.ts'
 import { cronOpportunities, runInBackground } from '../_shared/opportunityCron.ts'
+import { generateOpportunityPieces, type Dispatch } from '../_shared/opportunityPiecesRun.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -674,8 +675,18 @@ Deno.serve(async (req) => {
     const isCron = cronSecretEnv && body.cron_secret === cronSecretEnv
 
     // Rodadas automáticas de oportunidades (cron_secret no corpo, como os outros crons). Responde na hora e trabalha em segundo plano.
+    // Etapa 4B: despacho de UMA peça de oportunidade ao creative-generate (plan_slot, cron_secret). Responde 202 na hora.
+    const dispatchPiece: Dispatch = async (b) => {
+      if (!cronSecretEnv) return false
+      const res = await fetch(`${supabaseUrl}/functions/v1/creative-generate`, {
+        method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'plan_slot', cron_secret: cronSecretEnv, ...b }), signal: AbortSignal.timeout(20_000),
+      })
+      await res.body?.cancel()
+      return res.ok
+    }
     if (isCron && body.action === 'cron_opportunities') {
-      runInBackground(cronOpportunities(admin, (prompt, maxTokens) => callClaudeWithUsage(anthropicKey, prompt, maxTokens)).then(r => console.log('cron_opportunities:', JSON.stringify(r))).catch(e => console.error('cron_opportunities:', String(e))))
+      runInBackground(cronOpportunities(admin, (prompt, maxTokens) => callClaudeWithUsage(anthropicKey, prompt, maxTokens), Date.now(), dispatchPiece).then(r => console.log('cron_opportunities:', JSON.stringify(r))).catch(e => console.error('cron_opportunities:', String(e))))
       return json({ ok: true, cron: true, started: true })
     }
     if (isCron) {
@@ -723,6 +734,10 @@ Deno.serve(async (req) => {
     }
     if (action === 'approve_opportunity_plan') {
       const { status, ...rest } = await approveOpportunityPlan(admin, company.id as string, body.opportunity_id, body.undo === true)
+      // Etapa 4B (tudo automático): plano aprovado → as peças nascem sozinhas, em rascunho, em segundo plano. Desfazer não apaga nada.
+      if (rest.ok && body.undo !== true) {
+        runInBackground(generateOpportunityPieces(admin, company.id as string, body.opportunity_id, dispatchPiece).then(r => { if (!r.ok) console.error(`[opportunity-pieces] ${String(body.opportunity_id)}: ${r.status} ${r.error}`) }).catch(e => console.error('[opportunity-pieces]', String(e))))
+      }
       return json(rest, status)
     }
     ;(company as Company).businessContext = await loadBusinessContext(admin, company.id)

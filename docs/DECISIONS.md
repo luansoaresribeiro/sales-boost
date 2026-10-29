@@ -1972,3 +1972,50 @@ grátis de 30 s, acima — mantidos como histórico):
 - **CTA do plano:** o plano não liga a um imóvel com resposta automática aprovada; por isso "Comente PALAVRA" é
   trocado pelo CTA alternativo da ficha (`ctas.sem_automacao`; em inglês, "Send us a DM").
 
+## 2026-10-29 — Autonomia do agente
+
+- **Regra do dono (2026-10-29):** ele só quer ser consultado em decisões que **mudam a direção do produto**. Deploy de
+  function, migration e agendamento (cron) **não precisam mais de aprovação no chat**. A seção "Alterações
+  arriscadas" do [CLAUDE.md](../CLAUDE.md) foi mantida (com uma nota apontando para cá): vira lista de **cuidado**.
+- **Continuam valendo, sem exceção:** (1) nada vai ao público sem aprovação do dono; (2) nunca tocar dados de clientes
+  reais (Liga dos Sonhos) em testes; (3) nunca publicar em Instagram real sem aprovação explícita (inclui o
+  @getsaleboost); (4) **não gastar além do teto/combinado** — vídeo/Higgsfield e qualquer fornecedor ou API paga nova
+  continuam precisando do OK do dono; (5) nada de setor no código (ficha `vertical_playbooks`); (6) não inventar
+  números; (7) foto de item é sempre real e IA de imagem nunca escreve texto.
+- **O que o agente faz sozinho, com o mesmo cuidado de antes:** migration (aditiva e idempotente, com como reverter
+  escrito no próprio arquivo), deploy de function — **inclusive as usadas por cliente real** (`agent-actions`,
+  `instagram-webhook`, `hermes-proxy`, `strategy-generate`, `creative-generate`, `claim-diagnostic`) — e cron.
+  Cuidado = testar antes (build, lint, testes de lógica, bundle), **comparar o que foi pro ar** com o que estava
+  (contagem de erros de tipo antes/depois; ver [PITFALLS.md](PITFALLS.md)), e deixar o **rollback documentado**
+  (migration: bloco "como reverter"; function: o commit anterior para redeploy; cron: `cron.unschedule`).
+- **Ainda é decisão do dono:** mudar a direção do produto (algo que contradiga este arquivo), remover funcionalidade,
+  gastar mais, publicar/enviar em conta real.
+
+## 2026-10-29 — Inteligência comercial, Etapa 4B: plano aprovado → peças em rascunho (automático)
+
+- **Fluxo:** o dono aprova o **plano** (`approve_opportunity_plan`) e o sistema gera sozinho **1 a 3 rascunhos**
+  (padrão 2; a IA do plano sugere `pieces_count`, o código limita a 3). Sem botão de gerar — a única ação humana é
+  aprovar (princípio "Tudo automático", 2026-10-26). Cada peça nasce **rascunho na Central de Aprovações**; o cron
+  `cron_opportunities` é a rede de segurança (plano aprovado sem peças → gera).
+- **Mesmo motor do calendário:** a peça é pedida ao `creative-generate` (`plan_slot` com `opportunity_id`, só por chamada
+  interna com `cron_secret`) e herda todas as travas (intenção, QUERO, recados internos, tema do carrossel,
+  render-format, fotos reais, nada de texto em imagem de IA). Nenhum caminho novo de criação foi inventado.
+- **Só formatos SEM custo extra de vídeo** (decisão de custo pendente do dono): carrossel, post, story de imagem/texto.
+  Se o plano sugerir `reel`/vídeo, saem peças de **carrossel** e o plano registra "Vídeo fica para quando o dono liberar
+  custo de vídeo". Liberar vídeo nas peças de oportunidade é decisão do dono (gasto Higgsfield).
+- **Foto real ou texto (regra 4):** peça de foto exige item do plano com **5+ fotos reais** (exigência do
+  `catalog-package`). Sem isso, sai **1 peça de texto** (carrossel educativo da marca) com o motivo no plano — nunca
+  duas peças de texto repetidas, nunca imagem de imóvel inventada.
+- **Limites:** no máx. **3 peças por plano** e **6 peças de oportunidade por empresa por dia** (janela de 24 h,
+  `agent_performance` `task_key='opportunity_pieces'`, uma linha por peça despachada). As peças contam no caminho de
+  custo que o calendário já usa (mesma IA/teto do `creative-generate`).
+- **Idempotência:** `growth_opportunities.pieces_generated_at` é reservado de forma atômica antes de despachar; plano
+  que já tem peça (rascunho ou post) não gera de novo. Despachado há > 30 min e **nenhuma peça jamais existiu** → 1 retentativa única (linha `opportunity_pieces_retry`). Peça que já existiu e foi excluída pelo dono (marca `opportunity_piece_created`) **nunca** é regerada sozinha.
+- **Vínculo:** `opportunity_id` em `marketing_ai_test_content` e `posts` (copiado na aprovação, como `item_id`) — a
+  Etapa 6 poderá medir por oportunidade.
+- **O mapa formato-do-plano → formato-do-catálogo vive na ficha** (`config.opportunity_pieces`, regra 6); setor sem
+  mapa usa o carrossel de slides genérico.
+- **Qualidade (1ª rodada real, Tespon):** adjetivo de mercado ("disputado", "valorizado", "alto padrão", "nobre",
+  "em alta", "ticket elevado") só vale se estiver nos fatos — prompt **e** filtro em código (lista na ficha,
+  `opportunity_texts.market_claims`, com fallback genérico); a ação sugerida não manda "publicar com fotos" para item
+  sem foto — a primeira ação passa a ser adicionar fotos reais.

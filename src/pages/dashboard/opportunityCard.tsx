@@ -1,6 +1,6 @@
 import { useLang } from '../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
-import OpportunityPlan, { type PlanData, type PlanPatch } from './opportunityPlan'
+import OpportunityPlan, { type PieceStats, type PlanData, type PlanPatch } from './opportunityPlan'
 
 // Cartão de uma oportunidade (Inteligência comercial — Etapa 1). Só mostra: a decisão
 // (aprovar/descartar) sobe pro pai. Nada daqui publica ou envia (regra 1).
@@ -13,6 +13,7 @@ export interface Opportunity {
   status: 'suggested' | 'approved' | 'dismissed'; priority_rank: number | null; priority_reasons: string[] | null
   run_id: string | null; created_at: string; decided_at?: string | null
   plan?: PlanData | null; plan_generated_at?: string | null; plan_approved_at?: string | null // Etapa 4A (migration 20261029120000)
+  pieces_generated_at?: string | null // Etapa 4B (migration 20261029130000)
 }
 
 const GREEN = '#4ade80'
@@ -53,8 +54,8 @@ function Block({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export default function OpportunityCard({ o, itemNames, busy, onDecide, onPlan }: {
-  o: Opportunity; itemNames: Record<string, string>; busy: boolean; onDecide: (status: Opportunity['status']) => void; onPlan: (patch: Partial<PlanPatch>) => void
+export default function OpportunityCard({ o, itemNames, pieces, busy, onDecide, onPlan }: {
+  o: Opportunity; itemNames: Record<string, string>; pieces?: PieceStats; busy: boolean; onDecide: (status: Opportunity['status']) => void; onPlan: (patch: Partial<PlanPatch>) => void
 }) {
   const { lang } = useLang()
   const t = TX[lang]
@@ -111,7 +112,7 @@ export default function OpportunityCard({ o, itemNames, busy, onDecide, onPlan }
         )}
       </div>
       {o.status === 'suggested' && <div style={{ fontSize: '10.5px', color: MUTED, marginTop: '8px' }}>{t.approveHint}</div>}
-      {o.status === 'approved' && <OpportunityPlan opportunityId={o.id} plan={o.plan ?? null} approvedAt={o.plan_approved_at ?? null} itemNames={itemNames} decidedAt={o.decided_at ?? null} onChange={onPlan} />}
+      {o.status === 'approved' && <OpportunityPlan opportunityId={o.id} plan={o.plan ?? null} approvedAt={o.plan_approved_at ?? null} itemNames={itemNames} decidedAt={o.decided_at ?? null} piecesGeneratedAt={o.pieces_generated_at ?? null} pieces={pieces} onChange={onPlan} />}
     </div>
   )
 }

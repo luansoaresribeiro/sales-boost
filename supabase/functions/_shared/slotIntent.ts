@@ -14,7 +14,10 @@ export interface SlotIntent {
   pillar_plan: string
   funnel: { stage: string; objective: string; audience: string; message: string; cta: string } | null
   central_line: string
+  /** Intenção que vem de uma OPORTUNIDADE aprovada (Etapa 4B), não de um pilar de Social Selling: `pilar_ss` fica vazio. */
+  opportunity?: OppIntent
 }
+export interface OppIntent { title: string; objective: string; audience: string; buyer_problem: string; value_proposition: string; key_message: string; cta: string }
 
 interface SlotLike { format?: string; pilar_ss?: string | null }
 interface PlanLike { central_line?: string; pillars?: { key: string; name?: string; plan?: string }[] }
@@ -52,6 +55,7 @@ const MAX_BLOCK = 900
  * O CTA da etapa é SÓ sugestão — a trava do QUERO manda.
  */
 export function intentBlock(intent: SlotIntent | null | undefined): string {
+  if (intent?.opportunity) return opportunityBlock(intent.opportunity)
   if (!intent || !intent.pilar_ss) return ''
   const lines = [
     `Pra que serve (Social Selling): pilar ${intent.pilar_ss_name}${intent.pilar_ss_why ? ` — ${intent.pilar_ss_why}` : ''}.`,
@@ -68,6 +72,38 @@ export function intentBlock(intent: SlotIntent | null | undefined): string {
   const out = lines.join('\n')
   if (out.length <= MAX_BLOCK) return out
   // Estourou: encurta o corpo, mas a última linha (as regras) nunca se perde.
+  const rules = lines[lines.length - 1]
+  const body = lines.slice(0, -1).join('\n').slice(0, MAX_BLOCK - rules.length - 2).replace(/\s+\S*$/, '…')
+  return `${body}\n${rules}`
+}
+
+/**
+ * Intenção de uma oportunidade aprovada (plano aprovado pelo dono): público, objetivo, mensagem, CTA. Os textos do
+ * plano já passaram pela conferência de números/promessa/Fair Housing/afirmações de mercado (opportunityPlan.ts).
+ */
+export function buildOpportunityIntent(title: unknown, plan: { audience?: unknown; objective?: unknown; buyer_problem?: unknown; value_proposition?: unknown; key_message?: unknown; cta?: unknown } | null | undefined): SlotIntent | null {
+  if (!plan || typeof plan !== 'object') return null
+  const opp: OppIntent = {
+    title: s(title, 120), objective: s(plan.objective, 300), audience: s(plan.audience, 200), buyer_problem: s(plan.buyer_problem, 300),
+    value_proposition: s(plan.value_proposition, 300), key_message: s(plan.key_message, 300), cta: s(plan.cta, 100),
+  }
+  if (!opp.objective && !opp.key_message) return null
+  return { pilar_ss: '', pilar_ss_name: '', pillar_plan: '', funnel: null, central_line: '', opportunity: opp }
+}
+
+function opportunityBlock(o: OppIntent): string {
+  const lines = [
+    `Pra que serve: oportunidade comercial APROVADA pelo dono — ${o.title}.`,
+    o.objective && `Objetivo: ${o.objective}`,
+    o.audience && `Público: ${o.audience}`,
+    o.buyer_problem && `Problema do comprador: ${o.buyer_problem}`,
+    o.value_proposition && `Proposta de valor: ${o.value_proposition}`,
+    o.key_message && `Mensagem principal: ${o.key_message}`,
+    o.cta && `CTA sugerido: ${o.cta}`,
+    'Use como direção, não copie o texto. Não repita número que não esteja nos dados do imóvel/empresa. Não use adjetivo de mercado (disputado, valorizado, alto padrão, nobre, em alta) que não esteja acima. O CTA sugerido não vale se contrariar a regra de chamada final.',
+  ].filter(Boolean) as string[]
+  const out = lines.join('\n')
+  if (out.length <= MAX_BLOCK) return out
   const rules = lines[lines.length - 1]
   const body = lines.slice(0, -1).join('\n').slice(0, MAX_BLOCK - rules.length - 2).replace(/\s+\S*$/, '…')
   return `${body}\n${rules}`
@@ -104,6 +140,8 @@ export function dropUnknownPilar<T extends { pilar_ss?: string }>(x: T, ssPillar
 /** Revalida uma intenção que viajou por JSON (plan_slot / cron): forma fixa + slice. */
 export function cleanIntent(x: unknown): SlotIntent | null {
   const r = (x && typeof x === 'object' ? x : null) as Record<string, unknown> | null
+  // Intenção de oportunidade: sem pilar_ss; só a forma fixa, com slice (o conteúdo real é recarregado do banco por quem usa).
+  if (r?.opportunity && typeof r.opportunity === 'object') return buildOpportunityIntent((r.opportunity as Record<string, unknown>).title, r.opportunity as Record<string, unknown>)
   const key = typeof r?.pilar_ss === 'string' && /^[a-z0-9_]{2,60}$/.test(r.pilar_ss) ? r.pilar_ss : ''
   if (!r || !key) return null
   const f = (r.funnel && typeof r.funnel === 'object' ? r.funnel : null) as Record<string, unknown> | null

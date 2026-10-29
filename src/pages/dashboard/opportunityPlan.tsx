@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLang } from '../../contexts/LanguageContext'
 import { useShowcase } from '../../contexts/ShowcaseContext'
@@ -8,14 +9,21 @@ import type { Evidence } from './opportunityCard'
 // Plano de uma oportunidade APROVADA (Inteligência comercial — Etapa 4, Parte A). Tudo automático: o plano é criado
 // sozinho quando a oportunidade é aprovada (marketing-ai → decide_opportunity); aqui o dono só APROVA o plano
 // (approve_opportunity_plan). Não há botão de gerar nem de refazer. Aprovar só guarda a decisão: nada é publicado
-// ou enviado daqui (regra 1); gerar as peças é a Parte B.
+// ou enviado daqui (regra 1). Etapa 4B: aprovado o plano, as peças nascem SOZINHAS como rascunho na Central de
+// Aprovações (sem botão de gerar); aqui só se mostra o andamento e o link.
 
 export interface PlanData {
   audience: string | null; objective: string; buyer_problem: string; value_proposition: string; key_message: string
   channel: string; format_suggestion: string; format_reason: string; format_is_default?: boolean
   cta: string; cta_replaced?: boolean; success_metrics: string
   item_ids: string[]; cited_evidence: (Evidence & { index: number })[]; hypotheses: string[]
+  pieces_count?: number
+  pieces_info?: { requested_format: string; used_format: string; video_deferred: boolean; dispatched: number; notes: string[]; at: string }
 }
+/** Peças desta oportunidade: rascunhos pendentes na Central (ready), em revisão de qualidade (review) e já aprovadas/publicadas (approved). */
+export interface PieceStats { ready: number; review: number; approved: number }
+// Depois de aprovado o plano, a tela espera as peças por até 15 min antes de dizer "próxima rodada".
+export const PIECES_WAIT_MS = 15 * 60_000
 export const PLAN_WAIT_MS = 2 * 60_000 // quanto tempo a tela espera o plano sair antes de dizer "próxima rodada"
 export interface PlanPatch { plan: PlanData | null; plan_generated_at: string | null; plan_approved_at: string | null }
 
@@ -23,7 +31,8 @@ const GREEN = '#4ade80'
 const TX = {
   pt: {
     building: 'Montando o plano…', later: 'O plano sai na próxima rodada automática.', approve: 'Aprovar plano', unapprove: 'Desfazer aprovação', approvedBadge: 'Plano aprovado', draftBadge: 'Plano ainda não aprovado',
-    fixed: 'Nada é publicado daqui. Gerar as peças vem no próximo passo.', title: 'Plano da oportunidade', hint: 'O plano transforma esta oportunidade em uma ação: público, mensagem e formato. É criado sozinho depois que você aprova a oportunidade.',
+    fixed: 'Nada é publicado daqui. Aprovado o plano, as peças nascem sozinhas como rascunho na Central de Aprovações — você aprova uma a uma.',
+    makingPieces: 'Gerando as peças…', piecesLater: 'As peças saem na próxima rodada automática.', piecesReady: (n: number) => `${n} ${n === 1 ? 'peça' : 'peças'} na Central de Aprovações`, piecesReview: (n: number) => `${n} em revisão de qualidade`, piecesApproved: (n: number) => `${n} ${n === 1 ? 'aprovada' : 'aprovadas'}`, openApprovals: 'Abrir a Central de Aprovações', pieces: 'Peças', piecesNotes: 'Sobre as peças', title: 'Plano da oportunidade', hint: 'O plano transforma esta oportunidade em uma ação: público, mensagem e formato. É criado sozinho depois que você aprova a oportunidade.',
     audience: 'Público', objective: 'Objetivo', problem: 'Problema do comprador', value: 'Proposta de valor', message: 'Mensagem principal', channel: 'Canal', format: 'Formato sugerido', cta: 'Chamada final (CTA)',
     measure: 'Como medir', items: 'Imóveis ligados', evidence: 'Evidências citadas', hypotheses: 'Hipóteses (ainda não verificadas)',
     formats: { carousel: 'Carrossel', reel: 'Vídeo curto (Reel)', post: 'Post com foto', story: 'Story' } as Record<string, string>,
@@ -33,7 +42,8 @@ const TX = {
   },
   en: {
     building: 'Building the plan…', later: 'The plan will come out in the next automatic round.', approve: 'Approve plan', unapprove: 'Undo approval', approvedBadge: 'Plan approved', draftBadge: 'Plan not approved yet',
-    fixed: 'Nothing is published from here. Generating the pieces comes in the next step.', title: 'Opportunity plan', hint: 'The plan turns this opportunity into an action: audience, message and format. It is created automatically after you approve the opportunity.',
+    fixed: 'Nothing is published from here. Once the plan is approved, the pieces are made automatically as drafts in the Approvals center — you approve them one by one.',
+    makingPieces: 'Making the pieces…', piecesLater: 'The pieces will come out in the next automatic round.', piecesReady: (n: number) => `${n} ${n === 1 ? 'piece' : 'pieces'} in the Approvals center`, piecesReview: (n: number) => `${n} in quality review`, piecesApproved: (n: number) => `${n} approved`, openApprovals: 'Open the Approvals center', pieces: 'Pieces', piecesNotes: 'About the pieces', title: 'Opportunity plan', hint: 'The plan turns this opportunity into an action: audience, message and format. It is created automatically after you approve the opportunity.',
     audience: 'Audience', objective: 'Objective', problem: 'Buyer problem', value: 'Value proposition', message: 'Key message', channel: 'Channel', format: 'Suggested format', cta: 'Call to action (CTA)',
     measure: 'How to measure', items: 'Linked properties', evidence: 'Evidence cited', hypotheses: 'Hypotheses (not verified yet)',
     formats: { carousel: 'Carousel', reel: 'Short video (Reel)', post: 'Photo post', story: 'Story' } as Record<string, string>,
@@ -58,8 +68,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   )
 }
 
-export default function OpportunityPlan({ plan, opportunityId, decidedAt, approvedAt, itemNames, onChange }: {
-  opportunityId: string; plan: PlanData | null; decidedAt: string | null; approvedAt: string | null; itemNames: Record<string, string>; onChange: (p: Partial<PlanPatch>) => void
+export default function OpportunityPlan({ plan, opportunityId, decidedAt, approvedAt, itemNames, piecesGeneratedAt, pieces, onChange }: {
+  opportunityId: string; plan: PlanData | null; decidedAt: string | null; approvedAt: string | null; itemNames: Record<string, string>
+  piecesGeneratedAt?: string | null; pieces?: PieceStats; onChange: (p: Partial<PlanPatch>) => void
 }) {
   const { lang } = useLang()
   const t = TX[lang]
@@ -83,6 +94,11 @@ export default function OpportunityPlan({ plan, opportunityId, decidedAt, approv
 
   const btn = (bg: string, fg: string, border?: string) => ({ padding: '9px 18px', background: bg, color: fg, fontWeight: 700, fontSize: '12.5px', border: border ?? 'none', borderRadius: '9px', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: D } as const)
   const lock = readOnly ? '🔒 ' : ''
+  // Peças: prontas = rascunho na Central de Aprovações (ou já aprovadas); "gerando" até 15 min depois da aprovação do plano.
+  const ready = pieces?.ready ?? 0, review = pieces?.review ?? 0, approvedN = pieces?.approved ?? 0
+  const total = ready + review + approvedN
+  const approvedMs = approvedAt ? Date.parse(approvedAt) : NaN
+  const makingPieces = !!approvedAt && total === 0 && Number.isFinite(approvedMs) && Date.now() - approvedMs < PIECES_WAIT_MS
   const names = (plan?.item_ids ?? []).map(id => itemNames[id]).filter(Boolean)
 
   return (
@@ -127,6 +143,17 @@ export default function OpportunityPlan({ plan, opportunityId, decidedAt, approv
           {plan.hypotheses.length > 0 && (
             <Row label={t.hypotheses}>
               {plan.hypotheses.map(h => <div key={h} style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}><span style={{ flexShrink: 0, fontSize: '9.5px', fontWeight: 800, padding: '2px 7px', borderRadius: '6px', border: '1px solid #a78bfa66', color: '#a78bfa' }}>{t.ev.hypothesis}</span><span>{h}</span></div>)}
+            </Row>
+          )}
+          {approvedAt && (
+            <Row label={t.pieces}>
+              {total > 0 ? (
+                <div role="status">
+                  <b>{[ready > 0 && t.piecesReady(ready), review > 0 && t.piecesReview(review), approvedN > 0 && t.piecesApproved(approvedN)].filter(Boolean).join(' · ')}</b>
+                  {ready > 0 && <div style={{ marginTop: '4px' }}><Link to="/dashboard/aprovacoes" style={{ color: ORANGE, fontWeight: 700, fontSize: '12px' }}>{t.openApprovals} →</Link></div>}
+                </div>
+              ) : <div role="status" style={{ color: makingPieces || piecesGeneratedAt ? ORANGE : MUTED, fontWeight: 700 }}>{makingPieces || (piecesGeneratedAt && Date.now() - Date.parse(piecesGeneratedAt) < PIECES_WAIT_MS) ? t.makingPieces : t.piecesLater}</div>}
+              {(plan.pieces_info?.notes ?? []).length > 0 && <div style={{ marginTop: '6px', fontSize: '11px', color: MUTED }}>{(plan.pieces_info?.notes ?? []).join(' ')}</div>}
             </Row>
           )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px', alignItems: 'center' }}>

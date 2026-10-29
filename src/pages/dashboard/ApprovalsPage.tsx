@@ -171,8 +171,8 @@ function ContentCard({ item, onApprove, onDiscard, busy, lang }: {
 // ── Peça do calendário pronta pra aprovar (marketing_ai_test_content 'vault')
 // — a mesma que aparece no Calendário da semana / Peças avulsas. Clicar abre
 // a peça (CalendarPostModal) com publicar agora / agendar / excluir.
-type CalPiece = TestPost & { kind?: string; planned_for?: string | null; recipe?: string | null }
-function PieceCard({ p, onOpen, lang, ssNames }: { p: CalPiece; onOpen: () => void; lang: 'pt' | 'en'; ssNames: Record<string, string> }) {
+type CalPiece = TestPost & { kind?: string; planned_for?: string | null; recipe?: string | null; opportunity_id?: string | null }
+function PieceCard({ p, onOpen, lang, ssNames, oppTitle }: { p: CalPiece; onOpen: () => void; lang: 'pt' | 'en'; ssNames: Record<string, string>; oppTitle?: string }) {
   const day = p.planned_for ? new Date(`${p.planned_for}T12:00:00`).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }) : null
   const where = day ? (lang === 'en' ? `Calendar · ${day}` : `Calendário · ${day}`) : (lang === 'en' ? 'Loose piece' : 'Peça avulsa')
   return (
@@ -187,6 +187,11 @@ function PieceCard({ p, onOpen, lang, ssNames }: { p: CalPiece; onOpen: () => vo
           <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#A78BFA', marginBottom: '6px' }}>
             ● {lang === 'en' ? 'Ready to approve' : 'Pronta pra aprovar'}{p.quality_score != null ? ` · ${lang === 'en' ? 'score' : 'nota'} ${p.quality_score}` : ''} · {where}
           </div>
+          {p.opportunity_id && (
+            <div title={lang === 'en' ? 'This piece was made from an opportunity you approved' : 'Esta peça foi feita a partir de uma oportunidade que você aprovou'} style={{ display: 'inline-block', maxWidth: '100%', marginBottom: '6px', fontSize: '10px', fontWeight: 700, color: '#4ade80', border: '1px solid rgba(74,222,128,0.35)', background: 'rgba(74,222,128,0.08)', borderRadius: '99px', padding: '2px 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+              {lang === 'en' ? 'From the opportunity' : 'Da oportunidade'}{oppTitle ? `: ${oppTitle}` : ''}
+            </div>
+          )}
           <div style={{ marginBottom: '6px' }}><PieceChips familia={p.familia} pilarSs={p.pilar_ss} tema={p.pillar} ssNames={ssNames} /></div>
           {p.caption && <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.82)', lineHeight: 1.55, whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.caption}</div>}
         </div>
@@ -238,6 +243,7 @@ export default function ApprovalsPage() {
   const [loading, setLoading] = useState(true)
   const [contentMsg, setContentMsg] = useState('')
   const [pieces, setPieces] = useState<CalPiece[]>([])
+  const [oppTitles, setOppTitles] = useState<Record<string, string>>({})
   const [openPiece, setOpenPiece] = useState<CalPiece | null>(null)
 
   const token = session?.access_token ?? ''
@@ -257,7 +263,14 @@ export default function ApprovalsPage() {
       supabase.from('agent_actions').select('ref_id').eq('company_id', company.id).eq('ref_type', 'marketing_ai_test_content').eq('execution_status', 'QUEUED').not('scheduled_at', 'is', null),
     ])
     const queued = new Set(((q ?? []) as { ref_id: string }[]).map(r => r.ref_id))
-    setPieces(((v ?? []) as CalPiece[]).filter(p => !queued.has(p.id)))
+    const shown = ((v ?? []) as CalPiece[]).filter(p => !queued.has(p.id))
+    setPieces(shown)
+    // Selo "Da oportunidade: <título>" (Etapa 4B): título buscado de uma vez; coluna/tabela ausente = sem título, o selo continua.
+    const oppIds = [...new Set(shown.map(p => p.opportunity_id).filter((x): x is string => !!x))]
+    if (oppIds.length) {
+      const { data: o } = await supabase.from('growth_opportunities').select('id, title').eq('company_id', company.id).in('id', oppIds)
+      setOppTitles(Object.fromEntries(((o ?? []) as { id: string; title: string }[]).map(x => [x.id, x.title])))
+    }
     if (token) {
       try {
         const [p, h] = await Promise.all([
@@ -360,7 +373,7 @@ export default function ApprovalsPage() {
                         onApprove={() => approveContent(item)} onDiscard={() => discardContent(item.id)} />
                     ) })),
                     ...pieces.map(p => ({ key: `p-${p.id}`, created_at: p.created_at, node: (
-                      <PieceCard key={`p-${p.id}`} p={p} lang={lang} ssNames={ssNames} onOpen={() => setOpenPiece(p)} />
+                      <PieceCard key={`p-${p.id}`} p={p} lang={lang} ssNames={ssNames} oppTitle={p.opportunity_id ? oppTitles[p.opportunity_id] : undefined} onOpen={() => setOpenPiece(p)} />
                     ) })),
                   ]
                     .sort((x, y) => y.created_at.localeCompare(x.created_at))

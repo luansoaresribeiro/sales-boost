@@ -46,7 +46,7 @@ export async function createOpportunityPlan(admin: Admin, companyId: string, opp
 
   // Ficha do setor (regra 6): papéis dos campos, rótulos, vocabulário, ressalva, CTA alternativo.
   const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', co.vertical_key ?? '').eq('enabled', true).maybeSingle()
-  const cfg = (pb?.config ?? {}) as { opportunity_fields?: FieldMap; catalog_fields?: { required?: { key: string; label?: Bilingual }[]; optional?: { key: string; label?: Bilingual }[] }; vocabulary?: { item?: string }; ctas?: { sem_automacao?: unknown }; opportunity_texts?: { caveat?: Bilingual; audience_hint?: Bilingual } }
+  const cfg = (pb?.config ?? {}) as { opportunity_fields?: FieldMap; catalog_fields?: { required?: { key: string; label?: Bilingual }[]; optional?: { key: string; label?: Bilingual }[] }; vocabulary?: { item?: string }; ctas?: { sem_automacao?: unknown }; opportunity_texts?: { caveat?: Bilingual; audience_hint?: Bilingual; market_claims?: { pt?: string[]; en?: string[] } } }
   const fieldMap = cfg.opportunity_fields
   if (!fieldMap?.location) return { ok: false, status: 400, error: tr(lang, 'Este setor ainda não tem os campos de oportunidades configurados na ficha.', 'This business type does not have opportunity fields set up yet.') }
   const labels: Record<string, string> = {}
@@ -56,7 +56,7 @@ export async function createOpportunityPlan(admin: Admin, companyId: string, opp
   let items: PlanItem[] = []
   if (itemIds.length) {
     const { data } = await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('company_id', companyId).eq('kind', 'product').in('id', itemIds).limit(50)
-    items = ((data ?? []) as { id: string; title: string; meta: { fields?: Record<string, unknown> } | null }[]).map(i => ({ id: i.id, title: i.title, fields: i.meta?.fields ?? {} }))
+    items = ((data ?? []) as { id: string; title: string; meta: { fields?: Record<string, unknown>; photos?: unknown[] } | null }[]).map(i => ({ id: i.id, title: i.title, fields: i.meta?.fields ?? {}, photoCount: i.meta?.photos?.length ?? 0 }))
   }
   const opp: PlanOpp = {
     title: String(row.title ?? ''), commercial_problem: row.commercial_problem ?? null, audience: row.audience ?? null, suggested_action: row.suggested_action ?? null,
@@ -66,7 +66,7 @@ export async function createOpportunityPlan(admin: Admin, companyId: string, opp
   const ctaAlt = lang === 'en' ? 'Send us a DM' : (typeof cfg.ctas?.sem_automacao === 'string' && cfg.ctas.sem_automacao.trim() ? cfg.ctas.sem_automacao.trim() : 'Me chama no direct')
   const prompt = buildPlanPrompt({
     lang, businessName: String(co.business_name ?? ''), itemLabel: cfg.vocabulary?.item ?? 'Item', opp,
-    items: items.map(i => ({ id: i.id, text: describePlanItem(i, fieldMap, labels).text })),
+    items: items.map(i => ({ id: i.id, text: describePlanItem(i, fieldMap, labels).text, photos: i.photoCount })),
     caveat: pick(cfg.opportunity_texts?.caveat, lang) || undefined, audienceHint: pick(cfg.opportunity_texts?.audience_hint, lang) || undefined, ctaAlt,
   })
 
@@ -104,7 +104,8 @@ export async function createOpportunityPlan(admin: Admin, companyId: string, opp
     await logCost(admin, companyId, row.id, started, answer.tokens, false, 'resposta da IA ilegível')
     return { ok: false, status: 502, error: tr(lang, 'Não consegui ler a resposta da IA. Tente de novo.', 'The AI answer could not be read. Try again.') }
   }
-  const res = finalizePlan({ lang, opp, items, fieldMap, labels, llm: parsed, ctas })
+  const marketClaims = cfg.opportunity_texts?.market_claims?.[lang]?.filter(x => typeof x === 'string' && x.trim())
+  const res = finalizePlan({ lang, opp, items, fieldMap, labels, llm: parsed, ctas, marketClaims })
   if (!res.ok) {
     await logCost(admin, companyId, row.id, started, answer.tokens, false, res.reason)
     return { ok: false, status: 502, error: `${res.reason} ${tr(lang, 'Tente de novo.', 'Try again.')}` }

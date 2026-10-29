@@ -10,11 +10,15 @@
 //  - CTA que pede comentário com palavra-chave ("Comente QUERO") não existe sem resposta automática aprovada
 //    (e o plano não liga a um imóvel específico) → vira o CTA alternativo (ficha: ctas.sem_automacao).
 // Nada é publicado nem enviado daqui (regra 1).
-import { allowedNumbers, cleanText, hasProtectedTerm, promptSafe, type AllowedNumbers } from './opportunityOutput.ts'
+import { allowedNumbers, claimGuard, cleanText, hasProtectedTerm, promptSafe, type AllowedNumbers, type ClaimGuard } from './opportunityOutput.ts'
 import { norm, type Evidence, type FieldMap, type Lang, type NumTag } from './opportunityEngine.ts'
 import { decideVideoCta, sanitizeCaptionCta } from './videoCta.ts'
 
 export const MAX_PLANS_PER_DAY = 5
+// Etapa 4B: quantas peças o plano pede (a IA sugere; o código limita). Os limites por dia ficam em opportunityPieces.ts.
+export const DEFAULT_PIECES = 2
+export const MAX_PIECES_PER_PLAN = 3
+export const clampPieces = (v: unknown): number => { const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v.trim()) : NaN; return Number.isInteger(n) && n >= 1 ? Math.min(n, MAX_PIECES_PER_PLAN) : DEFAULT_PIECES }
 export const FORMATS = ['carousel', 'reel', 'post', 'story'] as const
 export type PlanFormat = typeof FORMATS[number]
 export const CHANNELS = ['instagram', 'whatsapp', 'email'] as const
@@ -26,18 +30,23 @@ export interface PlanOpp {
   title: string; commercial_problem: string | null; audience: string | null; suggested_action: string | null
   how_to_measure: string | null; evidence: Evidence[]; item_ids: string[]
 }
-export interface PlanItem { id: string; title: string; fields: Record<string, unknown> }
+export interface PlanItem { id: string; title: string; fields: Record<string, unknown>; photoCount?: number }
 export interface CitedEvidence extends Evidence { index: number }
 export interface OpportunityPlan {
   audience: string | null; objective: string; buyer_problem: string; value_proposition: string; key_message: string
   channel: PlanChannel; format_suggestion: PlanFormat; format_reason: string; format_is_default: boolean
   cta: string; cta_replaced: boolean; success_metrics: string
   item_ids: string[]; cited_evidence: CitedEvidence[]; hypotheses: string[]; lang: Lang
+  /** Etapa 4B: quantas peças gerar (1 a 3). */
+  pieces_count?: number
+  /** Etapa 4B: o que aconteceu com as peças (preenchido depois de gerar). */
+  pieces_info?: PiecesInfo
 }
+export interface PiecesInfo { requested_format: PlanFormat; used_format: PlanFormat; video_deferred: boolean; dispatched: number; notes: string[]; at: string }
 export interface LlmPlan {
   audience?: unknown; objective?: unknown; buyer_problem?: unknown; value_proposition?: unknown; key_message?: unknown
   channel?: unknown; format_suggestion?: unknown; format_reason?: unknown; cta?: unknown; success_metrics?: unknown
-  item_ids?: unknown; cited_evidence?: unknown; hypotheses?: unknown
+  item_ids?: unknown; cited_evidence?: unknown; hypotheses?: unknown; pieces_count?: unknown
 }
 
 export function parsePlan(raw: string): LlmPlan | null {
@@ -60,10 +69,10 @@ export const asksForComment = (s: string): boolean => ASKS_COMMENT.test(norm(s))
 
 const SENT = /(?<=[.!?])\s+|\n+/
 // Limpa um texto do plano: número fora dos dados / classe protegida (cleanText) + promessa (+ pedido de comentário, se `noAsk`).
-function clean(s: unknown, allowed: AllowedNumbers, max: number, opts: { noAsk?: boolean; noDigits?: boolean } = {}): string {
+function clean(s: unknown, allowed: AllowedNumbers, max: number, opts: { noAsk?: boolean; noDigits?: boolean; guard?: ClaimGuard } = {}): string {
   if (typeof s !== 'string') return ''
   const kept = s.split(SENT).filter(p => p.trim() && !hasPromise(p) && !(opts.noAsk && asksForComment(p)) && !(opts.noDigits && /\d/.test(p))).join(' ')
-  return cleanText(kept, allowed, max)
+  return cleanText(kept, allowed, max, opts.guard)
 }
 
 // ── Imóveis (papéis da ficha: opportunity_fields) ───────────────────────────────────────────────────────────────────
@@ -84,10 +93,10 @@ function planAllowed(o: PlanOpp, items: { text: string; tags: NumTag[] }[]): All
   ])
 }
 
-export function buildPlanPrompt(opts: { lang: Lang; businessName: string; itemLabel: string; opp: PlanOpp; items: { id: string; text: string }[]; caveat?: string; audienceHint?: string; ctaAlt: string }): string {
+export function buildPlanPrompt(opts: { lang: Lang; businessName: string; itemLabel: string; opp: PlanOpp; items: { id: string; text: string; photos?: number }[]; caveat?: string; audienceHint?: string; ctaAlt: string }): string {
   const { lang, opp } = opts
   const ev = opp.evidence.map((e, i) => `E${i + 1} [${e.type === 'fact' ? 'FATO' : e.type === 'data' ? 'DADO' : 'HIPÓTESE'}] ${promptSafe(e.text)} (fonte: ${promptSafe(e.source ?? '', 120) || '—'}${e.date ? `; data: ${e.date}` : ''})`).join('\n') || '(nenhuma)'
-  const its = opts.items.map(i => `${i.id} · ${promptSafe(i.text, 260)}`).join('\n') || '(nenhum)'
+  const its = opts.items.map(i => `${i.id} · ${promptSafe(i.text, 260)}${i.photos != null ? ` · fotos reais: ${i.photos}` : ''}`).join('\n') || '(nenhum)'
   const caveat = opts.caveat ?? 'Valor anunciado não é valor fechado; interesse de busca não é cliente.'
   const hint = opts.audienceHint ?? '"quem busca perto do trabalho", "quem quer trocar por algo maior"'
   return `Você ajuda a equipe comercial de "${promptSafe(opts.businessName, 80)}" a transformar UMA oportunidade já aprovada pelo dono em um mini-plano de ação. Você só REDIGE o plano em cima dos dados abaixo; nada é publicado ou enviado — o dono ainda vai aprovar o plano e, depois, cada peça.
@@ -116,22 +125,26 @@ REGRAS INEGOCIÁVEIS:
 5. "cta": uma chamada final curta. NÃO peça comentário com palavra-chave (nada de "Comente QUERO"): não existe resposta automática aprovada. Use "${promptSafe(opts.ctaAlt, 60)}" ou algo equivalente.
 6. "success_metrics": diga o que observar (conversas, pedidos de contato, salvamentos…), sem meta numérica e sem número.
 7. "item_ids": só ids da lista de itens ligados acima (um subconjunto, os que mais fazem sentido). "cited_evidence": os códigos das evidências em que o plano se apoia (ex.: ["E1","E3"]).
-8. Cada texto com no máximo 2 frases. Idioma de TODOS os textos: ${lang === 'en' ? 'English' : 'português do Brasil'}.
+8. Adjetivo ou opinião de mercado ("disputado", "valorizado", "alto padrão", "nobre", "em alta", "ticket elevado", "procurado"…) só pode aparecer se a MESMA ideia estiver escrita nas evidências ou nos dados. Sem isso, descreva só o que os dados dizem, sem qualificar o local, o valor ou a demanda.
+9. Itens sem foto real (fotos reais: 0): o plano não pode depender de foto desse item. Prefira uma mensagem educativa ou de contexto que se sustente só com texto e não prometa imagens do item.
+10. "pieces_count": quantas peças o plano precisa (1, 2 ou 3; padrão 2). Cada peça será um rascunho que o dono ainda aprova; nada é publicado. Não escolha "reel" só por parecer atraente: vídeo custa à parte e hoje só saem peças de imagem/texto.
+11. Cada texto com no máximo 2 frases. Idioma de TODOS os textos: ${lang === 'en' ? 'English' : 'português do Brasil'}.
 
 Responda APENAS com JSON, sem markdown:
-{"audience":"","objective":"","buyer_problem":"","value_proposition":"","key_message":"","channel":"instagram","format_suggestion":"carousel|reel|post|story","format_reason":"","cta":"","success_metrics":"","item_ids":["..."],"cited_evidence":["E1"],"hypotheses":["Pode ser…"]}`
+{"audience":"","objective":"","buyer_problem":"","value_proposition":"","key_message":"","channel":"instagram","format_suggestion":"carousel|reel|post|story","format_reason":"","cta":"","success_metrics":"","item_ids":["..."],"cited_evidence":["E1"],"hypotheses":["Pode ser…"],"pieces_count":2}`
 }
 
 export type PlanResult = { ok: true; plan: OpportunityPlan } | { ok: false; reason: string }
 
 export function finalizePlan(opts: {
   lang: Lang; opp: PlanOpp; items: PlanItem[]; fieldMap: FieldMap; labels: Record<string, string>
-  llm: LlmPlan; ctas?: { sem_automacao?: unknown } | null
+  llm: LlmPlan; ctas?: { sem_automacao?: unknown } | null; marketClaims?: string[] | null
 }): PlanResult {
   const { lang, opp, llm } = opts
   const described = opts.items.map(i => describePlanItem(i, opts.fieldMap, opts.labels))
   const allowed = planAllowed(opp, described)
-  const c = (v: unknown, max: number) => clean(v, allowed, max, { noAsk: true })
+  const guard = claimGuard(lang, [...opp.evidence.map(e => e.text), ...oppTexts(opp), ...described.map(d => d.text)], opts.marketClaims)
+  const c = (v: unknown, max: number) => clean(v, allowed, max, { noAsk: true, guard })
 
   const objective = c(llm.objective, 300), valueProp = c(llm.value_proposition, 300), keyMessage = c(llm.key_message, 300)
   if (!objective || !valueProp || !keyMessage) {
@@ -159,7 +172,7 @@ export function finalizePlan(opts: {
   const altCtas = lang === 'en' ? { sem_automacao: 'Send us a DM' } : opts.ctas
   const decision = decideVideoCta(null, altCtas)
   const rawCta = typeof llm.cta === 'string' ? llm.cta.trim() : ''
-  const ctaClean = clean(rawCta, allowed, 100)
+  const ctaClean = clean(rawCta, allowed, 100, { guard })
   const needsAlt = !ctaClean || asksForComment(rawCta) || sanitizeCaptionCta(null, ctaClean, decision).changed
   const cta = needsAlt ? decision.cta : ctaClean
 
@@ -179,7 +192,7 @@ export function finalizePlan(opts: {
 
   const hyps: string[] = []
   for (const h of Array.isArray(llm.hypotheses) ? llm.hypotheses : []) {
-    const t = clean(h, allowed, 220)
+    const t = clean(h, allowed, 220, { guard })
     if (t && !hyps.includes(t) && hyps.length < 4) hyps.push(t)
   }
 
@@ -188,7 +201,7 @@ export function finalizePlan(opts: {
     plan: {
       audience: audience || null, objective, buyer_problem: buyerProblem, value_proposition: valueProp, key_message: keyMessage,
       channel, format_suggestion: format, format_reason: formatReason, format_is_default: formatIsDefault,
-      cta, cta_replaced: needsAlt && !!rawCta, success_metrics: metrics, item_ids: itemIds, cited_evidence: citedEvidence, hypotheses: hyps, lang,
+      cta, cta_replaced: needsAlt && !!rawCta, success_metrics: metrics, item_ids: itemIds, cited_evidence: citedEvidence, hypotheses: hyps, lang, pieces_count: clampPieces(llm.pieces_count),
     },
   }
 }

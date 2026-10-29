@@ -516,6 +516,40 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
 - **Estado:** 🟡 código e teste de lógica prontos; falta aplicar a migration em produção (depois do merge), fazer
   o deploy do `marketing-ai` e rodar na Tespon. A Etapa 1 **não** publica nem envia nada.
 
+- **Etapa 4B — plano aprovado → peças em rascunho (2026-10-29) — 🟡 código pronto; migration/deploy/teste em produção por fazer.**
+  Decisão: [DECISIONS.md](DECISIONS.md#2026-10-29--inteligência-comercial-etapa-4b-plano-aprovado--peças-em-rascunho-automático).
+  Código: `_shared/opportunityPieces.ts` (lógica pura: formato sem vídeo, quantidade, limites, idempotência, mapa da
+  ficha), `opportunityPiecesRun.ts` (banco + despacho), `opportunityPieceJob.ts` (monta a vaga no `creative-generate`).
+  Testes: `scripts/test-opportunity-pieces.mjs`. Migration: `20261029130000_oportunidade_pecas.sql` (aditiva).
+  - **Fluxo completo:** `run_opportunities` (cron/sinal novo) → oportunidade **sugerida** → dono **aprova** (`decide_opportunity`)
+    → plano criado sozinho (`createOpportunityPlan`) → dono **aprova o plano** (`approve_opportunity_plan`) →
+    `marketing-ai` chama `generateOpportunityPieces` em segundo plano → por peça, `POST creative-generate {action:'plan_slot',
+    cron_secret, company_id, opportunity_id, piece:{format, mode:'item'|'text', item_id?}}` (responde 202) →
+    `buildOpportunityJob` **recarrega o plano do banco** (empresa + status aprovado + `plan_approved_at`; o corpo não é
+    confiado) e monta a vaga → `runPlanSlot` (o mesmo do calendário): modo texto = `generateForCompany` (carrossel de
+    slides com `intent` do plano), modo foto = `catalog-package` (`only_recipe`, `loose`) → peça em `marketing_ai_test_content`
+    (rascunho) com `opportunity_id` e `intent` (`SlotIntent.opportunity`, sem `pilar_ss`) → nota de qualidade → vault =
+    **Central de Aprovações** → dono aprova → `agent-actions` cria o `posts` **copiando `opportunity_id`** (bloco separado e
+    tolerante, como os rótulos). `make_now` (login do dono) ignora `opportunity_id`.
+  - **Formato:** plano `carousel|post|story` → mapa da ficha `config.opportunity_pieces` (`{carousel:{item,text},…}`); só
+    formato `live`; foto = `item_package` com receita, texto = `post`; **`item_video`/`dm` nunca**. `reel` → carrossel +
+    nota em `plan.pieces_info.notes`. `plan.pieces_count` (1–3, padrão 2) e `plan.pieces_info` (o que foi feito).
+  - **Limites/custo:** 3 por plano (também conferido no `creative-generate`), 6 por empresa por dia (`opportunity_pieces`).
+  - **Cron:** `cron_opportunities` passa a também pedir as peças dos planos aprovados sem peças (só despacha; sem IA, não
+    ocupa vaga das 3 empresas). Resumo agora traz `pieces`.
+  - **Tela:** oportunidade com plano aprovado mostra "Gerando as peças…" (recarrega a cada 10 s por 15 min), depois
+    "N peças na Central de Aprovações" com link para `/dashboard/aprovacoes` (só rascunhos pendentes; "M em revisão de qualidade" se alguma não
+    chegou ao vault e "K aprovadas" para os posts já aprovados/publicados). Na Central, a peça mostra o selo "Da oportunidade: <título>".
+  - **Qualidade:** `claimGuard`/`hasUnsupportedClaim` (opportunityOutput.ts) tiram frases com adjetivo de mercado sem
+    dado nos fatos (lista: ficha `opportunity_texts.market_claims`, senão `DEFAULT_MARKET_CLAIMS`); `photoCounts` entra no
+    prompt do `run_opportunities` e do plano, e `actionForPhotos` troca a ação por "adicionar fotos reais" quando o item
+    não tem foto.
+  - **Divergências/atenção:** (a) o vínculo `opportunity_id` é gravado num UPDATE à parte (migration pendente não derruba
+    a peça), mas `generateOpportunityPieces` **não gera** se a coluna não existe (sem idempotência não há segurança);
+    (b) o cliente pode ter UPDATE direto em `marketing_ai_test_content`: a Etapa 6 deve juntar `opportunity_id` **sempre
+    filtrando por `company_id`** dos dois lados; (c) desfazer a aprovação do plano **não apaga** peças já geradas.
+  - **Reverter:** bloco "Como reverter" no próprio arquivo da migration; as functions voltam pelo commit anterior.
+
 ## Estado atual do código
 
 - **Site publicado:** https://getsaleboost.com/ (+ www). O endereço antigo
