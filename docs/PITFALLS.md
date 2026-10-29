@@ -805,3 +805,13 @@ destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
   prompts padrão; exemplo de setor vem da ficha (`opportunity_texts`, `opportunity_pieces`).
 - **Formato da peça de foto depende do `catalog-package`:** exige 5+ fotos reais por item; o `reel` do plano vira
   carrossel (vídeo = gasto Higgsfield, decisão pendente do dono).
+
+## `agent_performance.latency_ms` é obrigatório — registro sem ele some calado (2026-10-29)
+
+A coluna `latency_ms` é `NOT NULL` sem valor padrão. O supabase-js **não lança erro** num `insert` recusado (só devolve
+`{ error }`), então um registro sem `latency_ms` simplesmente não existe — e tudo que conta essas linhas para de
+funcionar sem aviso. Achado no teste da Etapa 4B na Tespon: as linhas `create_opportunity_plan_start`,
+`opportunity_pieces`, `opportunity_pieces_retry` e `opportunity_piece_created` não eram gravadas, ou seja, o limite de 5
+planos/dia, o limite de 6 peças/dia, a retentativa única e o "rascunho excluído nunca volta" estavam desligados.
+Regra: todo `insert` em `agent_performance` passa `latency_ms` (0 quando não houver medida) e, se a linha for usada como
+trava/contador, confere o `error` retornado.

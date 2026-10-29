@@ -71,7 +71,7 @@ export async function generateOpportunityPieces(admin: Admin, companyId: string,
 
   // Retentativa explícita e única: a linha é gravada logo após a reserva (quem perdeu a reserva não chega aqui).
   if (idem === 'retry') {
-    try { await admin.from('agent_performance').insert({ company_id: companyId, agent_role: 'cmo', task_key: RETRY_TASK_KEY, task_description: `opp:${row.id} retentativa`, tokens_used: 0, success: true }) } catch { /* não-fatal */ }
+    try { await admin.from('agent_performance').insert({ company_id: companyId, agent_role: 'cmo', task_key: RETRY_TASK_KEY, task_description: `opp:${row.id} retentativa`, latency_ms: 0, tokens_used: 0, success: true }) } catch { /* não-fatal */ }
   }
 
   // Despacho: cada peça é uma chamada própria (relógio próprio de 150 s no creative-generate); esperamos só o aceite.
@@ -81,7 +81,7 @@ export async function generateOpportunityPieces(admin: Admin, companyId: string,
     try {
       await admin.from('agent_performance').insert({
         company_id: companyId, agent_role: 'cmo', task_key: PIECES_TASK_KEY, task_description: `opp:${row.id} ${spec.format}/${spec.mode}`.slice(0, 200),
-        tokens_used: 0, success: ok, ...(ok ? {} : { error_message: 'creative-generate não aceitou a peça' }),
+        latency_ms: 0, tokens_used: 0, success: ok, ...(ok ? {} : { error_message: 'creative-generate não aceitou a peça' }),
       })
     } catch { /* não-fatal */ }
     return ok

@@ -90,7 +90,7 @@ export async function createOpportunityPlan(admin: Admin, companyId: string, opp
       `Limite de ${MAX_PLANS_PER_DAY} planos por dia atingido. O plano sai quando houver vaga, nas próximas 24 horas.`,
       `Daily limit of ${MAX_PLANS_PER_DAY} plans reached. The plan will be made when there is room, within the next 24 hours.`) }
   }
-  try { await admin.from('agent_performance').insert({ company_id: companyId, agent_role: 'cmo', task_key: START_KEY, task_description: `opp:${row.id} começou`, success: true, tokens_used: 0 }) } catch { /* não-fatal */ }
+  try { await admin.from('agent_performance').insert({ company_id: companyId, agent_role: 'cmo', task_key: START_KEY, task_description: `opp:${row.id} começou`, latency_ms: 0, success: true, tokens_used: 0 }) } catch { /* não-fatal */ }
 
   let answer: { text: string; tokens: number }
   try {
