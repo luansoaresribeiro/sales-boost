@@ -33,6 +33,7 @@ import { runOpportunities } from '../_shared/opportunityRun.ts'
 import { approveOpportunityPlan, decideOpportunity } from '../_shared/opportunityPlanRun.ts'
 import { cronOpportunities, runInBackground } from '../_shared/opportunityCron.ts'
 import { generateOpportunityPieces, type Dispatch } from '../_shared/opportunityPiecesRun.ts'
+import { PUBLIC_ACTIONS, getPublicPageState, handlePublicPage, publicCtxFrom, setPublicPage } from '../_shared/publicPageRun.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -668,10 +669,19 @@ Deno.serve(async (req) => {
     // decide através dela agora, por decisão explícita do dono.
     const hermesUrl = Deno.env.get('HERMES_URL') ?? null
     const hermesApiKey = Deno.env.get('HERMES_API_KEY') ?? null
-    if (!anthropicKey) return json({ error: 'ANTHROPIC_API_KEY não configurada.' }, 503)
-
     const admin = createClient(supabaseUrl, serviceKey)
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
+
+    // Etapa 5: página pública do imóvel — ações SEM login, tratadas antes de qualquer auth/cron (e sem precisar de IA).
+    // Superfície pública: tudo via service role, 404 idêntico a qualquer falha de leitura (ver PITFALLS). Lógica em
+    // _shared/publicPage.ts (pura) e _shared/publicPageRun.ts (banco). Nunca envia nada ao visitante.
+    if ((PUBLIC_ACTIONS as readonly string[]).includes(String(body.action))) {
+      const salt = Deno.env.get('PUBLIC_PAGE_SALT') ?? cronSecretEnv ?? serviceKey
+      const { status, body: out } = await handlePublicPage(admin, String(body.action), body, publicCtxFrom(req, salt))
+      return json(out, status)
+    }
+
+    if (!anthropicKey) return json({ error: 'ANTHROPIC_API_KEY não configurada.' }, 503)
     const isCron = cronSecretEnv && body.cron_secret === cronSecretEnv
 
     // Rodadas automáticas de oportunidades (cron_secret no corpo, como os outros crons). Responde na hora e trabalha em segundo plano.
@@ -718,6 +728,13 @@ Deno.serve(async (req) => {
     if (noPlan) return noPlan
 
     const action = body.action as string
+    // Etapa 5 (com login): o dono vê a prévia e APROVA a página do imóvel. Fica antes do getConfig (não depende do Marketing AI).
+    if (action === 'get_public_page' || action === 'set_public_page') {
+      const r = action === 'get_public_page'
+        ? await getPublicPageState(admin, company.id as string, body.item_id)
+        : await setPublicPage(admin, company.id as string, user.id, body.item_id, body.enabled)
+      return json(r.body, r.status)
+    }
     // Opportunity Engine (Inteligência comercial, 2026-10-28): lê só dados da empresa e grava em
     // growth_opportunities — nada é publicado. Fica ANTES do getConfig de propósito: não depende da
     // configuração do Marketing AI (a Tespon pode não ter). Lógica em _shared/opportunityRun.ts.
@@ -816,7 +833,7 @@ Deno.serve(async (req) => {
       return json({ ok: true })
     }
 
-    return json({ error: 'action inválida. Use run_tracking, run_competitors, run_content, run_trends, run_strategy, run_opportunities, decide_opportunity, approve_opportunity_plan, chat, run_experiment, conclude_experiment ou generate_report.' }, 400)
+    return json({ error: 'action inválida. Use get_public_page, set_public_page, run_tracking, run_competitors, run_content, run_trends, run_strategy, run_opportunities, decide_opportunity, approve_opportunity_plan, chat, run_experiment, conclude_experiment ou generate_report.' }, 400)
   } catch (err) {
     console.error('marketing-ai error:', err)
     return json({ error: String(err) }, 500)

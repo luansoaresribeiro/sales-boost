@@ -6,6 +6,7 @@ import { catalogMinPhotos, MAX_PHOTOS_PER_ITEM } from '../../../lib/setupRules'
 import { bi, sanitizeCatalogValues, titleFromFields, type CatalogSchema } from '../../../lib/verticalPlaybook'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import ItemVideos from './ItemVideos'
+import PublicPageButton from './PublicPageButton'
 import CatalogImport from './CatalogImport'
 import CatalogItemEditor, { FieldInput } from './CatalogItemEditor'
 import VirtualStaging from './VirtualStaging'
@@ -362,6 +363,7 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                       )}
                     </div>
                   )}
+                  {!setupMode && <PublicPageButton itemId={item.id} />}
                   {!setupMode && <ItemVideos itemId={item.id} photos={(item.meta?.photos ?? []).map(p => p.url)} />}
                   {!setupMode && <VirtualStaging itemId={item.id} companyId={companyId} verticalKey={verticalKey} photos={item.meta?.photos ?? []} staged={item.meta?.staged_photos ?? []} onChanged={load} />}
                   {!setupMode && <ItemCreationTools itemId={item.id} companyId={companyId} verticalKey={verticalKey} itemLabel={schema.itemLabel} onGenerate={generatePackage} busy={packageBusyId} />}

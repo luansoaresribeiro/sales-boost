@@ -2034,3 +2034,26 @@ grátis de 30 s, acima — mantidos como histórico):
 - **Custo:** 1 busca Tavily básica por região; no máx. 3 buscas e 5 sinais novos por empresa a cada 7 dias e teto global
   mensal `MARKET_NEWS_MONTHLY_CAP` (padrão 120). Erro/429/sem chave: registra e para, sem nova tentativa em laço. O
   interruptor `insight_sources` (tavily) desligado no painel Owner também desliga esta coleta.
+
+## 2026-10-30 — Inteligência comercial, Etapa 5: página pública do imóvel + link rastreável + lead com origem
+
+- **Decisão do dono (direção):** a página do imóvel é **só destino de link** — o link vai no post, na DM ou na bio. **Sem listagem,
+  sem busca, sem portal, `noindex`** (meta robots + `X-Robots-Tag` em `public/_headers`). Não vira concorrente de portal.
+- **Só vai ao ar com a aprovação do dono:** botão "Página pública" no card do imóvel → prévia exata do que vai aparecer (campos,
+  fotos, WhatsApp e Instagram) → **"Aprovar e publicar"** (grava `approved_at`/`approved_by`) ou "Despublicar". Exige o mínimo de
+  fotos **reais** da ficha (`min_photos`, 3). Foto mobiliada por IA (`staged_photos`) nunca aparece nem conta.
+- **O que aparece vem da ficha (regra 6):** `vertical_playbooks.config.public_page.fields` é uma lista **branca**; campo
+  `private` nunca sai; campo vazio some; nada de número inventado (só o que o dono cadastrou).
+- **Lead com origem:** quem preenche o formulário (nome, WhatsApp ou e-mail, mensagem opcional, **consentimento desmarcado por
+  padrão** + link para `/privacidade`) vira lead com `source='link_page'`, `item_id`, `opportunity_id` (se o link veio de uma
+  peça de oportunidade) e `link_id`, com `consent_at`/`consent_text`. **Nada é enviado ao visitante automaticamente** — o dono
+  responde (o alerta de lead novo que já existia no banco continua valendo). Limites: 3 envios/visitante/hora, 20/link/dia,
+  mesmo contato + imóvel em 24 h não duplica; campo-armadilha (honeypot) contra robô. IP **nunca** é guardado (só um hash com sal).
+- **Link nas peças sem tocar o `creative-generate`:** o cron `cron_opportunities` acrescenta UMA vez a frase da ficha
+  (`caption_line`) com o link (canal `caption`) aos **rascunhos** de oportunidade cujo imóvel tem página no ar; nunca em peça
+  aprovada/agendada/publicada. A mensagem **nova** do "Comente QUERO" ganha o link (canal `dm`); a já aprovada fica como está.
+- **Continua sem atribuição:** lead que chega por DM ou comentário (instagram-webhook) segue sem item/oportunidade — só o lead
+  que entra pela página tem origem. Atribuir DM/comentário exigiria mexer no `instagram-webhook` (fica para depois).
+- **Corretores ficam para a Etapa 7.** Não há encaminhamento ao corretor nesta etapa.
+- **Ainda é decisão/ação do dono:** aplicar a migration, publicar o `marketing-ai`/`item-videos`/site e aprovar a primeira
+  página (ver ROADMAP).

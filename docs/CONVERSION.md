@@ -98,3 +98,19 @@ IA), cria `engagement_events` + proposta em `agent_actions`. Texto fixo
 de commits de `instagram-webhook` e nas migrações de `leads`/`engagement_events`
 a partir desta data — o resumo deve ser mantido aqui conforme avança, em
 vez de duplicar no CLAUDE.md.
+
+## 2026-10-30 — Etapa 5: página pública do imóvel e lead com origem
+
+- **O que existe:** o dono aprova uma página simples do imóvel (`/p/<código>`, só destino de link, `noindex`); cada link tem
+  origem (`tracked_links`: imóvel + oportunidade + canal `caption`/`dm`/`bio`/`manual`) e cada visita/clique/lead vira um
+  `link_events`. O formulário da página cria um lead com `source='link_page'` (ver [DECISIONS.md](DECISIONS.md)).
+- **Divergência registrada (colunas de origem):** o plano de "Rastreabilidade" acima previa `leads.source_post_id`,
+  `source_item_id` e `source_pillar`. O que foi construído é **`leads.item_id`, `leads.opportunity_id` e `leads.link_id`** (mais
+  `consent_at`/`consent_text`). Motivo: a origem real que o sistema consegue provar hoje é o **link** (imóvel + oportunidade); o
+  pilar/post se deriva de `opportunity_id` → peça → `posts.pillar`, sem coluna nova. `source_post_id`/`source_pillar` seguem
+  **não existindo**.
+- **O que continua sem atribuição:** leads de DM e de comentário ("Comente QUERO") criados pelo `instagram-webhook` /
+  `agent-actions` seguem sem `item_id`/`opportunity_id` (só o lead da página tem origem). A DM/QUERO **nova** leva um link
+  rastreável (canal `dm`), então quem clicar nele e preencher o formulário passa a ter origem.
+- **Nunca automático:** nada é enviado ao visitante ao receber o lead; responder é com o dono (regra de ouro). Encaminhar ao
+  corretor certo é a Etapa 7.
