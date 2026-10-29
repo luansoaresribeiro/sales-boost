@@ -492,7 +492,12 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
     produção):** aprovar a oportunidade cria sozinho um mini-plano no `marketing-ai` (formato sugerido como
     consequência do objetivo, limite de 5 planos/dia/empresa); o dono aprova o plano. *Pronto quando:* na Tespon,
     aprovar uma oportunidade gera um plano com evidências citadas, sem número inventado e sem "Comente QUERO". **4B —
-    gerar as peças a partir do plano aprovado (pendente, outro PR):** continuam passando pela Central de Aprovações.
+    gerar as peças a partir do plano aprovado (🟡 pronta em código, 2026-10-29; falta migration `20261029130000`,
+    deploy de `marketing-ai`/`creative-generate`/`catalog-package`/`agent-actions` e teste na Tespon):** automático, 1–3
+    rascunhos por plano aprovado, só formatos sem custo de vídeo (reel → carrossel; **vídeo fica para quando o dono
+    liberar custo de vídeo**), limites 3/plano e 6/empresa/dia, `opportunity_id` na peça e no post. *Pronto quando:* na
+    Tespon, aprovar o plano gera as peças na Central de Aprovações com o selo "Da oportunidade", sem repetir ao aprovar
+    de novo. As peças continuam passando pela Central de Aprovações. **Etapa 6 poderá medir por `opportunity_id`.**
   - **Tudo automático (2026-10-29):** a Etapa 1 **deixou de ter botão manual** "Encontrar oportunidades": a busca roda
     sozinha (`cron_opportunities`, semanal ou com sinal novo). O agendamento ainda **não foi criado** (pendente de
     aprovação do dono).

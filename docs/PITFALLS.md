@@ -788,3 +788,19 @@ destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
 - A tela lê a data da última análise de `agent_performance`; se o RLS dessa tabela não deixar o cliente ler, cai na
   data da última oportunidade (rodadas sem resultado não aparecem).
 
+## Peças de oportunidade (Etapa 4B, 2026-10-29)
+
+- **`opportunity_id` vem de chamada interna, nunca do corpo do dono.** No `creative-generate` só o `plan_slot` com
+  `cron_secret` o aceita; o `make_now` (login do dono) ignora. Mesmo assim o plano é **recarregado do banco** filtrando
+  `company_id` e exige oportunidade aprovada + `plan_approved_at` (`opportunityPieceJob.ts`). Qualquer ramo novo que
+  receba um id de oportunidade deve fazer o mesmo.
+- **Reserva antes de despachar.** `pieces_generated_at` é gravado de forma atômica (`... is null`) ANTES de chamar o
+  `creative-generate`, que responde 202 e cria a peça depois. Sem isso, aprovação + cron geram em dobro. Se nenhuma peça
+  for aceita, a reserva é devolvida. Se a criação falhar em segundo plano, o cron tenta uma vez mais após 30 min.
+- **Migration pendente = não gera.** `generateOpportunityPieces` consulta `opportunity_id`; se a coluna não existe,
+  devolve `migration_pending` em vez de gerar sem idempotência. Já a gravação do vínculo (`saveLabels`,
+  `catalog-package`, `agent-actions`) é em UPDATE separado e tolerante, como os rótulos.
+- **Texto de setor não entra em prompt de código.** Os testes `test-opportunity-*` barram "preço/bairro/imóvel" nos
+  prompts padrão; exemplo de setor vem da ficha (`opportunity_texts`, `opportunity_pieces`).
+- **Formato da peça de foto depende do `catalog-package`:** exige 5+ fotos reais por item; o `reel` do plano vira
+  carrossel (vídeo = gasto Higgsfield, decisão pendente do dono).

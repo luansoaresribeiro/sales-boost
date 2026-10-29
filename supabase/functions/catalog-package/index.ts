@@ -247,6 +247,12 @@ Deno.serve(async (req) => {
     const { data: auto } = await admin.from('engagement_automations').select('active, message, keywords').eq('company_id', company.id).eq('item_id', item.id).maybeSingle()
     const automation = auto as { active?: boolean; message?: string; keywords?: string[] } | null
     const decision = decideVideoCta(automation, ficha.ctas)
+    // Etapa 4B: peça de oportunidade — só no modo interno, e só se a oportunidade é desta empresa (senão a FK quebraria o insert).
+    let opportunityId: string | null = null
+    if (internal && typeof body.opportunity_id === 'string' && /^[0-9a-f-]{36}$/i.test(body.opportunity_id)) {
+      const { data: opp } = await admin.from('growth_opportunities').select('id').eq('id', body.opportunity_id).eq('company_id', company.id).eq('status', 'approved').maybeSingle()
+      if (opp) opportunityId = opp.id as string
+    }
     const intentTxt = internal && typeof body.intent === 'string' ? body.intent.trim().slice(0, 1000) : ''
     const labels: { familia?: string; pilar_ss?: string; tema?: string } = internal ? dropUnknownPilar(cleanLabels(body as { familia?: unknown; pilar_ss?: unknown; tema?: unknown }), await fetchSSPillars(admin, company.vertical_key)) : {}
     // Rede de segurança (2026-10-23): mesmo com o prompt proibindo, a IA às vezes escreve um recado pro corretor
@@ -395,6 +401,13 @@ Deno.serve(async (req) => {
             const { error: lerr } = await admin.from('marketing_ai_test_content').update({ ...(labels.familia ? { familia: labels.familia } : {}), ...(labels.pilar_ss ? { pilar_ss: labels.pilar_ss } : {}) }).eq('id', row!.id)
             if (lerr) console.error('catalog-package: rótulo não gravado (migration aplicada?)', lerr.message)
           } catch (e) { console.error('catalog-package: rótulo falhou', e) }
+        }
+        // Vínculo com a oportunidade num UPDATE à parte e tolerante (sem a coluna, a peça nasce do mesmo jeito).
+        if (opportunityId) {
+          try {
+            const { error: oerr } = await admin.from('marketing_ai_test_content').update({ opportunity_id: opportunityId }).eq('id', row!.id)
+            if (oerr) console.error('catalog-package: opportunity_id não gravado (migration aplicada?)', oerr.message)
+          } catch (e) { console.error('catalog-package: opportunity_id falhou', e) }
         }
         await scoreTestContent(supabaseUrl, serviceKey, company.id as string, row!.id as string)
         generated.push({ recipe, pillar: pillarKey, planned_for: slot.date, id: row!.id as string, over_capacity: slot.overCapacity })

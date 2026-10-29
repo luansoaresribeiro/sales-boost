@@ -7,7 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { callMarketingAi, CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
 import MarketSignals from './marketSignals'
 import OpportunityCard, { type Opportunity } from './opportunityCard'
-import { PLAN_WAIT_MS } from './opportunityPlan'
+import { PIECES_WAIT_MS, PLAN_WAIT_MS, type PieceStats } from './opportunityPlan'
 
 // "Oportunidades" (Inteligência comercial para imobiliárias — decisão do dono 2026-10-28). Tudo AUTOMÁTICO
 // (princípio "Tudo automático"): a busca roda sozinha (marketing-ai → cron_opportunities: semanal e quando entra
@@ -58,6 +58,7 @@ export default function GrowthOpportunitiesPage() {
   const [itemNames, setItemNames] = useState<Record<string, string>>({})
   const [counts, setCounts] = useState<{ catalog: number; signals: number; competitors: number } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [pieceStats, setPieceStats] = useState<Record<string, PieceStats>>({})
   const [lastRunAt, setLastRunAt] = useState<string | null>(null)
   const [showDismissed, setShowDismissed] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -81,6 +82,19 @@ export default function GrowthOpportunitiesPage() {
       catalog: cat.count ?? 0, signals: sig.error ? 0 : (sig.count ?? 0),
       competitors: ((comp.data ?? []) as { hashtags_used: string[] | null }[]).filter(c => (c.hashtags_used ?? []).length > 0).length,
     })
+    // Etapa 4B: peças de cada oportunidade com plano aprovado. Coluna ausente (migration pendente) = erro → sem contagem, sem quebrar a tela.
+    const withPlan = list.filter(o => o.status === 'approved' && o.plan_approved_at).map(o => o.id)
+    if (withPlan.length) {
+      const [drafts, posts] = await Promise.all([
+        supabase.from('marketing_ai_test_content').select('opportunity_id, status').eq('company_id', companyId).in('opportunity_id', withPlan),
+        supabase.from('posts').select('opportunity_id').eq('company_id', companyId).in('opportunity_id', withPlan),
+      ])
+      const st: Record<string, PieceStats> = {}
+      const bump = (id: string | null, k: keyof PieceStats) => { if (id) (st[id] ??= { ready: 0, review: 0 })[k]++ }
+      if (!drafts.error) for (const r of (drafts.data ?? []) as { opportunity_id: string | null; status: string | null }[]) bump(r.opportunity_id, r.status === 'vault' ? 'ready' : 'review')
+      if (!posts.error) for (const r of (posts.data ?? []) as { opportunity_id: string | null }[]) bump(r.opportunity_id, 'ready')
+      setPieceStats(st)
+    } else setPieceStats({})
     const ids = [...new Set(list.flatMap(o => o.item_ids ?? []))]
     if (ids.length) {
       const { data } = await supabase.from('marketing_ai_knowledge').select('id, title').in('id', ids)
@@ -103,11 +117,13 @@ export default function GrowthOpportunitiesPage() {
 
   // Plano em construção (aprovada há < 2 min e ainda sem plano): recarrega a cada 10 s até aparecer ou passar o prazo.
   const waitingPlan = rows.some(o => o.status === 'approved' && !o.plan && o.decided_at && Date.now() - Date.parse(o.decided_at) < PLAN_WAIT_MS)
+  // Peças em construção (plano aprovado há < 15 min e ainda sem nenhuma peça): mesmo recarregamento a cada 10 s.
+  const waitingPieces = rows.some(o => o.status === 'approved' && o.plan_approved_at && !(pieceStats[o.id]?.ready || pieceStats[o.id]?.review) && Date.now() - Date.parse(o.plan_approved_at) < PIECES_WAIT_MS)
   useEffect(() => {
-    if (!waitingPlan) return
+    if (!waitingPlan && !waitingPieces) return
     const id = setInterval(() => { void load() }, 10_000)
     return () => clearInterval(id)
-  }, [waitingPlan, load])
+  }, [waitingPlan, waitingPieces, load])
 
   const decide = async (o: Opportunity, status: Opportunity['status']) => {
     if (readOnly) { openPlanModal(); return }
@@ -149,7 +165,7 @@ export default function GrowthOpportunitiesPage() {
             <>
               {rows.length === 0 && <div style={{ padding: '24px', textAlign: 'center', color: MUTED, fontSize: '13px', border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>{t.none}</div>}
               {latest.length > 0 && <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{t.latest}</div>}
-              {latest.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
+              {latest.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
               {dismissedList.length > 0 && (
                 <div>
                   <button onClick={() => setShowDismissed(v => !v)} aria-expanded={showDismissed}
@@ -158,13 +174,13 @@ export default function GrowthOpportunitiesPage() {
                   </button>
                   {showDismissed && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px', opacity: 0.75 }}>
-                      {dismissedList.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
+                      {dismissedList.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
                     </div>
                   )}
                 </div>
               )}
               {earlier.length > 0 && <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginTop: '6px' }}>{t.earlier}</div>}
-              {earlier.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
+              {earlier.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
             </>
           )}
 

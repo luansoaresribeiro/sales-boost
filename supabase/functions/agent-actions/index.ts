@@ -407,6 +407,18 @@ async function execute(admin: Supa, act: any): Promise<any> {
           }
         }
       } catch (e) { console.error('agent-actions: gravar familia/pilar_ss no post falhou (ignorado):', e) }
+      // Etapa 4B: o vínculo com a oportunidade (opportunity_id) segue a peça até o post aprovado — é por ele que a Etapa 6
+      // mede o resultado por oportunidade. Bloco SEPARADO e tolerante, como os rótulos: sem a coluna, só este bloco falha.
+      try {
+        if (postRow?.id) {
+          const { data: ob, error: oerr } = await admin.from('marketing_ai_test_content').select('opportunity_id').eq('id', act.ref_id).eq('company_id', act.company_id).maybeSingle()
+          if (oerr) console.error('agent-actions: ler opportunity_id da peça falhou (ignorado):', oerr.message)
+          else if (ob?.opportunity_id) {
+            const { error: uerr } = await admin.from('posts').update({ opportunity_id: ob.opportunity_id }).eq('id', postRow.id).eq('company_id', act.company_id)
+            if (uerr) console.error('agent-actions: gravar opportunity_id no post falhou (ignorado):', uerr.message)
+          }
+        }
+      } catch (e) { console.error('agent-actions: gravar opportunity_id no post falhou (ignorado):', e) }
       await admin.from('marketing_ai_test_content').delete().eq('id', act.ref_id).eq('company_id', act.company_id)
       if (mediaId) await recordInstagramPost(admin, act.company_id, mediaId, caption, coverUrl)
 

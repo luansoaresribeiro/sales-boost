@@ -47,7 +47,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
 
   // Ficha do setor (regra 6): quais campos são região/preço/tipo/quartos e como se chamam.
   const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', co.vertical_key ?? '').eq('enabled', true).maybeSingle()
-  const cfg = (pb?.config ?? {}) as { opportunity_fields?: FieldMap; catalog_fields?: { required?: { key: string; label?: Bilingual }[]; optional?: { key: string; label?: Bilingual; private?: boolean }[] }; vocabulary?: { item?: string }; opportunity_texts?: { low_traction_hypotheses?: Record<string, string[]>; caveat?: Bilingual; audience_hint?: Bilingual } }
+  const cfg = (pb?.config ?? {}) as { opportunity_fields?: FieldMap; catalog_fields?: { required?: { key: string; label?: Bilingual }[]; optional?: { key: string; label?: Bilingual; private?: boolean }[] }; vocabulary?: { item?: string }; opportunity_texts?: { low_traction_hypotheses?: Record<string, string[]>; caveat?: Bilingual; audience_hint?: Bilingual; market_claims?: { pt?: string[]; en?: string[] } } }
   const fieldMap = cfg.opportunity_fields
   if (!fieldMap?.location) {
     return { ok: false, status: 400, generated: 0, considered: 0, error: lang === 'en' ? 'This business type does not have opportunity fields set up yet.' : 'Este setor ainda não tem os campos de oportunidades configurados na ficha.' }
@@ -58,6 +58,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
     hypotheses: ot?.low_traction_hypotheses?.[lang]?.filter(x => typeof x === 'string' && x.trim()) ?? undefined,
     caveat: pick(ot?.caveat, lang) || undefined,
     audienceHint: pick(ot?.audience_hint, lang) || undefined,
+    marketClaims: ot?.market_claims?.[lang]?.filter(x => typeof x === 'string' && x.trim()) ?? undefined,
   }
   const labels: Record<string, string> = {}
   for (const f of [...(cfg.catalog_fields?.required ?? []), ...(cfg.catalog_fields?.optional ?? [])]) labels[f.key] = pick(f.label, lang).replace(/\s*\(.*\)\s*$/, '')
@@ -83,6 +84,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
     lang, now: new Date(), windowDays: WINDOW_DAYS, fieldMap, labels, itemLabel: cfg.vocabulary?.item ?? 'Item',
     catalog, posts, events, competitors, trends, signals, instagramConnected: !!co.instagram_user_id, texts,
   }
+  const photoCounts = Object.fromEntries(catalog.map(i => [i.id, i.photoCount]))
   const { facts, candidates } = buildCandidates(input)
   if (candidates.length === 0) { await logCost(admin, companyId, started, 0, true, 'sem candidatos'); return { ok: true, status: 200, run_id: null, generated: 0, considered: 0 } } // marca a rodada (o cron semanal e a tela usam)
 
@@ -90,7 +92,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
   const top = candidates.map(c => score(c, facts)).sort(compareScored).slice(0, MAX_CANDIDATES_TO_LLM).map(s => s.c)
   const usedFactIds = new Set(top.flatMap(c => c.fact_ids))
   const sentFacts = facts.filter(f => usedFactIds.has(f.id))
-  const prompt = buildPrompt({ lang, businessName: String(co.business_name ?? ''), itemLabel: input.itemLabel, facts: sentFacts, candidates: top, windowDays: WINDOW_DAYS, texts })
+  const prompt = buildPrompt({ lang, businessName: String(co.business_name ?? ''), itemLabel: input.itemLabel, facts: sentFacts, candidates: top, windowDays: WINDOW_DAYS, texts, photoCounts })
 
   let answer: { text: string; tokens: number }
   try {
@@ -106,7 +108,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
     return { ok: false, status: 502, generated: 0, considered: top.length, error: lang === 'en' ? 'The AI answer could not be read. Try again.' : 'Não consegui ler a resposta da IA. Tente de novo.' }
   }
 
-  const drafts = finalize({ lang, candidates: top, facts: sentFacts, llm: parsed })
+  const drafts = finalize({ lang, candidates: top, facts: sentFacts, llm: parsed, marketClaims: texts.marketClaims, photoCounts })
   const validIds = new Set(catalog.map(i => i.id))
   const runId = crypto.randomUUID()
   if (drafts.length > 0) {

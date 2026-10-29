@@ -110,11 +110,32 @@ export function numbersAllowed(s: string, allowed: AllowedNumbers): boolean {
   }))
 }
 
-// Tira da frase o que não passa (número inventado / classe protegida). Frase = até . ! ? ou quebra de linha.
-export function cleanText(s: unknown, allowed: AllowedNumbers, max: number): string {
+// ── Afirmações de mercado sem dado ("bairro disputado", "ticket elevado") ──────────────────────────────────────────
+// A IA escreveu opinião de mercado sem base na 1ª rodada real (Tespon, 2026-10-29). Adjetivo de mercado só vale se o
+// MESMO termo (radical) aparece nos fatos. A lista vem da ficha (opportunity_texts.market_claims, pt/en — regra 6);
+// sem ela, vale esta genérica. Cada termo é um radical: "valorizad" cobre valorizado/valorizada.
+export const DEFAULT_MARKET_CLAIMS: Record<Lang, string[]> = {
+  pt: ['disputad', 'concorrid', 'valorizad', 'valorizacao', 'alto padrao', 'nobre', 'em alta', 'badalad', 'cobicad', 'ticket elevad', 'ticket alto', 'procuradissim', 'muito procurad', 'bairro quente', 'mercado aquecid', 'alta demanda', 'luxo', 'sofisticad'],
+  en: ['competitive', 'in demand', 'high demand', 'hot market', 'hot neighborhood', 'upscale', 'high-end', 'high end', 'prime', 'sought-after', 'sought after', 'booming', 'appreciat', 'luxury', 'high ticket', 'premium', 'coveted'],
+}
+export interface ClaimGuard { terms: string[]; factsNorm: string }
+const claimRe = (t: string) => new RegExp('(?:^|[^a-z])' + norm(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[a-z]*')
+/** Monta a trava: termos (ficha ou genéricos) + o texto dos fatos em que eles podem aparecer. */
+export function claimGuard(lang: Lang, factTexts: string[], fichaTerms?: string[] | null): ClaimGuard {
+  const terms = (fichaTerms?.length ? fichaTerms : DEFAULT_MARKET_CLAIMS[lang]).filter(t => typeof t === 'string' && t.trim())
+  return { terms, factsNorm: norm(factTexts.join(' \n ')) }
+}
+/** A frase afirma algo de mercado que não está nos fatos? */
+export function hasUnsupportedClaim(sentence: string, guard: ClaimGuard): boolean {
+  const n = norm(sentence)
+  return guard.terms.some(t => { const re = claimRe(t); return re.test(n) && !re.test(guard.factsNorm) })
+}
+
+// Tira da frase o que não passa (número inventado / classe protegida / afirmação de mercado sem dado). Frase = até . ! ? ou quebra de linha.
+export function cleanText(s: unknown, allowed: AllowedNumbers, max: number, guard?: ClaimGuard | null): string {
   if (typeof s !== 'string') return ''
   const parts = s.replace(/[ \t]+/g, ' ').trim().split(/(?<=[.!?])\s+|\n+/)
-  return parts.filter(p => p.trim() && numbersAllowed(p, allowed) && !hasProtectedTerm(p)).join(' ').trim().slice(0, max)
+  return parts.filter(p => p.trim() && numbersAllowed(p, allowed) && !hasProtectedTerm(p) && !(guard && hasUnsupportedClaim(p, guard))).join(' ').trim().slice(0, max)
 }
 
 export interface LlmOpportunity {
@@ -135,10 +156,10 @@ export const promptSafe = (v: unknown, max = 200): string => {
   return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t
 }
 
-export function buildPrompt(opts: { lang: Lang; businessName: string; itemLabel: string; facts: Fact[]; candidates: Candidate[]; windowDays: number; texts?: OppTexts }): string {
+export function buildPrompt(opts: { lang: Lang; businessName: string; itemLabel: string; facts: Fact[]; candidates: Candidate[]; windowDays: number; texts?: OppTexts; photoCounts?: Record<string, number> }): string {
   const { lang, facts, candidates } = opts
   const factLines = facts.map(f => `${f.id} [${f.type === 'fact' ? 'FATO' : 'DADO'}] ${promptSafe(f.text)} (fonte: ${promptSafe(f.source, 120)}${f.date ? `; data: ${f.date}` : ''})`).join('\n')
-  const candLines = candidates.map(c => `${c.id} · tipo=${c.kind} · fatos=${c.fact_ids.join(',')}${c.forceHypothesis ? ' · A CAUSA É SÓ HIPÓTESE (use o tom "pode ser…", nunca afirme a causa)' : ''}${c.validationReasons.length ? ` · ATENÇÃO: ${promptSafe(c.validationReasons.join(' '), 300)}` : ''}`).join('\n')
+  const candLines = candidates.map(c => `${c.id} · tipo=${c.kind} · fatos=${c.fact_ids.join(',')}${photoNote(c.item_ids, opts.photoCounts)}${c.forceHypothesis ? ' · A CAUSA É SÓ HIPÓTESE (use o tom "pode ser…", nunca afirme a causa)' : ''}${c.validationReasons.length ? ` · ATENÇÃO: ${promptSafe(c.validationReasons.join(' '), 300)}` : ''}`).join('\n')
   const caveat = opts.texts?.caveat ?? 'Valor anunciado não é valor fechado; interesse de busca não é cliente.'
   const hint = opts.texts?.audienceHint ?? '"quem busca perto do trabalho", "quem quer trocar por algo maior"'
   return `Você ajuda a equipe comercial de "${promptSafe(opts.businessName, 80)}" a decidir o que fazer a seguir. Abaixo há uma LISTA FECHADA de fatos (com id) e CANDIDATOS a oportunidade montados por regras do sistema (já contados do banco). Sua tarefa é só REDIGIR, para até ${MAX_OPPORTUNITIES} candidatos que tenham base, a oportunidade em linguagem simples e direta.
@@ -160,11 +181,27 @@ REGRAS INEGOCIÁVEIS:
 4. Público ("audience"): NUNCA segmente por raça, cor, religião, sexo/gênero, deficiência, situação familiar (ter ou não filhos/crianças, famílias, estado civil), idade ou origem/nacionalidade (Fair Housing / antidiscriminação). Descreva o público por NECESSIDADE, momento de compra ou de uso, localização ou categoria do item (ex.: ${hint}). Se não houver base, deixe "audience" vazio.
 5. Nada é publicado ou enviado daqui: "suggested_action" é uma sugestão que o dono vai aprovar ou descartar. Máximo de 2 frases.
 6. "how_to_measure": diga o que olhar (comentários, mensagens, pedidos de contato), sem meta numérica.
-7. Idioma de TODOS os textos: ${lang === 'en' ? 'English' : 'português do Brasil'}.
+7. Adjetivo ou opinião de mercado ("disputado", "valorizado", "alto padrão", "nobre", "em alta", "ticket elevado", "procurado"…) só pode aparecer se a MESMA ideia estiver escrita nos fatos. Sem fato que diga isso, descreva só o que os fatos dizem, sem qualificar o local, o valor ou a demanda.
+8. Fotos: cada candidato com item ligado diz quantas fotos reais o item tem. Se for ZERO, "suggested_action" NÃO pode mandar publicar/postar/criar peça com fotos: a primeira ação é adicionar fotos reais ao item. Nunca invente que o item tem fotos.
+9. Idioma de TODOS os textos: ${lang === 'en' ? 'English' : 'português do Brasil'}.
 
 Responda APENAS com JSON, sem markdown:
 {"opportunities":[{"candidate_id":"C1","title":"até 90 caracteres","description":"2-3 frases","commercial_problem":"1-2 frases: o que isso custa ao comercial","audience":"","suggested_action":"","how_to_measure":"","cited_fact_ids":["F1"],"hypotheses":["Pode ser…"]}]}
 Se nenhum candidato tiver base suficiente, responda {"opportunities":[]}.`
+}
+
+// Quantas fotos reais têm os itens ligados ao candidato (o prompt e a conferência usam). Sem item ligado, sem nota.
+export function photoNote(itemIds: string[], photoCounts?: Record<string, number>): string {
+  if (!photoCounts || !itemIds.length) return ''
+  const n = itemIds.map(id => photoCounts[id] ?? 0)
+  return ` · fotos reais dos itens ligados: ${n.join(',')}${n.every(x => x === 0) ? ' (NENHUMA: a 1ª ação é adicionar fotos reais)' : ''}`
+}
+const PHOTO_WORDS = /(?:^|[^a-z])(?:foto\w*|photo\w*|publica\w*|publish\w*|posta\w*|post|posts|carrossel|carousel|reels?|video\w*|peca|piece|story|stories)(?:$|[^a-z])/
+/** Item sem NENHUMA foto real: a ação não pode mandar publicar com fotos — a 1ª ação é adicionar fotos reais (regra 4). */
+export function actionForPhotos(action: string, itemIds: string[], photoCounts: Record<string, number> | undefined, lang: Lang): string {
+  if (!photoCounts || !itemIds.length || !itemIds.every(id => (photoCounts[id] ?? 0) === 0)) return action
+  const first = tr(lang, 'Adicionar fotos reais aos itens ligados no catálogo antes de criar qualquer peça: hoje eles não têm nenhuma.', 'Add real photos to the linked catalog items before creating any piece: they have none today.')
+  return PHOTO_WORDS.test(norm(action)) ? first : `${first} ${action}`.slice(0, 400)
 }
 
 const hypSource = (lang: Lang) => tr(lang, 'Hipótese do Sales Boost — ainda não verificada', 'Sales Boost hypothesis — not verified yet')
@@ -201,9 +238,10 @@ export function priorityReasons(s: Scored, next: Scored | null, lang: Lang): str
 }
 
 // Junta a redação da IA com os candidatos do código, valida e ordena. Devolve no máximo 3.
-export function finalize(opts: { lang: Lang; candidates: Candidate[]; facts: Fact[]; llm: LlmOpportunity[] }): OpportunityDraft[] {
+export function finalize(opts: { lang: Lang; candidates: Candidate[]; facts: Fact[]; llm: LlmOpportunity[]; marketClaims?: string[] | null; photoCounts?: Record<string, number> }): OpportunityDraft[] {
   const { lang, candidates, facts } = opts
   const allowed = allowedNumbers(facts)
+  const guard = claimGuard(lang, facts.map(f => f.text), opts.marketClaims)
   const byId = new Map(facts.map(f => [f.id, f]))
   const drafts: { s: Scored; d: Omit<OpportunityDraft, 'priority_rank' | 'priority_reasons'> }[] = []
   const seen = new Set<string>()
@@ -218,21 +256,21 @@ export function finalize(opts: { lang: Lang; candidates: Candidate[]; facts: Fac
     // A prioridade/confiança contam só as evidências do PRÓPRIO candidato (código): citar mais fatos não sobe a nota.
     const sc = score(c, facts)
     const evidence: Evidence[] = factIds.map(id => byId.get(id)!).map(f => ({ type: f.type, text: f.text, source: f.source, date: f.date }))
-    const hyps = [...c.hypotheses, ...(Array.isArray(raw.hypotheses) ? raw.hypotheses : []).map(h => cleanText(h, allowed, 220))]
+    const hyps = [...c.hypotheses, ...(Array.isArray(raw.hypotheses) ? raw.hypotheses : []).map(h => cleanText(h, allowed, 220, guard))]
     for (const h of hyps) if (h && !evidence.some(e => e.type === 'hypothesis' && e.text === h) && evidence.filter(e => e.type === 'hypothesis').length < 4) evidence.push({ type: 'hypothesis', text: h, source: hypSource(lang), date: null })
-    const audience = cleanText(raw.audience, allowed, 200)
+    const audience = cleanText(raw.audience, allowed, 200, guard)
     drafts.push({
       s: sc,
       d: {
         kind: c.kind,
-        title: cleanText(raw.title, allowed, 120) || c.fallback.title,
-        description: cleanText(raw.description, allowed, 600),
-        commercial_problem: cleanText(raw.commercial_problem, allowed, 400) || c.fallback.problem,
+        title: cleanText(raw.title, allowed, 120, guard) || c.fallback.title,
+        description: cleanText(raw.description, allowed, 600, guard),
+        commercial_problem: cleanText(raw.commercial_problem, allowed, 400, guard) || c.fallback.problem,
         evidence,
         item_ids: c.item_ids,
         audience: audience || null,
-        suggested_action: cleanText(raw.suggested_action, allowed, 400) || c.fallback.action,
-        how_to_measure: cleanText(raw.how_to_measure, allowed, 300) || c.fallback.measure,
+        suggested_action: actionForPhotos(cleanText(raw.suggested_action, allowed, 400, guard) || c.fallback.action, c.item_ids, opts.photoCounts, lang),
+        how_to_measure: cleanText(raw.how_to_measure, allowed, 300, guard) || c.fallback.measure,
         confidence: sc.confidence,
         needs_validation: sc.needs,
       },
