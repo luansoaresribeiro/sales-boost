@@ -84,7 +84,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
     catalog, posts, events, competitors, trends, signals, instagramConnected: !!co.instagram_user_id, texts,
   }
   const { facts, candidates } = buildCandidates(input)
-  if (candidates.length === 0) return { ok: true, status: 200, run_id: null, generated: 0, considered: 0 }
+  if (candidates.length === 0) { await logCost(admin, companyId, started, 0, true, 'sem candidatos'); return { ok: true, status: 200, run_id: null, generated: 0, considered: 0 } } // marca a rodada (o cron semanal e a tela usam)
 
   // Os melhores candidatos (mesma ordem da prioridade final) vão pra IA redigir; ela nunca vê os demais.
   const top = candidates.map(c => score(c, facts)).sort(compareScored).slice(0, MAX_CANDIDATES_TO_LLM).map(s => s.c)

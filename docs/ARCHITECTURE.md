@@ -402,7 +402,7 @@ growth_opportunities (id, company_id, kind, title, description,
   source, date}], item_ids uuid[], audience, suggested_action,
   how_to_measure, confidence, needs_validation, status, priority_rank,
   priority_reasons jsonb, run_id, decided_at, decided_by, strategy_id,
-  created_at)
+  created_at, plan jsonb, plan_generated_at, plan_approved_at)  -- plan*: 2026-10-29 (Etapa 4A)
   -- 2026-10-28: saída do Opportunity Engine. Cliente lê e só altera
   -- status/decided_at/decided_by (grant por coluna); criar é só pela function.
   -- ATENÇÃO nomes: `opportunities` (acima) e `campaigns` têm OUTRO significado
@@ -463,6 +463,56 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
   `market_signals` **não** está em `ALLOWED_WRITE_TABLES` do `showcaseGuard`, então o guard também bloqueia a
   escrita. Salvar não roda o motor: o aviso manda clicar em "Encontrar oportunidades" (intervalo de 90 s).
   Divergência: o motor casa região por texto normalizado (igual/contida), então grafia diferente do catálogo não liga.
+
+- **Etapa 4A — plano da oportunidade + rodadas automáticas (2026-10-29) — 🟡 código pronto, falta migration/deploy/teste.**
+  Decisão: [DECISIONS.md](DECISIONS.md#2026-10-29--inteligência-comercial-etapa-4-plano-a-e-peças-b-tudo-automático).
+  Código: `_shared/opportunityPlan.ts` (lógica pura: prompt, conferência, formato, CTA), `opportunityPlanRun.ts`
+  (banco + IA: `decideOpportunity`, `createOpportunityPlan`, `approveOpportunityPlan`), `opportunityCron.ts`
+  (rodadas automáticas). Tela: `opportunityPlan.tsx`. Testes: `scripts/test-opportunity-plan.mjs`.
+  - **Actions do `marketing-ai`:** `decide_opportunity` {opportunity_id, status: approved|dismissed|suggested} (JWT +
+    empresa do login + `requirePaidAccess`; grava status/decided_at/decided_by com a service role filtrando
+    `company_id`; ao aprovar sem plano, cria o plano em `EdgeRuntime.waitUntil` e responde na hora);
+    `approve_opportunity_plan` {opportunity_id, undo?} (grava `plan_approved_at`); `cron_opportunities` (cron_secret
+    no corpo, antes do ramo de cron genérico do arquivo). **Não existe action de criar/refazer plano manualmente.**
+  - **Plano (1 chamada à IA, `claude-sonnet-4-6`, 2000 tokens):** entrada = oportunidade (título, problema, público,
+    ação, medir, evidências com tipo/fonte/data) + imóveis ligados lidos pelos papéis da ficha, tudo em `<dados>`
+    saneado. Saída gravada em `growth_opportunities.plan`; `plan_generated_at=now()`, `plan_approved_at=null`.
+    Validação em código (reaproveita `opportunityOutput.ts`): número só se estiver nas evidências/imóveis com a
+    unidade certa; Fair Housing em todo texto (público vazio cai no da oportunidade, se limpo); promessa de resultado
+    ("garantido", "vai vender", "+X%") tira a frase; métrica sem número; `format_suggestion` só
+    carousel/reel/post/story (inválido ou sem motivo → `post` marcado como "formato padrão"); `item_ids` só da
+    oportunidade; evidências citadas viram snapshot do que está guardado. **CTA:** pedido de comentário com
+    palavra-chave vira o alternativo da ficha (`ctas.sem_automacao`; inglês: "Send us a DM") e o plano marca
+    `cta_replaced`. Custo (inclusive falha) em `agent_performance`, `task_key='create_opportunity_plan'`, com
+    `task_description` começando por `opp:<id>`.
+  - **Limite:** 5 planos/empresa/24 h (429 com mensagem pt/en), contando também tentativas em andamento (linha
+    `create_opportunity_plan_start` gravada antes da IA; falha devolve a vaga); no máx. 2 falhas por oportunidade em 24 h
+    (vale para aprovar e para o cron). Com 429 a oportunidade fica sem plano e o cron gera depois. Plano já existente nunca
+    é regerado. Desfazer/descartar a oportunidade zera `plan_approved_at`; o plano gerado em segundo plano só é gravado
+    se a oportunidade ainda está aprovada. Busca que falhou há < 6 h não é repetida pelo cron.
+  - **Rodadas automáticas (`cron_opportunities`):** por empresa elegível (`auto_strategy=true`, interruptor geral
+    `hermes_config.auto_strategy_enabled`, `hasPaidAccess`, ativa, ficha com `opportunity_fields`): roda a busca se a
+    última rodada (`agent_performance` `run_opportunities` com sucesso — agora gravada também com 0 candidatos) tem > 7
+    dias OU há `market_signals` criado depois dela; e cria o plano das aprovadas sem plano. Até 3 empresas por chamada
+    e nenhuma IA nova depois de 40 s (cabe nos 150 s); responde na hora e trabalha em segundo plano.
+  - **Agendamento — NÃO criado (alteração arriscada, aguarda o dono).** SQL sugerido (a cada 6 horas; o segredo vem do
+    mesmo lugar dos outros crons — não escrever o valor aqui):
+    ```sql
+    select cron.schedule('opportunities-auto', '0 */6 * * *', $$
+      select net.http_post(
+        url := 'https://<PROJECT_REF>.supabase.co/functions/v1/marketing-ai',
+        headers := '{"Content-Type":"application/json"}'::jsonb,
+        body := jsonb_build_object('action','cron_opportunities','cron_secret','<CRON_SECRET igual aos outros crons>')
+      );
+    $$);
+    -- desfazer: select cron.unschedule('opportunities-auto');
+    ```
+    `marketing-ai` precisa estar deployada com `--no-verify-jwt` (PITFALLS "verify_jwt × chamada de cron").
+  - **Tela:** sem botões de gerar; mostra "Próxima análise automática: semanal (e quando você cadastra um sinal novo)"
+    e a data da última análise; oportunidade aprovada sem plano mostra "Montando o plano…" (recarrega a cada 10 s por 2
+    min, depois "o plano sai na próxima rodada automática"); botões "Aprovar plano"/"Desfazer aprovação".
+    Aprovar/descartar a oportunidade passou de update direto no banco para `decide_opportunity` (o grant de update do
+    cliente continua existindo, sem uso pela tela).
 - **Estado:** 🟡 código e teste de lógica prontos; falta aplicar a migration em produção (depois do merge), fazer
   o deploy do `marketing-ai` e rodar na Tespon. A Etapa 1 **não** publica nem envia nada.
 
