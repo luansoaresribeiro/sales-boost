@@ -581,6 +581,16 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     foi feito (corretor = Etapa 7; DM/comentário seguem sem atribuição).
   - **Reverter:** bloco "Como reverter" na migration; as functions voltam pelo commit anterior; o site pelo `wrangler rollback`.
 
+- **Etapas 6 e 7 (mínimas) — resultados por oportunidade + corretor sem login (2026-10-30) — 🟡 código pronto; migration/deploy por fazer.**
+  Decisão: [DECISIONS.md](DECISIONS.md). Migration `20261030120000_resultados_e_equipe.sql`: `brokers` (RLS só da dona; owner da
+  plataforma lê), `leads` + `visit_at/proposal_at/proposal_value/closed_at/closed_value/assigned_broker_id`, `link_events.broker_id`,
+  funções `assign_next_broker` (security definer, só service_role) e `opportunity_results` (security invoker). Código:
+  `_shared/publicPageRun.ts` (rodízio no lead; corretor no clique), `src/pages/dashboard/resultsBrokers.ts` (lógica pura),
+  `opportunityResults.tsx` (card da oportunidade), `settings/BrokersCard.tsx`, `marketingAi/FunnelTab.tsx`. Teste:
+  `scripts/test-results-brokers.mjs` (+ casos de corretor em `test-public-page.mjs`). As telas caem no comportamento antigo se a migration
+  ainda não foi aplicada (consulta de leads sem as colunas novas; sem bloco de resultados).
+  - **Reverter:** bloco "Como reverter" na migration; functions e site voltam pelo commit anterior.
+
 ## Estado atual do código
 
 - **Site publicado:** https://getsaleboost.com/ (+ www). O endereço antigo

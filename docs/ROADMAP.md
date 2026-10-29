@@ -512,11 +512,15 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
   `instagram-webhook` — nada disso foi feito (corretor = Etapa 7; DM/comentário seguem sem atribuição). *Pronto quando:* uma visita
   pedida pela página aparece no Funil com a origem (imóvel/oportunidade), o link aparece na legenda de um rascunho de oportunidade e
   nada é enviado ao visitante sem o dono. Ver [ARCHITECTURE.md](ARCHITECTURE.md) e [CONVERSION.md](CONVERSION.md).
-- [ ] **Etapa 6 — resultados (visitas, propostas, vendas).** Só com atribuição comprovada (origem registrada);
-  sem atribuição, "sem dado" — nunca estimativa. *Pronto quando:* cada número na tela tem origem rastreável e o
-  que não tem fica borrado/"sem dado".
-- [ ] **Etapa 7 — equipe de corretores.** Convite, papéis (dono/gestor/corretor) e RLS por papel. **Arriscado**
-  (mexe em autenticação e RLS). *Pronto quando:* um corretor convidado vê só o que o papel permite, testado com
-  conta sintética, sem tocar dados de cliente real.
+- [ ] **Etapa 6 — resultados (visitas, propostas, vendas) — 🟡 versão mínima pronta em código (2026-10-30); falta migration + deploy do
+  `marketing-ai` + site.** Só com atribuição comprovada (origem registrada); sem atribuição, "sem dado" — nunca estimativa. Feito:
+  bloco "Resultados" no card da oportunidade aprovada, datas carimbadas pelo Funil, valor opcional informado pelo dono. *Pronto quando:*
+  cada número na tela tem origem rastreável e o que não tem fica "sem dado" (conferir em produção). **Fica para o futuro:** atribuir
+  lead de DM/comentário (exige tocar o `instagram-webhook`); receita/CAC/ROAS; mapa de estágios com etapa própria de "visita".
+- [ ] **Etapa 7 — equipe de corretores — 🟡 versão mínima pronta em código (2026-10-30): corretor = contato SEM login, rodízio de leads,
+  encaminhamento por WhatsApp.** Falta migration + deploy + site. **Fica para o futuro (projeto à parte):** convite, papéis
+  (dono/gestor/corretor) e RLS por papel — **arriscado** (autenticação e RLS) — junto com o preço para imobiliária com equipe e o
+  domínio de e-mail verificado. *Pronto quando (versão completa):* um corretor convidado vê só o que o papel permite, testado com conta
+  sintética, sem tocar dados de cliente real.
 - **Pendentes do dono (não decididos):** preço para imobiliária com equipe (R$ e US$); custo de provedor de
   notícias (Etapa 3); revisão jurídica EUA/Fair Housing.

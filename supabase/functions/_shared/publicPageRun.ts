@@ -4,7 +4,7 @@
 // (public_page_get / public_page_event / public_page_lead) respondem 404 IDÊNTICO a qualquer falha de leitura (código inválido,
 // página desligada, empresa sem plano pago, imóvel apagado) — quem tenta adivinhar códigos não aprende nada. Nunca devolve campo
 // fora da lista branca da ficha, nem foto mobiliada (staged), nem telefone/Instagram que o dono não aprovou. Nada é enviado ao
-// visitante e nenhum IP é guardado (visitor_hash = SHA-256 com sal).
+// visitante e nenhum IP é guardado (visitor_hash = SHA-256 com sal). Corretor (Etapa 7): o telefone dele só sai no redirecionamento do clique.
 import { hasPaidAccess } from './access.ts'
 import {
   LEAD_SOURCE, LEAD_STAGE_NEW, NOT_FOUND_BODY, appendLinkOnce, clientIp, consentText, generateCode, instagramHandle, instagramUrl, isBot,
@@ -12,7 +12,7 @@ import {
   validateLead, visitorHash, whatsappNumber, whatsappUrl, LIMITS, type Lang, type PublicPageConfig,
 } from './publicPage.ts'
 
-type Admin = { from: (t: string) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
+type Admin = { from: (t: string) => any; rpc?: (fn: string, args: Record<string, unknown>) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
 export interface Reply { status: number; body: Record<string, unknown> }
 const NOT_FOUND: Reply = { status: 404, body: { ...NOT_FOUND_BODY } }
 const UNAVAILABLE: Reply = { status: 503, body: { error: 'unavailable' } }
@@ -90,9 +90,31 @@ export interface PublicCtx { salt: string; ip: string; ua: string }
 export const publicCtxFrom = (req: Request, salt: string): PublicCtx => ({ salt, ip: clientIp(req.headers), ua: req.headers.get('user-agent') ?? '' })
 const hashFor = (ctx: PublicCtx) => visitorHash(ctx.ip, ctx.ua, new Date().toISOString().slice(0, 10), ctx.salt)
 
-async function logEvent(admin: Admin, live: Live, event: string, hash: string, leadId?: string): Promise<void> {
-  const { error } = await admin.from('link_events').insert({ company_id: live.company.id, link_id: live.link.id, event, visitor_hash: hash, ...(leadId ? { lead_id: leadId } : {}) })
+async function logEvent(admin: Admin, live: Live, event: string, hash: string, leadId?: string, brokerId?: string): Promise<void> {
+  const { error } = await admin.from('link_events').insert({ company_id: live.company.id, link_id: live.link.id, event, visitor_hash: hash, ...(leadId ? { lead_id: leadId } : {}), ...(brokerId ? { broker_id: brokerId } : {}) })
   if (error) console.error(`[public_page] link_events ${event}:`, error.message)
+}
+
+// ── corretores (Etapa 7 mínima: contato de encaminhamento, sem login) ──
+/** Rodízio do lead: o banco escolhe o corretor ATIVO mais antigo na fila (assign_next_broker, só service role). null = sem corretor / migration pendente. Nunca lança. */
+async function assignBroker(admin: Admin, companyId: string): Promise<string | null> {
+  try {
+    if (typeof admin.rpc !== 'function') return null
+    const { data, error } = await admin.rpc('assign_next_broker', { p_company: companyId })
+    if (error) { console.error('[public_page] assign_next_broker:', error.message); return null }
+    return isUuid(data) ? data : null
+  } catch (e) { console.error('[public_page] assignBroker:', String(e)); return null }
+}
+/**
+ * Corretor do clique no WhatsApp: o ativo que recebeu o lead mais recentemente (last_assigned_at mais recente) — o clique NÃO gira o
+ * rodízio (só lead gira). Sem corretor que já recebeu lead, vale o telefone da empresa. Nunca lança.
+ */
+async function clickBroker(admin: Admin, companyId: string): Promise<{ id: string; phone: string } | null> {
+  try {
+    const { data, error } = await admin.from('brokers').select('id, phone').eq('company_id', companyId).eq('active', true).not('last_assigned_at', 'is', null).order('last_assigned_at', { ascending: false }).limit(1).maybeSingle()
+    if (error) { console.error('[public_page] clickBroker:', error.message); return null }
+    return data && typeof data.phone === 'string' ? { id: String(data.id), phone: data.phone } : null
+  } catch (e) { console.error('[public_page] clickBroker:', String(e)); return null }
 }
 
 export const PUBLIC_ACTIONS = ['public_page_get', 'public_page_event', 'public_page_lead'] as const
@@ -135,14 +157,21 @@ export async function handlePublicPage(admin: Admin, action: string, body: Recor
 
     if (action === 'public_page_event') {
       const ev = body.event as 'click_whatsapp' | 'click_dm'
-      const url = ev === 'click_whatsapp' ? whatsappUrl(live.page.contact_phone, live.title, live.lang, live.cfg.country_code) : instagramUrl(live.page.contact_ig)
+      let url = ev === 'click_whatsapp' ? whatsappUrl(live.page.contact_phone, live.title, live.lang, live.cfg.country_code) : instagramUrl(live.page.contact_ig)
       if (!url) return NOT_FOUND // botão que a página não oferece
+      // O telefone do corretor só aparece AQUI (no redirecionamento do clique), nunca no `get`.
+      let brokerId: string | undefined
+      if (ev === 'click_whatsapp') {
+        const b = await clickBroker(admin, live.company.id)
+        const bUrl = b ? whatsappUrl(b.phone, live.title, live.lang, live.cfg.country_code) : null
+        if (b && bUrl) { url = bUrl; brokerId = b.id }
+      }
       const [mine, hour] = await Promise.all([
         admin.from('link_events').select('id', { count: 'exact', head: true }).eq('link_id', live.link.id).eq('visitor_hash', hash).in('event', ['click_whatsapp', 'click_dm']).gte('created_at', isoAgo(HOUR_MS)),
         admin.from('link_events').select('id', { count: 'exact', head: true }).eq('link_id', live.link.id).in('event', ['click_whatsapp', 'click_dm']).gte('created_at', isoAgo(HOUR_MS)),
       ])
       // Acima dos tetos (30/visitante/hora e 60/link/hora) o visitante ainda é redirecionado, só não enche o banco.
-      if (!mine.error && !hour.error && (mine.count ?? 0) < 30 && (hour.count ?? 0) < LIMITS.clickPerLinkHour) await logEvent(admin, live, ev, hash)
+      if (!mine.error && !hour.error && (mine.count ?? 0) < 30 && (hour.count ?? 0) < LIMITS.clickPerLinkHour) await logEvent(admin, live, ev, hash, undefined, brokerId)
       return { status: 200, body: { ok: true, url } }
     }
 
@@ -159,7 +188,9 @@ export async function handlePublicPage(admin: Admin, action: string, body: Recor
     if (limited === 'duplicate') return { status: 200, body: { ok: true } } // mesmo contato e imóvel em 24 h: já recebemos
     if (limited) return { status: 429, body: { error: 'rate_limited' } }
 
+    const brokerId = await assignBroker(admin, live.company.id) // só depois dos limites: lead repetido/barrado não gasta a vez de ninguém
     const { data: lead, error } = await admin.from('leads').insert({
+      ...(brokerId ? { assigned_broker_id: brokerId } : {}),
       company_id: live.company.id, name: v.value.name, contact: v.value.contact,
       // 'manual' e 'new' são valores que o sistema já grava hoje (hermes-proxy / instagram-webhook): não batem em constraint.
       channel: 'manual', source: LEAD_SOURCE, stage: LEAD_STAGE_NEW,

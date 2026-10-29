@@ -2057,3 +2057,21 @@ grátis de 30 s, acima — mantidos como histórico):
 - **Corretores ficam para a Etapa 7.** Não há encaminhamento ao corretor nesta etapa.
 - **Ainda é decisão/ação do dono:** aplicar a migration, publicar o `marketing-ai`/`item-videos`/site e aprovar a primeira
   página (ver ROADMAP).
+
+## 2026-10-30 — Inteligência comercial, Etapas 6 e 7 (versão mínima): resultados por oportunidade e corretor sem login
+
+- **Corretor é só um CONTATO de encaminhamento, sem login.** Nome + WhatsApp (+ e-mail opcional) cadastrados pelo dono em
+  Configurações. O lead que entra pela página pública (Etapa 5) é distribuído em **rodízio** entre os corretores ativos
+  (`assign_next_broker`: o ativo com `last_assigned_at` mais antigo, nulos primeiro; só a service role executa) e o dono
+  **encaminha por WhatsApp** pelo Funil — abre um `wa.me` com o resumo, **nada é enviado por nós** (regra 1).
+- **Login por papel (dono/gestor/corretor) = projeto futuro**, junto com o **preço para imobiliária com equipe** (R$/US$) e o
+  **domínio de e-mail verificado** (convite por e-mail). Mexe em autenticação e RLS; não faz parte desta versão.
+- **O telefone do corretor pode aparecer no botão de WhatsApp da página pública:** o clique usa o corretor ativo que recebeu o
+  lead mais recentemente (o clique **não** gira o rodízio; só lead gira); sem corretor, vale o telefone da empresa. O número só sai
+  no redirecionamento do clique, nunca no `get` da página. O card de Configurações avisa o dono disso.
+- **Resultados só com origem rastreável:** visitas, cliques e leads de uma oportunidade vêm do link `/p/<código>` dela. Oportunidade
+  **sem link = "sem dado"** (diferente de 0); atribuição aparece só quando houve evento. Lead de comentário ou DM **continua sem
+  atribuição** (exigiria mexer no `instagram-webhook`). **Valor** (proposta/venda) é opcional, digitado pelo dono: a tela soma só o
+  que foi informado e mostra "N de M vendas com valor"; sem valor, "valor não informado". Nada é estimado.
+- **Mapa dos estágios (o funil real não tem etapa "visita"):** Qualificado carimba `visit_at` (visita agendada), Proposta carimba
+  `proposal_at`, Venda realizada carimba `closed_at` — só se estiver vazio, e pular etapa não preenche as anteriores.
