@@ -1,10 +1,11 @@
 // Opportunity Engine — rodadas AUTOMÁTICAS (princípio "Tudo automático", DECISIONS 2026-10-26: a única ação humana
 // é aprovar/descartar). Chamado por marketing-ai → action 'cron_opportunities', autenticada por cron_secret no corpo
-// (PITFALLS "verify_jwt × chamada de cron"). O AGENDAMENTO em si (cron.schedule) NÃO é criado por código/migration:
-// é alteração arriscada, o dono aprova (ver docs/ARCHITECTURE.md).
+// (PITFALLS "verify_jwt × chamada de cron"). O agendamento `opportunities-auto` (a cada 6 h, minuto 17) existe desde 2026-10-29 e
+// vive no banco, não em código/migration (ver docs/ARCHITECTURE.md).
 //
 // Por empresa elegível (mesmo critério do cron de estratégia: companies.auto_strategy=true — a Liga dos Sonhos fica
 // de fora — + interruptor geral hermes_config.auto_strategy_enabled + hasPaidAccess; e empresa ativa):
+//  (0) Etapa 3: coleta notícias de mercado da região dos imóveis (Tavily, limites rígidos; ver marketNewsRun.ts);
 //  (a) roda a busca de oportunidades se a última rodada tem > 7 dias OU há sinal de mercado novo desde ela;
 //  (b) cria o plano das oportunidades APROVADAS que ainda não têm (rede de segurança do plano automático);
 //      os freios (5 planos/dia, 2 falhas por oportunidade em 24 h) moram em createOpportunityPlan.
@@ -19,6 +20,7 @@ import { MAX_PLANS_PER_DAY } from './opportunityPlan.ts'
 import { createOpportunityPlan } from './opportunityPlanRun.ts'
 import { generateOpportunityPieces, type Dispatch } from './opportunityPiecesRun.ts'
 import { STALE_DISPATCH_MS } from './opportunityPieces.ts'
+import { collectMarketNews, type NewsOpts } from './marketNewsRun.ts'
 
 type Admin = { from: (t: string) => any; rpc?: any } // eslint-disable-line @typescript-eslint/no-explicit-any
 export const RERUN_AFTER_MS = 7 * 24 * 3600_000
@@ -44,25 +46,34 @@ export function runInBackground(p: Promise<unknown>): void {
 
 const ms = (v: unknown): number | null => { const t = typeof v === 'string' ? Date.parse(v) : NaN; return Number.isFinite(t) ? t : null }
 
-export interface CronSummary { ok: boolean; skipped_reason?: string; companies_checked: number; ran: number; plans: number; pieces: number }
+export interface CronSummary { ok: boolean; skipped_reason?: string; companies_checked: number; ran: number; plans: number; pieces: number; news_added: number }
 
-export async function cronOpportunities(admin: Admin, llm: Llm, started = Date.now(), dispatch?: Dispatch): Promise<CronSummary> {
-  const sum: CronSummary = { ok: true, companies_checked: 0, ran: 0, plans: 0, pieces: 0 }
+export async function cronOpportunities(admin: Admin, llm: Llm, started = Date.now(), dispatch?: Dispatch, collectNews: (a: Admin, o: NewsOpts) => ReturnType<typeof collectMarketNews> = collectMarketNews): Promise<CronSummary> {
+  const sum: CronSummary = { ok: true, companies_checked: 0, ran: 0, plans: 0, pieces: 0, news_added: 0 }
   // Interruptor GERAL (painel Owner), o mesmo do cron de estratégia.
   const { data: cfg } = await admin.from('hermes_config').select('auto_strategy_enabled').eq('id', true).maybeSingle()
   if (cfg && cfg.auto_strategy_enabled === false) return { ...sum, skipped_reason: 'auto_strategy_enabled=false no painel Owner' }
 
-  const { data: companies } = await admin.from('companies').select('id, business_name, vertical_key').eq('auto_strategy', true).eq('active', true).limit(200)
+  const { data: companies } = await admin.from('companies').select('id, business_name, vertical_key, language').eq('auto_strategy', true).eq('active', true).limit(200)
   const aiWindowOpen = () => Date.now() - started < START_NEW_AI_UNTIL_MS
   let worked = 0
 
-  for (const c of (companies ?? []) as { id: string; vertical_key: string | null }[]) {
+  for (const c of (companies ?? []) as { id: string; vertical_key: string | null; language: string | null }[]) {
     if (worked >= COMPANIES_PER_CALL || !aiWindowOpen()) break
     try {
       if (!(await hasPaidAccess(admin, c.id))) continue // conta vitrine: cron não gasta IA
       const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', c.vertical_key ?? '').eq('enabled', true).maybeSingle()
-      if (!(pb?.config as { opportunity_fields?: { location?: string } } | null)?.opportunity_fields?.location) continue // setor sem o motor
+      const pbCfg = pb?.config as { opportunity_fields?: { location?: string }; market_news?: unknown } | null
+      if (!pbCfg?.opportunity_fields?.location) continue // setor sem o motor
       sum.companies_checked++
+
+      // Etapa 3: notícias de mercado automáticas ANTES de decidir a rodada — sinal novo (created_at depois da última
+      // rodada) já faz shouldRunOpportunities devolver true. Limites rígidos e tempo (12 s por busca; só começa
+      // antes dos 40 s) em marketNewsRun. Falha aqui nunca derruba o resto da empresa.
+      try {
+        const news = await collectNews(admin, { companyId: c.id, lang: c.language === 'en' ? 'en' : 'pt', rawConfig: pbCfg.market_news, locationKey: pbCfg.opportunity_fields.location, canStart: aiWindowOpen })
+        sum.news_added += news.added
+      } catch (e) { console.error(`[cron_opportunities] ${c.id} notícias:`, String(e)) }
 
       const staleBefore = new Date(Date.now() - STALE_DISPATCH_MS).toISOString()
       const [{ data: lastRun }, { data: lastFail }, { data: lastSignal }, { data: pending }, { data: needPieces }] = await Promise.all([

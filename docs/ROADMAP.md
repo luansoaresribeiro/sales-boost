@@ -479,9 +479,13 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 - [ ] **Etapa 2 — colar sinal de mercado à mão (🟡 código pronto no PR; falta teste em produção).** Tela para o cliente colar notícia/lançamento/obra (título,
   região, fonte, link, data) em `market_signals` (`collected_by='manual'`). *Pronto quando:* um sinal colado com
   fonte aparece como "Dado" numa oportunidade `market_change` do bairro certo; sem fonte, não entra.
-- [ ] **Etapa 3 — notícias automáticas.** Coletar sinais sozinho (`collected_by='system'`). **Depende de decisão do
-  dono:** provedor de notícias, custo e teto mensal (pendente). *Pronto quando:* a coleta respeita o teto, cada
-  sinal tem fonte + data, e o dono aprova/descarta antes de virar evidência.
+- [ ] **Etapa 3 — notícias automáticas (🟡 pronta em código, 2026-10-30; falta migration + deploy do `marketing-ai` e teste em produção).**
+  Coleta sozinha (Tavily, `topic:'news'`, sem botão) as notícias da região dos imóveis e grava em `market_signals` com
+  `collected_by='system'`, fonte e data. Limites: 3 buscas e 5 sinais novos por empresa por 7 dias; teto global
+  `MARKET_NEWS_MONTHLY_CAP` (padrão 120 buscas/30 dias). *Pronto quando:* a coleta respeita o teto, cada sinal tem fonte
+  + data, e o sinal novo faz aparecer a oportunidade `market_change`. **Divergência:** o critério original dizia "o dono
+  aprova/descarta antes de virar evidência" — o sinal entra direto como "Dado" (selo "Automático", o dono pode apagar) e a
+  aprovação humana fica na **oportunidade** (ver [DECISIONS.md](DECISIONS.md)).
 - [ ] **Etapa 4 — oportunidade aprovada → estratégia → peças.** Ligar `growth_opportunities.strategy_id` ao
   `strategy-generate` e às peças do calendário. **Alteração arriscada** (function de cliente real: aprovação do
   dono antes do deploy). *Pronto quando:* aprovar uma oportunidade gera uma iniciativa de estratégia citando a

@@ -495,8 +495,9 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     última rodada (`agent_performance` `run_opportunities` com sucesso — agora gravada também com 0 candidatos) tem > 7
     dias OU há `market_signals` criado depois dela; e cria o plano das aprovadas sem plano. Até 3 empresas por chamada
     e nenhuma IA nova depois de 40 s (cabe nos 150 s); responde na hora e trabalha em segundo plano.
-  - **Agendamento — NÃO criado (alteração arriscada, aguarda o dono).** SQL sugerido (a cada 6 horas; o segredo vem do
-    mesmo lugar dos outros crons — não escrever o valor aqui):
+  - **Agendamento — EXISTE desde 2026-10-29** (cron `opportunities-auto`, a cada 6 h, minuto 17; a nota original dizia
+    "não criado", mantida abaixo como histórico). SQL de referência (o segredo vem do mesmo lugar dos outros crons — não
+    escrever o valor aqui):
     ```sql
     select cron.schedule('opportunities-auto', '0 */6 * * *', $$
       select net.http_post(
@@ -508,6 +509,16 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     -- desfazer: select cron.unschedule('opportunities-auto');
     ```
     `marketing-ai` precisa estar deployada com `--no-verify-jwt` (PITFALLS "verify_jwt × chamada de cron").
+  - **Notícias de mercado automáticas (Etapa 3, 2026-10-30 — 🟡 código pronto, falta migration + deploy):** dentro do
+    `cron_opportunities`, por empresa elegível e ANTES de `shouldRunOpportunities`, `marketNewsRun.ts` busca na Tavily
+    (`topic:'news'`, `search_depth:'basic'`, `exclude_domains` da ficha) as notícias das até 3 regiões do catálogo com mais
+    itens e grava em `market_signals` (`collected_by='system'`, `meta.provider='tavily'`); sinal novo já dispara nova rodada
+    e a `market_change` aparece. Lógica pura em `marketNews.ts` (filtros: data válida/não futura/≤ days, região no
+    título ou trecho, sem portal, só https, link único por empresa pelo índice `market_signals_system_url_uq`). Texto de
+    setor na ficha: `config.market_news` (migration `20261030100000_noticias_automaticas.sql`). Limites: 3 buscas e 5
+    sinais novos por empresa/7 dias; `MARKET_NEWS_MONTHLY_CAP` (padrão 120) conta `agent_performance`
+    `task_key='market_news_search'`. Chave: `getTavilyKey` (env `TAVILY_API_KEY` ou `_app_config`); respeita o interruptor
+    `insight_sources` tavily. Teste: `scripts/test-market-news.mjs`. Decisão: [DECISIONS.md](DECISIONS.md#2026-10-30--inteligência-comercial-etapa-3-notícias-de-mercado-automáticas).
   - **Tela:** sem botões de gerar; mostra "Próxima análise automática: semanal (e quando você cadastra um sinal novo)"
     e a data da última análise; oportunidade aprovada sem plano mostra "Montando o plano…" (recarrega a cada 10 s por 2
     min, depois "o plano sai na próxima rodada automática"); botões "Aprovar plano"/"Desfazer aprovação".
