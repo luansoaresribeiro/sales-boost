@@ -123,5 +123,6 @@ vez de duplicar no CLAUDE.md.
   **nada é enviado automaticamente**.
 - **Clique no WhatsApp da página:** usa o corretor ativo que recebeu o lead mais recentemente (grava `link_events.broker_id`); sem
   corretor, o telefone da empresa. O `get` da página nunca devolve o telefone do corretor.
+  `link_events.broker_id` é **indicativo, não exato**: é o corretor do lead mais recente, não necessariamente quem "atende" aquele visitante.
 - **Funil e resultados:** mover o lead para Qualificado/Proposta/Venda carimba visita/proposta/fechado e oferece valor opcional
   (ver [LEARNING.md](LEARNING.md)). Lead de DM/comentário continua sem corretor (rodízio só na página pública).

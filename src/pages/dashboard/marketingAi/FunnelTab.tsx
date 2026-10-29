@@ -24,7 +24,7 @@ const TX = {
     emptyMsg: 'Assim que o primeiro lead chegar (Instagram, WhatsApp ou anúncios), o funil mostra os leads de verdade aqui, sozinho. Ligue o Modo demonstração pra ver o layout com exemplos.',
     seeExample: 'Ver exemplo (modo demonstração)', sameFunnel: 'Instagram e WhatsApp no mesmo funil — filtre pela origem.',
     leadsInFunnel: 'Leads no funil', conversion: 'Conversão', pipelineValue: 'Valor no pipeline', noReplyLbl: 'Sem resposta', empty: 'vazio',
-    broker: 'Corretor', forward: 'Encaminhar por WhatsApp', forwardHint: 'Abre o seu WhatsApp com o resumo — nada é enviado por nós.', valProposal: 'Valor da proposta', valSale: 'Valor da venda', valNone: 'valor não informado', valInform: 'informar valor', valPh: 'Opcional, ex.: 850000', valConfirm: 'Confirmar', valSkip: 'Pular (sem valor)', valSave: 'Salvar valor', valCancel: 'Cancelar', valBad: 'Valor inválido — use só números.', valVisit: 'Marca visita agendada',
+    broker: 'Corretor', forward: 'Encaminhar por WhatsApp', forwardHint: 'Abre o seu WhatsApp com o resumo — nada é enviado por nós.', valProposal: 'Valor da proposta', valSale: 'Valor da venda', valNone: 'valor não informado', valInform: 'informar valor', valPh: 'Opcional, ex.: 850000', valConfirm: 'Confirmar', valSkip: 'Pular (sem valor)', valSave: 'Salvar valor', valCancel: 'Cancelar', valBad: 'Valor inválido — use só números.', valVisit: 'ao ir para Qualificado, conta como visita agendada nos Resultados',
   },
   en: {
     noReply: '⚠️ No reply — risk of going cold', drafted: '✓ Follow-up drafted, awaiting your approval', draftBtn: 'Draft follow-up', advance: 'Advance stage',
@@ -34,7 +34,7 @@ const TX = {
     emptyMsg: 'As soon as the first lead arrives (Instagram, WhatsApp or ads), the pipeline shows the real leads here on its own. Turn on Demo mode to see the layout with examples.',
     seeExample: 'See an example (demo mode)', sameFunnel: 'Instagram and WhatsApp in the same pipeline — filter by source.',
     leadsInFunnel: 'Leads in pipeline', conversion: 'Conversion', pipelineValue: 'Pipeline value', noReplyLbl: 'No reply', empty: 'empty',
-    broker: 'Broker', forward: 'Forward by WhatsApp', forwardHint: 'Opens your WhatsApp with the summary — nothing is sent by us.', valProposal: 'Proposal value', valSale: 'Sale value', valNone: 'value not informed', valInform: 'add value', valPh: 'Optional, e.g. 850000', valConfirm: 'Confirm', valSkip: 'Skip (no value)', valSave: 'Save value', valCancel: 'Cancel', valBad: 'Invalid value — numbers only.', valVisit: 'Marks scheduled visit',
+    broker: 'Broker', forward: 'Forward by WhatsApp', forwardHint: 'Opens your WhatsApp with the summary — nothing is sent by us.', valProposal: 'Proposal value', valSale: 'Sale value', valNone: 'value not informed', valInform: 'add value', valPh: 'Optional, e.g. 850000', valConfirm: 'Confirm', valSkip: 'Skip (no value)', valSave: 'Save value', valCancel: 'Cancel', valBad: 'Invalid value — numbers only.', valVisit: 'moving to Qualified counts as a scheduled visit in Results',
   },
 } as const
 
@@ -51,9 +51,9 @@ interface Extra {
 interface Broker { id: string; name: string; phone: string }
 interface Prompt { id: string; col: 'proposal_value' | 'closed_value'; nx: StageKey | null }
 
-function LeadCard({ lead, drafted, onDraft, onAdvance, extra, broker, itemTitle, prompt, onPrompt, onValue, onCancel }: {
+function LeadCard({ lead, drafted, onDraft, onAdvance, extra, broker, countryCode, itemTitle, prompt, onPrompt, onValue, onCancel }: {
   lead: DemoLead; drafted: boolean; onDraft: () => void; onAdvance: () => void
-  extra?: Extra; broker?: Broker; itemTitle?: string | null; prompt: Prompt | null; onPrompt: (col: Prompt['col']) => void; onValue: (raw: string) => boolean; onCancel: () => void // onValue devolve true se o valor é inválido
+  extra?: Extra; broker?: Broker; countryCode: string | null; itemTitle?: string | null; prompt: Prompt | null; onPrompt: (col: Prompt['col']) => void; onValue: (raw: string) => boolean; onCancel: () => void // onValue devolve true se o valor é inválido
 }) {
   const [val, setVal] = useState('')
   const [bad, setBad] = useState(false)
@@ -64,7 +64,7 @@ function LeadCard({ lead, drafted, onDraft, onAdvance, extra, broker, itemTitle,
   const canAdvance = !!nextStage(lead.stageKey)
   const valCol = extra ? valueColumnFor(lead.stageKey) : null
   const curVal = valCol && extra ? extra[valCol] : null
-  const href = extra && broker ? forwardUrl(broker.phone, { name: lead.name, contact: extra.contact, item: itemTitle ?? null, message: extra.notes }, lang) : null
+  const href = extra && broker ? forwardUrl(broker.phone, { name: lead.name, contact: extra.contact, item: itemTitle ?? null, message: extra.notes }, lang, countryCode) : null
   const submit = (skip: boolean) => { if (onValue(skip ? '' : val)) setBad(true); else { setBad(false); setVal('') } }
   const mine = prompt?.id === lead.id ? prompt : null
   return (
@@ -132,7 +132,7 @@ function LeadCard({ lead, drafted, onDraft, onAdvance, extra, broker, itemTitle,
   )
 }
 
-export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name'> }) {
+export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id' | 'business_name' | 'vertical_key'> }) {
   const { lang } = useLang()
   const t = TX[lang]
   const demo = useMemo(() => buildFunnelDemo(company, lang), [company, lang])
@@ -150,6 +150,8 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
   const [extras, setExtras] = useState<Record<string, Extra>>({})
   const [brokers, setBrokers] = useState<Broker[]>([])
   const [itemTitles, setItemTitles] = useState<Record<string, string>>({})
+  // DDI do WhatsApp vem da ficha (regra 6). Sem ficha/campo: só funciona número digitado com "+".
+  const [countryCode, setCountryCode] = useState<string | null>(null)
   const [prompt, setPrompt] = useState<Prompt | null>(null)
 
   const load = useCallback(async () => {
@@ -168,13 +170,16 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
       proposal_value: r.proposal_value ?? null, closed_value: r.closed_value ?? null, visit_at: r.visit_at ?? null, proposal_at: r.proposal_at ?? null, closed_at: r.closed_at ?? null,
     }])))
     const itemIds = [...new Set(rows.map(r => r.item_id).filter((x): x is string => !!x))]
-    const [b, it] = await Promise.all([
+    const [b, it, pb] = await Promise.all([
       supabase.from('brokers').select('id, name, phone').eq('company_id', company.id),
       itemIds.length ? supabase.from('marketing_ai_knowledge').select('id, title').in('id', itemIds) : Promise.resolve({ data: [], error: null }),
+      company.vertical_key ? supabase.from('vertical_playbooks').select('config').eq('key', company.vertical_key).maybeSingle() : Promise.resolve({ data: null, error: null }),
     ])
+    const cc = String((pb.data as { config?: { public_page?: { country_code?: unknown } } } | null)?.config?.public_page?.country_code ?? '').replace(/\D/g, '')
+    setCountryCode(cc.length >= 1 && cc.length <= 3 ? cc : null)
     setBrokers(b.error ? [] : (b.data ?? []) as Broker[])
     setItemTitles(it.error ? {} : Object.fromEntries(((it.data ?? []) as { id: string; title: string }[]).map(i => [i.id, i.title])))
-  }, [company.id])
+  }, [company.id, company.vertical_key])
   useEffect(() => { void load() }, [load])
   useRealtime('leads', company.id, load)
 
@@ -271,7 +276,7 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
               <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                 {colLeads.map(l => (
                   <LeadCard key={l.id} lead={l} drafted={drafted.has(l.id)} onDraft={() => draft(l.id)} onAdvance={() => advance(l.id)}
-                    extra={isReal ? extras[l.id] : undefined} broker={isReal ? brokers.find(b => b.id === extras[l.id]?.assigned_broker_id) : undefined}
+                    extra={isReal ? extras[l.id] : undefined} broker={isReal ? brokers.find(b => b.id === extras[l.id]?.assigned_broker_id) : undefined} countryCode={countryCode}
                     itemTitle={isReal && extras[l.id]?.item_id ? itemTitles[extras[l.id].item_id as string] : null}
                     prompt={prompt} onPrompt={col => setPrompt({ id: l.id, col, nx: null })} onValue={submitValue} onCancel={() => setPrompt(null)} />
                 ))}

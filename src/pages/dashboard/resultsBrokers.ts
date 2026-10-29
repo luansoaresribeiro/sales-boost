@@ -35,10 +35,24 @@ export function parseMoney(raw: string): number | null {
 export const phoneDigits = (p: unknown) => String(p ?? '').replace(/\D/g, '')
 /** Cadastro do corretor: ≥ 10 dígitos (DDD + número). */
 export const isValidBrokerPhone = (p: unknown) => { const n = phoneDigits(p).length; return n >= 10 && n <= 15 }
-/** Número para o wa.me: 10 ou 11 dígitos (sem DDI) ganham o DDI do piloto (55); a página pública usa o country_code da ficha. */
-export function waNumber(phone: unknown, countryCode = '55'): string | null {
-  let d = phoneDigits(phone)
-  if (d.length === 10 || d.length === 11) d = countryCode + d
+/**
+ * Número para o wa.me. O DDI vem da ficha (config.public_page.country_code — regra 6); nada de DDI fixo aqui.
+ * - Digitado com "+": usa como está (11 a 15 dígitos).
+ * - Já começa com o DDI e tem o tamanho de número completo (DDI + ≥ 10): usa como está.
+ * - 10 ou 11 dígitos sem DDI: ganha o DDI da ficha.
+ * - Sem DDI conhecido e sem "+": null (melhor não ter botão do que mandar o lead para o número errado).
+ */
+export function waNumber(phone: unknown, countryCode: string | null | undefined): string | null {
+  const raw = String(phone ?? '').trim()
+  let d = phoneDigits(raw)
+  const cc = String(countryCode ?? '').replace(/\D/g, '')
+  if (!raw.startsWith('+')) {
+    if (!cc || cc.length > 3) return null
+    if (!(d.startsWith(cc) && d.length >= cc.length + 10)) {
+      if (d.length !== 10 && d.length !== 11) return null
+      d = cc + d
+    }
+  }
   return d.length >= 11 && d.length <= 15 ? d : null
 }
 export interface ForwardLead { name: string; contact: string | null; item: string | null; message: string | null }
@@ -53,7 +67,7 @@ export function forwardText(l: ForwardLead, lang: 'pt' | 'en'): string {
   ].filter(Boolean).join('\n')
 }
 /** wa.me do corretor com o resumo do lead. Nada é enviado por nós: o dono toca em "enviar" no próprio WhatsApp. */
-export function forwardUrl(brokerPhone: unknown, l: ForwardLead, lang: 'pt' | 'en', countryCode = '55'): string | null {
+export function forwardUrl(brokerPhone: unknown, l: ForwardLead, lang: 'pt' | 'en', countryCode: string | null | undefined): string | null {
   const n = waNumber(brokerPhone, countryCode)
   return n ? `https://wa.me/${n}?text=${encodeURIComponent(forwardText(l, lang))}` : null
 }

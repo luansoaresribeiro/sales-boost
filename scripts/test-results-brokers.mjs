@@ -35,19 +35,22 @@ function nextBroker(brokers) {
 // --- telefone do corretor
 {
   assert.ok(isValidBrokerPhone('(21) 99999-9999')); assert.ok(isValidBrokerPhone('2133334444')); assert.ok(!isValidBrokerPhone('999-9999')); assert.ok(!isValidBrokerPhone('')); assert.ok(!isValidBrokerPhone('abc')); ok('validação do WhatsApp: ≥ 10 dígitos')
-  assert.equal(waNumber('(21) 99999-9999'), '5521999999999'); assert.equal(waNumber('+55 21 99999-9999'), '5521999999999'); assert.equal(waNumber('12345'), null); ok('número do wa.me: DDI só quando falta')
+  assert.equal(waNumber('(21) 99999-9999', '55'), '5521999999999'); assert.equal(waNumber('+55 21 99999-9999', '55'), '5521999999999'); assert.equal(waNumber('5521999999999', '55'), '5521999999999'); assert.equal(waNumber('12345', '55'), null); ok('número do wa.me: DDI da ficha só quando falta')
+  assert.equal(waNumber('(55) 99999-9999', '55'), '5555999999999'); ok('DDD 55 sem DDI não é confundido com DDI')
+  assert.equal(waNumber('(212) 555-1234', '1'), '12125551234'); assert.equal(waNumber('1 212 555 1234', '1'), '12125551234'); assert.equal(waNumber('+1 212 555 1234', '55'), '12125551234'); ok('EUA: DDI 1 da ficha; "+" sempre vale')
+  assert.equal(waNumber('2125551234', null), null); assert.equal(waNumber('(21) 99999-9999', undefined), null); assert.equal(waNumber('+1 212 555 1234', null), '12125551234'); ok('sem DDI na ficha: sem chute (só número com "+")')
 }
 
 // --- encaminhamento por WhatsApp (nada é enviado por nós: só um link wa.me)
 {
   const lead = { name: 'Maria Silva', contact: '21977776666', item: 'Apartamento em Ipanema', message: 'Pediu informações. Mensagem: Quero visitar & ver "fotos"' }
-  const url = forwardUrl('(21) 91234-5678', lead, 'pt')
+  const url = forwardUrl('(21) 91234-5678', lead, 'pt', '55')
   assert.ok(url.startsWith('https://wa.me/5521912345678?text=')); const text = decodeURIComponent(url.split('?text=')[1])
   assert.equal(text, forwardText(lead, 'pt')); assert.match(text, /Nome: Maria Silva/); assert.match(text, /Contato: 21977776666/); assert.match(text, /Imóvel: Apartamento em Ipanema/); assert.match(text, /Quero visitar & ver "fotos"/)
   assert.ok(!/[ \n&"]/.test(url.split('?text=')[1])); ok('wa.me: texto codificado (espaço, quebra de linha, & e aspas não quebram a URL)')
   assert.match(forwardText(lead, 'en'), /Name: Maria Silva/); assert.match(forwardText(lead, 'en'), /Property:/); ok('encaminhamento em inglês')
   const sem = forwardText({ name: 'Ana', contact: null, item: null, message: '' }, 'pt'); assert.ok(!/Imóvel|Contato|Mensagem/.test(sem)); ok('linha sem dado some (nada inventado)')
-  assert.equal(forwardUrl('123', lead, 'pt'), null); ok('telefone inválido: sem link')
+  assert.equal(forwardUrl('123', lead, 'pt', '55'), null); assert.equal(forwardUrl('2125551234', lead, 'en', null), null); ok('telefone inválido ou sem DDI conhecido: sem link')
 }
 
 // --- sem dado x 0

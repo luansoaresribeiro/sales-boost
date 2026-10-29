@@ -877,8 +877,14 @@ trava/contador, confere o `error` retornado.
   (aceito; o dono encaminha à mão). O rodízio só avança depois dos limites de lead — lead repetido/barrado não gasta a vez de ninguém.
 - **Migration pendente não pode derrubar tela nem lead:** o Funil tenta a consulta com as colunas novas e cai na antiga; o rodízio
   falhando = lead sem `assigned_broker_id`; `opportunity_results` ausente = card sem bloco de resultados. Tudo registrado em log.
-- **DDI do corretor:** no encaminhamento (navegador) 10–11 dígitos ganham `55` (piloto Brasil); a página pública usa o `country_code`
-  da ficha. Setor/país novo: passar o DDI da ficha ao `forwardUrl`.
+- **DDI do corretor vem da ficha** (`config.public_page.country_code`), no navegador e na página pública. ~~Primeira versão punha `55`
+  fixo no navegador~~ (achado do QA: corretor dos EUA com 10 dígitos viraria um número aleatório do Brasil). Hoje: número digitado com
+  "+" vale como está; sem DDI na ficha e sem "+", o botão "Encaminhar" some — nunca chutar país. O servidor (`publicPage.ts`) ainda
+  cai em `55` quando a ficha não tem `country_code` (comportamento anterior, não regressão; ficha nova deve trazer o campo).
+- **Moeda fixa em BRL (dívida):** a soma de vendas em Resultados e os valores do Funil (`fmtBRL`) mostram "R$" mesmo em inglês. Antes
+  de cliente nos EUA, a moeda precisa vir da ficha/empresa (ex.: `config.currency`).
+- **Rodízio antes do insert:** o corretor é escolhido antes de gravar o lead; se o insert falhar, a vez dele é gasta sem lead. Só afeta
+  a justiça do rodízio, não o lead.
 - **"Qualificado" = visita agendada** é uma convenção (o funil não tem etapa de visita); `visit_at` só reflete isso. 0 não é "sem
   dado": sem `tracked_link` a oportunidade mostra "sem dado"; com link, 0 é 0.
 - **Telefone do corretor é público no clique:** o `wa.me` do botão da página expõe o número de quem recebeu o lead mais recente.
