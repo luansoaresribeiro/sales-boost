@@ -561,6 +561,26 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     filtrando por `company_id`** dos dois lados; (c) desfazer a aprovação do plano **não apaga** peças já geradas.
   - **Reverter:** bloco "Como reverter" no próprio arquivo da migration; as functions voltam pelo commit anterior.
 
+- **Etapa 5 — página pública do imóvel + link rastreável (2026-10-30) — 🟡 código pronto; migration/deploy/aprovação do dono por fazer.**
+  Decisão: [DECISIONS.md](DECISIONS.md#2026-10-30--inteligência-comercial-etapa-5-página-pública-do-imóvel--link-rastreável--lead-com-origem).
+  Código: `_shared/publicPage.ts` (puro: código sem ambíguos, lista branca de campos, fotos reais, validação do lead, limites,
+  `wa.me`/`ig.me`, hash do visitante, frase com link uma vez só), `_shared/publicPageRun.ts` (banco). Tela pública
+  `src/pages/public/PublicPropertyPage.tsx` (rota `/p/:code`, fora do `ClientRoute`); tela do dono `PublicPageButton.tsx` (no card do
+  imóvel em `CatalogItems.tsx`). Teste: `scripts/test-public-page.mjs`. Migration: `20261030110000_pagina_publica_imovel.sql`.
+  - **Modelo:** `public_pages` (item_id PK, `enabled`, `approved_at/by`, `contact_phone/contact_ig` copiados na aprovação),
+    `tracked_links` (`code` 8 caracteres, único por imóvel + oportunidade + canal), `link_events` (`view`/`click_whatsapp`/
+    `click_dm`/`lead`, `visitor_hash`, nunca IP), e `leads` ganha `item_id`, `opportunity_id`, `link_id`, `consent_at`, `consent_text`.
+    RLS: dono/owner só leem; escrita só service role. Variável opcional `PUBLIC_PAGE_SALT` (sal do hash do visitante; sem ela usa `CRON_SECRET`). Ficha `imoveis_rio.config.public_page` = `fields` (lista branca), `min_photos`,
+    `country_code`, `caption_line`.
+  - **Ações do `marketing-ai`:** públicas (sem login, antes de auth/cron): `public_page_get`, `public_page_event`,
+    `public_page_lead`. Com login + plano pago: `get_public_page` (prévia/estado) e `set_public_page {item_id, enabled}` (aprovação).
+  - **Onde o link entra:** `opportunityCron.ts` → `attachTrackedLinks` (rascunhos de oportunidade, canal `caption`, uma vez só,
+    nunca peça aprovada); `item-videos` `list` → mensagem NOVA do QUERO ganha o link (canal `dm`). `creative-generate` e
+    `instagram-webhook` NÃO foram tocados.
+  - **Divergência:** a Etapa 5 do ROADMAP falava em "encaminhar ao corretor" e em tocar o `instagram-webhook` — nenhum dos dois
+    foi feito (corretor = Etapa 7; DM/comentário seguem sem atribuição).
+  - **Reverter:** bloco "Como reverter" na migration; as functions voltam pelo commit anterior; o site pelo `wrangler rollback`.
+
 ## Estado atual do código
 
 - **Site publicado:** https://getsaleboost.com/ (+ www). O endereço antigo

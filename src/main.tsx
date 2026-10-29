@@ -39,6 +39,7 @@ import OnboardingPage from './pages/onboarding/OnboardingPage.tsx'
 import DiagnosticoPage from './pages/diagnostico/DiagnosticoPage.tsx'
 import PrivacyPolicyPage from './pages/legal/PrivacyPolicyPage.tsx'
 import TermsOfUsePage from './pages/legal/TermsOfUsePage.tsx'
+import PublicPropertyPage from './pages/public/PublicPropertyPage.tsx'
 import CookieConsent from './components/CookieConsent.tsx'
 
 const Spinner = () => (
@@ -181,6 +182,8 @@ function RouterRoot() {
       <Route path="/diagnostico/:id" element={<DiagnosticoPage />} />
       <Route path="/privacidade" element={<PrivacyPolicyPage />} />
       <Route path="/termos" element={<TermsOfUsePage />} />
+      {/* Etapa 5: página pública do imóvel — destino de link, sem login, noindex (fora do ClientRoute de propósito). */}
+      <Route path="/p/:code" element={<PublicPropertyPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

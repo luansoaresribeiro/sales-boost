@@ -11,6 +11,8 @@
 //      os freios (5 planos/dia, 2 falhas por oportunidade em 24 h) moram em createOpportunityPlan.
 //  (c) Etapa 4B: pede as peças (rascunhos) dos planos APROVADOS que ainda não têm — só despacha ao creative-generate; os freios
 //      (3 peças por plano, 6 por empresa por dia, idempotência) moram em opportunityPiecesRun/opportunityPieces.
+//  (d) Etapa 5: acrescenta o link da página pública do imóvel (canal 'caption') aos rascunhos que ainda não têm — sem IA, uma vez só,
+//      nunca em peça aprovada (publicPageRun.attachTrackedLinks).
 // Busca que falhou há < 6 h não é tentada de novo (e não ocupa vaga das 3 empresas).
 // Cabe nos 150 s: poucas empresas por chamada e nenhum trabalho de IA novo depois de 40 s (uma chamada à IA leva
 // no máx. 100 s). O que sobrar fica para a próxima chamada do agendamento.
@@ -21,6 +23,7 @@ import { createOpportunityPlan } from './opportunityPlanRun.ts'
 import { generateOpportunityPieces, type Dispatch } from './opportunityPiecesRun.ts'
 import { STALE_DISPATCH_MS } from './opportunityPieces.ts'
 import { collectMarketNews, type NewsOpts } from './marketNewsRun.ts'
+import { attachTrackedLinks } from './publicPageRun.ts'
 
 type Admin = { from: (t: string) => any; rpc?: any } // eslint-disable-line @typescript-eslint/no-explicit-any
 export const RERUN_AFTER_MS = 7 * 24 * 3600_000
@@ -63,7 +66,7 @@ export async function cronOpportunities(admin: Admin, llm: Llm, started = Date.n
     try {
       if (!(await hasPaidAccess(admin, c.id))) continue // conta vitrine: cron não gasta IA
       const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', c.vertical_key ?? '').eq('enabled', true).maybeSingle()
-      const pbCfg = pb?.config as { opportunity_fields?: { location?: string }; market_news?: unknown } | null
+      const pbCfg = pb?.config as { opportunity_fields?: { location?: string }; market_news?: unknown; public_page?: unknown } | null
       if (!pbCfg?.opportunity_fields?.location) continue // setor sem o motor
       sum.companies_checked++
 
@@ -106,6 +109,8 @@ export async function cronOpportunities(admin: Admin, llm: Llm, started = Date.n
           if (r.code === 'daily_limit' || r.code === 'migration_pending') break
         }
       }
+      // Etapa 5: rascunhos de oportunidade cujo imóvel tem página pública no ar ganham o link (uma vez só). Sem IA; nunca mexe em peça aprovada.
+      try { await attachTrackedLinks(admin, c.id, pbCfg.public_page) } catch (e) { console.error(`[cron_opportunities] ${c.id} links:`, String(e)) }
       if (did) worked++
     } catch (e) {
       console.error(`[cron_opportunities] empresa ${c.id}:`, String(e))

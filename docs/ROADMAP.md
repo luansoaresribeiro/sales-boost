@@ -505,10 +505,13 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
   - **Tudo automático (2026-10-29):** a Etapa 1 **deixou de ter botão manual** "Encontrar oportunidades": a busca roda
     sozinha (`cron_opportunities`, semanal ou com sinal novo). O agendamento ainda **não foi criado** (pendente de
     aprovação do dono).
-- [ ] **Etapa 5 — link rastreável, página do imóvel e encaminhar ao corretor.** Link com origem, página do imóvel,
-  repasse da conversa ao corretor certo. Toca o `instagram-webhook` (**arriscado**). *Pronto quando:* uma visita
-  pedida pelo link aparece com a origem (oportunidade/peça) e chega ao corretor sem mensagem automática sem
-  aprovação.
+- [ ] **Etapa 5 — link rastreável, página do imóvel e lead com origem (🟡 código pronto, 2026-10-30; falta migration + deploy do
+  `marketing-ai`/`item-videos` + site + teste em produção + o dono aprovar a 1ª página).** Direção decidida: página **só destino de
+  link** (sem listagem/busca, `noindex`), só no ar com aprovação do dono; lead da página entra com `item_id`/`opportunity_id`/`link_id`
+  e consentimento. **Divergência (registrada, não apagada):** o texto original previa "repasse ao corretor" e mexer no
+  `instagram-webhook` — nada disso foi feito (corretor = Etapa 7; DM/comentário seguem sem atribuição). *Pronto quando:* uma visita
+  pedida pela página aparece no Funil com a origem (imóvel/oportunidade), o link aparece na legenda de um rascunho de oportunidade e
+  nada é enviado ao visitante sem o dono. Ver [ARCHITECTURE.md](ARCHITECTURE.md) e [CONVERSION.md](CONVERSION.md).
 - [ ] **Etapa 6 — resultados (visitas, propostas, vendas).** Só com atribuição comprovada (origem registrada);
   sem atribuição, "sem dado" — nunca estimativa. *Pronto quando:* cada número na tela tem origem rastreável e o
   que não tem fica borrado/"sem dado".

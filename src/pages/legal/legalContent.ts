@@ -35,6 +35,7 @@ export const PRIVACY_POLICY: LegalDoc = {
       heading: '2. Quais dados coletamos',
       paragraphs: ['Coletamos apenas os dados necessários para operar a plataforma e gerar valor para o seu negócio:'],
       bullets: [
+        `Página pública de um imóvel: quando um visitante abre o link de um imóvel e envia o formulário, coletamos o nome, o contato (WhatsApp ou e-mail) e a mensagem que ele digitar, mais o aviso de que concordou em enviá-los. A finalidade é uma só: a imobiliária responder à pessoa sobre aquele imóvel — a imobiliária é a controladora desses dados e o ${C.brand} atua como operador, guardando-os no painel dela. Não enviamos nada à pessoa automaticamente, não usamos esses dados para publicidade e não guardamos o endereço IP do visitante (só um código irreversível, para contar visitas e evitar abuso). Para pedir a exclusão, escreva para ${C.privacyEmail} ou para a própria imobiliária.`,
         'Dados de cadastro: nome, e-mail, senha (armazenada de forma criptografada) e dados da empresa (nome, tipo de negócio, cidade, site, redes sociais).',
         'Dados de uso e conteúdo do negócio: posts, campanhas, avaliações, oportunidades, leads, mensagens com os agentes de IA e configurações.',
         'Dados públicos coletados de fontes externas que você conecta (ex.: avaliações do Google, perfis e publicações públicas em redes sociais, informações do Google Maps).',

@@ -827,3 +827,45 @@ trava/contador, confere o `error` retornado.
 - **A coleta roda dentro do orçamento do cron:** só começa uma busca antes dos 40 s (`canStart`), com 12 s por busca; o
   que não coube fica para a próxima chamada (a cada 6 h).
 - **Tavily `published_date` pode faltar** em resultados de `topic:'news'`; sem data a notícia é descartada de propósito.
+
+## Página pública do imóvel — superfície sem login (Etapa 5, 2026-10-30)
+
+- **É a primeira parte do sistema aberta a qualquer pessoa.** As 3 ações (`public_page_get`, `public_page_event`,
+  `public_page_lead`) do `marketing-ai` rodam ANTES da checagem de login/cron e sem precisar da chave de IA. Tudo passa pela
+  service role dentro de `_shared/publicPageRun.ts`; a página nunca fala com o banco. As tabelas novas (`public_pages`,
+  `tracked_links`, `link_events`) só deixam o dono/owner **ler**; escrever é só pela function.
+- **404 idêntico:** código inválido, página desligada, empresa sem plano pago, imóvel apagado, fotos abaixo do mínimo e erro de
+  banco devolvem exatamente o mesmo `404 {error:'not_found'}` (o teste confere os 10 motivos nas 3 ações). Não crie mensagem
+  diferente por motivo — quem tenta adivinhar códigos não pode aprender nada. Único 400/429 público: lead com campo inválido
+  ou limite estourado (só depois de o código existir).
+- **Só devolve o que o dono aprovou:** campos da lista branca da ficha (nunca `private`), fotos de `meta.photos` (nunca
+  `staged_photos`), telefone/Instagram **copiados na aprovação** (`public_pages.contact_*`, não os da empresa de hoje), e as URLs
+  `wa.me`/`ig.me` são montadas no servidor (o navegador nunca recebe o número cru). Mudou a ficha/telefone depois? O dono precisa
+  reaprovar (despublicar e publicar) para a página refletir.
+- **`leads` não tem migration de criação (deriva):** a migration só ACRESCENTA `item_id`, `opportunity_id`, `link_id`,
+  `consent_at`, `consent_text`. O lead da página usa `channel='manual'` e `stage='new'` — valores que o sistema já grava hoje
+  (hermes-proxy / instagram-webhook) e por isso não batem em constraint; `source='link_page'` distingue a origem. A tela de
+  Funil mostra `channel='manual'` como WhatsApp (só `insta…` vira Instagram). `link_events.lead_id` é `uuid` **supondo** que
+  `leads.id` é uuid (nada no repositório prova); se o evento `lead` não aparecer, confira o tipo de `leads.id`.
+- **Insert silencioso:** o supabase-js não lança erro. O lead confere `error` e, se recusado, **responde erro ao visitante** (nunca
+  "sucesso" falso) e não grava o evento; falha só do evento/visita é logada e não derruba a página. Nunca troque por insert sem
+  conferir o retorno.
+- **Limites não são atômicos:** contam `link_events`/`leads` e depois gravam; duas requisições simultâneas podem passar do limite
+  por 1. É aceitável (o objetivo é conter abuso, não contabilidade). O dedupe de 24 h é por contato + imóvel.
+- **O hash do visitante** (`SHA-256(ip|user-agent|dia|sal)`) usa `PUBLIC_PAGE_SALT` (ou, na falta, `CRON_SECRET`, ou a service key).
+  **Trocar o sal zera a contagem de "1 visita por visitante por dia" e os limites por hora** — não é problema, só uma lacuna de um dia.
+  Nunca grave IP nem user-agent em claro.
+- **Um link por (imóvel, oportunidade, canal):** peças diferentes da MESMA oportunidade e imóvel compartilham o código `caption`
+  (`content_id` guarda só a primeira). A atribuição é por oportunidade + imóvel, não por peça.
+- **A frase com o link na legenda é uma tentativa do cron, não do `creative-generate`:** só roda a cada 6 h (junto de
+  `cron_opportunities`) e só em empresas com `auto_strategy`. A própria legenda é a marca de "já feito" (se ela contém o
+  link, não repete). Troca condicional (`caption` igual ao lido): se o dono editou nesse meio-tempo, não sobrescreve.
+- **Vitrine:** em conta sem plano o botão aparece com cadeado e abre o modal de plano (`marketing-ai` é inteiro bloqueado pelo
+  guard de vitrine). A página pública de uma empresa que perdeu o plano sai do ar (404) sozinha.
+- **`public/_headers`** (noindex no cabeçalho) só vale no Cloudflare Workers Assets; se o site mudar de hospedagem, refaça.
+- **Ajustes pós-QA (Etapa 5):** (1) `event` e os campos do lead são validados ANTES de consultar o código — o 400 (e o falso
+  sucesso do honeypot) é igual para código existente, inexistente ou ausente. Só o **429** do formulário (limite estourado) ainda
+  só aparece para código válido: aceito de propósito, porque o visitante precisa saber que deve esperar. (2) Tetos por link por hora
+  em `link_events`: 300 `view` e 60 `click_*` (acima disso a página abre/redireciona normalmente, só não grava) — trocar de
+  user-agent ou IP não enche a tabela. (3) O IP do hash vem de `cf-connecting-ip` (a Cloudflare define; o cliente não forja);
+  `x-forwarded-for` (forjável) e `x-real-ip` são só reserva. Se um dia o tráfego não passar pela Cloudflare, o hash deixa de ser confiável.
