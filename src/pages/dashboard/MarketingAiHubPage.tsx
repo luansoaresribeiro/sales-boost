@@ -11,32 +11,33 @@ import type { LeadStageKey } from './marketingAi/salesDemo'
 import DataVeil, { veilMode } from './marketingAi/DataVeil'
 import { MUTED, BORDER, D, SUPABASE_URL } from './marketingAi/shared'
 import { useStrategySummary } from './marketingAi/useStrategySummary'
+import { useFlowSummary, type FlowSummary } from './marketingAi/useFlowSummary'
+import { usePendencias } from '../../lib/usePendencias'
 
 const ORANGE = '#FF6D29'
 const CARD = '#150E08'
 
-interface ModuleDef { section: string; title: string; desc: string; icon: string; soon?: boolean }
+interface ModuleDef { section: string; title: string; desc: string; icon: string; soon?: boolean; path?: string }
 
-// O fluxo do Growth OS, de cima pra baixo: Agente de Dados (o produto —
-// fotos reais do catálogo; desde 2026-10-14 só isso) →
-// Agente de Estratégia (direciona — lê o negócio e o dado real, define
-// objetivo/orçamento/metas e manda o direcionamento pro Conteúdo) → Agente
-// de Conteúdo (cria) → Agente de Conversão (fecha — Funil de Vendas +
-// Atendimento + Engagement). O Feedback Loop não é mais um card do fluxo —
-// virou um círculo flutuante (FeedbackWidget.tsx) que aparece dentro de
-// cada uma dessas seções com o sinal real daquele agente.
+// O fluxo do Growth OS, de cima pra baixo, nos 5 componentes do produto (decisão do dono 2026-10-30):
+// 1 Inteligência de Mercado (observa) → 2 Motor de Oportunidades (prioriza) → 3 Estratégia (direciona)
+// → 4 Ativação (produz) → 5 Resultados e Aprendizado (mede e volta pra estratégia).
+// As seções continuam as mesmas de antes (dados / estrategia / content / conversao); a 2 abre a tela
+// Oportunidades. O Feedback Loop segue como círculo flutuante (FeedbackWidget.tsx) dentro de cada seção.
 const MODULES = {
   pt: {
-    data: { section: 'dados', title: 'Agente de Dados', desc: 'O seu produto: as fotos reais de cada item do catálogo (é delas que saem os carrosséis e vídeos) — e Ideias e trends, pra posts do zero, como um carrossel de slides.', icon: '📊' },
-    strategy: { section: 'estrategia', title: 'Agente de Estratégia', desc: 'Lê o negócio e o dado real, define objetivo, metas, orçamento e prazo — e direciona o Agente de Conteúdo.', icon: '🧭' },
-    content: { section: 'content', title: 'Agente de Conteúdo e Campanha', desc: 'Conteúdo: calendário da semana (feed e stories) vindo da estratégia — clique numa peça pra ver a nota e aprovar — e padrão visual. Campanha (em breve): como os conteúdos estão indo, pixel e a campanha ideal.', icon: '✍️' },
-    conversion: { section: 'conversao', title: 'Agente de Conversão', desc: 'Funil de vendas, atendimento e engagement (comentários/DMs) — transforma quem chegou até você em cliente.', icon: '🔀' },
+    data: { section: 'dados', title: 'Inteligência de Mercado', desc: 'Coleta os sinais: seus imóveis com fotos reais, concorrentes e tendências do Instagram e notícias do bairro buscadas sozinhas, sempre com a fonte (as notícias ficam em Oportunidades → Sinais de mercado).', icon: '📊' },
+    opportunities: { section: '', path: '/dashboard/opportunities', title: 'Motor de Oportunidades', desc: 'Cruza o mercado com os seus dados e aponta onde há negócio: imóvel sem divulgação, procura sem resposta, mudança no bairro. Roda sozinho; você aprova ou descarta.', icon: '💡' },
+    strategy: { section: 'estrategia', title: 'Agente de Estratégia', desc: 'Define público, oferta, mensagem e ação comercial: a estratégia da conta e o plano de cada oportunidade aprovada — e direciona a Ativação.', icon: '🧭' },
+    content: { section: 'content', title: 'Ativação', desc: 'Produz o que vai para a rua: calendário da semana (feed e stories) vindo da estratégia, peças das oportunidades e a página do imóvel com link rastreável. Nada sai sem a sua aprovação.', icon: '✍️' },
+    conversion: { section: 'conversao', title: 'Resultados e Aprendizado', desc: 'Acompanha conversas, leads, visitas e vendas: funil com a origem de cada lead e o corretor da vez, atendimento e comentários/DMs. O desempenho dos posts volta para a próxima estratégia.', icon: '🔀' },
   },
   en: {
-    data: { section: 'dados', title: 'Data Agent', desc: 'Your product: real photos of each catalog item (they become the carousels and videos) — plus Ideas & trends, for posts from scratch such as a slide carousel.', icon: '📊' },
-    strategy: { section: 'estrategia', title: 'Strategy Agent', desc: 'Reads the business and the real data, sets the goal, targets, budget and timeline — and guides the Content Agent.', icon: '🧭' },
-    content: { section: 'content', title: 'Content & Campaign Agent', desc: 'Content: weekly calendar (feed and stories) from the strategy — click a piece to see its score and approve it — and visual pattern. Campaign (coming soon): how content is doing, pixel and the ideal campaign.', icon: '✍️' },
-    conversion: { section: 'conversao', title: 'Conversion Agent', desc: 'Sales pipeline, customer service and engagement (comments/DMs) — turns the people who reached you into customers.', icon: '🔀' },
+    data: { section: 'dados', title: 'Market Intelligence', desc: 'Collects the signals: your listings with real photos, competitors and Instagram trends, and neighborhood news fetched automatically, always with the source (news lives in Opportunities → Market signals).', icon: '📊' },
+    opportunities: { section: '', path: '/dashboard/opportunities', title: 'Opportunity Engine', desc: 'Crosses the market with your data and points to where the business is: unpromoted listings, unanswered demand, neighborhood changes. Runs on its own; you approve or dismiss.', icon: '💡' },
+    strategy: { section: 'estrategia', title: 'Strategy Agent', desc: 'Sets audience, offer, message and sales action: the account strategy and the plan for each approved opportunity — and guides Activation.', icon: '🧭' },
+    content: { section: 'content', title: 'Activation', desc: 'Produces what goes out: the weekly calendar (feed and stories) from the strategy, opportunity pieces and the listing page with a tracked link. Nothing goes out without your approval.', icon: '✍️' },
+    conversion: { section: 'conversao', title: 'Results & Learning', desc: 'Tracks conversations, leads, visits and sales: pipeline with each lead\'s source and the assigned agent, customer service and comments/DMs. Post performance feeds the next strategy.', icon: '🔀' },
   },
 } as const satisfies Record<string, Record<string, ModuleDef>>
 
@@ -55,8 +56,8 @@ const TX = {
     vErrM: 'A consulta ao banco/Meta falhou — veja o erro abaixo pra saber o que corrigir.',
     vEmptyM: 'Receita, ROAS e funil agregados aqui em cima ainda não têm dado real — assim que houver leads, Instagram ou Meta Ads conectados, cada peça some aqui automaticamente. Ligue o Modo demonstração pra ver como fica quando tudo estiver somado.',
     vCta: 'Ver exemplo (modo demonstração)', team: 'Sua equipe de agentes',
-    b1: '1 · Observa', b2: '2 · Direciona', b3: '3 · Agente principal', b4: '4 · Converte',
-    noStrat: '{t.noStrat}',
+    b1: '1 · Observa', b2: '3 · Direciona', b3: '4 · Ativa', b4: '5 · Mede e aprende', bOpp: '2 · Prioriza',
+    noStrat: 'Ainda sem estratégia ativa — clique para criar.',
     conn: 'Conexões', ctx: 'Contexto do Negócio', inSettings: 'ficam em Configurações.', and: 'e', open: 'Abrir',
   },
   en: {
@@ -73,7 +74,7 @@ const TX = {
     vErrM: 'The database/Meta query failed — see the error below to know what to fix.',
     vEmptyM: 'Revenue, ROAS and the pipeline aggregated up here have no real data yet — as soon as leads, Instagram or Meta Ads are connected, each piece shows up here automatically. Turn on Demo mode to see how it looks when everything is added up.',
     vCta: 'See an example (demo mode)', team: 'Your team of agents',
-    b1: '1 · Observes', b2: '2 · Directs', b3: '3 · Main agent', b4: '4 · Converts',
+    b1: '1 · Observes', b2: '3 · Directs', b3: '4 · Activates', b4: '5 · Measures & learns', bOpp: '2 · Prioritizes',
     noStrat: 'No active strategy yet — click to create one.',
     conn: 'Connections', ctx: 'Business Context', inSettings: 'live in Settings.', and: 'and', open: 'Open',
   },
@@ -202,12 +203,15 @@ export default function MarketingAiHubPage() {
   const demo = useMemo(() => (company ? buildGrowthDemo(company, lang) : null), [company, lang])
   const { real, loading: realLoading, error: realError } = useRealGrowth(company?.id ?? '', session?.access_token ?? '', lang)
   const { summary: strategySummary } = useStrategySummary(company?.id)
+  const flow = useFlowSummary(company?.id)
+  const { approvalsCount } = usePendencias()
 
   if (!company || !demo) {
     return <div style={{ padding: '48px', color: MUTED, fontSize: '14px' }}>{t.loading}</div>
   }
 
-  const open = (section: string) => navigate(`/dashboard/marketing-ai/${section}`)
+  const open = (m: ModuleDef) => navigate(m.path ?? `/dashboard/marketing-ai/${m.section}`)
+  const lines = flowLines(lang, flow, approvalsCount)
   const panelData = real?.hasReal ? real.data : demo
   const panelMode = veilMode({ hasReal: !!real?.hasReal, demoMode, error: !!realError })
 
@@ -263,9 +267,11 @@ export default function MarketingAiHubPage() {
             cada agente entrega pro próximo. O Feedback Loop aparece dentro
             de cada card (círculo flutuante), não é mais uma etapa separada. */}
         <div style={{ border: '1px solid rgba(255,109,41,0.18)', borderRadius: '22px', padding: '16px', background: 'rgba(255,109,41,0.035)' }}>
-          <HeroAgentCard m={M.data} badge={t.b1} onClick={() => open(M.data.section)} />
+          <HeroAgentCard m={M.data} badge={t.b1} onClick={() => open(M.data)} summary={<FlowLine parts={lines.data} />} />
           <FlowArrow />
-          <HeroAgentCard m={M.strategy} badge={t.b2} onClick={() => open(M.strategy.section)}
+          <HeroAgentCard m={M.opportunities} badge={t.bOpp} onClick={() => open(M.opportunities)} summary={<FlowLine parts={lines.opportunities} />} />
+          <FlowArrow />
+          <HeroAgentCard m={M.strategy} badge={t.b2} onClick={() => open(M.strategy)}
             summary={strategySummary ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '9.5px', fontWeight: 800, color: STRATEGY_STATUS_COLOR[strategySummary.status] ?? MUTED }}>● {((t as Record<string, unknown>)[strategySummary.status] as string | undefined) ?? strategySummary.status}</span>
@@ -276,15 +282,45 @@ export default function MarketingAiHubPage() {
               <span style={{ fontSize: '12px', color: MUTED }}>{t.noStrat}</span>
             )} />
           <FlowArrow />
-          <HeroAgentCard m={M.content} badge={t.b3} onClick={() => open(M.content.section)} />
+          <HeroAgentCard m={M.content} badge={t.b3} onClick={() => open(M.content)} summary={<FlowLine parts={lines.content} />} />
           <FlowArrow />
-          <HeroAgentCard m={M.conversion} badge={t.b4} onClick={() => open(M.conversion.section)} />
+          <HeroAgentCard m={M.conversion} badge={t.b4} onClick={() => open(M.conversion)} summary={<FlowLine parts={lines.conversion} />} />
         </div>
 
         <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginTop: '14px', maxWidth: '680px' }}>
           <strong style={{ color: 'rgba(255,255,255,0.6)' }}>{t.conn}</strong> {t.and} <strong style={{ color: 'rgba(255,255,255,0.6)' }}>{t.ctx}</strong> {t.inSettings}
         </p>
       </div>
+    </div>
+  )
+}
+
+// Linha "ao vivo" de cada card: só contagens reais (useFlowSummary); dado que não carregou some da linha.
+// Item com `alert` é o que espera o dono (laranja).
+type Part = { text: string; alert?: boolean }
+function flowLines(lang: Lang, f: FlowSummary, approvals: number): Record<'data' | 'opportunities' | 'content' | 'conversion', Part[]> {
+  const pt = lang === 'pt'
+  const pl = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+  const out = { data: [] as Part[], opportunities: [] as Part[], content: [] as Part[], conversion: [] as Part[] }
+  if (f.items != null) out.data.push({ text: pt ? pl(f.items, 'imóvel', 'imóveis') : pl(f.items, 'listing', 'listings') })
+  if (f.signals != null) out.data.push({ text: pt ? `${pl(f.signals, 'sinal de mercado', 'sinais de mercado')}${f.autoSignals ? ` (${f.autoSignals} automático${f.autoSignals === 1 ? '' : 's'})` : ''}` : `${pl(f.signals, 'market signal', 'market signals')}${f.autoSignals ? ` (${f.autoSignals} automatic)` : ''}` })
+  if (f.oppsNew) out.opportunities.push({ text: pt ? `${pl(f.oppsNew, 'oportunidade', 'oportunidades')} para você revisar` : `${pl(f.oppsNew, 'opportunity', 'opportunities')} to review`, alert: true })
+  if (f.oppsApproved != null) out.opportunities.push({ text: pt ? pl(f.oppsApproved, 'aprovada', 'aprovadas') : `${f.oppsApproved} approved` })
+  if (f.lastOppAt) out.opportunities.push({ text: `${pt ? 'última rodada' : 'last run'} ${new Date(f.lastOppAt).toLocaleDateString(pt ? 'pt-BR' : 'en-US')}` })
+  else if (f.oppsApproved != null) out.opportunities.push({ text: pt ? 'ainda sem rodada' : 'no run yet' })
+  if (approvals > 0) out.content.push({ text: pt ? `${pl(approvals, 'item esperando', 'itens esperando')} sua aprovação` : `${approvals} awaiting your approval`, alert: true })
+  if (f.pagesLive != null) out.content.push({ text: pt ? pl(f.pagesLive, 'página de imóvel no ar', 'páginas de imóvel no ar') : pl(f.pagesLive, 'listing page live', 'listing pages live') })
+  if (f.leads30 != null) out.conversion.push({ text: pt ? `${pl(f.leads30, 'lead', 'leads')} em 30 dias` : `${pl(f.leads30, 'lead', 'leads')} in 30 days` })
+  if (f.leads30 && f.tracked30 != null) out.conversion.push({ text: pt ? `${f.tracked30} com origem rastreada` : `${f.tracked30} with tracked source` })
+  return out
+}
+function FlowLine({ parts }: { parts: Part[] }) {
+  if (!parts.length) return null
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px' }}>
+      {parts.map((p, i) => (
+        <span key={i} style={{ color: p.alert ? ORANGE : 'rgba(255,255,255,0.7)', fontWeight: p.alert ? 800 : 600 }}>{i > 0 && <span style={{ color: MUTED, marginRight: '6px' }}>·</span>}{p.alert ? '● ' : ''}{p.text}</span>
+      ))}
     </div>
   )
 }

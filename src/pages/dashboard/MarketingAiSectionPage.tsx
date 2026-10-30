@@ -33,18 +33,18 @@ import { buildGrowthDemo } from './marketingAi/growthDemo'
 const ORANGE = '#FF6D29'
 
 const SECTION_TITLE_BY_LANG: Record<'pt' | 'en', Record<string, string>> = { pt: {
-  tracking: 'Tracking', content: 'Agente de Conteúdo e Campanha', dados: 'Agente de Dados', estrategia: 'Agente de Estratégia', conversao: 'Agente de Conversão', brain: 'Aprendizado',
+  tracking: 'Tracking', content: 'Ativação', dados: 'Inteligência de Mercado', estrategia: 'Agente de Estratégia', conversao: 'Resultados e Aprendizado', brain: 'Aprendizado',
   overview: 'Visão Geral', experiments: 'Experimentos', tools: 'Configuração', timeline: 'Central de Execução', reports: 'Relatórios',
   conexoes: 'Conexões', configuracao: 'Configuração dos Agentes', avaliacoes: 'Avaliações', context: 'Contexto do Negócio',
-  // Insights e Saúde da Meta agora vivem dentro de Agente de Dados (ver
+  // Insights e Saúde da Meta agora vivem dentro da Inteligência de Mercado (ex-Agente de Dados) (ver
   // DadosSection) — o link antigo continua funcionando, só cai direto na
   // sub-aba certa em vez de ser uma página solta.
-  insights: 'Agente de Dados', 'saude-meta': 'Agente de Dados',
+  insights: 'Inteligência de Mercado', 'saude-meta': 'Inteligência de Mercado',
 }, en: {
-  tracking: 'Tracking', content: 'Content & Campaign Agent', dados: 'Data Agent', estrategia: 'Strategy Agent', conversao: 'Conversion Agent', brain: 'Learning',
+  tracking: 'Tracking', content: 'Activation', dados: 'Market Intelligence', estrategia: 'Strategy Agent', conversao: 'Results & Learning', brain: 'Learning',
   overview: 'Overview', experiments: 'Experiments', tools: 'Settings', timeline: 'Execution Center', reports: 'Reports',
   conexoes: 'Connections', configuracao: 'Agent Settings', avaliacoes: 'Reviews', context: 'Business Context',
-  insights: 'Data Agent', 'saude-meta': 'Data Agent',
+  insights: 'Market Intelligence', 'saude-meta': 'Market Intelligence',
 } }
 
 const TX = {

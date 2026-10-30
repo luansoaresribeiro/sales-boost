@@ -2075,3 +2075,19 @@ grátis de 30 s, acima — mantidos como histórico):
   que foi informado e mostra "N de M vendas com valor"; sem valor, "valor não informado". Nada é estimado.
 - **Mapa dos estágios (o funil real não tem etapa "visita"):** Qualificado carimba `visit_at` (visita agendada), Proposta carimba
   `proposal_at`, Venda realizada carimba `closed_at` — só se estiver vazio, e pular etapa não preenche as anteriores.
+
+## 2026-10-30 — O Sales Boost em 5 componentes (hub do Marketing AI)
+
+Decisão do dono: o produto se apresenta em 5 componentes, na sequência dos cards (um embaixo do outro) do hub
+`/dashboard/marketing-ai`:
+1. **Inteligência de Mercado** (era "Agente de Dados") — catálogo com fotos reais, concorrentes/tendências, notícias do bairro.
+2. **Motor de Oportunidades** (card novo, abre `/dashboard/opportunities`).
+3. **Agente de Estratégia** — público, oferta, mensagem e ação; estratégia da conta + plano de cada oportunidade.
+4. **Ativação** (era "Agente de Conteúdo e Campanha") — calendário, peças das oportunidades, página do imóvel.
+5. **Resultados e Aprendizado** (era "Agente de Conversão") — funil com origem e corretor, atendimento, comentários/DMs.
+
+Cada card mostra uma linha ao vivo só com contagens reais (o que espera o dono em laranja). Só tela: nenhuma
+lógica, tabela ou função mudou; as seções por trás continuam as mesmas. **Motivo:** o dono enxergar o "motor"
+trabalhando e vender "5 agentes trabalhando por você". **Não feito de propósito:** chat com cada agente (custo de IA
+por mensagem e mais um lugar para cuidar). **Lacunas conhecidas:** material para o corretor executar (componente 4) e
+atribuição de lead de DM/comentário (componente 5).
