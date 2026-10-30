@@ -76,6 +76,9 @@ export default function PublicPropertyPage() {
     document.head.appendChild(meta)
     return () => { meta.remove() }
   }, [])
+  const { setPageLang } = useLang()
+  useEffect(() => { setPageLang(data?.lang === 'pt' || data?.lang === 'en' ? data.lang : null) }, [data, setPageLang])
+  useEffect(() => () => setPageLang(null), [setPageLang])
   useEffect(() => { if (data?.title) document.title = `${data.title} — ${data.company.name}` }, [data])
 
   const load = useCallback(async () => {

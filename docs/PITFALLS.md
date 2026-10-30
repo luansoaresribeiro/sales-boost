@@ -512,6 +512,14 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   dentro de um texto/JSON. Ela espera confirmação de comando perigoso. No
   ensaio deu pra contornar quebrando em comandos menores; em produção, o
   dono pode precisar confirmar na tela.
+  **Atualização 2026-10-30:** a pergunta de confirmação só fica aberta
+  enquanto a chamada espera (~230s) — "aprovei" depois disso não serve. O
+  que disparou a pergunta em produção: `drop policy if exists` e um `update`
+  de `vertical_playbooks` sem trava de "só se ainda não existe". Passaram
+  direto: `create table/index/policy`, `alter table ... add column`,
+  `create function`, `revoke/grant` e `update ... where (config->'x') is
+  null`. Receita: tabela nova não precisa de `drop policy if exists`
+  (aplicar sem ele) e separar o que é perigoso num passo à parte.
 
 ## Teste final na Tespon (2026-10-14) — o que apareceu
 

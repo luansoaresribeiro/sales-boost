@@ -15,6 +15,9 @@ interface LanguageCtx {
   lang: Lang
   setLang: (l: Lang) => void
   setCompanyLang: (l: Lang | null) => void
+  // Página pública (/p/:code): o idioma da EMPRESA dona da página vale para o visitante (aviso de cookies incluso).
+  // Fica entre a escolha explícita e a empresa logada; a página limpa (null) ao sair.
+  setPageLang: (l: Lang | null) => void
 }
 
 // Espelho do idioma atual pra código fora do React (libs). Nasce da escolha
@@ -22,7 +25,7 @@ interface LanguageCtx {
 let currentLang: Lang = readExplicit() ?? 'en'
 export function getCurrentLang(): Lang { return currentLang }
 
-const LanguageContext = createContext<LanguageCtx>({ lang: 'en', setLang: () => {}, setCompanyLang: () => {} })
+const LanguageContext = createContext<LanguageCtx>({ lang: 'en', setLang: () => {}, setCompanyLang: () => {}, setPageLang: () => {} })
 
 function readExplicit(): Lang | null {
   try {
@@ -36,7 +39,8 @@ function readExplicit(): Lang | null {
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [explicit, setExplicit] = useState<Lang | null>(readExplicit)
   const [companyLang, setCompanyLangState] = useState<Lang | null>(null)
-  const lang: Lang = explicit ?? companyLang ?? 'en'
+  const [pageLang, setPageLangState] = useState<Lang | null>(null)
+  const lang: Lang = explicit ?? pageLang ?? companyLang ?? 'en'
 
   const setLang = useCallback((l: Lang) => {
     currentLang = l
@@ -45,10 +49,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setCompanyLang = useCallback((l: Lang | null) => setCompanyLangState(l), [])
+  const setPageLang = useCallback((l: Lang | null) => setPageLangState(l), [])
 
   useEffect(() => { currentLang = lang; document.documentElement.lang = lang }, [lang])
 
-  return <LanguageContext.Provider value={{ lang, setLang, setCompanyLang }}>{children}</LanguageContext.Provider>
+  return <LanguageContext.Provider value={{ lang, setLang, setCompanyLang, setPageLang }}>{children}</LanguageContext.Provider>
 }
 
 export function useLang() {

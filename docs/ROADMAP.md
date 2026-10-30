@@ -522,5 +522,11 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
   (dono/gestor/corretor) e RLS por papel — **arriscado** (autenticação e RLS) — junto com o preço para imobiliária com equipe e o
   domínio de e-mail verificado. *Pronto quando (versão completa):* um corretor convidado vê só o que o papel permite, testado com conta
   sintética, sem tocar dados de cliente real.
+- **Etapas 5–7 no ar (2026-10-30):** migrations aplicadas, `marketing-ai` v39 e `item-videos` v9 publicados, teste de ponta a
+  ponta na Tespon (dados de teste apagados depois): página do imóvel abriu no celular com 10 fotos reais e só os campos da ficha;
+  código inválido → 404 igual; visita contada 1×; clique no WhatsApp foi para a empresa (sem corretor) e, depois do 1º lead, para o
+  corretor da vez; 2 leads → 2 corretores diferentes (rodízio); lead repetido não gravou 2×; consentimento e origem gravados. Achado e
+  corrigido: o aviso de cookies saía em inglês na página em português (agora segue o idioma da página). **Falta:** o dono aprovar a
+  1ª página de um imóvel real dele.
 - **Pendentes do dono (não decididos):** preço para imobiliária com equipe (R$ e US$); custo de provedor de
   notícias (Etapa 3); revisão jurídica EUA/Fair Housing.
