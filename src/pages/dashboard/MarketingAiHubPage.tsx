@@ -12,7 +12,6 @@ import DataVeil, { veilMode } from './marketingAi/DataVeil'
 import { MUTED, BORDER, D, SUPABASE_URL } from './marketingAi/shared'
 import { useStrategySummary } from './marketingAi/useStrategySummary'
 import { useFlowSummary, type FlowSummary } from './marketingAi/useFlowSummary'
-import { usePendencias } from '../../lib/usePendencias'
 
 const ORANGE = '#FF6D29'
 const CARD = '#150E08'
@@ -204,14 +203,13 @@ export default function MarketingAiHubPage() {
   const { real, loading: realLoading, error: realError } = useRealGrowth(company?.id ?? '', session?.access_token ?? '', lang)
   const { summary: strategySummary } = useStrategySummary(company?.id)
   const flow = useFlowSummary(company?.id)
-  const { approvalsCount } = usePendencias()
 
   if (!company || !demo) {
     return <div style={{ padding: '48px', color: MUTED, fontSize: '14px' }}>{t.loading}</div>
   }
 
   const open = (m: ModuleDef) => navigate(m.path ?? `/dashboard/marketing-ai/${m.section}`)
-  const lines = flowLines(lang, flow, approvalsCount)
+  const lines = flowLines(lang, flow)
   const panelData = real?.hasReal ? real.data : demo
   const panelMode = veilMode({ hasReal: !!real?.hasReal, demoMode, error: !!realError })
 
@@ -295,10 +293,13 @@ export default function MarketingAiHubPage() {
   )
 }
 
+// Não chamar usePendencias() aqui: ele abre um canal realtime com nome fixo e o DashboardLayout já abre o mesmo —
+// a 2ª inscrição derruba a tela inteira ("cannot add postgres_changes callbacks after subscribe()", 2026-10-30).
+// O total de Aprovações já aparece no menu lateral.
 // Linha "ao vivo" de cada card: só contagens reais (useFlowSummary); dado que não carregou some da linha.
 // Item com `alert` é o que espera o dono (laranja).
 type Part = { text: string; alert?: boolean }
-function flowLines(lang: Lang, f: FlowSummary, approvals: number): Record<'data' | 'opportunities' | 'content' | 'conversion', Part[]> {
+function flowLines(lang: Lang, f: FlowSummary): Record<'data' | 'opportunities' | 'content' | 'conversion', Part[]> {
   const pt = lang === 'pt'
   const pl = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
   const out = { data: [] as Part[], opportunities: [] as Part[], content: [] as Part[], conversion: [] as Part[] }
@@ -308,7 +309,6 @@ function flowLines(lang: Lang, f: FlowSummary, approvals: number): Record<'data'
   if (f.oppsApproved != null) out.opportunities.push({ text: pt ? pl(f.oppsApproved, 'aprovada', 'aprovadas') : `${f.oppsApproved} approved` })
   if (f.lastOppAt) out.opportunities.push({ text: `${pt ? 'última rodada' : 'last run'} ${new Date(f.lastOppAt).toLocaleDateString(pt ? 'pt-BR' : 'en-US')}` })
   else if (f.oppsApproved != null) out.opportunities.push({ text: pt ? 'ainda sem rodada' : 'no run yet' })
-  if (approvals > 0) out.content.push({ text: pt ? `${pl(approvals, 'item esperando', 'itens esperando')} sua aprovação` : `${approvals} awaiting your approval`, alert: true })
   if (f.pagesLive != null) out.content.push({ text: pt ? pl(f.pagesLive, 'página de imóvel no ar', 'páginas de imóvel no ar') : pl(f.pagesLive, 'listing page live', 'listing pages live') })
   if (f.leads30 != null) out.conversion.push({ text: pt ? `${pl(f.leads30, 'lead', 'leads')} em 30 dias` : `${pl(f.leads30, 'lead', 'leads')} in 30 days` })
   if (f.leads30 && f.tracked30 != null) out.conversion.push({ text: pt ? `${f.tracked30} com origem rastreada` : `${f.tracked30} with tracked source` })

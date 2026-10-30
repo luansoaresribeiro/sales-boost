@@ -6,6 +6,7 @@ import './lib/analytics' // inicializa o PostHog antes da app renderizar
 import './lib/facebookSdk' // carrega o Facebook SDK (JS) — exigência da Meta
 import './index.css'
 import App from './App.tsx'
+import ErrorBoundary from './components/ErrorBoundary.tsx'
 import { AuthProvider } from './contexts/AuthContext.tsx'
 import { useAuth } from './contexts/AuthContext.tsx'
 import { CompanyProvider, useCompany } from './contexts/CompanyContext.tsx'
@@ -189,6 +190,12 @@ function RouterRoot() {
   )
 }
 
+// Erro ao desenhar qualquer página mostra a mensagem (em vez de tela preta); trocar de rota limpa o erro.
+function SafeRoutes() {
+  const location = useLocation()
+  return <ErrorBoundary resetKey={location.pathname}><RouterRoot /></ErrorBoundary>
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
@@ -196,7 +203,7 @@ createRoot(document.getElementById('root')!).render(
       <LanguageProvider>
       <AuthProvider>
         <CompanyProvider>
-          <RouterRoot />
+          <SafeRoutes />
           <CookieConsent />
         </CompanyProvider>
       </AuthProvider>

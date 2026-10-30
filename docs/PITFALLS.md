@@ -896,3 +896,13 @@ trava/contador, confere o `error` retornado.
 - **"Qualificado" = visita agendada** é uma convenção (o funil não tem etapa de visita); `visit_at` só reflete isso. 0 não é "sem
   dado": sem `tracked_link` a oportunidade mostra "sem dado"; com link, 0 é 0.
 - **Telefone do corretor é público no clique:** o `wa.me` do botão da página expõe o número de quem recebeu o lead mais recente.
+
+## Hook com canal realtime chamado 2× = tela preta (2026-10-30)
+
+`usePendencias()` abre um canal realtime de nome fixo (`rt:agent_actions:<empresa>:pend`). O `DashboardLayout` já chama
+esse hook. Quando o hub do Marketing AI passou a chamá-lo também (PR #82), a 2ª inscrição no mesmo canal lançou
+`cannot add postgres_changes callbacks ... after subscribe()` e a página inteira caiu: tela preta para todo cliente
+logado. **Regra:** hook que abre canal realtime de nome fixo só pode ser chamado em UM lugar; quem mais precisar do
+número recebe por prop/contexto. Desde então existe o `ErrorBoundary` (`src/components/ErrorBoundary.tsx`): erro ao
+desenhar mostra a mensagem em vez de tela preta. Para testar telas logadas sem senha, dá pra simular a sessão no
+navegador automático com respostas falsas do Supabase (foi assim que este erro foi achado).
