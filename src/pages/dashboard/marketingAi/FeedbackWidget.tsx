@@ -13,12 +13,12 @@ type Section = 'dados' | 'estrategia' | 'content' | 'conversao'
 
 const SECTION_LABEL: Record<'pt' | 'en', Record<Section, string>> = {
   pt: {
-    dados: 'no Agente de Dados', estrategia: 'no Agente de Estratégia',
-    content: 'no Agente de Conteúdo', conversao: 'no Agente de Conversão',
+    dados: 'na Inteligência de Mercado', estrategia: 'no Agente de Estratégia',
+    content: 'na Ativação', conversao: 'em Resultados e Aprendizado',
   },
   en: {
-    dados: 'in the Data Agent', estrategia: 'in the Strategy Agent',
-    content: 'in the Content Agent', conversao: 'in the Conversion Agent',
+    dados: 'in Market Intelligence', estrategia: 'in the Strategy Agent',
+    content: 'in Activation', conversao: 'in Results & Learning',
   },
 }
 const TX = {
