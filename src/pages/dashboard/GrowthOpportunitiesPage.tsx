@@ -4,6 +4,9 @@ import { useCompany } from '../../contexts/CompanyContext'
 import { useLang } from '../../contexts/LanguageContext'
 import { useShowcase } from '../../contexts/ShowcaseContext'
 import { supabase } from '../../lib/supabase'
+import FlowStrip from './marketingAi/FlowStrip'
+import { useOppFlow } from './marketingAi/useFlowStripData'
+import { oppSteps } from './marketingAi/flowStripSteps'
 import { callMarketingAi, CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
 import MarketSignals from './marketSignals'
 import OpportunityCard, { type Opportunity } from './opportunityCard'
@@ -152,6 +155,10 @@ export default function GrowthOpportunitiesPage() {
   }
   const patchRow = (id: string, p: Partial<Opportunity>) => setRows(prev => prev.map(x => (x.id === id ? { ...x, ...p } : x)))
 
+  // Faixa do fluxo real (2026-11-01). Recarrega quando a lista muda (aprovar/descartar/plano). Sem usePendencias (PITFALLS).
+  const flow = useOppFlow(companyId, rows)
+  const flowSteps = oppSteps(lang, flow.data, { go: () => document.getElementById('opp-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) })
+
   const missing: string[] = []
   if (counts) {
     if (counts.catalog === 0) missing.push(t.mCatalog)
@@ -167,7 +174,8 @@ export default function GrowthOpportunitiesPage() {
         <h1 style={{ fontFamily: D, fontSize: '1.5rem', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>{t.title}</h1>
         <p style={{ color: MUTED, fontSize: '13px', lineHeight: 1.5 }}>{t.sub}</p>
       </div>
-      <div style={{ padding: '20px', maxWidth: '820px' }}>
+      <div style={{ padding: '20px', maxWidth: '900px' }}>
+        <FlowStrip steps={flowSteps} loading={flow.loading} />
         <div role="note" style={{ fontSize: '12px', color: 'rgba(255,255,255,0.86)', background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '10px', padding: '9px 12px', marginBottom: '14px', lineHeight: 1.5 }}>{t.notice}</div>
 
         <div style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>
@@ -175,7 +183,7 @@ export default function GrowthOpportunitiesPage() {
         </div>
         {msg && <div role="status" style={{ fontSize: '12.5px', marginTop: '10px', color: msg.ok ? '#4ade80' : '#FBBF24' }}>{msg.text}</div>}
 
-        <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div id="opp-list" style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '14px', scrollMarginTop: '12px' }}>
           {loading ? <div style={{ color: MUTED, fontSize: '13px' }}>{t.loading}</div> : (
             <>
               {rows.length === 0 && <div style={{ padding: '24px', textAlign: 'center', color: MUTED, fontSize: '13px', border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>{t.none}</div>}

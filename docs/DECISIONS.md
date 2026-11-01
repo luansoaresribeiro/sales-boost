@@ -2129,3 +2129,11 @@ saiu do menu da esquerda — já é o card 2 do fluxo do Marketing AI (a rota `/
 - **Preço da busca Tavily não é conhecido:** padrão conservador US$ 0,008 (`TAVILY_COST_USD`) — **a confirmar** no extrato.
 - Sinais ganham `kind` do tópico da ficha (lançamento, obra, economia, turismo), sempre com fonte e data da fonte.
 
+## 2026-11-01 — As abas de cada agente mostram o fluxo real (faixa de fluxo)
+
+Pedido do dono: "o que aparece nas abas de dentro de cada agente tem que ser realmente o fluxo que existe, para eu saber como o
+fluxo está indo e ter rastreamento pelo front-end." Cada agente ganha, no topo, uma faixa com os **passos reais** em ordem
+(status, última vez, próxima, contagens, o que espera o dono) e que serve de navegação para as sub-abas existentes. Só dado real:
+sem dado = "sem dado ainda"; o que não foi construído (coleta do Instagram) aparece como 🚧. Leitura do livro-caixa por função
+somente-leitura (`company_flow_status`), sem afrouxar a RLS. Feito agora: Inteligência de Mercado e Motor de Oportunidades; os outros
+3 vêm no mesmo formato. Detalhes em [ARCHITECTURE.md](ARCHITECTURE.md#faixa-de-fluxo-dos-agentes-2026-11-01).

@@ -531,3 +531,7 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
   1ª página de um imóvel real dele.
 - **Pendentes do dono (não decididos):** preço para imobiliária com equipe (R$ e US$); custo de provedor de
   notícias (Etapa 3); revisão jurídica EUA/Fair Housing.
+- [ ] **Faixa de fluxo dos agentes (pedido do dono 2026-11-01)** — 🟡 feita para **Inteligência de Mercado** e **Motor de Oportunidades**
+  (código pronto; falta aplicar a migration `20261101200000_company_flow_status.sql` e publicar o site). **Faltam 3 agentes, no mesmo
+  formato** (`FlowStrip` + um hook + `flowStripSteps`): Estratégia, Ativação, Resultados e Aprendizado. *Pronto quando:* cada agente mostra
+  os passos reais com status/última vez/contagens vindos de dado real, conferidos contra o código da área.

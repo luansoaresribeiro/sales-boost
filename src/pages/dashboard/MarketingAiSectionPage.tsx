@@ -23,6 +23,9 @@ import FeedbackWidget from './marketingAi/FeedbackWidget'
 import CreativeAgent from './marketingAi/CreativeAgent'
 import MarketFeed from './marketingAi/MarketFeed'
 import NearbyPlaces from './marketingAi/NearbyPlaces'
+import FlowStrip from './marketingAi/FlowStrip'
+import { useMarketFlow } from './marketingAi/useFlowStripData'
+import { marketSteps } from './marketingAi/flowStripSteps'
 import FaqTips from './marketingAi/FaqTips'
 import { fetchCatalogSchema, type CatalogSchema } from '../../lib/verticalPlaybook'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
@@ -300,10 +303,15 @@ function DadosSection({ company }: { company: CompanyData }) {
   }, [verticalKey])
   // Mercado só existe para setor com market_intel na ficha (regra 6); é a aba padrão quando existe.
   const sub = picked ?? (schema?.marketIntel ? 'mercado' : 'ideias')
+  // Faixa do fluxo real (2026-11-01): passos da Inteligência de Mercado com dado real; clicar abre a sub-aba correspondente.
+  const flow = useMarketFlow(company.id)
+  const steps = marketSteps(lang, flow.data, { hasMarket: !!schema?.marketIntel, hasNearby: !!schema?.nearby, hasFaq: !!schema?.faqCategories, go: setSub })
+  const activeStep = sub === 'mercado' ? 'sinais' : 'enriquecimento'
   // Links antigos do sino (?item=<id>) eram do Catálogo, que agora é página própria.
   if (focusItemId) return <Navigate to={`/dashboard/catalogo?item=${encodeURIComponent(focusItemId)}`} replace />
   return (
     <div>
+      <FlowStrip steps={steps} activeKey={activeStep} loading={flow.loading} />
       <div style={subTabsRow}>
         {schema?.marketIntel && <SubTabButton active={sub === 'mercado'} onClick={() => setSub('mercado')} icon="🌐" label={t.market} />}
         <SubTabButton active={sub === 'ideias'} onClick={() => setSub('ideias')} icon="💡" label={t.ideas} />
