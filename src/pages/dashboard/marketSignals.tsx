@@ -17,7 +17,7 @@ const TX = {
   pt: {
     title: 'Sinais de mercado',
     intro: 'Cole aqui notícias, lançamentos, obras ou preços anunciados que você viu. Com fonte e data, o sistema liga aos seus imóveis da mesma região e usa como prova nas oportunidades. Preço anunciado não é preço de venda.',
-    auto: 'Automático', autoNote: 'O sistema também busca notícias da região dos seus imóveis toda semana, com fonte e data. Apague o que não fizer sentido.',
+    auto: 'Automático', autoNote: 'O sistema também busca notícias da região dos seus imóveis todo dia, com fonte e data. Apague o que não fizer sentido.',
     needSource: 'A fonte é obrigatória: sinal sem fonte é ignorado pelo sistema. Use o mesmo nome de região do seu catálogo para a ligação funcionar.',
     kind: 'Tipo', t: 'Título', summary: 'Resumo (opcional)', region: 'Região', source: 'Nome da fonte', url: 'Link da fonte (recomendado)', date: 'Data em que foi publicado/visto',
     save: 'Salvar sinal', saving: 'Salvando…', plan: 'Disponível no plano — ver planos',
@@ -30,7 +30,7 @@ const TX = {
   en: {
     title: 'Market signals',
     intro: 'Paste here news, launches, works or listed prices you have seen. With a source and date, the system links them to your properties in the same region and uses them as proof in opportunities. Listed price is not sale price.',
-    auto: 'Automatic', autoNote: 'The system also searches for news about the region of your properties every week, with source and date. Delete whatever does not make sense.',
+    auto: 'Automatic', autoNote: 'The system also searches for news about the region of your properties every day, with source and date. Delete whatever does not make sense.',
     needSource: 'The source is required: a signal without a source is ignored by the system. Use the same region name as your catalog so the link works.',
     kind: 'Type', t: 'Title', summary: 'Summary (optional)', region: 'Region', source: 'Source name', url: 'Source link (recommended)', date: 'Date it was published/seen',
     save: 'Save signal', saving: 'Saving…', plan: 'Available on a paid plan — see plans',

@@ -65,24 +65,20 @@ export default function GrowthOpportunitiesPage() {
   const [pieceStats, setPieceStats] = useState<Record<string, PieceStats>>({})
   const [results, setResults] = useState<Record<string, OppResultRow>>({})
   const [linkCodes, setLinkCodes] = useState<Record<string, string[]>>({})
-  const [lastRunAt, setLastRunAt] = useState<string | null>(null)
   const [showDismissed, setShowDismissed] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const load = useCallback(async () => {
     if (!companyId) return
-    const [opps, cat, sig, comp, perf] = await Promise.all([
+    const [opps, cat, sig, comp] = await Promise.all([
       supabase.from('growth_opportunities').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(60),
       supabase.from('marketing_ai_knowledge').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('kind', 'product'),
       supabase.from('market_signals').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
       supabase.from('marketing_ai_competitors').select('id, hashtags_used').eq('company_id', companyId).limit(50),
-      // Última rodada (mesmo sem resultado). Se a tabela não for legível pelo cliente, cai na data da última oportunidade.
-      supabase.from('agent_performance').select('created_at').eq('company_id', companyId).eq('task_key', 'run_opportunities').eq('success', true).order('created_at', { ascending: false }).limit(1),
     ])
     const list = ((opps.data ?? []) as Opportunity[])
     setRows(list)
-    setLastRunAt((perf.data as { created_at: string }[] | null)?.[0]?.created_at ?? list[0]?.created_at ?? null)
     // Tabela ausente (migration pendente) = sem sinais, sem quebrar a tela.
     setCounts({
       catalog: cat.count ?? 0, signals: sig.error ? 0 : (sig.count ?? 0),
@@ -178,9 +174,7 @@ export default function GrowthOpportunitiesPage() {
         <FlowStrip steps={flowSteps} loading={flow.loading} />
         <div role="note" style={{ fontSize: '12px', color: 'rgba(255,255,255,0.86)', background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '10px', padding: '9px 12px', marginBottom: '14px', lineHeight: 1.5 }}>{t.notice}</div>
 
-        <div style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>
-          {t.next} {lastRunAt ? t.lastRun(new Date(lastRunAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR')) : t.noRun}
-        </div>
+        {/* A linha "Próxima análise…" saiu: a faixa de fluxo acima mostra a última e a próxima rodada com a regra real. */}
         {msg && <div role="status" style={{ fontSize: '12.5px', marginTop: '10px', color: msg.ok ? '#4ade80' : '#FBBF24' }}>{msg.text}</div>}
 
         <div id="opp-list" style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '14px', scrollMarginTop: '12px' }}>
