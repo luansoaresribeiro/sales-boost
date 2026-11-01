@@ -8,7 +8,7 @@
 import { getTavilyKey } from './faqCheck.ts'
 import {
   ALL_MARKET_TASK_KEYS, MARKET_TASK_KEYS, PARALLEL_SEARCHES, SEARCH_TIMEOUT_MS, buildUnits, capFromEnv, dayNumber, dayStartIso, daysLeftInMonth, envGet,
-  monthStartIso, normalizeUrl, normalizeTitle, parseIntelConfig, remainingFor, rotate, searchesToday, spentBySource, tavilyCostFromEnv,
+  capUsdOf, monthStartIso, normalizeUrl, normalizeTitle, parseIntelConfig, remainingFor, rotate, searchesToday, spentBySource, tavilyCostFromEnv,
   type IntelNewsConfig, type SearchUnit,
 } from './marketIntel.ts'
 import { filterHits, pickRegions, type NewsSignal, type TavilyHit } from './marketNews.ts'
@@ -52,7 +52,7 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
   const cfg = intel?.news
   if (!intel || !cfg || !o.locationKey) return { ...out, skipped: 'setor sem market_intel.news na ficha' }
   const now = o.nowMs ?? Date.now()
-  const capUsd = o.capUsd ?? (envGet('MARKET_INTEL_CAP_USD') ? capFromEnv(envGet('MARKET_INTEL_CAP_USD')) : intel.cap_usd ?? capFromEnv(undefined))
+  const capUsd = capUsdOf(o.capUsd ?? (envGet('MARKET_INTEL_CAP_USD') ? capFromEnv(envGet('MARKET_INTEL_CAP_USD')) : intel.cap_usd ?? capFromEnv(undefined)))
   const costUsd = o.costUsd ?? tavilyCostFromEnv(envGet('TAVILY_COST_USD'))
 
   // Interruptor das fontes (painel Owner): se existe a linha 'tavily' e está desligada, não busca.
@@ -65,7 +65,7 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
   const [led, newToday, known] = await Promise.all([
     admin.from('agent_performance').select('task_key, cost_usd, created_at').eq('company_id', o.companyId).in('task_key', ALL_MARKET_TASK_KEYS).gte('created_at', monthStartIso(now)),
     admin.from('market_signals').select('id', { count: 'exact', head: true }).eq('company_id', o.companyId).eq('collected_by', 'system').gte('created_at', dayStart),
-    admin.from('market_signals').select('source_url, title').eq('company_id', o.companyId).gte('created_at', new Date(now - DEDUPE_DAYS * 86400_000).toISOString()).limit(500),
+    admin.from('market_signals').select('source_url, title').eq('company_id', o.companyId).gte('created_at', new Date(now - DEDUPE_DAYS * 86400_000).toISOString()).order('created_at', { ascending: false }).limit(500),
   ])
   if (led.error || newToday.error || known.error) { log(o.companyId, `leitura: ${(led.error ?? newToday.error ?? known.error).message}`); return { ...out, skipped: 'erro ao ler limites' } }
   const rows = (led.data ?? []) as { task_key: string; cost_usd: number | string | null; created_at?: string }[]
@@ -101,6 +101,13 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
     const batch: { u: SearchUnit & { query: string }; id: string | null; t0: number }[] = []
     let stop = ''
     for (const u of units.slice(i, i + PARALLEL_SEARCHES)) {
+      if (remaining + 1e-9 < costUsd) { stop = 'orçamento em dólar acabou'; break }
+      // Relê o gasto do mês antes de cada reserva (QA 2026-11-01): duas chamadas ao mesmo tempo não passam do teto.
+      const fresh = await admin.from('agent_performance').select('task_key, cost_usd, created_at').eq('company_id', o.companyId).in('task_key', ALL_MARKET_TASK_KEYS).gte('created_at', monthStartIso(now))
+      if (fresh.error) { log(o.companyId, `releitura: ${fresh.error.message}`); stop = 'erro ao reler o gasto'; break }
+      const freshRows = (fresh.data ?? []) as { task_key: string; cost_usd: number | string | null; created_at?: string }[]
+      if (!batch.length && i === 0 && freshRows.some(r => r.task_key === MARKET_TASK_KEYS.news && (r.created_at ?? '') >= dayStart)) { stop = 'já coletou hoje'; break }
+      remaining = Math.min(remaining, remainingFor('news', { split: intel.split, capUsd, spent: spentBySource(freshRows) }))
       if (remaining + 1e-9 < costUsd) { stop = 'orçamento em dólar acabou'; break }
       let fits = true
       if (o.fitsTotalCap) { try { fits = await o.fitsTotalCap(costUsd) } catch (e) { log(o.companyId, `teto geral: ${String(e)}`); fits = false } }

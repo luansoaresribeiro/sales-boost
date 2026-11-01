@@ -281,24 +281,26 @@ function DadosSection({ company }: { company: CompanyData }) {
   const [params] = useSearchParams()
   const focusItemId = params.get('item')
   const verticalKey = company.vertical_key ?? 'generico'
-  const [sub, setSub] = useState<'mercado' | 'ideias' | 'lugares' | 'faq'>('mercado')
+  const [picked, setSub] = useState<'mercado' | 'ideias' | 'lugares' | 'faq' | null>(null)
   const [schema, setSchema] = useState<CatalogSchema | null | undefined>(undefined)
   useEffect(() => {
     let alive = true
     fetchCatalogSchema(verticalKey).then(s => { if (alive) setSchema(s) })
     return () => { alive = false }
   }, [verticalKey])
+  // Mercado só existe para setor com market_intel na ficha (regra 6); é a aba padrão quando existe.
+  const sub = picked ?? (schema?.marketIntel ? 'mercado' : 'ideias')
   // Links antigos do sino (?item=<id>) eram do Catálogo, que agora é página própria.
   if (focusItemId) return <Navigate to={`/dashboard/catalogo?item=${encodeURIComponent(focusItemId)}`} replace />
   return (
     <div>
       <div style={subTabsRow}>
-        <SubTabButton active={sub === 'mercado'} onClick={() => setSub('mercado')} icon="🌐" label={t.market} />
+        {schema?.marketIntel && <SubTabButton active={sub === 'mercado'} onClick={() => setSub('mercado')} icon="🌐" label={t.market} />}
         <SubTabButton active={sub === 'ideias'} onClick={() => setSub('ideias')} icon="💡" label={t.ideas} />
         {schema?.nearby && <SubTabButton active={sub === 'lugares'} onClick={() => setSub('lugares')} icon="📍" label={t.nearby} />}
         {schema?.faqCategories && <SubTabButton active={sub === 'faq'} onClick={() => setSub('faq')} icon="❓" label={t.faq} />}
       </div>
-      {sub === 'mercado' ? <MarketFeed lang={lang} companyId={company.id} />
+      {sub === 'mercado' && schema?.marketIntel ? <MarketFeed lang={lang} companyId={company.id} />
         : sub === 'lugares' && schema?.nearby ? <NearbyPlaces companyId={company.id} />
         : sub === 'faq' && schema?.faqCategories ? <FaqTips companyId={company.id} categories={schema.faqCategories} />
         : <CreativeAgent companyId={company.id} />}

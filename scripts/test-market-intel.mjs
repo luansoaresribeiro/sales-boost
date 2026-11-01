@@ -7,6 +7,7 @@ import {
   capFromEnv, tavilyCostFromEnv, sourceBudget, daysLeftInMonth, searchesToday, spentBySource, remainingFor, rotate, buildUnits, dayNumber,
   normalizeUrl, normalizeTitle, parseIntelConfig, MARKET_INTEL_CAP_DEFAULT_USD, TAVILY_COST_DEFAULT_USD, monthStartIso, dayStartIso,
 } from '../supabase/functions/_shared/marketIntel.ts'
+import { capUsdOf, HARD_MAX_CAP_USD } from '../supabase/functions/_shared/marketIntel.ts'
 import { cronMarketIntel } from '../supabase/functions/_shared/marketIntelCron.ts'
 import { cronOpportunities } from '../supabase/functions/_shared/opportunityCron.ts'
 const { monthSpend } = await import('../supabase/functions/_shared/spendCap.ts')
@@ -98,5 +99,9 @@ function cronAdmin(companies, pbCfg = CFG, hermes = { auto_strategy_enabled: tru
   } }
   const r = await cronOpportunities(admin, async () => ({ text: '[]', tokens: 0 }), Date.now())
   assert.equal(r.companies_checked, 1); assert.ok(!('news_added' in r)); assert.ok(order.includes('market_signals')); ok('opportunityCron: só lê sinais, não coleta')
+}
+{ // teto aprovado pelo dono: ficha/env só apertam
+  assert.equal(HARD_MAX_CAP_USD, 5); assert.equal(capUsdOf(500), 5); assert.equal(capUsdOf(2), 2); assert.equal(capUsdOf(NaN), 5); assert.equal(capUsdOf(0), 5)
+  ok('teto em dólar nunca passa de US$ 5')
 }
 console.log(`\n${n} verificações ok`)

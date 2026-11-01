@@ -15,6 +15,9 @@ export const MARKET_TASK_KEYS: Record<MarketSource, string> = { news: 'market_ne
 export const ALL_MARKET_TASK_KEYS: string[] = Object.values(MARKET_TASK_KEYS)
 
 export const MARKET_INTEL_CAP_DEFAULT_USD = 5
+// Teto máximo aprovado pelo dono (2026-11-01): ficha e variável de ambiente só APERTAM, nunca passam disto.
+export const HARD_MAX_CAP_USD = 5
+export const capUsdOf = (v: number): number => Math.min(Number.isFinite(v) && v > 0 ? v : MARKET_INTEL_CAP_DEFAULT_USD, HARD_MAX_CAP_USD)
 /** Preço de 1 busca básica da Tavily (1 crédito). A CONFIRMAR com o extrato; troque pelo secret TAVILY_COST_USD. Valor conservador. */
 export const TAVILY_COST_DEFAULT_USD = 0.008
 export const SEARCH_TIMEOUT_MS = 12_000

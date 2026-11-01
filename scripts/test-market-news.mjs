@@ -84,6 +84,7 @@ function fakeAdmin(init = {}) {
       gte: (c, v) => { st.filters.push((r) => r[c] === undefined || r[c] >= v); return api },
       in: (c, v) => { st.filters.push((r) => v.includes(r[c])); return api },
       limit: () => api,
+      order: () => api,
       maybeSingle: async () => ({ data: table === 'insight_sources' ? db.source ?? null : null, error: null }),
       insert: (row) => { st.op = 'insert'; st.payload = row; return api },
       update: (row) => { st.op = 'update'; st.payload = row; return api },
