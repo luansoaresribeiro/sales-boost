@@ -1,21 +1,23 @@
 import { useState } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams, Navigate } from 'react-router-dom'
 import { useLang } from '../../../contexts/LanguageContext'
 import type { CompanyData } from '../../../contexts/CompanyContext'
 import { BORDER, MUTED, D } from './shared'
 import ContentLibrary from './ContentLibrary'
 import ContentOverviewTab from './ContentOverviewTab'
 import WeeklyCalendarTab from './WeeklyCalendarTab'
-import PerformanceTab from './PerformanceTab'
 import MetaAdsTab from './MetaAdsTab'
 import CampaignsTab from './CampaignsTab'
 import MetaHealthTab from './MetaHealthTab'
+import WhatsAppTab from './WhatsAppTab'
+import EngagementTab from './EngagementTab'
 
 const ORANGE = '#FF6D29'
 
-type Top = 'conteudo' | 'campanha'
+type Top = 'conteudo' | 'campanha' | 'conversas'
 type ContentSub = 'calendario' | 'padrao'
-type CampaignSub = 'resultados' | 'ideal' | 'anuncios' | 'saude'
+type CampaignSub = 'ideal' | 'anuncios' | 'saude'
+type TalkSub = 'atendimento' | 'respostas'
 
 // Agente de Conteúdo e Campanha — reorganizado em 2026-10-14 a pedido do
 // dono em DUAS abas de topo:
@@ -30,22 +32,27 @@ type CampaignSub = 'resultados' | 'ideal' | 'anuncios' | 'saude'
 // Saíram: Biblioteca (virou Padrão visual + Vault), Testes e a sub-aba
 // Ideias do calendário (o calendário vem da estratégia, não de ideia solta).
 // Deep links antigos: ?tab=biblioteca|vault → Calendário; ?tab=campanha[&sub=…].
+// 2026-11-01 (pedido do dono, Ativação = tudo que vai para a rua): nova aba de topo Conversas (Atendimento +
+// respostas automáticas de comentários/DMs, vindas do antigo Agente de Conversão). "Como os conteúdos estão indo"
+// saiu da Campanha e foi para Resultados e Aprendizado → Desempenho dos posts (link antigo redireciona).
 const TX = {
   pt: {
-    top: { conteudo: { icon: '✍️', label: 'Conteúdo', sub: 'Calendário da semana e padrão visual' }, campanha: { icon: '🎯', label: 'Campanha', sub: 'Análise, pixel e campanha ideal' } },
+    top: { conteudo: { icon: '✍️', label: 'Conteúdo', sub: 'Calendário da semana e padrão visual' }, campanha: { icon: '🎯', label: 'Campanha', sub: 'Pixel, campanha ideal e anúncios' }, conversas: { icon: '💬', label: 'Conversas', sub: 'Atendimento e respostas a comentários/DMs' } },
+    talk: { atendimento: ['💬', 'Atendimento'], respostas: ['🤝', 'Respostas automáticas (comentários e DMs)'] },
     content: { calendario: ['🗓️', 'Calendário da semana'], padrao: ['🎨', 'Padrão visual'] },
-    campaign: { resultados: ['📈', 'Como os conteúdos estão indo'], ideal: ['📣', 'Campanha ideal e pixel'], anuncios: ['💰', 'Anúncios (Meta Ads)'], saude: ['❤️‍🩹', 'Saúde da Meta'] },
+    campaign: { ideal: ['📣', 'Campanha ideal e pixel'], anuncios: ['💰', 'Anúncios (Meta Ads)'], saude: ['❤️‍🩹', 'Saúde da Meta'] },
     soon: 'EM BREVE', overview: 'Resumo da semana',
     soonTitle: 'Rodar campanhas pagas chega em breve.',
-    soonBody: ' Enquanto isso, esta aba já lê como seus conteúdos estão indo e mostra qual campanha valeria a pena rodar. Nenhum anúncio vai ao ar sem a sua aprovação.',
+    soonBody: ' Enquanto isso, esta aba já mostra qual campanha valeria a pena rodar (o desempenho dos posts fica em Resultados e Aprendizado). Nenhum anúncio vai ao ar sem a sua aprovação.',
   },
   en: {
-    top: { conteudo: { icon: '✍️', label: 'Content', sub: 'Weekly calendar and visual pattern' }, campanha: { icon: '🎯', label: 'Campaign', sub: 'Analysis, pixel and ideal campaign' } },
+    top: { conteudo: { icon: '✍️', label: 'Content', sub: 'Weekly calendar and visual pattern' }, campanha: { icon: '🎯', label: 'Campaign', sub: 'Pixel, ideal campaign and ads' }, conversas: { icon: '💬', label: 'Conversations', sub: 'Customer service and comment/DM replies' } },
+    talk: { atendimento: ['💬', 'Customer service'], respostas: ['🤝', 'Automatic replies (comments and DMs)'] },
     content: { calendario: ['🗓️', 'Weekly calendar'], padrao: ['🎨', 'Visual pattern'] },
-    campaign: { resultados: ['📈', 'How your content is doing'], ideal: ['📣', 'Ideal campaign & pixel'], anuncios: ['💰', 'Ads (Meta Ads)'], saude: ['❤️‍🩹', 'Meta Health'] },
+    campaign: { ideal: ['📣', 'Ideal campaign & pixel'], anuncios: ['💰', 'Ads (Meta Ads)'], saude: ['❤️‍🩹', 'Meta Health'] },
     soon: 'COMING SOON', overview: 'Week summary',
     soonTitle: 'Running paid campaigns is coming soon.',
-    soonBody: ' Meanwhile, this tab already reads how your content is doing and shows which campaign would be worth running. No ad goes live without your approval.',
+    soonBody: ' Meanwhile, this tab already shows which campaign would be worth running (post performance lives in Results & Learning). No ad goes live without your approval.',
   },
 } as const
 
@@ -56,13 +63,13 @@ export default function ContentSection({ company }: { company: Company }) {
   const tx = TX[lang]
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab')
-  const [top, setTop] = useState<Top>(tab === 'campanha' ? 'campanha' : 'conteudo')
+  const [top, setTop] = useState<Top>(tab === 'campanha' ? 'campanha' : tab === 'conversas' ? 'conversas' : 'conteudo')
   const [contentSub, setContentSub] = useState<ContentSub>('calendario')
 
   const pickTop = (k: Top) => {
     setTop(k)
     const next = new URLSearchParams(params)
-    if (k === 'campanha') next.set('tab', 'campanha'); else next.delete('tab')
+    if (k === 'conteudo') next.delete('tab'); else next.set('tab', k)
     next.delete('sub')
     setParams(next, { replace: true })
   }
@@ -70,12 +77,12 @@ export default function ContentSection({ company }: { company: Company }) {
   return (
     <div>
       <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', marginBottom: '22px', flexWrap: 'wrap' }}>
-        {(['conteudo', 'campanha'] as const).map(k => (
+        {(['conteudo', 'campanha', 'conversas'] as const).map(k => (
           <TabButton key={k} t={tx.top[k]} active={top === k} onClick={() => pickTop(k)} badge={k === 'campanha' ? tx.soon : undefined} />
         ))}
       </div>
 
-      {top === 'campanha' ? <CampanhaPanel company={company} /> : (
+      {top === 'campanha' ? <CampanhaPanel company={company} /> : top === 'conversas' ? <ConversasPanel company={company} /> : (
         <div>
           <SubTabs items={(['calendario', 'padrao'] as const).map(k => [k, ...tx.content[k]] as const)} active={contentSub} onPick={setContentSub} />
           {contentSub === 'calendario' ? (
@@ -96,27 +103,41 @@ export default function ContentSection({ company }: { company: Company }) {
 function CampanhaPanel({ company }: { company: Company }) {
   const { lang } = useLang()
   const tx = TX[lang]
-  const navigate = useNavigate()
   // A sub-aba mora na URL (?sub=…) — assim o atalho "Saúde da Meta" de
   // dentro da Campanha ideal troca de sub-aba sem recarregar.
   const [params, setParams] = useSearchParams()
   const raw = params.get('sub')
-  const sub: CampaignSub = raw === 'ideal' || raw === 'anuncios' || raw === 'saude' ? raw : 'resultados'
+  const sub: CampaignSub = raw === 'anuncios' || raw === 'saude' ? raw : 'ideal'
   const setSub = (k: CampaignSub) => {
     const next = new URLSearchParams(params)
     next.set('tab', 'campanha'); next.set('sub', k)
     setParams(next, { replace: true })
   }
+  if (raw === 'resultados') return <Navigate to="/dashboard/marketing-ai/conversao?sub=desempenho" replace />
   return (
     <div>
       <div style={{ fontSize: '12px', color: MUTED, lineHeight: 1.6, background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '18px', maxWidth: '820px' }}>
         <strong style={{ color: ORANGE }}>{tx.soonTitle}</strong>{tx.soonBody}
       </div>
-      <SubTabs items={(['resultados', 'ideal', 'anuncios', 'saude'] as const).map(k => [k, ...tx.campaign[k]] as const)} active={sub} onPick={setSub} />
-      {sub === 'resultados' ? <PerformanceTab company={company} onCreateContent={() => navigate('/dashboard/marketing-ai/content')} />
-        : sub === 'ideal' ? <CampaignsTab company={company} />
+      <SubTabs items={(['ideal', 'anuncios', 'saude'] as const).map(k => [k, ...tx.campaign[k]] as const)} active={sub} onPick={setSub} />
+      {sub === 'ideal' ? <CampaignsTab company={company} />
         : sub === 'anuncios' ? <MetaAdsTab company={company} />
         : <MetaHealthTab company={company} />}
+    </div>
+  )
+}
+
+// Conversas: responder quem chegou (WhatsApp e respostas automáticas de comentários/DMs, ex.: "Comente QUERO").
+// Nada é enviado sem aprovação do dono — a regra mora dentro de cada aba, que não mudou.
+function ConversasPanel({ company }: { company: Company }) {
+  const tx = TX[useLang().lang]
+  const [params, setParams] = useSearchParams()
+  const sub: TalkSub = params.get('sub') === 'respostas' ? 'respostas' : 'atendimento'
+  const setSub = (k: TalkSub) => { const next = new URLSearchParams(params); next.set('tab', 'conversas'); next.set('sub', k); setParams(next, { replace: true }) }
+  return (
+    <div>
+      <SubTabs items={(['atendimento', 'respostas'] as const).map(k => [k, ...tx.talk[k]] as const)} active={sub} onPick={setSub} />
+      {sub === 'atendimento' ? <WhatsAppTab company={company} /> : <EngagementTab company={company} />}
     </div>
   )
 }
