@@ -479,6 +479,7 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 - [ ] **Etapa 2 — colar sinal de mercado à mão (🟡 código pronto no PR; falta teste em produção).** Tela para o cliente colar notícia/lançamento/obra (título,
   região, fonte, link, data) em `market_signals` (`collected_by='manual'`). *Pronto quando:* um sinal colado com
   fonte aparece como "Dado" numa oportunidade `market_change` do bairro certo; sem fonte, não entra.
+- [ ] **Inteligência de Mercado ampla, estágios 1-3 (🟡 código pronto no branch `mi-stage1-3`, 2026-11-01):** teto US$ 5/cliente/mês (Apify+Tavily) dentro dos US$ 40, notícias diárias por tópicos da ficha (`cron_market_intel`), aba "Mercado" em Dados. Falta: migration `20261101100000_inteligencia_mercado_ficha.sql`, deploy do `marketing-ai`, cron `market-intel-daily`, confirmar `TAVILY_COST_USD`. Estágio 4+ (Instagram semanal) não iniciado. Substitui a coleta semanal da Etapa 3 abaixo.
 - [ ] **Etapa 3 — notícias automáticas (🟡 pronta em código, 2026-10-30; falta migration + deploy do `marketing-ai` e teste em produção).**
   Coleta sozinha (Tavily, `topic:'news'`, sem botão) as notícias da região dos imóveis e grava em `market_signals` com
   `collected_by='system'`, fonte e data. Limites: 3 buscas e 5 sinais novos por empresa por 7 dias; teto global
