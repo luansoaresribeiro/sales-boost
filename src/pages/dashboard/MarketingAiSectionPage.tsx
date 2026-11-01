@@ -15,8 +15,7 @@ import ExperimentsTab from './marketingAi/ExperimentsTab'
 import ToolsTab from './marketingAi/ToolsTab'
 import ConnectionsTab from './marketingAi/ConnectionsTab'
 import FunnelTab from './marketingAi/FunnelTab'
-import WhatsAppTab from './marketingAi/WhatsAppTab'
-import EngagementTab from './marketingAi/EngagementTab'
+import PerformanceTab from './marketingAi/PerformanceTab'
 import ReviewsAgentTab from './marketingAi/ReviewsAgentTab'
 import BusinessContextTab from './marketingAi/BusinessContextTab'
 import StrategySection from './marketingAi/StrategySection'
@@ -54,7 +53,7 @@ const TX = {
     back: '← Voltar', followers: 'Seguidores', pendingApproval: 'Conteúdo esperando aprovação', newRecs: 'Recomendações novas', competitors: 'Concorrentes monitorados',
     openInsights: 'Insights em aberto', noInsights: 'Nenhum insight aberto agora.', recent: 'Atividade recente', noActivity: 'Nenhuma atividade ainda.',
     products: 'Produtos', avatar: 'Meu avatar (em breve)', ideas: 'Ideias e trends', nearby: 'Lugares perto', faq: 'Dicas e FAQ', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
-    funnel: 'Funil de Vendas', service: 'Atendimento', engagement: 'Engagement',
+    funnel: 'Funil de vendas', perf: 'Desempenho dos posts', learn: 'Aprendizado', exper: 'Experimentos', reps: 'Relatórios',
   },
   en: {
     loading: 'Loading...', notActive: 'Marketing AI has not been activated yet',
@@ -62,7 +61,7 @@ const TX = {
     back: '← Back', followers: 'Followers', pendingApproval: 'Content awaiting approval', newRecs: 'New recommendations', competitors: 'Competitors monitored',
     openInsights: 'Open insights', noInsights: 'No open insights right now.', recent: 'Recent activity', noActivity: 'No activity yet.',
     products: 'Products', avatar: 'My avatar (coming soon)', ideas: 'Ideas & trends', nearby: 'Nearby places', faq: 'Tips & FAQ', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
-    funnel: 'Sales Pipeline', service: 'Customer Service', engagement: 'Engagement',
+    funnel: 'Sales pipeline', perf: 'Post performance', learn: 'Learning', exper: 'Experiments', reps: 'Reports',
   },
 } as const
 const SECTION_ICON: Record<string, string> = {
@@ -99,7 +98,15 @@ export default function MarketingAiSectionPage() {
   // é mais uma seção própria — virou o círculo flutuante (FeedbackWidget).
   if (section === 'meta-ads') return <Navigate to="/dashboard/marketing-ai/content?tab=campanha" replace />
   if (section === 'competitors') return <Navigate to="/dashboard/marketing-ai/dados" replace />
-  if (section === 'funil' || section === 'whatsapp' || section === 'engagement') return <Navigate to="/dashboard/marketing-ai/conversao" replace />
+  // 2026-11-01 (pedido do dono): Resultados e Aprendizado só com resultado e aprendizado; Atendimento e Engagement
+  // (responder conversa é execução) moraram para Ativação → Conversas. Aprendizado/Experimentos/Relatórios viraram
+  // sub-abas de Resultados e Aprendizado.
+  if (section === 'funil') return <Navigate to="/dashboard/marketing-ai/conversao" replace />
+  if (section === 'whatsapp') return <Navigate to="/dashboard/marketing-ai/content?tab=conversas&sub=atendimento" replace />
+  if (section === 'engagement') return <Navigate to="/dashboard/marketing-ai/content?tab=conversas&sub=respostas" replace />
+  if (section === 'brain') return <Navigate to="/dashboard/marketing-ai/conversao?sub=aprendizado" replace />
+  if (section === 'experiments') return <Navigate to="/dashboard/marketing-ai/conversao?sub=experimentos" replace />
+  if (section === 'reports') return <Navigate to="/dashboard/marketing-ai/conversao?sub=relatorios" replace />
   if (section === 'feedback') return <Navigate to="/dashboard/marketing-ai/dados" replace />
   // 2026-10-14: Agente de Dados ficou só com o Catálogo (+ Avatar em breve).
   // Insights saiu da tela (a estratégia já consome isso por trás); Saúde da
@@ -151,7 +158,10 @@ export default function MarketingAiSectionPage() {
       case 'estrategia':
         return <StrategySection company={company} />
       case 'conversao':
-        return <ConversaoSection company={company} />
+        return <ResultsSection company={company}
+          learning={<BrainTab nodes={data.brainNodes} accessToken={accessToken} strategyLog={data.strategyLog} onRefresh={data.refresh} />}
+          experiments={<ExperimentsTab accessToken={accessToken} experiments={data.experiments} onRefresh={data.refresh} />}
+          reports={<ReportsTab accessToken={accessToken} insights={data.insights} strategyLog={data.strategyLog} reports={data.reports} onRefresh={data.refresh} />} />
       case 'brain':
         return <BrainTab nodes={data.brainNodes} accessToken={accessToken} strategyLog={data.strategyLog} onRefresh={data.refresh} />
       case 'experiments':
@@ -321,21 +331,30 @@ function DadosSection({ company }: { company: CompanyData }) {
   )
 }
 
-// Agente de Conversão — Funil de Vendas + Atendimento (WhatsApp/Instagram) +
-// Engagement (automação de comentários e DMs) num único lugar, downstream do
-// Agente de Conteúdo (Dados → Conteúdo → Conversão → Feedback Loop): quem
-// chegou vira lead, o funil/atendimento/engagement fecham.
-function ConversaoSection({ company }: { company: CompanyData }) {
+// Resultados e Aprendizado (5º componente, DECISIONS 2026-10-30) — só o que MEDE e o que se APRENDE (pedido do dono
+// 2026-11-01): funil (leads → visitas → vendas, com origem e corretor), desempenho real dos posts, a memória do negócio
+// (Aprendizado), experimentos e relatórios. Responder conversas (Atendimento/Engagement) é execução → Ativação.
+// A sub-aba mora na URL (?sub=) para os links antigos de brain/experiments/reports caírem no lugar certo.
+type ResultsSub = 'funil' | 'desempenho' | 'aprendizado' | 'experimentos' | 'relatorios'
+const RESULTS_SUBS: ResultsSub[] = ['funil', 'desempenho', 'aprendizado', 'experimentos', 'relatorios']
+function ResultsSection({ company, learning, experiments, reports }: { company: CompanyData; learning: React.ReactNode; experiments: React.ReactNode; reports: React.ReactNode }) {
   const t = TX[useLang().lang]
-  const [sub, setSub] = useState<'funil' | 'atendimento' | 'engagement'>('funil')
+  const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const raw = params.get('sub') as ResultsSub | null
+  const sub: ResultsSub = raw && RESULTS_SUBS.includes(raw) ? raw : 'funil'
+  const setSub = (k: ResultsSub) => { const next = new URLSearchParams(params); next.set('sub', k); setParams(next, { replace: true }) }
+  const label: Record<ResultsSub, [string, string]> = { funil: ['🔀', t.funnel], desempenho: ['📈', t.perf], aprendizado: ['🧠', t.learn], experimentos: ['🧪', t.exper], relatorios: ['📄', t.reps] }
   return (
     <div>
       <div style={subTabsRow}>
-        <SubTabButton active={sub === 'funil'} onClick={() => setSub('funil')} icon="🔀" label={t.funnel} />
-        <SubTabButton active={sub === 'atendimento'} onClick={() => setSub('atendimento')} icon="💬" label={t.service} />
-        <SubTabButton active={sub === 'engagement'} onClick={() => setSub('engagement')} icon="🤝" label={t.engagement} />
+        {RESULTS_SUBS.map(k => <SubTabButton key={k} active={sub === k} onClick={() => setSub(k)} icon={label[k][0]} label={label[k][1]} />)}
       </div>
-      {sub === 'funil' ? <FunnelTab company={company} /> : sub === 'atendimento' ? <WhatsAppTab company={company} /> : <EngagementTab company={company} />}
+      {sub === 'funil' ? <FunnelTab company={company} />
+        : sub === 'desempenho' ? <PerformanceTab company={company} onCreateContent={() => navigate('/dashboard/marketing-ai/content')} />
+        : sub === 'aprendizado' ? learning
+        : sub === 'experimentos' ? experiments
+        : reports}
     </div>
   )
 }
