@@ -4,6 +4,9 @@ import { useCompany } from '../../contexts/CompanyContext'
 import { useLang } from '../../contexts/LanguageContext'
 import { useShowcase } from '../../contexts/ShowcaseContext'
 import { supabase } from '../../lib/supabase'
+import FlowStrip from './marketingAi/FlowStrip'
+import { useOppFlow } from './marketingAi/useFlowStripData'
+import { oppSteps } from './marketingAi/flowStripSteps'
 import { callMarketingAi, CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
 import MarketSignals from './marketSignals'
 import OpportunityCard, { type Opportunity } from './opportunityCard'
@@ -62,24 +65,20 @@ export default function GrowthOpportunitiesPage() {
   const [pieceStats, setPieceStats] = useState<Record<string, PieceStats>>({})
   const [results, setResults] = useState<Record<string, OppResultRow>>({})
   const [linkCodes, setLinkCodes] = useState<Record<string, string[]>>({})
-  const [lastRunAt, setLastRunAt] = useState<string | null>(null)
   const [showDismissed, setShowDismissed] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const load = useCallback(async () => {
     if (!companyId) return
-    const [opps, cat, sig, comp, perf] = await Promise.all([
+    const [opps, cat, sig, comp] = await Promise.all([
       supabase.from('growth_opportunities').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(60),
       supabase.from('marketing_ai_knowledge').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('kind', 'product'),
       supabase.from('market_signals').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
       supabase.from('marketing_ai_competitors').select('id, hashtags_used').eq('company_id', companyId).limit(50),
-      // Última rodada (mesmo sem resultado). Se a tabela não for legível pelo cliente, cai na data da última oportunidade.
-      supabase.from('agent_performance').select('created_at').eq('company_id', companyId).eq('task_key', 'run_opportunities').eq('success', true).order('created_at', { ascending: false }).limit(1),
     ])
     const list = ((opps.data ?? []) as Opportunity[])
     setRows(list)
-    setLastRunAt((perf.data as { created_at: string }[] | null)?.[0]?.created_at ?? list[0]?.created_at ?? null)
     // Tabela ausente (migration pendente) = sem sinais, sem quebrar a tela.
     setCounts({
       catalog: cat.count ?? 0, signals: sig.error ? 0 : (sig.count ?? 0),
@@ -152,6 +151,10 @@ export default function GrowthOpportunitiesPage() {
   }
   const patchRow = (id: string, p: Partial<Opportunity>) => setRows(prev => prev.map(x => (x.id === id ? { ...x, ...p } : x)))
 
+  // Faixa do fluxo real (2026-11-01). Recarrega quando a lista muda (aprovar/descartar/plano). Sem usePendencias (PITFALLS).
+  const flow = useOppFlow(companyId, rows)
+  const flowSteps = oppSteps(lang, flow.data, { go: () => document.getElementById('opp-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) })
+
   const missing: string[] = []
   if (counts) {
     if (counts.catalog === 0) missing.push(t.mCatalog)
@@ -167,15 +170,14 @@ export default function GrowthOpportunitiesPage() {
         <h1 style={{ fontFamily: D, fontSize: '1.5rem', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>{t.title}</h1>
         <p style={{ color: MUTED, fontSize: '13px', lineHeight: 1.5 }}>{t.sub}</p>
       </div>
-      <div style={{ padding: '20px', maxWidth: '820px' }}>
+      <div style={{ padding: '20px', maxWidth: '900px' }}>
+        <FlowStrip steps={flowSteps} loading={flow.loading} />
         <div role="note" style={{ fontSize: '12px', color: 'rgba(255,255,255,0.86)', background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '10px', padding: '9px 12px', marginBottom: '14px', lineHeight: 1.5 }}>{t.notice}</div>
 
-        <div style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.6 }}>
-          {t.next} {lastRunAt ? t.lastRun(new Date(lastRunAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR')) : t.noRun}
-        </div>
+        {/* A linha "Próxima análise…" saiu: a faixa de fluxo acima mostra a última e a próxima rodada com a regra real. */}
         {msg && <div role="status" style={{ fontSize: '12.5px', marginTop: '10px', color: msg.ok ? '#4ade80' : '#FBBF24' }}>{msg.text}</div>}
 
-        <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div id="opp-list" style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '14px', scrollMarginTop: '12px' }}>
           {loading ? <div style={{ color: MUTED, fontSize: '13px' }}>{t.loading}</div> : (
             <>
               {rows.length === 0 && <div style={{ padding: '24px', textAlign: 'center', color: MUTED, fontSize: '13px', border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>{t.none}</div>}

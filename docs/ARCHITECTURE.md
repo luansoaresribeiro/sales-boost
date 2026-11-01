@@ -627,6 +627,27 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
   ainda não foi aplicada (consulta de leads sem as colunas novas; sem bloco de resultados).
   - **Reverter:** bloco "Como reverter" na migration; functions e site voltam pelo commit anterior.
 
+## Faixa de fluxo dos agentes (2026-11-01)
+
+Pedido do dono: o que aparece nas abas de cada agente tem que ser o fluxo REAL, com rastreamento no front-end. No topo de cada
+agente há uma faixa horizontal (empilha no celular) com os passos reais, ligados por setas; cada passo mostra nome, explicação, pílula
+de status (✅ ok / ⏳ aguardando / ⚠️ erro com o texto real encurtado / 🚧 em construção), "última vez", "próxima" (só quando as
+regras do código permitem calcular), 1–2 contagens e, em laranja, o que espera o dono. Sem dado = "sem dado ainda" (regra 5).
+- **Componente:** `src/pages/dashboard/marketingAi/FlowStrip.tsx` (só desenha). **Dados:** `useFlowStripData.ts` (um hook por agente).
+  **Montagem dos passos:** `flowStripSteps.ts` (`marketSteps`, `oppSteps`). **Regras puras:** `flowStripLogic.ts` (`nextOpportunityRound`
+  espelha `shouldRunOpportunities`: > 7 dias, ou sinal novo e já passaram 24 h; falha há < 6 h não tenta). Teste: `scripts/test-flow-strip.mjs`.
+- **Prontos:** Inteligência de Mercado (`dados`; clicar abre a sub-aba, respeitando abas condicionais da ficha) e Motor de Oportunidades
+  (`/dashboard/opportunities`; clicar rola até a lista). **Faltam:** Estratégia, Ativação, Resultados e Aprendizado (ROADMAP).
+- **Livro-caixa:** a RLS de `agent_performance` não está nas migrations (tabela criada fora delas), então a tela não depende dela:
+  a função `public.company_flow_status(p_company uuid) returns jsonb` (migration `20261101200000_company_flow_status.sql`) é
+  **somente leitura**, `security definer`, `set search_path = public`; confere que a empresa é de quem chama (ou dono da plataforma) e
+  devolve só agregados (última execução, sucesso, erro com 160 caracteres, contagens, soma de custo do mês, teto de notícias da ficha).
+  `revoke` de public/anon, `grant` só a `authenticated`. Se a função não existir ou falhar, a faixa mostra "sem dado ainda". Reverter:
+  `drop function if exists public.company_flow_status(uuid);`
+- **Limites honestos:** o cron não é consultado do navegador (texto fixo: `market-intel-daily` 09:43 UTC = 06:43 do Rio; `opportunities-auto`
+  a cada 6 h); o teto mensal mostrado vem da ficha (o secret `MARKET_INTEL_CAP_USD`, se existir, não é visível ao banco); coleta do
+  Instagram (estágio 4) aparece como 🚧 em construção.
+
 ## Estado atual do código
 
 - **Site publicado:** https://getsaleboost.com/ (+ www). O endereço antigo
