@@ -25,14 +25,14 @@ interface ModuleDef { section: string; title: string; desc: string; icon: string
 // Oportunidades. O Feedback Loop segue como círculo flutuante (FeedbackWidget.tsx) dentro de cada seção.
 const MODULES = {
   pt: {
-    data: { section: 'dados', title: 'Inteligência de Mercado', desc: 'Coleta os sinais: seus imóveis com fotos reais, concorrentes e tendências do Instagram e notícias do bairro buscadas sozinhas, sempre com a fonte (as notícias ficam em Oportunidades → Sinais de mercado).', icon: '📊' },
+    data: { section: 'dados', title: 'Inteligência de Mercado', desc: 'Coleta os sinais do mercado: concorrentes e tendências do Instagram, notícias do bairro buscadas sozinhas (sempre com a fonte), lugares perto e dicas conferidas. Seus imóveis ficam no botão + laranja.', icon: '📊' },
     opportunities: { section: '', path: '/dashboard/opportunities', title: 'Motor de Oportunidades', desc: 'Cruza o mercado com os seus dados e aponta onde há negócio: imóvel sem divulgação, procura sem resposta, mudança no bairro. Roda sozinho; você aprova ou descarta.', icon: '💡' },
     strategy: { section: 'estrategia', title: 'Agente de Estratégia', desc: 'Define público, oferta, mensagem e ação comercial: a estratégia da conta e o plano de cada oportunidade aprovada — e direciona a Ativação.', icon: '🧭' },
     content: { section: 'content', title: 'Ativação', desc: 'Produz o que vai para a rua: calendário da semana (feed e stories) vindo da estratégia, peças das oportunidades, a página do imóvel com link rastreável e as conversas (atendimento e respostas a comentários/DMs). Nada sai sem a sua aprovação.', icon: '✍️' },
     conversion: { section: 'conversao', title: 'Resultados e Aprendizado', desc: 'Mede e aprende: funil de vendas (leads, visitas e vendas, com a origem e o corretor de cada lead), desempenho dos posts, a memória do que funcionou, experimentos e relatórios. O que funcionou volta para a próxima estratégia.', icon: '🔀' },
   },
   en: {
-    data: { section: 'dados', title: 'Market Intelligence', desc: 'Collects the signals: your listings with real photos, competitors and Instagram trends, and neighborhood news fetched automatically, always with the source (news lives in Opportunities → Market signals).', icon: '📊' },
+    data: { section: 'dados', title: 'Market Intelligence', desc: 'Collects market signals: competitors and Instagram trends, neighborhood news fetched automatically (always with the source), nearby places and verified tips. Your listings live in the orange + button.', icon: '📊' },
     opportunities: { section: '', path: '/dashboard/opportunities', title: 'Opportunity Engine', desc: 'Crosses the market with your data and points to where the business is: unpromoted listings, unanswered demand, neighborhood changes. Runs on its own; you approve or dismiss.', icon: '💡' },
     strategy: { section: 'estrategia', title: 'Strategy Agent', desc: 'Sets audience, offer, message and sales action: the account strategy and the plan for each approved opportunity — and guides Activation.', icon: '🧭' },
     content: { section: 'content', title: 'Activation', desc: 'Produces what goes out: the weekly calendar (feed and stories) from the strategy, opportunity pieces, the listing page with a tracked link and conversations (customer service and comment/DM replies). Nothing goes out without your approval.', icon: '✍️' },
@@ -303,7 +303,6 @@ function flowLines(lang: Lang, f: FlowSummary): Record<'data' | 'opportunities' 
   const pt = lang === 'pt'
   const pl = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
   const out = { data: [] as Part[], opportunities: [] as Part[], content: [] as Part[], conversion: [] as Part[] }
-  if (f.items != null) out.data.push({ text: pt ? pl(f.items, 'imóvel', 'imóveis') : pl(f.items, 'listing', 'listings') })
   if (f.signals != null) out.data.push({ text: pt ? `${pl(f.signals, 'sinal de mercado', 'sinais de mercado')}${f.autoSignals ? ` (${f.autoSignals} automático${f.autoSignals === 1 ? '' : 's'})` : ''}` : `${pl(f.signals, 'market signal', 'market signals')}${f.autoSignals ? ` (${f.autoSignals} automatic)` : ''}` })
   if (f.oppsNew) out.opportunities.push({ text: pt ? `${pl(f.oppsNew, 'oportunidade', 'oportunidades')} para você revisar` : `${pl(f.oppsNew, 'opportunity', 'opportunities')} to review`, alert: true })
   if (f.oppsApproved != null) out.opportunities.push({ text: pt ? pl(f.oppsApproved, 'aprovada', 'aprovadas') : `${f.oppsApproved} approved` })

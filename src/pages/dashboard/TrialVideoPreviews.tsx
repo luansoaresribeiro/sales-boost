@@ -83,7 +83,7 @@ export default function TrialVideoPreviews({ companyId, verticalKey }: Props) {
       {!data.hasPhotos ? (
         <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '18px 20px' }}>
           <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '10px' }}>{tx.upload}</div>
-          <button onClick={() => navigate('/dashboard/marketing-ai/dados')}
+          <button onClick={() => navigate('/dashboard/catalogo')}
             style={{ padding: '10px 16px', background: ORANGE, color: '#000', fontWeight: 800, fontSize: '12.5px', border: 'none', borderRadius: '10px', cursor: 'pointer' }}>
             {tx.uploadBtn}
           </button>

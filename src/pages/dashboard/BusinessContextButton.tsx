@@ -19,7 +19,9 @@ const TX = {
   },
 } as const
 
-// Botão flutuante global (todo o dashboard) — atalho pro Catálogo do Agente
+// Botão flutuante global (todo o dashboard) — abre o Catálogo (fotos reais dos itens), que desde 2026-11-01 é
+// página própria (/dashboard/catalogo) e só se acessa por aqui e pelos atalhos do sino.
+// Histórico: atalho pro Catálogo do Agente
 // de Dados (fotos reais dos itens). Antes abria um modal com Contexto do
 // negócio / Catálogo / Avatar; o dono pediu (2026-10-14) que o "+" levasse
 // pra MESMA tela do Agente de Dados, sem duas telas fazendo a mesma coisa.
@@ -34,14 +36,14 @@ export default function BusinessContextButton() {
   useEffect(() => {
     const onOpen = (e: Event) => {
       const d = (e as CustomEvent<{ itemId?: string }>).detail ?? {}
-      navigate(`/dashboard/marketing-ai/dados${d.itemId ? `?item=${encodeURIComponent(d.itemId)}` : ''}`)
+      navigate(`/dashboard/catalogo${d.itemId ? `?item=${encodeURIComponent(d.itemId)}` : ''}`)
     }
     window.addEventListener('sb:open-add', onOpen)
     return () => window.removeEventListener('sb:open-add', onOpen)
   }, [navigate])
 
   return (
-    <button onClick={() => navigate('/dashboard/marketing-ai/dados')} title={tx.btnTitle} aria-label={tx.btnTitle}
+    <button onClick={() => navigate('/dashboard/catalogo')} title={tx.btnTitle} aria-label={tx.btnTitle}
       style={{
         position: 'fixed', right: '24px', bottom: '24px', zIndex: 60, width: '52px', height: '52px', borderRadius: '50%',
         background: ORANGE, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',

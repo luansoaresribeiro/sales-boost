@@ -2109,3 +2109,11 @@ O dono pediu coleta "absurda" de notícias e Instagram e aprovou teto de **US$ 5
 contando dentro do teto de US$ 40. Supera — sem apagar — os limites da Etapa 3 de 30/10 (3 buscas e 5 sinais por
 semana). Plano em etapas pequenas (contador de dólares com reserva antes de gastar → notícias diárias → tela de
 mercado → Instagram semanal com até ~20 concorrentes → ligação com o motor de oportunidades, no máx. 1 rodada/24 h).
+
+## 2026-11-01 — Catálogo sai da Inteligência de Mercado; Oportunidades sai do menu lateral
+
+Pedido do dono: a Inteligência de Mercado fica focada em inteligência de mercado. O **Catálogo** (imóveis/itens com
+fotos reais + Avatar em breve) virou página própria `/dashboard/catalogo`, aberta **só pelo botão "+" laranja** e pelos
+atalhos do sino (`?item=<id>`; o link antigo `marketing-ai/dados?item=` redireciona). Na Inteligência de Mercado ficam
+Ideias e trends, Lugares perto e Dicas/FAQ (a aba de notícias/Instagram entra com a Etapa de mercado). **Oportunidades**
+saiu do menu da esquerda — já é o card 2 do fluxo do Marketing AI (a rota `/dashboard/opportunities` continua).
