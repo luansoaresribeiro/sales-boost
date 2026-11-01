@@ -4,30 +4,35 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { track } from '../../../lib/analytics'
 import { useShowcase } from '../../../contexts/ShowcaseContext'
 import { useCompany } from '../../../contexts/CompanyContext'
+import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 
 const ORANGE = '#FF6D29'
-const MOD_LABEL: Record<string, string> = { organico: 'Orgânico', stories: 'Stories', campanhas: 'Campanhas' }
-const RELEVANCE_META: Record<string, { color: string; label: string }> = {
-  high: { color: '#f87171', label: 'Alta' }, medium: { color: '#FBBF24', label: 'Média' }, low: { color: MUTED, label: 'Baixa' },
+const MOD_LABEL = {
+  pt: { organico: 'Orgânico', stories: 'Stories', campanhas: 'Campanhas' } as Record<string, string>,
+  en: { organico: 'Organic', stories: 'Stories', campanhas: 'Campaigns' } as Record<string, string>,
+}
+const RELEVANCE_META: Record<string, { color: string; pt: string; en: string }> = {
+  high: { color: '#f87171', pt: 'Alta', en: 'High' }, medium: { color: '#FBBF24', pt: 'Média', en: 'Medium' }, low: { color: MUTED, pt: 'Baixa', en: 'Low' },
 }
 
 interface Idea { id: string; title: string; hook: string | null; angle: string | null; format: string | null; module: string | null; rationale: string | null; status: string; created_at: string }
 interface Trend { id: string; title: string; description: string | null; category: string | null; relevance: string | null; source: string | null; detected_at: string }
 
 function TrendCard({ t, onDeck, busy }: { t: Trend; onDeck?: () => void; busy?: boolean }) {
+  const en = useLang().lang === 'en'
   const rel = RELEVANCE_META[t.relevance ?? 'medium'] ?? RELEVANCE_META.medium
   return (
     <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', padding: '12px 14px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '5px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>🔥 {t.title}</span>
         {t.category && <span style={{ fontSize: '8.5px', fontWeight: 700, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: '99px', padding: '1px 7px' }}>{t.category}</span>}
-        <span style={{ fontSize: '9px', fontWeight: 700, color: rel.color, marginLeft: 'auto' }}>{rel.label} relevância</span>
+        <span style={{ fontSize: '9px', fontWeight: 700, color: rel.color, marginLeft: 'auto' }}>{en ? `${rel.en} relevance` : `${rel.pt} relevância`}</span>
       </div>
       {t.description && <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>{t.description}</div>}
       {onDeck && (
         <button onClick={onDeck} disabled={busy} style={{ marginTop: '8px', padding: '6px 10px', background: 'rgba(255,109,41,0.12)', border: '1px solid rgba(255,109,41,0.35)', borderRadius: '7px', color: ORANGE, fontWeight: 700, fontSize: '10.5px', cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-          {busy ? 'Criando...' : '📑 Fazer carrossel desta trend'}
+          {busy ? (en ? 'Creating...' : 'Criando...') : (en ? '📑 Make a carousel from this trend' : '📑 Fazer carrossel desta trend')}
         </button>
       )}
     </div>
@@ -42,6 +47,8 @@ function TrendCard({ t, onDeck, busy }: { t: Trend; onDeck?: () => void; busy?: 
 // (creative-generate), que cai na Área de Testes. Nada publica sozinho.
 export default function CreativeAgent({ companyId, module }: { companyId: string; module?: string }) {
   const { session } = useAuth()
+  const lang = useLang().lang
+  const en = lang === 'en'
   const { readOnly } = useShowcase() // vitrine: não dispara a geração sozinha ao abrir
   const token = session?.access_token ?? ''
   const [ideas, setIdeas] = useState<Idea[]>([])
@@ -86,7 +93,7 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
           method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         })
         const r = await res.json().catch(() => ({}))
-        if (res.ok && r.ok) { setMsg('✓ O agente trouxe as primeiras ideias e tendências sozinho.'); await load() }
+        if (res.ok && r.ok) { setMsg(en ? '✓ The agent brought the first ideas and trends on its own.' : '✓ O agente trouxe as primeiras ideias e tendências sozinho.'); await load() }
       } catch { /* silencioso — sem dado real suficiente ainda, tudo bem */ }
       setGenerating(false)
     })
@@ -100,11 +107,11 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ focus_module: module }),
       })
       const r = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(r.error ?? 'Erro ao gerar ideias')
+      if (!res.ok) throw new Error(r.error ?? (en ? 'Error generating ideas' : 'Erro ao gerar ideias'))
       track('ideas_generated', 'Gerou ideias de post')
       await load()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Erro ao gerar ideias')
+      setErr(e instanceof Error ? e.message : (en ? 'Error generating ideas' : 'Erro ao gerar ideias'))
     }
     setGenerating(false)
   }
@@ -120,12 +127,14 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
         body: JSON.stringify({ kind: idea.module ?? 'organico', ...(idea.fromTrend ? {} : { idea_id: idea.id }), idea: { title: idea.title, hook: idea.hook, angle: idea.angle, format: deck ? 'carrossel' : idea.format }, deck }),
       })
       const r = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(r.error ?? 'Erro ao gerar post')
+      if (!res.ok) throw new Error(r.error ?? (en ? 'Error generating post' : 'Erro ao gerar post'))
       track('content_generated', `Gerou ${deck ? 'carrossel de slides' : 'post'} de uma ${idea.fromTrend ? 'trend' : 'ideia'}`, { from_idea: idea.id, deck })
-      setMsg(`${deck ? 'Carrossel' : 'Post'} criado! Está em "Peças avulsas", embaixo do Calendário da semana (Agente de Conteúdo) — clique nele pra ver, aprovar ou agendar.`)
+      setMsg(en
+        ? `${deck ? 'Carousel' : 'Post'} created! It is under "Standalone pieces", below the weekly Calendar (Content Agent) — open it to review, approve or schedule.`
+        : `${deck ? 'Carrossel' : 'Post'} criado! Está em "Peças avulsas", embaixo do Calendário da semana (Agente de Conteúdo) — clique nele pra ver, aprovar ou agendar.`)
       await load()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Erro ao gerar post')
+      setErr(e instanceof Error ? e.message : (en ? 'Error generating post' : 'Erro ao gerar post'))
     }
     setBusyId(null)
   }
@@ -141,7 +150,11 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
   return (
     <div>
       <div style={{ padding: '12px 16px', background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.2)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '20px' }}>
-        💡 <strong>Ideias e trends.</strong> Nem todo post sai de um imóvel: toda semana o agente olha sua marca e o que está bombando no seu segmento (trends, abaixo) e traz ideias novas sozinho. Gostou de uma? Crie um <strong>post</strong> ou um <strong>carrossel de slides</strong> (tipo apresentação, com a sua marca) com um clique — ele aparece embaixo do Calendário da semana pra você aprovar. Nada é publicado sozinho.
+        {en ? (<>
+          💡 <strong>Ideas and trends.</strong> Not every post comes from a listing: every week the agent looks at your brand and what is trending in your segment (trends, below) and brings new ideas on its own. Like one? Create a <strong>post</strong> or a <strong>slide carousel</strong> (presentation style, with your brand) in one click — it shows up below the weekly Calendar for you to approve. Nothing is published on its own.
+        </>) : (<>
+          💡 <strong>Ideias e trends.</strong> Nem todo post sai de um imóvel: toda semana o agente olha sua marca e o que está bombando no seu segmento (trends, abaixo) e traz ideias novas sozinho. Gostou de uma? Crie um <strong>post</strong> ou um <strong>carrossel de slides</strong> (tipo apresentação, com a sua marca) com um clique — ele aparece embaixo do Calendário da semana pra você aprovar. Nada é publicado sozinho.
+        </>)}
       </div>
 
       {/* Trend Agent — tendências reais do segmento */}
@@ -149,11 +162,11 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
         <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>📈 Trend Agent</div>
         <div style={{ fontSize: '11px', color: MUTED, marginBottom: '11px' }}>
           {realTrends.length > 0
-            ? 'O que está bombando no seu segmento agora, lido de posts reais do Instagram (Apify) — alimenta as ideias abaixo.'
-            : 'Assim que o próximo ciclo semanal escanear posts reais do seu segmento, as tendências aparecem aqui.'}
+            ? (en ? 'What is trending in your segment right now, read from real Instagram posts (Apify) — it feeds the ideas below.' : 'O que está bombando no seu segmento agora, lido de posts reais do Instagram (Apify) — alimenta as ideias abaixo.')
+            : (en ? 'As soon as the next weekly cycle scans real posts from your segment, the trends will show up here.' : 'Assim que o próximo ciclo semanal escanear posts reais do seu segmento, as tendências aparecem aqui.')}
         </div>
         {shownTrends.length === 0 ? (
-          <div style={{ padding: '18px', textAlign: 'center', color: MUTED, fontSize: '12px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '11px' }}>Nenhuma tendência ainda.</div>
+          <div style={{ padding: '18px', textAlign: 'center', color: MUTED, fontSize: '12px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '11px' }}>{en ? 'No trends yet.' : 'Nenhuma tendência ainda.'}</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
             {shownTrends.map(t => <TrendCard key={t.id} t={t} busy={busyId === `${t.id}:deck`} onDeck={readOnly ? undefined : () => generatePost({ id: t.id, title: t.title, hook: null, angle: t.description, format: 'carrossel', module: 'organico', fromTrend: true }, true)} />)}
@@ -162,9 +175,9 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
       </section>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
-        <div style={{ fontSize: '13px', fontWeight: 800, color: 'white' }}>✨ Ideias de post</div>
+        <div style={{ fontSize: '13px', fontWeight: 800, color: 'white' }}>{en ? '✨ Post ideas' : '✨ Ideias de post'}</div>
         <button onClick={generateIdeas} disabled={generating} style={{ marginLeft: 'auto', padding: '8px 15px', background: 'rgba(255,109,41,0.12)', color: ORANGE, fontWeight: 700, fontSize: '11.5px', borderRadius: '8px', border: '1px solid rgba(255,109,41,0.3)', cursor: generating ? 'wait' : 'pointer', fontFamily: D }}>
-          {generating ? '💭 Pensando...' : '🔄 Atualizar ideias agora'}
+          {generating ? (en ? '💭 Thinking...' : '💭 Pensando...') : (en ? '🔄 Refresh ideas now' : '🔄 Atualizar ideias agora')}
         </button>
         {msg && <span style={{ fontSize: '11.5px', color: '#4ade80' }}>{msg}</span>}
         {err && <span style={{ fontSize: '11.5px', color: '#f87171' }}>{err}</span>}
@@ -172,19 +185,21 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
 
       {(() => { const visible = module ? ideas.filter(i => (i.module ?? 'organico') === module) : ideas; return (
       loading ? (
-        <div style={{ fontSize: '12px', color: MUTED }}>Carregando...</div>
+        <div style={{ fontSize: '12px', color: MUTED }}>{en ? 'Loading...' : 'Carregando...'}</div>
       ) : visible.length === 0 ? (
         <div style={{ padding: '28px', textAlign: 'center', color: MUTED, fontSize: '12.5px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>
-          Nenhuma ideia de {MOD_LABEL[module ?? ''] ?? 'post'} ainda. O agente traz as primeiras no próximo ciclo — ou clique em <strong>Atualizar ideias agora</strong> pra não esperar.
+          {en
+            ? <>No {MOD_LABEL.en[module ?? ''] ?? 'post'} ideas yet. The agent brings the first ones in the next cycle — or click <strong>Refresh ideas now</strong> so you do not have to wait.</>
+            : <>Nenhuma ideia de {MOD_LABEL.pt[module ?? ''] ?? 'post'} ainda. O agente traz as primeiras no próximo ciclo — ou clique em <strong>Atualizar ideias agora</strong> pra não esperar.</>}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '12px' }}>
           {visible.map(i => (
             <div key={i.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px', opacity: i.status === 'used' ? 0.6 : 1 }}>
               <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
-                {i.module && <span style={{ fontSize: '8.5px', fontWeight: 700, color: ORANGE, border: '1px solid rgba(255,109,41,0.4)', borderRadius: '99px', padding: '1px 7px' }}>{MOD_LABEL[i.module] ?? i.module}</span>}
+                {i.module && <span style={{ fontSize: '8.5px', fontWeight: 700, color: ORANGE, border: '1px solid rgba(255,109,41,0.4)', borderRadius: '99px', padding: '1px 7px' }}>{MOD_LABEL[lang][i.module] ?? i.module}</span>}
                 {i.format && <span style={{ fontSize: '8.5px', fontWeight: 700, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: '99px', padding: '1px 7px' }}>{i.format}</span>}
-                {i.status === 'used' && <span style={{ fontSize: '8.5px', fontWeight: 700, color: '#4ade80', marginLeft: 'auto' }}>✓ gerado</span>}
+                {i.status === 'used' && <span style={{ fontSize: '8.5px', fontWeight: 700, color: '#4ade80', marginLeft: 'auto' }}>{en ? '✓ generated' : '✓ gerado'}</span>}
               </div>
               <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', lineHeight: 1.35 }}>{i.title}</div>
               {i.hook && <div style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.5 }}>“{i.hook}”</div>}
@@ -192,12 +207,12 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
               {i.rationale && <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, fontStyle: 'italic' }}>{i.rationale}</div>}
               <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '6px' }}>
                 {!postCardOff && <button onClick={() => generatePost(i)} disabled={!!busyId || i.status === 'used'} style={{ flex: 1, padding: '7px', background: i.status === 'used' ? 'rgba(255,255,255,0.06)' : ORANGE, color: i.status === 'used' ? MUTED : '#000', fontWeight: 700, fontSize: '11px', borderRadius: '8px', border: 'none', cursor: busyId || i.status === 'used' ? 'default' : 'pointer', fontFamily: D }}>
-                  {busyId === `${i.id}:post` ? 'Gerando...' : i.status === 'used' ? 'Já gerado' : '✨ Post'}
+                  {busyId === `${i.id}:post` ? (en ? 'Generating...' : 'Gerando...') : i.status === 'used' ? (en ? 'Already generated' : 'Já gerado') : '✨ Post'}
                 </button>}
-                <button onClick={() => generatePost(i, true)} disabled={!!busyId || i.status === 'used'} title="Carrossel de slides (tipo apresentação)" style={{ flex: 1, padding: '7px', background: 'rgba(255,109,41,0.12)', color: i.status === 'used' ? MUTED : ORANGE, fontWeight: 700, fontSize: '11px', borderRadius: '8px', border: '1px solid rgba(255,109,41,0.35)', cursor: busyId || i.status === 'used' ? 'default' : 'pointer', fontFamily: D }}>
-                  {busyId === `${i.id}:deck` ? 'Gerando...' : '📑 Carrossel'}
+                <button onClick={() => generatePost(i, true)} disabled={!!busyId || i.status === 'used'} title={en ? 'Slide carousel (presentation style)' : 'Carrossel de slides (tipo apresentação)'} style={{ flex: 1, padding: '7px', background: 'rgba(255,109,41,0.12)', color: i.status === 'used' ? MUTED : ORANGE, fontWeight: 700, fontSize: '11px', borderRadius: '8px', border: '1px solid rgba(255,109,41,0.35)', cursor: busyId || i.status === 'used' ? 'default' : 'pointer', fontFamily: D }}>
+                  {busyId === `${i.id}:deck` ? (en ? 'Generating...' : 'Gerando...') : (en ? '📑 Carousel' : '📑 Carrossel')}
                 </button>
-                <button onClick={() => dismiss(i.id)} title="Dispensar" style={{ padding: '7px 10px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '11px', cursor: 'pointer', fontFamily: D }}>✕</button>
+                <button onClick={() => dismiss(i.id)} title={en ? 'Dismiss' : 'Dispensar'} style={{ padding: '7px 10px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '11px', cursor: 'pointer', fontFamily: D }}>✕</button>
               </div>
             </div>
           ))}

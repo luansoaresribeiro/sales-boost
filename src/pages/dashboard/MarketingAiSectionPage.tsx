@@ -15,36 +15,36 @@ import ExperimentsTab from './marketingAi/ExperimentsTab'
 import ToolsTab from './marketingAi/ToolsTab'
 import ConnectionsTab from './marketingAi/ConnectionsTab'
 import FunnelTab from './marketingAi/FunnelTab'
-import WhatsAppTab from './marketingAi/WhatsAppTab'
-import EngagementTab from './marketingAi/EngagementTab'
+import PerformanceTab from './marketingAi/PerformanceTab'
 import ReviewsAgentTab from './marketingAi/ReviewsAgentTab'
 import BusinessContextTab from './marketingAi/BusinessContextTab'
 import StrategySection from './marketingAi/StrategySection'
 import FeedbackWidget from './marketingAi/FeedbackWidget'
-import CatalogItems from './marketingAi/CatalogItems'
 import CreativeAgent from './marketingAi/CreativeAgent'
+import MarketFeed from './marketingAi/MarketFeed'
 import NearbyPlaces from './marketingAi/NearbyPlaces'
+import FlowStrip from './marketingAi/FlowStrip'
+import { useMarketFlow } from './marketingAi/useFlowStripData'
+import { marketSteps } from './marketingAi/flowStripSteps'
 import FaqTips from './marketingAi/FaqTips'
-import ProductPhotos from './marketingAi/ProductPhotos'
-import { AvatarSoon } from './BusinessContextButton'
 import { fetchCatalogSchema, type CatalogSchema } from '../../lib/verticalPlaybook'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
 
 const ORANGE = '#FF6D29'
 
 const SECTION_TITLE_BY_LANG: Record<'pt' | 'en', Record<string, string>> = { pt: {
-  tracking: 'Tracking', content: 'Agente de Conteúdo e Campanha', dados: 'Agente de Dados', estrategia: 'Agente de Estratégia', conversao: 'Agente de Conversão', brain: 'Aprendizado',
+  tracking: 'Tracking', content: 'Ativação', dados: 'Inteligência de Mercado', estrategia: 'Agente de Estratégia', conversao: 'Resultados e Aprendizado', brain: 'Aprendizado',
   overview: 'Visão Geral', experiments: 'Experimentos', tools: 'Configuração', timeline: 'Central de Execução', reports: 'Relatórios',
   conexoes: 'Conexões', configuracao: 'Configuração dos Agentes', avaliacoes: 'Avaliações', context: 'Contexto do Negócio',
-  // Insights e Saúde da Meta agora vivem dentro de Agente de Dados (ver
+  // Insights e Saúde da Meta agora vivem dentro da Inteligência de Mercado (ex-Agente de Dados) (ver
   // DadosSection) — o link antigo continua funcionando, só cai direto na
   // sub-aba certa em vez de ser uma página solta.
-  insights: 'Agente de Dados', 'saude-meta': 'Agente de Dados',
+  insights: 'Inteligência de Mercado', 'saude-meta': 'Inteligência de Mercado',
 }, en: {
-  tracking: 'Tracking', content: 'Content & Campaign Agent', dados: 'Data Agent', estrategia: 'Strategy Agent', conversao: 'Conversion Agent', brain: 'Learning',
+  tracking: 'Tracking', content: 'Activation', dados: 'Market Intelligence', estrategia: 'Strategy Agent', conversao: 'Results & Learning', brain: 'Learning',
   overview: 'Overview', experiments: 'Experiments', tools: 'Settings', timeline: 'Execution Center', reports: 'Reports',
   conexoes: 'Connections', configuracao: 'Agent Settings', avaliacoes: 'Reviews', context: 'Business Context',
-  insights: 'Data Agent', 'saude-meta': 'Data Agent',
+  insights: 'Market Intelligence', 'saude-meta': 'Market Intelligence',
 } }
 
 const TX = {
@@ -53,16 +53,16 @@ const TX = {
     notActiveDesc: 'A ativação é feita pela equipe Sales Boost, configurando a marca, o público e os concorrentes. Fale com a gente pra ativar.',
     back: '← Voltar', followers: 'Seguidores', pendingApproval: 'Conteúdo esperando aprovação', newRecs: 'Recomendações novas', competitors: 'Concorrentes monitorados',
     openInsights: 'Insights em aberto', noInsights: 'Nenhum insight aberto agora.', recent: 'Atividade recente', noActivity: 'Nenhuma atividade ainda.',
-    products: 'Produtos', avatar: 'Meu avatar (em breve)', ideas: 'Ideias e trends', nearby: 'Lugares perto', faq: 'Dicas e FAQ', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
-    funnel: 'Funil de Vendas', service: 'Atendimento', engagement: 'Engagement',
+    products: 'Produtos', market: 'Mercado', avatar: 'Meu avatar (em breve)', ideas: 'Ideias e trends', nearby: 'Lugares perto', faq: 'Dicas e FAQ', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
+    funnel: 'Funil de vendas', perf: 'Desempenho dos posts', learn: 'Aprendizado', exper: 'Experimentos', reps: 'Relatórios',
   },
   en: {
     loading: 'Loading...', notActive: 'Marketing AI has not been activated yet',
     notActiveDesc: 'Activation is done by the Sales Boost team, setting up the brand, audience and competitors. Contact us to activate it.',
     back: '← Back', followers: 'Followers', pendingApproval: 'Content awaiting approval', newRecs: 'New recommendations', competitors: 'Competitors monitored',
     openInsights: 'Open insights', noInsights: 'No open insights right now.', recent: 'Recent activity', noActivity: 'No activity yet.',
-    products: 'Products', avatar: 'My avatar (coming soon)', ideas: 'Ideas & trends', nearby: 'Nearby places', faq: 'Tips & FAQ', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
-    funnel: 'Sales Pipeline', service: 'Customer Service', engagement: 'Engagement',
+    products: 'Products', market: 'Market', avatar: 'My avatar (coming soon)', ideas: 'Ideas & trends', nearby: 'Nearby places', faq: 'Tips & FAQ', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
+    funnel: 'Sales pipeline', perf: 'Post performance', learn: 'Learning', exper: 'Experiments', reps: 'Reports',
   },
 } as const
 const SECTION_ICON: Record<string, string> = {
@@ -99,7 +99,15 @@ export default function MarketingAiSectionPage() {
   // é mais uma seção própria — virou o círculo flutuante (FeedbackWidget).
   if (section === 'meta-ads') return <Navigate to="/dashboard/marketing-ai/content?tab=campanha" replace />
   if (section === 'competitors') return <Navigate to="/dashboard/marketing-ai/dados" replace />
-  if (section === 'funil' || section === 'whatsapp' || section === 'engagement') return <Navigate to="/dashboard/marketing-ai/conversao" replace />
+  // 2026-11-01 (pedido do dono): Resultados e Aprendizado só com resultado e aprendizado; Atendimento e Engagement
+  // (responder conversa é execução) moraram para Ativação → Conversas. Aprendizado/Experimentos/Relatórios viraram
+  // sub-abas de Resultados e Aprendizado.
+  if (section === 'funil') return <Navigate to="/dashboard/marketing-ai/conversao" replace />
+  if (section === 'whatsapp') return <Navigate to="/dashboard/marketing-ai/content?tab=conversas&sub=atendimento" replace />
+  if (section === 'engagement') return <Navigate to="/dashboard/marketing-ai/content?tab=conversas&sub=respostas" replace />
+  if (section === 'brain') return <Navigate to="/dashboard/marketing-ai/conversao?sub=aprendizado" replace />
+  if (section === 'experiments') return <Navigate to="/dashboard/marketing-ai/conversao?sub=experimentos" replace />
+  if (section === 'reports') return <Navigate to="/dashboard/marketing-ai/conversao?sub=relatorios" replace />
   if (section === 'feedback') return <Navigate to="/dashboard/marketing-ai/dados" replace />
   // 2026-10-14: Agente de Dados ficou só com o Catálogo (+ Avatar em breve).
   // Insights saiu da tela (a estratégia já consome isso por trás); Saúde da
@@ -151,7 +159,10 @@ export default function MarketingAiSectionPage() {
       case 'estrategia':
         return <StrategySection company={company} />
       case 'conversao':
-        return <ConversaoSection company={company} />
+        return <ResultsSection company={company}
+          learning={<BrainTab nodes={data.brainNodes} accessToken={accessToken} strategyLog={data.strategyLog} onRefresh={data.refresh} />}
+          experiments={<ExperimentsTab accessToken={accessToken} experiments={data.experiments} onRefresh={data.refresh} />}
+          reports={<ReportsTab accessToken={accessToken} insights={data.insights} strategyLog={data.strategyLog} reports={data.reports} onRefresh={data.refresh} />} />
       case 'brain':
         return <BrainTab nodes={data.brainNodes} accessToken={accessToken} strategyLog={data.strategyLog} onRefresh={data.refresh} />
       case 'experiments':
@@ -275,67 +286,70 @@ const subTabsRow: React.CSSProperties = { display: 'inline-flex', gap: '4px', pa
 // Visuais e Insights — a estratégia e o Higgsfield já se alimentam disso por
 // trás. Performance e Saúde da Meta foram pra Conteúdo e Campanha → Campanha;
 // o Kit da marca foi pra Conteúdo → Padrão visual.
+// 2026-11-01 (pedido do dono): virou Inteligência de Mercado e fica SÓ com inteligência de mercado — o Catálogo saiu
+// para página própria (/dashboard/catalogo, aberta pelo botão "+"). O texto acima é histórico.
 function DadosSection({ company }: { company: CompanyData }) {
-  const t = TX[useLang().lang]
-  const [params, setParams] = useSearchParams()
+  const { lang } = useLang()
+  const t = TX[lang]
+  const [params] = useSearchParams()
   const focusItemId = params.get('item')
   const verticalKey = company.vertical_key ?? 'generico'
-  const [pickedSub, setPickedSub] = useState<'catalogo' | 'ideias' | 'lugares' | 'faq'>('catalogo')
-  // Vindo do sino (?item=) é sempre o Catálogo; trocar de sub-aba limpa o item.
-  const sub = focusItemId ? 'catalogo' : pickedSub
-  const setSub = (k: 'catalogo' | 'ideias' | 'lugares' | 'faq') => {
-    setPickedSub(k)
-    if (focusItemId) { const next = new URLSearchParams(params); next.delete('item'); setParams(next, { replace: true }) }
-  }
+  const [picked, setSub] = useState<'mercado' | 'ideias' | 'lugares' | 'faq' | null>(null)
   const [schema, setSchema] = useState<CatalogSchema | null | undefined>(undefined)
   useEffect(() => {
     let alive = true
     fetchCatalogSchema(verticalKey).then(s => { if (alive) setSchema(s) })
     return () => { alive = false }
   }, [verticalKey])
-  const catalogLabel = schema?.catalogLabel ?? t.products
+  // Mercado só existe para setor com market_intel na ficha (regra 6); é a aba padrão quando existe.
+  const sub = picked ?? (schema?.marketIntel ? 'mercado' : 'ideias')
+  // Faixa do fluxo real (2026-11-01): passos da Inteligência de Mercado com dado real; clicar abre a sub-aba correspondente.
+  const flow = useMarketFlow(company.id)
+  const steps = marketSteps(lang, flow.data, { hasMarket: !!schema?.marketIntel, hasNearby: !!schema?.nearby, hasFaq: !!schema?.faqCategories, go: setSub })
+  const activeStep = sub === 'mercado' ? 'sinais' : 'enriquecimento'
+  // Links antigos do sino (?item=<id>) eram do Catálogo, que agora é página própria.
+  if (focusItemId) return <Navigate to={`/dashboard/catalogo?item=${encodeURIComponent(focusItemId)}`} replace />
   return (
     <div>
+      <FlowStrip steps={steps} activeKey={activeStep} loading={flow.loading} />
       <div style={subTabsRow}>
-        <SubTabButton active={sub === 'catalogo'} onClick={() => setSub('catalogo')} icon="📸" label={catalogLabel} />
+        {schema?.marketIntel && <SubTabButton active={sub === 'mercado'} onClick={() => setSub('mercado')} icon="🌐" label={t.market} />}
+        <SubTabButton active={sub === 'ideias'} onClick={() => setSub('ideias')} icon="💡" label={t.ideas} />
         {schema?.nearby && <SubTabButton active={sub === 'lugares'} onClick={() => setSub('lugares')} icon="📍" label={t.nearby} />}
         {schema?.faqCategories && <SubTabButton active={sub === 'faq'} onClick={() => setSub('faq')} icon="❓" label={t.faq} />}
-        <SubTabButton active={sub === 'ideias'} onClick={() => setSub('ideias')} icon="💡" label={t.ideas} />
       </div>
-      {sub === 'ideias' ? <CreativeAgent companyId={company.id} />
+      {sub === 'mercado' && schema?.marketIntel ? <MarketFeed lang={lang} companyId={company.id} />
         : sub === 'lugares' && schema?.nearby ? <NearbyPlaces companyId={company.id} />
         : sub === 'faq' && schema?.faqCategories ? <FaqTips companyId={company.id} categories={schema.faqCategories} />
-        : schema === undefined ? null
-        : schema ? (
-          <>
-            <div style={{ fontSize: '12px', color: MUTED, marginBottom: '14px', maxWidth: '760px', lineHeight: 1.55 }}>{t.catalogSub}</div>
-            <CatalogItems companyId={company.id} schema={schema} verticalKey={verticalKey} focusItemId={focusItemId} />
-            {/* Avatar mora dentro dos itens (pedido do dono 2026-10-14). */}
-            <div style={{ marginTop: '22px', maxWidth: '760px' }}>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>{t.avatar}</div>
-              <AvatarSoon companyId={company.id} verticalKey={verticalKey} />
-            </div>
-          </>
-        ) : <ProductPhotos companyId={company.id} />}
+        : <CreativeAgent companyId={company.id} />}
     </div>
   )
 }
 
-// Agente de Conversão — Funil de Vendas + Atendimento (WhatsApp/Instagram) +
-// Engagement (automação de comentários e DMs) num único lugar, downstream do
-// Agente de Conteúdo (Dados → Conteúdo → Conversão → Feedback Loop): quem
-// chegou vira lead, o funil/atendimento/engagement fecham.
-function ConversaoSection({ company }: { company: CompanyData }) {
+// Resultados e Aprendizado (5º componente, DECISIONS 2026-10-30) — só o que MEDE e o que se APRENDE (pedido do dono
+// 2026-11-01): funil (leads → visitas → vendas, com origem e corretor), desempenho real dos posts, a memória do negócio
+// (Aprendizado), experimentos e relatórios. Responder conversas (Atendimento/Engagement) é execução → Ativação.
+// A sub-aba mora na URL (?sub=) para os links antigos de brain/experiments/reports caírem no lugar certo.
+type ResultsSub = 'funil' | 'desempenho' | 'aprendizado' | 'experimentos' | 'relatorios'
+const RESULTS_SUBS: ResultsSub[] = ['funil', 'desempenho', 'aprendizado', 'experimentos', 'relatorios']
+function ResultsSection({ company, learning, experiments, reports }: { company: CompanyData; learning: React.ReactNode; experiments: React.ReactNode; reports: React.ReactNode }) {
   const t = TX[useLang().lang]
-  const [sub, setSub] = useState<'funil' | 'atendimento' | 'engagement'>('funil')
+  const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const raw = params.get('sub') as ResultsSub | null
+  const sub: ResultsSub = raw && RESULTS_SUBS.includes(raw) ? raw : 'funil'
+  const setSub = (k: ResultsSub) => { const next = new URLSearchParams(params); next.set('sub', k); setParams(next, { replace: true }) }
+  const label: Record<ResultsSub, [string, string]> = { funil: ['🔀', t.funnel], desempenho: ['📈', t.perf], aprendizado: ['🧠', t.learn], experimentos: ['🧪', t.exper], relatorios: ['📄', t.reps] }
   return (
     <div>
       <div style={subTabsRow}>
-        <SubTabButton active={sub === 'funil'} onClick={() => setSub('funil')} icon="🔀" label={t.funnel} />
-        <SubTabButton active={sub === 'atendimento'} onClick={() => setSub('atendimento')} icon="💬" label={t.service} />
-        <SubTabButton active={sub === 'engagement'} onClick={() => setSub('engagement')} icon="🤝" label={t.engagement} />
+        {RESULTS_SUBS.map(k => <SubTabButton key={k} active={sub === k} onClick={() => setSub(k)} icon={label[k][0]} label={label[k][1]} />)}
       </div>
-      {sub === 'funil' ? <FunnelTab company={company} /> : sub === 'atendimento' ? <WhatsAppTab company={company} /> : <EngagementTab company={company} />}
+      {sub === 'funil' ? <FunnelTab company={company} />
+        : sub === 'desempenho' ? <PerformanceTab company={company} onCreateContent={() => navigate('/dashboard/marketing-ai/content')} />
+        : sub === 'aprendizado' ? learning
+        : sub === 'experimentos' ? experiments
+        : reports}
     </div>
   )
 }

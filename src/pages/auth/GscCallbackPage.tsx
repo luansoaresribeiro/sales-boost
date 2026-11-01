@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { getCurrentLang } from '../../contexts/LanguageContext'
 
 const ORANGE = '#FF6D29'
 const BG = '#0E0B0A'
@@ -23,7 +24,7 @@ const TX = {
     errTitle: 'Connection error', back: 'Back to Connections',
   },
 } as const
-const getX = () => TX[localStorage.getItem('sb_lang') === 'en' ? 'en' : 'pt']
+const getX = () => TX[getCurrentLang()]
 
 export default function GscCallbackPage() {
   const [searchParams] = useSearchParams()

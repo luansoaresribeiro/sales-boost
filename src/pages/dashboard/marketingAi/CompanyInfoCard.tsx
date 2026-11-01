@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabase'
 import { markProfileSaved } from '../../../lib/profileConfirm'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
-import { fetchBusinessTypes, OTHER_BUSINESS_TYPE } from '../../../lib/businessTypes'
+import { fetchBusinessTypes, businessTypeLabel, OTHER_BUSINESS_TYPE } from '../../../lib/businessTypes'
 import { CARD, MUTED, BORDER, D, ORANGE, SUPABASE_URL } from './shared'
 import { buildIcpDemo } from './growthIntelDemo'
 import { REQUIRED_STAR } from '../../../lib/requiredFields'
@@ -290,7 +290,7 @@ export default function CompanyInfoCard({ companyId }: { companyId: string }) {
             onChange={e => { const v = e.target.value; if (v === OTHER_BUSINESS_TYPE) { setOtherMode(true); setBusinessType('') } else { setOtherMode(false); setBusinessType(v) } }}
             style={{ width: '100%', boxSizing: 'border-box', padding: '10px 13px', background: '#150E08', border: `1px solid ${BORDER}`, borderRadius: '10px', color: businessType ? 'white' : MUTED, fontSize: '13.5px', outline: 'none', cursor: 'pointer', appearance: 'none', fontFamily: 'inherit' }}>
             <option value="">{X.select}</option>
-            {businessTypeOptions.map(o => <option key={o} value={o} style={{ background: '#150E08' }}>{o}</option>)}
+            {businessTypeOptions.map(o => <option key={o} value={o} style={{ background: '#150E08' }}>{businessTypeLabel(o, lang)}</option>)}
             <option value={OTHER_BUSINESS_TYPE} style={{ background: '#150E08' }}>{X.otherSpecify}</option>
           </select>
           {showOtherType && (

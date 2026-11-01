@@ -60,15 +60,16 @@ export const PANEL_LINKS: Record<ButtonKind | 'lead', string> = {
 
 // Teclado padrão de um item pendente. A aprovação SEMPRE passa por um
 // segundo toque ("Tem certeza?") antes de ir ao público.
-export async function pendingKeyboard(kind: ButtonKind, id: string, chatId: number | string) {
-  const approveLabel = kind === 'v' ? '✅ Publicar' : '✅ Aprovar'
+// `when` ("dia 28/10 às 18h"): peça do Vault planejada pra um dia futuro — aprovar AGENDA em vez de publicar já.
+export async function pendingKeyboard(kind: ButtonKind, id: string, chatId: number | string, when?: string | null) {
+  const approveLabel = kind === 'v' ? (when ? `✅ Aprovar (sai ${when})` : '✅ Publicar') : '✅ Aprovar'
   const row1 = [{ text: approveLabel, callback_data: await signButton(kind, 'A', id, chatId) }]
   if (kind === 'a') row1.push({ text: '❌ Recusar', callback_data: await signButton(kind, 'R', id, chatId) })
   return { inline_keyboard: [row1, [{ text: '👀 Ver no painel', url: PANEL_LINKS[kind] }]] }
 }
 
-export async function confirmKeyboard(kind: ButtonKind, id: string, chatId: number | string) {
-  const yes = kind === 'v' ? '✅ Sim, publicar agora' : '✅ Sim, pode enviar'
+export async function confirmKeyboard(kind: ButtonKind, id: string, chatId: number | string, when?: string | null) {
+  const yes = kind === 'v' ? (when ? `✅ Sim, agendar pro ${when}` : '✅ Sim, publicar agora') : '✅ Sim, pode enviar'
   return {
     inline_keyboard: [[
       { text: yes, callback_data: await signButton(kind, 'Y', id, chatId) },

@@ -9,7 +9,7 @@
 //    termos regulados (ITBI, FGTS…) que escaparem.
 // Tudo que é do setor (categorias, termos, termos regulados) vem da ficha (config.faq, regra 6).
 
-import { isDue, isOfficial, isPublishable, numberFacts, numbersIn, type FaqConfig, type FaqRow } from './faqCheck.ts'
+import { isDue, isOfficial, isOfficiallyReleased, numberFacts, numbersIn, type FaqConfig, type FaqRow } from './faqCheck.ts'
 import type { DeckSlide } from './deckSlides.ts'
 
 export type DeckMode = 'regulado' | 'geral' | 'leve'
@@ -81,9 +81,10 @@ const inCategory = (r: FaqRow, category: string) => r.meta?.category === categor
 /** Dicas da categoria que venceram a reconferência (a quem chama cabe reconferir, no máximo `max`). */
 export const dueTips = (rows: FaqRow[], category: string, now = Date.now(), max = 2): FaqRow[] =>
   rows.filter(r => inCategory(r, category) && isDue(r.meta, now)).slice(0, max)
-/** Até `max` dicas liberadas da categoria, as menos usadas primeiro. Pergunta e resposta precisam existir. */
-export function pickTips(rows: FaqRow[], category: string, now = Date.now(), max = 4): FaqRow[] {
-  return rows.filter(r => inCategory(r, category) && isPublishable(r.meta, now) && r.title?.trim() && r.content?.trim())
+/** Até `max` dicas liberadas da categoria, as menos usadas primeiro. Pergunta e resposta precisam existir.
+ *  Modo regulado = SÓ dica conferida em fonte oficial e não vencida (opção A, 2026-10-26): geral/aprovada_dono/revisar ficam de fora. */
+export function pickTips(rows: FaqRow[], category: string, officialDomains: string[], now = Date.now(), max = 4): FaqRow[] {
+  return rows.filter(r => inCategory(r, category) && isOfficiallyReleased(r.meta, officialDomains, now) && r.title?.trim() && r.content?.trim())
     .sort((a, b) => (a.meta?.used_count ?? 0) - (b.meta?.used_count ?? 0)).slice(0, max)
 }
 /** Números permitidos num carrossel regulado: SÓ os das dicas (nada de ficha, insight, ideia ou intenção). */

@@ -1819,19 +1819,321 @@ grátis de 30 s, acima — mantidos como histórico):
   Carrossel de aluguel agora usa só dica liberada da categoria aluguel; sem dica, sai como dica geral. **Geral**
   continua leve.
 
-## 2026-10-26 — Tudo automático: nenhum processo depende de botão manual (pedido do dono)
+## 2026-10-26 — "Tudo automático" (princípio do dono) + dicas opção A + horário padrão de publicação
 
-- **Pedido do dono:** "tudo vai ser automatizado, então nos processos não devemos ter botões manuais."
-- **Regra:** cada etapa do ciclo roda sozinha (agendamento, gatilho no banco ou passo encadeado na
-  function). Botão na tela só pode existir como atalho opcional ("refazer agora"), nunca como única forma
-  de algo acontecer. A ÚNICA ação humana do processo é a **aprovação do dono** antes de ir ao público
-  (regra inviolável 1), pelo Telegram/Aprovações.
-- **Divergências encontradas no código (2026-10-26):**
-  - Kit de marca: logo **enviado por arquivo** já é preparado sozinho (PNG transparente); logo **colado
-    por link** só é preparado no botão "Preparar logo para criativos" (`BrandKit.tsx`).
-  - `backfill_logos` (`brand-kit-suggest`) só roda se alguém chamar com `cron_secret`; nenhum
-    agendamento chama. Logo trocado fora da tela (`logo_meta.src` ≠ `logo_url`) fica sem preparo até
-    alguém agir.
-  - Carrossel educativo de tema regulado depende de dica **liberada pelo dono** em Dicas e FAQ; sem
-    isso cai sempre no modo geral. Pendente do dono: liberação automática quando a dica é conferida
-    em fonte oficial, ou manter a liberação manual (é aprovação de conteúdo, regra 1).
+- **Princípio — "Tudo automático".** Nenhum processo pode depender de botão manual. Cada etapa roda sozinha
+  (agendamento, gatilho ou passo encadeado). Botão na tela só como atalho opcional ("refazer agora"). A **ÚNICA**
+  ação humana é a **aprovação do dono antes de ir ao público** (Telegram/Aprovações) — a regra 1 não muda.
+  Aplicado nesta rodada (tudo em código; deploy e migration dependem de "pode"):
+  1. **Logo preparado sozinho:** salvar o logo por link já prepara (igual ao upload); logo trocado por qualquer
+     caminho é preparado na primeira peça que notar (`kickLogoPrepare` → `brand-kit-suggest` `prepare_logo`,
+     em segundo plano, trava de 1 h em `logo_meta.attempted_at/attempt_src/attempt_status`, sem coluna nova).
+     Nunca troca o `logo_url` do dono; logo do dono que a IA acha "foto" não vira "foto" sozinho (só marca a
+     tentativa). O botão virou "Refazer o preparo do logo".
+  2. **Publicar no dia planejado:** aprovar peça com `planned_for` no futuro (dia de Brasília depois de hoje)
+     **agenda** pro dia no horário padrão; sem data/hoje/passado publica ao aprovar. "Publicar agora" ficou como atalho.
+  3. **Calendário assim que a estratégia nova fica pronta:** `strategy-generate` (2ª etapa, kind main) chama
+     `creative-generate` `plan_rest_of_week` — só amanhã até domingo, nada se faltarem < 2 dias; não duplica.
+  4. **Peça com nota ruim é refeita sozinha, no máx. 1 vez** (só texto; ver "Escopo" abaixo).
+- **Horário padrão de publicação: 18:00 (America/Sao_Paulo, offset fixo -03:00).** Não existe preferência de
+  horário por empresa no banco (`best_posting_hour` em `instagram_metrics` é medição, não escolha do dono), então
+  o horário é uma constante definida em **um lugar**: `supabase/functions/_shared/publishSlot.ts`
+  (`PUBLISH_HOUR_BRT`). A tela tem uma cópia só pra escrever "vai sair dia X às 18h" (`src/lib/publishSlot.ts`);
+  `scripts/test-publish-slot.mjs` falha se divergirem. Telegram: a mensagem da peça e os botões dizem
+  "Aprovar (sai dia X às 18h)"/"Sim, agendar pro dia X às 18h". O dono pode cancelar o agendamento no painel
+  enquanto a hora não chega. Se quiser outro horário (ou um por empresa), é mudar a constante / criar a preferência.
+- **Escopo da refação automática (conservador):** só reescreve o TEXTO (ideia, legenda, hashtags, CTA) quando a
+  nota de coerência do texto ficou ruim; no máx. 1 vez (`brief.auto_redo=true`, marcado ANTES de reescrever).
+  Fora: problema só visual, peça de imóvel/pacote/vídeo (dado real e custo Higgsfield), carrossel de tema
+  regulado, `runFaqSlot`/`runVideoSlot`/catalog-package. A reescrita não pode trazer número novo nem recado pro
+  corretor (senão é descartada e o original fica). Passou → vai pra aprovação; não passou → fica pra decisão do
+  dono. `planned_for` e rótulos não são tocados. Custo: 1 reescrita + 1 nota (Haiku), sem imagem. **Não consulta o teto em US$** (`fitsCap`) porque não gera mídia paga (nem Higgsfield nem imagem de IA); se um dia a refação passar a regerar imagem/vídeo, tem que checar o teto antes. Carrossel (peça com `slides`) também fica de fora: os slides já desenhados não mudam com o texto.
+- **Dicas — opção A (decisão do dono, 2026-10-26).** No **modo regulado** do carrossel educativo e na vaga
+  `dica_faq` de **categoria regulada**, a dica só é "liberada" sozinha quando conferida em fonte oficial:
+  status `conferida`|`corrigida`, `source_url` presente e dentro de `faq.official_domains` da ficha, e não vencida
+  (`next_check_at` no futuro; vencida = reconfere antes, como já fazia). `geral`, `revisar` e `aprovada_dono` sem
+  fonte oficial **deixam de valer** nesses casos → o carrossel sai no modo geral (sem número/prazo/taxa/lei).
+  **Categoria leve** (ou ficha sem `regulated_categories`): a vaga `dica_faq` segue como antes (geral e aprovada
+  pelo dono valem) — mínimo coerente, porque leve não carrega fato regulado. Código: `faqCheck.isOfficiallyReleased`
+  / `isUsableTip`, `deckTopic.pickTips(rows, categoria, official_domains, …)`. Texto da tela `FaqTips.tsx` (PT/EN) atualizado.
+- **Padrão de WhatsApp (migration `20261027120000_whatsapp_auto_reply_default_off.sql`):** resposta automática nasce
+  DESLIGADA (regra 1). Só muda o padrão de linhas futuras; os valores atuais o dono ajusta à mão.
+
+## 2026-10-27 — Áudio no Telegram: transcrição pela OpenAI, resposta pelo Claude
+
+- **Decisão do dono:** o bot do Telegram passa a entender áudio. A API da Anthropic não recebe áudio (só texto,
+  imagem e documento — conferido na doc da Messages API em 2026-10-27), então a **OpenAI (`whisper-1`) só
+  transcreve**; quem entende e responde continua sendo o Claude (`telegram-chat`). O dono preferiu Anthropic e,
+  sabendo que não dá, aprovou a OpenAI (chave já existente, usada na geração de imagem).
+- **Limites:** só chat privado, só chat ligado a exatamente 1 empresa (sem gastar com quem não conectou), até
+  2 minutos por áudio. Custo estimado ~US$ 0,006/min (preço conhecido; a página de preços da OpenAI não abriu do
+  ambiente de trabalho — conferir no painel da OpenAI), gravado em `agent_performance` (`task_key`
+  `audio_transcription`). O bot mostra "🎤 Entendi: …" antes de responder, pra o dono ver o que foi entendido.
+- **Privacidade:** o áudio vai para a OpenAI para virar texto — atualizar `/privacidade` (pendente).
+- Foto/vídeo/arquivo no chat privado agora recebem aviso ("por enquanto entendo texto e áudio") em vez de silêncio.
+
+## 2026-10-27 — Inglês como idioma principal; mercado EUA inteiro
+
+- **Decisão do dono:** o Sales Boost passa a vender para os **EUA inteiros**, com o **inglês como idioma
+  principal**. Os brasileiros que já usam seguem em português (as 4 empresas atuais têm `companies.language = 'pt'`
+  e continuam assim). Esta entrada **não apaga** as decisões antigas (Brasil/Rio, PT-BR, R$) — elas ficam como
+  histórico e cada trecho antigo ganhou uma nota de divergência apontando pra cá.
+- **Fase 1 (feita nesta entrada) — só a tela e o padrão:**
+  - Idioma da **tela** é por usuário: escolha explícita (`localStorage['sb_lang']`) vence; sem escolha, segue
+    `companies.language` da empresa logada (`'pt'` → pt, qualquer outro → en); sem empresa (landing, visitante,
+    cadastro) → **inglês**. A regra não grava nada sozinha no navegador, pra a troca de idioma/empresa refletir.
+  - Idioma do **conteúdo gerado** (legendas, ganchos, CTA) é por empresa: `companies.language`, agora com padrão
+    `'en'` pra empresa nova (migration `20261027120000_ingles_padrao.sql`, aditiva: só linhas futuras; antes
+    fixa `'pt'` em quem estiver `null`).
+  - O seletor "Língua da empresa" saiu de Estilos e Visuais e foi pra **Configurações → Informações da empresa**
+    (bilíngue, rótulo diz que vale pro conteúdo gerado, não pra tela).
+  - Textos fixos que ainda estavam só em PT no painel do cliente foram traduzidos (CreativeAgent, tela de
+    erro de carregamento, mensagens de bloqueio de vitrine, rótulos gravados nas ações do calendário, etc.).
+  - `business_types.label` segue em PT como **chave** (liga à ficha e ao plano); só a **exibição** é traduzida
+    (`businessTypeLabel` em `src/lib/businessTypes.ts`).
+- **Fases pendentes (ver [ROADMAP.md](ROADMAP.md)):**
+  - **Fase 2:** conteúdo gerado em inglês de verdade (prompts das functions, travas em inglês — número inventado,
+    "Comente QUERO", recado da IA na legenda, carrossel educativo, etc.) e testes.
+  - **Fase 3:** ficha `real_estate_us` (vocabulário, perguntas do cadastro, catálogo, regras do setor nos EUA).
+  - **Fase 4:** dólar (US$), fuso/horário local, endereço com ZIP e termos do mercado (MLS, realtor, etc.).
+- **Decisões pendentes do dono (nada disso foi decidido):**
+  - Preço em **USD** (hoje R$ 2.449/mês e R$ 1.449/mês anual, nada convertido).
+  - Continuar **só imóveis** ou abrir outros setores nos EUA.
+  - **Horário de publicação local** (hoje 18h de Brasília).
+  - **Revisão jurídica EUA / Fair Housing** (publicidade imobiliária, termos, privacidade) antes de vender.
+  - O **Brasil continua** como mercado ou fica só como legado.
+- **Não verificado:** os depoimentos/cartões da landing com `São Paulo, Brasil` (`src/i18n.ts`) são decorativos
+  do cartão do herói; não dá pra saber se vêm de cliente real. Não foram alterados.
+
+## 2026-10-28 — Inteligência comercial para imobiliárias (Opportunity Engine)
+
+- **Decisão do dono (aprovou a Etapa 1 com "PODE"):** novo posicionamento — *"Inteligência comercial para
+  imobiliárias. Identificamos oportunidades no seu mercado, conectamos essas oportunidades aos imóveis da sua
+  imobiliária e ajudamos seus corretores a transformar isso em ações para gerar demanda."* O texto de
+  posicionamento antigo (growth engine / parceiro de crescimento) **não foi apagado** — ganhou nota de
+  divergência em [PRODUCT.md](PRODUCT.md).
+- **Cliente = imobiliária com equipe de corretores.** O corretor autônomo continua podendo usar (é o caso de
+  uma equipe de 1). Isso ainda não muda o modelo de conta: hoje é 1 login por empresa; equipe, convite e papéis
+  são a Etapa 7 do [ROADMAP.md](ROADMAP.md) (mexe em RLS — alteração arriscada).
+- **Mesmo sistema no Brasil e nos EUA, piloto no Rio.** O que é de país ou de setor mora na ficha
+  (`vertical_playbooks`, regra 6): a Etapa 1 já lê da ficha quais campos do catálogo são região/preço/tipo/
+  quartos/negócio (`config.opportunity_fields`) e os rótulos (`config.catalog_fields`).
+- **Convivência com 2026-10-27:** o inglês **continua** o idioma padrão da tela e do conteúdo de empresa nova.
+  A tela "Oportunidades" é bilíngue e o motor escreve no idioma de `companies.language`. As empresas atuais
+  (todas `'pt'`) seguem em português. Nada da decisão anterior foi revertido.
+- **Regra de evidência (vale pra tudo daqui em diante):** toda oportunidade carrega evidências rotuladas —
+  **Fato** (contado dos dados da própria empresa), **Dado** (coletado de fora: concorrente, notícia, tendência)
+  ou **Hipótese** (o que ninguém verificou) — cada uma com **fonte e data reais** (`null` se não houver data;
+  nunca inventada). Pouca evidência = **"Precisa validar"**; o motor pode devolver menos de 3 oportunidades e
+  a tela diz o que falta. Sem promessa ("+X% de vendas"), sem número fora dos fatos (trava em código), sem
+  público por classe protegida (raça, cor, religião, sexo, deficiência, situação familiar, origem — Fair Housing).
+  A IA só **redige** em cima dos fatos; fatos, confiança e prioridade são calculados em código.
+- **Por que só 2 tabelas novas (`market_signals`, `growth_opportunities`) e por que não reaproveitar
+  `opportunities`/`campaigns`:** `opportunities` já existe com **outro significado** (receita/lead detectada por
+  `detect-opportunities`, `hermes-proxy`, `monthly-report`, popup de progresso) e `campaigns` é o objeto de
+  campanha do Marketing AI; misturar quebraria essas telas e contaminaria os números. O catálogo, os posts, os
+  concorrentes e as tendências **já existem** e são só lidos. Nenhuma function nova (limite de functions do
+  Supabase, [PITFALLS.md](PITFALLS.md)): o motor é `action: 'run_opportunities'` no `marketing-ai`.
+- **Etapa 1 entregue (este PR):** motor + tela `/dashboard/opportunities` + 2 tabelas + chave na ficha. **Não
+  publica nada**, não grava em conta real; só lê e grava em `growth_opportunities`. Plano das Etapas 2–7 no
+  [ROADMAP.md](ROADMAP.md).
+- **Decisões pendentes do dono (nada disso foi decidido):**
+  - **Preço para imobiliária com equipe** (em R$ e em US$) — hoje o preço é por conta/empresa.
+  - **Custo de um provedor de notícias** (Etapa 3): qual, quanto, teto mensal.
+  - **Revisão jurídica EUA / Fair Housing** antes de vender nos EUA (já pendente em 2026-10-27; agora também
+    cobre o texto de "público" das oportunidades).
+
+## 2026-10-29 — Inteligência comercial, Etapa 4: plano (A) e peças (B); tudo automático
+
+- **Etapa 4 dividida em duas partes.** **A — plano da oportunidade** (este trabalho): oportunidade aprovada →
+  mini-plano (público, objetivo, problema do comprador, proposta de valor, mensagem principal, canal, formato
+  sugerido com motivo, CTA, como medir, imóveis ligados, evidências citadas, hipóteses). **B — gerar as peças**
+  (outro PR, depois). O plano nunca publica nada; o dono ainda aprova o plano e, na Parte B, cada peça.
+- **Opção escolhida: "mini-plano" dentro do `marketing-ai`**, em vez de o `strategy-generate` ler as oportunidades.
+  Motivo: `strategy-generate` é function de cliente real (mexer exige aprovação e deploy arriscado) e, ali, o
+  formato já vem decidido pela estratégia; no mini-plano o **formato é consequência** do objetivo e da mensagem.
+  Isto **diverge** do texto antigo da Etapa 4 no [ROADMAP.md](ROADMAP.md) ("iniciativa de estratégia ligada ao
+  `strategy_id`"), que foi mantido e anotado, não apagado. `growth_opportunities.strategy_id` segue sem uso.
+- **Limite de 5 planos por empresa por dia** (decisão do dono; janela móvel de 24 h, contando execuções
+  bem-sucedidas em `agent_performance`, `task_key='create_opportunity_plan'`). Falha não gasta o limite, mas o cron
+  tenta no máximo 2 vezes por oportunidade a cada 24 h. O **teto mensal de custo de IA hoje não conta texto**: o
+  limite diário é o único freio do plano.
+- **"Tudo automático" (princípio de 2026-10-26) vale aqui; a ÚNICA ação humana é aprovar/descartar.** Mudanças
+  pedidas pelo dono: (1) **sem botão "Criar/Refazer plano"** — aprovar a oportunidade (`decide_opportunity`) cria o
+  plano sozinho em segundo plano; (2) **o botão "Encontrar oportunidades" da Etapa 1 foi removido** — a busca roda
+  sozinha (`cron_opportunities`: semanal e quando entra sinal de mercado novo); (3) aprovar o **plano** continua
+  manual (é aprovação, não geração). A action `run_opportunities` continua existindo no servidor (usada pelo
+  cron), só não há mais botão.
+- **Quem é tocado pelo cron:** mesmo critério do cron de estratégia — `companies.auto_strategy=true` (a Liga dos
+  Sonhos fica de fora), interruptor geral `hermes_config.auto_strategy_enabled`, `hasPaidAccess` (vitrine e
+  bloqueados fora) e empresa ativa.
+- **Agendamento NÃO foi criado** (alteração arriscada): o SQL sugerido está em [ARCHITECTURE.md](ARCHITECTURE.md),
+  bloco do motor, esperando o dono.
+- **CTA do plano:** o plano não liga a um imóvel com resposta automática aprovada; por isso "Comente PALAVRA" é
+  trocado pelo CTA alternativo da ficha (`ctas.sem_automacao`; em inglês, "Send us a DM").
+
+## 2026-10-29 — Autonomia do agente
+
+- **Regra do dono (2026-10-29):** ele só quer ser consultado em decisões que **mudam a direção do produto**. Deploy de
+  function, migration e agendamento (cron) **não precisam mais de aprovação no chat**. A seção "Alterações
+  arriscadas" do [CLAUDE.md](../CLAUDE.md) foi mantida (com uma nota apontando para cá): vira lista de **cuidado**.
+- **Continuam valendo, sem exceção:** (1) nada vai ao público sem aprovação do dono; (2) nunca tocar dados de clientes
+  reais (Liga dos Sonhos) em testes; (3) nunca publicar em Instagram real sem aprovação explícita (inclui o
+  @getsaleboost); (4) **não gastar além do teto/combinado** — vídeo/Higgsfield e qualquer fornecedor ou API paga nova
+  continuam precisando do OK do dono; (5) nada de setor no código (ficha `vertical_playbooks`); (6) não inventar
+  números; (7) foto de item é sempre real e IA de imagem nunca escreve texto.
+- **O que o agente faz sozinho, com o mesmo cuidado de antes:** migration (aditiva e idempotente, com como reverter
+  escrito no próprio arquivo), deploy de function — **inclusive as usadas por cliente real** (`agent-actions`,
+  `instagram-webhook`, `hermes-proxy`, `strategy-generate`, `creative-generate`, `claim-diagnostic`) — e cron.
+  Cuidado = testar antes (build, lint, testes de lógica, bundle), **comparar o que foi pro ar** com o que estava
+  (contagem de erros de tipo antes/depois; ver [PITFALLS.md](PITFALLS.md)), e deixar o **rollback documentado**
+  (migration: bloco "como reverter"; function: o commit anterior para redeploy; cron: `cron.unschedule`).
+- **Ainda é decisão do dono:** mudar a direção do produto (algo que contradiga este arquivo), remover funcionalidade,
+  gastar mais, publicar/enviar em conta real.
+
+## 2026-10-29 — Inteligência comercial, Etapa 4B: plano aprovado → peças em rascunho (automático)
+
+- **Fluxo:** o dono aprova o **plano** (`approve_opportunity_plan`) e o sistema gera sozinho **1 a 3 rascunhos**
+  (padrão 2; a IA do plano sugere `pieces_count`, o código limita a 3). Sem botão de gerar — a única ação humana é
+  aprovar (princípio "Tudo automático", 2026-10-26). Cada peça nasce **rascunho na Central de Aprovações**; o cron
+  `cron_opportunities` é a rede de segurança (plano aprovado sem peças → gera).
+- **Mesmo motor do calendário:** a peça é pedida ao `creative-generate` (`plan_slot` com `opportunity_id`, só por chamada
+  interna com `cron_secret`) e herda todas as travas (intenção, QUERO, recados internos, tema do carrossel,
+  render-format, fotos reais, nada de texto em imagem de IA). Nenhum caminho novo de criação foi inventado.
+- **Só formatos SEM custo extra de vídeo** (decisão de custo pendente do dono): carrossel, post, story de imagem/texto.
+  Se o plano sugerir `reel`/vídeo, saem peças de **carrossel** e o plano registra "Vídeo fica para quando o dono liberar
+  custo de vídeo". Liberar vídeo nas peças de oportunidade é decisão do dono (gasto Higgsfield).
+- **Foto real ou texto (regra 4):** peça de foto exige item do plano com **5+ fotos reais** (exigência do
+  `catalog-package`). Sem isso, sai **1 peça de texto** (carrossel educativo da marca) com o motivo no plano — nunca
+  duas peças de texto repetidas, nunca imagem de imóvel inventada.
+- **Limites:** no máx. **3 peças por plano** e **6 peças de oportunidade por empresa por dia** (janela de 24 h,
+  `agent_performance` `task_key='opportunity_pieces'`, uma linha por peça despachada). As peças contam no caminho de
+  custo que o calendário já usa (mesma IA/teto do `creative-generate`).
+- **Idempotência:** `growth_opportunities.pieces_generated_at` é reservado de forma atômica antes de despachar; plano
+  que já tem peça (rascunho ou post) não gera de novo. Despachado há > 30 min e **nenhuma peça jamais existiu** → 1 retentativa única (linha `opportunity_pieces_retry`). Peça que já existiu e foi excluída pelo dono (marca `opportunity_piece_created`) **nunca** é regerada sozinha.
+- **Vínculo:** `opportunity_id` em `marketing_ai_test_content` e `posts` (copiado na aprovação, como `item_id`) — a
+  Etapa 6 poderá medir por oportunidade.
+- **O mapa formato-do-plano → formato-do-catálogo vive na ficha** (`config.opportunity_pieces`, regra 6); setor sem
+  mapa usa o carrossel de slides genérico.
+- **Qualidade (1ª rodada real, Tespon):** adjetivo de mercado ("disputado", "valorizado", "alto padrão", "nobre",
+  "em alta", "ticket elevado") só vale se estiver nos fatos — prompt **e** filtro em código (lista na ficha,
+  `opportunity_texts.market_claims`, com fallback genérico); a ação sugerida não manda "publicar com fotos" para item
+  sem foto — a primeira ação passa a ser adicionar fotos reais.
+
+## 2026-10-30 — Inteligência comercial, Etapa 3: notícias de mercado automáticas
+
+- **O que é:** o sistema busca sozinho (Tavily, que o projeto já usa; sem botão — princípio "Tudo automático") notícias da
+  região dos imóveis do catálogo e grava em `market_signals` com `collected_by='system'`, com fonte (domínio + link) e a
+  data da própria fonte. Roda dentro do cron `cron_opportunities`, antes de decidir a rodada: sinal novo dispara a
+  rodada e a oportunidade `market_change` aparece sozinha.
+- **Divergência do ROADMAP (registrada, não apagada):** o ROADMAP previa que o dono aprovasse cada sinal antes de virar
+  evidência. Decidido: o sinal automático entra como **"Dado" com fonte e data**, a tela mostra o selo "Automático" e o dono
+  pode **apagar**; a aprovação humana continua na **oportunidade** (e no plano e nas peças), nada vai ao público sem ela.
+- **Sem número inventado:** filtros em código — sem data válida, data futura ou > 30 dias, região fora do título/trecho,
+  portal de anúncio (lista na ficha), link não-https: descartado. O resumo é um trecho da fonte, saneado.
+- **Custo:** 1 busca Tavily básica por região; no máx. 3 buscas e 5 sinais novos por empresa a cada 7 dias e teto global
+  mensal `MARKET_NEWS_MONTHLY_CAP` (padrão 120). Erro/429/sem chave: registra e para, sem nova tentativa em laço. O
+  interruptor `insight_sources` (tavily) desligado no painel Owner também desliga esta coleta.
+
+## 2026-10-30 — Inteligência comercial, Etapa 5: página pública do imóvel + link rastreável + lead com origem
+
+- **Decisão do dono (direção):** a página do imóvel é **só destino de link** — o link vai no post, na DM ou na bio. **Sem listagem,
+  sem busca, sem portal, `noindex`** (meta robots + `X-Robots-Tag` em `public/_headers`). Não vira concorrente de portal.
+- **Só vai ao ar com a aprovação do dono:** botão "Página pública" no card do imóvel → prévia exata do que vai aparecer (campos,
+  fotos, WhatsApp e Instagram) → **"Aprovar e publicar"** (grava `approved_at`/`approved_by`) ou "Despublicar". Exige o mínimo de
+  fotos **reais** da ficha (`min_photos`, 3). Foto mobiliada por IA (`staged_photos`) nunca aparece nem conta.
+- **O que aparece vem da ficha (regra 6):** `vertical_playbooks.config.public_page.fields` é uma lista **branca**; campo
+  `private` nunca sai; campo vazio some; nada de número inventado (só o que o dono cadastrou).
+- **Lead com origem:** quem preenche o formulário (nome, WhatsApp ou e-mail, mensagem opcional, **consentimento desmarcado por
+  padrão** + link para `/privacidade`) vira lead com `source='link_page'`, `item_id`, `opportunity_id` (se o link veio de uma
+  peça de oportunidade) e `link_id`, com `consent_at`/`consent_text`. **Nada é enviado ao visitante automaticamente** — o dono
+  responde (o alerta de lead novo que já existia no banco continua valendo). Limites: 3 envios/visitante/hora, 20/link/dia,
+  mesmo contato + imóvel em 24 h não duplica; campo-armadilha (honeypot) contra robô. IP **nunca** é guardado (só um hash com sal).
+- **Link nas peças sem tocar o `creative-generate`:** o cron `cron_opportunities` acrescenta UMA vez a frase da ficha
+  (`caption_line`) com o link (canal `caption`) aos **rascunhos** de oportunidade cujo imóvel tem página no ar; nunca em peça
+  aprovada/agendada/publicada. A mensagem **nova** do "Comente QUERO" ganha o link (canal `dm`); a já aprovada fica como está.
+- **Continua sem atribuição:** lead que chega por DM ou comentário (instagram-webhook) segue sem item/oportunidade — só o lead
+  que entra pela página tem origem. Atribuir DM/comentário exigiria mexer no `instagram-webhook` (fica para depois).
+- **Corretores ficam para a Etapa 7.** Não há encaminhamento ao corretor nesta etapa.
+- **Ainda é decisão/ação do dono:** aplicar a migration, publicar o `marketing-ai`/`item-videos`/site e aprovar a primeira
+  página (ver ROADMAP).
+
+## 2026-10-30 — Inteligência comercial, Etapas 6 e 7 (versão mínima): resultados por oportunidade e corretor sem login
+
+- **Corretor é só um CONTATO de encaminhamento, sem login.** Nome + WhatsApp (+ e-mail opcional) cadastrados pelo dono em
+  Configurações. O lead que entra pela página pública (Etapa 5) é distribuído em **rodízio** entre os corretores ativos
+  (`assign_next_broker`: o ativo com `last_assigned_at` mais antigo, nulos primeiro; só a service role executa) e o dono
+  **encaminha por WhatsApp** pelo Funil — abre um `wa.me` com o resumo, **nada é enviado por nós** (regra 1).
+- **Login por papel (dono/gestor/corretor) = projeto futuro**, junto com o **preço para imobiliária com equipe** (R$/US$) e o
+  **domínio de e-mail verificado** (convite por e-mail). Mexe em autenticação e RLS; não faz parte desta versão.
+- **O telefone do corretor pode aparecer no botão de WhatsApp da página pública:** o clique usa o corretor ativo que recebeu o
+  lead mais recentemente (o clique **não** gira o rodízio; só lead gira); sem corretor, vale o telefone da empresa. O número só sai
+  no redirecionamento do clique, nunca no `get` da página. O card de Configurações avisa o dono disso.
+- **Resultados só com origem rastreável:** visitas, cliques e leads de uma oportunidade vêm do link `/p/<código>` dela. Oportunidade
+  **sem link = "sem dado"** (diferente de 0); atribuição aparece só quando houve evento. Lead de comentário ou DM **continua sem
+  atribuição** (exigiria mexer no `instagram-webhook`). **Valor** (proposta/venda) é opcional, digitado pelo dono: a tela soma só o
+  que foi informado e mostra "N de M vendas com valor"; sem valor, "valor não informado". Nada é estimado.
+- **Mapa dos estágios (o funil real não tem etapa "visita"):** Qualificado carimba `visit_at` (visita agendada), Proposta carimba
+  `proposal_at`, Venda realizada carimba `closed_at` — só se estiver vazio, e pular etapa não preenche as anteriores.
+
+## 2026-10-30 — O Sales Boost em 5 componentes (hub do Marketing AI)
+
+Decisão do dono: o produto se apresenta em 5 componentes, na sequência dos cards (um embaixo do outro) do hub
+`/dashboard/marketing-ai`:
+1. **Inteligência de Mercado** (era "Agente de Dados") — catálogo com fotos reais, concorrentes/tendências, notícias do bairro.
+2. **Motor de Oportunidades** (card novo, abre `/dashboard/opportunities`).
+3. **Agente de Estratégia** — público, oferta, mensagem e ação; estratégia da conta + plano de cada oportunidade.
+4. **Ativação** (era "Agente de Conteúdo e Campanha") — calendário, peças das oportunidades, página do imóvel.
+5. **Resultados e Aprendizado** (era "Agente de Conversão") — funil com origem e corretor, atendimento, comentários/DMs.
+
+Cada card mostra uma linha ao vivo só com contagens reais (o que espera o dono em laranja). Só tela: nenhuma
+lógica, tabela ou função mudou; as seções por trás continuam as mesmas. **Motivo:** o dono enxergar o "motor"
+trabalhando e vender "5 agentes trabalhando por você". **Não feito de propósito:** chat com cada agente (custo de IA
+por mensagem e mais um lugar para cuidar). **Lacunas conhecidas:** material para o corretor executar (componente 4) e
+atribuição de lead de DM/comentário (componente 5).
+
+## 2026-11-01 — Resultados e Aprendizado só com resultado e aprendizado; Conversas vão para Ativação
+
+Pedido do dono: o 5º card tinha coisas "nada a ver" (Atendimento, Engagement). Agora:
+- **Resultados e Aprendizado** (`/dashboard/marketing-ai/conversao`, sub-aba em `?sub=`): Funil de vendas · Desempenho
+  dos posts (saiu de Ativação → Campanha) · Aprendizado (memória do negócio, antes a página solta `brain`) · Experimentos ·
+  Relatórios. Os links antigos `brain`/`experiments`/`reports`/`campanha&sub=resultados` redirecionam.
+- **Ativação** ganhou a aba de topo **Conversas** (`?tab=conversas`): Atendimento (WhatsApp) e Respostas automáticas
+  (comentários/DMs, ex.: "Comente QUERO") — responder é execução (escolha do dono, 2026-11-01).
+Só tela: nenhuma regra de envio/aprovação mudou. **Lacuna registrada:** o 80/20 do `_shared/learning.ts` (o que
+alimenta a estratégia) ainda não aparece na aba Aprendizado.
+
+## 2026-11-01 — Inteligência de Mercado ampla, teto de US$ 5/cliente/mês
+
+O dono pediu coleta "absurda" de notícias e Instagram e aprovou teto de **US$ 5 por cliente por mês** (Apify + Tavily),
+contando dentro do teto de US$ 40. Supera — sem apagar — os limites da Etapa 3 de 30/10 (3 buscas e 5 sinais por
+semana). Plano em etapas pequenas (contador de dólares com reserva antes de gastar → notícias diárias → tela de
+mercado → Instagram semanal com até ~20 concorrentes → ligação com o motor de oportunidades, no máx. 1 rodada/24 h).
+
+## 2026-11-01 — Catálogo sai da Inteligência de Mercado; Oportunidades sai do menu lateral
+
+Pedido do dono: a Inteligência de Mercado fica focada em inteligência de mercado. O **Catálogo** (imóveis/itens com
+fotos reais + Avatar em breve) virou página própria `/dashboard/catalogo`, aberta **só pelo botão "+" laranja** e pelos
+atalhos do sino (`?item=<id>`; o link antigo `marketing-ai/dados?item=` redireciona). Na Inteligência de Mercado ficam
+Ideias e trends, Lugares perto e Dicas/FAQ (a aba de notícias/Instagram entra com a Etapa de mercado). **Oportunidades**
+saiu do menu da esquerda — já é o card 2 do fluxo do Marketing AI (a rota `/dashboard/opportunities` continua).
+
+## 2026-11-01 — Inteligência de Mercado ampla, estágios 1-3
+
+- **Decisão do dono:** teto de **US$ 5 por cliente por mês** para Apify + Tavily, contado **dentro** dos US$ 40 de `spendCap`.
+  Fatias da ficha: Instagram 3 / notícias 2. Estágio 4+ (Instagram semanal via Apify) fica para depois.
+- **Substitui** (sem apagar o registro acima) os tetos fixos semanais da Etapa 3 de 2026-10-30 (3 buscas/5 sinais por 7 dias e
+  `MARKET_NEWS_MONTHLY_CAP`): agora o limite é o dólar (reserva antes, ajuste depois no livro-caixa `agent_performance`),
+  mais tetos da ficha (por dia, por mês, sinais novos por dia). Coleta DIÁRIA, 1 rodada por empresa/dia, em um cron próprio
+  (`cron_market_intel`); o `cron_opportunities` deixa de coletar e só roda nova rodada por sinal novo com 24 h de intervalo.
+- **Preço da busca Tavily não é conhecido:** padrão conservador US$ 0,008 (`TAVILY_COST_USD`) — **a confirmar** no extrato.
+- Sinais ganham `kind` do tópico da ficha (lançamento, obra, economia, turismo), sempre com fonte e data da fonte.
+
+## 2026-11-01 — As abas de cada agente mostram o fluxo real (faixa de fluxo)
+
+Pedido do dono: "o que aparece nas abas de dentro de cada agente tem que ser realmente o fluxo que existe, para eu saber como o
+fluxo está indo e ter rastreamento pelo front-end." Cada agente ganha, no topo, uma faixa com os **passos reais** em ordem
+(status, última vez, próxima, contagens, o que espera o dono) e que serve de navegação para as sub-abas existentes. Só dado real:
+sem dado = "sem dado ainda"; o que não foi construído (coleta do Instagram) aparece como 🚧. Leitura do livro-caixa por função
+somente-leitura (`company_flow_status`), sem afrouxar a RLS. Feito agora: Inteligência de Mercado e Motor de Oportunidades; os outros
+3 vêm no mesmo formato. Detalhes em [ARCHITECTURE.md](ARCHITECTURE.md#faixa-de-fluxo-dos-agentes-2026-11-01).

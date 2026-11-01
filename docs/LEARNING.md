@@ -132,3 +132,14 @@ Relatório simples pro corretor no formato "seus posts geraram X
 conversas; campeão: …" — ainda não existe uma function dedicada a isso.
 `generate-tab-insight` (1x/dia, por aba do dashboard) é o parente mais
 próximo que já existe, mas não é esse relatório semanal específico.
+
+## 2026-10-30 — Resultados por oportunidade (Etapa 6 mínima)
+
+- **O que existe:** função `opportunity_results(company)` (security invoker) devolve, por oportunidade: links, peças aprovadas
+  (`posts.opportunity_id`), visitas (visitantes distintos por dia), cliques, leads, visitas agendadas, propostas, vendas, soma dos
+  valores informados e quantas vendas têm valor. A tela mostra isso no card de cada oportunidade aprovada
+  (`opportunityResults.tsx`).
+- **Atribuição só por link:** visita/clique/lead só entram na conta da oportunidade pelo `tracked_links.opportunity_id`. Sem link
+  = "sem dado" (≠ 0). Lead de comentário/DM segue sem atribuição (texto fixo na tela). Datas (`visit_at`/`proposal_at`/`closed_at`)
+  são carimbadas quando o dono move o lead no Funil; valores são digitados por ele (opcionais) — a soma ignora o que não foi informado.
+- **Ainda não existe:** receita/CAC/ROAS continuam desconhecidos (o gap acima segue valendo); isto só mede o que o dono registra.

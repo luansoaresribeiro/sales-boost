@@ -447,3 +447,91 @@ Os posts que nascem daqui seguem a regra 1: só saem com aprovação do dono.
    - garantir que os concorrentes encontrados são os reais.
 
    Ganha um plano próprio.
+
+## Inglês como idioma principal / mercado EUA (decisão do dono 2026-10-27)
+
+Ver [DECISIONS.md](DECISIONS.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro).
+
+- [x] **Fase 1 — tela e padrão:** inglês como padrão da tela, regra tela por usuário × conteúdo por empresa,
+  seletor "Língua da empresa" em Configurações, textos fixos traduzidos, migration `20261027120000_ingles_padrao.sql`
+  (aplicar em produção só depois do merge, é aditiva).
+- [ ] **Fase 2 — conteúdo gerado em inglês + travas em inglês:** prompts das functions por `companies.language`;
+  travas de honestidade (número inventado, "Comente QUERO", recado da IA, carrossel educativo/dicas) funcionando
+  em inglês. Critério de pronto: empresa de teste em `'en'` gera legenda, carrossel e vídeo sem uma palavra em PT.
+- [ ] **Fase 3 — ficha `real_estate_us`:** vocabulário, perguntas do cadastro, campos do catálogo e regras do
+  setor para os EUA (tudo na ficha, nunca em código — regra 6). Depende da revisão jurídica EUA/Fair Housing.
+- [ ] **Fase 4 — dólar, fuso, ZIP e termos:** preço em USD (decisão do dono), horário de publicação local (hoje
+  18h de Brasília), endereço com ZIP, termos do mercado americano.
+- [ ] **Decisões do dono pendentes:** preço em USD; só imóveis ou outros setores; horário local; revisão jurídica
+  EUA/Fair Housing; se o Brasil continua como mercado.
+
+## Inteligência comercial (visão 2026-10-28)
+
+Ver [DECISIONS.md](DECISIONS.md#2026-10-28--inteligência-comercial-para-imobiliárias-opportunity-engine) e o bloco
+"Opportunity Engine" em [ARCHITECTURE.md](ARCHITECTURE.md). Regra de evidência em todas as etapas: fato/dado/
+hipótese, fonte + data, "precisa validar", nunca número inventado, nada publicado sem aprovação.
+
+- [ ] **Etapa 1 — motor + tela de oportunidades (este PR; 🟡 até teste em produção).** `run_opportunities` no
+  `marketing-ai`, tabelas `market_signals`/`growth_opportunities`, tela `/dashboard/opportunities`. *Pronto
+  quando:* migration aplicada, `marketing-ai` deployado, e na Tespon (1 imóvel, 8 concorrentes, 0 posts) o botão
+  devolve ≥1 oportunidade com evidência rotulada e fonte/data, ou diz o que falta — sem número inventado e sem
+  nada publicado; aprovar/descartar grava o status.
+- [ ] **Etapa 2 — colar sinal de mercado à mão (🟡 código pronto no PR; falta teste em produção).** Tela para o cliente colar notícia/lançamento/obra (título,
+  região, fonte, link, data) em `market_signals` (`collected_by='manual'`). *Pronto quando:* um sinal colado com
+  fonte aparece como "Dado" numa oportunidade `market_change` do bairro certo; sem fonte, não entra.
+- [ ] **Inteligência de Mercado ampla, estágios 1-3 (🟡 código pronto no branch `mi-stage1-3`, 2026-11-01):** teto US$ 5/cliente/mês (Apify+Tavily) dentro dos US$ 40, notícias diárias por tópicos da ficha (`cron_market_intel`), aba "Mercado" em Dados. Falta: migration `20261101100000_inteligencia_mercado_ficha.sql`, deploy do `marketing-ai`, cron `market-intel-daily`, confirmar `TAVILY_COST_USD`. Estágio 4+ (Instagram semanal) não iniciado. Substitui a coleta semanal da Etapa 3 abaixo.
+- [ ] **Etapa 3 — notícias automáticas (🟡 pronta em código, 2026-10-30; falta migration + deploy do `marketing-ai` e teste em produção).**
+  Coleta sozinha (Tavily, `topic:'news'`, sem botão) as notícias da região dos imóveis e grava em `market_signals` com
+  `collected_by='system'`, fonte e data. Limites: 3 buscas e 5 sinais novos por empresa por 7 dias; teto global
+  `MARKET_NEWS_MONTHLY_CAP` (padrão 120 buscas/30 dias). *Pronto quando:* a coleta respeita o teto, cada sinal tem fonte
+  + data, e o sinal novo faz aparecer a oportunidade `market_change`. **Divergência:** o critério original dizia "o dono
+  aprova/descarta antes de virar evidência" — o sinal entra direto como "Dado" (selo "Automático", o dono pode apagar) e a
+  aprovação humana fica na **oportunidade** (ver [DECISIONS.md](DECISIONS.md)).
+- [ ] **Etapa 4 — oportunidade aprovada → estratégia → peças.** Ligar `growth_opportunities.strategy_id` ao
+  `strategy-generate` e às peças do calendário. **Alteração arriscada** (function de cliente real: aprovação do
+  dono antes do deploy). *Pronto quando:* aprovar uma oportunidade gera uma iniciativa de estratégia citando a
+  evidência, e as peças continuam passando pela Central de Aprovações.
+  - **Divergência (2026-10-29, ver [DECISIONS.md](DECISIONS.md)):** a Etapa 4 foi dividida e o caminho mudou — o
+    texto acima (iniciativa de estratégia ligada ao `strategy_id`, via `strategy-generate`) **não vai ser seguido
+    por enquanto**. **4A — plano da oportunidade (🟡 código pronto no PR; falta migration, deploy e teste em
+    produção):** aprovar a oportunidade cria sozinho um mini-plano no `marketing-ai` (formato sugerido como
+    consequência do objetivo, limite de 5 planos/dia/empresa); o dono aprova o plano. *Pronto quando:* na Tespon,
+    aprovar uma oportunidade gera um plano com evidências citadas, sem número inventado e sem "Comente QUERO". **4B —
+    gerar as peças a partir do plano aprovado (🟡 pronta em código, 2026-10-29; falta migration `20261029130000`,
+    deploy de `marketing-ai`/`creative-generate`/`catalog-package`/`agent-actions` e teste na Tespon):** automático, 1–3
+    rascunhos por plano aprovado, só formatos sem custo de vídeo (reel → carrossel; **vídeo fica para quando o dono
+    liberar custo de vídeo**), limites 3/plano e 6/empresa/dia, `opportunity_id` na peça e no post. *Pronto quando:* na
+    Tespon, aprovar o plano gera as peças na Central de Aprovações com o selo "Da oportunidade", sem repetir ao aprovar
+    de novo. As peças continuam passando pela Central de Aprovações. **Etapa 6 poderá medir por `opportunity_id`.**
+  - **Tudo automático (2026-10-29):** a Etapa 1 **deixou de ter botão manual** "Encontrar oportunidades": a busca roda
+    sozinha (`cron_opportunities`, semanal ou com sinal novo). O agendamento ainda **não foi criado** (pendente de
+    aprovação do dono).
+- [ ] **Etapa 5 — link rastreável, página do imóvel e lead com origem (🟡 código pronto, 2026-10-30; falta migration + deploy do
+  `marketing-ai`/`item-videos` + site + teste em produção + o dono aprovar a 1ª página).** Direção decidida: página **só destino de
+  link** (sem listagem/busca, `noindex`), só no ar com aprovação do dono; lead da página entra com `item_id`/`opportunity_id`/`link_id`
+  e consentimento. **Divergência (registrada, não apagada):** o texto original previa "repasse ao corretor" e mexer no
+  `instagram-webhook` — nada disso foi feito (corretor = Etapa 7; DM/comentário seguem sem atribuição). *Pronto quando:* uma visita
+  pedida pela página aparece no Funil com a origem (imóvel/oportunidade), o link aparece na legenda de um rascunho de oportunidade e
+  nada é enviado ao visitante sem o dono. Ver [ARCHITECTURE.md](ARCHITECTURE.md) e [CONVERSION.md](CONVERSION.md).
+- [ ] **Etapa 6 — resultados (visitas, propostas, vendas) — 🟡 versão mínima pronta em código (2026-10-30); falta migration + deploy do
+  `marketing-ai` + site.** Só com atribuição comprovada (origem registrada); sem atribuição, "sem dado" — nunca estimativa. Feito:
+  bloco "Resultados" no card da oportunidade aprovada, datas carimbadas pelo Funil, valor opcional informado pelo dono. *Pronto quando:*
+  cada número na tela tem origem rastreável e o que não tem fica "sem dado" (conferir em produção). **Fica para o futuro:** atribuir
+  lead de DM/comentário (exige tocar o `instagram-webhook`); receita/CAC/ROAS; mapa de estágios com etapa própria de "visita".
+- [ ] **Etapa 7 — equipe de corretores — 🟡 versão mínima pronta em código (2026-10-30): corretor = contato SEM login, rodízio de leads,
+  encaminhamento por WhatsApp.** Falta migration + deploy + site. **Fica para o futuro (projeto à parte):** convite, papéis
+  (dono/gestor/corretor) e RLS por papel — **arriscado** (autenticação e RLS) — junto com o preço para imobiliária com equipe e o
+  domínio de e-mail verificado. *Pronto quando (versão completa):* um corretor convidado vê só o que o papel permite, testado com conta
+  sintética, sem tocar dados de cliente real.
+- **Etapas 5–7 no ar (2026-10-30):** migrations aplicadas, `marketing-ai` v39 e `item-videos` v9 publicados, teste de ponta a
+  ponta na Tespon (dados de teste apagados depois): página do imóvel abriu no celular com 10 fotos reais e só os campos da ficha;
+  código inválido → 404 igual; visita contada 1×; clique no WhatsApp foi para a empresa (sem corretor) e, depois do 1º lead, para o
+  corretor da vez; 2 leads → 2 corretores diferentes (rodízio); lead repetido não gravou 2×; consentimento e origem gravados. Achado e
+  corrigido: o aviso de cookies saía em inglês na página em português (agora segue o idioma da página). **Falta:** o dono aprovar a
+  1ª página de um imóvel real dele.
+- **Pendentes do dono (não decididos):** preço para imobiliária com equipe (R$ e US$); custo de provedor de
+  notícias (Etapa 3); revisão jurídica EUA/Fair Housing.
+- [ ] **Faixa de fluxo dos agentes (pedido do dono 2026-11-01)** — 🟡 feita para **Inteligência de Mercado** e **Motor de Oportunidades**
+  (código pronto; falta aplicar a migration `20261101200000_company_flow_status.sql` e publicar o site). **Faltam 3 agentes, no mesmo
+  formato** (`FlowStrip` + um hook + `flowStripSteps`): Estratégia, Ativação, Resultados e Aprendizado. *Pronto quando:* cada agente mostra
+  os passos reais com status/última vez/contagens vindos de dado real, conferidos contra o código da área.

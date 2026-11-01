@@ -143,7 +143,7 @@ function HeroPhone({ tx }: { tx: (typeof t)['pt']['hero'] }) {
             <div style={{ width: '76px', height: '20px', borderRadius: '12px', background: '#100600' }} />
           </div>
           <div style={{ padding: '0 20px 10px' }}>
-            <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.27)', letterSpacing: '0.13em', textTransform: 'uppercase' }}>Junho 2026</div>
+            <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.27)', letterSpacing: '0.13em', textTransform: 'uppercase' }}>{tx.month}</div>
             <div style={{ fontSize: '14px', fontWeight: 700, color: 'white', marginTop: '2px' }}>{tx.reportTitle}</div>
           </div>
           <div style={{ margin: '0 16px 12px', padding: '12px 14px', borderRadius: '14px', background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.2)' }}>
@@ -154,7 +154,7 @@ function HeroPhone({ tx }: { tx: (typeof t)['pt']['hero'] }) {
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.4)' }}>↑ +12 pts</div>
-                <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.22)', marginTop: '2px' }}>vs anterior</div>
+                <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.22)', marginTop: '2px' }}>{tx.vsPrev}</div>
               </div>
             </div>
             <div style={{ marginTop: '8px', height: '3px', borderRadius: '99px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>

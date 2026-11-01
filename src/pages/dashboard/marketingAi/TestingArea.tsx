@@ -4,7 +4,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { track } from '../../../lib/analytics'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL, timeAgo, FORMAT_CLASS, FUNNEL_LABEL } from './shared'
 import AdaptModal, { type VaultPost } from './AdaptModal'
-import { useLang, type Lang } from '../../../contexts/LanguageContext'
+import { useLang, getCurrentLang, type Lang } from '../../../contexts/LanguageContext'
 
 const TX = {
   pt: {
@@ -228,7 +228,7 @@ export async function callContentTest(token: string, payload: Record<string, unk
     body: JSON.stringify(payload),
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.error ?? TX[localStorage.getItem('sb_lang') === 'en' ? 'en' : 'pt'].testsErr)
+  if (!res.ok) throw new Error(data.error ?? TX[getCurrentLang()].testsErr)
   return data as { id?: string; quality_score?: number; regenerated?: string; image_generated?: boolean; auto_vault?: boolean }
 }
 

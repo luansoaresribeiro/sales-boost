@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { fetchBusinessTypes, OTHER_BUSINESS_TYPE } from '../../lib/businessTypes'
+import { fetchBusinessTypes, businessTypeLabel, OTHER_BUSINESS_TYPE } from '../../lib/businessTypes'
 import { fetchVerticalKey, fetchOnboardingQuestions, bi, type PlaybookQuestion } from '../../lib/verticalPlaybook'
 import { useLang } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -284,7 +284,7 @@ function BusinessTypeSelect({ value, onChange, options, startOther = false }: { 
       <SelectField label={t.bizType} required
         value={showOther ? OTHER_BUSINESS_TYPE : (known ? value : '')}
         onChange={v => { if (v === OTHER_BUSINESS_TYPE) { setOtherMode(true); onChange('') } else { setOtherMode(false); onChange(v) } }}
-        options={[...options, OTHER_BUSINESS_TYPE]} />
+        options={[...options, OTHER_BUSINESS_TYPE]} optLabel={o => o === OTHER_BUSINESS_TYPE ? (lang === 'en' ? 'Other' : o) : businessTypeLabel(o, lang)} />
       {showOther && <div style={{ marginTop: '-8px' }}><Field label={t.which} value={value} onChange={onChange} placeholder={t.typeBiz} required /></div>}
     </>
   )
@@ -553,7 +553,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                     <button key={o.label} type="button"
                       onClick={() => { if (o.other) { setTypePicked('other'); set('business_type')('') } else { setTypePicked('known'); setFichaLoading(true); set('business_type')(o.label) } }}
                       style={{ minHeight: 56, width: '100%', textAlign: 'left', padding: '14px 18px', borderRadius: '14px', background: o.other ? 'transparent' : 'rgba(255,109,41,0.07)', border: `1px solid ${o.other ? BORDER : 'rgba(255,109,41,0.3)'}`, color: o.other ? MUTED : 'white', fontSize: o.other ? '14px' : '16px', fontWeight: o.other ? 500 : 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                      <span>{o.label}</span><span aria-hidden style={{ color: ORANGE }}>→</span>
+                      <span>{o.other ? o.label : businessTypeLabel(o.label, lang)}</span><span aria-hidden style={{ color: ORANGE }}>→</span>
                     </button>
                   ))}
                 </div>

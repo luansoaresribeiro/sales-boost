@@ -44,7 +44,7 @@ export async function decideTopic(a: { admin: Admin; cfg: FaqConfig; tcfg: Topic
     const ctx = { anthropicKey: a.anthropicKey, tavilyKey: await getTavilyKey(admin), cfg, city: a.company.city ?? '', companyId: a.company.id }
     for (const r of due) { try { Object.assign(r, await checkAndSave(admin, r, ctx)) } catch (e) { console.error('deckGuard: reconferência falhou', r.id, e) } }
   }
-  const tips = pickTips(rows, category)
+  const tips = pickTips(rows, category, cfg.official_domains)
   if (!tips.length) return { mode: 'geral', category, label, tips: [], hosts: [] }
   return { mode: 'regulado', category, label, tips, hosts: tipSources(tips, cfg.official_domains) }
 }

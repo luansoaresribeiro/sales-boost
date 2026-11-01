@@ -170,7 +170,7 @@ export const REWARD_CATEGORY_LABEL: Record<string, string> = {
 }
 
 const FUNIL = '/dashboard/marketing-ai/conversao'
-const ATEND = '/dashboard/marketing-ai/conversao'
+const ATEND = '/dashboard/marketing-ai/content?tab=conversas'
 const POSTS = '/dashboard/marketing-ai/content'
 
 // Rótulos dos eventos reais do ledger (progress_events) — espelha progress_gp_rules.

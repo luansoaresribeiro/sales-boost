@@ -433,6 +433,15 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   conferir os toques pelos logs do `telegram-webhook`.
 - **Migration com cron:** `20261014100000_telegram_buddy.sql` aponta pra
   produção — no ensaio aplicar só a tabela e a flag.
+- **Um chat do Telegram ligado a duas empresas deixava o bot mudo
+  (2026-10-27).** O dono conectou a Tespon com o mesmo Telegram que já estava
+  na Sales Boost; o `telegram-chat` buscava a empresa com `.single()`, recebia
+  erro (2 linhas) e devolvia o aviso só pro `telegram-webhook`, que não repassa
+  o texto — nada chegava no Telegram. Agora: o `telegram-connect` desliga o
+  chat de qualquer outra empresa antes de ligar na nova (um chat ↔ uma
+  empresa), e o `telegram-chat` manda ele mesmo a mensagem quando não acha
+  exatamente 1 empresa. Regra: resposta pro usuário sai sempre da função que
+  conversa com o Telegram — nunca contar com o chamador repassar.
 
 ## Functions não checavam pagamento — usar `_shared/access.ts` (2026-10-13)
 
@@ -503,6 +512,14 @@ sufixo novo, pra nenhum navegador reaproveitar o arquivo quebrado em cache).
   dentro de um texto/JSON. Ela espera confirmação de comando perigoso. No
   ensaio deu pra contornar quebrando em comandos menores; em produção, o
   dono pode precisar confirmar na tela.
+  **Atualização 2026-10-30:** a pergunta de confirmação só fica aberta
+  enquanto a chamada espera (~230s) — "aprovei" depois disso não serve. O
+  que disparou a pergunta em produção: `drop policy if exists` e um `update`
+  de `vertical_playbooks` sem trava de "só se ainda não existe". Passaram
+  direto: `create table/index/policy`, `alter table ... add column`,
+  `create function`, `revoke/grant` e `update ... where (config->'x') is
+  null`. Receita: tabela nova não precisa de `drop policy if exists`
+  (aplicar sem ele) e separar o que é perigoso num passo à parte.
 
 ## Teste final na Tespon (2026-10-14) — o que apareceu
 
@@ -708,3 +725,194 @@ destaque com sublinhado. Nunca pintar elemento com `brand.primary` direto.
   palavra genérica ("dica", "dicas") em `category_terms`.
 - **Números do guarda = valor + unidade** (`faqCheck.numberFacts`): `1500` = `1.500,00`, `3,0%` = `3%`, mas
   `30%` ≠ `3%` ≠ `30 dias` e `150.000` ≠ `1.500`. Comparar só dígitos deixava passar colisões.
+
+## "Tudo automático" (2026-10-26)
+
+- **Marca de tentativa do logo vive dentro de `logo_meta`:** sem `src`/`kind` válidos ela nunca vale como logo
+  preparado (`usableLogoMeta` → null); não "limpe" campos extras ao gravar o meta (perde a trava de 1 h). O
+  `backfill_logos` (`logo_meta is null`) deixa de pegar empresa que já tem só a marca.
+- **Peça agendada continua no Vault** (status `vault` + ação `QUEUED` com `scheduled_at`); listas que mostram
+  "a aprovar" precisam filtrar as agendadas (já filtram). No Telegram o claim usa `publishing` e volta pra `vault`.
+- **`pickTips` mudou de assinatura** (`rows, categoria, official_domains, now, max`); `isPublishable` só vale pra
+  categoria leve — no regulado use `isOfficiallyReleased`.
+- **Edge function sem checagem de tipo local:** não há `deno` no ambiente; confira lint + testes Node e leia o diff.
+- **Refação automática respeita o relógio da invocação:** `creative-generate` tem teto de ~150 s por execução; `autoRedoOnce` só roda se passaram < 100 s desde o início de `generateForCompany` (`AUTO_REDO_MAX_ELAPSED_MS`). Passou disso → a peça fica pra decisão do dono (sem refação).
+- **Agendamento manual sugere 18h de Brasília**, não do navegador (`brtLocalInput` no `CalendarPostModal`, hora vinda de `PUBLISH_HOUR_BRT`); o `datetime-local` mostra no relógio local, mas o instante é o mesmo.
+
+## Idioma da tela × idioma do conteúdo (2026-10-27)
+
+- **São dois idiomas diferentes.** Tela = por usuário (`useLang()`): `sb_lang` explícito > `companies.language` > `'en'`.
+  Conteúdo gerado = `companies.language` (padrão `'en'` pra empresa nova). Não gravar `sb_lang` sozinho ao ler a
+  empresa — senão a troca de idioma da empresa nunca mais reflete na tela.
+- **Código fora do React** (libs, mensagens de erro) usa `getCurrentLang()`; ele lê o `sb_lang` na carga e o provider
+  o mantém em dia. Não reatribuir variável de módulo durante o render (o lint do React barra) — só em efeito/handler.
+- **`business_types.label` é chave, não texto.** Traduzir o valor quebra a ligação com a ficha (trigger
+  `sync_company_vertical_key`) e com o plano (`usePlanTier`). Use `businessTypeLabel(label, lang)` só pra mostrar.
+- **`progressGame.ts` nasce em PT e a tela traduz** por `trProgress` (mapa PT→EN em `progressParts.i18n.ts`): texto
+  novo gerado ali precisa de entrada no mapa, senão aparece em PT na tela em inglês (ex.: o "há 3h" da linha do tempo).
+- **Textos que a tela grava no banco** (título/agente/interpretação das ações do calendário) saem no idioma da tela
+  no momento do clique; ficam assim mesmo se o idioma mudar depois.
+- **Ainda em PT de propósito (fase 2):** resumo/interpretação do negócio que o cadastro e o "Entendimento do
+  negócio" montam pra IA ler (`buildContext`, `interpretation`), e `vocabulary.item/catalog` da ficha
+  (`imoveis_rio`) — vêm em PT até existir a ficha em inglês.
+
+## Colisão de nomes: `opportunities` / `campaigns` × tabelas novas de oportunidade (2026-10-28)
+
+- **`opportunities` já existe e significa outra coisa:** oportunidade de receita/lead detectada por
+  `detect-opportunities` (e lida por `hermes-proxy`, `monthly-report`, popup de progresso, `/dashboard/oportunidades`).
+  A "Inteligência comercial" usa **`growth_opportunities`** (e `market_signals`) — nunca escrever o motor novo em
+  `opportunities`, nunca ler `growth_opportunities` como se fosse a antiga. `campaigns` (objeto de campanha do
+  Marketing AI) também **não** é reaproveitada: a ligação oportunidade → campanha/estratégia (Etapa 4) usa
+  `growth_opportunities.strategy_id`.
+- **Duas telas, duas rotas:** `/dashboard/oportunidades` (`OpportunitiesPage.tsx`, tabela antiga, fora do menu) ×
+  `/dashboard/opportunities` (`GrowthOpportunitiesPage.tsx`, motor novo, no menu como "Oportunidades"/"Opportunities").
+  Busca por "opportunities" no código mistura as duas: confira a tabela antes de editar.
+- **O motor depende da ficha:** sem `vertical_playbooks.config.opportunity_fields` a function responde 400
+  ("setor ainda não tem os campos de oportunidades"). A migration `20261028120000_inteligencia_comercial.sql` põe
+  a chave em `imoveis_rio`; ordem segura: migration → deploy do `marketing-ai`. Deploy antes da migration não
+  quebra nada (só responde esse 400; a tela mostra o erro).
+- **`posts.item_id`/`instagram_media_id` ligam post a imóvel e comentário a imóvel.** Post sem `item_id` (feito
+  fora do catálogo) não conta pro imóvel: o motor pode sugerir "sem post" para um imóvel que a imobiliária
+  divulgou por fora. Por isso `content_gap`/`low_traction` viram "Precisa validar" quando o Instagram não está
+  conectado e a tela sempre mostra a fonte ("Posts registrados no Sales Boost").
+- **`growth_opportunities`: cliente só altera 3 colunas** (grant por coluna, não só RLS). Coluna nova que a tela
+  precise editar exige `grant update (coluna)` na migration.
+- **Filtro de classe protegida (Fair Housing) é por palavra:** "família/filhos/crianças", "branco/preto", "jovens", "igreja"… saem
+  da frase mesmo em sentido inocente ("paredes brancas", "perto da igreja matriz" como referência). É de propósito. Frase
+  nova que escapou? Acrescente o caso em `scripts/test-opportunity-engine.mjs` antes de mexer na lista de `opportunityOutput.ts`.
+- **Número com unidade:** o preço e os quartos do catálogo são marcados (`Fact.numTags`) pelo código; sem a marca, "R$ 1.200.000" na
+  saída da IA não passa mesmo que o valor esteja no fato.
+
+## Plano da oportunidade: duplo disparo e cron genérico do `marketing-ai` (2026-10-29)
+
+- O plano é criado em segundo plano ao aprovar a oportunidade. Para o limite de 5/dia valer mesmo com cliques
+  rápidos, cada tentativa grava uma linha `create_opportunity_plan_start` em `agent_performance` ANTES da IA (conta
+  no limite na hora); falha devolve a vaga (a linha de falha desconta a de início). Ainda existe uma janelinha de
+  milissegundos entre contar e gravar (não é atômico), por isso o limite pode estourar em 1 no pior caso. Também: no
+  máx. 2 falhas por oportunidade em 24 h, e o plano só é gravado se a oportunidade ainda está `approved`.
+- O ramo de cron do `marketing-ai` (`cron_secret` no corpo) sem `action` roda o pipeline inteiro de TODAS as empresas
+  ativas. `cron_opportunities` é tratado **antes** dele; qualquer action de cron nova precisa ficar antes também, senão
+  cai no pipeline genérico e gasta IA/Apify de todos.
+- A tela lê a data da última análise de `agent_performance`; se o RLS dessa tabela não deixar o cliente ler, cai na
+  data da última oportunidade (rodadas sem resultado não aparecem).
+
+## Peças de oportunidade (Etapa 4B, 2026-10-29)
+
+- **`opportunity_id` vem de chamada interna, nunca do corpo do dono.** No `creative-generate` só o `plan_slot` com
+  `cron_secret` o aceita; o `make_now` (login do dono) ignora. Mesmo assim o plano é **recarregado do banco** filtrando
+  `company_id` e exige oportunidade aprovada + `plan_approved_at` (`opportunityPieceJob.ts`). Qualquer ramo novo que
+  receba um id de oportunidade deve fazer o mesmo.
+- **Reserva antes de despachar.** `pieces_generated_at` é gravado de forma atômica (`... is null`) ANTES de chamar o
+  `creative-generate`, que responde 202 e cria a peça depois. Sem isso, aprovação + cron geram em dobro. Se nenhuma peça
+  for aceita, a reserva é devolvida. Se a criação falhar em segundo plano (nenhuma peça jamais existiu), o cron tenta UMA vez mais após 30 min (`opportunity_pieces_retry`). Quando uma peça nasce, grava-se `opportunity_piece_created` em `agent_performance`; com ela, excluir o rascunho não faz a peça voltar.
+- **Migration pendente = não gera.** `generateOpportunityPieces` consulta `opportunity_id`; se a coluna não existe,
+  devolve `migration_pending` em vez de gerar sem idempotência. Já a gravação do vínculo (`saveLabels`,
+  `catalog-package`, `agent-actions`) é em UPDATE separado e tolerante, como os rótulos.
+- **`market_claims` é lista de palavras/expressões INTEIRAS** (borda de palavra, com flexões listadas): radical amplo pegava "appreciate"/"primer".
+- **Texto de setor não entra em prompt de código.** Os testes `test-opportunity-*` barram "preço/bairro/imóvel" nos
+  prompts padrão; exemplo de setor vem da ficha (`opportunity_texts`, `opportunity_pieces`).
+- **Formato da peça de foto depende do `catalog-package`:** exige 5+ fotos reais por item; o `reel` do plano vira
+  carrossel (vídeo = gasto Higgsfield, decisão pendente do dono).
+
+## `agent_performance.latency_ms` é obrigatório — registro sem ele some calado (2026-10-29)
+
+A coluna `latency_ms` é `NOT NULL` sem valor padrão. O supabase-js **não lança erro** num `insert` recusado (só devolve
+`{ error }`), então um registro sem `latency_ms` simplesmente não existe — e tudo que conta essas linhas para de
+funcionar sem aviso. Achado no teste da Etapa 4B na Tespon: as linhas `create_opportunity_plan_start`,
+`opportunity_pieces`, `opportunity_pieces_retry` e `opportunity_piece_created` não eram gravadas, ou seja, o limite de 5
+planos/dia, o limite de 6 peças/dia, a retentativa única e o "rascunho excluído nunca volta" estavam desligados.
+Regra: todo `insert` em `agent_performance` passa `latency_ms` (0 quando não houver medida) e, se a linha for usada como
+trava/contador, confere o `error` retornado.
+
+## Notícias automáticas (Etapa 3, 2026-10-30)
+
+- **Contador de buscas = linhas `market_news_search` em `agent_performance`.** Cada busca (inclusive a que falhou) grava uma
+  linha ANTES de seguir; se o insert for recusado, a coleta para (nunca busca sem contar). `latency_ms` é obrigatório (ver
+  entrada acima). O teto global mensal conta as últimas 30 dias, de todas as empresas.
+- **Apagar um sinal automático não o "bloqueia":** a mesma notícia pode voltar numa busca futura enquanto estiver dentro da
+  janela de 30 dias (o índice único só impede duplicata enquanto a linha existe). Se incomodar, guardar os links
+  descartados (hoje não guarda).
+- **A coleta roda dentro do orçamento do cron:** só começa uma busca antes dos 40 s (`canStart`), com 12 s por busca; o
+  que não coube fica para a próxima chamada (a cada 6 h).
+- **Tavily `published_date` pode faltar** em resultados de `topic:'news'`; sem data a notícia é descartada de propósito.
+
+## Página pública do imóvel — superfície sem login (Etapa 5, 2026-10-30)
+
+- **É a primeira parte do sistema aberta a qualquer pessoa.** As 3 ações (`public_page_get`, `public_page_event`,
+  `public_page_lead`) do `marketing-ai` rodam ANTES da checagem de login/cron e sem precisar da chave de IA. Tudo passa pela
+  service role dentro de `_shared/publicPageRun.ts`; a página nunca fala com o banco. As tabelas novas (`public_pages`,
+  `tracked_links`, `link_events`) só deixam o dono/owner **ler**; escrever é só pela function.
+- **404 idêntico:** código inválido, página desligada, empresa sem plano pago, imóvel apagado, fotos abaixo do mínimo e erro de
+  banco devolvem exatamente o mesmo `404 {error:'not_found'}` (o teste confere os 10 motivos nas 3 ações). Não crie mensagem
+  diferente por motivo — quem tenta adivinhar códigos não pode aprender nada. Único 400/429 público: lead com campo inválido
+  ou limite estourado (só depois de o código existir).
+- **Só devolve o que o dono aprovou:** campos da lista branca da ficha (nunca `private`), fotos de `meta.photos` (nunca
+  `staged_photos`), telefone/Instagram **copiados na aprovação** (`public_pages.contact_*`, não os da empresa de hoje), e as URLs
+  `wa.me`/`ig.me` são montadas no servidor (o navegador nunca recebe o número cru). Mudou a ficha/telefone depois? O dono precisa
+  reaprovar (despublicar e publicar) para a página refletir.
+- **`leads` não tem migration de criação (deriva):** a migration só ACRESCENTA `item_id`, `opportunity_id`, `link_id`,
+  `consent_at`, `consent_text`. O lead da página usa `channel='manual'` e `stage='new'` — valores que o sistema já grava hoje
+  (hermes-proxy / instagram-webhook) e por isso não batem em constraint; `source='link_page'` distingue a origem. A tela de
+  Funil mostra `channel='manual'` como WhatsApp (só `insta…` vira Instagram). `link_events.lead_id` é `uuid` **supondo** que
+  `leads.id` é uuid (nada no repositório prova); se o evento `lead` não aparecer, confira o tipo de `leads.id`.
+- **Insert silencioso:** o supabase-js não lança erro. O lead confere `error` e, se recusado, **responde erro ao visitante** (nunca
+  "sucesso" falso) e não grava o evento; falha só do evento/visita é logada e não derruba a página. Nunca troque por insert sem
+  conferir o retorno.
+- **Limites não são atômicos:** contam `link_events`/`leads` e depois gravam; duas requisições simultâneas podem passar do limite
+  por 1. É aceitável (o objetivo é conter abuso, não contabilidade). O dedupe de 24 h é por contato + imóvel.
+- **O hash do visitante** (`SHA-256(ip|user-agent|dia|sal)`) usa `PUBLIC_PAGE_SALT` (ou, na falta, `CRON_SECRET`, ou a service key).
+  **Trocar o sal zera a contagem de "1 visita por visitante por dia" e os limites por hora** — não é problema, só uma lacuna de um dia.
+  Nunca grave IP nem user-agent em claro.
+- **Um link por (imóvel, oportunidade, canal):** peças diferentes da MESMA oportunidade e imóvel compartilham o código `caption`
+  (`content_id` guarda só a primeira). A atribuição é por oportunidade + imóvel, não por peça.
+- **A frase com o link na legenda é uma tentativa do cron, não do `creative-generate`:** só roda a cada 6 h (junto de
+  `cron_opportunities`) e só em empresas com `auto_strategy`. A própria legenda é a marca de "já feito" (se ela contém o
+  link, não repete). Troca condicional (`caption` igual ao lido): se o dono editou nesse meio-tempo, não sobrescreve.
+- **Vitrine:** em conta sem plano o botão aparece com cadeado e abre o modal de plano (`marketing-ai` é inteiro bloqueado pelo
+  guard de vitrine). A página pública de uma empresa que perdeu o plano sai do ar (404) sozinha.
+- **`public/_headers`** (noindex no cabeçalho) só vale no Cloudflare Workers Assets; se o site mudar de hospedagem, refaça.
+- **Ajustes pós-QA (Etapa 5):** (1) `event` e os campos do lead são validados ANTES de consultar o código — o 400 (e o falso
+  sucesso do honeypot) é igual para código existente, inexistente ou ausente. Só o **429** do formulário (limite estourado) ainda
+  só aparece para código válido: aceito de propósito, porque o visitante precisa saber que deve esperar. (2) Tetos por link por hora
+  em `link_events`: 300 `view` e 60 `click_*` (acima disso a página abre/redireciona normalmente, só não grava) — trocar de
+  user-agent ou IP não enche a tabela. (3) O IP do hash vem de `cf-connecting-ip` (a Cloudflare define; o cliente não forja);
+  `x-forwarded-for` (forjável) e `x-real-ip` são só reserva. Se um dia o tráfego não passar pela Cloudflare, o hash deixa de ser confiável.
+
+## Etapas 6 e 7 (corretor sem login + resultados) — armadilhas (2026-10-30)
+
+- **`assign_next_broker` só roda pela service role** (revoke de public/anon/authenticated): chamar do navegador falha de propósito. Se
+  `for update skip locked` encontrar todos os corretores travados por outro lead simultâneo, devolve `null` e o lead entra sem corretor
+  (aceito; o dono encaminha à mão). O rodízio só avança depois dos limites de lead — lead repetido/barrado não gasta a vez de ninguém.
+- **Migration pendente não pode derrubar tela nem lead:** o Funil tenta a consulta com as colunas novas e cai na antiga; o rodízio
+  falhando = lead sem `assigned_broker_id`; `opportunity_results` ausente = card sem bloco de resultados. Tudo registrado em log.
+- **DDI do corretor vem da ficha** (`config.public_page.country_code`), no navegador e na página pública. ~~Primeira versão punha `55`
+  fixo no navegador~~ (achado do QA: corretor dos EUA com 10 dígitos viraria um número aleatório do Brasil). Hoje: número digitado com
+  "+" vale como está; sem DDI na ficha e sem "+", o botão "Encaminhar" some — nunca chutar país. O servidor (`publicPage.ts`) ainda
+  cai em `55` quando a ficha não tem `country_code` (comportamento anterior, não regressão; ficha nova deve trazer o campo).
+- **Moeda fixa em BRL (dívida):** a soma de vendas em Resultados e os valores do Funil (`fmtBRL`) mostram "R$" mesmo em inglês. Antes
+  de cliente nos EUA, a moeda precisa vir da ficha/empresa (ex.: `config.currency`).
+- **Rodízio antes do insert:** o corretor é escolhido antes de gravar o lead; se o insert falhar, a vez dele é gasta sem lead. Só afeta
+  a justiça do rodízio, não o lead.
+- **"Qualificado" = visita agendada** é uma convenção (o funil não tem etapa de visita); `visit_at` só reflete isso. 0 não é "sem
+  dado": sem `tracked_link` a oportunidade mostra "sem dado"; com link, 0 é 0.
+- **Telefone do corretor é público no clique:** o `wa.me` do botão da página expõe o número de quem recebeu o lead mais recente.
+
+## Hook com canal realtime chamado 2× = tela preta (2026-10-30)
+
+`usePendencias()` abre um canal realtime de nome fixo (`rt:agent_actions:<empresa>:pend`). O `DashboardLayout` já chama
+esse hook. Quando o hub do Marketing AI passou a chamá-lo também (PR #82), a 2ª inscrição no mesmo canal lançou
+`cannot add postgres_changes callbacks ... after subscribe()` e a página inteira caiu: tela preta para todo cliente
+logado. **Regra:** hook que abre canal realtime de nome fixo só pode ser chamado em UM lugar; quem mais precisar do
+número recebe por prop/contexto. Desde então existe o `ErrorBoundary` (`src/components/ErrorBoundary.tsx`): erro ao
+desenhar mostra a mensagem em vez de tela preta. Para testar telas logadas sem senha, dá pra simular a sessão no
+navegador automático com respostas falsas do Supabase (foi assim que este erro foi achado).
+
+## Inteligência de Mercado: livro-caixa e crons (2026-11-01)
+
+- Todo cron novo do `marketing-ai` (`cron_market_intel` incluso) precisa ficar **antes** do ramo `if (isCron)` genérico, senão
+  roda o pipeline de todas as empresas. O ramo fica depois do 503 de `ANTHROPIC_API_KEY` (a chave precisa existir).
+- `agent_performance.latency_ms` é NOT NULL: a linha de reserva grava `latency_ms: 0` e o ajuste atualiza depois.
+- `spendCap.ts` lê `Deno.env` ao carregar; nos testes em node, defina `globalThis.Deno` antes do `import()` dinâmico.
+- Sem `deno` no ambiente do agente: a verificação das edge functions foi só pelos testes em node (`--experimental-strip-types`).
+- A cidade da ficha (`news.city`) precisa aparecer no texto da notícia (filtro "região no texto"); notícia que só diz "Rio" é descartada.
+

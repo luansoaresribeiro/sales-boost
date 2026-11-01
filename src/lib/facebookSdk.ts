@@ -4,9 +4,12 @@
 // O App ID do Facebook é PÚBLICO (vai no SDK do browser por design), então
 // fica numa env VITE_ — sem ela, o SDK simplesmente não carrega e nada quebra.
 // A versão é fixada na mesma usada pelas edge functions de Instagram (v21.0).
+import { getCurrentLang } from '../contexts/LanguageContext'
+
 const APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID as string | undefined
 const FB_VERSION = (import.meta.env.VITE_FACEBOOK_API_VERSION as string | undefined) ?? 'v21.0'
 const WHATSAPP_CONFIG_ID = import.meta.env.VITE_WHATSAPP_CONFIG_ID as string | undefined
+const en = () => getCurrentLang() === 'en'
 
 interface FBLoginResponse { authResponse?: { code?: string }; status?: string }
 interface FBSdk {
@@ -60,8 +63,8 @@ export function isWhatsAppSignupConfigured(): boolean {
 
 export function launchWhatsAppSignup(): Promise<WhatsAppSignupResult> {
   return new Promise((resolve, reject) => {
-    if (!WHATSAPP_CONFIG_ID) { reject(new Error('WhatsApp Embedded Signup não configurado (VITE_WHATSAPP_CONFIG_ID ausente).')); return }
-    if (!window.FB?.login) { reject(new Error('SDK do Facebook ainda não carregou. Tenta de novo em alguns segundos.')); return }
+    if (!WHATSAPP_CONFIG_ID) { reject(new Error(en() ? 'WhatsApp Embedded Signup is not configured (VITE_WHATSAPP_CONFIG_ID is missing).' : 'WhatsApp Embedded Signup não configurado (VITE_WHATSAPP_CONFIG_ID ausente).')); return }
+    if (!window.FB?.login) { reject(new Error(en() ? 'The Facebook SDK has not loaded yet. Try again in a few seconds.' : 'SDK do Facebook ainda não carregou. Tenta de novo em alguns segundos.')); return }
     console.log('[Meta Signup] iniciado (config_id presente)')
 
     const sessionInfo: { wabaId: string | null; phoneNumberId: string | null } = { wabaId: null, phoneNumberId: null }
@@ -97,8 +100,8 @@ export function launchWhatsAppSignup(): Promise<WhatsAppSignupResult> {
         window.removeEventListener('message', onMessage)
         console.log('[Meta Signup] login concluído', { temCode: !!code, status: res.status, temWaba: !!sessionInfo.wabaId, temPhone: !!sessionInfo.phoneNumberId, cancel: userCancelled, erro: !!signupError })
         if (signupError) { reject(new Error(signupError)); return }
-        if (userCancelled) { reject(new Error('Você fechou a janela antes de terminar. Refaça e vá até o fim: escolha a conta do WhatsApp (WABA), selecione ou cadastre o número e clique em concluir.')); return }
-        if (!code) { reject(new Error('Login cancelado ou sem permissão concedida.')); return }
+        if (userCancelled) { reject(new Error(en() ? 'You closed the window before finishing. Start again and go to the end: choose the WhatsApp account (WABA), select or register the number and click finish.' : 'Você fechou a janela antes de terminar. Refaça e vá até o fim: escolha a conta do WhatsApp (WABA), selecione ou cadastre o número e clique em concluir.')); return }
+        if (!code) { reject(new Error(en() ? 'Login cancelled or permission not granted.' : 'Login cancelado ou sem permissão concedida.')); return }
         resolve({ code, wabaId: sessionInfo.wabaId, phoneNumberId: sessionInfo.phoneNumberId })
       }, 1500)
     }, {

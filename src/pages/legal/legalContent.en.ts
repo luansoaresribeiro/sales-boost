@@ -23,6 +23,7 @@ export const PRIVACY_POLICY_EN: LegalDoc = {
       heading: '2. What data we collect',
       paragraphs: ['We collect only the data necessary to operate the platform and create value for your business:'],
       bullets: [
+        `Public property page: when a visitor opens a property link and submits the form, we collect the name, the contact (WhatsApp or email) and the message they type, plus the record that they agreed to send them. There is a single purpose: the agency replying to that person about that property — the agency is the controller of this data and ${C.brand} acts as processor, keeping it in the agency's dashboard. We send nothing to the person automatically, we do not use this data for advertising, and we do not store the visitor's IP address (only an irreversible code, to count visits and prevent abuse). To ask for deletion, write to ${C.privacyEmail} or to the agency itself.`,
         'Registration data: name, email, password (stored encrypted) and company data (name, business type, city, website, social networks).',
         'Usage and business content data: posts, campaigns, reviews, opportunities, leads, messages with the AI agents and settings.',
         'Public data collected from external sources you connect (e.g., Google reviews, public profiles and posts on social networks, Google Maps information).',

@@ -64,14 +64,30 @@ export function isOfficial(url: string, domains: string[]): boolean {
   } catch { return false }
 }
 
-// Pode ir pra post? Geral e aprovada pelo dono sempre; conferida/corrigida
-// só dentro do prazo de reconferência.
+// Pode ir pra post (categoria LEVE)? Geral e aprovada pelo dono sempre; conferida/corrigida
+// só dentro do prazo de reconferência. Categoria regulada: ver isUsableTip/isOfficiallyReleased.
 export function isPublishable(meta: FaqMeta | null | undefined, now = Date.now()): boolean {
   const c = meta?.check
   if (!c) return false
   if (c.status === 'geral' || c.status === 'aprovada_dono') return true
   if (c.status === 'conferida' || c.status === 'corrigida') return !c.next_check_at || Date.parse(c.next_check_at) > now
   return false
+}
+// Dica "liberada sozinha" (decisão do dono 2026-10-26, opção A — docs/DECISIONS.md): só quando conferida em FONTE
+// OFICIAL — status conferida|corrigida, source_url presente e dentro de official_domains da ficha, e NÃO vencida
+// (next_check_at no futuro; vencida = reconferir antes). geral / revisar / aprovada_dono (sem fonte oficial) NÃO valem.
+export function isOfficiallyReleased(meta: FaqMeta | null | undefined, officialDomains: string[], now = Date.now()): boolean {
+  const c = meta?.check
+  if (!c || (c.status !== 'conferida' && c.status !== 'corrigida')) return false
+  if (!c.source_url || !isOfficial(c.source_url, officialDomains)) return false
+  return !!c.next_check_at && Date.parse(c.next_check_at) > now
+}
+
+// Dica que pode virar post na vaga dica_faq: categoria REGULADA (ficha) exige liberação por fonte oficial; categoria
+// leve (ou ficha sem regulated_categories) segue a regra de sempre (isPublishable: geral e aprovada pelo dono valem).
+export function isUsableTip(meta: FaqMeta | null | undefined, cfg: Pick<FaqConfig, 'official_domains' | 'regulated_categories'>, now = Date.now()): boolean {
+  const regulated = !!meta?.category && !!cfg.regulated_categories?.includes(meta.category)
+  return regulated ? isOfficiallyReleased(meta, cfg.official_domains, now) : isPublishable(meta, now)
 }
 export function isDue(meta: FaqMeta | null | undefined, now = Date.now()): boolean {
   const c = meta?.check

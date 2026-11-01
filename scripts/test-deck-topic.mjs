@@ -9,7 +9,7 @@ import {
 } from '../supabase/functions/_shared/deckTopic.ts'
 import { decideTopic, guardDeck, topicBlock } from '../supabase/functions/_shared/deckGuard.ts'
 import { deckPromptRules, rewritePrompt } from '../supabase/functions/_shared/deckSlides.ts'
-import { fetchFaqConfig, isPublishable } from '../supabase/functions/_shared/faqCheck.ts'
+import { fetchFaqConfig, isPublishable, isOfficiallyReleased, isUsableTip } from '../supabase/functions/_shared/faqCheck.ts'
 import { fetchFormatAliases } from '../supabase/functions/_shared/formatCatalog.ts'
 
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
@@ -67,11 +67,21 @@ const T8 = mk('t8', 'Dono', 'Texto aprovado pelo dono', 'impostos', chk('aprovad
 assert.equal(isPublishable(T1.meta, NOW), true); assert.equal(isPublishable(T3.meta, NOW), true); assert.equal(isPublishable(T8.meta, NOW), true)
 assert.equal(isPublishable(T4.meta, NOW), false); assert.equal(isPublishable(T5.meta, NOW), false); assert.equal(isPublishable(T7.meta, NOW), false)
 ok('isPublishable: conferida/geral/dono sim; vencida, revisar e sem check não')
-const picked = pickTips([T1, T2, T3, T4, T5, T6, T7, T8], 'impostos', NOW, 4)
-assert.deepEqual(picked.map(t => t.id), ['t2', 't3', 't1', 't8']) // menos usadas primeiro, só da categoria e só liberadas
-assert.deepEqual(pickTips([T1, T2, T3, T8], 'impostos', NOW, 2).map(t => t.id), ['t2', 't3'])
-assert.deepEqual(pickTips([T6], 'impostos', NOW), [])
-ok('pickTips: categoria, liberadas, até 4, menos usadas')
+const picked = pickTips([T1, T2, T3, T4, T5, T6, T7, T8], 'impostos', ['gov.br'], NOW, 4)
+assert.deepEqual(picked.map(t => t.id), ['t2', 't1']) // opção A: só conferida em fonte oficial (geral e dono saem), menos usadas primeiro
+assert.deepEqual(pickTips([T1, T2, T3, T8], 'impostos', ['gov.br'], NOW, 1).map(t => t.id), ['t2'])
+assert.deepEqual(pickTips([T6], 'impostos', ['gov.br'], NOW), [])
+assert.deepEqual(pickTips([T1, T2], 'impostos', ['rj.gov.br'], NOW), []) // fonte fora de official_domains
+assert.deepEqual(pickTips([mk('x', 'Q', 'A', 'impostos', { ...chk('conferida'), source_url: undefined })], 'impostos', ['gov.br'], NOW), []) // sem source_url
+assert.deepEqual(pickTips([T4], 'impostos', ['gov.br'], NOW), []) // vencida
+ok('pickTips (opção A): só conferida/corrigida com fonte oficial e no prazo; geral, dono, revisar e vencida não')
+assert.equal(isOfficiallyReleased(T1.meta, ['gov.br'], NOW), true); assert.equal(isOfficiallyReleased(T3.meta, ['gov.br'], NOW), false); assert.equal(isOfficiallyReleased(T8.meta, ['gov.br'], NOW), false)
+const cfgR = { official_domains: ['gov.br'], regulated_categories: ['impostos'] }
+assert.equal(isUsableTip(T3.meta, cfgR, NOW), false)  // geral em categoria regulada: não
+assert.equal(isUsableTip(T1.meta, cfgR, NOW), true)
+assert.equal(isUsableTip(mk('g', 'Q', 'A', 'geral', chk('geral')).meta, cfgR, NOW), true)  // categoria leve: como sempre
+assert.equal(isUsableTip(T3.meta, { official_domains: ['gov.br'] }, NOW), true) // ficha sem regulated_categories: fluxo antigo
+ok('isUsableTip: regulada exige fonte oficial; leve e ficha sem regulated_categories seguem como antes')
 assert.deepEqual(tipSources([T1, T2, T3], ['gov.br']), ['gov.br']) // geral não tem fonte; repetida some
 assert.deepEqual(tipSources([T1], ['rj.gov.br']), []) // site fora da lista oficial
 ok('fontes: só site oficial de dica conferida')
@@ -220,10 +230,12 @@ const askFn = (answer) => async () => { asked++; return answer }
 const base = { cfg, tcfg, company: { id: 'c1', city: 'Rio' }, anthropicKey: 'k' }
 {
   const d = await decideTopic({ ...base, admin: kAdmin([T1, T2, T3, T6]), text: 'Quanto custa o ITBI?', ask: askFn('leve') })
-  assert.equal(d.mode, 'regulado'); assert.equal(d.category, 'impostos'); assert.equal(asked, 0); assert.deepEqual(d.tips.map(t => t.id).sort(), ['t1', 't2', 't3'])
+  assert.equal(d.mode, 'regulado'); assert.equal(d.category, 'impostos'); assert.equal(asked, 0); assert.deepEqual(d.tips.map(t => t.id).sort(), ['t1', 't2']) // t3 (geral) não vale no regulado
   assert.deepEqual(d.hosts, ['gov.br'])
   const g = await decideTopic({ ...base, admin: kAdmin([T6]), text: 'Quanto custa o ITBI?', ask: askFn('leve') })
   assert.equal(g.mode, 'geral'); assert.equal(g.category, 'impostos'); assert.deepEqual(g.tips, [])
+  const soGeral = await decideTopic({ ...base, admin: kAdmin([T3, T8, T5]), text: 'Quanto custa o ITBI?', ask: askFn('leve') })
+  assert.equal(soGeral.mode, 'geral'); assert.deepEqual(soGeral.tips, []) // só geral/dono/revisar: carrossel sai no modo geral
   const l = await decideTopic({ ...base, admin: kAdmin([T1]), text: 'Bairro charmoso', ask: askFn('leve') })
   assert.equal(l.mode, 'leve'); assert.equal(asked, 1)
   const viaIa = await decideTopic({ ...base, admin: kAdmin([T6]), text: 'Bairro charmoso', ask: askFn('documentacao') })

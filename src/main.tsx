@@ -1,11 +1,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { LanguageProvider } from './contexts/LanguageContext'
+import { LanguageProvider, useLang } from './contexts/LanguageContext'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import './lib/analytics' // inicializa o PostHog antes da app renderizar
 import './lib/facebookSdk' // carrega o Facebook SDK (JS) — exigência da Meta
 import './index.css'
 import App from './App.tsx'
+import ErrorBoundary from './components/ErrorBoundary.tsx'
 import { AuthProvider } from './contexts/AuthContext.tsx'
 import { useAuth } from './contexts/AuthContext.tsx'
 import { CompanyProvider, useCompany } from './contexts/CompanyContext.tsx'
@@ -19,7 +20,9 @@ import DiagnosticsPage from './pages/dashboard/DiagnosticsPage.tsx'
 import InsightsPage from './pages/dashboard/InsightsPage.tsx'
 import SettingsPage from './pages/dashboard/SettingsPage.tsx'
 import OpportunitiesPage from './pages/dashboard/OpportunitiesPage.tsx'
+import GrowthOpportunitiesPage from './pages/dashboard/GrowthOpportunitiesPage.tsx'
 import MarketingAiHubPage from './pages/dashboard/MarketingAiHubPage.tsx'
+import CatalogPage from './pages/dashboard/CatalogPage.tsx'
 import BusinessProgressPage from './pages/dashboard/BusinessProgressPage.tsx'
 import TrialSummaryPage from './pages/dashboard/TrialSummaryPage.tsx'
 import AccessBlockedPage from './pages/dashboard/AccessBlockedPage.tsx'
@@ -38,6 +41,7 @@ import OnboardingPage from './pages/onboarding/OnboardingPage.tsx'
 import DiagnosticoPage from './pages/diagnostico/DiagnosticoPage.tsx'
 import PrivacyPolicyPage from './pages/legal/PrivacyPolicyPage.tsx'
 import TermsOfUsePage from './pages/legal/TermsOfUsePage.tsx'
+import PublicPropertyPage from './pages/public/PublicPropertyPage.tsx'
 import CookieConsent from './components/CookieConsent.tsx'
 
 const Spinner = () => (
@@ -47,13 +51,16 @@ const Spinner = () => (
   </div>
 )
 
-const LoadRetry = ({ onRetry }: { onRetry: () => void }) => (
+const LoadRetry = ({ onRetry }: { onRetry: () => void }) => {
+  const en = useLang().lang === 'en'
+  return (
   <div style={{ minHeight: '100vh', background: '#0E0B0A', display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center', justifyContent: 'center', padding: '16px', textAlign: 'center', fontFamily: "'Bricolage Grotesque', system-ui, sans-serif" }}>
-    <div style={{ color: 'white', fontSize: '15px', fontWeight: 700 }}>Não foi possível carregar sua conta agora.</div>
-    <div style={{ color: '#BABABA', fontSize: '13px' }}>Verifique sua internet e tente de novo.</div>
-    <button onClick={onRetry} style={{ padding: '10px 20px', background: '#FF6D29', color: '#000', fontWeight: 700, fontSize: '13px', border: 'none', borderRadius: '9px', cursor: 'pointer' }}>Tentar de novo</button>
+    <div style={{ color: 'white', fontSize: '15px', fontWeight: 700 }}>{en ? 'We could not load your account right now.' : 'Não foi possível carregar sua conta agora.'}</div>
+    <div style={{ color: '#BABABA', fontSize: '13px' }}>{en ? 'Check your internet connection and try again.' : 'Verifique sua internet e tente de novo.'}</div>
+    <button onClick={onRetry} style={{ padding: '10px 20px', background: '#FF6D29', color: '#000', fontWeight: 700, fontSize: '13px', border: 'none', borderRadius: '9px', cursor: 'pointer' }}>{en ? 'Try again' : 'Tentar de novo'}</button>
   </div>
-)
+  )
+}
 
 // Página inicial do dashboard: cai no Marketing AI (agente principal). Se o
 // owner desligou o Marketing AI dessa empresa, cai em Atividades.
@@ -153,12 +160,16 @@ function RouterRoot() {
         <Route path="posts/*" element={<Navigate to="/dashboard/marketing-ai" replace />} />
         <Route path="agente" element={<Navigate to="/dashboard/marketing-ai" replace />} />
         <Route path="marketing-ai" element={<MarketingAiHubPage />} />
+        {/* Catálogo (imóveis/itens): página própria, aberta pelo botão "+" (2026-11-01). */}
+        <Route path="catalogo" element={<CatalogPage />} />
         <Route path="marketing-ai/:section" element={<MarketingAiSectionPage />} />
         <Route path="meta-ads" element={<Navigate to="/dashboard/marketing-ai/content?tab=campanha" replace />} />
         <Route path="progresso" element={<BusinessProgressPage />} />
         <Route path="trial" element={<TrialSummaryPage />} />
         <Route path="access-blocked" element={<AccessBlockedPage />} />
         <Route path="oportunidades" element={<OpportunitiesPage />} />
+        {/* Inteligência comercial (2026-10-28): tabela growth_opportunities — outra coisa que a /oportunidades acima. */}
+        <Route path="opportunities" element={<GrowthOpportunitiesPage />} />
         <Route path="concorrentes" element={<Navigate to="/dashboard/marketing-ai/dados" replace />} />
         <Route path="aprovacoes" element={<ApprovalsPage />} />
         <Route path="relatorio" element={<ReportPage />} />
@@ -175,9 +186,17 @@ function RouterRoot() {
       <Route path="/diagnostico/:id" element={<DiagnosticoPage />} />
       <Route path="/privacidade" element={<PrivacyPolicyPage />} />
       <Route path="/termos" element={<TermsOfUsePage />} />
+      {/* Etapa 5: página pública do imóvel — destino de link, sem login, noindex (fora do ClientRoute de propósito). */}
+      <Route path="/p/:code" element={<PublicPropertyPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
+}
+
+// Erro ao desenhar qualquer página mostra a mensagem (em vez de tela preta); trocar de rota limpa o erro.
+function SafeRoutes() {
+  const location = useLocation()
+  return <ErrorBoundary resetKey={location.pathname}><RouterRoot /></ErrorBoundary>
 }
 
 createRoot(document.getElementById('root')!).render(
@@ -187,7 +206,7 @@ createRoot(document.getElementById('root')!).render(
       <LanguageProvider>
       <AuthProvider>
         <CompanyProvider>
-          <RouterRoot />
+          <SafeRoutes />
           <CookieConsent />
         </CompanyProvider>
       </AuthProvider>

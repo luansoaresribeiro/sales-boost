@@ -23,6 +23,8 @@ export const t = {
       date: 'Jun 11',
       year: '2026',
       location: 'São Paulo, Brasil',
+      month: 'Junho 2026',
+      vsPrev: 'vs anterior',
       reportTitle: 'Relatório Mensal',
       scoreLabel: 'Score de Saúde',
       reportItems: [
@@ -155,7 +157,9 @@ export const t = {
       bgWord: 'SALES',
       date: 'Jun 11',
       year: '2026',
-      location: 'São Paulo, Brasil',
+      location: 'United States',
+      month: 'June 2026',
+      vsPrev: 'vs previous',
       reportTitle: 'Monthly Report',
       scoreLabel: 'Health Score',
       reportItems: [

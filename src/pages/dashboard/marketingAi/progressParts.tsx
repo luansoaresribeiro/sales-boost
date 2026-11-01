@@ -295,7 +295,7 @@ export function Timeline({ d }: { d: ProgressData }) {
             <span style={{ fontSize: '18px' }}>{t.icon}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'white' }}>{trProgress(lang, t.label)}</div>
-              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)' }}>{t.when}</div>
+              <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)' }}>{trProgress(lang, t.when)}</div>
             </div>
             {t.gp != null && <span style={{ fontSize: '12px', fontWeight: 800, color: ORANGE, flexShrink: 0 }}>+{t.gp} XP</span>}
           </div>

@@ -318,6 +318,15 @@ Telegram (`notifyMarketing()` → Cloudflare Worker `marketing-bot` →
 - Nunca expor chave de API no frontend — sempre via Edge Functions.
 - i18n desde o início — nunca string hardcoded na UI (seguido de forma
   inconsistente em componentes mais novos — débito técnico conhecido).
+- **Idioma (2026-10-27):** dois idiomas, dois donos. **Tela = por usuário**
+  (`LanguageContext`): escolha explícita em `localStorage['sb_lang']` vence; sem
+  escolha, `companies.language` da empresa logada (`'pt'` → pt, senão en); sem
+  empresa → `'en'`. A regra só lê, nunca grava o `sb_lang` sozinha. **Conteúdo
+  gerado = por empresa** (`companies.language`, padrão `'en'` desde a migration
+  `20261027120000_ingles_padrao.sql`; editado em Configurações). Código fora do
+  React lê a tela com `getCurrentLang()`. `business_types.label` é chave em PT
+  (ficha/plano): traduzir só na exibição (`businessTypeLabel`). Ver
+  [DECISIONS.md](DECISIONS.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro).
 - Deploy: `npm run build` → `npx wrangler deploy` (manual, sem CI/CD —
   ver P4 em [ROADMAP.md](ROADMAP.md)).
 
@@ -384,7 +393,260 @@ engagement_automations (id, company_id, name, active, trigger_type,
 engagement_events (id, company_id, automation_id, channel, ig_user,
   ig_user_id, comment_text, media_ref, intent_detected, ai_interpretation,
   action_type, action_message, status, agent_action_id, error, created_at)
+market_signals (id, company_id, kind, region, title, summary, source_name,
+  source_url, observed_at, collected_by, meta, created_at)
+  -- 2026-10-28 (migration 20261028120000): sinal de mercado com fonte e data.
+  -- Etapa 1: vazia; a Etapa 2 deixa o cliente colar à mão (RLS de escrita já existe).
+growth_opportunities (id, company_id, kind, title, description,
+  commercial_problem, evidence jsonb [{type: fact|data|hypothesis, text,
+  source, date}], item_ids uuid[], audience, suggested_action,
+  how_to_measure, confidence, needs_validation, status, priority_rank,
+  priority_reasons jsonb, run_id, decided_at, decided_by, strategy_id,
+  created_at, plan jsonb, plan_generated_at, plan_approved_at)  -- plan*: 2026-10-29 (Etapa 4A)
+  -- 2026-10-28: saída do Opportunity Engine. Cliente lê e só altera
+  -- status/decided_at/decided_by (grant por coluna); criar é só pela function.
+  -- ATENÇÃO nomes: `opportunities` (acima) e `campaigns` têm OUTRO significado
+  -- e NÃO são estas tabelas — ver PITFALLS.md.
 ```
+
+## Opportunity Engine (Inteligência comercial, 2026-10-28) — 🟡 até teste em produção
+
+Decisão: [DECISIONS.md](DECISIONS.md#2026-10-28--inteligência-comercial-para-imobiliárias-opportunity-engine).
+Código: `supabase/functions/_shared/opportunityEngine.ts` (fatos + candidatos), `opportunityOutput.ts` (prompt,
+validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action: 'run_opportunities'` em
+`marketing-ai/index.ts`. Tela: `/dashboard/opportunities` (`GrowthOpportunitiesPage.tsx`). Teste de lógica pura:
+`node --experimental-strip-types scripts/test-opportunity-engine.mjs`.
+
+- **Entradas (só leitura):** catálogo (`marketing_ai_knowledge` kind='product', campos de `meta.fields` lidos pelos
+  papéis da ficha `config.opportunity_fields`), `posts` e `engagement_events` dos últimos 60 dias (vínculo
+  comentário → item: `media_ref` = `posts.instagram_media_id` → `posts.item_id`), `marketing_ai_competitors`,
+  `marketing_ai_trends`, `market_signals`. `leads` não entra: não há vínculo lead → imóvel no banco.
+- **Passo A (código, sem IA) — candidatos por regra:** `content_gap` (bairro do catálogo sem NENHUM post — qualquer
+  status — em 60 dias); `low_traction` (item COM post publicado e zero comentários nesses posts; **sempre
+  hipótese**, causas possíveis preço/fotos/comunicação; exige Instagram conectado); `positioning` (hashtag que ≥2
+  concorrentes repetem e a empresa não usa; notas do concorrente entram como "dado"); `market_change` (sinal ou
+  tendência **com fonte** citando um bairro onde há item do catálogo; tendência cuja fonte é a própria IA é
+  ignorada). `unmet_demand` existe no schema mas ainda não tem regra. Cada fato tem `type` (fact/data), `source`
+  e `date` real (`null` quando o dado não tem data; "contei agora" usa a data de hoje).
+- **Passo B (IA):** Claude (`claude-sonnet-4-6`, mesmo cliente do marketing-ai) recebe SÓ fatos + candidatos
+  (no máx. 5, os de melhor prioridade) e devolve JSON com até 3 oportunidades redigidas. Idioma =
+  `companies.language`. Síncrono (1 chamada, `AbortSignal` de 100 s, abaixo do teto de 150 s); sem candidato
+  nem chama a IA. Custo vai pra `agent_performance` (`task_key='run_opportunities'`). Auth: JWT da empresa +
+  `requirePaidAccess` (vitrine bloqueada; a tela abre o modal de plano). Chamadas repetidas em < 90 s reaproveitam
+  a rodada anterior (não gasta IA de novo). Roda **antes** do `getConfig`: não exige o Marketing AI configurado.
+- **Texto de setor na ficha (regra 6):** `config.opportunity_fields` (papéis dos campos) e `config.opportunity_texts`
+  (pt/en: causas possíveis de pouca reação, ressalva do prompt, exemplos de público), ambos na migration. Sem
+  `opportunity_texts` valem textos genéricos do código ("valor anunciado", "localização", "categoria do item").
+- **Prompt:** fatos e candidatos vão dentro de um bloco `<dados>…</dados>` com instrução de que é dado, nunca
+  instrução; todo texto vindo do banco (títulos, notas de concorrente, sinais, tendências) é saneado — uma linha,
+  sem `<` `>`, ~200 caracteres (`promptSafe`).
+- **Rodada repetida:** o marcador é a última execução bem-sucedida de `run_opportunities` em `agent_performance`
+  nos últimos 90 s (gravada mesmo com 0 oportunidades), não a última linha de `growth_opportunities`.
+- **Validação em código:** evidência `fact`/`data` sempre vem do fato guardado (texto, fonte e data do banco) —
+  id inexistente é descartado; número no texto que não esteja nos fatos → a **frase** sai (campo vazio cai no
+  texto padrão do código); termo de classe protegida (lista ampla PT/EN: situação familiar — filhos, crianças, famílias —, raça/cor, religião, origem, deficiência, sexo/gênero/orientação/estado civil, idade; falso positivo é preferível) → a frase sai (no público, vira vazio); número vale por **valor + unidade** ("60 dias" não libera "60%"; moeda só se o fato for o preço; quartos só se o fato for quartos); a IA só acrescenta
+  `hypothesis`. Confiança é do código: `needs_validation` se for hipótese (low_traction), tiver < 2 evidências ou
+  houver ressalva (Instagram desconectado, 1 fonte só, poucos posts, coleta velha); senão `high` (≥4
+  evidências e ≥3 fontes independentes), `medium` (≥2 e ≥2) ou `low`.
+- **Prioridade explicável (código):** (1) nº de evidências com fonte, (2) nº de imóveis ligados, (3) fontes
+  independentes; "precisa validar" sempre depois das com base. `priority_reasons` são frases geradas pelo código.
+  Nenhuma pontuação inventada.
+- **Tabelas:** `market_signals`, `growth_opportunities` (ver "Modelo de dados"). Sem cron. A tela mostra a rodada
+  mais recente (sem as descartadas) + as aprovadas de rodadas anteriores; o que falta pra achar mais é calculado
+  na tela a partir de contagens (nada é persistido).
+- **Etapa 2 — entrada manual de sinais (2026-10-28):** a seção "Sinais de mercado" da tela de Oportunidades
+  (`src/pages/dashboard/marketSignals.tsx`) grava direto em `market_signals` com o supabase-js (RLS da empresa;
+  `collected_by='manual'`), sem function nem migration. Exige título, nome da fonte e data (não futura) porque o
+  motor descarta sinal sem título ou sem fonte; link opcional (http/https). A região sugere (datalist) os valores
+  do campo de localização (`config.opportunity_fields.location`) dos itens do catálogo; o rótulo vem da ficha.
+  Lista os 50 mais recentes, com apagar (confirmação). Vitrine: botões com cadeado abrem o modal de plano —
+  `market_signals` **não** está em `ALLOWED_WRITE_TABLES` do `showcaseGuard`, então o guard também bloqueia a
+  escrita. Salvar não roda o motor: o aviso manda clicar em "Encontrar oportunidades" (intervalo de 90 s).
+  Divergência: o motor casa região por texto normalizado (igual/contida), então grafia diferente do catálogo não liga.
+
+- **Etapa 4A — plano da oportunidade + rodadas automáticas (2026-10-29) — 🟡 código pronto, falta migration/deploy/teste.**
+  Decisão: [DECISIONS.md](DECISIONS.md#2026-10-29--inteligência-comercial-etapa-4-plano-a-e-peças-b-tudo-automático).
+  Código: `_shared/opportunityPlan.ts` (lógica pura: prompt, conferência, formato, CTA), `opportunityPlanRun.ts`
+  (banco + IA: `decideOpportunity`, `createOpportunityPlan`, `approveOpportunityPlan`), `opportunityCron.ts`
+  (rodadas automáticas). Tela: `opportunityPlan.tsx`. Testes: `scripts/test-opportunity-plan.mjs`.
+  - **Actions do `marketing-ai`:** `decide_opportunity` {opportunity_id, status: approved|dismissed|suggested} (JWT +
+    empresa do login + `requirePaidAccess`; grava status/decided_at/decided_by com a service role filtrando
+    `company_id`; ao aprovar sem plano, cria o plano em `EdgeRuntime.waitUntil` e responde na hora);
+    `approve_opportunity_plan` {opportunity_id, undo?} (grava `plan_approved_at`); `cron_opportunities` (cron_secret
+    no corpo, antes do ramo de cron genérico do arquivo). **Não existe action de criar/refazer plano manualmente.**
+  - **Plano (1 chamada à IA, `claude-sonnet-4-6`, 2000 tokens):** entrada = oportunidade (título, problema, público,
+    ação, medir, evidências com tipo/fonte/data) + imóveis ligados lidos pelos papéis da ficha, tudo em `<dados>`
+    saneado. Saída gravada em `growth_opportunities.plan`; `plan_generated_at=now()`, `plan_approved_at=null`.
+    Validação em código (reaproveita `opportunityOutput.ts`): número só se estiver nas evidências/imóveis com a
+    unidade certa; Fair Housing em todo texto (público vazio cai no da oportunidade, se limpo); promessa de resultado
+    ("garantido", "vai vender", "+X%") tira a frase; métrica sem número; `format_suggestion` só
+    carousel/reel/post/story (inválido ou sem motivo → `post` marcado como "formato padrão"); `item_ids` só da
+    oportunidade; evidências citadas viram snapshot do que está guardado. **CTA:** pedido de comentário com
+    palavra-chave vira o alternativo da ficha (`ctas.sem_automacao`; inglês: "Send us a DM") e o plano marca
+    `cta_replaced`. Custo (inclusive falha) em `agent_performance`, `task_key='create_opportunity_plan'`, com
+    `task_description` começando por `opp:<id>`.
+  - **Limite:** 5 planos/empresa/24 h (429 com mensagem pt/en), contando também tentativas em andamento (linha
+    `create_opportunity_plan_start` gravada antes da IA; falha devolve a vaga); no máx. 2 falhas por oportunidade em 24 h
+    (vale para aprovar e para o cron). Com 429 a oportunidade fica sem plano e o cron gera depois. Plano já existente nunca
+    é regerado. Desfazer/descartar a oportunidade zera `plan_approved_at`; o plano gerado em segundo plano só é gravado
+    se a oportunidade ainda está aprovada. Busca que falhou há < 6 h não é repetida pelo cron.
+  - **Rodadas automáticas (`cron_opportunities`):** por empresa elegível (`auto_strategy=true`, interruptor geral
+    `hermes_config.auto_strategy_enabled`, `hasPaidAccess`, ativa, ficha com `opportunity_fields`): roda a busca se a
+    última rodada (`agent_performance` `run_opportunities` com sucesso — agora gravada também com 0 candidatos) tem > 7
+    dias OU há `market_signals` criado depois dela; e cria o plano das aprovadas sem plano. Até 3 empresas por chamada
+    e nenhuma IA nova depois de 40 s (cabe nos 150 s); responde na hora e trabalha em segundo plano.
+  - **Agendamento — EXISTE desde 2026-10-29** (cron `opportunities-auto`, a cada 6 h, minuto 17; a nota original dizia
+    "não criado", mantida abaixo como histórico). SQL de referência (o segredo vem do mesmo lugar dos outros crons — não
+    escrever o valor aqui):
+    ```sql
+    select cron.schedule('opportunities-auto', '0 */6 * * *', $$
+      select net.http_post(
+        url := 'https://<PROJECT_REF>.supabase.co/functions/v1/marketing-ai',
+        headers := '{"Content-Type":"application/json"}'::jsonb,
+        body := jsonb_build_object('action','cron_opportunities','cron_secret','<CRON_SECRET igual aos outros crons>')
+      );
+    $$);
+    -- desfazer: select cron.unschedule('opportunities-auto');
+    ```
+    `marketing-ai` precisa estar deployada com `--no-verify-jwt` (PITFALLS "verify_jwt × chamada de cron").
+  - **Notícias de mercado automáticas (Etapa 3, 2026-10-30 — 🟡 código pronto, falta migration + deploy):** dentro do
+    `cron_opportunities`, por empresa elegível e ANTES de `shouldRunOpportunities`, `marketNewsRun.ts` busca na Tavily
+    (`topic:'news'`, `search_depth:'basic'`, `exclude_domains` da ficha) as notícias das até 3 regiões do catálogo com mais
+    itens e grava em `market_signals` (`collected_by='system'`, `meta.provider='tavily'`); sinal novo já dispara nova rodada
+    e a `market_change` aparece. Lógica pura em `marketNews.ts` (filtros: data válida/não futura/≤ days, região no
+    título ou trecho, sem portal, só https, link único por empresa pelo índice `market_signals_system_url_uq`). Texto de
+    setor na ficha: `config.market_news` (migration `20261030100000_noticias_automaticas.sql`). Limites: 3 buscas e 5
+    sinais novos por empresa/7 dias; `MARKET_NEWS_MONTHLY_CAP` (padrão 120) conta `agent_performance`
+    `task_key='market_news_search'`. Chave: `getTavilyKey` (env `TAVILY_API_KEY` ou `_app_config`); respeita o interruptor
+    `insight_sources` tavily. Teste: `scripts/test-market-news.mjs`. Decisão: [DECISIONS.md](DECISIONS.md#2026-10-30--inteligência-comercial-etapa-3-notícias-de-mercado-automáticas).
+  - **Inteligência de Mercado ampla — estágios 1-3 (2026-11-01 — 🟡 código pronto no branch `mi-stage1-3`; falta migration, deploy do
+    `marketing-ai`, cron e secrets).** SUBSTITUI a coleta semanal descrita acima (mantida como histórico; divergência registrada
+    em [DECISIONS.md](DECISIONS.md#2026-11-01--inteligência-de-mercado-ampla-estágios-1-3)):
+    - **Teto em dólar (estágio 1):** US$ 5/cliente/mês para Apify+Tavily (`MARKET_INTEL_CAP_USD`, padrão 5; ficha
+      `market_intel.split` = instagram 3 / news 2, reduzida proporcionalmente se a soma passar do teto), **dentro dos US$ 40**:
+      `spendCap.monthSpend` soma `market_news_search` e `market_intel_apify` no campo `market_usd`. Livro-caixa em
+      `agent_performance.cost_usd` (`latency_ms: 0` obrigatório): **reserva** o custo estimado antes de cada chamada paga e
+      **ajusta** depois (erro HTTP da Tavily = 0; timeout/queda = reserva fica). Reserva que não grava = não chama. Preço da
+      busca: `TAVILY_COST_USD` (padrão 0,008 — **A CONFIRMAR** com o extrato da Tavily). Plano de gasto: dólares que restam ÷ dias
+      que restam ÷ custo = buscas de hoje (limitado por `max_searches_per_day` da ficha e pelo contador mensal por empresa
+      `max_searches_per_month`). Lógica pura: `_shared/marketIntel.ts` (+ teste `scripts/test-market-intel.mjs`).
+    - **Notícias v2 (estágio 2):** ficha `config.market_intel.news` (migration `20261101100000_inteligencia_mercado_ficha.sql`):
+      tópicos `{kind, query{pt,en}}` com `{region}` (bairros do catálogo) / `{city}`, `kind` dentro do CHECK de `market_signals.kind`
+      (launch, infrastructure, economy, tourism, ...), portais excluídos, janela. Rotação diária por (tópico x bairro);
+      lotes de 3 buscas em paralelo (12 s); **1 rodada por empresa por dia**; mesmo filtro de qualidade (data válida, região no
+      texto, https, sem portal); dedupe por URL normalizada (sem `utm_*`/`fbclid`/fragmento) e por título. Quem coleta é a action
+      `cron_market_intel` do `marketing-ai` (`_shared/marketIntelCron.ts`; `cron_secret` no corpo; mesma elegibilidade do
+      opportunityCron + interruptor `insight_sources` tavily; até 2 empresas com trabalho por chamada; nada novo após 40 s).
+      O `cron_opportunities` **parou de coletar**; `shouldRunOpportunities` mantém "sinal novo -> nova rodada" com **mínimo de 24 h**
+      entre rodadas. `MARKET_NEWS_MONTHLY_CAP` e os tetos semanais fixos foram aposentados.
+    - **Agendamento (NÃO criado — o agente principal cria em produção).** Diário, 09:43 UTC (06:43 Rio):
+      ```sql
+      select cron.schedule('market-intel-daily', '43 9 * * *', $$
+        select net.http_post(
+          url := 'https://<PROJECT_REF>.supabase.co/functions/v1/marketing-ai',
+          headers := '{"Content-Type":"application/json"}'::jsonb,
+          body := jsonb_build_object('action','cron_market_intel','cron_secret','<CRON_SECRET igual aos outros crons>')
+        );
+      $$);
+      -- desfazer: select cron.unschedule('market-intel-daily');
+      ```
+      Cada chamada atende até 2 empresas; com mais clientes use `'43 9,13,17 * * *'` (as já atendidas no dia saem
+      sozinhas por "já coletou hoje", sem custo).
+    - **Tela (estágio 3):** aba "🌐 Mercado" em Dados (`marketingAi/MarketFeed.tsx`): feed de `market_signals` com filtros por
+      bairro e tipo, selo "Automático", fonte (domínio com link) e data da fonte, apagar; "Última coleta: dd/mm — próxima:
+      amanhã" lido de `agent_performance` (se o RLS impedir a leitura, a linha some). Sem botão de gerar.
+  - **Tela:** sem botões de gerar; mostra "Próxima análise automática: semanal (e quando você cadastra um sinal novo)"
+    e a data da última análise; oportunidade aprovada sem plano mostra "Montando o plano…" (recarrega a cada 10 s por 2
+    min, depois "o plano sai na próxima rodada automática"); botões "Aprovar plano"/"Desfazer aprovação".
+    Aprovar/descartar a oportunidade passou de update direto no banco para `decide_opportunity` (o grant de update do
+    cliente continua existindo, sem uso pela tela).
+- **Estado:** 🟡 código e teste de lógica prontos; falta aplicar a migration em produção (depois do merge), fazer
+  o deploy do `marketing-ai` e rodar na Tespon. A Etapa 1 **não** publica nem envia nada.
+
+- **Etapa 4B — plano aprovado → peças em rascunho (2026-10-29) — 🟡 código pronto; migration/deploy/teste em produção por fazer.**
+  Decisão: [DECISIONS.md](DECISIONS.md#2026-10-29--inteligência-comercial-etapa-4b-plano-aprovado--peças-em-rascunho-automático).
+  Código: `_shared/opportunityPieces.ts` (lógica pura: formato sem vídeo, quantidade, limites, idempotência, mapa da
+  ficha), `opportunityPiecesRun.ts` (banco + despacho), `opportunityPieceJob.ts` (monta a vaga no `creative-generate`).
+  Testes: `scripts/test-opportunity-pieces.mjs`. Migration: `20261029130000_oportunidade_pecas.sql` (aditiva).
+  - **Fluxo completo:** `run_opportunities` (cron/sinal novo) → oportunidade **sugerida** → dono **aprova** (`decide_opportunity`)
+    → plano criado sozinho (`createOpportunityPlan`) → dono **aprova o plano** (`approve_opportunity_plan`) →
+    `marketing-ai` chama `generateOpportunityPieces` em segundo plano → por peça, `POST creative-generate {action:'plan_slot',
+    cron_secret, company_id, opportunity_id, piece:{format, mode:'item'|'text', item_id?}}` (responde 202) →
+    `buildOpportunityJob` **recarrega o plano do banco** (empresa + status aprovado + `plan_approved_at`; o corpo não é
+    confiado) e monta a vaga → `runPlanSlot` (o mesmo do calendário): modo texto = `generateForCompany` (carrossel de
+    slides com `intent` do plano), modo foto = `catalog-package` (`only_recipe`, `loose`) → peça em `marketing_ai_test_content`
+    (rascunho) com `opportunity_id` e `intent` (`SlotIntent.opportunity`, sem `pilar_ss`) → nota de qualidade → vault =
+    **Central de Aprovações** → dono aprova → `agent-actions` cria o `posts` **copiando `opportunity_id`** (bloco separado e
+    tolerante, como os rótulos). `make_now` (login do dono) ignora `opportunity_id`.
+  - **Formato:** plano `carousel|post|story` → mapa da ficha `config.opportunity_pieces` (`{carousel:{item,text},…}`); só
+    formato `live`; foto = `item_package` com receita, texto = `post`; **`item_video`/`dm` nunca**. `reel` → carrossel +
+    nota em `plan.pieces_info.notes`. `plan.pieces_count` (1–3, padrão 2) e `plan.pieces_info` (o que foi feito).
+  - **Limites/custo:** 3 por plano (também conferido no `creative-generate`), 6 por empresa por dia (`opportunity_pieces`).
+  - **Cron:** `cron_opportunities` passa a também pedir as peças dos planos aprovados sem peças (só despacha; sem IA, não
+    ocupa vaga das 3 empresas). Resumo agora traz `pieces`.
+  - **Tela:** oportunidade com plano aprovado mostra "Gerando as peças…" (recarrega a cada 10 s por 15 min), depois
+    "N peças na Central de Aprovações" com link para `/dashboard/aprovacoes` (só rascunhos pendentes; "M em revisão de qualidade" se alguma não
+    chegou ao vault e "K aprovadas" para os posts já aprovados/publicados). Na Central, a peça mostra o selo "Da oportunidade: <título>".
+  - **Qualidade:** `claimGuard`/`hasUnsupportedClaim` (opportunityOutput.ts) tiram frases com adjetivo de mercado sem
+    dado nos fatos (lista: ficha `opportunity_texts.market_claims`, senão `DEFAULT_MARKET_CLAIMS`); `photoCounts` entra no
+    prompt do `run_opportunities` e do plano, e `actionForPhotos` troca a ação por "adicionar fotos reais" quando o item
+    não tem foto.
+  - **Divergências/atenção:** (a) o vínculo `opportunity_id` é gravado num UPDATE à parte (migration pendente não derruba
+    a peça), mas `generateOpportunityPieces` **não gera** se a coluna não existe (sem idempotência não há segurança);
+    (b) o cliente pode ter UPDATE direto em `marketing_ai_test_content`: a Etapa 6 deve juntar `opportunity_id` **sempre
+    filtrando por `company_id`** dos dois lados; (c) desfazer a aprovação do plano **não apaga** peças já geradas.
+  - **Reverter:** bloco "Como reverter" no próprio arquivo da migration; as functions voltam pelo commit anterior.
+
+- **Etapa 5 — página pública do imóvel + link rastreável (2026-10-30) — 🟡 código pronto; migration/deploy/aprovação do dono por fazer.**
+  Decisão: [DECISIONS.md](DECISIONS.md#2026-10-30--inteligência-comercial-etapa-5-página-pública-do-imóvel--link-rastreável--lead-com-origem).
+  Código: `_shared/publicPage.ts` (puro: código sem ambíguos, lista branca de campos, fotos reais, validação do lead, limites,
+  `wa.me`/`ig.me`, hash do visitante, frase com link uma vez só), `_shared/publicPageRun.ts` (banco). Tela pública
+  `src/pages/public/PublicPropertyPage.tsx` (rota `/p/:code`, fora do `ClientRoute`); tela do dono `PublicPageButton.tsx` (no card do
+  imóvel em `CatalogItems.tsx`). Teste: `scripts/test-public-page.mjs`. Migration: `20261030110000_pagina_publica_imovel.sql`.
+  - **Modelo:** `public_pages` (item_id PK, `enabled`, `approved_at/by`, `contact_phone/contact_ig` copiados na aprovação),
+    `tracked_links` (`code` 8 caracteres, único por imóvel + oportunidade + canal), `link_events` (`view`/`click_whatsapp`/
+    `click_dm`/`lead`, `visitor_hash`, nunca IP), e `leads` ganha `item_id`, `opportunity_id`, `link_id`, `consent_at`, `consent_text`.
+    RLS: dono/owner só leem; escrita só service role. Variável opcional `PUBLIC_PAGE_SALT` (sal do hash do visitante; sem ela usa `CRON_SECRET`). Ficha `imoveis_rio.config.public_page` = `fields` (lista branca), `min_photos`,
+    `country_code`, `caption_line`.
+  - **Ações do `marketing-ai`:** públicas (sem login, antes de auth/cron): `public_page_get`, `public_page_event`,
+    `public_page_lead`. Com login + plano pago: `get_public_page` (prévia/estado) e `set_public_page {item_id, enabled}` (aprovação).
+  - **Onde o link entra:** `opportunityCron.ts` → `attachTrackedLinks` (rascunhos de oportunidade, canal `caption`, uma vez só,
+    nunca peça aprovada); `item-videos` `list` → mensagem NOVA do QUERO ganha o link (canal `dm`). `creative-generate` e
+    `instagram-webhook` NÃO foram tocados.
+  - **Divergência:** a Etapa 5 do ROADMAP falava em "encaminhar ao corretor" e em tocar o `instagram-webhook` — nenhum dos dois
+    foi feito (corretor = Etapa 7; DM/comentário seguem sem atribuição).
+  - **Reverter:** bloco "Como reverter" na migration; as functions voltam pelo commit anterior; o site pelo `wrangler rollback`.
+
+- **Etapas 6 e 7 (mínimas) — resultados por oportunidade + corretor sem login (2026-10-30) — 🟡 código pronto; migration/deploy por fazer.**
+  Decisão: [DECISIONS.md](DECISIONS.md). Migration `20261030120000_resultados_e_equipe.sql`: `brokers` (RLS só da dona; owner da
+  plataforma lê), `leads` + `visit_at/proposal_at/proposal_value/closed_at/closed_value/assigned_broker_id`, `link_events.broker_id`,
+  funções `assign_next_broker` (security definer, só service_role) e `opportunity_results` (security invoker). Código:
+  `_shared/publicPageRun.ts` (rodízio no lead; corretor no clique), `src/pages/dashboard/resultsBrokers.ts` (lógica pura),
+  `opportunityResults.tsx` (card da oportunidade), `settings/BrokersCard.tsx`, `marketingAi/FunnelTab.tsx`. Teste:
+  `scripts/test-results-brokers.mjs` (+ casos de corretor em `test-public-page.mjs`). As telas caem no comportamento antigo se a migration
+  ainda não foi aplicada (consulta de leads sem as colunas novas; sem bloco de resultados).
+  - **Reverter:** bloco "Como reverter" na migration; functions e site voltam pelo commit anterior.
+
+## Faixa de fluxo dos agentes (2026-11-01)
+
+Pedido do dono: o que aparece nas abas de cada agente tem que ser o fluxo REAL, com rastreamento no front-end. No topo de cada
+agente há uma faixa horizontal (empilha no celular) com os passos reais, ligados por setas; cada passo mostra nome, explicação, pílula
+de status (✅ ok / ⏳ aguardando / ⚠️ erro com o texto real encurtado / 🚧 em construção), "última vez", "próxima" (só quando as
+regras do código permitem calcular), 1–2 contagens e, em laranja, o que espera o dono. Sem dado = "sem dado ainda" (regra 5).
+- **Componente:** `src/pages/dashboard/marketingAi/FlowStrip.tsx` (só desenha). **Dados:** `useFlowStripData.ts` (um hook por agente).
+  **Montagem dos passos:** `flowStripSteps.ts` (`marketSteps`, `oppSteps`). **Regras puras:** `flowStripLogic.ts` (`nextOpportunityRound`
+  espelha `shouldRunOpportunities`: > 7 dias, ou sinal novo e já passaram 24 h; falha há < 6 h não tenta). Teste: `scripts/test-flow-strip.mjs`.
+- **Prontos:** Inteligência de Mercado (`dados`; clicar abre a sub-aba, respeitando abas condicionais da ficha) e Motor de Oportunidades
+  (`/dashboard/opportunities`; clicar rola até a lista). **Faltam:** Estratégia, Ativação, Resultados e Aprendizado (ROADMAP).
+- **Livro-caixa:** a RLS de `agent_performance` não está nas migrations (tabela criada fora delas), então a tela não depende dela:
+  a função `public.company_flow_status(p_company uuid) returns jsonb` (migration `20261101200000_company_flow_status.sql`) é
+  **somente leitura**, `security definer`, `set search_path = public`; confere que a empresa é de quem chama (ou dono da plataforma) e
+  devolve só agregados (última execução, sucesso, erro com 160 caracteres, contagens, soma de custo do mês, teto de notícias da ficha).
+  `revoke` de public/anon, `grant` só a `authenticated`. Se a função não existir ou falhar, a faixa mostra "sem dado ainda". Reverter:
+  `drop function if exists public.company_flow_status(uuid);`
+- **Limites honestos:** o cron não é consultado do navegador (texto fixo: `market-intel-daily` 09:43 UTC = 06:43 do Rio; `opportunities-auto`
+  a cada 6 h); o teto mensal mostrado vem da ficha (o secret `MARKET_INTEL_CAP_USD`, se existir, não é visível ao banco); coleta do
+  Instagram (estágio 4) aparece como 🚧 em construção.
 
 ## Estado atual do código
 

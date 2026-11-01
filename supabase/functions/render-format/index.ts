@@ -16,6 +16,7 @@ import { encodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { svgSlideSystem, SLIDE_LAYOUTS, type Measure, type LogoOpts } from '../_shared/slideSystem.ts'
 import { usableLogoMeta, logoBackdrop, hexLuma } from '../_shared/logoPng.ts'
+import { kickLogoPrepare } from '../_shared/logoResolve.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 
@@ -79,8 +80,10 @@ async function resolveLogo(admin: ReturnType<typeof createClient>, companyId: st
     if (!brand.logoUrl) return legacy
     const { data, error } = await admin.from('brand_dna').select('logo_meta').eq('company_id', companyId).maybeSingle()
     if (error || !data) return legacy
-    const m = usableLogoMeta((data as { logo_meta?: unknown }).logo_meta, brand.logoUrl)
-    if (!m) return legacy
+    const raw = (data as { logo_meta?: unknown }).logo_meta
+    const m = usableLogoMeta(raw, brand.logoUrl)
+    // Meta ausente/de outro logo: prepara em segundo plano (peça de agora segue com o logo de sempre). Ver _shared/logoResolve.ts.
+    if (!m) { void kickLogoPrepare(admin, companyId, brand.logoUrl, raw); return legacy }
     if (m.kind === 'foto') return { url: null, foto: true, prepared: false, luma: null, lo: null, hi: null, aspect: null }
     if (m.png_url) return { url: m.png_url, foto: false, prepared: true, luma: m.luma, lo: m.luma_lo ?? null, hi: m.luma_hi ?? null, aspect: m.w && m.h ? m.w / m.h : null }
     return legacy

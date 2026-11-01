@@ -29,6 +29,13 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
+import { runOpportunities } from '../_shared/opportunityRun.ts'
+import { approveOpportunityPlan, decideOpportunity } from '../_shared/opportunityPlanRun.ts'
+import { cronOpportunities, runInBackground } from '../_shared/opportunityCron.ts'
+import { cronMarketIntel } from '../_shared/marketIntelCron.ts'
+import { fitsCap } from '../_shared/spendCap.ts'
+import { generateOpportunityPieces, type Dispatch } from '../_shared/opportunityPiecesRun.ts'
+import { PUBLIC_ACTIONS, getPublicPageState, handlePublicPage, publicCtxFrom, setPublicPage } from '../_shared/publicPageRun.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -158,6 +165,19 @@ async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1200
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
   const data = await res.json()
   return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+}
+
+// Mesma Claude/modelo das outras actions, mas devolvendo também os tokens (custo vai pra agent_performance).
+async function callClaudeWithUsage(anthropicKey: string, prompt: string, maxTokens: number): Promise<{ text: string; tokens: number }> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    signal: AbortSignal.timeout(100_000), // abaixo do teto de 150s da function (PITFALLS)
+  })
+  if (!res.ok) throw new Error(`Claude error: ${(await res.text()).slice(0, 300)}`)
+  const data = await res.json()
+  return { text: (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim(), tokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0) }
 }
 
 function parseJsonArray<T>(raw: string): T[] {
@@ -651,12 +671,41 @@ Deno.serve(async (req) => {
     // decide através dela agora, por decisão explícita do dono.
     const hermesUrl = Deno.env.get('HERMES_URL') ?? null
     const hermesApiKey = Deno.env.get('HERMES_API_KEY') ?? null
-    if (!anthropicKey) return json({ error: 'ANTHROPIC_API_KEY não configurada.' }, 503)
-
     const admin = createClient(supabaseUrl, serviceKey)
     const body = await req.json().catch(() => ({})) as Record<string, unknown>
+
+    // Etapa 5: página pública do imóvel — ações SEM login, tratadas antes de qualquer auth/cron (e sem precisar de IA).
+    // Superfície pública: tudo via service role, 404 idêntico a qualquer falha de leitura (ver PITFALLS). Lógica em
+    // _shared/publicPage.ts (pura) e _shared/publicPageRun.ts (banco). Nunca envia nada ao visitante.
+    if ((PUBLIC_ACTIONS as readonly string[]).includes(String(body.action))) {
+      const salt = Deno.env.get('PUBLIC_PAGE_SALT') ?? cronSecretEnv ?? serviceKey
+      const { status, body: out } = await handlePublicPage(admin, String(body.action), body, publicCtxFrom(req, salt))
+      return json(out, status)
+    }
+
+    if (!anthropicKey) return json({ error: 'ANTHROPIC_API_KEY não configurada.' }, 503)
     const isCron = cronSecretEnv && body.cron_secret === cronSecretEnv
 
+    // Rodadas automáticas de oportunidades (cron_secret no corpo, como os outros crons). Responde na hora e trabalha em segundo plano.
+    // Etapa 4B: despacho de UMA peça de oportunidade ao creative-generate (plan_slot, cron_secret). Responde 202 na hora.
+    const dispatchPiece: Dispatch = async (b) => {
+      if (!cronSecretEnv) return false
+      const res = await fetch(`${supabaseUrl}/functions/v1/creative-generate`, {
+        method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'plan_slot', cron_secret: cronSecretEnv, ...b }), signal: AbortSignal.timeout(20_000),
+      })
+      await res.body?.cancel()
+      return res.ok
+    }
+    if (isCron && body.action === 'cron_opportunities') {
+      runInBackground(cronOpportunities(admin, (prompt, maxTokens) => callClaudeWithUsage(anthropicKey, prompt, maxTokens), Date.now(), dispatchPiece).then(r => console.log('cron_opportunities:', JSON.stringify(r))).catch(e => console.error('cron_opportunities:', String(e))))
+      return json({ ok: true, cron: true, started: true })
+    }
+    // Inteligência de Mercado: coleta diária de notícias (Tavily) com teto em dólar. Dono único da coleta; ver marketIntelCron.ts.
+    if (isCron && body.action === 'cron_market_intel') {
+      runInBackground(cronMarketIntel(admin, Date.now(), { fitsCap: async (companyId, est) => (await fitsCap(admin, companyId, est)).ok }).then(r => console.log('cron_market_intel:', JSON.stringify(r))).catch(e => console.error('cron_market_intel:', String(e))))
+      return json({ ok: true, cron: true, started: true })
+    }
     if (isCron) {
       const disabled = await getDisabledMarketingAiTools(admin)
       const { data: companies } = await admin.from('companies').select('id, business_name, business_type, city, instagram_url, goal').eq('active', true)
@@ -684,9 +733,38 @@ Deno.serve(async (req) => {
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
     const noPlan = await requirePaidAccess(admin, company.id)
     if (noPlan) return noPlan
-    ;(company as Company).businessContext = await loadBusinessContext(admin, company.id)
 
     const action = body.action as string
+    // Etapa 5 (com login): o dono vê a prévia e APROVA a página do imóvel. Fica antes do getConfig (não depende do Marketing AI).
+    if (action === 'get_public_page' || action === 'set_public_page') {
+      const r = action === 'get_public_page'
+        ? await getPublicPageState(admin, company.id as string, body.item_id)
+        : await setPublicPage(admin, company.id as string, user.id, body.item_id, body.enabled)
+      return json(r.body, r.status)
+    }
+    // Opportunity Engine (Inteligência comercial, 2026-10-28): lê só dados da empresa e grava em
+    // growth_opportunities — nada é publicado. Fica ANTES do getConfig de propósito: não depende da
+    // configuração do Marketing AI (a Tespon pode não ter). Lógica em _shared/opportunityRun.ts.
+    if (action === 'run_opportunities') {
+      const r = await runOpportunities(admin, company.id as string, (prompt, maxTokens) => callClaudeWithUsage(anthropicKey, prompt, maxTokens))
+      const { status, ...rest } = r
+      return json(rest, status)
+    }
+    // Etapa 4A (tudo automático): o dono só aprova/descarta; aprovar cria o plano sozinho em segundo plano.
+    // Lógica em _shared/opportunityPlanRun.ts. Aprovar o PLANO continua manual (é aprovação). Nada é publicado.
+    if (action === 'decide_opportunity') {
+      const { status, ...rest } = await decideOpportunity(admin, company.id as string, user.id, body.opportunity_id, body.status, (prompt, maxTokens) => callClaudeWithUsage(anthropicKey, prompt, maxTokens), runInBackground)
+      return json(rest, status)
+    }
+    if (action === 'approve_opportunity_plan') {
+      const { status, ...rest } = await approveOpportunityPlan(admin, company.id as string, body.opportunity_id, body.undo === true)
+      // Etapa 4B (tudo automático): plano aprovado → as peças nascem sozinhas, em rascunho, em segundo plano. Desfazer não apaga nada.
+      if (rest.ok && body.undo !== true) {
+        runInBackground(generateOpportunityPieces(admin, company.id as string, body.opportunity_id, dispatchPiece).then(r => { if (!r.ok) console.error(`[opportunity-pieces] ${String(body.opportunity_id)}: ${r.status} ${r.error}`) }).catch(e => console.error('[opportunity-pieces]', String(e))))
+      }
+      return json(rest, status)
+    }
+    ;(company as Company).businessContext = await loadBusinessContext(admin, company.id)
     const config = await getConfig(admin, company.id)
     if (!config) return json({ error: 'Configure o Marketing AI primeiro (aba Configurações).' }, 400)
 
@@ -762,7 +840,7 @@ Deno.serve(async (req) => {
       return json({ ok: true })
     }
 
-    return json({ error: 'action inválida. Use run_tracking, run_competitors, run_content, run_trends, run_strategy, chat, run_experiment, conclude_experiment ou generate_report.' }, 400)
+    return json({ error: 'action inválida. Use get_public_page, set_public_page, run_tracking, run_competitors, run_content, run_trends, run_strategy, run_opportunities, decide_opportunity, approve_opportunity_plan, chat, run_experiment, conclude_experiment ou generate_report.' }, 400)
   } catch (err) {
     console.error('marketing-ai error:', err)
     return json({ error: String(err) }, 500)

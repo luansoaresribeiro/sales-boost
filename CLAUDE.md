@@ -84,6 +84,12 @@ confiável pro próximo agente.
 - Mudar a direção do produto (algo que contradiga
   [docs/DECISIONS.md](docs/DECISIONS.md)).
 
+> **Nota (2026-10-29):** a regra desta seção foi **relaxada pelo dono** — migration, deploy de function (inclusive de
+> cliente real) e cron o agente faz sozinho; só decisões que mudam a **direção do produto** (e gasto novo, como
+> vídeo/Higgsfield) continuam exigindo a resposta dele. Ver
+> [docs/DECISIONS.md](docs/DECISIONS.md#2026-10-29--autonomia-do-agente). Os itens acima ficam como lista de **cuidado**
+> (testar, comparar o deploy, deixar rollback documentado), não de pedido de permissão.
+
 **Formato do aviso** (em português simples): O que vou fazer · Por quê ·
 O que pode dar errado · Como desfazer · **"Posso seguir?"** — e esperar a
 resposta antes de agir.

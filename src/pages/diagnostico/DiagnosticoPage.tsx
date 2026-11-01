@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { businessTypeLabel } from '../../lib/businessTypes'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import {
@@ -373,7 +374,7 @@ export function DiagnosticResult({ id, embedded = false }: { id: string; embedde
           {diag.business_name}
         </h1>
         <p style={{ fontSize: 14, color: MUTED, lineHeight: 1.6, margin: '0 0 24px' }}>
-          {diag.business_type} · {diag.city}
+          {diag.business_type ? businessTypeLabel(diag.business_type, lang) : ''} · {diag.city}
         </p>
 
         {/* Camada 1 (diagnóstico em 3 camadas, 2026-10-19): a nota abre "o que você faz hoje" */}

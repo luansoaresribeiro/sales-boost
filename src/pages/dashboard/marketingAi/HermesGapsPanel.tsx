@@ -57,7 +57,7 @@ export default function HermesGapsPanel({ company }: { company: CompanyData }) {
         list.push({
           key: 'catalog', label: `${catalogSchema.catalogLabel}`, why: t.catalogWhy.replace('{item}', itemName),
           status: (catalogCount ?? 0) > 0 ? 'ok' : 'gap',
-          actionLabel: t.catalogAction.replace('{item}', itemName), actionHref: '/dashboard/marketing-ai/dados',
+          actionLabel: t.catalogAction.replace('{item}', itemName), actionHref: '/dashboard/catalogo',
         })
       }
 

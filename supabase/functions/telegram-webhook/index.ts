@@ -10,6 +10,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { parseButton, verifyButton, pendingKeyboard, confirmKeyboard, tg } from '../_shared/telegramButtons.ts'
+import { plannedPublishAt, publishWhenLabel } from '../_shared/publishSlot.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -20,7 +21,8 @@ const BOT_USERNAME = 'luansoaresribeirobot'
 type SupaClient = ReturnType<typeof createClient>
 
 interface TelegramChat { id: number; type: string }
-interface TelegramMessage { message_id?: number; chat: TelegramChat; text?: string }
+interface TelegramAudio { file_id: string; duration?: number; file_size?: number }
+interface TelegramMessage { message_id?: number; chat: TelegramChat; text?: string; voice?: TelegramAudio; audio?: TelegramAudio }
 interface TelegramCallback { id: string; from: { id: number }; data?: string; message?: TelegramMessage }
 interface TelegramUpdate { message?: TelegramMessage; edited_message?: TelegramMessage; callback_query?: TelegramCallback }
 
@@ -102,11 +104,83 @@ async function handleFreeText(admin: SupaClient, token: string, chatId: number, 
   }
 }
 
+// Áudio no chat privado: o Claude não recebe áudio, então a OpenAI só converte a fala em texto
+// (whisper-1, ~US$ 0,006/min) e o texto segue pro telegram-chat como se tivesse sido digitado.
+// Só transcreve chat ligado a exatamente 1 empresa (não gasta com quem não conectou) e até 2 min.
+const AUDIO_MAX_SECONDS = 120
+const WHISPER_USD_PER_MIN = 0.006
+
+async function openAiKey(admin: SupaClient): Promise<string | null> {
+  const env = Deno.env.get('OPENAI_API_KEY')
+  if (env) return env
+  const { data } = await admin.from('_app_config').select('value').eq('key', 'openai_api_key').maybeSingle()
+  return (data as { value?: string } | null)?.value ?? null
+}
+
+async function handleVoice(admin: SupaClient, token: string, chatId: number, audio: TelegramAudio, supabaseUrl: string, webhookSecret: string): Promise<void> {
+  const { data: companies } = await admin.from('companies').select('id').eq('telegram_chat_id', chatId).limit(2)
+  if (companies?.length !== 1) {
+    // Sem gastar com transcrição: o telegram-chat já explica como conectar (ou o conflito de 2 empresas).
+    await handleFreeText(admin, token, chatId, '(áudio)', supabaseUrl, webhookSecret)
+    return
+  }
+  const companyId = (companies[0] as { id: string }).id
+  if ((audio.duration ?? 0) > AUDIO_MAX_SECONDS) {
+    await sendMessage(token, chatId, '🎤 Esse áudio passou de 2 minutos. Manda um mais curto (ou escreve) que eu respondo.')
+    return
+  }
+  const fail = (why: string) => sendMessage(token, chatId, `🎤 Não consegui entender o áudio (${why}). Tenta de novo ou escreve a mensagem.`)
+  const key = await openAiKey(admin)
+  if (!key) { console.error('telegram-webhook: OPENAI_API_KEY ausente'); await fail('transcrição indisponível agora'); return }
+
+  let text = ''
+  try {
+    const info = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(audio.file_id)}`).then(r => r.json()) as { ok?: boolean; result?: { file_path?: string } }
+    const path = info.result?.file_path
+    if (!info.ok || !path) { await fail('não consegui baixar'); return }
+    const file = await fetch(`https://api.telegram.org/file/bot${token}/${path}`)
+    if (!file.ok) { await fail('não consegui baixar'); return }
+    const form = new FormData()
+    form.append('file', new Blob([await file.arrayBuffer()], { type: 'audio/ogg' }), path.split('/').pop() || 'audio.ogg')
+    form.append('model', 'whisper-1')
+    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form, signal: AbortSignal.timeout(60_000),
+    })
+    if (!res.ok) { console.error('telegram-webhook: transcrição falhou', res.status, await res.text().catch(() => '')); await fail('erro na transcrição'); return }
+    text = String(((await res.json()) as { text?: string }).text ?? '').trim()
+  } catch (err) {
+    console.error('telegram-webhook: áudio falhou', err)
+    await fail('erro na transcrição')
+    return
+  }
+
+  // Custo no mesmo diário dos outros gastos de IA (teto de custo, regra 7).
+  await admin.from('agent_performance').insert({
+    company_id: companyId, agent_role: 'telegram', task_key: 'audio_transcription',
+    task_description: 'Transcrição de áudio do Telegram (OpenAI whisper-1)', success: !!text,
+    cost_usd: Math.round(Math.max(1, audio.duration ?? 1) / 60 * WHISPER_USD_PER_MIN * 10000) / 10000, latency_ms: 0,
+  }).then(({ error }) => { if (error) console.error('telegram-webhook: custo não gravado', error.message) })
+
+  if (!text) { await fail('não ouvi nada'); return }
+  await sendMessage(token, chatId, `🎤 Entendi: “${text.length > 300 ? `${text.slice(0, 299)}…` : text}”`)
+  await handleFreeText(admin, token, chatId, text, supabaseUrl, webhookSecret)
+}
+
 // Toque num botão de aprovação (mensagens do telegram-buddy). Fluxo:
 // "Aprovar" → troca os botões por "Tem certeza?" → "Sim" → agent-actions
 // (que confere a assinatura de novo e só então publica/envia). Só vale em
 // conversa privada e só pra quem recebeu o botão (assinatura presa ao chat).
-async function handleCallback(cb: TelegramCallback, supabaseUrl: string): Promise<void> {
+// "dia 28/10 às 18h" quando a peça do Vault está planejada pra um dia futuro (aprovar agenda); senão null.
+async function vaultWhen(admin: SupaClient, kind: string, id: string): Promise<string | null> {
+  if (kind !== 'v') return null
+  try {
+    const { data } = await admin.from('marketing_ai_test_content').select('planned_for').eq('id', id).maybeSingle()
+    const plan = plannedPublishAt((data as { planned_for?: unknown } | null)?.planned_for)
+    return plan ? publishWhenLabel(plan) : null
+  } catch { return null }
+}
+
+async function handleCallback(cb: TelegramCallback, supabaseUrl: string, admin: SupaClient): Promise<void> {
   const answer = (text: string) => tg('answerCallbackQuery', { callback_query_id: cb.id, text, show_alert: false })
   const chat = cb.message?.chat
   const btn = parseButton(cb.data ?? '')
@@ -115,12 +189,13 @@ async function handleCallback(cb: TelegramCallback, supabaseUrl: string): Promis
   const where = { chat_id: chat.id, message_id: cb.message.message_id }
 
   if (btn.op === 'A') {
-    await tg('editMessageReplyMarkup', { ...where, reply_markup: await confirmKeyboard(btn.kind, btn.id, chat.id) })
-    await answer(btn.kind === 'v' ? 'Tem certeza? Vai pro Instagram de verdade.' : 'Tem certeza? Vai ser enviado de verdade.')
+    const when = await vaultWhen(admin, btn.kind, btn.id)
+    await tg('editMessageReplyMarkup', { ...where, reply_markup: await confirmKeyboard(btn.kind, btn.id, chat.id, when) })
+    await answer(btn.kind === 'v' ? (when ? `Tem certeza? Vai sair no Instagram ${when}.` : 'Tem certeza? Vai pro Instagram de verdade.') : 'Tem certeza? Vai ser enviado de verdade.')
     return
   }
   if (btn.op === 'B') {
-    await tg('editMessageReplyMarkup', { ...where, reply_markup: await pendingKeyboard(btn.kind, btn.id, chat.id) })
+    await tg('editMessageReplyMarkup', { ...where, reply_markup: await pendingKeyboard(btn.kind, btn.id, chat.id, await vaultWhen(admin, btn.kind, btn.id)) })
     await answer('Ok, nada foi feito.')
     return
   }
@@ -202,13 +277,26 @@ Deno.serve(async (req) => {
     if (update.callback_query) {
       // Responde ao Telegram na hora e processa em segundo plano: publicar
       // pode levar ~30s e, sem resposta, o Telegram reenvia o mesmo toque.
-      const work = handleCallback(update.callback_query, supabaseUrl).catch(e => console.error('telegram-webhook callback:', e))
+      const work = handleCallback(update.callback_query, supabaseUrl, admin).catch(e => console.error('telegram-webhook callback:', e))
       // deno-lint-ignore no-explicit-any
       const rt = (globalThis as any).EdgeRuntime
       if (rt?.waitUntil) rt.waitUntil(work); else await work
       return json({ ok: true })
     }
     const message = update.message ?? update.edited_message
+    if (message && !message.text && message.chat.type === 'private') {
+      const audio = message.voice ?? message.audio
+      if (audio?.file_id && update.message) {
+        // Baixar + transcrever + responder pode passar de 10s: responde ao Telegram já (senão ele reenvia).
+        const work = handleVoice(admin, token, message.chat.id, audio, supabaseUrl, webhookSecret).catch(e => console.error('telegram-webhook voz:', e))
+        // deno-lint-ignore no-explicit-any
+        const rt = (globalThis as any).EdgeRuntime
+        if (rt?.waitUntil) rt.waitUntil(work); else await work
+      } else if (update.message) {
+        await sendMessage(token, message.chat.id, 'Por enquanto eu entendo mensagem escrita e áudio. Foto, vídeo e arquivo ainda não — manda por texto que eu respondo.')
+      }
+      return json({ ok: true })
+    }
     if (!message?.text) return json({ ok: true })
 
     await routeMessage(admin, token, message.chat.id, message.chat.type, message.text, supabaseUrl, webhookSecret)

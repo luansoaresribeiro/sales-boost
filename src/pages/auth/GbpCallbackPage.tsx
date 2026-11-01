@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { getCurrentLang } from '../../contexts/LanguageContext'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 
@@ -19,7 +20,7 @@ const TX = {
     connected: 'Connected!', redirecting: 'Redirecting...', errTitle: 'Connection error', back: 'Back to Connections',
   },
 } as const
-const getX = () => TX[localStorage.getItem('sb_lang') === 'en' ? 'en' : 'pt']
+const getX = () => TX[getCurrentLang()]
 
 export default function GbpCallbackPage() {
   const { session, user } = useAuth()

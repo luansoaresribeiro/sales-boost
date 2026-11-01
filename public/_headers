@@ -1,0 +1,4 @@
+# Página pública do imóvel (/p/<código>): destino de link, nunca listada nem indexada (Etapa 5).
+/p/*
+  X-Robots-Tag: noindex, nofollow
+  Referrer-Policy: no-referrer

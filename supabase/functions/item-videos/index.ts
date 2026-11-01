@@ -4,6 +4,8 @@ import { advanceTour, clipPrompt, estimateUsd, hfHeaders, SECONDS, submitAll, VI
 import { draftReply, type DmReplyConfig } from '../_shared/dmReply.ts'
 import { keepQueroNotice } from '../_shared/videoCta.ts'
 import { capMessage, fitsCap, monthSpend } from '../_shared/spendCap.ts'
+import { withDmLink } from '../_shared/publicPageRun.ts'
+import { lng } from '../_shared/publicPage.ts'
 
 // Vídeos curtos de um imóvel do catálogo (plano pago — decisões do dono
 // 2026-10-09, docs/DECISIONS.md). O vídeo é ISCA: 1 cômodo ('room'), 2 cômodos
@@ -108,15 +110,15 @@ Deno.serve(async (req) => {
       return json({ ok: true, seen: (rows ?? []).length, ...result })
     }
 
-    let company: { id: string; plan: string | null; vertical_key: string | null } | null = null
+    let company: { id: string; plan: string | null; vertical_key: string | null; language?: string | null } | null = null
     if (isCron && body.action === 'create' && typeof body.company_id === 'string') {
-      const { data } = await admin.from('companies').select('id, plan, vertical_key').eq('id', body.company_id).maybeSingle()
+      const { data } = await admin.from('companies').select('id, plan, vertical_key, language').eq('id', body.company_id).maybeSingle()
       company = data
     } else {
       const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } })
       const { data: { user } } = await userClient.auth.getUser()
       if (!user) return json({ error: 'Unauthorized' }, 401)
-      const { data } = await admin.from('companies').select('id, plan, vertical_key').eq('user_id', user.id).maybeSingle()
+      const { data } = await admin.from('companies').select('id, plan, vertical_key, language').eq('user_id', user.id).maybeSingle()
       company = data
     }
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
@@ -139,6 +141,9 @@ Deno.serve(async (req) => {
         monthSpend(admin, company.id),
       ])
       const draft = draftReply(((pb?.config ?? {}) as { dm_reply?: DmReplyConfig }).dm_reply, item.meta?.fields ?? {})
+      // Etapa 5: SÓ a mensagem NOVA (rascunho ainda não aprovada) ganha o link da página pública, se o imóvel tem uma no ar.
+      // A já aprovada (`auto`) fica exatamente como o dono aprovou.
+      if (!auto) draft.message = await withDmLink(admin, company.id, item.id, lng(company.language), (pb?.config as { public_page?: unknown } | null)?.public_page, draft.message)
       return json({
         videos: (vids ?? []).map((v: { id: string; status: string; plan: { kind: string; label?: string }; video_path: string | null; created_at: string }) => ({
           id: v.id, status: v.status, kind: v.plan?.kind, label: v.plan?.label ?? '', created_at: v.created_at,
