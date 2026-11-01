@@ -2092,6 +2092,24 @@ trabalhando e vender "5 agentes trabalhando por você". **Não feito de propósi
 por mensagem e mais um lugar para cuidar). **Lacunas conhecidas:** material para o corretor executar (componente 4) e
 atribuição de lead de DM/comentário (componente 5).
 
+## 2026-11-01 — Resultados e Aprendizado só com resultado e aprendizado; Conversas vão para Ativação
+
+Pedido do dono: o 5º card tinha coisas "nada a ver" (Atendimento, Engagement). Agora:
+- **Resultados e Aprendizado** (`/dashboard/marketing-ai/conversao`, sub-aba em `?sub=`): Funil de vendas · Desempenho
+  dos posts (saiu de Ativação → Campanha) · Aprendizado (memória do negócio, antes a página solta `brain`) · Experimentos ·
+  Relatórios. Os links antigos `brain`/`experiments`/`reports`/`campanha&sub=resultados` redirecionam.
+- **Ativação** ganhou a aba de topo **Conversas** (`?tab=conversas`): Atendimento (WhatsApp) e Respostas automáticas
+  (comentários/DMs, ex.: "Comente QUERO") — responder é execução (escolha do dono, 2026-11-01).
+Só tela: nenhuma regra de envio/aprovação mudou. **Lacuna registrada:** o 80/20 do `_shared/learning.ts` (o que
+alimenta a estratégia) ainda não aparece na aba Aprendizado.
+
+## 2026-11-01 — Inteligência de Mercado ampla, teto de US$ 5/cliente/mês
+
+O dono pediu coleta "absurda" de notícias e Instagram e aprovou teto de **US$ 5 por cliente por mês** (Apify + Tavily),
+contando dentro do teto de US$ 40. Supera — sem apagar — os limites da Etapa 3 de 30/10 (3 buscas e 5 sinais por
+semana). Plano em etapas pequenas (contador de dólares com reserva antes de gastar → notícias diárias → tela de
+mercado → Instagram semanal com até ~20 concorrentes → ligação com o motor de oportunidades, no máx. 1 rodada/24 h).
+
 ## 2026-11-01 — Catálogo sai da Inteligência de Mercado; Oportunidades sai do menu lateral
 
 Pedido do dono: a Inteligência de Mercado fica focada em inteligência de mercado. O **Catálogo** (imóveis/itens com
