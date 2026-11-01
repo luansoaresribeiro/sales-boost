@@ -906,3 +906,13 @@ logado. **Regra:** hook que abre canal realtime de nome fixo só pode ser chamad
 número recebe por prop/contexto. Desde então existe o `ErrorBoundary` (`src/components/ErrorBoundary.tsx`): erro ao
 desenhar mostra a mensagem em vez de tela preta. Para testar telas logadas sem senha, dá pra simular a sessão no
 navegador automático com respostas falsas do Supabase (foi assim que este erro foi achado).
+
+## Inteligência de Mercado: livro-caixa e crons (2026-11-01)
+
+- Todo cron novo do `marketing-ai` (`cron_market_intel` incluso) precisa ficar **antes** do ramo `if (isCron)` genérico, senão
+  roda o pipeline de todas as empresas. O ramo fica depois do 503 de `ANTHROPIC_API_KEY` (a chave precisa existir).
+- `agent_performance.latency_ms` é NOT NULL: a linha de reserva grava `latency_ms: 0` e o ajuste atualiza depois.
+- `spendCap.ts` lê `Deno.env` ao carregar; nos testes em node, defina `globalThis.Deno` antes do `import()` dinâmico.
+- Sem `deno` no ambiente do agente: a verificação das edge functions foi só pelos testes em node (`--experimental-strip-types`).
+- A cidade da ficha (`news.city`) precisa aparecer no texto da notícia (filtro "região no texto"); notícia que só diz "Rio" é descartada.
+

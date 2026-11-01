@@ -32,6 +32,8 @@ import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { runOpportunities } from '../_shared/opportunityRun.ts'
 import { approveOpportunityPlan, decideOpportunity } from '../_shared/opportunityPlanRun.ts'
 import { cronOpportunities, runInBackground } from '../_shared/opportunityCron.ts'
+import { cronMarketIntel } from '../_shared/marketIntelCron.ts'
+import { fitsCap } from '../_shared/spendCap.ts'
 import { generateOpportunityPieces, type Dispatch } from '../_shared/opportunityPiecesRun.ts'
 import { PUBLIC_ACTIONS, getPublicPageState, handlePublicPage, publicCtxFrom, setPublicPage } from '../_shared/publicPageRun.ts'
 
@@ -697,6 +699,11 @@ Deno.serve(async (req) => {
     }
     if (isCron && body.action === 'cron_opportunities') {
       runInBackground(cronOpportunities(admin, (prompt, maxTokens) => callClaudeWithUsage(anthropicKey, prompt, maxTokens), Date.now(), dispatchPiece).then(r => console.log('cron_opportunities:', JSON.stringify(r))).catch(e => console.error('cron_opportunities:', String(e))))
+      return json({ ok: true, cron: true, started: true })
+    }
+    // Inteligência de Mercado: coleta diária de notícias (Tavily) com teto em dólar. Dono único da coleta; ver marketIntelCron.ts.
+    if (isCron && body.action === 'cron_market_intel') {
+      runInBackground(cronMarketIntel(admin, Date.now(), { fitsCap: async (companyId, est) => (await fitsCap(admin, companyId, est)).ok }).then(r => console.log('cron_market_intel:', JSON.stringify(r))).catch(e => console.error('cron_market_intel:', String(e))))
       return json({ ok: true, cron: true, started: true })
     }
     if (isCron) {

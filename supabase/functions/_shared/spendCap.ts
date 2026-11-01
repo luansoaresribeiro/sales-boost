@@ -5,7 +5,10 @@
 //  - edições de foto (Higgsfield Qwen Edit): "mobiliar" (tabela virtual_staging)
 //    + tratamento de foto do Vault (agent_performance task_key 'photo_retouch');
 //  - imagens da OpenAI: agent_performance task_key 'image_generation' (estimativa
-//    do generate-image).
+//    do generate-image);
+//  - Inteligência de Mercado (2026-11-01): Tavily 'market_news_search' e Apify
+//    'market_intel_apify' (agent_performance.cost_usd, reservado antes da chamada) —
+//    campo market_usd; o teto PRÓPRIO de US$ 5/mês dessas fontes vive em marketIntel.ts.
 // Texto da IA (Claude) NÃO entra: já tem limite diário próprio (hermes-proxy).
 // O kit grátis também não (é de quem ainda não paga; tem teto global próprio).
 //
@@ -23,7 +26,7 @@ export const HF_EDIT_COST_USD: number = Number.isFinite(editEnv) && editEnv > 0 
 
 export interface MonthSpend {
   total_usd: number; cap_usd: number
-  videos_usd: number; images_usd: number
+  videos_usd: number; images_usd: number; market_usd: number
   edits: number; edits_usd: number
 }
 
@@ -36,7 +39,7 @@ export async function monthSpend(admin: Any, companyId: string): Promise<MonthSp
     // Pedido de mobiliar que chegou na Higgsfield (job_ref) — com ou sem sucesso,
     // cada envio (attempts, inclui a nova tentativa automática) foi cobrado.
     admin.from('virtual_staging').select('attempts').eq('company_id', companyId).not('job_ref', 'is', null).gte('created_at', since),
-    admin.from('agent_performance').select('task_key, cost_usd').eq('company_id', companyId).in('task_key', ['image_generation', 'photo_retouch']).gte('created_at', since),
+    admin.from('agent_performance').select('task_key, cost_usd').eq('company_id', companyId).in('task_key', ['image_generation', 'photo_retouch', 'market_news_search', 'market_intel_apify']).gte('created_at', since),
   ])
   const sum = (rows: { cost_usd: number | string | null }[]) => rows.reduce((s, r) => s + Number(r.cost_usd || 0), 0)
   const rows = (perf ?? []) as { task_key: string; cost_usd: number | string | null }[]
@@ -45,8 +48,9 @@ export async function monthSpend(admin: Any, companyId: string): Promise<MonthSp
   const staged = ((staging ?? []) as { attempts: number | null }[]).reduce((s, r) => s + Math.max(1, Number(r.attempts || 1)), 0)
   const edits = staged + rows.filter(r => r.task_key === 'photo_retouch').length
   const editsUsd = edits * HF_EDIT_COST_USD
-  const total = videos + images + editsUsd
-  return { total_usd: total, cap_usd: CLIENT_MONTHLY_CAP_USD, videos_usd: videos, images_usd: images, edits, edits_usd: editsUsd }
+  const market = sum(rows.filter(r => r.task_key === 'market_news_search' || r.task_key === 'market_intel_apify'))
+  const total = videos + images + editsUsd + market
+  return { total_usd: total, cap_usd: CLIENT_MONTHLY_CAP_USD, videos_usd: videos, images_usd: images, market_usd: market, edits, edits_usd: editsUsd }
 }
 
 // Cabe mais um gasto de `estimate` dólares neste mês?

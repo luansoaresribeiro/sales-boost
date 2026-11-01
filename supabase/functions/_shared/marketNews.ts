@@ -1,47 +1,12 @@
-// Notícias de mercado automáticas (Inteligência comercial, Etapa 3) — LÓGICA PURA (sem banco, sem rede), testada em
-// scripts/test-market-news.mjs. O banco e a Tavily vivem em marketNewsRun.ts. Tudo de setor (busca, portais, limites)
-// vem da ficha (`config.market_news`, regra 6). Nada é inventado: o sinal guarda título, trecho, domínio, link e data
+// Notícias de mercado automáticas (Inteligência comercial, Etapa 3; v2 em 2026-11-01) — LÓGICA PURA (sem banco, sem rede), testada em
+// scripts/test-market-news.mjs. O banco e a Tavily vivem em marketNewsRun.ts. Tudo de setor (tópicos, portais, limites)
+// vem da ficha (`config.market_intel.news`, regra 6; limites em dólar e rotação em marketIntel.ts). Nada é inventado: o sinal guarda título, trecho, domínio, link e data
 // da própria fonte; sem data válida, sem região no texto, portal de anúncio ou link não-https = descartado.
 
-export interface MarketNewsConfig {
-  queries: { pt?: string; en?: string }
-  exclude_domains: string[]
-  days: number
-  max_regions: number
-  max_results: number
-  max_new_per_week: number
-}
+import { normalizeTitle, normalizeUrl, type SignalKind } from './marketIntel.ts'
+
 export interface TavilyHit { title?: unknown; url?: unknown; content?: unknown; published_date?: unknown }
-export interface NewsSignal { kind: 'news'; region: string; title: string; summary: string | null; source_name: string; source_url: string; observed_at: string; collected_by: 'system'; meta: { provider: 'tavily' } }
-
-/** Limites rígidos (a ficha só pode apertar, nunca passar disso). */
-export const MAX_SEARCHES_PER_WEEK = 3
-export const MAX_NEW_PER_WEEK = 5
-export const DEFAULT_MONTHLY_CAP = 120
-export const SEARCH_TIMEOUT_MS = 12_000
-export const WEEK_MS = 7 * 86400_000
-export const MONTH_MS = 30 * 86400_000
-export const TASK_KEY = 'market_news_search'
-
-const clamp = (v: unknown, lo: number, hi: number, def: number) => { const n = Math.floor(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : def }
-
-/** Lê a chave da ficha; sem busca definida = null (setor sem coleta). */
-export function parseNewsConfig(raw: unknown): MarketNewsConfig | null {
-  if (!raw || typeof raw !== 'object') return null
-  const r = raw as Record<string, unknown>
-  const q = (r.queries && typeof r.queries === 'object' ? r.queries : {}) as Record<string, unknown>
-  const queries = {
-    pt: typeof q.pt === 'string' && q.pt.includes('{region}') ? q.pt.slice(0, 300) : undefined,
-    en: typeof q.en === 'string' && q.en.includes('{region}') ? q.en.slice(0, 300) : undefined,
-  }
-  if (!queries.pt && !queries.en) return null
-  const domains = (Array.isArray(r.exclude_domains) ? r.exclude_domains : []).map(d => String(d ?? '').toLowerCase().trim()).filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)).slice(0, 50)
-  return {
-    queries, exclude_domains: domains,
-    days: clamp(r.days, 1, 90, 30), max_regions: clamp(r.max_regions, 1, MAX_SEARCHES_PER_WEEK, 3),
-    max_results: clamp(r.max_results, 1, 10, 5), max_new_per_week: clamp(r.max_new_per_week, 1, MAX_NEW_PER_WEEK, MAX_NEW_PER_WEEK),
-  }
-}
+export interface NewsSignal { kind: SignalKind; region: string; title: string; summary: string | null; source_name: string; source_url: string; observed_at: string; collected_by: 'system'; meta: { provider: 'tavily'; topic: SignalKind } }
 
 export const normalize = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
@@ -95,10 +60,11 @@ export function validSourceDate(v: unknown, nowMs: number, days: number): string
   return new Date(t).toISOString().slice(0, 10)
 }
 
-/** Resultado da Tavily -> sinais aceitos (os filtros de verdade, em código). `seen` evita repetir link. */
-export function filterHits(hits: TavilyHit[], o: { region: string; days: number; excludeDomains: string[]; nowMs: number; seen?: Set<string> }): NewsSignal[] {
+/** Resultado da Tavily -> sinais aceitos (os filtros de verdade, em código). `seen` evita repetir link; `seenTitles` repete título (mesma notícia em outro portal). */
+export function filterHits(hits: TavilyHit[], o: { region: string; kind: SignalKind; days: number; excludeDomains: string[]; nowMs: number; seen?: Set<string>; seenTitles?: Set<string> }): NewsSignal[] {
   const out: NewsSignal[] = []
   const seen = o.seen ?? new Set<string>()
+  const seenTitles = o.seenTitles ?? new Set<string>()
   for (const h of hits) {
     const host = httpsHost(h.url)
     if (!host || isExcluded(host, o.excludeDomains)) continue
@@ -106,18 +72,12 @@ export function filterHits(hits: TavilyHit[], o: { region: string; days: number;
     if (!date) continue
     const title = sanitizeText(h.title, 200)
     if (!title || !mentionsRegion(o.region, title, h.content)) continue
-    const url = String(h.url).trim().slice(0, 500)
-    if (seen.has(url)) continue
-    seen.add(url)
+    const url = normalizeUrl(h.url)?.slice(0, 500)
+    const tk = normalizeTitle(title)
+    if (!url || seen.has(url) || (tk && seenTitles.has(tk))) continue
+    seen.add(url); if (tk) seenTitles.add(tk)
     const summary = sanitizeText(h.content, 300)
-    out.push({ kind: 'news', region: o.region, title, summary: summary || null, source_name: host.slice(0, 120), source_url: url, observed_at: date, collected_by: 'system', meta: { provider: 'tavily' } })
+    out.push({ kind: o.kind, region: o.region, title, summary: summary || null, source_name: host.slice(0, 120), source_url: url, observed_at: date, collected_by: 'system', meta: { provider: 'tavily', topic: o.kind } })
   }
   return out
 }
-
-/** Quantas buscas ainda cabem agora (empresa/semana, teto global/mês, regiões da ficha). */
-export function searchesAllowed(o: { usedWeek: number; maxRegions: number; monthUsed: number; monthlyCap: number }): number {
-  return Math.max(0, Math.min(o.maxRegions, MAX_SEARCHES_PER_WEEK - o.usedWeek, o.monthlyCap - o.monthUsed))
-}
-export const newAllowed = (newThisWeek: number, maxPerWeek: number): number => Math.max(0, Math.min(MAX_NEW_PER_WEEK, maxPerWeek) - newThisWeek)
-export const monthlyCapFrom = (env: string | undefined | null): number => { const n = Math.floor(Number(env)); return env != null && env !== '' && Number.isFinite(n) && n >= 0 ? n : DEFAULT_MONTHLY_CAP }

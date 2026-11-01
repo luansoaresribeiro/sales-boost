@@ -519,6 +519,42 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     sinais novos por empresa/7 dias; `MARKET_NEWS_MONTHLY_CAP` (padrão 120) conta `agent_performance`
     `task_key='market_news_search'`. Chave: `getTavilyKey` (env `TAVILY_API_KEY` ou `_app_config`); respeita o interruptor
     `insight_sources` tavily. Teste: `scripts/test-market-news.mjs`. Decisão: [DECISIONS.md](DECISIONS.md#2026-10-30--inteligência-comercial-etapa-3-notícias-de-mercado-automáticas).
+  - **Inteligência de Mercado ampla — estágios 1-3 (2026-11-01 — 🟡 código pronto no branch `mi-stage1-3`; falta migration, deploy do
+    `marketing-ai`, cron e secrets).** SUBSTITUI a coleta semanal descrita acima (mantida como histórico; divergência registrada
+    em [DECISIONS.md](DECISIONS.md#2026-11-01--inteligência-de-mercado-ampla-estágios-1-3)):
+    - **Teto em dólar (estágio 1):** US$ 5/cliente/mês para Apify+Tavily (`MARKET_INTEL_CAP_USD`, padrão 5; ficha
+      `market_intel.split` = instagram 3 / news 2, reduzida proporcionalmente se a soma passar do teto), **dentro dos US$ 40**:
+      `spendCap.monthSpend` soma `market_news_search` e `market_intel_apify` no campo `market_usd`. Livro-caixa em
+      `agent_performance.cost_usd` (`latency_ms: 0` obrigatório): **reserva** o custo estimado antes de cada chamada paga e
+      **ajusta** depois (erro HTTP da Tavily = 0; timeout/queda = reserva fica). Reserva que não grava = não chama. Preço da
+      busca: `TAVILY_COST_USD` (padrão 0,008 — **A CONFIRMAR** com o extrato da Tavily). Plano de gasto: dólares que restam ÷ dias
+      que restam ÷ custo = buscas de hoje (limitado por `max_searches_per_day` da ficha e pelo contador mensal por empresa
+      `max_searches_per_month`). Lógica pura: `_shared/marketIntel.ts` (+ teste `scripts/test-market-intel.mjs`).
+    - **Notícias v2 (estágio 2):** ficha `config.market_intel.news` (migration `20261101100000_inteligencia_mercado_ficha.sql`):
+      tópicos `{kind, query{pt,en}}` com `{region}` (bairros do catálogo) / `{city}`, `kind` dentro do CHECK de `market_signals.kind`
+      (launch, infrastructure, economy, tourism, ...), portais excluídos, janela. Rotação diária por (tópico x bairro);
+      lotes de 3 buscas em paralelo (12 s); **1 rodada por empresa por dia**; mesmo filtro de qualidade (data válida, região no
+      texto, https, sem portal); dedupe por URL normalizada (sem `utm_*`/`fbclid`/fragmento) e por título. Quem coleta é a action
+      `cron_market_intel` do `marketing-ai` (`_shared/marketIntelCron.ts`; `cron_secret` no corpo; mesma elegibilidade do
+      opportunityCron + interruptor `insight_sources` tavily; até 2 empresas com trabalho por chamada; nada novo após 40 s).
+      O `cron_opportunities` **parou de coletar**; `shouldRunOpportunities` mantém "sinal novo -> nova rodada" com **mínimo de 24 h**
+      entre rodadas. `MARKET_NEWS_MONTHLY_CAP` e os tetos semanais fixos foram aposentados.
+    - **Agendamento (NÃO criado — o agente principal cria em produção).** Diário, 09:43 UTC (06:43 Rio):
+      ```sql
+      select cron.schedule('market-intel-daily', '43 9 * * *', $$
+        select net.http_post(
+          url := 'https://<PROJECT_REF>.supabase.co/functions/v1/marketing-ai',
+          headers := '{"Content-Type":"application/json"}'::jsonb,
+          body := jsonb_build_object('action','cron_market_intel','cron_secret','<CRON_SECRET igual aos outros crons>')
+        );
+      $$);
+      -- desfazer: select cron.unschedule('market-intel-daily');
+      ```
+      Cada chamada atende até 2 empresas; com mais clientes use `'43 9,13,17 * * *'` (as já atendidas no dia saem
+      sozinhas por "já coletou hoje", sem custo).
+    - **Tela (estágio 3):** aba "🌐 Mercado" em Dados (`marketingAi/MarketFeed.tsx`): feed de `market_signals` com filtros por
+      bairro e tipo, selo "Automático", fonte (domínio com link) e data da fonte, apagar; "Última coleta: dd/mm — próxima:
+      amanhã" lido de `agent_performance` (se o RLS impedir a leitura, a linha some). Sem botão de gerar.
   - **Tela:** sem botões de gerar; mostra "Próxima análise automática: semanal (e quando você cadastra um sinal novo)"
     e a data da última análise; oportunidade aprovada sem plano mostra "Montando o plano…" (recarrega a cada 10 s por 2
     min, depois "o plano sai na próxima rodada automática"); botões "Aprovar plano"/"Desfazer aprovação".

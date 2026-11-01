@@ -5,8 +5,9 @@
 //
 // Por empresa elegível (mesmo critério do cron de estratégia: companies.auto_strategy=true — a Liga dos Sonhos fica
 // de fora — + interruptor geral hermes_config.auto_strategy_enabled + hasPaidAccess; e empresa ativa):
-//  (0) Etapa 3: coleta notícias de mercado da região dos imóveis (Tavily, limites rígidos; ver marketNewsRun.ts);
-//  (a) roda a busca de oportunidades se a última rodada tem > 7 dias OU há sinal de mercado novo desde ela;
+//  (0) A coleta de notícias NÃO mora mais aqui (2026-11-01): é o cron diário `cron_market_intel` (marketIntelCron.ts), dono único;
+//      aqui só se LÊ o último sinal: sinal novo dispara nova rodada, com no mínimo 24 h entre rodadas;
+//  (a) roda a busca de oportunidades se a última rodada tem > 7 dias OU há sinal de mercado novo desde ela (e já passaram 24 h);
 //  (b) cria o plano das oportunidades APROVADAS que ainda não têm (rede de segurança do plano automático);
 //      os freios (5 planos/dia, 2 falhas por oportunidade em 24 h) moram em createOpportunityPlan.
 //  (c) Etapa 4B: pede as peças (rascunhos) dos planos APROVADOS que ainda não têm — só despacha ao creative-generate; os freios
@@ -22,20 +23,21 @@ import { MAX_PLANS_PER_DAY } from './opportunityPlan.ts'
 import { createOpportunityPlan } from './opportunityPlanRun.ts'
 import { generateOpportunityPieces, type Dispatch } from './opportunityPiecesRun.ts'
 import { STALE_DISPATCH_MS } from './opportunityPieces.ts'
-import { collectMarketNews, type NewsOpts } from './marketNewsRun.ts'
 import { attachTrackedLinks } from './publicPageRun.ts'
 
 type Admin = { from: (t: string) => any; rpc?: any } // eslint-disable-line @typescript-eslint/no-explicit-any
 export const RERUN_AFTER_MS = 7 * 24 * 3600_000
+export const MIN_BETWEEN_RUNS_MS = 24 * 3600_000
 export const RETRY_AFTER_FAIL_MS = 6 * 3600_000
 export const COMPANIES_PER_CALL = 3
 export const START_NEW_AI_UNTIL_MS = 40_000
 
-/** Roda a busca? Sem rodada anterior, rodada com > 7 dias, ou sinal de mercado criado depois da última rodada. */
+/** Roda a busca? Sem rodada anterior, rodada com > 7 dias, ou sinal de mercado criado depois da última rodada — nunca com menos de 24 h desde a última. */
 export function shouldRunOpportunities(lastRunMs: number | null, latestSignalMs: number | null, nowMs: number, lastFailMs: number | null = null): boolean {
   if (lastFailMs != null && Number.isFinite(lastFailMs) && nowMs - lastFailMs < RETRY_AFTER_FAIL_MS && (lastRunMs == null || lastFailMs > lastRunMs)) return false // falhou há pouco: não tenta a cada chamada
   if (lastRunMs == null || !Number.isFinite(lastRunMs)) return true
   if (nowMs - lastRunMs > RERUN_AFTER_MS) return true
+  if (nowMs - lastRunMs < MIN_BETWEEN_RUNS_MS) return false
   return latestSignalMs != null && Number.isFinite(latestSignalMs) && latestSignalMs > lastRunMs
 }
 
@@ -49,10 +51,10 @@ export function runInBackground(p: Promise<unknown>): void {
 
 const ms = (v: unknown): number | null => { const t = typeof v === 'string' ? Date.parse(v) : NaN; return Number.isFinite(t) ? t : null }
 
-export interface CronSummary { ok: boolean; skipped_reason?: string; companies_checked: number; ran: number; plans: number; pieces: number; news_added: number }
+export interface CronSummary { ok: boolean; skipped_reason?: string; companies_checked: number; ran: number; plans: number; pieces: number }
 
-export async function cronOpportunities(admin: Admin, llm: Llm, started = Date.now(), dispatch?: Dispatch, collectNews: (a: Admin, o: NewsOpts) => ReturnType<typeof collectMarketNews> = collectMarketNews): Promise<CronSummary> {
-  const sum: CronSummary = { ok: true, companies_checked: 0, ran: 0, plans: 0, pieces: 0, news_added: 0 }
+export async function cronOpportunities(admin: Admin, llm: Llm, started = Date.now(), dispatch?: Dispatch): Promise<CronSummary> {
+  const sum: CronSummary = { ok: true, companies_checked: 0, ran: 0, plans: 0, pieces: 0 }
   // Interruptor GERAL (painel Owner), o mesmo do cron de estratégia.
   const { data: cfg } = await admin.from('hermes_config').select('auto_strategy_enabled').eq('id', true).maybeSingle()
   if (cfg && cfg.auto_strategy_enabled === false) return { ...sum, skipped_reason: 'auto_strategy_enabled=false no painel Owner' }
@@ -66,17 +68,9 @@ export async function cronOpportunities(admin: Admin, llm: Llm, started = Date.n
     try {
       if (!(await hasPaidAccess(admin, c.id))) continue // conta vitrine: cron não gasta IA
       const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', c.vertical_key ?? '').eq('enabled', true).maybeSingle()
-      const pbCfg = pb?.config as { opportunity_fields?: { location?: string }; market_news?: unknown; public_page?: unknown } | null
+      const pbCfg = pb?.config as { opportunity_fields?: { location?: string }; public_page?: unknown } | null
       if (!pbCfg?.opportunity_fields?.location) continue // setor sem o motor
       sum.companies_checked++
-
-      // Etapa 3: notícias de mercado automáticas ANTES de decidir a rodada — sinal novo (created_at depois da última
-      // rodada) já faz shouldRunOpportunities devolver true. Limites rígidos e tempo (12 s por busca; só começa
-      // antes dos 40 s) em marketNewsRun. Falha aqui nunca derruba o resto da empresa.
-      try {
-        const news = await collectNews(admin, { companyId: c.id, lang: c.language === 'en' ? 'en' : 'pt', rawConfig: pbCfg.market_news, locationKey: pbCfg.opportunity_fields.location, canStart: aiWindowOpen })
-        sum.news_added += news.added
-      } catch (e) { console.error(`[cron_opportunities] ${c.id} notícias:`, String(e)) }
 
       const staleBefore = new Date(Date.now() - STALE_DISPATCH_MS).toISOString()
       const [{ data: lastRun }, { data: lastFail }, { data: lastSignal }, { data: pending }, { data: needPieces }] = await Promise.all([

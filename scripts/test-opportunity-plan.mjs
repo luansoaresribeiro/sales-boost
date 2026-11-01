@@ -114,7 +114,9 @@ const run = (over = {}, o = opp, extra = {}) => finalizePlan({ lang: 'pt', opp: 
   assert.equal(shouldRunOpportunities(now - RERUN_AFTER_MS, null, now), false) // exatamente 7 dias ainda não
   assert.equal(shouldRunOpportunities(now - 3 * day, now - 1 * day, now), true) // sinal novo depois da rodada
   assert.equal(shouldRunOpportunities(now - 1 * day, now - 3 * day, now), false) // sinal antigo
-  ok('cron: roda se nunca rodou, > 7 dias ou sinal novo desde a última rodada')
+  assert.equal(shouldRunOpportunities(now - 12 * 3600000, now - 3600000, now), false) // sinal novo, mas a última rodada tem < 24 h
+  assert.equal(shouldRunOpportunities(now - 24 * 3600000, now - 3600000, now), true) // 24 h cravadas: pode
+  ok('cron: roda se nunca rodou, > 7 dias ou sinal novo desde a última rodada (mínimo 24 h entre rodadas)')
 }
 // ── decide_opportunity: filtra pela empresa, valida status, só cria plano ao aprovar sem plano
 {

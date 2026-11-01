@@ -21,6 +21,7 @@ import BusinessContextTab from './marketingAi/BusinessContextTab'
 import StrategySection from './marketingAi/StrategySection'
 import FeedbackWidget from './marketingAi/FeedbackWidget'
 import CreativeAgent from './marketingAi/CreativeAgent'
+import MarketFeed from './marketingAi/MarketFeed'
 import NearbyPlaces from './marketingAi/NearbyPlaces'
 import FaqTips from './marketingAi/FaqTips'
 import { fetchCatalogSchema, type CatalogSchema } from '../../lib/verticalPlaybook'
@@ -49,7 +50,7 @@ const TX = {
     notActiveDesc: 'A ativação é feita pela equipe Sales Boost, configurando a marca, o público e os concorrentes. Fale com a gente pra ativar.',
     back: '← Voltar', followers: 'Seguidores', pendingApproval: 'Conteúdo esperando aprovação', newRecs: 'Recomendações novas', competitors: 'Concorrentes monitorados',
     openInsights: 'Insights em aberto', noInsights: 'Nenhum insight aberto agora.', recent: 'Atividade recente', noActivity: 'Nenhuma atividade ainda.',
-    products: 'Produtos', avatar: 'Meu avatar (em breve)', ideas: 'Ideias e trends', nearby: 'Lugares perto', faq: 'Dicas e FAQ', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
+    products: 'Produtos', market: 'Mercado', avatar: 'Meu avatar (em breve)', ideas: 'Ideias e trends', nearby: 'Lugares perto', faq: 'Dicas e FAQ', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
     funnel: 'Funil de vendas', perf: 'Desempenho dos posts', learn: 'Aprendizado', exper: 'Experimentos', reps: 'Relatórios',
   },
   en: {
@@ -57,7 +58,7 @@ const TX = {
     notActiveDesc: 'Activation is done by the Sales Boost team, setting up the brand, audience and competitors. Contact us to activate it.',
     back: '← Back', followers: 'Followers', pendingApproval: 'Content awaiting approval', newRecs: 'New recommendations', competitors: 'Competitors monitored',
     openInsights: 'Open insights', noInsights: 'No open insights right now.', recent: 'Recent activity', noActivity: 'No activity yet.',
-    products: 'Products', avatar: 'My avatar (coming soon)', ideas: 'Ideas & trends', nearby: 'Nearby places', faq: 'Tips & FAQ', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
+    products: 'Products', market: 'Market', avatar: 'My avatar (coming soon)', ideas: 'Ideas & trends', nearby: 'Nearby places', faq: 'Tips & FAQ', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
     funnel: 'Sales pipeline', perf: 'Post performance', learn: 'Learning', exper: 'Experiments', reps: 'Reports',
   },
 } as const
@@ -285,27 +286,32 @@ const subTabsRow: React.CSSProperties = { display: 'inline-flex', gap: '4px', pa
 // 2026-11-01 (pedido do dono): virou Inteligência de Mercado e fica SÓ com inteligência de mercado — o Catálogo saiu
 // para página própria (/dashboard/catalogo, aberta pelo botão "+"). O texto acima é histórico.
 function DadosSection({ company }: { company: CompanyData }) {
-  const t = TX[useLang().lang]
+  const { lang } = useLang()
+  const t = TX[lang]
   const [params] = useSearchParams()
   const focusItemId = params.get('item')
   const verticalKey = company.vertical_key ?? 'generico'
-  const [sub, setSub] = useState<'ideias' | 'lugares' | 'faq'>('ideias')
+  const [picked, setSub] = useState<'mercado' | 'ideias' | 'lugares' | 'faq' | null>(null)
   const [schema, setSchema] = useState<CatalogSchema | null | undefined>(undefined)
   useEffect(() => {
     let alive = true
     fetchCatalogSchema(verticalKey).then(s => { if (alive) setSchema(s) })
     return () => { alive = false }
   }, [verticalKey])
+  // Mercado só existe para setor com market_intel na ficha (regra 6); é a aba padrão quando existe.
+  const sub = picked ?? (schema?.marketIntel ? 'mercado' : 'ideias')
   // Links antigos do sino (?item=<id>) eram do Catálogo, que agora é página própria.
   if (focusItemId) return <Navigate to={`/dashboard/catalogo?item=${encodeURIComponent(focusItemId)}`} replace />
   return (
     <div>
       <div style={subTabsRow}>
+        {schema?.marketIntel && <SubTabButton active={sub === 'mercado'} onClick={() => setSub('mercado')} icon="🌐" label={t.market} />}
         <SubTabButton active={sub === 'ideias'} onClick={() => setSub('ideias')} icon="💡" label={t.ideas} />
         {schema?.nearby && <SubTabButton active={sub === 'lugares'} onClick={() => setSub('lugares')} icon="📍" label={t.nearby} />}
         {schema?.faqCategories && <SubTabButton active={sub === 'faq'} onClick={() => setSub('faq')} icon="❓" label={t.faq} />}
       </div>
-      {sub === 'lugares' && schema?.nearby ? <NearbyPlaces companyId={company.id} />
+      {sub === 'mercado' && schema?.marketIntel ? <MarketFeed lang={lang} companyId={company.id} />
+        : sub === 'lugares' && schema?.nearby ? <NearbyPlaces companyId={company.id} />
         : sub === 'faq' && schema?.faqCategories ? <FaqTips companyId={company.id} categories={schema.faqCategories} />
         : <CreativeAgent companyId={company.id} />}
     </div>

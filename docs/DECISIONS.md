@@ -2117,3 +2117,15 @@ fotos reais + Avatar em breve) virou página própria `/dashboard/catalogo`, abe
 atalhos do sino (`?item=<id>`; o link antigo `marketing-ai/dados?item=` redireciona). Na Inteligência de Mercado ficam
 Ideias e trends, Lugares perto e Dicas/FAQ (a aba de notícias/Instagram entra com a Etapa de mercado). **Oportunidades**
 saiu do menu da esquerda — já é o card 2 do fluxo do Marketing AI (a rota `/dashboard/opportunities` continua).
+
+## 2026-11-01 — Inteligência de Mercado ampla, estágios 1-3
+
+- **Decisão do dono:** teto de **US$ 5 por cliente por mês** para Apify + Tavily, contado **dentro** dos US$ 40 de `spendCap`.
+  Fatias da ficha: Instagram 3 / notícias 2. Estágio 4+ (Instagram semanal via Apify) fica para depois.
+- **Substitui** (sem apagar o registro acima) os tetos fixos semanais da Etapa 3 de 2026-10-30 (3 buscas/5 sinais por 7 dias e
+  `MARKET_NEWS_MONTHLY_CAP`): agora o limite é o dólar (reserva antes, ajuste depois no livro-caixa `agent_performance`),
+  mais tetos da ficha (por dia, por mês, sinais novos por dia). Coleta DIÁRIA, 1 rodada por empresa/dia, em um cron próprio
+  (`cron_market_intel`); o `cron_opportunities` deixa de coletar e só roda nova rodada por sinal novo com 24 h de intervalo.
+- **Preço da busca Tavily não é conhecido:** padrão conservador US$ 0,008 (`TAVILY_COST_USD`) — **a confirmar** no extrato.
+- Sinais ganham `kind` do tópico da ficha (lançamento, obra, economia, turismo), sempre com fonte e data da fonte.
+
