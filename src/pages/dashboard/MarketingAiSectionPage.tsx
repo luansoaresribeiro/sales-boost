@@ -21,12 +21,9 @@ import ReviewsAgentTab from './marketingAi/ReviewsAgentTab'
 import BusinessContextTab from './marketingAi/BusinessContextTab'
 import StrategySection from './marketingAi/StrategySection'
 import FeedbackWidget from './marketingAi/FeedbackWidget'
-import CatalogItems from './marketingAi/CatalogItems'
 import CreativeAgent from './marketingAi/CreativeAgent'
 import NearbyPlaces from './marketingAi/NearbyPlaces'
 import FaqTips from './marketingAi/FaqTips'
-import ProductPhotos from './marketingAi/ProductPhotos'
-import { AvatarSoon } from './BusinessContextButton'
 import { fetchCatalogSchema, type CatalogSchema } from '../../lib/verticalPlaybook'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
 
@@ -275,48 +272,32 @@ const subTabsRow: React.CSSProperties = { display: 'inline-flex', gap: '4px', pa
 // Visuais e Insights — a estratégia e o Higgsfield já se alimentam disso por
 // trás. Performance e Saúde da Meta foram pra Conteúdo e Campanha → Campanha;
 // o Kit da marca foi pra Conteúdo → Padrão visual.
+// 2026-11-01 (pedido do dono): virou Inteligência de Mercado e fica SÓ com inteligência de mercado — o Catálogo saiu
+// para página própria (/dashboard/catalogo, aberta pelo botão "+"). O texto acima é histórico.
 function DadosSection({ company }: { company: CompanyData }) {
   const t = TX[useLang().lang]
-  const [params, setParams] = useSearchParams()
+  const [params] = useSearchParams()
   const focusItemId = params.get('item')
   const verticalKey = company.vertical_key ?? 'generico'
-  const [pickedSub, setPickedSub] = useState<'catalogo' | 'ideias' | 'lugares' | 'faq'>('catalogo')
-  // Vindo do sino (?item=) é sempre o Catálogo; trocar de sub-aba limpa o item.
-  const sub = focusItemId ? 'catalogo' : pickedSub
-  const setSub = (k: 'catalogo' | 'ideias' | 'lugares' | 'faq') => {
-    setPickedSub(k)
-    if (focusItemId) { const next = new URLSearchParams(params); next.delete('item'); setParams(next, { replace: true }) }
-  }
+  const [sub, setSub] = useState<'ideias' | 'lugares' | 'faq'>('ideias')
   const [schema, setSchema] = useState<CatalogSchema | null | undefined>(undefined)
   useEffect(() => {
     let alive = true
     fetchCatalogSchema(verticalKey).then(s => { if (alive) setSchema(s) })
     return () => { alive = false }
   }, [verticalKey])
-  const catalogLabel = schema?.catalogLabel ?? t.products
+  // Links antigos do sino (?item=<id>) eram do Catálogo, que agora é página própria.
+  if (focusItemId) return <Navigate to={`/dashboard/catalogo?item=${encodeURIComponent(focusItemId)}`} replace />
   return (
     <div>
       <div style={subTabsRow}>
-        <SubTabButton active={sub === 'catalogo'} onClick={() => setSub('catalogo')} icon="📸" label={catalogLabel} />
+        <SubTabButton active={sub === 'ideias'} onClick={() => setSub('ideias')} icon="💡" label={t.ideas} />
         {schema?.nearby && <SubTabButton active={sub === 'lugares'} onClick={() => setSub('lugares')} icon="📍" label={t.nearby} />}
         {schema?.faqCategories && <SubTabButton active={sub === 'faq'} onClick={() => setSub('faq')} icon="❓" label={t.faq} />}
-        <SubTabButton active={sub === 'ideias'} onClick={() => setSub('ideias')} icon="💡" label={t.ideas} />
       </div>
-      {sub === 'ideias' ? <CreativeAgent companyId={company.id} />
-        : sub === 'lugares' && schema?.nearby ? <NearbyPlaces companyId={company.id} />
+      {sub === 'lugares' && schema?.nearby ? <NearbyPlaces companyId={company.id} />
         : sub === 'faq' && schema?.faqCategories ? <FaqTips companyId={company.id} categories={schema.faqCategories} />
-        : schema === undefined ? null
-        : schema ? (
-          <>
-            <div style={{ fontSize: '12px', color: MUTED, marginBottom: '14px', maxWidth: '760px', lineHeight: 1.55 }}>{t.catalogSub}</div>
-            <CatalogItems companyId={company.id} schema={schema} verticalKey={verticalKey} focusItemId={focusItemId} />
-            {/* Avatar mora dentro dos itens (pedido do dono 2026-10-14). */}
-            <div style={{ marginTop: '22px', maxWidth: '760px' }}>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>{t.avatar}</div>
-              <AvatarSoon companyId={company.id} verticalKey={verticalKey} />
-            </div>
-          </>
-        ) : <ProductPhotos companyId={company.id} />}
+        : <CreativeAgent companyId={company.id} />}
     </div>
   )
 }

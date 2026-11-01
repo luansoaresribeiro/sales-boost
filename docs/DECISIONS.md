@@ -2091,3 +2091,11 @@ lógica, tabela ou função mudou; as seções por trás continuam as mesmas. **
 trabalhando e vender "5 agentes trabalhando por você". **Não feito de propósito:** chat com cada agente (custo de IA
 por mensagem e mais um lugar para cuidar). **Lacunas conhecidas:** material para o corretor executar (componente 4) e
 atribuição de lead de DM/comentário (componente 5).
+
+## 2026-11-01 — Catálogo sai da Inteligência de Mercado; Oportunidades sai do menu lateral
+
+Pedido do dono: a Inteligência de Mercado fica focada em inteligência de mercado. O **Catálogo** (imóveis/itens com
+fotos reais + Avatar em breve) virou página própria `/dashboard/catalogo`, aberta **só pelo botão "+" laranja** e pelos
+atalhos do sino (`?item=<id>`; o link antigo `marketing-ai/dados?item=` redireciona). Na Inteligência de Mercado ficam
+Ideias e trends, Lugares perto e Dicas/FAQ (a aba de notícias/Instagram entra com a Etapa de mercado). **Oportunidades**
+saiu do menu da esquerda — já é o card 2 do fluxo do Marketing AI (a rota `/dashboard/opportunities` continua).
