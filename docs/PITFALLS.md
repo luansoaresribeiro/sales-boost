@@ -939,6 +939,11 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
   e o `tick` do `item-videos` (`resumePending`) retoma em até 48 h — não use `concept` de peça de vídeo pra outra coisa; (3) `startJob` troca
   `wait_studio→vps` com update condicional (`assembly->>mode`) e só então cria o `media_job` (com `id` gerado antes); (4) estourar 20 min no
   estúdio conta como recusa (3 = falha); (5) foto que a IA não conseguiu pontuar grava `score_failed_at` e só é tentada de novo depois de 7 dias.
+- **Retomada do tour em espera (`resumePending`):** mais antiga primeiro; o pedido é **reservado antes de pagar** (update condicional que
+  zera `concept.tour_pending`) — só quem pegou paga. Falha sem vídeo devolve o pedido (`attempts`, 3 e vira "não feita"); vídeo pago cujo
+  registro falhou **não volta** pra fila (registra o erro na peça). Peça que saiu de idea/draft/vault não é paga.
+- **Peça de vídeo sem vídeo não aprova nem publica:** o modal (`CalendarPostModal`) esconde publicar/agendar, o Telegram recusa antes de
+  reservar e o executor do `agent-actions` falha com motivo — senão só a foto de capa iria pro Instagram. (Precisa publicar `agent-actions`.)
 - **Preço no encerramento** passa por `formatPrice` (milhar + moeda da ficha); o valor guardado no cadastro não muda.
 - A migration do tour **não sobrescreve** `config.tour`/`clip_prompts.opening` já existentes (o que está lá vence).
 

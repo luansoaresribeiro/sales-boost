@@ -261,6 +261,14 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
               </div>
               <button onClick={cancelSchedule} disabled={isBusy} title={tx.cancelSched} style={ghost}>✕ {tx.cancelSched}</button>
             </div>
+          ) : ready && item.recipe === 'video_imovel' && !item.video_url ? (
+            // Vídeo ainda não pronto (sendo feito ou aguardando o estúdio): sem publicar nem agendar — só a foto de capa sairia.
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, padding: '9px', background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: '9px', color: '#60a5fa', fontSize: '11.5px', fontWeight: 700, textAlign: 'center' }}>
+                {lang === 'en' ? '🎬 Video not ready yet — approving unlocks when it appears here' : '🎬 Vídeo ainda não pronto — a aprovação libera quando ele aparecer aqui'}
+              </div>
+              <button onClick={() => setAsking(true)} disabled={isBusy} title={tx.del} style={ghost}>🗑</button>
+            </div>
           ) : ready ? (
             <>
               <div style={{ fontSize: '10.5px', color: MUTED }}>{plan ? tx.planHint(planWhen) : tx.approveHint}</div>

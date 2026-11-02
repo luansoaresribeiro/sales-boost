@@ -96,7 +96,7 @@ async function advanceVideo(admin: Admin, supabaseUrl: string, serviceKey: strin
   return 'processing'
 }
 
-type CreateResult = { ok: true; video_id: string } | { ok: false; status: number; error: string; cap?: boolean }
+type CreateResult = { ok: true; video_id: string } | { ok: false; status: number; error: string; cap?: boolean; paid?: boolean }
 // Confere o teto, manda os trechos pra Higgsfield (é aqui que gasta) e grava o vídeo. Quem chama já validou fotos e encerramento.
 async function createPlanVideo(admin: Admin, company: { id: string; vertical_key: string | null }, itemId: string, kind: ClipKind, photos: string[], label: string,
   pieceId: string | undefined, endcard: { url: string; seconds: number } | null): Promise<CreateResult> {
@@ -110,28 +110,35 @@ async function createPlanVideo(admin: Admin, company: { id: string; vertical_key
   const { data: v, error } = await admin.from('video_tours')
     .insert({ company_id: company.id, kind: 'plan', item_id: itemId, status: 'generating', photos, clips, plan: { kind, label, ...(pieceId ? { piece_id: pieceId } : {}), ...(endcard ? { endcard_url: endcard.url, endcard_seconds: endcard.seconds } : {}) }, cost_usd: estimate })
     .select('id').single()
-  if (error) return { ok: false, status: 500, error: error.message }
+  if (error) return { ok: false, status: 500, error: error.message, paid: true } // trechos já mandados (pagos) e o registro falhou
   console.log('[item-videos] vídeo iniciado', company.id, v.id, kind, estimate.toFixed(2), 'USD')
   return { ok: true, video_id: v.id }
 }
 
 const PENDING_MAX_MS = 48 * 3_600_000
-interface PendingTour { item_id: string; kind: ClipKind; photos: string[]; endcard_url: string; endcard_seconds: number; since: string }
+const PENDING_MAX_ATTEMPTS = 3
+const PAYABLE_PIECE_STATUS = ['idea', 'draft', 'vault'] // peça publicada/rejeitada/em publicação não gera mais vídeo
+interface PendingTour { item_id: string; kind: ClipKind; photos: string[]; endcard_url: string; endcard_seconds: number; since: string; attempts?: number }
 
 // Peças do calendário que esperam o estúdio ANTES de gastar (concept.tour_pending): com o estúdio de volta, paga os trechos e segue.
+// Ordem: a mais antiga primeiro. O pedido é RESERVADO antes de pagar (update condicional: só quem tirou o pedido paga — dois ticks
+// ao mesmo tempo não pagam duas vezes). Pagamento que falhou sem gerar vídeo devolve o pedido (3 tentativas, depois "não feita");
+// vídeo pago mas não registrado NUNCA volta pra fila (registra o erro na peça).
 async function resumePending(admin: Admin, supabaseUrl: string, deadline: number): Promise<number> {
-  const { data: rows } = await admin.from('marketing_ai_test_content').select('id, company_id, reasoning, concept').not('concept->tour_pending', 'is', null).limit(5)
-  const list = (rows ?? []) as { id: string; company_id: string; reasoning: string | null; concept: { tour_pending?: PendingTour } | null }[]
+  const { data: rows } = await admin.from('marketing_ai_test_content').select('id, company_id, status, reasoning, concept').not('concept->tour_pending', 'is', null)
+    .order('created_at', { ascending: true }).limit(5)
+  const list = (rows ?? []) as { id: string; company_id: string; status: string; reasoning: string | null; concept: { tour_pending?: PendingTour } | null }[]
   if (!list.length) return 0
   const ready = await studioReady(admin)
   let started = 0
   for (const piece of list) {
     if (Date.now() > deadline) break
     const pend = piece.concept?.tour_pending
-    const setPiece = (reasoning: string, clear: boolean) => admin.from('marketing_ai_test_content').update({ reasoning, ...(clear ? { concept: null } : {}) }).eq('id', piece.id).eq('company_id', piece.company_id)
     const notice = keepQueroNotice(piece.reasoning)
     const withN = (m: string) => `${m}${notice ? ` ${notice}` : ''}`
+    const setPiece = (reasoning: string, clear: boolean) => admin.from('marketing_ai_test_content').update({ reasoning, ...(clear ? { concept: null } : {}) }).eq('id', piece.id).eq('company_id', piece.company_id)
     if (!pend || !validEndcardUrl(pend.endcard_url, supabaseUrl) || !KINDS.includes(pend.kind)) { await setPiece(withN('O vídeo não foi feito (pedido inválido). Nada foi cobrado.'), true); continue }
+    if (!PAYABLE_PIECE_STATUS.includes(piece.status)) { await admin.from('marketing_ai_test_content').update({ concept: null }).eq('id', piece.id).eq('company_id', piece.company_id); continue }
     if (Date.now() - Date.parse(pend.since) > PENDING_MAX_MS) { await setPiece(withN('O vídeo não foi feito: o servidor de vídeo ficou fora do ar por mais de 48 h. Nada foi cobrado.'), true); continue }
     if (!ready) continue
     try {
@@ -140,10 +147,19 @@ async function resumePending(admin: Admin, supabaseUrl: string, deadline: number
       const { data: item } = await admin.from('marketing_ai_knowledge').select('id, meta').eq('id', pend.item_id).eq('company_id', company.id).eq('kind', 'product').maybeSingle()
       const have = new Set(((item?.meta?.photos ?? []) as { url: string }[]).map(p => p.url))
       if (!item || pend.photos.some(u => !have.has(u))) { await setPiece(withN('O vídeo não foi feito: as fotos do imóvel mudaram. Nada foi cobrado.'), true); continue }
-      const r = await createPlanVideo(admin, company, item.id, pend.kind, pend.photos, 'Calendário', piece.id, { url: pend.endcard_url, seconds: pend.endcard_seconds })
-      if (r.ok) { await setPiece(withN('Vídeo sendo feito na Higgsfield a partir de foto real — aparece aqui em alguns minutos.'), true); started++ }
-      else if (r.cap) await setPiece(withN(`O vídeo não foi feito: ${r.error}. Nada foi cobrado.`), true)
-      // outros erros (Higgsfield fora, sem chave): fica pendente e tenta no próximo tick
+      // Reserva ANTES de pagar: só segue quem conseguiu tirar o pedido da peça (e a peça ainda existe).
+      const { data: claim } = await admin.from('marketing_ai_test_content').update({ concept: null })
+        .eq('id', piece.id).eq('company_id', piece.company_id).in('status', PAYABLE_PIECE_STATUS).not('concept->tour_pending', 'is', null).select('id').maybeSingle()
+      if (!claim) continue
+      const attempts = (pend.attempts ?? 0) + 1
+      let r: CreateResult
+      try { r = await createPlanVideo(admin, company, item.id, pend.kind, pend.photos, 'Calendário', piece.id, { url: pend.endcard_url, seconds: pend.endcard_seconds }) }
+      catch (e) { r = { ok: false, status: 500, error: String(e).slice(0, 160) }; console.error('[item-videos] retomada: pagamento lançou erro', piece.id, r.error) }
+      if (r.ok) { await setPiece(withN('Vídeo sendo feito na Higgsfield a partir de foto real — aparece aqui em alguns minutos.'), false); started++ }
+      else if (r.paid) await setPiece(withN('O vídeo foi pago na Higgsfield, mas não consegui registrá-lo aqui. Não vou tentar de novo sozinho (evita cobrar duas vezes) — fale com o suporte.'), false)
+      else if (r.cap) await setPiece(withN(`O vídeo não foi feito: ${r.error}. Nada foi cobrado.`), false)
+      else if (attempts >= PENDING_MAX_ATTEMPTS) await setPiece(withN('O vídeo não foi feito: a Higgsfield não aceitou o pedido depois de 3 tentativas. Nada foi cobrado.'), false)
+      else await admin.from('marketing_ai_test_content').update({ concept: { tour_pending: { ...pend, attempts } } }).eq('id', piece.id).eq('company_id', piece.company_id) // devolve o pedido
     } catch (e) { console.error('[item-videos] retomada falhou', piece.id, String(e).slice(0, 200)) }
   }
   return started
