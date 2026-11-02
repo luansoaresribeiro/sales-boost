@@ -9,7 +9,7 @@ let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
 // ── ficha = lista antiga + termos novos, mesclados SEM duplicar (é o que o SQL faz) ───────────────────────────────
 const oldSql = readFileSync(new URL('../supabase/migrations/20261029130000_oportunidade_pecas.sql', import.meta.url), 'utf8')
-const newSql = readFileSync(new URL('../supabase/migrations/20261102100000_carrosseis_qualidade.sql', import.meta.url), 'utf8')
+const newSql = readFileSync(new URL('../supabase/migrations/20261102120000_carrosseis_qualidade.sql', import.meta.url), 'utf8')
 const oldPt = JSON.parse(oldSql.split('$json$')[3]).pt
 const arrays = [...newSql.matchAll(/\$json\$(\[.*?\])\$json\$/g)].map(m => JSON.parse(m[1]))
 assert.equal(arrays.length, 2, 'a migration traz uma lista pt e uma en')
