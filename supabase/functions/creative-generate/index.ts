@@ -34,6 +34,10 @@ import { decideTopic, guardDeck, loadGuardCfg, topicBlock, topicNote, type Ask, 
 import { resolveAlias, tipNumbers, topicText } from '../_shared/deckTopic.ts'
 import { currentWeekBRT } from '../_shared/publishSlot.ts'
 import { buildOpportunityJob } from '../_shared/opportunityPieceJob.ts'
+import { checkCaption, promptRules as captionRules, rewriteRequest, stripForbidden, findForbidden } from '../_shared/captionGuard.ts'
+import { formatPrice, tourNotice, WAITING_STUDIO_PRE } from '../_shared/tourPick.ts'
+import { studioReady } from '../_shared/tourEngine.ts'
+import { chooseTour, fetchTourCfg, planTours, previousCaptions, type TourPlan } from '../_shared/tourSlot.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -420,12 +424,13 @@ async function renderGraphicCard(
 // Igual ao renderGraphicCard, mas devolve também o `overflow` do render-format (texto que não coube no quadro).
 async function renderGraphicCardFull(
   auth: { bearer: string; isCron: boolean; cronSecret?: string },
-  companyId: string, template: 'tweet' | 'slide' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand,
+  companyId: string, template: 'tweet' | 'slide' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo' | 'tour_endcard', fields: Record<string, string>, brand: CardBrand,
+  size?: { width: number; height: number },
 ): Promise<{ url: string; overflow: boolean } | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   if (!supabaseUrl) return null
   try {
-    const body: Record<string, unknown> = { template, fields, brand, save: false }
+    const body: Record<string, unknown> = { template, fields, brand, save: false, ...(size ?? {}) }
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (auth.isCron && auth.cronSecret) { body.cron_secret = auth.cronSecret; body.company_id = companyId }
     else headers.Authorization = auth.bearer
@@ -1147,7 +1152,7 @@ const VIDEO_RECIPE = 'video_imovel'
 const DECK_FORMAT = 'carrossel_slides' // genérico (formatCatalog.ts)
 // familia/pilar_ss/tema = rótulo único da peça (tema = pilar de conteúdo da ficha, gravado em `pillar`);
 // intent = a intenção da estratégia pra esta vaga (buildSlotIntent). Todos opcionais (vaga antiga/avulsa).
-interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string; familia?: string; pilar_ss?: string; tema?: string; intent?: SlotIntent | null; opportunity_id?: string }
+interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string; familia?: string; pilar_ss?: string; tema?: string; intent?: SlotIntent | null; opportunity_id?: string; tour?: TourPlan }
 
 async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: ReturnType<typeof weekSlots>, plan: ContentPlan, funnelPlan: unknown = null, ssPillars: { key: string; name: string; why?: string }[] = []): Promise<{ planned: number; days: { date: string; posts: number; note: string }[]; todo: { format: string; name: string; per_week: number; purpose: string }[] }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -1167,9 +1172,12 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
   for (const r of (usedRows ?? []) as { item_id: string }[]) usage.set(r.item_id, (usage.get(r.item_id) ?? 0) + 1)
   const items = ((itemRows ?? []) as { id: string; meta: { photos?: unknown[] } | null }[])
     .filter(it => (it.meta?.photos?.length ?? 0) >= 5).map(it => it.id)
-  const pickItem = (): string | null => {
+  // Tour: no máximo 1 por imóvel na semana (decisão do dono 2026-11-02) — só repete se houver um único imóvel elegível.
+  const videoItems = new Set(((existingRows ?? []) as { item_id: string | null; recipe: string | null }[]).filter(r => r.recipe === VIDEO_RECIPE && r.item_id).map(r => r.item_id as string))
+  const pickItem = (avoid?: Set<string>): string | null => {
     if (!items.length) return null
-    const id = [...items].sort((a, b) => (usage.get(a) ?? 0) - (usage.get(b) ?? 0))[0]
+    const free = avoid ? items.filter(i => !avoid.has(i)) : items
+    const id = [...(free.length ? free : items)].sort((a, b) => (usage.get(a) ?? 0) - (usage.get(b) ?? 0))[0]
     usage.set(id, (usage.get(id) ?? 0) + 1)
     return id
   }
@@ -1204,14 +1212,25 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
       jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format, ...labelsOf(slot) }); continue
     }
     if (slot.producer === 'item_video') {
-      const itemId = pickItem()
+      const itemId = pickItem(videoItems)
       if (!itemId) { addTodo(slot); continue }
-      jobs.push({ date: slot.date, producer: 'item_video', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe: VIDEO_RECIPE, item_id: itemId, ...labelsOf(slot) })
+      videoItems.add(itemId)
+      jobs.push({ date: slot.date, producer: 'item_video', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format: slot.format, recipe: VIDEO_RECIPE, item_id: itemId, ...labelsOf(slot) })
       continue
     }
     const itemId = recipe ? pickItem() : null
     if (!recipe || !itemId) { addTodo(slot); continue }
     jobs.push({ date: slot.date, producer: 'item_package', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe, item_id: itemId, ...labelsOf(slot) })
+  }
+
+  // Tours: foto e tipo de cada vaga de vídeo decididos AQUI, de uma vez, pra vagas paralelas não escolherem a mesma foto/cômodo.
+  const videoJobs = jobs.filter(j => j.producer === 'item_video')
+  if (videoJobs.length && cronSecret) {
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
+    if (anthropicKey) {
+      const tours = await planTours(admin, anthropicKey, company.id, company.vertical_key ?? null, videoJobs, videoJobs[0].date)
+      videoJobs.forEach((j, i) => { if (tours[i]) j.tour = tours[i] })
+    }
   }
 
   // Despacho: cada vaga é uma chamada própria; esperamos só o aceite.
@@ -1376,48 +1395,93 @@ async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Co
   const { data: item } = await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('id', job.item_id).eq('company_id', company.id).eq('kind', 'product').maybeSingle()
   const photos = ((item?.meta?.photos ?? []) as { url: string }[]).map(p => p.url).filter(Boolean)
   if (!item || !photos.length) { console.error('runVideoSlot: item sem fotos', company.id, job.item_id); return }
-  // Foto ainda não usada em vídeo deste item, se houver (senão qualquer uma).
-  const { data: used } = await admin.from('video_tours').select('photos').eq('company_id', company.id).eq('item_id', item.id).eq('kind', 'plan')
-  const usedSet = new Set(((used ?? []) as { photos: string[] | null }[]).flatMap(v => v.photos ?? []))
-  const fresh = photos.filter(u => !usedSet.has(u))
-  const pool = fresh.length ? fresh : photos
-  const photo = pool[Math.floor(Math.random() * pool.length)]
+  // Foto(s) e tipo: vêm decididos do planejamento da semana (sem corrida entre vagas); peça avulsa escolhe aqui.
+  // Nota de qualidade + cômodo (IA de visão) e a ficha (config.tour) mandam; sem nota, a foto é último recurso (nunca sorteio às cegas).
+  const tcfg = await fetchTourCfg(admin, company.vertical_key ?? null)
+  let tour: TourPlan | null = job.tour && job.tour.photos?.length && job.tour.photos.every(u => photos.includes(u)) ? job.tour : null
+  if (!tour) { try { tour = await chooseTour(admin, anthropicKey, company.id, item.id, job.format, tcfg) } catch (e) { console.error('runVideoSlot: escolha da foto falhou', company.id, String(e).slice(0, 200)) } }
+  if (!tour) tour = { kind: 'room', photos: [photos[0]], rooms: [null], notes: ['não consegui analisar as fotos — usei a primeira do cadastro.'] }
+  const photo = tour.photos[0]
   const f = (item.meta?.fields ?? {}) as Record<string, unknown>
   const hidden = await privateFieldKeys(admin, company.vertical_key ?? null)
   const facts = Object.entries(f).filter(([k, v]) => !hidden.has(k) && v !== null && v !== undefined && String(v).trim() !== '').map(([k, v]) => `${k}: ${String(v).slice(0, 600)}`).join('\n')
   // "Comente QUERO" só com a resposta do QUERO deste imóvel aprovada (decisão em código, não da IA).
   const { data: auto } = await admin.from('engagement_automations').select('active, message, keywords').eq('company_id', company.id).eq('item_id', item.id).maybeSingle()
   const decision = decideVideoCta(auto as { active?: boolean; message?: string; keywords?: string[] } | null, await fetchFichaCtas(admin, company.vertical_key))
-  let cap: Record<string, unknown> = {}
-  try {
-    cap = parseObj(await callClaude(anthropicKey, `Você escreve a legenda de um Reels curto (5 s) de "${company.business_name}" mostrando 1 ambiente deste imóvel real, em movimento de câmera suave.
+  // Legenda: o vídeo é uma ANIMAÇÃO por IA de foto real (nunca "filmado"); sem duração; sem repetir a abertura das últimas legendas do imóvel.
+  const prev = await previousCaptions(admin, company.id, item.id, VIDEO_RECIPE)
+  const scene = tour.kind === 'pair' ? '2 ambientes vizinhos deste imóvel real, numa passagem suave de um para o outro' : tour.kind === 'opening' ? 'o exterior/a vista deste imóvel real, em abertura de câmera suave' : '1 ambiente deste imóvel real, em movimento de câmera suave'
+  const basePrompt = `Você escreve a legenda de um Reels de "${company.business_name}" mostrando ${scene}.
 Dados reais do imóvel (use só isto):
 ${facts || '(sem dados além do título)'}
 Título: ${item.title}
 Objetivo da peça na estratégia: ${job.purpose || job.name}${job.intent ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentBlock(job.intent)}\nO CTA sugerido acima é só sugestão: a regra de chamada final abaixo manda.` : ''}
 ${HONESTY_RULE} A legenda é pro público do Instagram — nunca um recado pro corretor.
+${captionRules(tcfg.forbidden_claims, prev)}
 ${decision.promptRule}${lessonsBlock(await loadLessons(admin, company.id))}
-Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`, 700))
-  } catch (e) { console.error('runVideoSlot: legenda falhou', company.id, e) }
+Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`
+  const guardNotes: string[] = []
+  const ask = async (extra = ''): Promise<Record<string, unknown>> => {
+    try { return parseObj(await callClaude(anthropicKey, basePrompt + extra, 700)) } catch (e) { console.error('runVideoSlot: legenda falhou', company.id, e); return {} }
+  }
+  const textOf = (c: Record<string, unknown>) => `${c.caption ?? ''} ${c.hashtags ?? ''} ${c.cta ?? ''}`
+  let cap = await ask()
+  let check = checkCaption(textOf(cap), tcfg.forbidden_claims, prev)
+  if (!check.ok && cap.caption) {
+    // Reescreve 1 vez com os problemas apontados; se ainda reprovar, a frase proibida sai em código.
+    cap = await ask(`\nLEGENDA REPROVADA:\n${String(cap.caption)}\n${rewriteRequest(check, prev)}`)
+    check = checkCaption(textOf(cap), tcfg.forbidden_claims, prev)
+    guardNotes.push('a legenda foi reescrita para tirar frase proibida/abertura repetida.')
+  }
+  if (check.forbidden.length && cap.caption) {
+    const st = stripForbidden(String(cap.caption), tcfg.forbidden_claims)
+    cap = { ...cap, caption: st.text }
+    if (findForbidden(String(cap.cta ?? ''), tcfg.forbidden_claims).length) cap.cta = ''
+    if (findForbidden(String(cap.hashtags ?? ''), tcfg.forbidden_claims).length) cap.hashtags = ''
+    guardNotes.push('tirei da legenda uma frase que afirmava algo que o vídeo não é (ex.: "filmado") — confira o texto.')
+  } else if (check.repeated) guardNotes.push('a abertura da legenda ficou parecida com a de outro vídeo deste imóvel — confira.')
   // Recado da IA pro corretor sai da legenda/CTA antes da trava do QUERO (2026-10-25).
   const sp = stripPieceTexts(cap.caption ? String(cap.caption) : null, cap.cta ? String(cap.cta) : null)
   const safe = sanitizeCaptionCta(sp.caption || null, sp.cta || null, decision)
   if (safe.changed) console.log('runVideoSlot: CTA ajustado pela trava', company.id, decision.approved ? 'com QUERO' : 'sem QUERO')
-  // Sem a resposta aprovada, o dono é avisado na peça (e o item-videos preserva o aviso).
-  const notice = [decision.approved ? '' : queroNotice(decision.cta), internalNotesNotice(sp.notes) ?? '', sp.emptied ? EMPTY_CAPTION_NOTICE : ''].filter(Boolean).join(' ')
+  // Encerramento de marca (logo + lugar + CTA sempre; preço só se cadastrado, exatamente como veio): por código, nunca pela IA de vídeo.
+  const fieldText = (key: string) => (key && !hidden.has(key) && f[key] !== null && f[key] !== undefined ? String(f[key]).trim().slice(0, 80) : '')
+  const { data: bd } = await admin.from('brand_dna').select('colors, kit, logo_url').eq('company_id', company.id).maybeSingle()
+  const kit = bd as { colors: string[] | null; kit: { colors?: { primary?: string[]; accent?: string[]; text?: string; bg?: string } } | null; logo_url: string | null } | null
+  const brand: CardBrand = { primary: kit?.kit?.colors?.primary?.[0] || kit?.colors?.[0] || '#FF6D29', name: company.business_name, accent: kit?.kit?.colors?.accent?.[0], text: kit?.kit?.colors?.text, bg: kit?.kit?.colors?.bg, logoUrl: kit?.logo_url ?? undefined }
+  const card = await renderGraphicCardFull({ bearer: '', isCron: true, cronSecret }, company.id, 'tour_endcard',
+    { bairro: fieldText(tcfg.endcard_place_field), preco: formatPrice(fieldText(tcfg.endcard_price_field), tcfg.endcard_currency, tcfg.endcard_locale), cta: decision.cta }, brand, { width: 1080, height: 1920 })
+  // Avisos pro dono (reasoning): do tour (pair sem planta, queda de tipo…), da trava da legenda, do QUERO e do recado interno.
+  const notice = [tourNotice([...tour.notes, ...guardNotes]), decision.approved ? '' : queroNotice(decision.cta), internalNotesNotice(sp.notes) ?? '', sp.emptied ? EMPTY_CAPTION_NOTICE : ''].filter(Boolean).join(' ')
   const withNotice = (msg: string) => notice ? `${msg} ${notice}` : msg
   const { data: piece, error } = await admin.from('marketing_ai_test_content').insert({
     company_id: company.id, kind: 'organico', format: 'reel', idea: `${item.title} — vídeo`,
     caption: safe.caption, hashtags: cap.hashtags ? String(cap.hashtags) : null, cta: safe.cta,
     image_url: photo, media: [{ url: photo, type: 'photo' }], item_id: item.id, pillar: job.tema ?? job.pillar, recipe: VIDEO_RECIPE, provider: 'higgsfield',
-    planned_for: job.date || null, reasoning: withNotice('Vídeo sendo feito na Higgsfield a partir de uma foto real — aparece aqui em alguns minutos.'),
+    planned_for: job.date || null, reasoning: withNotice(`Vídeo sendo feito na Higgsfield a partir de ${tour.photos.length > 1 ? 'fotos reais' : 'uma foto real'} — aparece aqui em alguns minutos.`),
   }).select('id').single()
   if (error || !piece) { console.error('runVideoSlot: peça não gravada', company.id, error?.message); return }
   await saveLabels(admin, piece.id, job, job.intent)
+  if (!card) {
+    // Sem encerramento não sai vídeo (decisão do dono): nada foi gasto.
+    console.error('runVideoSlot: encerramento falhou', company.id, piece.id)
+    await admin.from('marketing_ai_test_content').update({ reasoning: withNotice('O vídeo não foi feito: não consegui desenhar o encerramento da marca. Nada foi cobrado.') }).eq('id', piece.id)
+    try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runVideoSlot: nota falhou', e) }
+    return
+  }
+  // Estúdio fora do ar: NÃO gasta. A peça fica "aguardando estúdio" e o tick do item-videos retoma (só então paga os trechos).
+  let ready = false
+  try { ready = await studioReady(admin) } catch (e) { console.error('runVideoSlot: conferir estúdio falhou', String(e).slice(0, 200)) }
+  if (!ready) {
+    const pending = { item_id: item.id, kind: tour.kind, photos: tour.photos, endcard_url: card.url, endcard_seconds: tcfg.endcard_seconds, since: new Date().toISOString() }
+    await admin.from('marketing_ai_test_content').update({ reasoning: withNotice(WAITING_STUDIO_PRE), concept: { tour_pending: pending } }).eq('id', piece.id)
+    try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runVideoSlot: nota falhou', e) }
+    return
+  }
   try {
     const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/item-videos`, {
       method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create', cron_secret: cronSecret, company_id: company.id, item_id: item.id, kind: 'room', photos: [photo], label: 'Calendário', piece_id: piece.id }),
+      body: JSON.stringify({ action: 'create', cron_secret: cronSecret, company_id: company.id, item_id: item.id, kind: tour.kind, photos: tour.photos, label: 'Calendário', piece_id: piece.id, endcard_url: card.url, endcard_seconds: tcfg.endcard_seconds }),
     })
     const r = await res.json().catch(() => ({})) as { error?: string }
     if (!res.ok) await admin.from('marketing_ai_test_content').update({ reasoning: withNotice(`O vídeo não foi feito: ${r.error ?? `erro ${res.status}`}. Nada foi cobrado.`) }).eq('id', piece.id)

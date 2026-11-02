@@ -2170,3 +2170,23 @@ somente-leitura (`company_flow_status`), sem afrouxar a RLS. Feito agora: Inteli
 - **Preço NÃO decidido.** Ideia: US$ 19 / 29 / 59, com 5 / 15 / 30 posts; o mais caro com avatar, Meta Ads e
   leitura comercial avançada. Nada muda no código de cobrança até a decisão. Pendências listadas no pitch.
 - O pitch só promete o que existe: impulsionar anúncio e avatar aparecem como "em construção / em breve".
+
+## 2026-11-02 — Tour virtual: PR A (qualidade do tour)
+
+Decisões do dono que fecham as dúvidas do plano do PR A (detalhes e o que mudou em
+[PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md#pr-a--qualidade-do-tour-feito-no-código-em-2026-11-02-branch-claudenifty-shannon-ysp818-tour-ainda-não-publicado)):
+
+1. **Estúdio (VPS) fora do ar: esperar.** O tour do calendário só sai em 9:16 com encerramento. Sem o estúdio a peça fica
+   "Aguardando estúdio" e é montada quando ele volta. **Nunca** sai vídeo 4:5 / sem encerramento por esse caminho. (Limite que
+   o agente pôs: 48 h esperando; depois a peça falha avisando. Os trechos já gerados ficam cobrados.)
+2. **Tour "2 cômodos" (`pair`) liberado** para sala↔varanda, sala↔cozinha "e outros combos possíveis": a lista de pares
+   plausíveis vive na **ficha** (`config.tour.adjacent_rooms`), nada de setor no código. Na aprovação a peça avisa
+   "passagem entre cômodos não confirmada por planta".
+3. **Encerramento do vídeo:** logo + bairro + CTA sempre; **preço só se cadastrado, com o MESMO valor do cadastro** (nunca soma nem arredonda;
+   formatar milhar e moeda não é inventar — número só de dígitos e maior que 0 vira "R$ 3.000.000", 0 não aparece, texto que já tem letras/"R$" fica como veio; moeda/idioma na ficha); ~2,5 s; fundo escuro da marca. Feito por **código** (`render-format`, template `tour_endcard`), nunca pela IA
+   de vídeo (regra 4).
+4. **Mostrar cômodo/nota da foto na tela do catálogo:** não foi pedido — fica fora do PR (só no banco, em `meta.photos[i]`).
+
+Junto, o que o plano já previa: foto escolhida por nota (Haiku, ~US$ 0,003/foto, uma vez) em vez de sorteio, variar o
+cômodo, `opening` só com fachada/vista real, no máximo 1 tour por imóvel por semana, legenda sem "filmado" nem "N segundos".
+**Substitui** (sem apagar) o "tipo sempre `room`" do automático descrito na fase 7 do PLANO-CRIATIVOS.
