@@ -2171,6 +2171,25 @@ somente-leitura (`company_flow_status`), sem afrouxar a RLS. Feito agora: Inteli
   leitura comercial avançada. Nada muda no código de cobrança até a decisão. Pendências listadas no pitch.
 - O pitch só promete o que existe: impulsionar anúncio e avatar aparecem como "em construção / em breve".
 
+## 2026-11-02 — Qualidade dos carrosséis (PR B)
+
+Decisões do dono para o PR B (detalhes em [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md#pr-b--qualidade-dos-carrosséis-2026-11-02)):
+
+1. **"luxo", "nobre", "premium", "exclusivo" e afins:** liberados **só** se o cadastro do imóvel citado traz a palavra; senão a trava barra.
+2. **Quando a trava dispara:** reescreve 1x; se persistir, corta só a frase; registra em `reasoning` "Tirei afirmação sem fonte: …".
+   Nunca troca por outro adjetivo inventado.
+3. **Educativo:** foto real do catálogo só quando a vaga cita um imóvel (`item_id`); sem imóvel, capa com design da marca
+   (gancho/pergunta/erro comum — nunca índice).
+4. **Carrossel de oferta:** no máximo 7 slides (capa + até 4 fotos melhores + dados + fecho).
+5. **Foto da capa da oferta:** a de maior nota (`meta.photos[].score/quality`, vindo do PR A) de forma tolerante; sem nota,
+   `photos[0]`. Nunca sorteia.
+6. **Planejador:** não repetir o mesmo tema/ângulo das últimas 3 semanas nem dentro da semana (caso real: "R$ 1,5 mi Barra vs
+   Leblon" saiu 4 semanas seguidas e 2x na mesma semana).
+
+Não contradiz a decisão de 21/10 (capa do educativo com foto só quando há imóvel; design da marca quando não há). A foto aqui é
+a do **catálogo** (não "foto do corretor").
+
+
 ## 2026-11-02 — Tour virtual: PR A (qualidade do tour)
 
 Decisões do dono que fecham as dúvidas do plano do PR A (detalhes e o que mudou em
