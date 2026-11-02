@@ -11,9 +11,11 @@ let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 const oldSql = readFileSync(new URL('../supabase/migrations/20261029130000_oportunidade_pecas.sql', import.meta.url), 'utf8')
 const newSql = readFileSync(new URL('../supabase/migrations/20261102120000_carrosseis_qualidade.sql', import.meta.url), 'utf8')
 const oldPt = JSON.parse(oldSql.split('$json$')[3]).pt
-const all3 = [...newSql.matchAll(/\$json\$(\[.*?\])\$json\$/g)].map(m => JSON.parse(m[1]))
-assert.equal(all3.length, 3, 'a migration traz: termos pt, "em alta" a tirar e termos en')
-const arrays = [all3[0], all3[2]], REMOVE = all3[1]
+const all4 = [...newSql.matchAll(/\$json\$(\[.*?\])\$json\$/g)].map(m => JSON.parse(m[1]))
+assert.equal(all4.length, 4, 'a migration traz: termos pt, termos pt a tirar, termos en, termos en a tirar')
+const arrays = [all4[0], all4[2]], REMOVE = all4[1]
+const ctxCfg = newSql.match(/\$json\$(\{[^$]*?"market_claims_ctx"[^$]*?|\{ ?"pt": ?\{"terms"[^$]*?)\$json\$/) ? JSON.parse(newSql.match(/\$json\$(\{ ?"pt": ?\{"terms"[^$]*?)\$json\$/)[1]) : null
+assert.ok(ctxCfg?.pt?.terms?.length && ctxCfg.pt.context.length)
 const merge = (oldList, add) => [...new Map([...oldList, ...add].filter(t => !REMOVE.includes(t)).map(t => [t, t])).values()]
 const TERMS = merge(oldPt, arrays[0])
 assert.ok(oldPt.includes('em alta') && !TERMS.includes('em alta')); ok('"em alta" solto sai da ficha (entra "mercado em alta")')
@@ -21,7 +23,7 @@ assert.equal(TERMS.length, new Set(TERMS).size); ok('mesclagem de array não dup
 assert.deepEqual(merge(TERMS, arrays[0]), TERMS); ok('2ª aplicação = mesma lista (idempotente)')
 assert.ok(oldPt.filter(t => !REMOVE.includes(t)).every(t => TERMS.includes(t))); ok('termos antigos e a ordem deles ficam')
 
-const empty = claimCtx('pt', [], [], TERMS)   // educativo sem imóvel: nenhum fato
+const empty = claimCtx('pt', [], [], TERMS, { ctx: ctxCfg.pt })   // educativo sem imóvel: nenhum fato
 const bad = [
   'Imóveis acima de R$ 1,5 mi são raros.',
   'Um dos m² mais valorizados do Rio.',
@@ -34,8 +36,8 @@ assert.ok(claimIssues('Imóveis acima de R$ 1,5 mi são raros.', empty).includes
 assert.ok(claimIssues('Apartamento de 3 quartos na Barra.', empty).length === 0 && claimIssues('Dicas para quem vai financiar.', empty).length === 0); ok('frase factual / educativa comum passa')
 
 // ── fatos do imóvel liberam termo e valor ────────────────────────────────────────────────────────────────────────
-const f = itemFacts('Cobertura duplex de luxo', { tipo: 'Cobertura', bairro: 'Leblon', preco: '1500000', quartos: '3', descricao: 'Acabamento de luxo.' }, { price: 'preco', bedrooms: 'quartos' })
-const ctx = claimCtx('pt', f.texts, f.nums, TERMS)
+const f = itemFacts('Cobertura duplex de luxo', { tipo: 'Cobertura', bairro: 'Leblon', preco: '1500000', quartos: '3', descricao: 'Acabamento de luxo.' }, { price: 'preco', bedrooms: 'quartos', location: 'bairro' })
+const ctx = claimCtx('pt', f.texts, f.nums, TERMS, { ctx: ctxCfg.pt, places: f.places })
 assert.equal(claimIssues('Acabamento de luxo no Leblon.', ctx).length, 0); ok('"luxo" liberado porque o cadastro traz a palavra')
 assert.ok(claimIssues('Um endereço nobre.', ctx).length > 0); ok('"nobre" continua barrado se o cadastro não traz')
 assert.equal(claimIssues('Imóvel acima de R$ 1,5 mi no Leblon.', ctx).length, 0); ok('faixa liberada quando o valor (com unidade) está no cadastro')
@@ -44,8 +46,8 @@ assert.ok(claimIssues('Por R$ 1,5 mi.', empty).includes(PRICE_RANGE_ISSUE)); ass
 assert.ok(claimIssues('Imóveis de 1.5 million no Rio.', empty).includes(PRICE_RANGE_ISSUE)); assert.ok(claimIssues('Sai por 850 mil reais.', empty).includes(PRICE_RANGE_ISSUE)); ok('"1.5 million" sem $ e "850 mil reais" também')
 
 // falsos positivos que o QA achou: texto legítimo passa
-for (const f of ['O endereço mais próximo do metrô fica a pé.', 'O melhor caminho é pela orla.', 'O melhor momento para visitar é de manhã.', 'Sala única com varanda.', 'Condomínio exclusivo para moradores.', 'A temporada em alta chega no verão.', 'O mercado financeiro muda.']) assert.deepEqual(claimIssues(f, empty), [], f)
-ok('sem falso positivo: "mais próximo", "o melhor caminho/momento", "sala única", "condomínio exclusivo", "temporada em alta"')
+for (const f of ['Financiamento mais barato exige entrada.', 'A taxa mais barata costuma ser a de banco público.', 'O documento mais procurado é a certidão.', 'O mais caro é errar o prazo.', 'Escolha o plano mais caro só se precisar.', 'O endereço mais próximo do metrô fica a pé.', 'O melhor caminho é pela orla.', 'O melhor momento para visitar é de manhã.', 'Sala única com varanda.', 'Condomínio exclusivo para moradores.', 'A temporada em alta chega no verão.', 'O mercado financeiro muda.']) assert.deepEqual(claimIssues(f, empty), [], f)
+ok('sem falso positivo (financiamento mais barato, taxa mais barata, documento mais procurado, "o mais caro é errar"): "mais próximo", "o melhor caminho/momento", "sala única", "condomínio exclusivo", "temporada em alta"')
 // escapes que o QA achou: agora barrados
 for (const f of ['O bairro mais procurado do Rio.', 'Um dos bairros mais caros da cidade.', 'Mais barato que Ipanema.', 'O metro quadrado mais caro.', 'Ipanema é mais cara que Leblon.', 'O mercado em alta no Rio.']) assert.ok(claimIssues(f, empty).length > 0, f)
 ok('escapes barrados: "mais procurado", "mais caros", "mais barato que", "metro quadrado mais caro", "mais cara que", "mercado em alta"')
@@ -112,5 +114,8 @@ assert.deepEqual(qualityFlags({ reasoning: null, slides: [{ layout: 'capa', text
 // meio esvaziado sai (não vira "Tespon"); fecho sem botão ganha o CTA da ficha
 const out4 = await lockDeckClaims({ slides: [sl({ layout: 'capa', title: 'Ok' }), sl({ title: 'Vale cada centavo' }), sl({ layout: 'fecho', title: 'Fim', cta: '' })], caption: '', hashtags: '', cta: '', ctx: empty, brand: 'Tespon', neutral: 'Tespon', ctaFallback: 'Me chama no direct' })
 assert.deepEqual(out4.slides.map(x => x.layout), ['capa', 'fecho']); assert.equal(out4.slides[1].cta, 'Me chama no direct'); ok('meio esvaziado sai sem repetir a marca; fecho sem CTA usa o da ficha')
+
+// comparativo com nome de bairro do CADASTRO como complemento (sem hard-code de setor)
+assert.ok(claimIssues('Sai mais caro em Leblon.', ctx).length > 0); assert.equal(claimIssues('Sai mais caro em Pampulha.', ctx).length, 0); ok('nome do bairro do cadastro conta como complemento de lugar')
 
 console.log(`\n${n} verificações ok`)

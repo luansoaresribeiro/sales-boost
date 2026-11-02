@@ -795,9 +795,9 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   try {
     const lang = claimLang, cc = claimCfg
     if (!cc.terms) throw new SkipClaimLock()   // setor sem lista na ficha (regra 6): a trava de mercado não se aplica — "premium" de uma cafeteria não é afirmação de mercado
-    const facts = linkedItem ? itemFacts(String(linkedItem.title ?? ''), linkedItem.meta?.fields, cc.fieldMap) : { texts: [] as string[], nums: [] as (string | { text: string })[] }
+    const facts = linkedItem ? itemFacts(String(linkedItem.title ?? ''), linkedItem.meta?.fields, cc.fieldMap) : { texts: [] as string[], nums: [] as (string | { text: string })[], places: [] as string[] }
     const tipTexts = topic?.mode === 'regulado' ? topic.tips.map(t => `${t.title} ${t.content}`) : []
-    claims = claimCtx(lang, [...facts.texts, ...tipTexts], [...facts.nums, ...tipTexts], cc.terms)
+    claims = claimCtx(lang, [...facts.texts, ...tipTexts], [...facts.nums, ...tipTexts], cc.terms, { ctx: cc.ctx, places: facts.places })
     const r = await lockDeckClaims({ slides: deckSlides, caption: caption ?? '', hashtags: post.hashtags ? String(post.hashtags) : '', cta: post.cta ? String(post.cta) : '', ctx: claims,
       ask: (p, m) => ask(p, m), brand: company.business_name, neutral: company.business_name, ctaFallback: quero.cta, post: x => lockSlide(x, quero) })
     if (r.removed.length || r.slides.length !== deckSlides.length) {

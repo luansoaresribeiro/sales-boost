@@ -39,7 +39,7 @@ type SupaClient = ReturnType<typeof createClient>
 interface Photo { url: string; path: string }
 interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
 interface RecipeGroup { recipes: string[]; fonte_midia: string; descricao: string }
-interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; fieldMap: { price?: string; bedrooms?: string } | null }
+interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; fieldMap: { price?: string; bedrooms?: string; location?: string } | null; claimCtx: { terms: string[]; context: string[] } | null }
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -68,7 +68,8 @@ async function fetchFichaConfig(admin: SupaClient, verticalKey: string | null): 
     return { pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null,
       // Trava de afirmação de mercado (claimLock): termos e campos de preço/quartos vêm da ficha (regra 6).
       marketClaims: ((c.opportunity_texts as { market_claims?: { pt?: unknown } } | undefined)?.market_claims?.pt as string[] | undefined)?.filter(x => typeof x === 'string' && x.trim()) ?? null,
-      fieldMap: c.opportunity_fields && typeof c.opportunity_fields === 'object' ? c.opportunity_fields as { price?: string; bedrooms?: string } : null }
+      fieldMap: c.opportunity_fields && typeof c.opportunity_fields === 'object' ? c.opportunity_fields as { price?: string; bedrooms?: string; location?: string } : null,
+      claimCtx: (() => { const x = (c.opportunity_texts as { market_claims_ctx?: { pt?: { terms?: unknown; context?: unknown } } } | undefined)?.market_claims_ctx?.pt; const a = (v: unknown) => (Array.isArray(v) ? v.filter((y): y is string => typeof y === 'string' && !!y.trim()) : []); return x && a(x.terms).length ? { terms: a(x.terms), context: a(x.context) } : null })() }
   } catch { return null }
 }
 
@@ -290,7 +291,7 @@ Deno.serve(async (req) => {
     // Trava de afirmação de mercado (claimLock, 2026-11-02): "acima de R$ X", "vale cada centavo", "endereços mais desejados"…
     // só passam se o cadastro DESTE imóvel traz o termo/valor. Reescreve 1x; persistiu, corta só a frase e avisa o dono.
     const facts = itemFacts(String(item.title ?? ''), fields, ficha.fieldMap)
-    const claims = claimCtx('pt', facts.texts, facts.nums, ficha.marketClaims)
+    const claims = claimCtx('pt', facts.texts, facts.nums, ficha.marketClaims, { ctx: ficha.claimCtx, places: facts.places })
     const copy = async (briefing: string) => {
       const c = await writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`, claimPromptRule(ficha.marketClaims))
       const cap = stripInternalNotes(c.caption), cta = stripInternalNotes(c.cta)

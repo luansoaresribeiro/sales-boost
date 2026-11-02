@@ -30,16 +30,23 @@ export function claimPromptRule(fichaTerms: string[] | null | undefined, bullet 
   return `${bullet}AFIRMAÇÃO DE MERCADO: nada de comparativo nem superlativo de mercado sem dado, e nenhum valor em dinheiro nem faixa de preço que não esteja nos dados cadastrados. Estes termos só valem se estiverem escritos nos dados cadastrados: ${terms.join(', ')}. Descreva só o que os dados dizem, sem qualificar o local, o valor nem a demanda.\n`
 }
 
-export interface ClaimCtx { guard: ClaimGuard; allowed: AllowedNumbers }
+export interface ClaimCtx { guard: ClaimGuard; allowed: AllowedNumbers; ctxTerms: string[]; ctxWords: string[] }
+/** Comparativos que só são afirmação de mercado COM complemento de lugar/mercado na frase ("bairro mais procurado"); ficha: opportunity_texts.market_claims_ctx. */
+export interface CtxCfg { terms: string[]; context: string[] }
 type NumSource = string | { text: string; numTags?: { value: string; unit: 'cur' | 'bed' }[] }
 
 /** Monta a trava: termos (ficha ou genéricos) + fatos permitidos (texto e números com unidade). */
-export function claimCtx(lang: Lang, factTexts: string[], numSources: NumSource[], fichaTerms?: string[] | null): ClaimCtx {
-  return { guard: claimGuard(lang, factTexts, fichaTerms), allowed: allowedNumbers(numSources.map(s => (typeof s === 'string' ? s : { text: s.text, numTags: s.numTags }))) }
+export function claimCtx(lang: Lang, factTexts: string[], numSources: NumSource[], fichaTerms?: string[] | null, extra?: { ctx?: CtxCfg | null; places?: string[] }): ClaimCtx {
+  return {
+    guard: claimGuard(lang, factTexts, fichaTerms), allowed: allowedNumbers(numSources.map(s => (typeof s === 'string' ? s : { text: s.text, numTags: s.numTags }))),
+    ctxTerms: extra?.ctx?.terms ?? [],
+    // complemento = palavras de lugar/mercado da ficha + nome do bairro/região do cadastro do imóvel (sem hard-code de setor)
+    ctxWords: [...(extra?.ctx?.context ?? []), ...(extra?.places ?? [])].filter(w => typeof w === 'string' && w.trim()),
+  }
 }
 
 /** Fatos de UM imóvel do catálogo (título + campos). Preço e quartos entram com unidade quando a ficha diz qual campo é (opportunity_fields). */
-export function itemFacts(title: string, fields: Record<string, unknown> | null | undefined, map?: { price?: string; bedrooms?: string } | null): { texts: string[]; nums: NumSource[] } {
+export function itemFacts(title: string, fields: Record<string, unknown> | null | undefined, map?: { price?: string; bedrooms?: string; location?: string } | null): { texts: string[]; nums: NumSource[]; places: string[] } {
   const f = fields ?? {}
   const texts = [title, ...Object.values(f).filter(v => typeof v === 'string' || typeof v === 'number').map(String)].filter(t => t.trim())
   const nums: NumSource[] = texts.map(t => ({ text: t }))
@@ -47,7 +54,8 @@ export function itemFacts(title: string, fields: Record<string, unknown> | null 
   if (priceRaw !== undefined && priceRaw !== null && String(priceRaw).trim()) nums.push({ text: '', numTags: [{ value: String(priceRaw), unit: 'cur' }] })
   const bedRaw = map?.bedrooms ? f[map.bedrooms] : undefined
   if (bedRaw !== undefined && bedRaw !== null && String(bedRaw).trim()) nums.push({ text: '', numTags: [{ value: String(bedRaw), unit: 'bed' }] })
-  return { texts, nums }
+  const loc = map?.location ? String(f[map.location] ?? '').trim() : ''
+  return { texts, nums, places: loc ? [loc] : [] }
 }
 
 // Valor em dinheiro solto ("R$ 1,5 mi", "850 mil reais", "1.5 million"): em peça do calendário só vale se o valor, com unidade, está
@@ -59,6 +67,15 @@ export function claimIssues(sentence: string, ctx: ClaimCtx): string[] {
   const n = norm(sentence)
   if (!n) return []
   const out = ctx.guard.terms.filter(t => { const re = claimRe(t); return re.test(n) && !re.test(ctx.guard.factsNorm) })
+  // Comparativo (ctxTerms) só conta com complemento de lugar/mercado na frase, ou na forma "mais caro QUE <X>":
+  // "financiamento mais barato" e "O mais caro é errar o prazo" passam; "bairro mais procurado" e "mais barato que Ipanema" não.
+  for (const t of ctx.ctxTerms) {
+    const re = claimRe(t)
+    if (!re.test(n) || re.test(ctx.guard.factsNorm)) continue
+    const compare = new RegExp(norm(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+(?:que|than)(?:$|[^a-z])').test(n)
+    const place = ctx.ctxWords.some(w => new RegExp('(?:^|[^a-z0-9])' + norm(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:\\w*)').test(n))
+    if (compare || place) out.push(t)
+  }
   const money = n.match(MONEY_G) ?? []
   if (money.some(m => !numbersAllowed(m, ctx.allowed))) out.push(PRICE_RANGE_ISSUE)
   return out
@@ -191,18 +208,21 @@ export async function lockDeckClaims(a: LockDeckIn): Promise<LockDeckOut> {
 }
 
 // ── Ficha do setor (regra 6): termos de mercado, campos de preço/quartos, capa com foto ────────────────────────────
-export interface ClaimCfg { terms: string[] | null; fieldMap: { price?: string; bedrooms?: string } | null; photoWhenItem: boolean }
+export interface ClaimCfg { terms: string[] | null; fieldMap: { price?: string; bedrooms?: string; location?: string } | null; photoWhenItem: boolean; ctx: CtxCfg | null }
 type Admin = { from: (t: string) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Lê da ficha: market_claims (pt/en), opportunity_fields e carousel_cover.educativo.photo_when_item. Falhou/sem ficha = genéricos, sem foto. */
 export async function loadClaimCfg(admin: Admin, verticalKey: string | null, lang: Lang): Promise<ClaimCfg> {
-  const none: ClaimCfg = { terms: null, fieldMap: null, photoWhenItem: false }
+  const none: ClaimCfg = { terms: null, fieldMap: null, photoWhenItem: false, ctx: null }
   if (!verticalKey) return none
   try {
     const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
-    const c = (data?.config ?? {}) as { opportunity_texts?: { market_claims?: Record<string, unknown> }; opportunity_fields?: { price?: string; bedrooms?: string }; carousel_cover?: { educativo?: { photo_when_item?: unknown } } }
+    const c = (data?.config ?? {}) as { opportunity_texts?: { market_claims?: Record<string, unknown>; market_claims_ctx?: Record<string, { terms?: unknown; context?: unknown }> }; opportunity_fields?: { price?: string; bedrooms?: string; location?: string }; carousel_cover?: { educativo?: { photo_when_item?: unknown } } }
     const raw = c.opportunity_texts?.market_claims?.[lang]
     const terms = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string' && !!x.trim()) : []
-    return { terms: terms.length ? terms : null, fieldMap: c.opportunity_fields && typeof c.opportunity_fields === 'object' ? c.opportunity_fields : null, photoWhenItem: c.carousel_cover?.educativo?.photo_when_item === true }
+    const cx = c.opportunity_texts?.market_claims_ctx?.[lang]
+    const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()) : [])
+    const ctx: CtxCfg | null = cx && strs(cx.terms).length ? { terms: strs(cx.terms), context: strs(cx.context) } : null
+    return { ctx, terms: terms.length ? terms : null, fieldMap: c.opportunity_fields && typeof c.opportunity_fields === 'object' ? c.opportunity_fields : null, photoWhenItem: c.carousel_cover?.educativo?.photo_when_item === true }
   } catch (e) { console.error('claimLock: ficha não lida (segue com os termos genéricos)', e); return none }
 }
 
