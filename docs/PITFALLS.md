@@ -966,3 +966,8 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - **Preço no encerramento** passa por `formatPrice` (milhar + moeda da ficha); o valor guardado no cadastro não muda.
 - A migration do tour **não sobrescreve** `config.tour`/`clip_prompts.opening` já existentes (o que está lá vence).
 
+
+- **Trava só no prompt não segura** (Tespon 2/11): o mesmo tema saiu 2x na mesma semana porque cada vaga do calendário roda em
+  invocação própria, em paralelo, e só enxergava o banco — e o banco só recebe a peça no fim. Reserva de tema tem que ser feita no
+  planejamento da semana inteira, antes de disparar (`weekThemes.planWeekThemes`). Número "por extenso" (`trezentos`) também escapava da
+  trava de algarismos: use `numberGuard` (extenso → número) em texto que fala do cadastro do imóvel. Janela e limiar de tema vivem na ficha.

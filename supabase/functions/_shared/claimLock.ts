@@ -17,6 +17,7 @@ import { allowedNumbers, claimGuard, claimRe, numbersAllowed, type AllowedNumber
 import { norm, type Lang } from './opportunityEngine.ts'
 import { normalizeSlide, rewritePrompt, type DeckSlide } from './deckSlides.ts'
 import { parseJson } from './faqCheck.ts'
+import { NUMBER_ISSUE, unsourcedNumbers } from './numberGuard.ts'
 
 export const PRICE_RANGE_ISSUE = 'valor em dinheiro sem fonte'
 
@@ -30,7 +31,8 @@ export function claimPromptRule(fichaTerms: string[] | null | undefined, bullet 
   return `${bullet}AFIRMAÇÃO DE MERCADO: nada de comparativo nem superlativo de mercado sem dado, e nenhum valor em dinheiro nem faixa de preço que não esteja nos dados cadastrados. Estes termos só valem se estiverem escritos nos dados cadastrados: ${terms.join(', ')}. Descreva só o que os dados dizem, sem qualificar o local, o valor nem a demanda.\n`
 }
 
-export interface ClaimCtx { guard: ClaimGuard; allowed: AllowedNumbers; ctxTerms: string[]; ctxWords: string[] }
+/** `factNums` (opcional): números do cadastro do imóvel. Só legenda de vídeo/catálogo ligam (numberGuard.allowedValues) — aí QUALQUER número fora do cadastro, em algarismo ou por extenso, é barrado. */
+export interface ClaimCtx { guard: ClaimGuard; allowed: AllowedNumbers; ctxTerms: string[]; ctxWords: string[]; factNums?: Set<number> }
 /** Comparativos que só são afirmação de mercado COM complemento de lugar/mercado na frase ("bairro mais procurado"); ficha: opportunity_texts.market_claims_ctx. */
 export interface CtxCfg { terms: string[]; context: string[] }
 type NumSource = string | { text: string; numTags?: { value: string; unit: 'cur' | 'bed' }[] }
@@ -78,6 +80,7 @@ export function claimIssues(sentence: string, ctx: ClaimCtx): string[] {
   }
   const money = n.match(MONEY_G) ?? []
   if (money.some(m => !numbersAllowed(m, ctx.allowed))) out.push(PRICE_RANGE_ISSUE)
+  if (ctx.factNums) for (const v of unsourcedNumbers(sentence, ctx.factNums)) out.push(`${NUMBER_ISSUE}: ${v}`)
   return out
 }
 
@@ -122,8 +125,9 @@ export function claimNotice(removed: string[]): string | null {
   return `Tirei afirmação sem fonte: ${shown}${uniq.length > 3 ? ` (+${uniq.length - 3})` : ''}.`
 }
 
-export const claimWhy = (issues: string[]): string =>
-  `a versão atual traz afirmação de mercado sem dado cadastrado (${issues.join(', ')}). NÃO use esses termos nem comparativo/superlativo/faixa de preço; escreva só o que os dados dizem, sem trocar por outro adjetivo de mercado`
+export const claimWhy = (issues: string[]): string => issues.some(i => i.startsWith(NUMBER_ISSUE))
+  ? `a versão atual traz número que não está nos dados cadastrados (${issues.join(', ')}). Use SÓ números que estão nos dados (em algarismo ou por extenso); sem esse número, descreva sem ele. Nada de comparativo/superlativo de mercado`
+  : `a versão atual traz afirmação de mercado sem dado cadastrado (${issues.join(', ')}). NÃO use esses termos nem comparativo/superlativo/faixa de preço; escreva só o que os dados dizem, sem trocar por outro adjetivo de mercado`
 
 /** Texto solto (legenda/CTA): reescreve 1x via `rewrite` (devolve o texto novo ou null) → ainda ruim: corta a frase. */
 export async function lockText(text: string, ctx: ClaimCtx, rewrite?: (issues: string[]) => Promise<string | null>): Promise<{ text: string; removed: string[] }> {
