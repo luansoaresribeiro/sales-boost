@@ -758,3 +758,45 @@ Complementa as seções acima sem apagar nada (decisões em [DECISIONS.md](DECIS
   disparada no `generateForCompany` quando a peça não foi pro Vault.
 - **Dicas opção A:** ver DECISIONS; testes em `scripts/test-deck-topic.mjs`.
 - **Testes novos:** `scripts/test-publish-slot.mjs`, `scripts/test-auto-redo.mjs`, `shouldPrepareLogo` em `test-logo-png.mjs`.
+
+## PR B — qualidade dos carrosséis (2026-11-02)
+
+Em código na branch `claude/nifty-shannon-ysp818-carrosseis` (sem deploy e sem migration aplicados). Decisões do dono em
+[DECISIONS.md](DECISIONS.md#2026-11-02--qualidade-dos-carrosséis-pr-b).
+
+- **Trava de afirmação de mercado** (`_shared/claimLock.ts`): legenda, CTA, hashtags e todo campo de slide (título, texto,
+  itens, destaque, botão), em `creative-generate` e `catalog-package`. Termos vêm da ficha (`opportunity_texts.market_claims`,
+  ampliados pela migration `20261102100000`); em `catalog-package` (só imóveis) sem ficha valem os genéricos de `opportunityOutput.ts`; em `creative-generate` **setor sem lista na ficha não passa pela trava** (regra 6: "premium" de uma cafeteria não é afirmação de mercado). Fatos permitidos =
+  cadastro do imóvel citado (`item_id` da vaga) + dicas conferidas (modo regulado). "luxo/nobre/premium/exclusivo" passam só
+  se o cadastro traz a palavra. Faixa de preço ("acima de R$ X", "a partir de…") só vale com o valor + unidade no cadastro;
+  educativo sem imóvel não cita faixa. Ordem: reescreve 1x (IA, com a lista barrada) → corta só a frase → aviso no
+  `reasoning`. Nunca troca por outro adjetivo. Capa/fecho que esvaziam ficam com o nome da marca; slide do meio que
+  esvazia sai (mínimo 3 slides). O retry de overflow também passa pelo corte.
+- **Capa do educativo:** rodízio `gancho` · `pergunta` · `erro` (erro comum, com "!"). A capa-índice (`lista`) saiu do
+  sorteio (o desenho ainda a aceita para peça antiga). O prompt proíbe listar os próximos slides, número e faixa sem fonte.
+- **Foto real no educativo:** só quando a vaga traz `item_id` **e** a ficha liga `carousel_cover.educativo.photo_when_item`.
+  Capa = foto de maior nota, fecho = a melhor seguinte; texto branco sobre degradê escuro (`render-format` template `slide`
+  aceita `background`). Sem imóvel: design da marca. Nunca `staged_photos`. **Hoje nenhuma vaga de texto traz `item_id`**
+  (`runPlanSlot` agora repassa `job.item_id`, mas o planejador só o preenche em vaga de imóvel) — a foto só aparece quando
+  uma vaga de texto passar a citar um imóvel.
+- **Oferta (`carrossel_tour`)** vira carrossel de verdade: capa (foto escolhida + tipo/bairro/quartos/preço só se cadastrado,
+  logo) · até 4 fotos (`foto`) · slide de dados (campos preenchidos; m² fora de 10–2000 não aparece) · fecho com o CTA seguro
+  (`decideVideoCta`; sem DM aprovada nunca "Comente QUERO"). **Máx. 7 slides.** `slides` e `media` gravam as mesmas URLs.
+  Falhou o desenho: fotos cruas, como antes. Fotos mobiliadas (até 2) só entram com o aviso da ficha.
+- **Foto da capa:** `_shared/carouselOffer.ts` `pickCoverPhoto` lê `meta.photos[].score`/`quality` (número, texto ou objeto)
+  de forma tolerante (forma do PR A ainda pode mudar); sem nota nenhuma = `photos[0]`; nunca sorteia.
+- **"3 coisas perto"** no sistema de slides: capa com a foto real, lista dos 3 lugares (OpenStreetMap) e fecho com CTA; logo e @
+  do template `slide`. Menos de 3 lugares: foto única com cartão de marca (logo + bairro, sem "1/1"). Se o desenho falhar,
+  volta o card antigo `trend` (que continua existindo para o fluxo manual).
+- **Variação:** o enfeite do slide muda de posição e de cor do kit (`pickAccents`, mesmo critério de contraste do `pickAccent`)
+  a cada página; `normalizeDeck` impede 3 slides iguais seguidos (lista↔passos).
+- **Tema repetido:** o Diretor Criativo recebe os temas das últimas 3 semanas + os já agendados (`_shared/themeDedupe.ts`) e
+  é proibido de repetir tema/ângulo; conferência em código (sobreposição de palavras) → 1 refação do texto, senão aviso no
+  `reasoning`. **Limite:** as vagas da semana são geradas em paralelo, então duas peças da MESMA semana ainda podem se
+  cruzar; o que já foi gravado é visto.
+- **Divergência achada (não mexi):** o carrossel educativo grava só `slides` + `image_url`; **`media` fica vazio**, e a
+  aprovação (`agent-actions`) publica `media[]` como carrossel e, sem ele, só a capa como foto única. Confirmar com o dono
+  se educativo deve publicar todos os slides (provável bug); a correção é uma linha no `UPDATE` final do `generateForCompany`.
+- **Testes:** `scripts/test-claim-lock.mjs` (as 4 frases do relato, termos da migration), `scripts/test-carousel-quality.mjs`
+  (capa, foto, oferta, bairro, tema repetido).
+

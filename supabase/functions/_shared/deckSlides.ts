@@ -5,6 +5,7 @@
 import { COVER_STYLES, SLIDE_LAYOUTS, clean } from './slideSystem.ts'
 import { sanitizeCaptionCta, type CtaDecision } from './videoCta.ts'
 
+const CLAIM_RULE = 'MERCADO: sem comparativo nem superlativo de mercado sem dado ("mais valorizado", "um dos mais desejados", "vale cada centavo", "imperdível") e sem faixa de preço ("acima de R$ X") que não esteja nos dados cadastrados. A trava em código remove o que sobrar.'
 export interface DeckSlide { layout: string; title: string; text: string; items: string; highlight: string; cta: string }
 
 const MIDDLE = ['lista', 'passos', 'comparacao', 'destaque'] as const
@@ -48,7 +49,16 @@ export function normalizeSlide(raw: Raw, forced: 'capa' | 'fecho' | null, postCt
 export function normalizeDeck(rawSlides: unknown[], postCta = ''): DeckSlide[] {
   const rows = rawSlides.filter((x): x is Raw => !!x && typeof x === 'object')
     .filter(x => str(x.title).trim() || str(x.text).trim() || str(x.items).trim()).slice(0, MAX_SLIDES)
-  return rows.map((x, i) => normalizeSlide(x, i === 0 ? 'capa' : i === rows.length - 1 ? 'fecho' : null, postCta))
+  return varyLayouts(rows.map((x, i) => normalizeSlide(x, i === 0 ? 'capa' : i === rows.length - 1 ? 'fecho' : null, postCta)))
+}
+
+/** Nunca 3 slides do meio com o mesmo layout seguido: o 3º de "lista"/"passos" vira o irmão (mesmos campos, sem perder conteúdo). */
+export function varyLayouts(slides: DeckSlide[]): DeckSlide[] {
+  const twin: Record<string, string> = { lista: 'passos', passos: 'lista' }
+  return slides.map((s, i) => {
+    const a = slides[i - 1], b = slides[i - 2]
+    return a && b && s.layout === a.layout && s.layout === b.layout && twin[s.layout] ? { ...s, layout: twin[s.layout] } : s
+  })
 }
 
 /**
@@ -79,11 +89,12 @@ export const numbersOf = (txt: string): Set<string> => new Set((txt.match(numRe)
 /** Modo do tema (deckTopic.ts): regulado = só dicas conferidas; geral = sem fato; leve/ausente = como sempre foi. */
 export interface DeckTopicRules { mode: 'regulado' | 'geral' | 'leve'; tipCount?: number }
 export function deckPromptRules(coverStyle: string, brandCta: string, topic?: DeckTopicRules): string {
+  // A capa prende; nunca é índice (lista dos slides seguintes) — 'lista' saiu do rodízio em 2026-11-02.
   const capa = coverStyle === 'pergunta' ? '"title" = uma PERGUNTA que o público se faz (até 70 caracteres)'
-    : coverStyle === 'lista' ? '"title" = promessa curta (até 60 caracteres) e "items" = 3 a 4 linhas (até 45 caracteres cada) com o que vem nos próximos slides'
-    : '"title" = gancho: afirmação forte (até 70 caracteres)'
-  return `- ESTE é um CARROSSEL DE SLIDES (design da marca, só texto na arte — sem foto): "slides" com ${topic?.mode === 'regulado' && topic.tipCount ? `${topic.tipCount + 2} itens (capa + ${topic.tipCount} slide${topic.tipCount > 1 ? 's' : ''} do meio, UM por dica, na ordem das dicas + fecho)` : '4 a 7 itens'}. Cada slide: {"layout","title","text","items","highlight","cta"}, em frases completas e curtas, NUNCA cortadas no meio, sem emoji, sem hashtag, sem setas.
-  • 1º slide: "layout":"capa" — ${capa}; "text" = apoio opcional (até 100 caracteres).
+    : coverStyle === 'erro' ? '"title" = um ERRO COMUM que o público comete, dito de frente (ex.: "O erro que faz você …"; até 70 caracteres)'
+    : '"title" = gancho: uma promessa concreta ou afirmação forte (até 70 caracteres)'
+  return `- ESTE é um CARROSSEL DE SLIDES (design da marca; o texto é desenhado pelo sistema, a foto de fundo quando existe é real e posta pelo sistema): "slides" com ${topic?.mode === 'regulado' && topic.tipCount ? `${topic.tipCount + 2} itens (capa + ${topic.tipCount} slide${topic.tipCount > 1 ? 's' : ''} do meio, UM por dica, na ordem das dicas + fecho)` : '4 a 7 itens'}. Cada slide: {"layout","title","text","items","highlight","cta"}, em frases completas e curtas, NUNCA cortadas no meio, sem emoji, sem hashtag, sem setas.
+  • 1º slide: "layout":"capa" — ${capa}; "text" = apoio opcional (até 100 caracteres). A capa NUNCA lista os slides seguintes nem vira índice, e não leva número nem faixa de preço sem fonte.
   • slides do MEIO: um destes layouts por slide, variando entre eles:
       "lista" — "title" até 60 caracteres + "items" com 3 a 5 linhas separadas por \\n (até 80 caracteres cada);
       "passos" — igual a lista, mas as linhas são ações em ordem;
@@ -96,6 +107,7 @@ ${topic?.mode === 'regulado'
     : topic?.mode === 'geral'
       ? '  • SEM FATOS: dica GERAL e prática, sem número, prazo, taxa, valor, percentual nem nome de lei, imposto ou programa, e sem afirmar nenhuma regra.'
       : '  • NÚMEROS: só use número, preço, prazo ou estatística que esteja nos dados fornecidos acima. Na dúvida, escreva sem número.'}
+  • ${CLAIM_RULE}
   Deixe "image" vazio.
 `
 }

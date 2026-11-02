@@ -16,13 +16,17 @@ export type SlideFields = Record<string, string>
 export interface Tok { w: string; hl: boolean }
 export interface DrawnLine { text: string; x0: number; x1: number; y: number; size: number; bold: boolean; box: [number, number] }
 /** Opções do logo já preparado (PNG transparente): pílula atrás quando ele some no fundo; aspect = largura/altura do PNG. */
-export interface LogoOpts { backdrop?: string | null; aspect?: number | null }
+export interface LogoOpts { backdrop?: string | null; aspect?: number | null; /** Foto real de fundo (data URI) — capa/fecho do carrossel com foto; texto vira branco sobre degradê escuro. */ bgImage?: string | null }
 export interface SlideOut { svg: string; w: number; h: number; overflow: boolean; layout: string; drawn: DrawnLine[] }
 
 export const SLIDE_W = 1080
 export const SLIDE_H = 1350
-export const SLIDE_LAYOUTS = ['capa', 'lista', 'passos', 'comparacao', 'destaque', 'fecho'] as const
-export const COVER_STYLES = ['gancho', 'pergunta', 'lista'] as const
+// 'foto' = só a foto real de fundo com a marca (logo, @, contador); sem texto. Não é pedido pela IA (o MIDDLE do deckSlides não o lista): só o catalog-package usa.
+export const SLIDE_LAYOUTS = ['capa', 'lista', 'passos', 'comparacao', 'destaque', 'fecho', 'foto'] as const
+// Rodízio da capa: gancho (promessa), pergunta, erro comum. A capa-ÍNDICE ('lista') saiu do rodízio (2026-11-02):
+// não prende; segue aceita no desenho só pra peça antiga re-renderizada, mas nunca é sorteada.
+export const COVER_STYLES = ['gancho', 'pergunta', 'erro'] as const
+const LEGACY_COVER_STYLES = ['lista'] as const
 
 const M = 90, RIGHT = SLIDE_W - M, CW = SLIDE_W - 2 * M
 const BODY_TOP = 230, BODY_BOT = 1150, BODY_H = BODY_BOT - BODY_TOP
@@ -112,6 +116,15 @@ function lum(hex: string): number {
 const contrast = (a: string, b: string) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) }
 const isHex = (s?: string) => !!s && /^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(s)
 
+/** Todas as cores do kit que servem de destaque (mesmo critério do pickAccent) — o enfeite do slide alterna entre elas. */
+export function pickAccents(b: SlideBrand, bg: string, text: string): string[] {
+  const out: string[] = []
+  for (const cand of [b.primary, b.primary2, b.accent, b.accent2]) {
+    if (isHex(cand) && contrast(cand!, bg) >= 3 && contrast(cand!, text) >= 1.6 && !out.includes(cand!)) out.push(cand!)
+  }
+  return out
+}
+
 /** Cor de destaque que APARECE: a 1ª cor da marca que contrasta com o fundo e
  *  se distingue do texto (kit real da Tespon: primária = fundo, teste
  *  2026-10-21). Sem nenhuma → usa a cor do texto e marca o destaque com
@@ -192,6 +205,7 @@ function chrome(c: Ctx, f: SlideFields, b: SlideBrand, logo: string | null, page
     const hf = fitText(handle, hBox[1] - hBox[0], { maxLines: 1 }, 30, 18, c.m, { bold: false })
     if (!hf.overflow) s += blockSvg(c, hf, RIGHT, 78, c.text, false, 'end', hBox, 0.7)
   }
+  if (total <= 1) return s   // peça de 1 slide só (cartão de marca): sem barra nem "1/1"
   const barY = H - 150
   s += `<rect x="${M}" y="${barY}" width="${CW}" height="6" rx="3" fill="${c.text}" fill-opacity="0.15"/>`
   s += `<rect x="${M}" y="${barY}" width="${Math.round(CW * page / total)}" height="6" rx="3" fill="${c.primary}"/>`
@@ -230,7 +244,7 @@ const centerY = (h: number) => Math.max(BODY_TOP, Math.round(BODY_TOP + (BODY_H 
 function layoutCapa(c: Ctx, f: SlideFields): string {
   const title = f.title || f.text || ''
   const sub = f.title ? (f.text || '') : ''
-  const style = (COVER_STYLES as readonly string[]).includes(f.cover_style) ? f.cover_style : 'gancho'
+  const style = ([...COVER_STYLES, ...LEGACY_COVER_STYLES] as readonly string[]).includes(f.cover_style) ? f.cover_style : 'gancho'
   const items = style === 'lista' ? splitItems(f.items, 5) : []
   const useList = style === 'lista' && items.length > 0
   const hlo = { highlight: f.highlight }
@@ -250,7 +264,8 @@ function layoutCapa(c: Ctx, f: SlideFields): string {
     })
     return s
   }
-  const isQ = style === 'pergunta'
+  const isQ = style === 'pergunta' || style === 'erro'
+  const glyph = style === 'erro' ? '!' : '?'
   const sb = sub ? fitText(sub, CW, { maxLines: 3 }, 40, 28, c.m, { bold: false }) : null
   const head = isQ ? 250 + 20 : 10 + 40
   const t = fitText(title, CW, { maxH: BODY_H - head - (sb ? 36 + sb.height : 0) }, isQ ? 96 : 108, 52, c.m, hlo)
@@ -258,8 +273,8 @@ function layoutCapa(c: Ctx, f: SlideFields): string {
   if (total > BODY_H) c.overflow = true
   let y = centerY(total)
   if (isQ) {
-    c.drawn.push({ text: '?', x0: M, x1: M + c.m('?', 330, true), y: y + 250, size: 330, bold: true, box: [M, RIGHT] })
-    s += `<text x="${M}" y="${y + 250}" font-family="Poppins" font-size="330" font-weight="700" fill="${c.primary}">?</text>`
+    c.drawn.push({ text: glyph, x0: M, x1: M + c.m(glyph, 330, true), y: y + 250, size: 330, bold: true, box: [M, RIGHT] })
+    s += `<text x="${M}" y="${y + 250}" font-family="Poppins" font-size="330" font-weight="700" fill="${c.primary}">${glyph}</text>`
   } else s += `<rect x="${M}" y="${y}" width="120" height="10" rx="5" fill="${c.primary}"/>`
   y += head
   s += blockSvg(c, t, M, y, c.text, true); y += t.height
@@ -374,8 +389,9 @@ function layoutTexto(c: Ctx, f: SlideFields, first: boolean): string {
 
 /** Desenha 1 slide. `measure` = largura real da fonte (ver render-format); logo = data URI ou null. */
 export function svgSlideSystem(f: SlideFields, b: SlideBrand, logo: string | null, measure: Measure, logoOpts: LogoOpts = {}): SlideOut {
-  const bg = b.bg || '#0E0B0A'
-  const text = b.text || (lum(bg) > 0.45 ? '#111111' : '#ffffff')
+  const photo = !!logoOpts.bgImage && /^data:image\//.test(logoOpts.bgImage)
+  const bg = photo ? '#0B0B0B' : b.bg || '#0E0B0A'
+  const text = photo ? '#ffffff' : b.text || (lum(bg) > 0.45 ? '#111111' : '#ffffff')
   const acc = pickAccent({ ...b, primary: b.primary || '#FF6D29' }, bg, text)
   const primary = acc.color
   const c: Ctx = { m: measure, maxY: BODY_LIMIT, drawn: [], overflow: false, text, bg, primary, onPrimary: contrast('#111111', primary) >= contrast('#ffffff', primary) ? '#111111' : '#ffffff', underline: acc.underline }
@@ -389,11 +405,19 @@ export function svgSlideSystem(f: SlideFields, b: SlideBrand, logo: string | nul
     case 'comparacao': body = layoutComparacao(c, f); break
     case 'destaque': body = layoutDestaque(c, f); break
     case 'fecho': body = layoutFecho(c, f); break
+    case 'foto': body = ''; break
     default: body = layoutTexto(c, f, page === 1)
   }
   c.maxY = Infinity   // rodapé e topo (logo, contador, arraste) sempre desenham
+  // Enfeite: posição e cor (do kit, via pickAccents — nunca brand.primary direto) mudam de página em página; a capa e a foto de fundo ficam como são.
+  const accents = pickAccents({ ...b, primary: b.primary || '#FF6D29' }, bg, text)
+  const dec = accents.length ? accents[(page - 1) % accents.length] : primary
+  const [dx, dy] = [[SLIDE_W, SLIDE_H], [0, 0], [SLIDE_W, 0], [0, SLIDE_H]][(page - 1) % 4]
+  const backdropArt = photo
+    ? `<image href="${logoOpts.bgImage}" x="0" y="0" width="${SLIDE_W}" height="${SLIDE_H}" preserveAspectRatio="xMidYMid slice"/><defs><linearGradient id="shade" x1="0" y1="0" x2="0" y2="1">${layout === 'foto' ? '<stop offset="0" stop-color="#000" stop-opacity="0.45"/><stop offset="0.25" stop-color="#000" stop-opacity="0"/><stop offset="0.75" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.6"/>' : '<stop offset="0" stop-color="#000" stop-opacity="0.62"/><stop offset="0.5" stop-color="#000" stop-opacity="0.58"/><stop offset="1" stop-color="#000" stop-opacity="0.86"/>'}</linearGradient></defs><rect width="${SLIDE_W}" height="${SLIDE_H}" fill="url(#shade)"/>`
+    : `<circle cx="${dx}" cy="${dy}" r="${page % 2 ? 380 : 320}" fill="${dec}" fill-opacity="0.07"/>`
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDE_W}" height="${SLIDE_H}" viewBox="0 0 ${SLIDE_W} ${SLIDE_H}"><defs><clipPath id="bodyClip"><rect x="0" y="0" width="${SLIDE_W}" height="${BODY_LIMIT}"/></clipPath></defs><rect width="${SLIDE_W}" height="${SLIDE_H}" fill="${bg}"/>` +
-    `<circle cx="${SLIDE_W}" cy="${SLIDE_H}" r="380" fill="${primary}" fill-opacity="0.07"/>` +
+    backdropArt +
     chrome(c, f, b, logo, page, total, logoOpts) + `<g clip-path="url(#bodyClip)">${body}</g></svg>`
   return { svg, w: SLIDE_W, h: SLIDE_H, overflow: c.overflow, layout, drawn: c.drawn }
 }

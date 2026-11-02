@@ -916,3 +916,20 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - Sem `deno` no ambiente do agente: a verificação das edge functions foi só pelos testes em node (`--experimental-strip-types`).
 - A cidade da ficha (`news.city`) precisa aparecer no texto da notícia (filtro "região no texto"); notícia que só diz "Rio" é descartada.
 
+## Carrosséis: trava de mercado, foto de fundo, concorrência (2026-11-02)
+
+- **A lista `market_claims` da ficha SUBSTITUI a genérica** (`claimGuard`: ficha com itens → só ela vale). Migration que
+  mexe nela precisa **mesclar** o array (a de 02/11 faz, sem duplicar e sem apagar ajuste do dono); `jsonb_set ... is null` não serve.
+  Deploy antes da migration não quebra: a lista antiga segue valendo (só não pega "mais desejados"/"vale cada centavo").
+- **A trava de número (`inventedNumbers`) não pega "acima de R$ 1,5 mi"**: ela libera qualquer número que apareça em
+  `dataText` (ficha + insights). A faixa de preço agora é checada à parte (`claimLock.claimIssues`: sinal de faixa + valor em
+  moeda, valor+unidade têm que estar no cadastro do imóvel).
+- **Foto de fundo no `render-format` baixa e embute a foto inteira** (`toDataUri`): renderizar 5–10 slides com foto em paralelo
+  pode estourar `WORKER_RESOURCE_LIMIT`. O `catalog-package` renderiza em lotes de 2. O bucket `post-images` aceita 5 MB.
+- **`slides` ≠ `media`:** a prévia lê `slides[].image_url` (senão `media`, senão `image_url`); a publicação (`agent-actions`) lê só
+  `media[]`/`image_url`. Peça que grava só um dos dois mostra uma coisa e publica outra — o educativo hoje grava só `slides`.
+- **As vagas da semana são geradas em paralelo** (cada `plan_slot` é uma invocação): a lista de "temas recentes" só enxerga o
+  que já foi gravado, então a repetição dentro da mesma semana é reduzida, não eliminada.
+- Sem `deno` nem Postgres no ambiente do agente: edge functions conferidas por testes em Node + `tsc` nos arquivos `_shared`;
+  a migration de 02/11 foi só lida, **não executada** — rodar 2x num banco de teste antes de confiar.
+

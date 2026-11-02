@@ -26,6 +26,8 @@ import { applyQueroLock, cleanLabels, dropUnknownPilar, fetchSSPillars } from '.
 import { decideVideoCta } from '../_shared/videoCta.ts'
 import { stripInternalNotes, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
 import { ensureNearby, fetchNearbyConfig, fmtDistance, topPlaces } from '../_shared/nearbyPlaces.ts'
+import { buildNearbySlides, buildOfferSlides, pickCoverPhoto, type OfferSlide } from '../_shared/carouselOffer.ts'
+import { CLAIM_PROMPT_RULE, captionRewritePrompt, claimCtx, claimNotice, cutClaims, cutHashtags, itemFacts, lockText } from '../_shared/claimLock.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -37,7 +39,7 @@ type SupaClient = ReturnType<typeof createClient>
 interface Photo { url: string; path: string }
 interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
 interface RecipeGroup { recipes: string[]; fonte_midia: string; descricao: string }
-interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null }
+interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; fieldMap: { price?: string; bedrooms?: string } | null }
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -63,7 +65,10 @@ async function fetchFichaConfig(admin: SupaClient, verticalKey: string | null): 
     const c = (data?.config ?? {}) as Record<string, unknown>
     if (!c.production_recipes) return null
     const disclosure = String((c.virtual_staging as { disclosure?: string } | undefined)?.disclosure ?? '').slice(0, 200)
-    return { pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null }
+    return { pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null,
+      // Trava de afirmação de mercado (claimLock): termos e campos de preço/quartos vêm da ficha (regra 6).
+      marketClaims: ((c.opportunity_texts as { market_claims?: { pt?: unknown } } | undefined)?.market_claims?.pt as string[] | undefined)?.filter(x => typeof x === 'string' && x.trim()) ?? null,
+      fieldMap: c.opportunity_fields && typeof c.opportunity_fields === 'object' ? c.opportunity_fields as { price?: string; bedrooms?: string } : null }
   } catch { return null }
 }
 
@@ -131,6 +136,7 @@ async function writeCopy(anthropicKey: string, briefing: string, extra = ''): Pr
   const prompt = `Você é o Content Agent do Sales Boost, especializado em corretores de imóveis no Rio de Janeiro.
 ${briefing}
 ${extra}Regras inegociáveis: nunca invente preço, m², condomínio ou qualquer dado de mercado além do que foi passado; nunca invente cliente, depoimento, venda fechada nem distância; a legenda é SEMPRE pro público do Instagram — nunca um recado, aviso, alerta ou ressalva pro corretor, nem pedido de dado (nada de "⚠️", "os dados que recebi", "precisam de confirmação", "antes de publicar"). Se um dado parecer estranho ou faltar, simplesmente não o cite; nunca prometa valorização; tom próximo e carioca, direto nos números reais, sem "oportunidade imperdível".
+${CLAIM_PROMPT_RULE}
 Responda SÓ em JSON: {"caption":"...","hashtags":"...","cta":"..."}`
   const obj = parseObj(await callClaude(anthropicKey, prompt, 700))
   return { caption: String(obj.caption ?? '').trim(), hashtags: String(obj.hashtags ?? '').trim(), cta: String(obj.cta ?? '').trim() }
@@ -153,12 +159,14 @@ async function scoreTestContent(supabaseUrl: string, serviceKey: string, company
 // company_id (o render-format aceita os dois).
 // Kit da Marca da empresa (cores do logo, nome, logo) — os cards saem na
 // identidade dela, não no laranja padrão do Sales Boost.
-interface CardBrand { primary: string; name: string; accent?: string; text?: string; bg?: string; logoUrl?: string }
+interface CardBrand { primary: string; name: string; accent?: string; text?: string; bg?: string; logoUrl?: string; primary2?: string; accent2?: string }
 async function loadBrand(admin: SupaClient, companyId: string, name: string): Promise<CardBrand> {
   const { data } = await admin.from('brand_dna').select('colors, kit, logo_url').eq('company_id', companyId).maybeSingle()
   const bd = data as { colors: string[] | null; kit: { colors?: { primary?: string[]; accent?: string[]; text?: string; bg?: string } } | null; logo_url: string | null } | null
   const c = bd?.kit?.colors
-  return { primary: c?.primary?.[0] || bd?.colors?.[0] || '#FF6D29', accent: c?.accent?.[0], text: c?.text, bg: c?.bg, name: name || 'Marca', logoUrl: bd?.logo_url ?? undefined }
+  return { primary: c?.primary?.[0] || bd?.colors?.[0] || '#FF6D29', accent: c?.accent?.[0], text: c?.text, bg: c?.bg, name: name || 'Marca', logoUrl: bd?.logo_url ?? undefined,
+    // Cores de reserva: o slide escolhe a 1ª que contrasta com o fundo (slideSystem.pickAccent).
+    primary2: c?.primary?.[1] || bd?.colors?.[1], accent2: c?.accent?.[1] }
 }
 
 // Stories "pagaria R$X?": foto REAL do imóvel com a pergunta por cima
@@ -190,6 +198,27 @@ async function renderListCard(supabaseUrl: string, auth: { bearer: string } | { 
   } catch { return null }
 }
 
+type RenderAuth = { bearer: string } | { cronSecret: string; companyId: string; serviceKey: string }
+// 1 slide do sistema de slides (template 'slide' do render-format): logo, @, contador e foto real de fundo. Texto só pelo render-format (regra 4).
+async function renderSlideImage(supabaseUrl: string, auth: RenderAuth, sl: OfferSlide, page: number, total: number, brand: CardBrand, handle: string): Promise<string | null> {
+  try {
+    const internal = 'cronSecret' in auth
+    const res = await fetch(`${supabaseUrl}/functions/v1/render-format`, {
+      method: 'POST', headers: { Authorization: internal ? `Bearer ${auth.serviceKey}` : auth.bearer, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ template: 'slide', kind: 'organico', fields: { ...sl.fields, handle, name: brand.name, page: String(page), total: String(total) }, brand, ...(sl.photo ? { background: sl.photo } : {}), save: false, ...(internal ? { cron_secret: auth.cronSecret, company_id: auth.companyId } : {}) }),
+    })
+    const data = await res.json().catch(() => ({})) as { url?: string }
+    return res.ok && data.url ? data.url : null
+  } catch (e) { console.error('catalog-package: slide não renderizou', e); return null }
+}
+// Em lotes de 2: cada slide com foto de fundo baixa e decodifica uma foto grande (limite de memória do render-format).
+async function renderSlides(supabaseUrl: string, auth: RenderAuth, specs: OfferSlide[], brand: CardBrand, handle: string): Promise<(string | null)[]> {
+  const out: (string | null)[] = []
+  for (let i = 0; i < specs.length; i += 2) out.push(...await Promise.all(specs.slice(i, i + 2).map((sl, j) => renderSlideImage(supabaseUrl, auth, sl, i + j + 1, specs.length, brand, handle))))
+  return out
+}
+const slideLabel = (sl: OfferSlide): string => [sl.fields.title, sl.fields.text, (sl.fields.items ?? '').split('\n').join(' · '), sl.fields.cta].filter(Boolean).join(' — ') || 'Foto do imóvel'
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
@@ -216,16 +245,16 @@ Deno.serve(async (req) => {
     const cronSecretEnv = Deno.env.get('CRON_SECRET')
     const internal = !!cronSecretEnv && body.cron_secret === cronSecretEnv && typeof body.company_id === 'string'
     const bearer = req.headers.get('Authorization') ?? ''
-    let company: { id: string; vertical_key: string | null; city: string | null; business_name: string | null } | null = null
+    let company: { id: string; vertical_key: string | null; city: string | null; business_name: string | null; instagram_username: string | null } | null = null
     if (internal) {
-      const { data } = await admin.from('companies').select('id, vertical_key, city, business_name').eq('id', body.company_id as string).maybeSingle()
+      const { data } = await admin.from('companies').select('id, vertical_key, city, business_name, instagram_username').eq('id', body.company_id as string).maybeSingle()
       company = data
     } else {
       if (!bearer) return json({ error: 'Unauthorized' }, 401)
       const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
       const { data: { user } } = await userClient.auth.getUser()
       if (!user) return json({ error: 'Unauthorized' }, 401)
-      const { data } = await admin.from('companies').select('id, vertical_key, city, business_name').eq('user_id', user.id).maybeSingle()
+      const { data } = await admin.from('companies').select('id, vertical_key, city, business_name, instagram_username').eq('user_id', user.id).maybeSingle()
       company = data
     }
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
@@ -258,13 +287,20 @@ Deno.serve(async (req) => {
     // Rede de segurança (2026-10-23): mesmo com o prompt proibindo, a IA às vezes escreve um recado pro corretor
     // dentro da legenda/CTA ("⚠️ Sobre a metragem: os dados que recebi precisam de confirmação…"). Aqui o recado
     // SAI do texto (antes de qualquer coisa ser anexada, ex.: o aviso de mobiliado) e vai pro aviso do dono.
-    let pieceNotes: string[] = [], pieceEmptied = false
+    let pieceNotes: string[] = [], pieceEmptied = false, pieceClaims: string[] = []
+    // Trava de afirmação de mercado (claimLock, 2026-11-02): "acima de R$ X", "vale cada centavo", "endereços mais desejados"…
+    // só passam se o cadastro DESTE imóvel traz o termo/valor. Reescreve 1x; persistiu, corta só a frase e avisa o dono.
+    const facts = itemFacts(String(item.title ?? ''), fields, ficha.fieldMap)
+    const claims = claimCtx('pt', facts.texts, facts.nums, ficha.marketClaims)
     const copy = async (briefing: string) => {
       const c = await writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`)
       const cap = stripInternalNotes(c.caption), cta = stripInternalNotes(c.cta)
       pieceNotes.push(...cap.notes, ...cta.notes)
       if (c.caption.trim() && !cap.text.trim()) pieceEmptied = true
-      return { ...c, caption: cap.text, cta: cta.text }
+      const locked = await lockText(cap.text, claims, async iss => String(parseObj(await callClaude(anthropicKey, captionRewritePrompt(String(company!.business_name ?? ''), cap.text, iss), 900)).caption ?? '').trim() || null)
+      const lc = cutClaims(cta.text, claims), lh = cutHashtags(c.hashtags, claims)
+      pieceClaims.push(...locked.removed, ...lc.removed, ...lh.removed)
+      return { ...c, caption: locked.text, cta: lc.text, hashtags: lh.text }
     }
 
     const fieldsLine = `Tipo: ${fields.tipo ?? '—'} · Bairro: ${fields.bairro ?? '—'} · ${fields.venda_ou_aluguel ?? '—'} · Preço: R$ ${fields.preco ?? '—'} · Quartos: ${fields.quartos ?? '—'} · Metragem: ${fields.m2 ?? '—'}m²${fields.perto_de ? ` · Perto de: ${fields.perto_de}` : ''}${fields.descricao ? `\nDescrição real escrita pelo corretor (use só o que está aqui, sem acrescentar): ${String(fields.descricao).slice(0, 1500)}` : ''}`
@@ -286,6 +322,8 @@ Deno.serve(async (req) => {
     let brandCache: CardBrand | null = null
     const getBrand = async () => brandCache ??= await loadBrand(admin, company!.id, String(company!.business_name ?? ''))
     let near: { top: ReturnType<typeof topPlaces>; precise: boolean } | null = null
+    const auth: RenderAuth = internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }
+    const handle = String(company.instagram_username ?? '').replace(/^@/, '').trim()
     const loadNear = async () => {
       const cfg = await fetchNearbyConfig(admin, company!.vertical_key)
       const data = cfg ? await ensureNearby(admin, { itemId: item.id as string, companyId: company!.id, verticalKey: company!.vertical_key, city: String(company!.city ?? '') }) : null
@@ -305,10 +343,11 @@ Deno.serve(async (req) => {
         }
 
         let media: { url: string; type: string }[] = []
+        let slidesOut: { text: string; image_prompt: string; image_url: string; layout: string }[] | null = null   // espelho de `media` com a arte do sistema de slides (a prévia lê slides; a publicação lê media)
         let caption = '', hashtags = '', cta = ''
         let kind = 'organico'
         let provider = ''
-        pieceNotes = []; pieceEmptied = false
+        pieceNotes = []; pieceEmptied = false; pieceClaims = []
 
         if (recipe === 'carrossel_tour') {
           // Até 2 fotos mobiliadas virtualmente (escolhidas pelo dono) entram
@@ -317,7 +356,16 @@ Deno.serve(async (req) => {
           const staged = (meta.staged_photos ?? []).slice(0, 2)
           const useStaged = staged.length > 0 && !!ficha.stagingDisclosure
           // Instagram aceita até 10 mídias no carrossel — corta aqui, não na publicação.
-          media = [photos[0], ...(useStaged ? staged : []), ...photos.slice(1)].slice(0, 10).map(p => ({ url: p.url, type: 'photo' }))
+          // Carrossel de verdade no sistema de slides (decisão do dono, 2026-11-02): capa com a foto de maior nota + tipo/bairro/quartos/preço
+          // (só o que está cadastrado) · até 4 fotos reais · slide de dados · fecho com o CTA seguro. Máx. 7. Falhou o desenho: fotos cruas, como era antes.
+          const specs = buildOfferSlides({ photos, staged: useStaged ? staged : [], fields, cta: decision.cta })
+          const urls = specs.length ? await renderSlides(supabaseUrl, auth, specs, await getBrand(), handle) : []
+          const okAll = specs.length > 0 && urls[0] && urls.filter(Boolean).length >= 3
+          if (okAll) {
+            const pairs = specs.map((sp, k) => ({ sp, url: urls[k] })).filter((x): x is { sp: OfferSlide; url: string } => !!x.url)
+            media = pairs.map(x => ({ url: x.url, type: 'photo' }))
+            slidesOut = pairs.map(x => ({ text: slideLabel(x.sp), image_prompt: '', image_url: x.url, layout: x.sp.fields.layout }))
+          } else media = [photos[0], ...(useStaged ? staged : []), ...photos.slice(1)].slice(0, 10).map(p => ({ url: p.url, type: 'photo' }))
           const c = await copy(lessonsTxt + `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
           caption = useStaged ? [c.caption, ficha.stagingDisclosure].filter(Boolean).join('\n\n') : c.caption
           hashtags = c.hashtags; cta = c.cta
@@ -340,15 +388,20 @@ Deno.serve(async (req) => {
           if (recipe === 'post_3_coisas_perto') {
             // Card de lista (template "trend" do render-format): sem emoji — a
             // fonte do card não tem esse glifo.
-            const card = await renderListCard(supabaseUrl, internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }, {
-              eyebrow: `Perto do imóvel em ${String(fields.bairro ?? 'Rio')}`.slice(0, 40),
-              title: '3 coisas perto daqui',
-              // "Metrô · Antero de Quental" — a categoria entra quando o nome
-              // sozinho não diz o que é (ex.: estação de metrô).
-              items: near!.top.slice(0, 3).map(p => `${p.label.toLowerCase().split(/\s+/).some(w => w.length > 3 && p.name.toLowerCase().includes(w)) ? '' : `${p.label.split(' ')[0]} · `}${p.name}${near!.precise ? ` · ${fmtDistance(p.distance_m)}` : ''}`).join('\n'),
-            }, await getBrand())
-            if (!card) { skipped.push({ recipe, reason: 'Falha ao gerar o card dos lugares — tente de novo depois.' }); continue }
-            media = [{ url: card, type: 'photo' }, { url: photos[0].url, type: 'photo' }]
+            // "Metrô · Antero de Quental" — a categoria entra quando o nome sozinho não diz o que é (ex.: estação de metrô).
+            const placeLines = near!.top.slice(0, 3).map(p => `${p.label.toLowerCase().split(/\s+/).some(w => w.length > 3 && p.name.toLowerCase().includes(w)) ? '' : `${p.label.split(' ')[0]} · `}${p.name}${near!.precise ? ` · ${fmtDistance(p.distance_m)}` : ''}`)
+            // Sistema de slides (PR B): capa com a foto real, lista dos 3 lugares e fecho com CTA — logo e @ vêm do template 'slide'.
+            const specs = buildNearbySlides({ photo: pickCoverPhoto(photos), bairro: String(fields.bairro ?? ''), places: placeLines, cta: decision.cta })
+            const urls = specs.length ? await renderSlides(supabaseUrl, auth, specs, await getBrand(), handle) : []
+            if (specs.length && urls.every(Boolean)) {
+              media = urls.map(u => ({ url: u as string, type: 'photo' }))
+              slidesOut = specs.map((sp, k) => ({ text: slideLabel(sp), image_prompt: '', image_url: urls[k] as string, layout: sp.fields.layout }))
+            } else {
+              // Reserva (desenho falhou): o card antigo "trend" + foto real, como era antes.
+              const card = await renderListCard(supabaseUrl, auth, { eyebrow: `Perto do imóvel em ${String(fields.bairro ?? 'Rio')}`.slice(0, 40), title: '3 coisas perto daqui', items: placeLines.join('\n') }, await getBrand())
+              if (!card) { skipped.push({ recipe, reason: 'Falha ao gerar o card dos lugares — tente de novo depois.' }); continue }
+              media = [{ url: card, type: 'photo' }, { url: photos[0].url, type: 'photo' }]
+            }
           } else {
             media = [{ url: photos[0].url, type: 'photo' }]
           }
@@ -361,6 +414,12 @@ Deno.serve(async (req) => {
           // IA (gente na calçada, padaria inventada) — o dono pediu pra
           // tirar (2026-10-14): parecia post "do fluxo antigo".
           media = [{ url: (photos[1] ?? photos[0]).url, type: 'photo' }]
+          // Foto real com cartão de marca (logo + bairro) em vez de foto crua; falhou o desenho: a foto crua, como era antes.
+          if (fields.bairro) {
+            const sp: OfferSlide = { kind: 'capa', photo: media[0].url, fields: { layout: 'capa', cover_style: 'gancho', title: String(fields.bairro) } }
+            const [u] = await renderSlides(supabaseUrl, auth, [sp], await getBrand(), handle)
+            if (u) media = [{ url: u, type: 'photo' }]
+          }
           const briefing = recipe === 'reels_o_que_compra_no_bairro'
             ? `Escreva um post sobre como é morar no bairro "${fields.bairro ?? 'da região'}" — estilo de vida, sem citar nome de estabelecimento nem número que não esteja nos dados. A foto é do imóvel real.`
             : `Escreva um post "o que tem perto" do imóvel${fields.perto_de ? ` — use SÓ isto que o corretor informou: ${fields.perto_de}` : ' — fale de forma geral do bairro, sem inventar nome de lugar nem distância'}. A foto é do imóvel real.`
@@ -384,7 +443,7 @@ Deno.serve(async (req) => {
         caption = lock.caption ?? ''
         if (cta || lock.approved) cta = lock.cta ?? ''
         // Avisos pro dono: o do QUERO vem primeiro (o prefixo dele fica intacto — keepQueroNotice) e depois o recado que saiu.
-        const reasoning = [lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null].filter(Boolean).join(' ') || null
+        const reasoning = [lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null, claimNotice(pieceClaims)].filter(Boolean).join(' ') || null
 
         const slot = forcedDate || loose ? { date: forcedDate ?? '', overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
         const { data: row, error } = await admin.from('marketing_ai_test_content').insert({
@@ -392,6 +451,7 @@ Deno.serve(async (req) => {
           format: media.length > 1 ? 'carrossel' : 'foto', image_url: media[0]?.url ?? null,
           item_id: item.id, media, pillar: pillarKey, recipe, provider, planned_for: loose ? null : slot.date,
           ...(reasoning ? { reasoning } : {}),
+          ...(slidesOut ? { slides: slidesOut } : {}),
         }).select('id').single()
         if (error) { skipped.push({ recipe, reason: error.message }); continue }
         // Rótulo num UPDATE à parte e tolerante: sem a migration das colunas, a peça nasce sem rótulo mas nasce.

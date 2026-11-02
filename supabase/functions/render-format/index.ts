@@ -390,7 +390,8 @@ function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: str
   }
   switch (template) {
     case 'tweet': return svgTweet(f, b, logo, pill(hexLuma((f.theme || 'dark') === 'dark' ? '#15202b' : '#ffffff')), lc.aspect)
-    case 'slide': { const r = svgSlideSystem(f, b, logo, measureFn, { backdrop: pill(hexLuma(b.bg || '#0E0B0A')), aspect: lc.aspect }); return { svg: r.svg, w: r.w, h: r.h, overflow: r.overflow } }
+    // `bg` (foto real em data URI) só entra no slide quando o chamador manda `background`: texto branco sobre degradê escuro; a pílula do logo é calculada contra o escuro.
+    case 'slide': { const r = svgSlideSystem(f, b, logo, measureFn, { backdrop: pill(bg ? 0.02 : hexLuma(b.bg || '#0E0B0A')), aspect: lc.aspect, bgImage: bg }); return { svg: r.svg, w: r.w, h: r.h, overflow: r.overflow } }
     case 'product': return svgProduct(f, b, productImg)
     case 'problem': return svgProblem(f, b)
     case 'faq': return svgFaq(f, b)

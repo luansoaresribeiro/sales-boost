@@ -591,6 +591,11 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     dado nos fatos (lista: ficha `opportunity_texts.market_claims`, senão `DEFAULT_MARKET_CLAIMS`); `photoCounts` entra no
     prompt do `run_opportunities` e do plano, e `actionForPhotos` troca a ação por "adicionar fotos reais" quando o item
     não tem foto.
+    **Atualização 2026-11-02 (PR B):** a mesma trava agora também vale nas peças do **calendário** (carrossel, legenda,
+    CTA e hashtags) — `_shared/claimLock.ts`, chamada por `creative-generate` e `catalog-package`. Termo da ficha só passa
+    se o cadastro do imóvel citado (ou, no modo regulado, a dica conferida) traz a palavra; faixa de preço ("acima de
+    R$ X") só passa se o valor com unidade está no cadastro. Disparou: reescreve 1x → corta só a frase → `reasoning`
+    "Tirei afirmação sem fonte: …". Detalhes em [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md#pr-b--qualidade-dos-carrosséis-2026-11-02).
   - **Divergências/atenção:** (a) o vínculo `opportunity_id` é gravado num UPDATE à parte (migration pendente não derruba
     a peça), mas `generateOpportunityPieces` **não gera** se a coluna não existe (sem idempotência não há segurança);
     (b) o cliente pode ter UPDATE direto em `marketing_ai_test_content`: a Etapa 6 deve juntar `opportunity_id` **sempre

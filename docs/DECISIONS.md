@@ -2137,3 +2137,22 @@ fluxo está indo e ter rastreamento pelo front-end." Cada agente ganha, no topo,
 sem dado = "sem dado ainda"; o que não foi construído (coleta do Instagram) aparece como 🚧. Leitura do livro-caixa por função
 somente-leitura (`company_flow_status`), sem afrouxar a RLS. Feito agora: Inteligência de Mercado e Motor de Oportunidades; os outros
 3 vêm no mesmo formato. Detalhes em [ARCHITECTURE.md](ARCHITECTURE.md#faixa-de-fluxo-dos-agentes-2026-11-01).
+
+## 2026-11-02 — Qualidade dos carrosséis (PR B)
+
+Decisões do dono para o PR B (detalhes em [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md#pr-b--qualidade-dos-carrosséis-2026-11-02)):
+
+1. **"luxo", "nobre", "premium", "exclusivo" e afins:** liberados **só** se o cadastro do imóvel citado traz a palavra; senão a trava barra.
+2. **Quando a trava dispara:** reescreve 1x; se persistir, corta só a frase; registra em `reasoning` "Tirei afirmação sem fonte: …".
+   Nunca troca por outro adjetivo inventado.
+3. **Educativo:** foto real do catálogo só quando a vaga cita um imóvel (`item_id`); sem imóvel, capa com design da marca
+   (gancho/pergunta/erro comum — nunca índice).
+4. **Carrossel de oferta:** no máximo 7 slides (capa + até 4 fotos melhores + dados + fecho).
+5. **Foto da capa da oferta:** a de maior nota (`meta.photos[].score/quality`, vindo do PR A) de forma tolerante; sem nota,
+   `photos[0]`. Nunca sorteia.
+6. **Planejador:** não repetir o mesmo tema/ângulo das últimas 3 semanas nem dentro da semana (caso real: "R$ 1,5 mi Barra vs
+   Leblon" saiu 4 semanas seguidas e 2x na mesma semana).
+
+Não contradiz a decisão de 21/10 (capa do educativo com foto só quando há imóvel; design da marca quando não há). A foto aqui é
+a do **catálogo** (não "foto do corretor").
+

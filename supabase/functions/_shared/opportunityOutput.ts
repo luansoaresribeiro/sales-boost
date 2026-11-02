@@ -120,7 +120,7 @@ export const DEFAULT_MARKET_CLAIMS: Record<Lang, string[]> = {
   en: ['competitive', 'in demand', 'high demand', 'hot market', 'hot neighborhood', 'upscale', 'high-end', 'high end', 'prime location', 'sought-after', 'sought after', 'booming', 'appreciating', 'appreciation', 'luxury', 'high ticket', 'premium', 'coveted'],
 }
 export interface ClaimGuard { terms: string[]; factsNorm: string }
-const claimRe = (t: string) => new RegExp('(?:^|[^a-z])' + norm(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[^a-z])')
+export const claimRe = (t: string) => new RegExp('(?:^|[^a-z])' + norm(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[^a-z])')
 /** Monta a trava: termos (ficha ou genéricos) + o texto dos fatos em que eles podem aparecer. */
 export function claimGuard(lang: Lang, factTexts: string[], fichaTerms?: string[] | null): ClaimGuard {
   const terms = (fichaTerms?.length ? fichaTerms : DEFAULT_MARKET_CLAIMS[lang]).filter(t => typeof t === 'string' && t.trim())

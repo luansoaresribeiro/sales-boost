@@ -1,0 +1,57 @@
+-- PR B (qualidade dos carrosséis) — só a ficha do setor. Aditiva e idempotente: não cria coluna, não muda RLS, sem cron.
+--
+-- 1) opportunity_texts.market_claims (pt/en): ACRESCENTA os termos de afirmação de mercado que passavam
+--    ("endereços mais desejados", "vale cada centavo", "imperdível", "exclusivo"…). Mescla com o que já está na ficha:
+--    não duplica e não apaga ajuste do dono (a ordem antiga fica; os novos entram no fim). Rodar 2x dá o mesmo resultado.
+--    A trava (supabase/functions/_shared/claimLock.ts) barra o termo SÓ se ele não aparece no cadastro do imóvel citado:
+--    "luxo", "nobre", "premium", "exclusivo" continuam liberados quando o cadastro traz a palavra (decisão do dono, 2026-11-02).
+-- 2) carousel_cover.educativo.photo_when_item: o carrossel educativo só usa foto real do catálogo na capa/fecho
+--    quando a vaga cita um imóvel (item_id). Só entra se ainda não existe.
+--
+-- REVERTER (tira só os termos acrescentados aqui e a chave nova; o resto da ficha fica como está):
+--   update public.vertical_playbooks vp
+--   set config = jsonb_set(jsonb_set(vp.config, '{opportunity_texts,market_claims,pt}',
+--       coalesce((select jsonb_agg(e.value) from jsonb_array_elements(vp.config->'opportunity_texts'->'market_claims'->'pt') e
+--                 where (e.value #>> '{}') not in ('mais desejado','mais desejada','mais desejados','mais desejadas','um dos mais','endereco mais','enderecos mais','vale cada centavo','cada centavo','imperdivel','imperdiveis','o melhor','a melhor','unico','unica','oportunidade unica','exclusivo','exclusiva','exclusivos','exclusivas','raridade','premium','luxuoso','luxuosa','mais cobicado','mais cobicada')), '[]'::jsonb), true),
+--     '{opportunity_texts,market_claims,en}',
+--       coalesce((select jsonb_agg(e.value) from jsonb_array_elements(vp.config->'opportunity_texts'->'market_claims'->'en') e
+--                 where (e.value #>> '{}') not in ('most desired','most coveted','one of the most','worth every penny','unmissable','must-see','the best','one of a kind','unique','exclusive','rare find','once in a lifetime','luxurious')), '[]'::jsonb), true)
+--   where key = 'imoveis_rio' and jsonb_typeof(config->'opportunity_texts'->'market_claims') = 'object';
+--   update public.vertical_playbooks set config = config - 'carousel_cover' where key = 'imoveis_rio';
+
+begin;
+
+update public.vertical_playbooks vp
+set config = jsonb_set(
+  jsonb_set(vp.config, '{opportunity_texts,market_claims,pt}', (
+    select coalesce(jsonb_agg(to_jsonb(x.t) order by x.o), '[]'::jsonb) from (
+      select u.t, min(u.o) as o from (
+        select e.value #>> '{}' as t, e.ordinality as o
+          from jsonb_array_elements(coalesce(vp.config->'opportunity_texts'->'market_claims'->'pt', '[]'::jsonb)) with ordinality e
+        union all
+        select n.value as t, 100000 + n.ordinality as o
+          from jsonb_array_elements_text($json$["mais desejado","mais desejada","mais desejados","mais desejadas","um dos mais","endereco mais","enderecos mais","vale cada centavo","cada centavo","imperdivel","imperdiveis","o melhor","a melhor","unico","unica","oportunidade unica","exclusivo","exclusiva","exclusivos","exclusivas","raridade","premium","luxuoso","luxuosa","mais cobicado","mais cobicada"]$json$::jsonb) with ordinality n
+      ) u where u.t is not null and btrim(u.t) <> '' group by u.t
+    ) x
+  ), true),
+  '{opportunity_texts,market_claims,en}', (
+    select coalesce(jsonb_agg(to_jsonb(x.t) order by x.o), '[]'::jsonb) from (
+      select u.t, min(u.o) as o from (
+        select e.value #>> '{}' as t, e.ordinality as o
+          from jsonb_array_elements(coalesce(vp.config->'opportunity_texts'->'market_claims'->'en', '[]'::jsonb)) with ordinality e
+        union all
+        select n.value as t, 100000 + n.ordinality as o
+          from jsonb_array_elements_text($json$["most desired","most coveted","one of the most","worth every penny","unmissable","must-see","the best","one of a kind","unique","exclusive","rare find","once in a lifetime","luxurious"]$json$::jsonb) with ordinality n
+      ) u where u.t is not null and btrim(u.t) <> '' group by u.t
+    ) x
+  ), true)
+)
+where vp.key = 'imoveis_rio'
+  and jsonb_typeof(vp.config->'opportunity_texts'->'market_claims') = 'object';
+
+update public.vertical_playbooks
+set config = jsonb_set(config, '{carousel_cover}', $json${ "educativo": { "photo_when_item": true } }$json$::jsonb, true)
+where key = 'imoveis_rio'
+  and (config->'carousel_cover') is null;
+
+commit;

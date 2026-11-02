@@ -31,6 +31,9 @@ import { decideVideoCta, queroNotice, sanitizeCaptionCta } from '../_shared/vide
 import { stripPieceTexts, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
 import { callClaude as callModel, CHEAP_MODEL, checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isUsableTip, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 import { decideTopic, guardDeck, loadGuardCfg, topicBlock, topicNote, type Ask, type TopicDecision } from '../_shared/deckGuard.ts'
+import { CLAIM_PROMPT_RULE, claimCtx, claimNotice, cutSlide, itemFacts, loadClaimCfg, lockDeckClaims, type ClaimCtx } from '../_shared/claimLock.ts'
+import { pickCoverPhoto, pickMiddlePhotos, type CatalogPhoto } from '../_shared/carouselOffer.ts'
+import { findRepeatedTheme, recentThemes, themeBlock, themeRetryNote } from '../_shared/themeDedupe.ts'
 import { resolveAlias, tipNumbers, topicText } from '../_shared/deckTopic.ts'
 import { currentWeekBRT } from '../_shared/publishSlot.ts'
 import { buildOpportunityJob } from '../_shared/opportunityPieceJob.ts'
@@ -420,12 +423,12 @@ async function renderGraphicCard(
 // Igual ao renderGraphicCard, mas devolve também o `overflow` do render-format (texto que não coube no quadro).
 async function renderGraphicCardFull(
   auth: { bearer: string; isCron: boolean; cronSecret?: string },
-  companyId: string, template: 'tweet' | 'slide' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand,
+  companyId: string, template: 'tweet' | 'slide' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand, background?: string | null,
 ): Promise<{ url: string; overflow: boolean } | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   if (!supabaseUrl) return null
   try {
-    const body: Record<string, unknown> = { template, fields, brand, save: false }
+    const body: Record<string, unknown> = { template, fields, brand, save: false, ...(background ? { background } : {}) }
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (auth.isCron && auth.cronSecret) { body.cron_secret = auth.cronSecret; body.company_id = companyId }
     else headers.Authorization = auth.bearer
@@ -455,6 +458,8 @@ function findContent(lib: Know[], kind: string, title: string | undefined): stri
 // Campanhas (mídia paga) segue livre.
 const ALLOWED_FORMATS: Record<string, string[]> = { organico: ['foto', 'carrossel'], stories: ['foto'], campanhas: ['reel', 'carrossel', 'story', 'foto'] }
 const MOD_LABEL: Record<string, string> = { organico: 'Post Orgânico', stories: 'Stories', campanhas: 'Campanha (mídia paga)' }
+
+class SkipClaimLock extends Error {}
 
 interface GenOpts {
   bearer: string; isCron: boolean; cronSecret?: string
@@ -580,6 +585,10 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
   // (ex: sempre "Antes/Depois" + "BAB" pra um negócio sobre transformação),
   // porque o contexto da empresa não muda entre gerações. Pedir variedade
   // explícita evita repetir o mesmo formato/visual toda vez.
+  // Temas das últimas 3 semanas + o que já está agendado (peças de imóvel ficam de fora: a ideia delas é o título do imóvel).
+  const { data: themeRows } = await admin.from('marketing_ai_test_content').select('idea').eq('company_id', company.id).is('item_id', null).not('idea', 'is', null)
+    .or(`created_at.gte.${new Date(Date.now() - 21 * 86400000).toISOString()},planned_for.gte.${new Date().toISOString().slice(0, 10)}`).order('created_at', { ascending: false }).limit(60)
+  const pastThemes = recentThemes((themeRows ?? []) as { idea: string | null }[])
   const recent = (recentRows ?? []) as { format: string | null; brief: { visual_system?: string; framework?: string; template?: string } | null }[]
   const recentUsed = recent.filter(r => r.format || r.brief?.visual_system || r.brief?.framework)
     .map(r => `- formato "${r.format ?? '—'}", template "${r.brief?.template ?? '—'}", sistema visual "${r.brief?.visual_system ?? '—'}", framework "${r.brief?.framework ?? '—'}"`).join('\n')
@@ -622,7 +631,7 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
 
 Você é o DIRETOR CRIATIVO de uma agência. Vai criar um conteúdo do tipo "${modLabel}". Decida o brief usando os insights reais e as boas práticas ESPECÍFICAS desse formato (não use regra genérica).
 ${seedBlock}${intentTxt}${insights.length ? `\nInsights abertos:\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
-${recentUsed ? `\nÚltimos posts desse negócio (formato/sistema visual/framework já usados — VARIE, não repita o mesmo combo à toa só porque "faz sentido pro negócio"; só repita se você tiver um motivo estratégico real e disser isso em "reasoning"):\n${recentUsed}` : ''}
+${themeBlock(pastThemes)}${recentUsed ? `\nÚltimos posts desse negócio (formato/sistema visual/framework já usados — VARIE, não repita o mesmo combo à toa só porque "faz sentido pro negócio"; só repita se você tiver um motivo estratégico real e disser isso em "reasoning"):\n${recentUsed}` : ''}
 
 Boas práticas do formato ${modLabel}:\n${moduleKnow}
 ${formatsRef ? `\nFormatos disponíveis (escolha a anatomia certa e cite em "format" quando usar um):\n${formatsRef}` : ''}
@@ -709,7 +718,7 @@ Boas práticas do formato ${modLabel} (siga-as):\n${moduleKnow}
 ${visualRefs ? `\nReferências visuais da marca (Layouts & Estilos — inspire-se no estilo quando fizer sentido):\n${visualRefs}\n` : ''}${lessonsBlock(await loadLessons(admin, company.id))}
 Escreva o post pronto pra publicar. Regras importantes:
 - "caption" é APENAS a legenda que vai no Instagram (texto pro público). NUNCA coloque nela instruções de imagem, descrição de foto nem "Slide 1/2/3".
-- Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
+${CLAIM_PROMPT_RULE}- Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
 ${opts.deck ? deckPromptRules(coverStyle, quero.cta, topic ? { mode: topic.mode, tipCount: topic.tips.length } : undefined) : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
 - Depois de escrever, avalie o PRÓPRIO post: ele é forte/direto o suficiente pra também valer a pena repostar nos Stories tal como está (sem regerar nada)? Se sim, "story_worthy":true e "story_note": 1 frase curta dizendo por quê. Seja seletivo — nem todo post é bom pra Stories (ex: um card com muito texto lido rápido não funciona lá); só marque true quando fizer sentido de verdade.
 ${CARD_FIELD_INSTRUCTIONS[String(brief.template ?? '')] ?? ''}
@@ -718,6 +727,15 @@ Retorne APENAS um JSON array:
 
   const execRaw = await callClaude(anthropicKey, execPrompt, opts.deck ? 3000 : 2000)
   let post = extractOne(execRaw)
+  // Tema repetido (mesmo com outro texto)? 1 refação com o aviso — só se sobrar folga no tempo da invocação; o dono ainda aprova tudo.
+  const repeated = post ? findRepeatedTheme(String(post.idea ?? ''), pastThemes) : null
+  if (post && repeated && Date.now() - startedAt < 60_000) {
+    try {
+      const again = extractOne(await callClaude(anthropicKey, execPrompt + themeRetryNote(repeated), opts.deck ? 3000 : 2000))
+      if (again && !findRepeatedTheme(String(again.idea ?? ''), pastThemes)) post = again
+      else if (again) brief.reasoning = `${brief.reasoning ?? ''} Atenção: o tema parece repetir uma peça recente ("${repeated}") — confira antes de aprovar.`.trim()
+    } catch (e) { console.error('creative-generate: refação por tema repetido falhou', company.id, e) }
+  }
   if (!post) {
     // Fallback: uma tentativa direta e simples, garante que o dono sempre recebe um post.
     const fbRaw = await callClaude(anthropicKey, `${preamble(config, company, playbookBlock)}
@@ -745,6 +763,11 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   // Avisos pro dono, nesta ordem: Diretor (brief.reasoning) · QUERO · recado que saiu · legenda vazia.
   brief.reasoning = [brief.reasoning, lock.notice, internalNotesNotice(sp.notes), sp.emptied ? EMPTY_CAPTION_NOTICE : null].filter(Boolean).join(' ') || brief.reasoning
 
+  // Imóvel citado pela vaga (só quando a vaga traz item_id): fonte dos fatos da trava de mercado e das fotos reais da capa/fecho do educativo.
+  const claimLang: 'pt' | 'en' = String(company.language ?? '').toLowerCase().startsWith('en') ? 'en' : 'pt'
+  const claimCfg = await loadClaimCfg(admin, company.vertical_key ?? null, claimLang)
+  const linkedItem = opts.itemId ? (await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('id', opts.itemId).eq('company_id', company.id).eq('kind', 'product').maybeSingle()).data as { id: string; title: string | null; meta: { fields?: Record<string, unknown>; photos?: CatalogPhoto[] } | null } | null : null
+
   // Carrossel de slides: validado e, se o tema pede, conferido ANTES de gravar — legenda e arte saem do mesmo texto conferido.
   let deckSlides: DeckSlide[] = opts.deck && fmt === 'carrossel' ? normalizeDeck(Array.isArray(post.slides) ? post.slides : [], String(post.cta ?? quero.cta)).map(x => lockSlide(x, quero)) : []
   let unitOk: ((i: number, s: DeckSlide) => boolean) | null = null
@@ -763,6 +786,25 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
       if (strict) brief.reasoning = `${brief.reasoning ?? ''} Atenção: não consegui conferir o texto contra as dicas — confira tudo antes de aprovar.`.trim()
     }
   }
+
+  // Trava de afirmação de mercado (PR B, 2026-11-02): legenda, CTA, hashtags e TODO campo de slide. Fatos permitidos = cadastro do imóvel
+  // citado (se a vaga trouxe item_id) + dicas conferidas (modo regulado). Reescreve 1x → corta a frase → "Tirei afirmação sem fonte: …".
+  let claims: ClaimCtx | null = null
+  const claimRemoved: string[] = []
+  try {
+    const lang = claimLang, cc = claimCfg
+    if (!cc.terms) throw new SkipClaimLock()   // setor sem lista na ficha (regra 6): a trava de mercado não se aplica — "premium" de uma cafeteria não é afirmação de mercado
+    const facts = linkedItem ? itemFacts(String(linkedItem.title ?? ''), linkedItem.meta?.fields, cc.fieldMap) : { texts: [] as string[], nums: [] as (string | { text: string })[] }
+    const tipTexts = topic?.mode === 'regulado' ? topic.tips.map(t => `${t.title} ${t.content}`) : []
+    claims = claimCtx(lang, [...facts.texts, ...tipTexts], [...facts.nums, ...tipTexts], cc.terms)
+    const r = await lockDeckClaims({ slides: deckSlides, caption: caption ?? '', hashtags: post.hashtags ? String(post.hashtags) : '', cta: post.cta ? String(post.cta) : '', ctx: claims,
+      ask: (p, m) => ask(p, m), brand: company.business_name, neutral: company.business_name, post: x => lockSlide(x, quero) })
+    if (r.removed.length || r.slides.length !== deckSlides.length) {
+      deckSlides = r.slides; claimRemoved.push(...r.removed)
+      brief.reasoning = [brief.reasoning, claimNotice(r.removed), !r.caption.trim() && (caption ?? '').trim() ? EMPTY_CAPTION_NOTICE : null].filter(Boolean).join(' ')
+    }
+    caption = r.caption; post.hashtags = r.hashtags || null; if (post.cta) post.cta = r.cta || null
+  } catch (e) { if (!(e instanceof SkipClaimLock)) console.error('creative-generate: trava de afirmação de mercado falhou (segue sem ela)', company.id, e) }
 
   const { data: inserted, error: insErr } = await admin.from('marketing_ai_test_content').insert({
     company_id: company.id, kind, idea, caption,
@@ -815,10 +857,15 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
       const allowed = topic?.mode === 'regulado' ? tipNumbers(topic.tips) : topic?.mode === 'geral' ? new Set<string>() : numbersOf(dataText)
       const strictWhy = topic?.mode === 'regulado' ? ['use só o que as dicas conferidas já dizem neste slide, sem acrescentar fato'] : topic?.mode === 'geral' ? ['sem número, prazo, taxa nem nome de lei'] : undefined
       const handle = String(company.instagram_username ?? '').replace(/^@/, '').trim()
+      // Foto real do catálogo SÓ quando a vaga cita um imóvel (item_id) e a ficha liga isso (carousel_cover.educativo.photo_when_item).
+      // Sem imóvel: design da marca (decisão do dono, 2026-11-02). Nunca staged_photos (mobiliada por IA), nunca foto de outro imóvel.
+      const itemPhotos = claimCfg.photoWhenItem && linkedItem ? (linkedItem.meta?.photos ?? []) : []
+      const coverPhoto = pickCoverPhoto(itemPhotos)
+      const closerPhoto = coverPhoto ? pickMiddlePhotos(itemPhotos, coverPhoto, 1)[0] ?? coverPhoto : null
       const renderSlide = (sl: DeckSlide, i: number) => renderGraphicCardFull(opts, company.id, 'slide', {
         layout: sl.layout, title: sl.title, text: sl.text, items: sl.items, highlight: sl.highlight, cta: sl.cta, cover_style: coverStyle,
         handle, name: company.business_name, page: String(i + 1), total: String(deckSlides.length),
-      }, cardBrand)
+      }, cardBrand, sl.layout === 'capa' ? coverPhoto?.url : sl.layout === 'fecho' ? closerPhoto?.url : null)
       const warnings: string[] = []
       const done = await Promise.all(deckSlides.map(async (sl, i) => {
         let cur = sl, r = await renderSlide(cur, i)
@@ -829,7 +876,8 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
             const next = normalizeSlide(raw, cur.layout === 'capa' || cur.layout === 'fecho' ? cur.layout : null, cur.cta)
             next.layout = cur.layout
             Object.assign(next, lockSlide(next, quero))
-            if (Object.keys(raw).length && (!unitOk || unitOk(i, next))) { cur = next; r = (await renderSlide(cur, i)) ?? r }
+            if (claims) { const cs = cutSlide(next, claims, String(post.cta ?? quero.cta)); Object.assign(next, cs.slide); if (cs.removed.length) warnings.push(`slide ${i + 1}: ${claimNotice(cs.removed)?.replace(/\.$/, '')}`) }
+            if (Object.keys(raw).length && (next.title || next.text || next.items) && (!unitOk || unitOk(i, next))) { cur = next; r = (await renderSlide(cur, i)) ?? r }
           } catch (e) { console.error('creative-generate: slide mais curto falhou', company.id, i + 1, e) }
         }
         if (r?.overflow) {
@@ -1288,7 +1336,7 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
       // Só o card genérico (post_card, em setor que não desligou) usa o
       // caminho de imagem+template; qualquer outro formato de post — inclusive
       // um antigo que ficou numa estratégia — sai como carrossel de slides.
-      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', forceGeneral: job.format === FAQ_FORMAT, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: job.intent ?? null, opportunityId: job.opportunity_id ?? null })
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', itemId: job.item_id ?? null, forceGeneral: job.format === FAQ_FORMAT, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: job.intent ?? null, opportunityId: job.opportunity_id ?? null })
       return
     }
     if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }
