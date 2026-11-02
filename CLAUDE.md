@@ -37,6 +37,8 @@ conteúdo técnico detalhado vive em `docs/`:
 - [docs/DECISIONS.md](docs/DECISIONS.md) — decisões, com data e motivo.
 - [docs/ROADMAP.md](docs/ROADMAP.md) — prioridades (P0-P4) com critério de
   pronto.
+- [pitch/PITCH.md](pitch/PITCH.md) — o pitch em trabalho e a ideia de
+  preço (ainda não decidida).
 - [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) — roteiro do time de
   agentes (`.claude/agents/`: `product`, `engineer`, `qa`).
 
