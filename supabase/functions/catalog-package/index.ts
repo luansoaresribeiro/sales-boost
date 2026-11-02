@@ -27,6 +27,7 @@ import { decideVideoCta } from '../_shared/videoCta.ts'
 import { stripInternalNotes, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
 import { ensureNearby, fetchNearbyConfig, fmtDistance, topPlaces } from '../_shared/nearbyPlaces.ts'
 import { buildNearbySlides, buildOfferSlides, pickCoverPhoto, type OfferSlide } from '../_shared/carouselOffer.ts'
+import { allowedValues } from '../_shared/numberGuard.ts'
 import { claimPromptRule, captionRewritePrompt, claimCtx, claimNotice, cutClaims, cutHashtags, itemFacts, lockText } from '../_shared/claimLock.ts'
 
 const cors = {
@@ -292,15 +293,18 @@ Deno.serve(async (req) => {
     // só passam se o cadastro DESTE imóvel traz o termo/valor. Reescreve 1x; persistiu, corta só a frase e avisa o dono.
     const facts = itemFacts(String(item.title ?? ''), fields, ficha.fieldMap)
     const claims = claimCtx('pt', facts.texts, facts.nums, ficha.marketClaims, { ctx: ficha.claimCtx, places: facts.places })
+    // Sem market_claims na ficha não há termo de mercado (regra 6) — mas o NÚMERO da legenda vale sempre: algarismo ou por extenso
+    // ("trezentos metros quadrados") tem que estar no cadastro do imóvel (2026-11-02). CTA e hashtags só passam pela trava de termos.
+    if (!ficha.marketClaims) claims.guard = { ...claims.guard, terms: [] }
+    const claimsNoNums = { ...claims }
+    claims.factNums = allowedValues(facts.texts)
     const copy = async (briefing: string) => {
       const c = await writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`, claimPromptRule(ficha.marketClaims))
       const cap = stripInternalNotes(c.caption), cta = stripInternalNotes(c.cta)
       pieceNotes.push(...cap.notes, ...cta.notes)
       if (c.caption.trim() && !cap.text.trim()) pieceEmptied = true
-      // Sem market_claims na ficha a trava fica desligada (regra 6).
-      if (!ficha.marketClaims) return { ...c, caption: cap.text, cta: cta.text }
       const locked = await lockText(cap.text, claims, async iss => String(parseObj(await callClaude(anthropicKey, captionRewritePrompt(String(company!.business_name ?? ''), cap.text, iss), 900)).caption ?? '').trim() || null)
-      const lc = cutClaims(cta.text, claims), lh = cutHashtags(c.hashtags, claims)
+      const lc = cutClaims(cta.text, claimsNoNums), lh = cutHashtags(c.hashtags, claimsNoNums)
       pieceClaims.push(...locked.removed, ...lc.removed, ...lh.removed)
       return { ...c, caption: locked.text, cta: lc.text, hashtags: lh.text }
     }

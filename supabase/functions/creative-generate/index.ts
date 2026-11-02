@@ -31,9 +31,11 @@ import { decideVideoCta, queroNotice, sanitizeCaptionCta } from '../_shared/vide
 import { stripPieceTexts, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
 import { callClaude as callModel, CHEAP_MODEL, checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isUsableTip, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 import { decideTopic, guardDeck, loadGuardCfg, topicBlock, topicNote, type Ask, type TopicDecision } from '../_shared/deckGuard.ts'
-import { claimCtx, claimPromptRule, claimNotice, cutSlide, itemFacts, loadClaimCfg, lockDeckClaims, type ClaimCtx } from '../_shared/claimLock.ts'
+import { captionRewritePrompt, claimCtx, claimPromptRule, claimNotice, cutClaims, cutHashtags, cutSlide, itemFacts, loadClaimCfg, lockDeckClaims, lockText, type ClaimCtx } from '../_shared/claimLock.ts'
+import { allowedValues } from '../_shared/numberGuard.ts'
 import { pickCoverPhoto, pickMiddlePhotos, type CatalogPhoto } from '../_shared/carouselOffer.ts'
-import { findRepeatedTheme, recentThemes, themeBlock, themeRetryNote } from '../_shared/themeDedupe.ts'
+import { blockingThemes, findRepeatedTheme, pickAlternative, recentThemes, themeBlock, themeRetryNote, weekStartOf } from '../_shared/themeDedupe.ts'
+import { fetchThemeCfg, planWeekThemes, recipeBlocked } from '../_shared/weekThemes.ts'
 import { resolveAlias, tipNumbers, topicText } from '../_shared/deckTopic.ts'
 import { currentWeekBRT } from '../_shared/publishSlot.ts'
 import { buildOpportunityJob } from '../_shared/opportunityPieceJob.ts'
@@ -487,6 +489,9 @@ interface GenOpts {
   // Calendário da Semana: pra qual dia (YYYY-MM-DD) este post foi planejado —
   // ver planWeekForCompany(). Sem isso (geração avulsa normal) fica null.
   plannedFor?: string | null
+  // Tema já reservado pro plano da semana inteira (planWeekThemes) — a vaga escreve sobre ele; `themeNote` vai pro reasoning.
+  reservedTheme?: string | null
+  themeNote?: string | null
   // Carrossel de slides (tipo apresentação) a partir de uma ideia/trend —
   // pedido do dono 2026-10-14: "post do zero, tipo PowerPoint, só pela ideia
   // que a trend traz". Cada slide é um card do render-format (texto nítido da
@@ -592,9 +597,12 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
   // porque o contexto da empresa não muda entre gerações. Pedir variedade
   // explícita evita repetir o mesmo formato/visual toda vez.
   // Temas das últimas 3 semanas + o que já está agendado (peças de imóvel ficam de fora: a ideia delas é o título do imóvel).
-  const { data: themeRows } = await admin.from('marketing_ai_test_content').select('idea').eq('company_id', company.id).is('item_id', null).not('idea', 'is', null)
-    .or(`created_at.gte.${new Date(Date.now() - 21 * 86400000).toISOString()},planned_for.gte.${new Date().toISOString().slice(0, 10)}`).order('created_at', { ascending: false }).limit(60)
-  const pastThemes = recentThemes((themeRows ?? []) as { idea: string | null }[])
+  // Janela e limiar vêm da ficha (content_rules.theme_cooldown_weeks / theme_similarity; padrão 4 semanas) e valem a partir da SEMANA da peça.
+  const themeCfg = await fetchThemeCfg(admin, company.vertical_key ?? null)
+  const themeWeek = opts.plannedFor || new Date().toISOString().slice(0, 10)
+  const { data: themeRows } = await admin.from('marketing_ai_test_content').select('idea, planned_for, created_at').eq('company_id', company.id).is('item_id', null).not('idea', 'is', null)
+    .or(`created_at.gte.${new Date(Date.parse(`${weekStartOf(themeWeek)}T00:00:00Z`) - themeCfg.cooldownWeeks * 7 * 86400000).toISOString()},planned_for.gte.${weekStartOf(themeWeek)}`).order('created_at', { ascending: false }).limit(120)
+  const pastThemes = recentThemes(blockingThemes(((themeRows ?? []) as { idea: string | null; planned_for: string | null; created_at: string | null }[]).map(r => ({ idea: r.idea, date: r.planned_for || r.created_at })), themeWeek, themeCfg).map(t => ({ idea: t })), 60)
   const recent = (recentRows ?? []) as { format: string | null; brief: { visual_system?: string; framework?: string; template?: string } | null }[]
   const recentUsed = recent.filter(r => r.format || r.brief?.visual_system || r.brief?.framework)
     .map(r => `- formato "${r.format ?? '—'}", template "${r.brief?.template ?? '—'}", sistema visual "${r.brief?.visual_system ?? '—'}", framework "${r.brief?.framework ?? '—'}"`).join('\n')
@@ -637,7 +645,7 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
 
 Você é o DIRETOR CRIATIVO de uma agência. Vai criar um conteúdo do tipo "${modLabel}". Decida o brief usando os insights reais e as boas práticas ESPECÍFICAS desse formato (não use regra genérica).
 ${seedBlock}${intentTxt}${insights.length ? `\nInsights abertos:\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
-${themeBlock(pastThemes)}${recentUsed ? `\nÚltimos posts desse negócio (formato/sistema visual/framework já usados — VARIE, não repita o mesmo combo à toa só porque "faz sentido pro negócio"; só repita se você tiver um motivo estratégico real e disser isso em "reasoning"):\n${recentUsed}` : ''}
+${themeBlock(pastThemes, themeCfg.cooldownWeeks)}${opts.reservedTheme ? `\nTEMA RESERVADO PARA ESTA VAGA (já conferido: não repete nada recente nem as outras vagas da semana): "${opts.reservedTheme}". Construa o brief em cima dele; o "idea" do post tem que ser esse tema.\n` : ''}${recentUsed ? `\nÚltimos posts desse negócio (formato/sistema visual/framework já usados — VARIE, não repita o mesmo combo à toa só porque "faz sentido pro negócio"; só repita se você tiver um motivo estratégico real e disser isso em "reasoning"):\n${recentUsed}` : ''}
 
 Boas práticas do formato ${modLabel}:\n${moduleKnow}
 ${formatsRef ? `\nFormatos disponíveis (escolha a anatomia certa e cite em "format" quando usar um):\n${formatsRef}` : ''}
@@ -736,15 +744,25 @@ Retorne APENAS um JSON array:
 
   const execRaw = await callClaude(anthropicKey, execPrompt, opts.deck ? 3000 : 2000)
   let post = extractOne(execRaw)
-  // Tema repetido (mesmo com outro texto)? 1 refação com o aviso — só se sobrar folga no tempo da invocação; o dono ainda aprova tudo.
-  const repeated = post ? findRepeatedTheme(String(post.idea ?? ''), pastThemes) : null
-  if (post && repeated && Date.now() - startedAt < 60_000) {
-    try {
-      const again = extractOne(await callClaude(anthropicKey, execPrompt + themeRetryNote(repeated), opts.deck ? 3000 : 2000))
-      if (again && !findRepeatedTheme(String(again.idea ?? ''), pastThemes)) post = again
-      else if (again) brief.reasoning = `${brief.reasoning ?? ''} Atenção: o tema parece repetir uma peça recente ("${repeated}") — confira antes de aprovar.`.trim()
-    } catch (e) { console.error('creative-generate: refação por tema repetido falhou', company.id, e) }
+  // Tema repetido (trava em código, 2026-11-02): janela de N semanas da ficha + nunca 2x na semana. Repetiu → 1 refação com a lista
+  // proibida → ainda repetiu → tema alternativo da ficha que não repita → senão avisa o dono. Tudo vai pro reasoning. (Folga de tempo da invocação.)
+  const hasTime = () => Date.now() - startedAt < 60_000
+  const redo = async (note: string): Promise<Record<string, unknown> | null> => {
+    try { return extractOne(await callClaude(anthropicKey, execPrompt + note, opts.deck ? 3000 : 2000)) } catch (e) { console.error('creative-generate: refação por tema repetido falhou', company.id, e); return null }
   }
+  const repeats = (p: Record<string, unknown> | null) => (p ? findRepeatedTheme(String(p.idea ?? ''), pastThemes, themeCfg.similarity, themeCfg.places) : null)
+  const repeated = repeats(post)
+  if (post && repeated) {
+    const was = String(post.idea ?? '')
+    let fixed = false
+    if (hasTime()) { const again = await redo(themeRetryNote(repeated)); if (again && !repeats(again)) { post = again; fixed = true } }
+    if (!fixed) {
+      const alt = pickAlternative(themeCfg.alternatives, [...pastThemes, was], themeCfg)
+      if (alt && hasTime()) { const forced = await redo(`\n\nATENÇÃO: o tema anterior repetia uma peça recente. Escreva SOBRE ESTE TEMA (e só ele): "${alt}". O "idea" tem que ser esse tema.\n`); if (forced) { post = forced; fixed = true } }
+    }
+    brief.reasoning = `${brief.reasoning ?? ''} ${fixed ? `Tema trocado: “${was}” repetia “${repeated}” (últimas ${themeCfg.cooldownWeeks} semanas ou esta semana); escrevi sobre “${String(post!.idea ?? '')}”.` : `Atenção: o tema parece repetir uma peça recente (“${repeated}”) e não consegui trocar — confira antes de aprovar.`}`.trim()
+  }
+  if (opts.themeNote) brief.reasoning = `${brief.reasoning ?? ''} ${opts.themeNote}`.trim()
   if (!post) {
     // Fallback: uma tentativa direta e simples, garante que o dono sempre recebe um post.
     const fbRaw = await callClaude(anthropicKey, `${preamble(config, company, playbookBlock)}
@@ -1207,7 +1225,7 @@ const VIDEO_RECIPE = 'video_imovel'
 const DECK_FORMAT = 'carrossel_slides' // genérico (formatCatalog.ts)
 // familia/pilar_ss/tema = rótulo único da peça (tema = pilar de conteúdo da ficha, gravado em `pillar`);
 // intent = a intenção da estratégia pra esta vaga (buildSlotIntent). Todos opcionais (vaga antiga/avulsa).
-interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string; familia?: string; pilar_ss?: string; tema?: string; intent?: SlotIntent | null; opportunity_id?: string; tour?: TourPlan }
+interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string; familia?: string; pilar_ss?: string; tema?: string; intent?: SlotIntent | null; opportunity_id?: string; tour?: TourPlan; theme_idea?: string; theme_note?: string }
 
 async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: ReturnType<typeof weekSlots>, plan: ContentPlan, funnelPlan: unknown = null, ssPillars: { key: string; name: string; why?: string }[] = []): Promise<{ planned: number; days: { date: string; posts: number; note: string }[]; todo: { format: string; name: string; per_week: number; purpose: string }[] }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -1215,13 +1233,21 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
   const cronSecret = Deno.env.get('CRON_SECRET') ?? ''
   const since = new Date(Date.now() - 21 * 86400000).toISOString()
   const dates = [...new Set(slots.map(s => s.date))]
-  const [formats, aliases, { data: itemRows }, { data: usedRows }, { data: existingRows }] = await Promise.all([
+  const themeCfg = await fetchThemeCfg(admin, company.vertical_key ?? null)
+  const weekOf = dates[0] ?? new Date().toISOString().slice(0, 10)
+  const cooldownSince = new Date(Date.parse(`${weekStartOf(weekOf)}T00:00:00Z`) - themeCfg.cooldownWeeks * 7 * 86400000).toISOString()
+  const [formats, aliases, { data: itemRows }, { data: usedRows }, { data: existingRows }, { data: pkgRows }, { data: themeRows }] = await Promise.all([
     fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
     fetchFormatAliases(admin, company.vertical_key ?? 'generico'),
     admin.from('marketing_ai_knowledge').select('id, meta').eq('company_id', company.id).eq('kind', 'product'),
     admin.from('marketing_ai_test_content').select('item_id').eq('company_id', company.id).not('item_id', 'is', null).gte('created_at', since),
     admin.from('marketing_ai_test_content').select('planned_for, item_id, recipe').eq('company_id', company.id).in('planned_for', dates),
+    // Trava de repetição (2026-11-02): oferta = mesmo imóvel + mesma receita; educativo = tema parecido. Janela de N semanas da ficha.
+    admin.from('marketing_ai_test_content').select('item_id, recipe, planned_for, created_at').eq('company_id', company.id).not('item_id', 'is', null).not('recipe', 'is', null).gte('created_at', cooldownSince),
+    admin.from('marketing_ai_test_content').select('idea, planned_for, created_at').eq('company_id', company.id).is('item_id', null).not('idea', 'is', null)
+      .or(`created_at.gte.${cooldownSince},planned_for.gte.${weekStartOf(weekOf)}`).order('created_at', { ascending: false }).limit(120),
   ])
+  const pkgHistory = ((pkgRows ?? []) as { item_id: string; recipe: string; planned_for: string | null; created_at: string }[]).map(r => ({ item_id: r.item_id, recipe: r.recipe, date: r.planned_for || r.created_at }))
   const recipeOf = new Map(formats.map(f => [f.key, f.recipe]))
   const usage = new Map<string, number>()
   for (const r of (usedRows ?? []) as { item_id: string }[]) usage.set(r.item_id, (usage.get(r.item_id) ?? 0) + 1)
@@ -1229,9 +1255,10 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
     .filter(it => (it.meta?.photos?.length ?? 0) >= 5).map(it => it.id)
   // Tour: no máximo 1 por imóvel na semana (decisão do dono 2026-11-02) — só repete se houver um único imóvel elegível.
   const videoItems = new Set(((existingRows ?? []) as { item_id: string | null; recipe: string | null }[]).filter(r => r.recipe === VIDEO_RECIPE && r.item_id).map(r => r.item_id as string))
-  const pickItem = (avoid?: Set<string>): string | null => {
+  const pickItem = (avoid?: Set<string>, strict = false): string | null => {
     if (!items.length) return null
     const free = avoid ? items.filter(i => !avoid.has(i)) : items
+    if (strict && !free.length) return null   // oferta: todos os imóveis já usaram essa receita na janela → fica "pra fazer" em vez de repetir
     const id = [...(free.length ? free : items)].sort((a, b) => (usage.get(a) ?? 0) - (usage.get(b) ?? 0))[0]
     usage.set(id, (usage.get(id) ?? 0) + 1)
     return id
@@ -1273,10 +1300,26 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
       jobs.push({ date: slot.date, producer: 'item_video', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format: slot.format, recipe: VIDEO_RECIPE, item_id: itemId, ...labelsOf(slot) })
       continue
     }
-    const itemId = recipe ? pickItem() : null
+    // Oferta: o MESMO imóvel não repete a mesma receita antes de N semanas (ficha) nem 2x na semana (código; ângulo = receita).
+    const recipeKey = recipe ? String(recipe) : ''
+    const itemId = recipeKey ? pickItem(new Set(items.filter(i => recipeBlocked(pkgHistory, i, recipeKey, slot.date, themeCfg.cooldownWeeks))), true) : null
     if (!recipe || !itemId) { addTodo(slot); continue }
+    pkgHistory.push({ item_id: itemId, recipe: recipeKey, date: slot.date })
     jobs.push({ date: slot.date, producer: 'item_package', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe, item_id: itemId, ...labelsOf(slot) })
   }
+
+  // Temas da semana INTEIRA reservados antes de disparar (vagas rodam em paralelo e não se enxergam): 1 pedido curto ao Diretor
+  // Criativo → conferido em código (janela da ficha + entre as vagas) → repetiu: outro tema 1x → alternativa da ficha. Falha não trava o despacho.
+  try {
+    const postJobs = jobs.filter(j => j.producer === 'post' && j.format !== FAQ_FORMAT && !j.opportunity_id)
+    const key = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
+    if (postJobs.length && key) {
+      const history = blockingThemes(((themeRows ?? []) as { idea: string | null; planned_for: string | null; created_at: string | null }[]).map(r => ({ idea: r.idea, date: r.planned_for || r.created_at })), weekOf, themeCfg)
+      const slotsT = postJobs.map((j, i) => ({ key: `v${i + 1}`, date: j.date, hint: `${j.name} — ${j.purpose || j.pillar}${j.intent ? ` · ${intentBlock(j.intent).replace(/\s+/g, ' ').slice(0, 260)}` : ''}` }))
+      const assigned = await planWeekThemes({ slots: slotsT, history, cfg: themeCfg, brand: company.business_name, ask: p => callModel(key, p, 700, CHEAP_MODEL) })
+      postJobs.forEach((j, i) => { const a = assigned.get(`v${i + 1}`); if (a?.idea) j.theme_idea = a.idea; if (a?.note) j.theme_note = a.note })
+    }
+  } catch (e) { console.error('planWeekFromStrategy: reserva de temas falhou (segue sem ela)', company.id, e) }
 
   // Tours: foto e tipo de cada vaga de vídeo decididos AQUI, de uma vez, pra vagas paralelas não escolherem a mesma foto/cômodo.
   const videoJobs = jobs.filter(j => j.producer === 'item_video')
@@ -1362,7 +1405,7 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
       // Só o card genérico (post_card, em setor que não desligou) usa o
       // caminho de imagem+template; qualquer outro formato de post — inclusive
       // um antigo que ficou numa estratégia — sai como carrossel de slides.
-      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', itemId: job.item_id ?? null, forceGeneral: job.format === FAQ_FORMAT, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: job.intent ?? null, opportunityId: job.opportunity_id ?? null })
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', itemId: job.item_id ?? null, forceGeneral: job.format === FAQ_FORMAT, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: job.intent ?? null, opportunityId: job.opportunity_id ?? null, reservedTheme: job.theme_idea ?? null, themeNote: job.theme_note ?? null })
       return
     }
     if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }
@@ -1453,6 +1496,8 @@ async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Co
   // Foto(s) e tipo: vêm decididos do planejamento da semana (sem corrida entre vagas); peça avulsa escolhe aqui.
   // Nota de qualidade + cômodo (IA de visão) e a ficha (config.tour) mandam; sem nota, a foto é último recurso (nunca sorteio às cegas).
   const tcfg = await fetchTourCfg(admin, company.vertical_key ?? null)
+  const claimLangV: 'pt' | 'en' = String(company.language ?? '').toLowerCase().startsWith('en') ? 'en' : 'pt'
+  const claimCfgV = await loadClaimCfg(admin, company.vertical_key ?? null, claimLangV)
   let tour: TourPlan | null = job.tour && job.tour.photos?.length && job.tour.photos.every(u => photos.includes(u)) ? job.tour : null
   if (!tour) { try { tour = await chooseTour(admin, anthropicKey, company.id, item.id, job.format, tcfg) } catch (e) { console.error('runVideoSlot: escolha da foto falhou', company.id, String(e).slice(0, 200)) } }
   if (!tour) tour = { kind: 'room', photos: [photos[0]], rooms: [null], notes: ['não consegui analisar as fotos — usei a primeira do cadastro.'] }
@@ -1473,7 +1518,8 @@ Título: ${item.title}
 Objetivo da peça na estratégia: ${job.purpose || job.name}${job.intent ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentBlock(job.intent)}\nO CTA sugerido acima é só sugestão: a regra de chamada final abaixo manda.` : ''}
 ${HONESTY_RULE} A legenda é pro público do Instagram — nunca um recado pro corretor.
 ${captionRules(tcfg.forbidden_claims, prev)}
-${decision.promptRule}${lessonsBlock(await loadLessons(admin, company.id))}
+NÚMEROS: só use número que esteja nos dados acima (em algarismo ou por extenso — "trezentos", "quatro quartos" contam). Sem o dado, não cite número nenhum.
+${claimPromptRule(claimCfgV.terms)}${decision.promptRule}${lessonsBlock(await loadLessons(admin, company.id))}
 Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`
   const guardNotes: string[] = []
   const ask = async (extra = ''): Promise<Record<string, unknown>> => {
@@ -1495,6 +1541,27 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`
     if (findForbidden(String(cap.hashtags ?? ''), tcfg.forbidden_claims).length) cap.hashtags = ''
     guardNotes.push('tirei da legenda uma frase que afirmava algo que o vídeo não é (ex.: "filmado") — confira o texto.')
   } else if (check.repeated) guardNotes.push('a abertura da legenda ficou parecida com a de outro vídeo deste imóvel — confira.')
+  // Trava de número + afirmação de mercado (2026-11-02): todo número da legenda (algarismo OU por extenso) tem que estar no cadastro do imóvel,
+  // e frase de mercado da ficha ("mais disputados", "demanda alta", "costuma ter liquidez") só vale se o cadastro traz a palavra.
+  // Reescreve 1x (com aviso do que sobrou) → persistiu: corta SÓ a frase → "Tirei afirmação sem fonte: …" no reasoning.
+  try {
+    const ff = itemFacts(String(item.title ?? ''), Object.fromEntries(Object.entries(f).filter(([k]) => !hidden.has(k))), claimCfgV.fieldMap)
+    const vctx = claimCtx(claimLangV, ff.texts, ff.nums, claimCfgV.terms, { ctx: claimCfgV.ctx, places: ff.places })
+    if (!claimCfgV.terms) vctx.guard = { ...vctx.guard, terms: [] }   // setor sem lista na ficha (regra 6): sem termo de mercado genérico; o número vale sempre
+    const noNums: ClaimCtx = { ...vctx }
+    vctx.factNums = allowedValues(ff.texts)
+    if (cap.caption) {
+      const orig = String(cap.caption)
+      const lk = await lockText(orig, vctx, async iss => String(parseObj(await callClaude(anthropicKey, captionRewritePrompt(company.business_name, orig, iss), 900)).caption ?? '').trim() || null)
+      cap = { ...cap, caption: lk.text }
+      const removed = [...lk.removed]
+      const c2 = cutClaims(String(cap.cta ?? ''), noNums); if (c2.removed.length) { cap.cta = c2.text; removed.push(...c2.removed) }
+      const h2 = cutHashtags(String(cap.hashtags ?? ''), noNums); if (h2.removed.length) { cap.hashtags = h2.text; removed.push(...h2.removed) }
+      const cn = claimNotice(removed)
+      if (cn) guardNotes.push(cn)
+      else if (lk.text !== orig) guardNotes.push('a legenda foi reescrita para tirar número ou afirmação sem fonte.')
+    }
+  } catch (e) { console.error('runVideoSlot: trava de número/afirmação falhou (segue sem ela)', company.id, e) }
   // Recado da IA pro corretor sai da legenda/CTA antes da trava do QUERO (2026-10-25).
   const sp = stripPieceTexts(cap.caption ? String(cap.caption) : null, cap.cta ? String(cap.cta) : null)
   const safe = sanitizeCaptionCta(sp.caption || null, sp.cta || null, decision)
@@ -1590,7 +1657,7 @@ Deno.serve(async (req) => {
       }
       const rawJob = body.slot as SlotJob | undefined
       // Campos novos (rótulo + intenção) revalidados: lista fixa / formato fixo / slice.
-      const job = rawJob ? { ...rawJob, familia: undefined, pilar_ss: undefined, tema: undefined, ...cleanLabels(rawJob), intent: cleanIntent(rawJob.intent) } as SlotJob : undefined
+      const job = rawJob ? { ...rawJob, familia: undefined, pilar_ss: undefined, tema: undefined, ...cleanLabels(rawJob), intent: cleanIntent(rawJob.intent), theme_idea: typeof rawJob.theme_idea === 'string' && rawJob.theme_idea.trim() ? rawJob.theme_idea.trim().slice(0, 140) : undefined, theme_note: typeof rawJob.theme_note === 'string' && rawJob.theme_note.trim() ? rawJob.theme_note.trim().slice(0, 300) : undefined } as SlotJob : undefined
       if (!job || !/^\d{4}-\d{2}-\d{2}$/.test(String(job.date)) || !['post', 'item_package', 'item_video'].includes(String(job.producer))) return json({ error: 'vaga inválida' }, 400)
       const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', body.company_id).maybeSingle()
       const company = companyRow as Company | null

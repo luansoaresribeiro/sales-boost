@@ -834,3 +834,22 @@ Em código na branch `claude/nifty-shannon-ysp818-carrosseis` (sem deploy e sem 
 - **Testes:** `scripts/test-claim-lock.mjs` (as 4 frases do relato, termos da migration), `scripts/test-carousel-quality.mjs`
   (capa, foto, oferta, bairro, tema repetido).
 
+
+
+## Travas em código: tema repetido, número por extenso, frases de mercado (2026-11-02, branch `claude/nifty-shannon-ysp818-travas`)
+
+Decisões em [DECISIONS.md](DECISIONS.md#2026-11-02--travas-em-código-tema-repetido-número-por-extenso-frases-de-mercado-depois-do-relatório-da-tespon).
+Código **não publicado** (functions `creative-generate` e `catalog-package`) e migration **não aplicada** até o dono mandar.
+
+| Pedido | Já era coberto? | O que mudou / onde |
+| --- | --- | --- |
+| Tema repetido (educativo) | Parcial: `themeDedupe.findRepeatedTheme` (PR B) com janela fixa de 21 dias, só no prompt + 1 refação, valor "1,5" e dígito solto ignorados, vagas paralelas não se enxergavam | `themeDedupe.ts` (janela/limiar 0,8/bairros da ficha, `blockingThemes`, `pickAlternative`, números contam), `weekThemes.ts` (`planWeekThemes`: reserva da semana inteira), `creative-generate` (`planWeekFromStrategy` reserva antes de disparar; `generateForCompany` confere de novo, refaz 1x, cai na alternativa da ficha e escreve "Tema trocado…" no reasoning) |
+| Oferta repetida (mesmo imóvel + receita) | Não (só rodízio por menos usado, 21 dias) | `weekThemes.recipeBlocked` + `pickItem(…, strict)` em `planWeekFromStrategy`: sem imóvel livre na janela, a vaga vira "pra fazer" |
+| Número por extenso na legenda de vídeo/catálogo | Não (só algarismo, e só nas peças de oportunidade/FAQ) | `numberGuard.ts` (extenso → número), `claimLock.ClaimCtx.factNums`, `runVideoSlot` (trava nova na legenda do vídeo) e `catalog-package` (agora vale mesmo sem `market_claims` na ficha) |
+| "sem filtro, sem encenação" | **Sim** (PR A): `captionGuard.ts` + `tourPick.DEFAULT_FORBIDDEN`, aplicado em `creative-generate/index.ts` `runVideoSlot` (`checkCaption` → reescreve 1x → `stripForbidden`) | prova no teste `test-number-guard.mjs` |
+| "mais desejados", "endereços mais disputados", "bairro mais desejado" | **Sim** na ficha (`mais desejado/a/s`, `disputado/a/s`, PRs anteriores); na **legenda do vídeo** não havia trava | `runVideoSlot` passou a usar `claimLock` |
+| "demanda alta", "costuma ter liquidez", "tem liquidez", "boa liquidez", "liquidez alta", "valorização garantida", "mais disputado(a/s)" | **Não** | migration `20261102130000_travas_tema_numero.sql` (mescla sem duplicar, com SQL de reverter) |
+
+Testes: `scripts/test-number-guard.mjs` (caso exato da Tespon, frases de mercado em legenda e slide, "sem filtro, sem encenação") e
+`scripts/test-week-themes.mjs` (par "Comparativo… R$ 1,5 mi" × "Comparação… R$1,5 mi…" = repetido; par diferente não; janela de 4
+semanas; vagas paralelas; oferta).
