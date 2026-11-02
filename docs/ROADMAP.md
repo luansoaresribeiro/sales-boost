@@ -4,6 +4,24 @@
 > pronto, arquivos envolvidos, riscos, e se envolve ALTERAÇÃO ARRISCADA
 > (ver CLAUDE.md).
 
+## Foco atual (dono, 2026-11-01) — qualidade antes do 1º cliente
+
+> As prioridades P0–P4 abaixo continuam valendo; este é o trabalho em andamento agora.
+
+- [ ] **PR A — tour virtual:** foto por nota (não sorteio), tipos 1 cômodo / 2 cômodos / abertura, 9:16 com
+  encerramento de marca por código, legenda que diz que é animação de foto real, 1 tour por imóvel por semana.
+  Em teste/correção (2026-11-02).
+- [ ] **PR B — carrosséis:** trava de afirmação de mercado em toda peça do calendário, capa-gancho (nunca índice),
+  oferta com capa de foto + faixa de dados (até 7 slides), "3 coisas perto" no sistema de slides, sem tema repetido.
+  Em teste (2026-11-02).
+- [ ] **PR C — validação do zero:** conta "Teste Zero Imóveis" criada pelo cadastro normal (2 imóveis do Leblon,
+  5 fotos cada, sem logo). Depois do deploy de A e B: gerar a 1ª semana, dar nota 1–5 a cada peça com prints.
+  *Pronto quando:* todas as peças 4+.
+- [ ] **Primeira impressão do cliente novo** — achados do cadastro do zero (ver o item no fim deste arquivo).
+- [ ] **Preço e pitch** — ideia de 3 planos em dólar, não decidida ([pitch/PITCH.md](../pitch/PITCH.md)).
+- **Adiado pelo dono:** fechar o ciclo publicar → medir → aprender; juntar estratégia com notícias/oportunidades;
+  fluxo de Resultados (código parado na branch `results-flow`, sem QA).
+
 ## P0 — Instagram certo conectado
 
 - **Objetivo:** o @ certo conectado, sem duplicidade entre empresas, e um

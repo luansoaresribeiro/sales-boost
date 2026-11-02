@@ -2161,3 +2161,12 @@ somente-leitura (`company_flow_status`), sem afrouxar a RLS. Feito agora: Inteli
   'https://miwcxakzyforbahpnpst.supabase.co/functions/v1/generate-posts', headers := '{"Content-Type":
   "application/json"}'::jsonb, body := json_build_object('cron_secret', (SELECT value FROM _app_config WHERE key =
   'cron_secret'))::jsonb)$$);`
+
+## 2026-11-02 — Pitch novo e ideia de preço em dólar (em aberto)
+
+- O dono mandou o pitch: dores (não sabe como aumentar a base, não tem tempo, não sabe o que acontece no mercado nem
+  onde a empresa está) → conteúdo com intenção no ritmo do mercado → ativação nos melhores conteúdos → painel que
+  ensina. Guardado em [pitch/PITCH.md](../pitch/PITCH.md) (texto original + versão de trabalho PT/EN).
+- **Preço NÃO decidido.** Ideia: US$ 19 / 29 / 59, com 5 / 15 / 30 posts; o mais caro com avatar, Meta Ads e
+  leitura comercial avançada. Nada muda no código de cobrança até a decisão. Pendências listadas no pitch.
+- O pitch só promete o que existe: impulsionar anúncio e avatar aparecem como "em construção / em breve".
