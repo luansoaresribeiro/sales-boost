@@ -194,7 +194,7 @@ Decisões do dono em [DECISIONS.md](DECISIONS.md#2026-11-02--tour-virtual-pr-a-q
 | Vídeo 4:5 sem encerramento (fallback `mp4stream`) | Tour do calendário **só sai pelo estúdio (VPS)**: 1080×1920 + encerramento de ~2,5 s (fundo escuro da marca, logo + bairro + CTA sempre; preço **só se cadastrado, exatamente como veio**). O encerramento é um PNG feito por código (`render-format`, template `tour_endcard`), emendado pelo `worker.mjs` com fusão. **VPS fora do ar = a peça fica "Aguardando estúdio"** e é montada quando volta (máx. 48 h; depois falha avisando). |
 | `pair` sem aviso | Toda peça `pair` leva em `reasoning`: "Aviso do tour: passagem entre cômodos não confirmada por planta…". |
 
-Ficha (regra 6, `20261102100000_tour_ficha.sql`): `config.tour` = `rooms`, `adjacent_rooms` (sala↔varanda, sala↔cozinha, sala↔sala de jantar,
+Ficha (regra 6, `20261102110000_tour_ficha.sql`): `config.tour` = `rooms`, `adjacent_rooms` (sala↔varanda, sala↔cozinha, sala↔sala de jantar,
 cozinha↔área de serviço, quarto↔banheiro, quarto↔varanda, sala↔hall, sala de jantar↔cozinha, hall↔sala de jantar), `opening_rooms`,
 `room_priority`, `avoid_rooms`, `min_quality`, `min_room_conf`, `recent_exclude`, `forbidden_claims`, `endcard_seconds`,
 `endcard_place_field`/`endcard_price_field` (quais campos do cadastro viram lugar e preço) e `clip_prompts.opening` (câmera sem "revelar"
