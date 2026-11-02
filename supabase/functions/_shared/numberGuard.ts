@@ -8,7 +8,9 @@ const UNITS: Record<string, number> = { dois: 2, duas: 2, tres: 3, quatro: 4, ci
 const TENS: Record<string, number> = { vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80, noventa: 90 }
 const HUNDREDS: Record<string, number> = { cem: 100, cento: 100, duzentos: 200, duzentas: 200, trezentos: 300, trezentas: 300, quatrocentos: 400, quatrocentas: 400, quinhentos: 500, quinhentas: 500, seiscentos: 600, seiscentas: 600, setecentos: 700, setecentas: 700, oitocentos: 800, oitocentas: 800, novecentos: 900, novecentas: 900 }
 const SCALES: Record<string, number> = { mil: 1e3, milhao: 1e6, milhoes: 1e6, bilhao: 1e9, bilhoes: 1e9 }
-const MULT: Record<string, number> = { mil: 1e3, mi: 1e6, milhao: 1e6, milhoes: 1e6, k: 1e3 }
+const MULT: Record<string, number> = { mil: 1e3, mi: 1e6, milhao: 1e6, milhoes: 1e6 }   // sem "k": "4K" (resolução) não é 4000
+// ordem de grandeza: centena 3 > dezena 2 > unidade 1 — "e" só encadeia pra ordem MENOR ("cento e vinte e três"; "dois e três quartos" são dois números)
+const orderOf = (w: string) => (w in HUNDREDS ? 3 : w in TENS ? 2 : 1)
 const isNum = (w: string) => w in UNITS || w in TENS || w in HUNDREDS || w === 'um' || w === 'uma'
 
 /** Valores numéricos de um texto: algarismos ("7.373", "1,5 mi", "850 mil") e números por extenso ("trezentos", "dois mil e quinhentos"). */
@@ -32,16 +34,16 @@ export function numberReadings(text: string): number[][] {
     if ((w === 'um' || w === 'uma') && !(toks[i + 1] && SCALES[toks[i + 1]])) continue
     if (w === 'mil' && /^\d/.test(toks[i - 1] ?? '')) continue                 // "850 mil" já foi lido acima
     if (!isNum(w) && !(w in SCALES)) continue
-    let total = 0, cur = 0, j = i
+    let total = 0, cur = 0, j = i, last = 4
     while (j < toks.length) {
       const t = toks[j]
-      if (t in HUNDREDS || t in TENS || t in UNITS) cur += HUNDREDS[t] ?? TENS[t] ?? UNITS[t]
-      else if (t === 'um' || t === 'uma') cur += 1
-      else if (t in SCALES) { total += (cur || 1) * SCALES[t]; cur = 0 }
+      if (t in HUNDREDS || t in TENS || t in UNITS) { cur += HUNDREDS[t] ?? TENS[t] ?? UNITS[t]; last = orderOf(t) }
+      else if (t === 'um' || t === 'uma') cur += 1   // unidade: nada de ordem menor depois
+      else if (t in SCALES) { total += (cur || 1) * SCALES[t]; cur = 0; last = 4 }
       else break
       const n1 = toks[j + 1], n2 = toks[j + 2]
       if (n1 && (n1 in SCALES)) { j++; continue }
-      if (n1 === 'e' && n2 && (isNum(n2) || n2 in SCALES)) { j += 2; continue }
+      if (n1 === 'e' && n2 && isNum(n2) && orderOf(n2) < last) { j += 2; continue }
       break
     }
     out.push([total + cur]); i = j

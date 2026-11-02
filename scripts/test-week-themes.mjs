@@ -12,15 +12,25 @@ const B = 'Comparação de o que R$1,5 mi compra na Barra da Tijuca vs. no Leblo
 assert.ok(findRepeatedTheme(A, [B])); assert.ok(findRepeatedTheme(B, [A])); ok('"Comparativo… R$ 1,5 mi… Barra vs. Leblon" × "Comparação… R$1,5 mi…" = repetido (nos 2 sentidos)')
 for (const d of ['Como funciona o financiamento imobiliário, passo a passo', 'O que conferir na visita ao imóvel antes de decidir', 'O que R$ 3 mi compra na Barra da Tijuca vs. no Leblon e na Gávea']) assert.equal(findRepeatedTheme(d, [A, B]), null, d)
 ok('temas diferentes NÃO são repetidos (inclusive outro valor / outros bairros)')
-assert.ok(findRepeatedTheme('Quanto custa morar em Ipanema', ['Quanto custa morar em Copacabana'])); ok('mesmo molde, só o bairro muda = conta como repetido (conservador: título curto, 3 de 4 palavras iguais)')
+assert.equal(DEFAULT_THEME_CFG.similarity, 0.8); ok('padrão do código também é 0.8')
+
 assert.equal(findRepeatedTheme(A, [B], 1), null); ok('limiar vem da ficha (1.0 não acusa o par parecido)')
 
 // ── ficha ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 const mig = readFileSync(new URL('../supabase/migrations/20261102130000_travas_tema_numero.sql', import.meta.url), 'utf8')
 const alts = JSON.parse(mig.match(/\$json\$(\[\s*"Como funciona.*?\])\$json\$/s)[1])
-const cfg = parseThemeCfg({ theme_cooldown_weeks: 4, theme_similarity: 0.75, theme_alternatives: alts })
-assert.equal(cfg.cooldownWeeks, 4); assert.ok(cfg.alternatives.length >= 5); ok('migration traz janela 4, limiar 0.75 e temas alternativos')
+const places = JSON.parse(mig.match(/\$json\$(\["leblon".*?\])\$json\$/s)[1])
+assert.ok(/"theme_similarity": 0.8\}/.test(mig))
+const cfg = parseThemeCfg({ theme_cooldown_weeks: 4, theme_similarity: 0.8, theme_alternatives: alts, theme_places: places })
+assert.equal(cfg.cooldownWeeks, 4); assert.ok(cfg.alternatives.length >= 5); ok('migration traz janela 4, limiar 0.8, bairros e temas alternativos')
 assert.ok(alts.every(a => !/\d/.test(a))); ok('alternativas da ficha não têm número (regra 5)')
+// bairro diferente sozinho NÃO é repetido (com os bairros da ficha); mesmos bairros + mesmo valor continua repetido
+const P = cfg.places, S = cfg.similarity
+assert.equal(findRepeatedTheme('Dicas para comprar apartamento no Leblon', ['Dicas para comprar apartamento na Barra'], S, P), null)
+assert.equal(findRepeatedTheme('Quanto custa morar em Ipanema', ['Quanto custa morar em Copacabana'], S, P), null)
+ok('"Dicas para comprar apartamento no Leblon" × "…na Barra" e Ipanema × Copacabana NÃO são repetidos')
+assert.ok(findRepeatedTheme(A, [B], S, P) && findRepeatedTheme(B, [A], S, P)); ok('o caso Barra vs. Leblon R$ 1,5 mi continua repetido com bairros e 0.8')
+assert.ok(findRepeatedTheme('Dicas para comprar apartamento no Leblon', ['Dicas para comprar apartamento no Leblon hoje'], S, P)); ok('mesmo bairro + mesmo molde continua repetido')
 assert.deepEqual(parseThemeCfg(undefined), DEFAULT_THEME_CFG); assert.equal(parseThemeCfg({ theme_cooldown_weeks: 0 }).cooldownWeeks, 4); assert.equal(parseThemeCfg({ theme_cooldown_weeks: 99 }).cooldownWeeks, 12); ok('sem ficha = padrão genérico (4 semanas); 0 não desliga; teto 12')
 
 // ── janela: 4ª semana seguida bloqueia; 5ª semanas atrás já pode voltar ───────────────────────────────────────────
@@ -51,6 +61,9 @@ assert.equal(out.get('v3').source, 'diretor'); assert.equal(out.get('v3').note, 
 out = await planWeekThemes({ slots: slots.slice(0, 1), history: [A], cfg: { ...cfg, alternatives: [] }, brand: 'X' })
 assert.equal(out.get('v1').idea, null); assert.equal(out.get('v1').source, 'livre'); ok('sem IA e sem alternativa = sem reserva, sem quebrar')
 assert.equal(pickAlternative(alts, alts.slice(0, 8), cfg), alts[8]); assert.equal(pickAlternative(alts, alts, cfg), null); ok('alternativa pula as que já foram usadas')
+// IA lenta (timeout) não trava: segue sem reservar
+out = await planWeekThemes({ slots: slots.slice(0, 1), history: [], cfg: { ...cfg, alternatives: [] }, brand: 'X', timeoutMs: 30, ask: () => new Promise(() => {}) })
+assert.equal(out.get('v1').idea, null); ok('chamada que não responde estoura o timeout e o planejamento segue sem reserva')
 // falha da IA não derruba o planejamento
 out = await planWeekThemes({ slots, history: [], cfg, brand: 'X', ask: async () => { throw new Error('boom') } })
 assert.equal(out.size, 3); assert.ok([...out.values()].every(a => a.source === 'alternativa' && a.idea)); ok('IA fora do ar → alternativas da ficha, sem repetir entre as vagas')

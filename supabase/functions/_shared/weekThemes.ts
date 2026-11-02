@@ -34,20 +34,22 @@ const asked = (raw: string): Map<string, string> => {
   return out
 }
 
-export async function planWeekThemes(a: { slots: ThemeSlot[]; history: string[]; cfg: ThemeCfg; brand: string; ask?: (prompt: string) => Promise<string> }): Promise<Map<string, ThemeAssign>> {
+export async function planWeekThemes(a: { slots: ThemeSlot[]; history: string[]; cfg: ThemeCfg; brand: string; ask?: (prompt: string) => Promise<string>; timeoutMs?: number }): Promise<Map<string, ThemeAssign>> {
   const { cfg } = a
   const taken = [...a.history]
   const out = new Map<string, ThemeAssign>()
   const propose = async (slots: ThemeSlot[]): Promise<Map<string, string>> => {
     if (!a.ask || !slots.length) return new Map()
-    try { return asked(await a.ask(themeAskPrompt(a.brand, slots, taken))) } catch (e) { console.error('weekThemes: pedido de temas falhou', e); return new Map() }
+    // timeout de ~20 s por chamada: falhou/demorou → segue sem reservar (o despacho nunca trava)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try { return asked(await Promise.race([a.ask(themeAskPrompt(a.brand, slots, taken)), new Promise<string>((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), a.timeoutMs ?? 20_000) })])) } catch (e) { console.error('weekThemes: pedido de temas falhou', e); return new Map() } finally { if (timer) clearTimeout(timer) }
   }
   const settle = (slots: ThemeSlot[], proposals: Map<string, string>): { slot: ThemeSlot; why: string }[] => {
     const failed: { slot: ThemeSlot; why: string }[] = []
     for (const s of slots) {
       const idea = proposals.get(s.key)
       if (!idea) { failed.push({ slot: s, why: '' }); continue }
-      const rep = findRepeatedTheme(idea, taken, cfg.similarity)
+      const rep = findRepeatedTheme(idea, taken, cfg.similarity, cfg.places)
       if (rep) { failed.push({ slot: s, why: `“${idea}” repetia “${rep}”` }); continue }
       taken.push(idea); out.set(s.key, { key: s.key, idea, source: 'diretor' })
     }

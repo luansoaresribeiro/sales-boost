@@ -24,13 +24,26 @@ export function themeOverlap(a: string, b: string): { ratio: number; common: num
 }
 
 export const THEME_MIN_COMMON = 2
-export const THEME_RATIO = 0.75
+export const THEME_RATIO = 0.8
 
 /** Devolve o tema recente que o novo repete (mesmo assunto/ângulo, mesmo com outras palavras), ou null. `ratio` = limiar da ficha. */
-export function findRepeatedTheme(idea: string, recent: string[], ratio: number = THEME_RATIO): string | null {
+/** Lugares (da ficha, sem acento) que o texto cita. */
+export function placesIn(text: string, places: string[]): Set<string> {
+  const toks = themeTokens(text), raw = fold(String(text ?? '')).split(/[^a-z0-9]+/)
+  const out = new Set<string>()
+  for (const p of places) {
+    const parts = fold(p).split(/[^a-z0-9]+/).filter(Boolean)
+    if (parts.length && parts.every(w => raw.includes(w) || toks.has(w))) out.add(fold(p).trim())
+  }
+  return out
+}
+/** `places` (ficha: content_rules.theme_places): temas que citam lugares DIFERENTES não são o mesmo tema só por terem o mesmo molde ("…no Leblon" × "…na Barra"). Mesmo conjunto de lugares (ou nenhum) = vale a semelhança. */
+export function findRepeatedTheme(idea: string, recent: string[], ratio: number = THEME_RATIO, places: string[] = []): string | null {
   if (!idea || !idea.trim()) return null
+  const mine = places.length ? placesIn(idea, places) : null
   for (const r of recent) {
     if (!r || !r.trim()) continue
+    if (mine) { const theirs = placesIn(r, places); if ((mine.size || theirs.size) && (mine.size !== theirs.size || [...mine].some(x => !theirs.has(x)))) continue }
     const o = themeOverlap(idea, r)
     if (o.common >= THEME_MIN_COMMON && o.ratio >= ratio) return r
   }
@@ -38,9 +51,9 @@ export function findRepeatedTheme(idea: string, recent: string[], ratio: number 
 }
 
 // ── Trava de tema em CÓDIGO (2026-11-02): janela de N semanas (ficha) e nunca 2x na mesma semana ─────────────────
-export interface ThemeCfg { cooldownWeeks: number; similarity: number; alternatives: string[] }
+export interface ThemeCfg { cooldownWeeks: number; similarity: number; alternatives: string[]; places: string[] }
 /** Sem ficha (setor genérico): 4 semanas, mesmo limiar de antes, nenhuma alternativa pronta. */
-export const DEFAULT_THEME_CFG: ThemeCfg = { cooldownWeeks: 4, similarity: THEME_RATIO, alternatives: [] }
+export const DEFAULT_THEME_CFG: ThemeCfg = { cooldownWeeks: 4, similarity: THEME_RATIO, alternatives: [], places: [] }
 /** Lê config.content_rules da ficha (theme_cooldown_weeks, theme_similarity, theme_alternatives). Valor ruim = padrão. Mínimo 1 semana: "nunca 2x na mesma semana" não se desliga. */
 export function parseThemeCfg(rules: unknown): ThemeCfg {
   const r = (rules && typeof rules === 'object' ? rules : {}) as Record<string, unknown>
@@ -50,6 +63,7 @@ export function parseThemeCfg(rules: unknown): ThemeCfg {
     cooldownWeeks: Number.isFinite(weeks) && weeks >= 1 ? Math.min(Math.floor(weeks), 12) : DEFAULT_THEME_CFG.cooldownWeeks,
     similarity: Number.isFinite(sim) && sim >= 0.5 && sim <= 1 ? sim : DEFAULT_THEME_CFG.similarity,
     alternatives: alts,
+    places: Array.isArray(r.theme_places) ? r.theme_places.filter((x): x is string => typeof x === 'string' && !!x.trim()).slice(0, 200) : [],
   }
 }
 
@@ -78,7 +92,7 @@ export function blockingThemes(rows: ThemeRow[], weekOf: string, cfg: ThemeCfg =
 }
 /** Primeiro tema alternativo (da ficha/estratégia) que não repete nada de `taken`. */
 export function pickAlternative(alternatives: string[], taken: string[], cfg: ThemeCfg = DEFAULT_THEME_CFG): string | null {
-  for (const a of alternatives) if (a && !findRepeatedTheme(a, taken, cfg.similarity)) return a
+  for (const a of alternatives) if (a && !findRepeatedTheme(a, taken, cfg.similarity, cfg.places)) return a
   return null
 }
 

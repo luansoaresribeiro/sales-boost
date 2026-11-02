@@ -750,7 +750,7 @@ Retorne APENAS um JSON array:
   const redo = async (note: string): Promise<Record<string, unknown> | null> => {
     try { return extractOne(await callClaude(anthropicKey, execPrompt + note, opts.deck ? 3000 : 2000)) } catch (e) { console.error('creative-generate: refação por tema repetido falhou', company.id, e); return null }
   }
-  const repeats = (p: Record<string, unknown> | null) => (p ? findRepeatedTheme(String(p.idea ?? ''), pastThemes, themeCfg.similarity) : null)
+  const repeats = (p: Record<string, unknown> | null) => (p ? findRepeatedTheme(String(p.idea ?? ''), pastThemes, themeCfg.similarity, themeCfg.places) : null)
   const repeated = repeats(post)
   if (post && repeated) {
     const was = String(post.idea ?? '')
@@ -1316,7 +1316,7 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
     if (postJobs.length && key) {
       const history = blockingThemes(((themeRows ?? []) as { idea: string | null; planned_for: string | null; created_at: string | null }[]).map(r => ({ idea: r.idea, date: r.planned_for || r.created_at })), weekOf, themeCfg)
       const slotsT = postJobs.map((j, i) => ({ key: `v${i + 1}`, date: j.date, hint: `${j.name} — ${j.purpose || j.pillar}${j.intent ? ` · ${intentBlock(j.intent).replace(/\s+/g, ' ').slice(0, 260)}` : ''}` }))
-      const assigned = await planWeekThemes({ slots: slotsT, history, cfg: themeCfg, brand: company.business_name, ask: p => callClaude(key, p, 700) })
+      const assigned = await planWeekThemes({ slots: slotsT, history, cfg: themeCfg, brand: company.business_name, ask: p => callModel(key, p, 700, CHEAP_MODEL) })
       postJobs.forEach((j, i) => { const a = assigned.get(`v${i + 1}`); if (a?.idea) j.theme_idea = a.idea; if (a?.note) j.theme_note = a.note })
     }
   } catch (e) { console.error('planWeekFromStrategy: reserva de temas falhou (segue sem ela)', company.id, e) }

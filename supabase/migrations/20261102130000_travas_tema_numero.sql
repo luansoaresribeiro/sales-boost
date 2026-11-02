@@ -4,16 +4,16 @@
 --    ("Demanda alta e imóvel que costuma ter liquidez", "dois dos endereços mais disputados do Rio", "o bairro mais desejado do Rio").
 --    Mescla com o que já está na ficha: não duplica e não apaga ajuste do dono (a ordem antiga fica; os novos entram no fim).
 --    Rodar 2x dá o mesmo resultado. A trava (_shared/claimLock.ts) só barra o termo se ele NÃO aparece no cadastro do imóvel citado.
--- 2) content_rules.theme_cooldown_weeks (4), theme_similarity (0.75) e theme_alternatives (temas educativos sem número): a trava de TEMA
+-- 2) content_rules.theme_cooldown_weeks (4), theme_similarity (0.8) e theme_places (bairros: tema com bairros diferentes não é o mesmo tema) e theme_alternatives (temas educativos sem número): a trava de TEMA
 --    REPETIDO em código (_shared/themeDedupe.ts + weekThemes.ts) lê daqui. Cada chave só entra se ainda não existe (não pisa ajuste do dono).
 --
--- REVERTER (tira só os termos acrescentados aqui e as 3 chaves novas; o resto da ficha fica como está):
+-- REVERTER (tira só os termos acrescentados aqui e as chaves novas; o resto da ficha fica como está):
 --   update public.vertical_playbooks vp
 --   set config = jsonb_set(vp.config, '{opportunity_texts,market_claims,pt}',
 --       coalesce((select jsonb_agg(e.value) from jsonb_array_elements(vp.config->'opportunity_texts'->'market_claims'->'pt') e
 --                 where (e.value #>> '{}') not in ('mais disputado','mais disputada','mais disputados','mais disputadas','endereco mais disputado','enderecos mais disputados','demanda alta','costuma ter liquidez','tem liquidez','boa liquidez','liquidez alta','valorizacao garantida','valorização garantida','bairro mais desejado','enderecos mais desejados')), '[]'::jsonb), true)
 --   where key = 'imoveis_rio' and jsonb_typeof(config->'opportunity_texts'->'market_claims'->'pt') = 'array';
---   update public.vertical_playbooks set config = jsonb_set(config, '{content_rules}', (config->'content_rules') - 'theme_cooldown_weeks' - 'theme_similarity' - 'theme_alternatives') where key = 'imoveis_rio' and jsonb_typeof(config->'content_rules') = 'object';
+--   update public.vertical_playbooks set config = jsonb_set(config, '{content_rules}', (config->'content_rules') - 'theme_cooldown_weeks' - 'theme_similarity' - 'theme_places' - 'theme_alternatives') where key = 'imoveis_rio' and jsonb_typeof(config->'content_rules') = 'object';
 
 begin;
 
@@ -38,8 +38,13 @@ set config = jsonb_set(config, '{content_rules}', coalesce(config->'content_rule
 where key = 'imoveis_rio' and (config->'content_rules'->'theme_cooldown_weeks') is null;
 
 update public.vertical_playbooks
-set config = jsonb_set(config, '{content_rules}', coalesce(config->'content_rules', '{}'::jsonb) || '{"theme_similarity": 0.75}'::jsonb, true)
+set config = jsonb_set(config, '{content_rules}', coalesce(config->'content_rules', '{}'::jsonb) || '{"theme_similarity": 0.8}'::jsonb, true)
 where key = 'imoveis_rio' and (config->'content_rules'->'theme_similarity') is null;
+
+-- Bairros (sem acento): dois temas que citam bairros DIFERENTES não contam como repetidos só pelo molde parecido.
+update public.vertical_playbooks
+set config = jsonb_set(config, '{content_rules}', coalesce(config->'content_rules', '{}'::jsonb) || jsonb_build_object('theme_places', $json$["leblon","ipanema","copacabana","barra da tijuca","barra","recreio","botafogo","flamengo","gavea","jardim botanico","lagoa","urca","leme","sao conrado","laranjeiras","humaita","santa teresa","lapa","centro","jacarepagua","itanhanga","vargem grande","niteroi","arpoador","catete","gloria","cosme velho","joa"]$json$::jsonb), true)
+where key = 'imoveis_rio' and (config->'content_rules'->'theme_places') is null;
 
 update public.vertical_playbooks
 set config = jsonb_set(config, '{content_rules}', coalesce(config->'content_rules', '{}'::jsonb) || jsonb_build_object('theme_alternatives', $json$[

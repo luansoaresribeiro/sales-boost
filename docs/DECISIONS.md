@@ -2219,10 +2219,10 @@ seguida; legenda de vídeo "Trezentos metros quadrados" com m² cadastrado = 737
 1. **Tema repetido é travado em CÓDIGO, não só no prompt.** Um tema igual ou parecido não volta antes de N semanas — N vem da ficha
    (`config.content_rules.theme_cooldown_weeks`, **4** na ficha `imoveis_rio`; setor sem ficha = 4 genérico) — e **nunca 2x na mesma
    semana** (a janela mínima é 1 semana, não dá pra desligar). Semelhança determinística e barata: sem acento/palavra vazia, valor
-   ("R$ 1,5 mi" = "R$1.5 mi") e nome de bairro contam; limiar na ficha (`theme_similarity`, 0,75). Vale no educativo (texto do tema) e na
+   ("R$ 1,5 mi" = "R$1.5 mi") e nome de bairro contam; limiar na ficha (`theme_similarity`, **0,8**, padrão do código também 0,8). Temas que citam **bairros diferentes** (lista `theme_places` da ficha) não são repetidos só pelo molde parecido ("Dicas… no Leblon" × "…na Barra"); mesmos bairros + mesmo valor (caso R$ 1,5 mi) continuam repetidos. Vale no educativo (texto do tema) e na
    oferta (**mesmo imóvel + mesma receita**; a receita é o ângulo).
 2. **Antes de gerar a imagem/slide, no planejamento da semana inteira.** `planWeekFromStrategy` reserva os temas de todas as vagas de
-   post antes de disparar (as vagas rodam em paralelo e não se enxergavam): 1 pedido curto ao Diretor Criativo → conferência em código →
+   post antes de disparar (as vagas rodam em paralelo e não se enxergavam): 1 pedido curto ao Diretor Criativo (modelo barato `CHEAP_MODEL`, timeout ~20 s; falhou = segue sem reservar) → conferência em código →
    repetiu: pede outro 1x com a lista proibida → ainda repetiu: **tema alternativo da ficha** (`theme_alternatives`, sem número) → sem
    alternativa: a vaga escolhe e a conferência na geração continua valendo. Tudo vai pro `reasoning` ("Tema trocado: …").
    Custo: **1 chamada curta de IA por semana por empresa** (+1 só quando algum tema repete); a conferência em si é de graça. Oferta cheia
@@ -2230,11 +2230,10 @@ seguida; legenda de vídeo "Trezentos metros quadrados" com m² cadastrado = 737
 3. **Número na legenda de vídeo e de catálogo** (algarismo OU por extenso em português) precisa existir no cadastro do imóvel
    (`meta.fields` + título). Não bate → reescreve 1x com aviso → persistiu: corta só a frase → "Tirei afirmação sem fonte: …". "um/uma"
    sozinho é artigo e não conta; slides do educativo **não** passam pela trava de número (carrossel educativo tem números legítimos
-   — ex.: "3 passos"); só a legenda de vídeo e a do catálogo. Palavras de número ficam no código (são da língua, não do setor).
+   — ex.: "3 passos"); só a legenda de vídeo e a do catálogo. Palavras de número ficam no código (são da língua, não do setor). "e" só encadeia número de ordem menor ("dois e três quartos" = 2 e 3); "4K" não é 4000. **A trava de número vale também para setor sem ficha (`generico`)**: a regra 5 (nunca inventar número) é universal; só os termos de mercado dependem da ficha.
 4. **Frases de mercado** ("demanda alta", "costuma ter liquidez", "mais disputados", "valorização garantida"…) entram na ficha
    (migration aditiva `20261102130000_travas_tema_numero.sql`) e passam a valer também na **legenda de vídeo** (antes só o catálogo e o
    carrossel tinham a trava). "Sem filtro, sem encenação" já era coberta pelo PR A (`captionGuard` + `DEFAULT_FORBIDDEN`, aplicado em `runVideoSlot`).
 
-Limite honesto: a semelhança é por palavras. Título curto que só troca o bairro ("Quanto custa morar em Ipanema" × "…Copacabana") conta como
-repetido (conservador, prefere variar). Duas vagas que escolhessem o mesmo tema no mesmo segundo, sem reserva do planejamento (peça avulsa),
+Limite honesto: a semelhança é por palavras; sem a lista de bairros na ficha, título curto que só troca o bairro pode contar como repetido. Duas vagas que escolhessem o mesmo tema no mesmo segundo, sem reserva do planejamento (peça avulsa),
 ainda dependem da conferência na geração.
