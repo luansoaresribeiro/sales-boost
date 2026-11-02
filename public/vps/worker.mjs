@@ -67,6 +67,8 @@ async function info() {
     mem_total_mb: Math.round(os.totalmem() / 1048576), mem_free_mb: Math.round(os.freemem() / 1048576),
     disk_free_gb: diskFree, load1: Math.round(os.loadavg()[0] * 100) / 100,
     ffmpeg: await ffmpegVersion(), node: process.version, version: await selfHash(), jobs_done: jobsDone,
+    // O que este estúdio sabe fazer: a função só manda trabalho com encerramento pra quem informa 'endcard'.
+    caps: ['endcard'],
   }
 }
 
@@ -97,7 +99,9 @@ async function duration(file) {
 // Monta um Reel: cada trecho vira vertical 1080×1920 (o vídeo inteiro no meio,
 // fundo com o próprio vídeo desfocado — nada é cortado nem inventado), trechos
 // emendados com fusão, entrada/saída suaves e trilha de áudio muda (AAC).
-async function finishReel(clips, outFile) {
+// `card` (opcional) = { file, seconds }: encerramento de marca (PNG 1080×1920 feito pelo render-format,
+// nunca pela IA de vídeo) que entra no fim, com fusão, por `seconds` segundos.
+async function finishReel(clips, outFile, card = null) {
   const durs = []
   for (const c of clips) durs.push(await duration(c))
   const parts = clips.map((_, i) =>
@@ -112,11 +116,20 @@ async function finishReel(clips, outFile) {
     total = total + durs[i] - x
     last = `x${i}`
   }
+  if (card) {
+    const ci = clips.length
+    parts.push(`[${ci}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,fps=${FPS},format=yuv420p,setsar=1,settb=AVTB[card]`)
+    const x = Math.min(XFADE, card.seconds / 2, total / 2)
+    parts.push(`[${last}][card]xfade=transition=fade:duration=${x.toFixed(3)}:offset=${(total - x).toFixed(3)}[xc]`)
+    total = total + card.seconds - x
+    last = 'xc'
+  }
   parts.push(`[${last}]fade=t=in:st=0:d=${FADE_IN},fade=t=out:st=${Math.max(0, total - FADE_OUT).toFixed(3)}:d=${FADE_OUT}[out]`)
   const args = ['-y', '-hide_banner', '-loglevel', 'error']
   for (const c of clips) args.push('-i', c)
+  if (card) args.push('-loop', '1', '-framerate', String(FPS), '-t', card.seconds.toFixed(3), '-i', card.file)
   args.push('-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
-    '-filter_complex', parts.join(';'), '-map', '[out]', '-map', `${clips.length}:a`,
+    '-filter_complex', parts.join(';'), '-map', '[out]', '-map', `${clips.length + (card ? 1 : 0)}:a`,
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-profile:v', 'high', '-level', '4.1', '-pix_fmt', 'yuv420p',
     '-r', String(FPS), '-threads', '2', '-c:a', 'aac', '-b:a', '128k', '-t', total.toFixed(3), '-movflags', '+faststart', outFile)
   await run('ffmpeg', args)
@@ -147,8 +160,15 @@ async function processJob(baseUrl, token, job) {
         local.push(f)
       }
       if (!local.length) throw new Error('trabalho sem trechos')
+      // Encerramento de marca (só quando a função pediu): baixa o PNG e emenda no fim.
+      let card = null
+      if (o.endcard_url) {
+        const cf = path.join(dir, `card-${oi}.png`)
+        await download(o.endcard_url, cf)
+        card = { file: cf, seconds: Math.min(6, Math.max(1, Number(o.endcard_seconds) || 2.5)) }
+      }
       const out = path.join(dir, `out-${oi}.mp4`)
-      const total = await finishReel(local, out)
+      const total = await finishReel(local, out, card)
       const cover = path.join(dir, `out-${oi}.jpg`)
       await run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-ss', Math.min(1, total / 3).toFixed(2), '-i', out, '-frames:v', '1', '-q:v', '3', cover], 60_000)
       const bytes = await upload(up.upload_url, out, 'video/mp4')
@@ -204,6 +224,12 @@ async function main() {
     await run('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=24:duration=3', '-pix_fmt', 'yuv420p', b])
     const t = await finishReel([a, b], o)
     log('selftest ok', t.toFixed(2) + 's', ((await stat(o)).size / 1e6).toFixed(2) + 'MB')
+    // Com encerramento (PNG de teste 1080×1920): precisa durar 2 trechos + encerramento − fusões.
+    const png = path.join(TMP, 'st-card.png'), o2 = path.join(TMP, 'st-out-card.mp4')
+    await run('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `color=c=0x111111:s=${W}x${H}:d=1`, '-frames:v', '1', png])
+    const t2 = await finishReel([a, b], o2, { file: png, seconds: 2.5 })
+    if (t2 < t + 1.5) throw new Error(`selftest do encerramento: duração ${t2.toFixed(2)}s curta demais`)
+    log('selftest encerramento ok', t2.toFixed(2) + 's')
     await rm(TMP, { recursive: true, force: true })
     return
   }

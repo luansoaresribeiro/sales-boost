@@ -23,7 +23,7 @@ const INSTALL_URL = 'https://getsaleboost.com/vps/install.sh'
 // sozinho pra um arquivo com exatamente este hash — invadir só o site não
 // basta pra rodar código na VPS. AO MUDAR worker.mjs, ATUALIZAR AQUI
 // (`sha256sum public/vps/worker.mjs`) e publicar esta função depois do merge.
-const WORKER_SHA256 = '35afe7353632b42643267a3aa076f55ebe895c9c456d12fe18b5a788b1bd4ee4'
+const WORKER_SHA256 = 'c23bc670ba8e4fc65c7951e7376e41e07369b1757017509726e44856458196b8'
 const UUID = /^[0-9a-f-]{36}$/i
 // deno-lint-ignore no-explicit-any
 type Any = any
@@ -47,6 +47,8 @@ function cleanInfo(v: unknown): Record<string, unknown> {
     os: str(i.os), arch: str(i.arch), cpus: num(i.cpus), mem_total_mb: num(i.mem_total_mb), mem_free_mb: num(i.mem_free_mb),
     disk_free_gb: num(i.disk_free_gb), load1: num(i.load1), ffmpeg: str(i.ffmpeg), node: str(i.node), version: str(i.version),
     jobs_done: num(i.jobs_done),
+    // Capacidades do estúdio (ex.: 'endcard'): o tourEngine só manda encerramento pra quem informa.
+    caps: Array.isArray(i.caps) ? i.caps.filter((c): c is string => typeof c === 'string' && /^[a-z0-9_]{1,30}$/.test(c)).slice(0, 10) : [],
   }
 }
 

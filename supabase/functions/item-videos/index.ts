@@ -36,6 +36,7 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 const KINDS: ClipKind[] = ['room', 'pair', 'opening']
+const WAITING_STUDIO = 'Aguardando estúdio: os trechos do vídeo estão prontos, mas o servidor de vídeo está fora do ar. O vídeo (9:16, com encerramento) é montado sozinho assim que ele voltar — nada sai antes disso.'
 const IG_TEXT_MAX = 1000 // limite de texto de mensagem do Instagram
 
 function json(data: unknown, status = 200) {
@@ -44,7 +45,7 @@ function json(data: unknown, status = 200) {
 
 // deno-lint-ignore no-explicit-any
 type Admin = any
-interface PlanVideo { id: string; company_id: string; status: string; plan: { kind?: string; label?: string; piece_id?: string } | null; photos: string[]; clips: unknown; video_path: string | null; assembly: unknown; updated_at: string }
+interface PlanVideo { id: string; company_id: string; status: string; plan: { kind?: string; label?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number } | null; photos: string[]; clips: unknown; video_path: string | null; assembly: unknown; updated_at: string }
 
 // Avança 1 vídeo (Higgsfield → gravação). Pronto: põe na peça do calendário
 // ligada (plan.piece_id). Falhou: não conta no teto e a peça diz o motivo.
@@ -65,18 +66,31 @@ async function advanceVideo(admin: Admin, supabaseUrl: string, serviceKey: strin
   const headers = hfHeaders()
   if (!headers) return 'processing'
   const kind = (v.plan?.kind ?? 'room') as ClipKind
+  // Tour do calendário com encerramento de marca: só sai pelo estúdio (9:16 + encerramento).
+  const endcard = v.plan?.endcard_url ? { url: v.plan.endcard_url, seconds: Number(v.plan.endcard_seconds) || 2.5 } : null
   const r = await advanceTour(admin, supabaseUrl, serviceKey, headers, await clipPrompt(admin, verticalKey, kind), v as unknown as TourRow,
-    () => [{ path: `plan/${v.company_id}/${v.id}.mp4`, from: 0, to: 1 }], SECONDS[kind])
+    () => [{ path: `plan/${v.company_id}/${v.id}.mp4`, from: 0, to: 1 }], SECONDS[kind], endcard)
   if (r.status === 'completed') return await finish(r.outputs[0].path)
   if (r.status === 'failed') {
+    const studio = r.reason === 'studio'
     // Não cobra no teto o que não foi entregue (a Higgsfield devolve crédito de trecho que falha).
-    await admin.from('video_tours').update({ cost_usd: 0 }).eq('id', v.id)
+    // Falha do estúdio é diferente: os trechos já foram gerados e pagos — o custo fica.
+    if (!studio) await admin.from('video_tours').update({ cost_usd: 0 }).eq('id', v.id)
     if (pieceId) {
       const { data: cur } = await admin.from('marketing_ai_test_content').select('reasoning').eq('id', pieceId).eq('company_id', v.company_id).maybeSingle()
       const notice = keepQueroNotice(cur?.reasoning as string | null)
-      await admin.from('marketing_ai_test_content').update({ reasoning: `O vídeo não saiu: a Higgsfield recusou (costuma ser falta de crédito). Nada foi cobrado.${notice ? ` ${notice}` : ''}` }).eq('id', pieceId).eq('company_id', v.company_id)
+      const msg = studio ? 'O vídeo não saiu: o estúdio de vídeo (servidor) não conseguiu montar. Os trechos já foram gerados e cobrados; fale com o suporte.' : 'O vídeo não saiu: a Higgsfield recusou (costuma ser falta de crédito). Nada foi cobrado.'
+      await admin.from('marketing_ai_test_content').update({ reasoning: `${msg}${notice ? ` ${notice}` : ''}` }).eq('id', pieceId).eq('company_id', v.company_id)
     }
     return 'failed'
+  }
+  if (r.status === 'processing' && r.waiting === 'studio' && pieceId) {
+    // "Aguardando estúdio": o vídeo está pronto pra montar, mas o servidor está fora do ar. Avisa na peça (uma vez).
+    const { data: cur } = await admin.from('marketing_ai_test_content').select('reasoning').eq('id', pieceId).eq('company_id', v.company_id).maybeSingle()
+    if (!String(cur?.reasoning ?? '').startsWith(WAITING_STUDIO)) {
+      const notice = keepQueroNotice(cur?.reasoning as string | null)
+      await admin.from('marketing_ai_test_content').update({ reasoning: `${WAITING_STUDIO}${notice ? ` ${notice}` : ''}` }).eq('id', pieceId).eq('company_id', v.company_id)
+    }
   }
   return 'processing'
 }
@@ -91,7 +105,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const admin = createClient(supabaseUrl, serviceKey)
-    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string }
+    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number }
     const cronSecret = Deno.env.get('CRON_SECRET')
     const isCron = !!cronSecret && body.cron_secret === cronSecret
 
@@ -182,8 +196,11 @@ Deno.serve(async (req) => {
         const { data: piece } = await admin.from('marketing_ai_test_content').select('id').eq('id', body.piece_id).eq('company_id', company.id).maybeSingle()
         pieceId = piece?.id
       }
+      // Encerramento de marca (só no caminho do cron): imagem 1080×1920 feita por código no nosso Storage, nunca por IA.
+      const endcardOk = isCron && typeof body.endcard_url === 'string' && body.endcard_url.startsWith(`${supabaseUrl}/storage/v1/object/public/`)
+      const endcardSec = Math.min(6, Math.max(1, Number(body.endcard_seconds) || 2.5))
       const { data: v, error } = await admin.from('video_tours')
-        .insert({ company_id: company.id, kind: 'plan', item_id: item.id, status: 'generating', photos, clips, plan: { kind, label, ...(pieceId ? { piece_id: pieceId } : {}) }, cost_usd: estimate })
+        .insert({ company_id: company.id, kind: 'plan', item_id: item.id, status: 'generating', photos, clips, plan: { kind, label, ...(pieceId ? { piece_id: pieceId } : {}), ...(endcardOk ? { endcard_url: body.endcard_url, endcard_seconds: endcardSec } : {}) }, cost_usd: estimate })
         .select('id').single()
       if (error) return json({ error: error.message }, 500)
       console.log('[item-videos] vídeo iniciado', company.id, v.id, kind, estimate.toFixed(2), 'USD')

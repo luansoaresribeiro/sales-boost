@@ -916,3 +916,22 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - Sem `deno` no ambiente do agente: a verificação das edge functions foi só pelos testes em node (`--experimental-strip-types`).
 - A cidade da ficha (`news.city`) precisa aparecer no texto da notícia (filtro "região no texto"); notícia que só diz "Rio" é descartada.
 
+## Tour virtual: encerramento e espera pelo estúdio (2026-11-02, PR A)
+
+- **Ordem de publicação:** `vps-worker` (hash novo + `caps`) → esperar a VPS atualizar (até 1 h, ou `install.sh ... update`) →
+  `render-format` → `item-videos` → `creative-generate`. O tour com encerramento só é entregue a um servidor que informe
+  `info.caps` com `endcard`; trabalhador antigo nunca recebe, então o tour fica "Aguardando estúdio" (não quebra, só espera).
+- **Tour com `endcard` NUNCA cai na colagem antiga** (`mp4stream`, 4:5, sem encerramento): `assembly.mode='wait_studio'` já
+  nasce no momento em que trava a montagem. Não mexa nesse ramo sem manter isso. Passou de 48 h esperando, ou o estúdio recusou
+  3 vezes: falha (o custo **fica**, os trechos já foram pagos — o `cost_usd` só zera na falha da Higgsfield).
+- **Tour em espera precisa mexer no `updated_at`** a cada consulta, senão fica sempre na frente da fila do `tick` (limite 10) e
+  trava os outros.
+- O `selftest` do `worker.mjs` agora também monta com encerramento; rode `node worker.mjs selftest` numa cópia fora do repo
+  (ele cria e apaga a pasta `tmp` ao lado do arquivo). Mudou o worker → recalcule `WORKER_SHA256` (regra acima).
+- **Foto do catálogo ganha campos extras** (`room`, `room_conf`, `quality`, `scored_at`, `model`) em `meta.photos[i]`. As telas que
+  regravam `meta.photos` (CatalogItems) precisam copiar o objeto inteiro, não só `{url,path}`, senão a nota se perde (e é paga de novo).
+- `ensurePhotoScores` relê a linha antes de gravar e só preenche foto sem nota; mesmo assim duas vagas pontuando o mesmo imóvel
+  ao mesmo tempo podem pagar a nota 2x (centavos) — por isso o planejamento da semana pontua uma vez por imóvel.
+- Legenda do tour: a trava de palavras é por texto; variação nova de "filmado" passa até entrar em `config.tour.forbidden_claims`.
+- Sem `config.tour` na ficha o código só faz `room` (nunca pair/opening) — de propósito (regra 6).
+

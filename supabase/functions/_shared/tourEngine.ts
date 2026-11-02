@@ -111,7 +111,13 @@ export async function pollClips(headers: Record<string, string>, prompt: string,
 
 export interface Output { path: string; from: number; to: number; nome?: string; upload_url?: string; total?: number; done?: boolean }
 // mode 'vps': quem cola é o estúdio de vídeo na VPS (media_jobs.job_id), não esta função.
-export interface Assembly { urls: string[]; metas: (ClipMeta | null)[]; outputs: Output[]; mode?: 'vps'; job_id?: string; vps_since?: string }
+// Com `endcard` (tour automático do calendário, decisão do dono 2026-11-02) o vídeo SÓ sai pelo estúdio: 9:16 + encerramento
+// de marca. Estúdio fora do ar → mode 'wait_studio' ("aguardando estúdio"), nunca a colagem antiga (4:5, sem encerramento).
+export interface Endcard { url: string; seconds: number }
+export interface Assembly {
+  urls: string[]; metas: (ClipMeta | null)[]; outputs: Output[]; mode?: 'vps' | 'wait_studio'; job_id?: string; vps_since?: string
+  endcard?: Endcard; wait_since?: string; vps_fails?: number
+}
 
 // ---------- acabamento na VPS (estúdio de vídeo, decisão do dono 2026-10-12) ----------
 // Com o interruptor ligado e um servidor online, a colagem vai pra VPS: ela
@@ -121,6 +127,9 @@ export interface Assembly { urls: string[]; metas: (ClipMeta | null)[]; outputs:
 const VPS_ONLINE_MS = 2 * 60_000
 const VPS_IDLE_FALLBACK_MS = 3 * 60_000 // na fila e nenhum servidor online
 const VPS_MAX_WAIT_MS = 20 * 60_000
+const STUDIO_MAX_WAIT_MS = 48 * 3_600_000 // tour com encerramento espera o estúdio voltar até 48 h; depois falha (não solta sem encerramento)
+const STUDIO_MAX_FAILS = 3 // o estúdio recusou o trabalho 3 vezes (ex.: arquivo do encerramento quebrado)
+export const STUDIO_CAP = 'endcard' // o trabalhador informa em info.caps que sabe montar o encerramento
 
 // deno-lint-ignore no-explicit-any
 async function vpsOnline(admin: any): Promise<boolean> {
@@ -133,6 +142,17 @@ async function vpsOnline(admin: any): Promise<boolean> {
 async function vpsEnabled(admin: any): Promise<boolean> {
   const { data } = await admin.from('feature_flags').select('enabled').eq('key', 'vps_reel_finish').maybeSingle()
   return !!data?.enabled && await vpsOnline(admin)
+}
+
+// Estúdio pronto pra montar com encerramento: interruptor ligado + servidor online que sabe fazer o encerramento
+// (um trabalhador antigo, sem a capacidade, ignoraria o encerramento — por isso não serve).
+// deno-lint-ignore no-explicit-any
+async function studioReady(admin: any): Promise<boolean> {
+  const { data: flag } = await admin.from('feature_flags').select('enabled').eq('key', 'vps_reel_finish').maybeSingle()
+  if (!flag?.enabled) return false
+  const { data } = await admin.from('worker_nodes').select('info').eq('status', 'active')
+    .gt('last_seen_at', new Date(Date.now() - VPS_ONLINE_MS).toISOString()).limit(20)
+  return ((data ?? []) as { info?: { caps?: unknown } | null }[]).some(n => Array.isArray(n.info?.caps) && (n.info!.caps as unknown[]).includes(STUDIO_CAP))
 }
 
 async function download(url: string): Promise<Uint8Array> {
@@ -175,13 +195,27 @@ export interface TourRow {
   id: string; status: string; photos: string[]; clips: Clip[]; updated_at: string
   assembly: (Assembly & { errors?: number }) | null
 }
-export type Advance = { status: 'processing'; done: number; total: number } | { status: 'completed'; outputs: Output[] } | { status: 'failed'; reason: string }
+export type Advance = { status: 'processing'; done: number; total: number; waiting?: 'studio' } | { status: 'completed'; outputs: Output[] } | { status: 'failed'; reason: string }
 
 // deno-lint-ignore no-explicit-any
 export async function advanceTour(admin: any, supabaseUrl: string, key: string, headers: Record<string, string>, prompt: string,
-  tour: TourRow, outputsFor: (urls: string[]) => Output[], seconds?: number): Promise<Advance> {
+  tour: TourRow, outputsFor: (urls: string[]) => Output[], seconds?: number, endcard?: Endcard | null): Promise<Advance> {
   const total = tour.clips.length
   const now = () => new Date().toISOString()
+  // Entrega o trabalho de acabamento (com ou sem encerramento) pro estúdio. false = não deu pra criar o trabalho.
+  const startJob = async (a: Assembly): Promise<boolean> => {
+    const { data: job } = await admin.from('media_jobs').insert({
+      kind: 'reel_finish', video_tour_id: tour.id,
+      input: { outputs: a.outputs.map(o => ({ path: o.path, clips: a.urls.slice(o.from, o.to), ...(a.endcard ? { endcard_url: a.endcard.url, endcard_seconds: a.endcard.seconds } : {}) })) },
+    }).select('id').single()
+    if (!job) return false
+    await admin.from('video_tours').update({ assembly: { ...a, mode: 'vps', job_id: job.id, vps_since: now() }, updated_at: now() }).eq('id', tour.id)
+    return true
+  }
+  const failStudio = async (a: Assembly, error: string): Promise<Advance> => {
+    await admin.from('video_tours').update({ status: 'failed', assembly: a, error, updated_at: now() }).eq('id', tour.id)
+    return { status: 'failed', reason: 'studio' }
+  }
 
   if (tour.status === 'generating') {
     const { done, failed, urls } = await pollClips(headers, prompt, tour.photos, tour.clips, seconds)
@@ -193,11 +227,16 @@ export async function advanceTour(admin: any, supabaseUrl: string, key: string, 
       await admin.from('video_tours').update({ clips: tour.clips, updated_at: now() }).eq('id', tour.id)
       return { status: 'processing', done, total }
     }
-    const assembly: Assembly = { urls: urls as string[], metas: urls.map(() => null), outputs: outputsFor(urls as string[]) }
+    const assembly: Assembly = { urls: urls as string[], metas: urls.map(() => null), outputs: outputsFor(urls as string[]),
+      ...(endcard ? { endcard, mode: 'wait_studio' as const, wait_since: now() } : {}) }  // com encerramento: já nasce "aguardando estúdio" (nunca cai na colagem antiga)
     const { data: locked } = await admin.from('video_tours').update({ status: 'assembling', clips: tour.clips, assembly, updated_at: now() })
       .eq('id', tour.id).eq('status', 'generating').select('id, updated_at').maybeSingle()
     if (!locked) return { status: 'processing', done, total }
     tour = { ...tour, status: 'assembling', assembly, updated_at: locked.updated_at }
+    if (endcard) {
+      if (await studioReady(admin) && await startJob(assembly)) return { status: 'processing', done, total }
+      return { status: 'processing', done, total, waiting: 'studio' }
+    }
     if (await vpsEnabled(admin)) {
       const { data: job } = await admin.from('media_jobs').insert({
         kind: 'reel_finish', video_tour_id: tour.id,
@@ -208,6 +247,13 @@ export async function advanceTour(admin: any, supabaseUrl: string, key: string, 
         return { status: 'processing', done, total }
       }
     }
+  } else if (tour.status === 'assembling' && tour.assembly?.mode === 'wait_studio') {
+    // Aguardando o estúdio (VPS) voltar; o resto do tempo só confere. Mexe no updated_at pra não travar a fila do tick.
+    const a = tour.assembly
+    if (Date.now() - new Date(a.wait_since ?? tour.updated_at).getTime() > STUDIO_MAX_WAIT_MS) return await failStudio(a, 'estúdio de vídeo não voltou em 48 h')
+    if (await studioReady(admin) && await startJob(a)) return { status: 'processing', done: total, total }
+    await admin.from('video_tours').update({ updated_at: now() }).eq('id', tour.id).eq('status', 'assembling')
+    return { status: 'processing', done: total, total, waiting: 'studio' }
   } else if (tour.status === 'assembling' && tour.assembly?.mode === 'vps') {
     const a = tour.assembly
     const { data: job } = await admin.from('media_jobs').select('status').eq('id', a.job_id).maybeSingle()
@@ -216,11 +262,18 @@ export async function advanceTour(admin: any, supabaseUrl: string, key: string, 
       (job.status === 'queued' && waited > VPS_IDLE_FALLBACK_MS && !await vpsOnline(admin))
     if (!stuck) return { status: 'processing', done: total, total }
     // Volta pra colagem antiga; a VPS não consegue mais entregar este trabalho (complete exige 'running').
+    // Exceção (tour com encerramento): nunca cola sem encerramento — volta a "aguardando estúdio" (3 recusas = falha).
     console.log('[tour] VPS não entregou, voltando pra colagem antiga', tour.id, job?.status ?? 'sem trabalho')
     if (job && job.status !== 'failed' && job.status !== 'done') {
       await admin.from('media_jobs').update({ status: 'failed', error: 'tempo esgotado — tour voltou pra colagem antiga', updated_at: now() }).eq('id', a.job_id)
     }
     const { mode: _m, job_id: _j, vps_since: _s, ...rest } = a
+    if (a.endcard) {
+      const fails = (a.vps_fails ?? 0) + (job?.status === 'failed' ? 1 : 0)
+      if (fails >= STUDIO_MAX_FAILS) return await failStudio({ ...rest, vps_fails: fails }, 'estúdio de vídeo recusou o trabalho 3 vezes')
+      await admin.from('video_tours').update({ assembly: { ...rest, mode: 'wait_studio', vps_fails: fails }, updated_at: now() }).eq('id', tour.id).eq('status', 'assembling')
+      return { status: 'processing', done: total, total, waiting: 'studio' }
+    }
     await admin.from('video_tours').update({ assembly: rest, updated_at: new Date(Date.now() - LEASE_MS).toISOString() })
       .eq('id', tour.id).eq('status', 'assembling')
     return { status: 'processing', done: total, total }
