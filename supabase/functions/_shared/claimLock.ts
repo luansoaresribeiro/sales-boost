@@ -195,3 +195,15 @@ export async function loadClaimCfg(admin: Admin, verticalKey: string | null, lan
     return { terms: terms.length ? terms : null, fieldMap: c.opportunity_fields && typeof c.opportunity_fields === 'object' ? c.opportunity_fields : null, photoWhenItem: c.carousel_cover?.educativo?.photo_when_item === true }
   } catch (e) { console.error('claimLock: ficha não lida (segue com os termos genéricos)', e); return none }
 }
+
+// ── Nota: motivos de nota baixa decididos em CÓDIGO (sem chamada de IA) ──────────────────────────────────────────
+export const QUALITY_PENALTY = 25
+export interface QualityFlag { key: 'afirmacao_sem_fonte' | 'capa_fraca'; label: string }
+/** "Tirei afirmação sem fonte" no reasoning = a IA tentou afirmar sem dado (a frase já saiu, mas a peça precisa de olho). Capa-índice (itens na capa) = capa fraca. */
+export function qualityFlags(p: { reasoning?: string | null; slides?: unknown }): QualityFlag[] {
+  const out: QualityFlag[] = []
+  if (/Tirei afirmação sem fonte/.test(String(p.reasoning ?? ''))) out.push({ key: 'afirmacao_sem_fonte', label: 'a IA tentou afirmar algo de mercado sem fonte (a frase foi retirada)' })
+  const first = Array.isArray(p.slides) ? (p.slides[0] as { layout?: string; text?: string } | undefined) : undefined
+  if (first && first.layout === 'capa' && /( · .+){2,}/.test(String(first.text ?? ''))) out.push({ key: 'capa_fraca', label: 'a capa parece um índice dos slides, não um gancho' })
+  return out
+}

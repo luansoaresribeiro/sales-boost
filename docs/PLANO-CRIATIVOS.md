@@ -794,9 +794,14 @@ Em código na branch `claude/nifty-shannon-ysp818-carrosseis` (sem deploy e sem 
   é proibido de repetir tema/ângulo; conferência em código (sobreposição de palavras) → 1 refação do texto, senão aviso no
   `reasoning`. **Limite:** as vagas da semana são geradas em paralelo, então duas peças da MESMA semana ainda podem se
   cruzar; o que já foi gravado é visto.
-- **Divergência achada (não mexi):** o carrossel educativo grava só `slides` + `image_url`; **`media` fica vazio**, e a
-  aprovação (`agent-actions`) publica `media[]` como carrossel e, sem ele, só a capa como foto única. Confirmar com o dono
-  se educativo deve publicar todos os slides (provável bug); a correção é uma linha no `UPDATE` final do `generateForCompany`.
+- **Divergência corrigida (2026-11-02):** o educativo gravava só `slides` + `image_url` e a aprovação publicava só a capa. Agora
+  `generateForCompany` grava `media` com as URLs de todos os slides, na mesma ordem (`{url,type:'photo'}`, até 10 — o mesmo
+  formato que `agent-actions` lê em `publishCarouselToInstagram`). Só vale para peças novas; as antigas seguem sem `media`.
+- **Nota (item 8):** `content-test` `score` aplica `qualityFlags` (em `claimLock.ts`, sem IA): "Tirei afirmação sem fonte" no
+  reasoning e capa-índice valem -25 cada na nota e a peça não vai sozinha pro Vault; os motivos ficam em `scores.flags`.
+- **Pulado (item 3):** preencher `item_id` na vaga educativa por afinidade tema×imóvel não é simples nem determinístico (precisa
+  mapear tema→bairro/imóvel, escolher entre vários imóveis e respeitar rodízio de uso). Fica para depois; hoje a foto no
+  educativo só aparece quando a vaga já traz `item_id`.
 - **Testes:** `scripts/test-claim-lock.mjs` (as 4 frases do relato, termos da migration), `scripts/test-carousel-quality.mjs`
   (capa, foto, oferta, bairro, tema repetido).
 

@@ -927,7 +927,7 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - **Foto de fundo no `render-format` baixa e embute a foto inteira** (`toDataUri`): renderizar 5–10 slides com foto em paralelo
   pode estourar `WORKER_RESOURCE_LIMIT`. O `catalog-package` renderiza em lotes de 2. O bucket `post-images` aceita 5 MB.
 - **`slides` ≠ `media`:** a prévia lê `slides[].image_url` (senão `media`, senão `image_url`); a publicação (`agent-actions`) lê só
-  `media[]`/`image_url`. Peça que grava só um dos dois mostra uma coisa e publica outra — o educativo hoje grava só `slides`.
+  `media[]`/`image_url`. Peça que grava só um dos dois mostra uma coisa e publica outra — o educativo gravava só `slides` (corrigido em 2026-11-02: agora grava `media` igual a `slides`; peças antigas continuam sem).
 - **As vagas da semana são geradas em paralelo** (cada `plan_slot` é uma invocação): a lista de "temas recentes" só enxerga o
   que já foi gravado, então a repetição dentro da mesma semana é reduzida, não eliminada.
 - Sem `deno` nem Postgres no ambiente do agente: edge functions conferidas por testes em Node + `tsc` nos arquivos `_shared`;

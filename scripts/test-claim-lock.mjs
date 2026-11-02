@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 // Roda: node --experimental-strip-types scripts/test-claim-lock.mjs
 // Trava de afirmação de mercado do calendário (claimLock.ts). Os termos vêm das MIGRATIONS de verdade
 // (a lista antiga de 29/10 + os termos acrescentados em 02/11), como a ficha de produção ficará depois de aplicar.
-import { claimCtx, claimIssues, claimNotice, cutClaims, cutHashtags, cutSlide, itemFacts, lockDeckClaims, lockText, PRICE_RANGE_ISSUE, textIssues } from '../supabase/functions/_shared/claimLock.ts'
+import { qualityFlags, QUALITY_PENALTY, claimCtx, claimIssues, claimNotice, cutClaims, cutHashtags, cutSlide, itemFacts, lockDeckClaims, lockText, PRICE_RANGE_ISSUE, textIssues } from '../supabase/functions/_shared/claimLock.ts'
 
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
@@ -92,5 +92,10 @@ assert.equal(c.slide.text, ''); ok('cutSlide (usado no retry de overflow) corta 
 
 // frase vizinha de "ate" não dispara faixa à toa
 assert.equal(textIssues('Visite até sábado e conheça.', empty).length, 0); ok('"até" sem valor em dinheiro não é faixa de preço')
+
+// ── nota: motivos de nota baixa em código ───────────────────────────────────────────────────────────────────────
+assert.deepEqual(qualityFlags({ reasoning: 'Ok. Tirei afirmação sem fonte: “x”.', slides: [] }).map(f => f.key), ['afirmacao_sem_fonte'])
+assert.deepEqual(qualityFlags({ reasoning: '', slides: [{ layout: 'capa', text: 'Promessa — Um · Dois · Três' }] }).map(f => f.key), ['capa_fraca'])
+assert.deepEqual(qualityFlags({ reasoning: null, slides: [{ layout: 'capa', text: 'Gancho forte' }, { layout: 'lista', text: 'a — b · c · d' }] }), []); assert.ok(QUALITY_PENALTY > 0); ok('afirmação sem fonte e capa-índice viram motivo de nota baixa; capa boa não')
 
 console.log(`\n${n} verificações ok`)

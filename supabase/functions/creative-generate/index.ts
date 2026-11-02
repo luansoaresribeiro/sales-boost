@@ -983,7 +983,9 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
       cta: capWords(String(post.cta ?? brief.cta ?? ''), 28),
     }, cardBrand)
   }
-  await admin.from('marketing_ai_test_content').update({ image_url: mainImage, slides }).eq('id', inserted.id)
+  // Educativo (slides do sistema): `media` com as MESMAS URLs de `slides`, na mesma ordem — a aprovação (agent-actions) publica media[] como carrossel (2–10); sem ele saía só a capa.
+  const deckMedia = opts.deck && fmt === 'carrossel' && slides ? slides.filter(x => x.image_url).slice(0, 10).map(x => ({ url: x.image_url as string, type: 'photo' })) : []
+  await admin.from('marketing_ai_test_content').update({ image_url: mainImage, slides, ...(deckMedia.length > 1 ? { media: deckMedia } : {}) }).eq('id', inserted.id)
 
   // Se veio de uma ideia do Creative Agent, marca ela como usada.
   if (opts.ideaId) await admin.from('marketing_ai_ideas').update({ status: 'used' }).eq('id', opts.ideaId).eq('company_id', company.id)

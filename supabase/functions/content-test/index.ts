@@ -12,6 +12,7 @@
  * verdade no Instagram e vira um post na aba Posts; o rascunho de teste é
  * removido. Nada aqui publica sozinho — segue a regra human-in-the-loop.
  */
+import { QUALITY_PENALTY, qualityFlags } from '../_shared/claimLock.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { autoRedoEligible, newNumbers } from '../_shared/autoRedo.ts'
@@ -319,8 +320,8 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       const testId = String(body.test_id ?? '')
       if (!testId) return json({ error: 'test_id é obrigatório' }, 400)
       const { data: tRow } = await admin.from('marketing_ai_test_content')
-        .select('id, idea, caption, hashtags, cta, format, image_url').eq('id', testId).eq('company_id', company.id).maybeSingle()
-      const t = tRow as (PostShape & { id: string; image_url: string | null }) | null
+        .select('id, idea, caption, hashtags, cta, format, image_url, reasoning, slides').eq('id', testId).eq('company_id', company.id).maybeSingle()
+      const t = tRow as (PostShape & { id: string; image_url: string | null; reasoning?: string | null; slides?: unknown }) | null
       if (!t) return json({ error: 'Post de teste não encontrado' }, 404)
       const config = await loadConfig(admin, company)
       const { scores, quality } = await scoreContent(anthropicKey, config, company, { idea: t.idea, caption: t.caption, hashtags: t.hashtags, cta: t.cta, format: t.format, imageUrl: t.image_url, feedPattern: await loadFeedPattern(admin, company.id) })
@@ -330,11 +331,14 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       // Só quando algo está claramente ruim é que fica esperando na Área de
       // Testes com o botão "Corrigir". Vale pra 3 posts/dia do trial e 1/dia
       // do plano normal — mesma regra, sem depender de quantos posts saíram.
-      const coherenceBad = quality < COHERENCE_BAD_THRESHOLD
+      // PR B: "afirmação sem fonte" e "capa fraca/índice" contam como nota baixa (decidido em código, sem IA): -25 cada e não vai sozinha pro Vault.
+      const flags = qualityFlags(t)
+      const finalQuality = Math.max(0, quality - flags.length * QUALITY_PENALTY)
+      const coherenceBad = finalQuality < COHERENCE_BAD_THRESHOLD || flags.length > 0
       const visualBad = (scores.visual_coherence?.score ?? 100) < COHERENCE_BAD_THRESHOLD
       const autoVault = !coherenceBad && !visualBad
-      await admin.from('marketing_ai_test_content').update({ scores, quality_score: quality, ...(autoVault ? { status: 'vault' } : {}) }).eq('id', testId)
-      return json({ ok: true, scores, quality_score: quality, auto_vault: autoVault })
+      await admin.from('marketing_ai_test_content').update({ scores: flags.length ? { ...scores, flags: flags.map(f => f.label) } : scores, quality_score: finalQuality, ...(autoVault ? { status: 'vault' } : {}) }).eq('id', testId)
+      return json({ ok: true, scores, quality_score: finalQuality, auto_vault: autoVault })
     }
 
     // ── Regenerar por problema de coerência (Auto Feedback Loop) ────────
