@@ -45,7 +45,6 @@ set config = jsonb_set(
       ) u where u.t is not null and btrim(u.t) <> '' and u.t not in (select jsonb_array_elements_text($json$["most expensive","cheaper than"]$json$::jsonb)) group by u.t
     ) x
   ), true)
-)
 where vp.key = 'imoveis_rio'
   and jsonb_typeof(vp.config->'opportunity_texts'->'market_claims') = 'object';
 
