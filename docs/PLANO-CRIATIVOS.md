@@ -179,6 +179,34 @@ diferentes. O post só repete a forma exata que está na fonte.
 Tudo continua: vídeo só com foto real, Higgsfield só move a câmera, nada vai
 ao ar sem aprovação, teto de custo por cliente.
 
+### PR A — qualidade do tour (feito no código em 2026-11-02; branch `claude/nifty-shannon-ysp818-tour`, ainda NÃO publicado)
+
+Decisões do dono em [DECISIONS.md](DECISIONS.md#2026-11-02--tour-virtual-pr-a-qualidade-do-tour). O que mudou no automático
+(`creative-generate` → `planWeekFromStrategy` / `runVideoSlot`):
+
+| Antes (conferido em 2026-10-21) | Agora |
+|---|---|
+| Foto **sorteada** (`Math.random`) entre as não usadas | `_shared/photoScore.ts`: Haiku 4.5 dá nota (qualidade 0-100) e cômodo a cada foto **uma vez** (guarda em `meta.photos[i]`: `room`, `room_conf`, `quality`, `scored_at`, `model`, casando pela `url`; sem migration). `_shared/tourPick.ts` escolhe: nota ≥ piso, cômodo "evitar" (banheiro/corredor/área de serviço) só sem alternativa, prioridade da ficha, foto ainda não usada, **sem repetir o cômodo dos 2 últimos tours do imóvel** e sem repetir foto/cômodo entre as vagas da mesma semana. Foto sem nota = último recurso (nunca inventa nota). |
+| Tipo **sempre `room`** | Tipo vem do formato da vaga (`video_comodo`→room, `video_dois_comodos`→pair, `video_abertura_vista`→opening). Se nenhuma vaga da semana pediu pair/opening, a **2ª vaga** vira `pair` ou `opening` (alterna por semana). `opening` só com foto real de fachada/vista (confiança ≥ 0,6 e qualidade ≥ piso). `pair` só com 2 cômodos que a **ficha** lista como vizinhos, na ordem da ficha. Impossível → cai (pair → opening → room) e a peça diz por quê. |
+| Planejamento por vaga independente (corrida) | `planWeekFromStrategy` decide foto+tipo de **todas** as vagas de vídeo de uma vez (`planTours`) e manda no `SlotJob.tour`. Peça avulsa ("Gerar agora") escolhe na hora (`chooseTour`). |
+| Rodízio de imóvel por uso nas últimas 3 semanas | + **no máximo 1 tour por imóvel por semana** (só repete se só houver 1 imóvel elegível). |
+| Legenda "Reels curto (5 s)", sem trava | Prompt: o vídeo é **animação por IA** de foto real; nunca "filmado"; **sem duração/"segundos"**; não abrir como as últimas 6 legendas do imóvel. `_shared/captionGuard.ts` confere em código (lista `config.tour.forbidden_claims` + padrão de segundos + abertura de 4 palavras): reescreve **1 vez**; se ainda reprovar, a frase proibida sai em código. Aviso em `reasoning`. |
+| Vídeo 4:5 sem encerramento (fallback `mp4stream`) | Tour do calendário **só sai pelo estúdio (VPS)**: 1080×1920 + encerramento de ~2,5 s (fundo escuro da marca, logo + bairro + CTA sempre; preço **só se cadastrado**, mesmo valor com milhar e moeda: "R$ 3.000.000"; 0 não aparece). O encerramento é um PNG feito por código (`render-format`, template `tour_endcard`), emendado pelo `worker.mjs` com fusão. **VPS fora do ar = a peça fica "Aguardando estúdio" SEM gastar (o pedido fica em `concept.tour_pending` e o tick do `item-videos` retoma e só então paga os trechos)**; depois de montado, se o estúdio cair, espera e remonta (máx. 48 h; depois falha avisando). |
+| `pair` sem aviso | Toda peça `pair` leva em `reasoning`: "Aviso do tour: passagem entre cômodos não confirmada por planta…". |
+
+Ficha (regra 6, `20261102110000_tour_ficha.sql`): `config.tour` = `rooms`, `adjacent_rooms` (sala↔varanda, sala↔cozinha, sala↔sala de jantar,
+cozinha↔área de serviço, quarto↔banheiro, quarto↔varanda, sala↔hall, sala de jantar↔cozinha, hall↔sala de jantar), `opening_rooms`,
+`room_priority`, `avoid_rooms`, `min_quality`, `min_room_conf`, `recent_exclude`, `forbidden_claims`, `endcard_seconds`,
+`endcard_place_field`/`endcard_price_field` (quais campos do cadastro viram lugar e preço) e `clip_prompts.opening` (câmera sem "revelar"
+o que está fora do quadro). **Sem `config.tour` o código só faz `room`**, pela melhor nota (nunca pair/opening).
+
+**Divergências / limites registrados:**
+- A "vizinhança" do `pair` vem do **tipo** do cômodo, não da planta — por isso o aviso na aprovação.
+- Tour **manual** (tela de vídeos do imóvel) não mudou: continua podendo cair na colagem antiga (4:5, sem encerramento) se a VPS falhar.
+- O catálogo não mostra cômodo/nota da foto na tela (não pedido; só no banco, em `meta.photos[i]`).
+- As legendas do `catalog-package` (carrossel do tour) que afirmam "filmado" **não** foram tocadas (fora do pedido).
+- O teste Higgsfield real (3 vídeos, ≈ US$ 1,34) ainda **não foi feito**: precisa do OK do dono.
+
 ## Identidade visual — o "sistema de slides"
 
 Um único sistema de design no `render-format`, usado por todas as famílias
@@ -255,6 +283,7 @@ rotulada de um jeito.
 
 Imóvel por rodízio (`pickItem`), foto sorteada, vídeo sempre `room` — fase 7,
 não feita. O QUERO já foi corrigido (no ar).
+**Atualização 2026-11-02:** foto/tipo/legenda/encerramento do tour feitos no código (PR A) — ver "PR A — qualidade do tour" na seção Tour virtual; falta publicar e o teste real.
 
 ### Decisões propostas a partir desta análise
 

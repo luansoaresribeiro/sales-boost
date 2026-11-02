@@ -132,6 +132,8 @@ async function telegramDecide(admin: Supa, b: any) {
   // mandar de volta pra testes). Trava o post saindo de 'vault' antes de
   // propor, pra um segundo toque não publicar de novo.
   if (op !== 'Y') return json({ ok: false, message: 'Botão inválido.' }, 400)
+  // Peça de vídeo do calendário ainda sem o vídeo (sendo feito / aguardando o estúdio): não aprova — só a foto de capa sairia.
+  if (item.recipe === 'video_imovel' && !item.video_url) return json({ ok: false, message: '🎬 O vídeo ainda não está pronto. Aguarde ele aparecer no painel antes de aprovar.' })
   const { data: claimed } = await admin.from('marketing_ai_test_content').update({ status: 'publishing' })
     .eq('id', id).eq('status', 'vault').select('*').maybeSingle()
   if (!claimed) return json({ ok: false, message: 'Esse post já saiu do Vault (publicado ou movido no painel).' })
@@ -345,6 +347,9 @@ async function execute(admin: Supa, act: any): Promise<any> {
     // post 'publicado' já com o media_id real — fecha o loop até a
     // instagram-performance conseguir medir esse post depois.
     if (act.ref_type === 'marketing_ai_test_content' && act.ref_id) {
+      // Mesma trava no executor (painel, agendamento): peça de vídeo sem vídeo pronto não publica só a capa.
+      const { data: vp } = await admin.from('marketing_ai_test_content').select('recipe, video_url').eq('id', act.ref_id).eq('company_id', act.company_id).maybeSingle()
+      if (vp?.recipe === 'video_imovel' && !vp.video_url) return await fail('O vídeo desta peça ainda não está pronto — espere ele aparecer e tente de novo.')
       const p = act.payload ?? {}
       const caption = [p.caption, p.cta, p.hashtags].map(x => (x ? String(x) : '').trim()).filter(Boolean).join('\n\n')
       const { data: company } = await admin.from('companies').select('instagram_user_id, instagram_access_token').eq('id', act.company_id).maybeSingle()

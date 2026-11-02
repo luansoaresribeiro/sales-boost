@@ -5,6 +5,7 @@
 // texto. Funções puras (testáveis fora do Deno). O CTA alternativo vem da
 // ficha do setor (config.ctas.sem_automacao) — regra 6.
 import { INTERNAL_NOTE_PREFIX, EMPTY_CAPTION_PREFIX } from './internalNotes.ts'
+import { TOUR_NOTICE_PREFIX } from './tourPick.ts'
 
 export const DEFAULT_CTA_SEM_AUTOMACAO = 'Me chama no direct'
 /** Começo do aviso gravado em reasoning — o item-videos usa pra não apagá-lo. */
@@ -129,10 +130,10 @@ export const queroNotice = (cta: string) =>
   `${QUERO_NOTICE_PREFIX} pra este imóvel: usei '${cta}'. Aprove a resposta em '🎬 Vídeos e resposta do QUERO' no imóvel pra usar 'Comente QUERO'.`
 
 /** Dado o reasoning atual, devolve só os avisos pro dono (ou null) — pra eles sobreviverem às trocas de reasoning.
- *  Corta a partir do PRIMEIRO de 3 começos: aviso do QUERO, recado que saiu da legenda, legenda vazia
- *  (a ordem gravada é QUERO, recado, vazio — então o corte mantém os que existirem). */
+ *  Corta a partir do PRIMEIRO de 4 começos: aviso do QUERO, recado que saiu da legenda, legenda vazia, aviso do tour
+ *  (o texto de antes do primeiro aviso — ex. "vídeo sendo feito" — cai; os avisos depois dele ficam). */
 export const keepQueroNotice = (reasoning: string | null | undefined): string | null => {
   const r = reasoning ?? ''
-  const idx = [QUERO_NOTICE_PREFIX, INTERNAL_NOTE_PREFIX, EMPTY_CAPTION_PREFIX].map(p => r.indexOf(p)).filter(i => i >= 0)
+  const idx = [QUERO_NOTICE_PREFIX, INTERNAL_NOTE_PREFIX, EMPTY_CAPTION_PREFIX, TOUR_NOTICE_PREFIX].map(p => r.indexOf(p)).filter(i => i >= 0)
   return idx.length ? r.slice(Math.min(...idx)) : null
 }
