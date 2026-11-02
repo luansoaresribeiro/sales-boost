@@ -2138,6 +2138,39 @@ sem dado = "sem dado ainda"; o que não foi construído (coleta do Instagram) ap
 somente-leitura (`company_flow_status`), sem afrouxar a RLS. Feito agora: Inteligência de Mercado e Motor de Oportunidades; os outros
 3 vêm no mesmo formato. Detalhes em [ARCHITECTURE.md](ARCHITECTURE.md#faixa-de-fluxo-dos-agentes-2026-11-01).
 
+## 2026-11-02 — Idioma pelo setor (a ficha diz o idioma padrão)
+
+- **Problema achado no teste de conta nova do zero:** um corretor do Rio se cadastrou e a empresa nasceu com
+  `companies.language = 'en'` (padrão da entrada de 2026-10-27), então legendas e ganchos sairiam em inglês.
+- **Decisão do dono:** o idioma padrão vem da **ficha do setor** (`vertical_playbooks.config.default_language`).
+  `imoveis_rio` → `'pt'`. Setor sem essa chave segue em inglês (não contradiz a entrada de 27/10: o inglês continua
+  sendo o padrão geral; só os setores brasileiros nascem em português).
+- **Como funciona:** o gatilho `sync_company_vertical_key` (que já liga tipo de negócio → setor) agora também copia o
+  idioma da ficha quando a empresa entra num setor **pela primeira vez** (cadastro, ou saindo de `generico`). Trocar de
+  setor depois não mexe no idioma que o dono escolheu em Configurações. Empresas antigas não mudam.
+  Migration `20261102100000_idioma_pelo_setor.sql` (aplicada; testada com inserção + rollback: nasce `pt`).
+- A tela já segue o idioma da empresa (sem escolha explícita no navegador), então a conta nova também vê o painel em
+  português depois do onboarding. As telas de cadastro (antes de saber o setor) continuam em inglês — ver pendências
+  do teste de conta nova em [ROADMAP.md](ROADMAP.md).
+
+## 2026-11-01 — Gerador antigo semanal desligado (`generate-posts-weekly`)
+
+- Cron `generate-posts-weekly` (segunda 11h UTC, function `generate-posts`) foi **desagendado** a pedido do dono: o
+  conteúdo vem só do calendário da estratégia. A function continua publicada (não foi removida).
+- **Para religar:** `select cron.schedule('generate-posts-weekly', '0 11 * * 1', $$SELECT net.http_post(url :=
+  'https://miwcxakzyforbahpnpst.supabase.co/functions/v1/generate-posts', headers := '{"Content-Type":
+  "application/json"}'::jsonb, body := json_build_object('cron_secret', (SELECT value FROM _app_config WHERE key =
+  'cron_secret'))::jsonb)$$);`
+
+## 2026-11-02 — Pitch novo e ideia de preço em dólar (em aberto)
+
+- O dono mandou o pitch: dores (não sabe como aumentar a base, não tem tempo, não sabe o que acontece no mercado nem
+  onde a empresa está) → conteúdo com intenção no ritmo do mercado → ativação nos melhores conteúdos → painel que
+  ensina. Guardado em [pitch/PITCH.md](../pitch/PITCH.md) (texto original + versão de trabalho PT/EN).
+- **Preço NÃO decidido.** Ideia: US$ 19 / 29 / 59, com 5 / 15 / 30 posts; o mais caro com avatar, Meta Ads e
+  leitura comercial avançada. Nada muda no código de cobrança até a decisão. Pendências listadas no pitch.
+- O pitch só promete o que existe: impulsionar anúncio e avatar aparecem como "em construção / em breve".
+
 ## 2026-11-02 — Qualidade dos carrosséis (PR B)
 
 Decisões do dono para o PR B (detalhes em [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md#pr-b--qualidade-dos-carrosséis-2026-11-02)):

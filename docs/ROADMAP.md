@@ -4,6 +4,24 @@
 > pronto, arquivos envolvidos, riscos, e se envolve ALTERAÇÃO ARRISCADA
 > (ver CLAUDE.md).
 
+## Foco atual (dono, 2026-11-01) — qualidade antes do 1º cliente
+
+> As prioridades P0–P4 abaixo continuam valendo; este é o trabalho em andamento agora.
+
+- [ ] **PR A — tour virtual:** foto por nota (não sorteio), tipos 1 cômodo / 2 cômodos / abertura, 9:16 com
+  encerramento de marca por código, legenda que diz que é animação de foto real, 1 tour por imóvel por semana.
+  Em teste/correção (2026-11-02).
+- [ ] **PR B — carrosséis:** trava de afirmação de mercado em toda peça do calendário, capa-gancho (nunca índice),
+  oferta com capa de foto + faixa de dados (até 7 slides), "3 coisas perto" no sistema de slides, sem tema repetido.
+  Em teste (2026-11-02).
+- [ ] **PR C — validação do zero:** conta "Teste Zero Imóveis" criada pelo cadastro normal (2 imóveis do Leblon,
+  5 fotos cada, sem logo). Depois do deploy de A e B: gerar a 1ª semana, dar nota 1–5 a cada peça com prints.
+  *Pronto quando:* todas as peças 4+.
+- [ ] **Primeira impressão do cliente novo** — achados do cadastro do zero (ver o item no fim deste arquivo).
+- [ ] **Preço e pitch** — ideia de 3 planos em dólar, não decidida ([pitch/PITCH.md](../pitch/PITCH.md)).
+- **Adiado pelo dono:** fechar o ciclo publicar → medir → aprender; juntar estratégia com notícias/oportunidades;
+  fluxo de Resultados (código parado na branch `results-flow`, sem QA).
+
 ## P0 — Instagram certo conectado
 
 - **Objetivo:** o @ certo conectado, sem duplicidade entre empresas, e um
@@ -535,3 +553,19 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
   (código pronto; falta aplicar a migration `20261101200000_company_flow_status.sql` e publicar o site). **Faltam 3 agentes, no mesmo
   formato** (`FlowStrip` + um hook + `flowStripSteps`): Estratégia, Ativação, Resultados e Aprendizado. *Pronto quando:* cada agente mostra
   os passos reais com status/última vez/contagens vindos de dado real, conferidos contra o código da área.
+- [ ] **Primeira impressão do cliente novo (achados do cadastro do zero, 2026-11-02)** — conta "Teste Zero Imóveis"
+  (`luan26ribeiro+teste3`, Instagram não conectado). ✅ Idioma do conteúdo pelo setor (ver DECISIONS 2026-11-02). **Falta:**
+  1. Telas de cadastro sempre em inglês, sem seletor PT/EN (só a home tem); aviso de cookies em inglês; mockup da home com "UNITED STATES".
+  2. Palavras em inglês nas telas em PT: "Growth Potential", "Growth Ready", "Social Selling", "GROWTH OS", "Business Progress",
+     "Trial de Crescimento", "SDR".
+  3. "Hermes" aparece sem explicação (onboarding passo 3, painel, sino, Telegram).
+  4. Status do plano contraditório: "Plano Free" + "modo demonstração" + "Trial dia 1 de 7" + "Gratuito — 5 posts/mês" + pop-up de cupom.
+  5. **Diagnóstico inventa número** ("ficou 30 dias no mercado e saiu pelo valor pedido") — quebra a regra 5; e "concorrentes fortes"
+     com 13/40 seguidores, "7.4%" ao lado de "1.380", "em Rio de Janeiro", tempo estimado diferente em cada tela.
+  6. Cadastro de imóvel: sem campo de título; "em Leblon" (deveria "no Leblon"); preço sem separador ("R$ 3000000"); a 1ª foto vira
+     capa sem perguntar (a cobertura ficou com a pia do banheiro); campos estreitos cortam o texto.
+  7. Respostas do onboarding não aparecem em Configurações (e-mail, objetivo); opções genéricas que não servem pra imóveis ("ticket médio").
+  8. Sino: contador 2 com 3 itens; pisca "Tudo em dia"; CRECI "preencher depois" conta como pendente; frequência lida do Instagram some
+     com um toque. Perguntas: "(até 3) (até 3)"; caixa de bairros salva texto não adicionado.
+  Prints: pasta do teste (sessão de 2026-11-02). *Pronto quando:* um cadastro novo de corretor do Rio passa pelo fluxo todo em português,
+  sem número inventado e sem informação contraditória sobre o plano.
