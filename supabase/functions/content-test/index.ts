@@ -337,7 +337,9 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
       const coherenceBad = finalQuality < COHERENCE_BAD_THRESHOLD || flags.length > 0
       const visualBad = (scores.visual_coherence?.score ?? 100) < COHERENCE_BAD_THRESHOLD
       const autoVault = !coherenceBad && !visualBad
-      await admin.from('marketing_ai_test_content').update({ scores: flags.length ? { ...scores, flags: flags.map(f => f.label) } : scores, quality_score: finalQuality, ...(autoVault ? { status: 'vault' } : {}) }).eq('id', testId)
+      // O motivo vai pro reasoning (a tela mostra); marcador "Nota reduzida:" evita repetir se a nota for refeita.
+      const why = flags.length && !/Nota reduzida:/.test(String(t.reasoning ?? '')) ? `${t.reasoning ?? ''} Nota reduzida: ${flags.map(f => f.label).join('; ')}.`.trim() : null
+      await admin.from('marketing_ai_test_content').update({ scores, quality_score: finalQuality, ...(why ? { reasoning: why } : {}), ...(autoVault ? { status: 'vault' } : {}) }).eq('id', testId)
       return json({ ok: true, scores, quality_score: finalQuality, auto_vault: autoVault })
     }
 

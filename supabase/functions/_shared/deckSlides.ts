@@ -5,7 +5,6 @@
 import { COVER_STYLES, SLIDE_LAYOUTS, clean } from './slideSystem.ts'
 import { sanitizeCaptionCta, type CtaDecision } from './videoCta.ts'
 
-const CLAIM_RULE = 'MERCADO: sem comparativo nem superlativo de mercado sem dado ("mais valorizado", "um dos mais desejados", "vale cada centavo", "imperdível") e sem faixa de preço ("acima de R$ X") que não esteja nos dados cadastrados. A trava em código remove o que sobrar.'
 export interface DeckSlide { layout: string; title: string; text: string; items: string; highlight: string; cta: string }
 
 const MIDDLE = ['lista', 'passos', 'comparacao', 'destaque'] as const
@@ -88,7 +87,8 @@ export const numbersOf = (txt: string): Set<string> => new Set((txt.match(numRe)
 /** Regras do prompt do carrossel (limites curtos por campo — o render mede o resto). */
 /** Modo do tema (deckTopic.ts): regulado = só dicas conferidas; geral = sem fato; leve/ausente = como sempre foi. */
 export interface DeckTopicRules { mode: 'regulado' | 'geral' | 'leve'; tipCount?: number }
-export function deckPromptRules(coverStyle: string, brandCta: string, topic?: DeckTopicRules): string {
+/** `claimRule` = linha de afirmação de mercado montada da ficha (claimLock.claimPromptRule); vazio = nada é acrescentado. */
+export function deckPromptRules(coverStyle: string, brandCta: string, topic?: DeckTopicRules, claimRule = ''): string {
   // A capa prende; nunca é índice (lista dos slides seguintes) — 'lista' saiu do rodízio em 2026-11-02.
   const capa = coverStyle === 'pergunta' ? '"title" = uma PERGUNTA que o público se faz (até 70 caracteres)'
     : coverStyle === 'erro' ? '"title" = um ERRO COMUM que o público comete, dito de frente (ex.: "O erro que faz você …"; até 70 caracteres)'
@@ -107,8 +107,7 @@ ${topic?.mode === 'regulado'
     : topic?.mode === 'geral'
       ? '  • SEM FATOS: dica GERAL e prática, sem número, prazo, taxa, valor, percentual nem nome de lei, imposto ou programa, e sem afirmar nenhuma regra.'
       : '  • NÚMEROS: só use número, preço, prazo ou estatística que esteja nos dados fornecidos acima. Na dúvida, escreva sem número.'}
-  • ${CLAIM_RULE}
-  Deixe "image" vazio.
+${claimRule ? `  ${claimRule}` : ''}  Deixe "image" vazio.
 `
 }
 

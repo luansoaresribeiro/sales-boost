@@ -932,4 +932,6 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
   que já foi gravado, então a repetição dentro da mesma semana é reduzida, não eliminada.
 - Sem `deno` nem Postgres no ambiente do agente: edge functions conferidas por testes em Node + `tsc` nos arquivos `_shared`;
   a migration de 02/11 foi só lida, **não executada** — rodar 2x num banco de teste antes de confiar.
+- **Termo solto na lista de mercado vira falso positivo** ("o melhor", "único", "exclusivo", "em alta" cortavam "o melhor caminho", "sala única", "temporada em alta"). Use frases específicas; a trava corta a frase inteira. Preço do cadastro pode vir como "1,5 mi"/"850 mil": `formatPrice` lê o multiplicador e, se ambíguo ("12.5", "1,500"), não mostra.
+- **`renderGraphicCardFull`:** o 6º parâmetro está reservado (`_size`, do PR A); a foto de fundo é o 7º.
 

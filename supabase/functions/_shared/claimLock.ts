@@ -18,10 +18,17 @@ import { norm, type Lang } from './opportunityEngine.ts'
 import { normalizeSlide, rewritePrompt, type DeckSlide } from './deckSlides.ts'
 import { parseJson } from './faqCheck.ts'
 
-export const PRICE_RANGE_ISSUE = 'faixa de preço sem fonte'
+export const PRICE_RANGE_ISSUE = 'valor em dinheiro sem fonte'
 
-/** Linha de reforço pro prompt de escrita (a trava em código é quem decide; isto só reduz o retrabalho). */
-export const CLAIM_PROMPT_RULE = '- AFIRMAÇÃO DE MERCADO: nada de comparativo nem superlativo de mercado sem dado ("mais valorizado", "um dos mais desejados", "endereço mais procurado", "vale cada centavo", "imperdível", "oportunidade única") e nada de faixa de preço ("acima de R$ X", "a partir de R$ X") que não esteja nos dados cadastrados. Descreva só o que os dados dizem, sem qualificar o local, o valor nem a demanda.\n'
+/**
+ * Linha de reforço pro prompt de escrita (a trava em código é quem decide; isto só reduz o retrabalho). Os exemplos vêm
+ * da FICHA (market_claims) — regra 6. Ficha sem a lista (setor genérico) = '' e o prompt fica idêntico ao de antes.
+ */
+export function claimPromptRule(fichaTerms: string[] | null | undefined, bullet = '- '): string {
+  const terms = (fichaTerms ?? []).filter(t => typeof t === 'string' && t.trim()).slice(0, 10)
+  if (!terms.length) return ''
+  return `${bullet}AFIRMAÇÃO DE MERCADO: nada de comparativo nem superlativo de mercado sem dado, e nenhum valor em dinheiro nem faixa de preço que não esteja nos dados cadastrados. Estes termos só valem se estiverem escritos nos dados cadastrados: ${terms.join(', ')}. Descreva só o que os dados dizem, sem qualificar o local, o valor nem a demanda.\n`
+}
 
 export interface ClaimCtx { guard: ClaimGuard; allowed: AllowedNumbers }
 type NumSource = string | { text: string; numTags?: { value: string; unit: 'cur' | 'bed' }[] }
@@ -43,16 +50,17 @@ export function itemFacts(title: string, fields: Record<string, unknown> | null 
   return { texts, nums }
 }
 
-// Faixa/comparação de preço: sinal de faixa (acima de, a partir de, até, entre…) + valor em moeda na MESMA frase.
-const RANGE_CUE = /(?:^|[^a-z])(?:acima|abaixo|a partir|ate|mais de|menos de|passa de|passam de|superior|inferior|faixa|entre|from|above|below|under|over|up to|starting at)(?:$|[^a-z])/
-const MONEY = /(?:r\$|us\$|\$)\s*\d|\d[\d.,]*\s*(?:mi|milhao|milhoes|mil|reais|k)(?![a-z])/
+// Valor em dinheiro solto ("R$ 1,5 mi", "850 mil reais", "1.5 million"): em peça do calendário só vale se o valor, com unidade, está
+// nos fatos cadastrados (regra 5) — com ou sem "acima de/a partir de". Confere só os trechos de dinheiro, não os outros números da frase.
+const MONEY_G = /(?:r\$|us\$|\$)\s*\d[\d.,]*(?:\s*(?:milhoes|milhao|millions?|mil|mi|k)(?![a-z]))?|\d[\d.,]*\s*(?:milhoes|milhao|millions?|(?:mil|mi|k)?\s*reais)(?![a-z])/g
 
-/** O que a frase afirma sem fonte: termos da ficha que não estão nos fatos e/ou faixa de preço sem valor nos fatos. */
+/** O que a frase afirma sem fonte: termos da ficha que não estão nos fatos e/ou valor em dinheiro sem valor nos fatos. */
 export function claimIssues(sentence: string, ctx: ClaimCtx): string[] {
   const n = norm(sentence)
   if (!n) return []
   const out = ctx.guard.terms.filter(t => { const re = claimRe(t); return re.test(n) && !re.test(ctx.guard.factsNorm) })
-  if (RANGE_CUE.test(n) && MONEY.test(n) && !numbersAllowed(sentence, ctx.allowed)) out.push(PRICE_RANGE_ISSUE)
+  const money = n.match(MONEY_G) ?? []
+  if (money.some(m => !numbersAllowed(m, ctx.allowed))) out.push(PRICE_RANGE_ISSUE)
   return out
 }
 
@@ -138,6 +146,8 @@ export interface LockDeckIn {
   brand: string
   /** Texto neutro quando o corte esvazia capa/fecho (ex.: nome da marca) — nunca texto novo da IA. */
   neutral: string
+  /** CTA seguro da ficha (decideVideoCta) pro botão do fecho quando o dele sai ou vem vazio. */
+  ctaFallback?: string
   /** Trava do QUERO etc. aplicada ao slide reescrito. */
   post?: (s: DeckSlide) => DeckSlide
 }
@@ -161,18 +171,18 @@ export async function lockDeckClaims(a: LockDeckIn): Promise<LockDeckOut> {
         }
       } catch (e) { console.error('claimLock: reescrita do slide falhou', e) }
     }
-    const c = cutSlide(cur, ctx, a.cta)
+    const c = cutSlide(cur, ctx, a.ctaFallback || a.cta)
     removed.push(...c.removed)
     let out = c.slide
+    if (out.layout === 'fecho' && !out.cta) out = { ...out, cta: a.ctaFallback || a.cta }   // fecho sem botão: CTA da ficha
     if (isEmpty(out)) {
       if (out.layout === 'capa' || out.layout === 'fecho') out = { ...out, title: a.neutral }
       else return null
     }
     return out
   }))
-  // Slide do meio que esvaziou sai do carrossel (mínimo de 3 slides); abaixo disso fica um slide neutro (nome da marca).
-  const kept = slides.filter((x): x is DeckSlide => !!x)
-  const finalSlides = kept.length >= Math.min(3, a.slides.length) ? kept : a.slides.map((orig, i) => slides[i] ?? { ...orig, title: a.neutral, text: '', items: '', highlight: '' })
+  // Slide do meio que esvaziou sai do carrossel (nunca vira um slide só com o nome da marca). Sobram capa e fecho no mínimo.
+  const finalSlides = slides.filter((x): x is DeckSlide => !!x)
   const cap = await lockText(a.caption, ctx, ask ? async (iss) => { const r = parseJson<{ caption?: unknown }>(await ask(captionRewritePrompt(a.brand, a.caption, iss), 900), {}); return String(r.caption ?? '').trim() || null } : undefined)
   removed.push(...cap.removed)
   const cta = cutClaims(a.cta, ctx); removed.push(...cta.removed)

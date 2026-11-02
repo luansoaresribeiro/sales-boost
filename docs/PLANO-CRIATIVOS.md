@@ -768,7 +768,7 @@ Em código na branch `claude/nifty-shannon-ysp818-carrosseis` (sem deploy e sem 
   itens, destaque, botão), em `creative-generate` e `catalog-package`. Termos vêm da ficha (`opportunity_texts.market_claims`,
   ampliados pela migration `20261102100000`); em `catalog-package` (só imóveis) sem ficha valem os genéricos de `opportunityOutput.ts`; em `creative-generate` **setor sem lista na ficha não passa pela trava** (regra 6: "premium" de uma cafeteria não é afirmação de mercado). Fatos permitidos =
   cadastro do imóvel citado (`item_id` da vaga) + dicas conferidas (modo regulado). "luxo/nobre/premium/exclusivo" passam só
-  se o cadastro traz a palavra. Faixa de preço ("acima de R$ X", "a partir de…") só vale com o valor + unidade no cadastro;
+  se o cadastro traz a palavra. Qualquer valor em dinheiro ("R$ 1,5 mi", "850 mil reais", "1.5 million"), com ou sem "acima de", só vale com o valor + unidade no cadastro (termos da migration são frases específicas; o reforço do prompt só entra se a ficha tem `market_claims`, com os termos da ficha);
   educativo sem imóvel não cita faixa. Ordem: reescreve 1x (IA, com a lista barrada) → corta só a frase → aviso no
   `reasoning`. Nunca troca por outro adjetivo. Capa/fecho que esvaziam ficam com o nome da marca; slide do meio que
   esvazia sai (mínimo 3 slides). O retry de overflow também passa pelo corte.
@@ -798,7 +798,7 @@ Em código na branch `claude/nifty-shannon-ysp818-carrosseis` (sem deploy e sem 
   `generateForCompany` grava `media` com as URLs de todos os slides, na mesma ordem (`{url,type:'photo'}`, até 10 — o mesmo
   formato que `agent-actions` lê em `publishCarouselToInstagram`). Só vale para peças novas; as antigas seguem sem `media`.
 - **Nota (item 8):** `content-test` `score` aplica `qualityFlags` (em `claimLock.ts`, sem IA): "Tirei afirmação sem fonte" no
-  reasoning e capa-índice valem -25 cada na nota e a peça não vai sozinha pro Vault; os motivos ficam em `scores.flags`.
+  reasoning e capa-índice valem -25 cada na nota e a peça não vai sozinha pro Vault; o motivo vai pro `reasoning` ("Nota reduzida: …") e a `TestingArea` mostra um aviso amarelo.
 - **Pulado (item 3):** preencher `item_id` na vaga educativa por afinidade tema×imóvel não é simples nem determinístico (precisa
   mapear tema→bairro/imóvel, escolher entre vários imóveis e respeitar rodízio de uso). Fica para depois; hoje a foto no
   educativo só aparece quando a vaga já traz `item_id`.

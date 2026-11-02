@@ -1,6 +1,6 @@
 // Carrossel de OFERTA e de BAIRRO no sistema de slides (PR B, 2026-11-02). Função PURA (sem Deno/rede): só decide
 // QUAIS fotos reais entram e QUE texto cada slide leva; o desenho é do render-format (template 'slide') e a
-// chamada é do catalog-package. Teste em Node: scripts/test-carousel-offer.mjs.
+// chamada é do catalog-package. Teste em Node: scripts/test-carousel-quality.mjs.
 //
 // Regras: foto de item é sempre real (nunca IA); só campo preenchido aparece (nunca "R$ —"); nada de número que
 // não esteja no cadastro; no máximo 7 slides (capa + até 4 fotos + dados + fecho — decisão do dono, 2026-11-02).
@@ -46,18 +46,32 @@ export function pickMiddlePhotos(photos: CatalogPhoto[] | null | undefined, cove
   return ordered.slice(0, n)
 }
 
-const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v).trim())
+const EMPTY_WORDS = new Set(['null', 'undefined', 'nan', 'n/a', 'na', '—', '–', '-', '--', '?'])
+/** Texto do cadastro; vazio, "null", "undefined", "—" e afins viram '' (nunca aparecem no slide). */
+const str = (v: unknown): string => { if (v === null || v === undefined) return ''; const t = String(v).trim(); return EMPTY_WORDS.has(t.toLowerCase()) ? '' : t }
 
-/** Preço do cadastro em reais ("1500000" → "R$ 1.500.000"); texto que já vem com R$ fica como está; vazio/zero/lixo → '' (nunca "R$ —"). */
+const MULTS: Record<string, number> = { k: 1e3, mil: 1e3, mi: 1e6, milhao: 1e6, milhoes: 1e6, million: 1e6, millions: 1e6 }
+/**
+ * Preço do cadastro em reais, lendo multiplicador: "1500000" e "1.500.000" → "R$ 1.500.000"; "1,5 mi" → "R$ 1.500.000";
+ * "850 mil" → "R$ 850.000"; "R$ 980.000" → "R$ 980.000". Formato ambíguo ("12.5", "1,500", "1.5.3"), vazio, zero ou lixo → ''
+ * (não mostra; nunca "R$ —" nem um valor chutado).
+ */
 export function formatPrice(v: unknown): string {
-  const s = str(v)
-  if (!s || /^[-—–.\s]+$/.test(s)) return ''
-  if (/r\$/i.test(s)) return /\d/.test(s) ? s : ''
-  const digits = s.replace(/[^\d,.]/g, '')
-  if (!/\d/.test(digits)) return ''
-  const n = Number(digits.includes(',') ? digits.replace(/\./g, '').replace(',', '.') : /^\d{1,3}(\.\d{3})+$/.test(digits) ? digits.replace(/\./g, '') : digits)
-  if (!Number.isFinite(n) || n <= 0) return ''
-  return `R$ ${Math.round(n).toLocaleString('pt-BR')}`
+  const raw = str(v)
+  if (!raw) return ''
+  const t = raw.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/r\$|reais|real/g, ' ').replace(/\s+/g, ' ').trim()
+  const m = /^(\d[\d.,]*)\s*(milhoes|milhao|millions?|mil|mi|k)?$/.exec(t)
+  if (!m) return ''
+  const body = m[1], mult = m[2] ? MULTS[m[2]] : 1
+  let n: number
+  if (/^\d+$/.test(body)) n = Number(body)
+  else if (m[2] && /^\d+[.,]\d{1,2}$/.test(body)) n = Number(body.replace(',', '.'))                    // "1,5 mi", "2.25 milhões"
+  else if (!m[2] && /^\d{1,3}(\.\d{3})+$/.test(body)) n = Number(body.replace(/\./g, ''))               // "1.500.000" (milhar BR)
+  else if (!m[2] && /^\d{1,3}(\.\d{3})+,\d{2}$/.test(body)) n = Number(body.replace(/\./g, '').replace(',', '.')) // "1.500.000,00"
+  else return ''                                                                                         // ambíguo
+  n *= mult
+  if (!Number.isFinite(n) || n <= 0 || n > 1e10) return ''
+  return `R$ ${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
 }
 
 const num = (v: unknown): number | null => { const s = str(v).replace(',', '.'); return s && Number.isFinite(Number(s)) ? Number(s) : null }

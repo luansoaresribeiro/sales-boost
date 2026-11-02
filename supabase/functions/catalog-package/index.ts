@@ -27,7 +27,7 @@ import { decideVideoCta } from '../_shared/videoCta.ts'
 import { stripInternalNotes, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
 import { ensureNearby, fetchNearbyConfig, fmtDistance, topPlaces } from '../_shared/nearbyPlaces.ts'
 import { buildNearbySlides, buildOfferSlides, pickCoverPhoto, type OfferSlide } from '../_shared/carouselOffer.ts'
-import { CLAIM_PROMPT_RULE, captionRewritePrompt, claimCtx, claimNotice, cutClaims, cutHashtags, itemFacts, lockText } from '../_shared/claimLock.ts'
+import { claimPromptRule, captionRewritePrompt, claimCtx, claimNotice, cutClaims, cutHashtags, itemFacts, lockText } from '../_shared/claimLock.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -132,12 +132,11 @@ function pickSlot(dates: string[], occ: Occupancy, pillar: string, pillarWeightP
 // ── Geração de texto por peça (1 função parametrizada em vez de 5 quase
 // iguais — reuso normal DENTRO do arquivo, não é a lib compartilhada ENTRE
 // functions que o projeto evita) ──────────────────────────────────────────
-async function writeCopy(anthropicKey: string, briefing: string, extra = ''): Promise<{ caption: string; hashtags: string; cta: string }> {
+async function writeCopy(anthropicKey: string, briefing: string, extra = '', claimRule = ''): Promise<{ caption: string; hashtags: string; cta: string }> {
   const prompt = `Você é o Content Agent do Sales Boost, especializado em corretores de imóveis no Rio de Janeiro.
 ${briefing}
 ${extra}Regras inegociáveis: nunca invente preço, m², condomínio ou qualquer dado de mercado além do que foi passado; nunca invente cliente, depoimento, venda fechada nem distância; a legenda é SEMPRE pro público do Instagram — nunca um recado, aviso, alerta ou ressalva pro corretor, nem pedido de dado (nada de "⚠️", "os dados que recebi", "precisam de confirmação", "antes de publicar"). Se um dado parecer estranho ou faltar, simplesmente não o cite; nunca prometa valorização; tom próximo e carioca, direto nos números reais, sem "oportunidade imperdível".
-${CLAIM_PROMPT_RULE}
-Responda SÓ em JSON: {"caption":"...","hashtags":"...","cta":"..."}`
+${claimRule}Responda SÓ em JSON: {"caption":"...","hashtags":"...","cta":"..."}`
   const obj = parseObj(await callClaude(anthropicKey, prompt, 700))
   return { caption: String(obj.caption ?? '').trim(), hashtags: String(obj.hashtags ?? '').trim(), cta: String(obj.cta ?? '').trim() }
 }
@@ -293,10 +292,12 @@ Deno.serve(async (req) => {
     const facts = itemFacts(String(item.title ?? ''), fields, ficha.fieldMap)
     const claims = claimCtx('pt', facts.texts, facts.nums, ficha.marketClaims)
     const copy = async (briefing: string) => {
-      const c = await writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`)
+      const c = await writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`, claimPromptRule(ficha.marketClaims))
       const cap = stripInternalNotes(c.caption), cta = stripInternalNotes(c.cta)
       pieceNotes.push(...cap.notes, ...cta.notes)
       if (c.caption.trim() && !cap.text.trim()) pieceEmptied = true
+      // Sem market_claims na ficha a trava fica desligada (regra 6).
+      if (!ficha.marketClaims) return { ...c, caption: cap.text, cta: cta.text }
       const locked = await lockText(cap.text, claims, async iss => String(parseObj(await callClaude(anthropicKey, captionRewritePrompt(String(company!.business_name ?? ''), cap.text, iss), 900)).caption ?? '').trim() || null)
       const lc = cutClaims(cta.text, claims), lh = cutHashtags(c.hashtags, claims)
       pieceClaims.push(...locked.removed, ...lc.removed, ...lh.removed)

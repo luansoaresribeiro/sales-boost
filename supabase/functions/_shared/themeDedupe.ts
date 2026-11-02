@@ -1,7 +1,7 @@
 // Tema repetido no calendário (PR B, 2026-11-02): "R$ 1,5 mi: Barra vs Leblon" saiu 4 semanas seguidas e 2x na mesma
 // semana. O Diretor Criativo só via formato/template/framework dos últimos posts, nunca o TEMA. Aqui: (1) o bloco que
 // lista os temas recentes pro prompt e (2) uma conferência em CÓDIGO (sobreposição de palavras) pra pegar o que passou.
-// Função pura (sem Deno/rede) — teste em Node: scripts/test-theme-dedupe.mjs.
+// Função pura (sem Deno/rede) — teste em Node: scripts/test-carousel-quality.mjs.
 
 const STOP = new Set(['de', 'da', 'do', 'das', 'dos', 'em', 'no', 'na', 'nos', 'nas', 'para', 'pra', 'com', 'por', 'que', 'um', 'uma', 'uns', 'umas', 'os', 'as', 'ou', 'e', 'a', 'o', 'mais', 'menos', 'vs', 'versus', 'como', 'qual', 'quais', 'onde', 'seu', 'sua', 'seus', 'suas', 'ao', 'aos', 'se', 'sem', 'ser', 'tem', 'ter', 'e', 'the', 'and', 'for', 'with', 'of', 'in', 'to', 'a', 'an'])
 const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')

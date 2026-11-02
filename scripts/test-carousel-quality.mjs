@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { COVER_STYLES, svgSlideSystem } from '../supabase/functions/_shared/slideSystem.ts'
 import { deckPromptRules, normalizeDeck, pickCoverStyle, varyLayouts } from '../supabase/functions/_shared/deckSlides.ts'
 import { buildNearbySlides, buildOfferSlides, dataLines, formatPrice, photoScore, pickCoverPhoto, pickMiddlePhotos } from '../supabase/functions/_shared/carouselOffer.ts'
+import { claimPromptRule } from '../supabase/functions/_shared/claimLock.ts'
 import { findRepeatedTheme, recentThemes, themeBlock } from '../supabase/functions/_shared/themeDedupe.ts'
 
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
@@ -15,7 +16,8 @@ assert.ok(!COVER_STYLES.includes('lista')); assert.deepEqual([...COVER_STYLES], 
 const seen = new Set(Array.from({ length: 30 }, (_, i) => pickCoverStyle(i))); assert.ok(!seen.has('lista') && seen.size === 3); ok('rodízio da capa: gancho, pergunta, erro — "lista" nunca é sorteada')
 for (const st of COVER_STYLES) assert.ok(!/próximos slides|índice/i.test(deckPromptRules(st, 'Me chama')) || /NUNCA lista/.test(deckPromptRules(st, 'Me chama')))
 assert.match(deckPromptRules('erro', ''), /ERRO COMUM/); assert.match(deckPromptRules('gancho', ''), /promessa concreta/); assert.match(deckPromptRules('pergunta', ''), /PERGUNTA/); assert.match(deckPromptRules('gancho', ''), /NUNCA lista os slides seguintes/); ok('prompt: capa é pergunta, erro comum ou promessa concreta; nunca lista os próximos slides')
-assert.match(deckPromptRules('gancho', ''), /MERCADO: sem comparativo/); ok('prompt: linha de reforço contra afirmação de mercado')
+assert.ok(!/MERCADO/.test(deckPromptRules('gancho', ''))); assert.equal(deckPromptRules('gancho', 'x'), deckPromptRules('gancho', 'x', undefined, ''))
+const rule = claimPromptRule(['mais desejado', 'vale cada centavo'], '• '); assert.match(deckPromptRules('gancho', '', undefined, rule), /AFIRMAÇÃO DE MERCADO[^]*mais desejado, vale cada centavo/); assert.equal(claimPromptRule(null), ''); assert.equal(claimPromptRule([]), ''); ok('prompt: reforço de mercado só com termos da ficha; sem ficha o prompt é idêntico ao de antes')
 
 // capa antiga com cover_style "lista" ainda desenha (peça antiga re-renderizada), e "erro" desenha o "!"
 const brand = { primary: '#FF6D29', name: 'Tespon', bg: '#0E0B0A', text: '#ffffff' }
@@ -54,7 +56,10 @@ assert.equal(pickCoverPhoto([]), null)
 assert.deepEqual(pickMiddlePhotos([P('a', 3), P('b', 9), P('c', 5), P('d', 7)], P('b', 9), 2).map(p => p.url), ['https://x/d.jpg', 'https://x/c.jpg']); ok('fotos do meio: as melhores depois da capa')
 
 // ── oferta ───────────────────────────────────────────────────────────────────────────────────────────────────────
-assert.equal(formatPrice('1500000'), 'R$ 1.500.000'); assert.equal(formatPrice('R$ 980.000'), 'R$ 980.000'); assert.equal(formatPrice('1.500.000'), 'R$ 1.500.000'); assert.equal(formatPrice(''), ''); assert.equal(formatPrice('—'), ''); assert.equal(formatPrice(null), ''); assert.equal(formatPrice('0'), ''); ok('preço: formata o que existe e nunca vira "R$ —"')
+assert.equal(formatPrice('1500000'), 'R$ 1.500.000'); assert.equal(formatPrice('R$ 980.000'), 'R$ 980.000'); assert.equal(formatPrice('1.500.000'), 'R$ 1.500.000'); assert.equal(formatPrice(''), ''); assert.equal(formatPrice('—'), ''); assert.equal(formatPrice(null), ''); assert.equal(formatPrice('0'), ''); const FP = { '1,5 mi': 'R$ 1.500.000', '1.5 mi': 'R$ 1.500.000', '850 mil': 'R$ 850.000', 'R$ 2 milhões': 'R$ 2.000.000', '2 milhao': 'R$ 2.000.000', '1.5 million': 'R$ 1.500.000', '900k': 'R$ 900.000', 'R$ 1,5 mi': 'R$ 1.500.000', '1.500.000,00': 'R$ 1.500.000', '12.5': '', '1,500': '', '1.5.3': '', 'abc': '', 'null': '', 'undefined': '', '12,50': '', '1,2345 mi': '' }
+for (const [i, o] of Object.entries(FP)) assert.equal(formatPrice(i), o, i)
+assert.equal(formatPrice(undefined), ''); ok('preço: formata o que existe, lê mi/mil/milhão/k e nunca vira "R$ —" (formato ambíguo = não mostra)')
+assert.deepEqual(dataLines({ quartos: 'null', bairro: 'undefined', vagas: '—', preco: '—' }), []); ok('"null"/"undefined"/"—" do cadastro não aparecem')
 const photos = Array.from({ length: 9 }, (_, i) => P(`f${i}`))
 const full = buildOfferSlides({ photos, fields: { tipo: 'Apartamento', bairro: 'Ipanema', quartos: '3', m2: '120', vagas: '1', preco: '1500000' }, cta: 'Me chama no direct' })
 assert.equal(full.length, 7); assert.deepEqual(full.map(s => s.kind), ['capa', 'foto', 'foto', 'foto', 'foto', 'dados', 'fecho']); ok('oferta: no máximo 7 slides (capa + 4 fotos + dados + fecho)')

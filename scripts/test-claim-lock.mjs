@@ -11,13 +11,15 @@ let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 const oldSql = readFileSync(new URL('../supabase/migrations/20261029130000_oportunidade_pecas.sql', import.meta.url), 'utf8')
 const newSql = readFileSync(new URL('../supabase/migrations/20261102120000_carrosseis_qualidade.sql', import.meta.url), 'utf8')
 const oldPt = JSON.parse(oldSql.split('$json$')[3]).pt
-const arrays = [...newSql.matchAll(/\$json\$(\[.*?\])\$json\$/g)].map(m => JSON.parse(m[1]))
-assert.equal(arrays.length, 2, 'a migration traz uma lista pt e uma en')
-const merge = (oldList, add) => [...new Map([...oldList, ...add].map(t => [t, t])).values()]
+const all3 = [...newSql.matchAll(/\$json\$(\[.*?\])\$json\$/g)].map(m => JSON.parse(m[1]))
+assert.equal(all3.length, 3, 'a migration traz: termos pt, "em alta" a tirar e termos en')
+const arrays = [all3[0], all3[2]], REMOVE = all3[1]
+const merge = (oldList, add) => [...new Map([...oldList, ...add].filter(t => !REMOVE.includes(t)).map(t => [t, t])).values()]
 const TERMS = merge(oldPt, arrays[0])
+assert.ok(oldPt.includes('em alta') && !TERMS.includes('em alta')); ok('"em alta" solto sai da ficha (entra "mercado em alta")')
 assert.equal(TERMS.length, new Set(TERMS).size); ok('mesclagem de array não duplica (rodar 2x dá o mesmo)')
 assert.deepEqual(merge(TERMS, arrays[0]), TERMS); ok('2ª aplicação = mesma lista (idempotente)')
-assert.ok(oldPt.every(t => TERMS.includes(t)) && TERMS.indexOf('luxo') === oldPt.indexOf('luxo')); ok('termos antigos e a ordem deles ficam')
+assert.ok(oldPt.filter(t => !REMOVE.includes(t)).every(t => TERMS.includes(t))); ok('termos antigos e a ordem deles ficam')
 
 const empty = claimCtx('pt', [], [], TERMS)   // educativo sem imóvel: nenhum fato
 const bad = [
@@ -28,7 +30,7 @@ const bad = [
 ]
 for (const f of bad) assert.ok(claimIssues(f, empty).length > 0, f)
 ok('as 4 frases do relato são barradas sem imóvel cadastrado')
-assert.ok(claimIssues('Imóveis acima de R$ 1,5 mi são raros.', empty).includes(PRICE_RANGE_ISSUE)); ok('faixa de preço sem fonte é apontada como tal')
+assert.ok(claimIssues('Imóveis acima de R$ 1,5 mi são raros.', empty).includes(PRICE_RANGE_ISSUE)); ok('valor/faixa de preço sem fonte é apontado como tal')
 assert.ok(claimIssues('Apartamento de 3 quartos na Barra.', empty).length === 0 && claimIssues('Dicas para quem vai financiar.', empty).length === 0); ok('frase factual / educativa comum passa')
 
 // ── fatos do imóvel liberam termo e valor ────────────────────────────────────────────────────────────────────────
@@ -38,7 +40,15 @@ assert.equal(claimIssues('Acabamento de luxo no Leblon.', ctx).length, 0); ok('"
 assert.ok(claimIssues('Um endereço nobre.', ctx).length > 0); ok('"nobre" continua barrado se o cadastro não traz')
 assert.equal(claimIssues('Imóvel acima de R$ 1,5 mi no Leblon.', ctx).length, 0); ok('faixa liberada quando o valor (com unidade) está no cadastro')
 assert.ok(claimIssues('Imóveis acima de R$ 2 mi no Leblon.', ctx).includes(PRICE_RANGE_ISSUE)); ok('outro valor continua barrado')
-const pExato = claimIssues('Por R$ 1,5 mi.', empty); assert.equal(pExato.length, 0); ok('preço sozinho (sem faixa) não é afirmação de mercado — a trava de número cuida dele')
+assert.ok(claimIssues('Por R$ 1,5 mi.', empty).includes(PRICE_RANGE_ISSUE)); assert.equal(claimIssues('Por R$ 1,5 mi.', ctx).length, 0); ok('valor em dinheiro solto sem fonte é barrado; com o valor no cadastro passa')
+assert.ok(claimIssues('Imóveis de 1.5 million no Rio.', empty).includes(PRICE_RANGE_ISSUE)); assert.ok(claimIssues('Sai por 850 mil reais.', empty).includes(PRICE_RANGE_ISSUE)); ok('"1.5 million" sem $ e "850 mil reais" também')
+
+// falsos positivos que o QA achou: texto legítimo passa
+for (const f of ['O endereço mais próximo do metrô fica a pé.', 'O melhor caminho é pela orla.', 'O melhor momento para visitar é de manhã.', 'Sala única com varanda.', 'Condomínio exclusivo para moradores.', 'A temporada em alta chega no verão.', 'O mercado financeiro muda.']) assert.deepEqual(claimIssues(f, empty), [], f)
+ok('sem falso positivo: "mais próximo", "o melhor caminho/momento", "sala única", "condomínio exclusivo", "temporada em alta"')
+// escapes que o QA achou: agora barrados
+for (const f of ['O bairro mais procurado do Rio.', 'Um dos bairros mais caros da cidade.', 'Mais barato que Ipanema.', 'O metro quadrado mais caro.', 'Ipanema é mais cara que Leblon.', 'O mercado em alta no Rio.']) assert.ok(claimIssues(f, empty).length > 0, f)
+ok('escapes barrados: "mais procurado", "mais caros", "mais barato que", "metro quadrado mais caro", "mais cara que", "mercado em alta"')
 
 // ── corte só da frase, parágrafos ficam ──────────────────────────────────────────────────────────────────────────
 const cap = 'Cobertura linda no Leblon. Vale cada centavo!\n\nChama no direct para visitar.'
@@ -71,9 +81,10 @@ const deck = [
 const out = await lockDeckClaims({ slides: deck, caption: 'Dica rápida.', hashtags: '#dica #luxo', cta: 'Me chama no direct', ctx: empty, brand: 'Tespon', neutral: 'Tespon' })
 const all = JSON.stringify({ s: out.slides, c: out.caption, h: out.hashtags, k: out.cta })
 for (const w of ['mais valorizados', 'Vale cada centavo', 'R$ 1,5', 'desejados', '#luxo']) assert.ok(!all.includes(w), `${w} ainda na arte`)
-assert.equal(out.slides[0].title, 'O erro de quem compra'); assert.equal(out.slides[0].text, ''); ok('capa: frase barrada sai do subtítulo, título limpo fica')
+assert.equal(out.slides[0].title, 'O erro de quem compra'); assert.equal(out.slides[0].text, ''); assert.equal(out.slides.at(-1).cta, 'Me chama no direct'); ok('capa: frase barrada sai do subtítulo, título limpo fica')
 assert.equal(out.slides[1].items, 'Confira a matrícula\nPeça o habite-se'); ok('itens: só a linha barrada sai')
-assert.equal(out.slides.length, 4); assert.ok(out.slides.every(s => s.title || s.text || s.items)); ok('slide do meio que esvaziou sai (restam 4 ≥ 3); nenhum slide vazio')
+assert.equal(out.slides.length, 4);   // capa, lista, passos, fecho — o destaque esvaziou e saiu
+ assert.ok(out.slides.every(s => s.title || s.text || s.items)); ok('slide do meio que esvaziou sai; nenhum slide vazio')
 assert.ok(out.removed.length >= 3); assert.match(claimNotice(out.removed), /^Tirei afirmação sem fonte:/); ok('removidos registrados pro reasoning')
 
 // capa esvaziada → texto neutro (nome da marca), nunca texto inventado
@@ -97,5 +108,9 @@ assert.equal(textIssues('Visite até sábado e conheça.', empty).length, 0); ok
 assert.deepEqual(qualityFlags({ reasoning: 'Ok. Tirei afirmação sem fonte: “x”.', slides: [] }).map(f => f.key), ['afirmacao_sem_fonte'])
 assert.deepEqual(qualityFlags({ reasoning: '', slides: [{ layout: 'capa', text: 'Promessa — Um · Dois · Três' }] }).map(f => f.key), ['capa_fraca'])
 assert.deepEqual(qualityFlags({ reasoning: null, slides: [{ layout: 'capa', text: 'Gancho forte' }, { layout: 'lista', text: 'a — b · c · d' }] }), []); assert.ok(QUALITY_PENALTY > 0); ok('afirmação sem fonte e capa-índice viram motivo de nota baixa; capa boa não')
+
+// meio esvaziado sai (não vira "Tespon"); fecho sem botão ganha o CTA da ficha
+const out4 = await lockDeckClaims({ slides: [sl({ layout: 'capa', title: 'Ok' }), sl({ title: 'Vale cada centavo' }), sl({ layout: 'fecho', title: 'Fim', cta: '' })], caption: '', hashtags: '', cta: '', ctx: empty, brand: 'Tespon', neutral: 'Tespon', ctaFallback: 'Me chama no direct' })
+assert.deepEqual(out4.slides.map(x => x.layout), ['capa', 'fecho']); assert.equal(out4.slides[1].cta, 'Me chama no direct'); ok('meio esvaziado sai sem repetir a marca; fecho sem CTA usa o da ficha')
 
 console.log(`\n${n} verificações ok`)

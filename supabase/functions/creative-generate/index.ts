@@ -31,7 +31,7 @@ import { decideVideoCta, queroNotice, sanitizeCaptionCta } from '../_shared/vide
 import { stripPieceTexts, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
 import { callClaude as callModel, CHEAP_MODEL, checkAndSave, fetchFaqConfig, getTavilyKey, isDue, isUsableTip, numbersIn, type FaqRow } from '../_shared/faqCheck.ts'
 import { decideTopic, guardDeck, loadGuardCfg, topicBlock, topicNote, type Ask, type TopicDecision } from '../_shared/deckGuard.ts'
-import { CLAIM_PROMPT_RULE, claimCtx, claimNotice, cutSlide, itemFacts, loadClaimCfg, lockDeckClaims, type ClaimCtx } from '../_shared/claimLock.ts'
+import { claimCtx, claimPromptRule, claimNotice, cutSlide, itemFacts, loadClaimCfg, lockDeckClaims, type ClaimCtx } from '../_shared/claimLock.ts'
 import { pickCoverPhoto, pickMiddlePhotos, type CatalogPhoto } from '../_shared/carouselOffer.ts'
 import { findRepeatedTheme, recentThemes, themeBlock, themeRetryNote } from '../_shared/themeDedupe.ts'
 import { resolveAlias, tipNumbers, topicText } from '../_shared/deckTopic.ts'
@@ -423,7 +423,7 @@ async function renderGraphicCard(
 // Igual ao renderGraphicCard, mas devolve também o `overflow` do render-format (texto que não coube no quadro).
 async function renderGraphicCardFull(
   auth: { bearer: string; isCron: boolean; cronSecret?: string },
-  companyId: string, template: 'tweet' | 'slide' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand, background?: string | null,
+  companyId: string, template: 'tweet' | 'slide' | 'product' | 'problem' | 'faq' | 'trend' | 'market_watch' | 'review' | 'photo', fields: Record<string, string>, brand: CardBrand, _size?: unknown, background?: string | null,
 ): Promise<{ url: string; overflow: boolean } | null> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   if (!supabaseUrl) return null
@@ -689,6 +689,9 @@ Decida o brief. Retorne APENAS um JSON:
   const quero = decideVideoCta(automation as { active?: boolean; message?: string; keywords?: string[] } | null, fichaCtas)
   // Carrossel educativo com fonte (decisão C, PLANO-CRIATIVOS): o tema decide o modo — regulado (só dicas conferidas),
   // geral (sem fato) ou leve (livre + trava de números). Setor sem faq/termos na ficha: null = fluxo de sempre.
+  // Ficha: termos de mercado, campos de preço/quartos e capa com foto. Sem market_claims na ficha a trava fica DESLIGADA e o prompt não muda (regra 6).
+  const claimLang: 'pt' | 'en' = String(company.language ?? '').toLowerCase().startsWith('en') ? 'en' : 'pt'
+  const claimCfg = await loadClaimCfg(admin, company.vertical_key ?? null, claimLang)
   const ask: Ask = (p, max, cheap) => callModel(anthropicKey, p, max, cheap ? CHEAP_MODEL : undefined)
   let guardCfg: Awaited<ReturnType<typeof loadGuardCfg>> = null
   let topic: TopicDecision | null = null
@@ -718,8 +721,8 @@ Boas práticas do formato ${modLabel} (siga-as):\n${moduleKnow}
 ${visualRefs ? `\nReferências visuais da marca (Layouts & Estilos — inspire-se no estilo quando fizer sentido):\n${visualRefs}\n` : ''}${lessonsBlock(await loadLessons(admin, company.id))}
 Escreva o post pronto pra publicar. Regras importantes:
 - "caption" é APENAS a legenda que vai no Instagram (texto pro público). NUNCA coloque nela instruções de imagem, descrição de foto nem "Slide 1/2/3".
-${CLAIM_PROMPT_RULE}- Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
-${opts.deck ? deckPromptRules(coverStyle, quero.cta, topic ? { mode: topic.mode, tipCount: topic.tips.length } : undefined) : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
+${claimPromptRule(claimCfg.terms)}- Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
+${opts.deck ? deckPromptRules(coverStyle, quero.cta, topic ? { mode: topic.mode, tipCount: topic.tips.length } : undefined, claimPromptRule(claimCfg.terms, '• ')) : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
 - Depois de escrever, avalie o PRÓPRIO post: ele é forte/direto o suficiente pra também valer a pena repostar nos Stories tal como está (sem regerar nada)? Se sim, "story_worthy":true e "story_note": 1 frase curta dizendo por quê. Seja seletivo — nem todo post é bom pra Stories (ex: um card com muito texto lido rápido não funciona lá); só marque true quando fizer sentido de verdade.
 ${CARD_FIELD_INSTRUCTIONS[String(brief.template ?? '')] ?? ''}
 Retorne APENAS um JSON array:
@@ -764,8 +767,6 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   brief.reasoning = [brief.reasoning, lock.notice, internalNotesNotice(sp.notes), sp.emptied ? EMPTY_CAPTION_NOTICE : null].filter(Boolean).join(' ') || brief.reasoning
 
   // Imóvel citado pela vaga (só quando a vaga traz item_id): fonte dos fatos da trava de mercado e das fotos reais da capa/fecho do educativo.
-  const claimLang: 'pt' | 'en' = String(company.language ?? '').toLowerCase().startsWith('en') ? 'en' : 'pt'
-  const claimCfg = await loadClaimCfg(admin, company.vertical_key ?? null, claimLang)
   const linkedItem = opts.itemId ? (await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('id', opts.itemId).eq('company_id', company.id).eq('kind', 'product').maybeSingle()).data as { id: string; title: string | null; meta: { fields?: Record<string, unknown>; photos?: CatalogPhoto[] } | null } | null : null
 
   // Carrossel de slides: validado e, se o tema pede, conferido ANTES de gravar — legenda e arte saem do mesmo texto conferido.
@@ -798,7 +799,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
     const tipTexts = topic?.mode === 'regulado' ? topic.tips.map(t => `${t.title} ${t.content}`) : []
     claims = claimCtx(lang, [...facts.texts, ...tipTexts], [...facts.nums, ...tipTexts], cc.terms)
     const r = await lockDeckClaims({ slides: deckSlides, caption: caption ?? '', hashtags: post.hashtags ? String(post.hashtags) : '', cta: post.cta ? String(post.cta) : '', ctx: claims,
-      ask: (p, m) => ask(p, m), brand: company.business_name, neutral: company.business_name, post: x => lockSlide(x, quero) })
+      ask: (p, m) => ask(p, m), brand: company.business_name, neutral: company.business_name, ctaFallback: quero.cta, post: x => lockSlide(x, quero) })
     if (r.removed.length || r.slides.length !== deckSlides.length) {
       deckSlides = r.slides; claimRemoved.push(...r.removed)
       brief.reasoning = [brief.reasoning, claimNotice(r.removed), !r.caption.trim() && (caption ?? '').trim() ? EMPTY_CAPTION_NOTICE : null].filter(Boolean).join(' ')
@@ -865,7 +866,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
       const renderSlide = (sl: DeckSlide, i: number) => renderGraphicCardFull(opts, company.id, 'slide', {
         layout: sl.layout, title: sl.title, text: sl.text, items: sl.items, highlight: sl.highlight, cta: sl.cta, cover_style: coverStyle,
         handle, name: company.business_name, page: String(i + 1), total: String(deckSlides.length),
-      }, cardBrand, sl.layout === 'capa' ? coverPhoto?.url : sl.layout === 'fecho' ? closerPhoto?.url : null)
+      }, cardBrand, undefined, sl.layout === 'capa' ? coverPhoto?.url : sl.layout === 'fecho' ? closerPhoto?.url : null)
       const warnings: string[] = []
       const done = await Promise.all(deckSlides.map(async (sl, i) => {
         let cur = sl, r = await renderSlide(cur, i)
@@ -876,7 +877,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
             const next = normalizeSlide(raw, cur.layout === 'capa' || cur.layout === 'fecho' ? cur.layout : null, cur.cta)
             next.layout = cur.layout
             Object.assign(next, lockSlide(next, quero))
-            if (claims) { const cs = cutSlide(next, claims, String(post.cta ?? quero.cta)); Object.assign(next, cs.slide); if (cs.removed.length) warnings.push(`slide ${i + 1}: ${claimNotice(cs.removed)?.replace(/\.$/, '')}`) }
+            if (claims) { const cs = cutSlide(next, claims, String(post.cta || quero.cta)); Object.assign(next, cs.slide); if (cs.removed.length) warnings.push(`slide ${i + 1}: ${claimNotice(cs.removed)?.replace(/\.$/, '')}`) }
             if (Object.keys(raw).length && (next.title || next.text || next.items) && (!unitOk || unitOk(i, next))) { cur = next; r = (await renderSlide(cur, i)) ?? r }
           } catch (e) { console.error('creative-generate: slide mais curto falhou', company.id, i + 1, e) }
         }
@@ -888,7 +889,10 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
         if (still.length) warnings.push(`slide ${i + 1} tem número que não veio dos dados cadastrados (${still.join(', ')}) — confira antes de aprovar`)
         return { cur, url: r?.url ?? null }
       }))
-      slides = done.map(d => ({ text: slideSummary(d.cur), image_prompt: '', image_url: d.url, layout: d.cur.layout }))
+      // `slides` e `media` ficam iguais: slide que não virou imagem sai dos dois (e o dono é avisado).
+      const drawn = done.filter(d => d.url)
+      if (drawn.length < done.length) warnings.push(drawn.length < 2 ? `só ${drawn.length} de ${done.length} slides foi desenhado, então a peça não vira carrossel` : `${done.length - drawn.length} de ${done.length} slides não foram desenhados e saíram do carrossel`)
+      slides = drawn.map(d => ({ text: slideSummary(d.cur), image_prompt: '', image_url: d.url, layout: d.cur.layout }))
       mainImage = slides.find(x => x.image_url)?.image_url ?? null
       if (!deckSlides.length) {
         await admin.from('marketing_ai_test_content').update({ reasoning: `${brief.reasoning ?? ''} Atenção: a IA não devolveu nenhum slide aproveitável, então este carrossel ficou sem arte. Gere de novo ou descarte.`.trim() }).eq('id', inserted.id)
