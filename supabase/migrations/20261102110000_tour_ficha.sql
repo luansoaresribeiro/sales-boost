@@ -11,6 +11,7 @@
 --    preço só aparece se preenchido, exatamente como cadastrado).
 --  - config.clip_prompts.opening: câmera da abertura limitada ao que a foto mostra (não "revela" o que está fora do quadro).
 -- Só JSON, aditivo e idempotente (rodar 2x dá o mesmo resultado). Não toca em nenhuma outra chave da ficha.
+-- NÃO sobrescreve ajustes manuais: o que já existe em config.tour / config.clip_prompts.opening vence (o padrão só preenche o que falta).
 --
 -- REVERTER:
 --   update vertical_playbooks set config = (config #- '{tour}') #- '{clip_prompts,opening}' where key = 'imoveis_rio';
@@ -51,11 +52,13 @@ set config = jsonb_set(
     ],
     "endcard_seconds": 2.5,
     "endcard_place_field": "bairro",
-    "endcard_price_field": "preco"
+    "endcard_price_field": "preco",
+    "endcard_currency": "R$",
+    "endcard_locale": "pt-BR"
   }
-  $json$::jsonb, true),
+  $json$::jsonb || coalesce(config->'tour', '{}'::jsonb), true),
   '{clip_prompts}',
-  coalesce(config->'clip_prompts', '{}'::jsonb) || jsonb_build_object('opening',
-    'Cinematic establishing shot from outside, slow smooth camera movement (a gentle push-in or slight pan) that stays inside what the photo already shows, golden natural light. Do not reveal, invent or add anything that is not in the frame: no new buildings, floors, rooms, people, vehicles, signs or scenery beyond the edges. Keep the building, the landscape and the view exactly as in the photo — do not add, remove or change anything. No people, no text, no logos.'),
+  jsonb_build_object('opening',
+    'Cinematic establishing shot from outside, slow smooth camera movement (a gentle push-in or slight pan) that stays inside what the photo already shows, golden natural light. Do not reveal, invent or add anything that is not in the frame: no new buildings, floors, rooms, people, vehicles, signs or scenery beyond the edges. Keep the building, the landscape and the view exactly as in the photo — do not add, remove or change anything. No people, no text, no logos.') || coalesce(config->'clip_prompts', '{}'::jsonb),
   true)
 where key = 'imoveis_rio' and config is not null;

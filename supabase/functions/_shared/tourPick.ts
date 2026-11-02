@@ -32,6 +32,9 @@ export interface TourCfg {
   /** Campos do cadastro do item que entram no encerramento (lugar e preço; preço só se preenchido). Vazio = não aparece. */
   endcard_place_field: string
   endcard_price_field: string
+  /** Moeda e idioma do preço no encerramento (padrão R$ / pt-BR). */
+  endcard_currency: string
+  endcard_locale: string
   /** Formato do catálogo → tipo de tour. */
   format_kinds: Record<string, TourKind>
 }
@@ -72,8 +75,35 @@ export function tourCfgFrom(config: unknown): TourCfg {
     endcard_seconds: num(t.endcard_seconds, DEFAULT_ENDCARD_SECONDS, 1, 6),
     endcard_place_field: /^[a-z0-9_]{1,40}$/i.test(String(t.endcard_place_field ?? '')) ? String(t.endcard_place_field) : '',
     endcard_price_field: /^[a-z0-9_]{1,40}$/i.test(String(t.endcard_price_field ?? '')) ? String(t.endcard_price_field) : '',
+    endcard_currency: String(t.endcard_currency ?? 'R$').trim().slice(0, 6) || 'R$',
+    endcard_locale: /^[a-z]{2}(-[A-Za-z]{2})?$/.test(String(t.endcard_locale ?? '')) ? String(t.endcard_locale) : 'pt-BR',
     format_kinds: fk,
   }
+}
+
+/** Aviso "aguardando estúdio" ANTES de gastar: o vídeo só começa (e só é cobrado) quando o estúdio voltar. */
+export const WAITING_STUDIO_PRE = 'Aguardando estúdio: o servidor de vídeo está fora do ar. O vídeo só começa a ser feito (e cobrado) quando ele voltar — nada foi gasto e nada sai antes disso.'
+
+/** Só aceita o encerramento que a NOSSA função de desenho gravou no nosso Storage (nada de URL de fora, nada de `..`). */
+export function validEndcardUrl(url: unknown, supabaseUrl: string): url is string {
+  return typeof url === 'string' && !!supabaseUrl && url.startsWith(`${supabaseUrl}/storage/v1/object/public/post-images/renders/`) &&
+    !url.includes('..') && !/[\s"'<>]/.test(url) && url.length < 400
+}
+
+/**
+ * Preço do encerramento. Só dígitos (com ou sem pontos/espaços de milhar) e > 0 → "R$ 3.000.000" (milhar e moeda são
+ * formatação, não número novo); 0 → não mostra; qualquer outra coisa (letras, "R$", centavos, faixa) fica como veio.
+ */
+export function formatPrice(raw: unknown, currency = 'R$', locale = 'pt-BR'): string {
+  const t = String(raw ?? '').trim()
+  if (!t) return ''
+  if (!/^\d{1,3}([.,\s]\d{3})+$|^\d+$/.test(t)) return t
+  const digits = t.replace(/\D/g, '')
+  if (!/[1-9]/.test(digits)) return ''
+  if (digits.length > 15) return t
+  let body: string
+  try { body = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(Number(digits)) } catch { body = digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.') }
+  return `${currency} ${body}`.trim()
 }
 
 export function kindForFormat(format: string | null | undefined, cfg: Pick<TourCfg, 'format_kinds'>): TourKind | null {

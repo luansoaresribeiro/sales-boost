@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
-import { advanceTour, clipPrompt, estimateUsd, hfHeaders, SECONDS, submitAll, VIDEO_BUCKET, type ClipKind, type TourRow } from '../_shared/tourEngine.ts'
+import { advanceTour, clipPrompt, estimateUsd, hfHeaders, SECONDS, studioReady, submitAll, VIDEO_BUCKET, type ClipKind, type TourRow } from '../_shared/tourEngine.ts'
+import { validEndcardUrl } from '../_shared/tourPick.ts'
 import { draftReply, type DmReplyConfig } from '../_shared/dmReply.ts'
 import { keepQueroNotice } from '../_shared/videoCta.ts'
 import { capMessage, fitsCap, monthSpend } from '../_shared/spendCap.ts'
@@ -95,7 +96,60 @@ async function advanceVideo(admin: Admin, supabaseUrl: string, serviceKey: strin
   return 'processing'
 }
 
-const VIDEO_SELECT = 'id, company_id, status, plan, photos, clips, video_path, assembly, updated_at'
+type CreateResult = { ok: true; video_id: string } | { ok: false; status: number; error: string; cap?: boolean }
+// Confere o teto, manda os trechos pra Higgsfield (é aqui que gasta) e grava o vídeo. Quem chama já validou fotos e encerramento.
+async function createPlanVideo(admin: Admin, company: { id: string; vertical_key: string | null }, itemId: string, kind: ClipKind, photos: string[], label: string,
+  pieceId: string | undefined, endcard: { url: string; seconds: number } | null): Promise<CreateResult> {
+  const estimate = estimateUsd(kind)
+  const cap = await fitsCap(admin, company.id, estimate)
+  if (!cap.ok) return { ok: false, status: 429, error: capMessage(cap.spend.cap_usd), cap: true }
+  const headers = hfHeaders()
+  if (!headers) return { ok: false, status: 503, error: 'Geração de vídeo indisponível no momento.' }
+  const clips = await submitAll(headers, await clipPrompt(admin, company.vertical_key, kind), photos, [kind === 'pair' ? { from: 0, to: 1 } : { from: 0 }], SECONDS[kind])
+  if (!clips[0].job_ref) return { ok: false, status: 502, error: 'Não consegui iniciar o vídeo agora. Tente de novo em alguns minutos.' }
+  const { data: v, error } = await admin.from('video_tours')
+    .insert({ company_id: company.id, kind: 'plan', item_id: itemId, status: 'generating', photos, clips, plan: { kind, label, ...(pieceId ? { piece_id: pieceId } : {}), ...(endcard ? { endcard_url: endcard.url, endcard_seconds: endcard.seconds } : {}) }, cost_usd: estimate })
+    .select('id').single()
+  if (error) return { ok: false, status: 500, error: error.message }
+  console.log('[item-videos] vídeo iniciado', company.id, v.id, kind, estimate.toFixed(2), 'USD')
+  return { ok: true, video_id: v.id }
+}
+
+const PENDING_MAX_MS = 48 * 3_600_000
+interface PendingTour { item_id: string; kind: ClipKind; photos: string[]; endcard_url: string; endcard_seconds: number; since: string }
+
+// Peças do calendário que esperam o estúdio ANTES de gastar (concept.tour_pending): com o estúdio de volta, paga os trechos e segue.
+async function resumePending(admin: Admin, supabaseUrl: string, deadline: number): Promise<number> {
+  const { data: rows } = await admin.from('marketing_ai_test_content').select('id, company_id, reasoning, concept').not('concept->tour_pending', 'is', null).limit(5)
+  const list = (rows ?? []) as { id: string; company_id: string; reasoning: string | null; concept: { tour_pending?: PendingTour } | null }[]
+  if (!list.length) return 0
+  const ready = await studioReady(admin)
+  let started = 0
+  for (const piece of list) {
+    if (Date.now() > deadline) break
+    const pend = piece.concept?.tour_pending
+    const setPiece = (reasoning: string, clear: boolean) => admin.from('marketing_ai_test_content').update({ reasoning, ...(clear ? { concept: null } : {}) }).eq('id', piece.id).eq('company_id', piece.company_id)
+    const notice = keepQueroNotice(piece.reasoning)
+    const withN = (m: string) => `${m}${notice ? ` ${notice}` : ''}`
+    if (!pend || !validEndcardUrl(pend.endcard_url, supabaseUrl) || !KINDS.includes(pend.kind)) { await setPiece(withN('O vídeo não foi feito (pedido inválido). Nada foi cobrado.'), true); continue }
+    if (Date.now() - Date.parse(pend.since) > PENDING_MAX_MS) { await setPiece(withN('O vídeo não foi feito: o servidor de vídeo ficou fora do ar por mais de 48 h. Nada foi cobrado.'), true); continue }
+    if (!ready) continue
+    try {
+      const { data: company } = await admin.from('companies').select('id, plan, vertical_key').eq('id', piece.company_id).maybeSingle()
+      if (!company || await requirePaidAccess(admin, company.id)) { await setPiece(withN('O vídeo não foi feito: a conta não tem plano ativo. Nada foi cobrado.'), true); continue }
+      const { data: item } = await admin.from('marketing_ai_knowledge').select('id, meta').eq('id', pend.item_id).eq('company_id', company.id).eq('kind', 'product').maybeSingle()
+      const have = new Set(((item?.meta?.photos ?? []) as { url: string }[]).map(p => p.url))
+      if (!item || pend.photos.some(u => !have.has(u))) { await setPiece(withN('O vídeo não foi feito: as fotos do imóvel mudaram. Nada foi cobrado.'), true); continue }
+      const r = await createPlanVideo(admin, company, item.id, pend.kind, pend.photos, 'Calendário', piece.id, { url: pend.endcard_url, seconds: pend.endcard_seconds })
+      if (r.ok) { await setPiece(withN('Vídeo sendo feito na Higgsfield a partir de foto real — aparece aqui em alguns minutos.'), true); started++ }
+      else if (r.cap) await setPiece(withN(`O vídeo não foi feito: ${r.error}. Nada foi cobrado.`), true)
+      // outros erros (Higgsfield fora, sem chave): fica pendente e tenta no próximo tick
+    } catch (e) { console.error('[item-videos] retomada falhou', piece.id, String(e).slice(0, 200)) }
+  }
+  return started
+}
+
+const VIDEO_SELECT ='id, company_id, status, plan, photos, clips, video_path, assembly, updated_at'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -121,7 +175,9 @@ Deno.serve(async (req) => {
         try { result[await advanceVideo(admin, supabaseUrl, serviceKey, row.companies?.vertical_key ?? null, row)]++ }
         catch (e) { console.error('[item-videos] tick falhou', row.id, String(e)) }
       }
-      return json({ ok: true, seen: (rows ?? []).length, ...result })
+      let resumed = 0
+      try { resumed = await resumePending(admin, supabaseUrl, deadline) } catch (e) { console.error('[item-videos] resumePending falhou', String(e).slice(0, 200)) }
+      return json({ ok: true, seen: (rows ?? []).length, ...result, resumed })
     }
 
     let company: { id: string; plan: string | null; vertical_key: string | null; language?: string | null } | null = null
@@ -182,29 +238,22 @@ Deno.serve(async (req) => {
       if (photos.length !== (kind === 'pair' ? 2 : 1) || photos.some(p => !itemPhotos.has(p)) || photos[0] === photos[1]) {
         return json({ error: kind === 'pair' ? 'Escolha 2 fotos diferentes deste imóvel.' : 'Escolha 1 foto deste imóvel.' }, 400)
       }
-      const estimate = estimateUsd(kind)
-      const cap = await fitsCap(admin, company.id, estimate)
-      if (!cap.ok) return json({ error: capMessage(cap.spend.cap_usd), status: 'cap_reached' }, 429)
-      const headers = hfHeaders()
-      if (!headers) return json({ error: 'Geração de vídeo indisponível no momento.' }, 503)
-      const clips = await submitAll(headers, await clipPrompt(admin, company.vertical_key, kind), photos, [kind === 'pair' ? { from: 0, to: 1 } : { from: 0 }], SECONDS[kind])
-      if (!clips[0].job_ref) return json({ error: 'Não consegui iniciar o vídeo agora. Tente de novo em alguns minutos.' }, 502)
-      const label = String(body.label ?? '').trim().slice(0, 80)
+      // Encerramento de marca (só no caminho do cron): imagem 1080×1920 feita por código no nosso Storage, nunca por IA.
+      // Validado ANTES de qualquer gasto: o calendário exige encerramento válido (sem ele o vídeo sairia 4:5 pela colagem antiga).
+      let endcard: { url: string; seconds: number } | null = null
+      if (isCron) {
+        if (!validEndcardUrl(body.endcard_url, supabaseUrl)) return json({ error: 'Encerramento da marca ausente ou inválido — o vídeo do calendário não é feito sem ele.' }, 400)
+        endcard = { url: body.endcard_url, seconds: Math.min(6, Math.max(1, Number(body.endcard_seconds) || 2.5)) }
+      }
       // Peça do calendário (só no caminho do cron, e só se for desta empresa).
       let pieceId: string | undefined
       if (isCron && typeof body.piece_id === 'string') {
         const { data: piece } = await admin.from('marketing_ai_test_content').select('id').eq('id', body.piece_id).eq('company_id', company.id).maybeSingle()
         pieceId = piece?.id
       }
-      // Encerramento de marca (só no caminho do cron): imagem 1080×1920 feita por código no nosso Storage, nunca por IA.
-      const endcardOk = isCron && typeof body.endcard_url === 'string' && body.endcard_url.startsWith(`${supabaseUrl}/storage/v1/object/public/`)
-      const endcardSec = Math.min(6, Math.max(1, Number(body.endcard_seconds) || 2.5))
-      const { data: v, error } = await admin.from('video_tours')
-        .insert({ company_id: company.id, kind: 'plan', item_id: item.id, status: 'generating', photos, clips, plan: { kind, label, ...(pieceId ? { piece_id: pieceId } : {}), ...(endcardOk ? { endcard_url: body.endcard_url, endcard_seconds: endcardSec } : {}) }, cost_usd: estimate })
-        .select('id').single()
-      if (error) return json({ error: error.message }, 500)
-      console.log('[item-videos] vídeo iniciado', company.id, v.id, kind, estimate.toFixed(2), 'USD')
-      return json({ status: 'processing', video_id: v.id })
+      const r = await createPlanVideo(admin, company, item.id, kind, photos, String(body.label ?? '').trim().slice(0, 80), pieceId, endcard)
+      if (!r.ok) return json({ error: r.error, ...(r.cap ? { status: 'cap_reached' } : {}) }, r.status)
+      return json({ status: 'processing', video_id: r.video_id })
     }
 
     if (body.action === 'status') {

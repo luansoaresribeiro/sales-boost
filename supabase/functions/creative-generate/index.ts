@@ -35,7 +35,8 @@ import { resolveAlias, tipNumbers, topicText } from '../_shared/deckTopic.ts'
 import { currentWeekBRT } from '../_shared/publishSlot.ts'
 import { buildOpportunityJob } from '../_shared/opportunityPieceJob.ts'
 import { checkCaption, promptRules as captionRules, rewriteRequest, stripForbidden, findForbidden } from '../_shared/captionGuard.ts'
-import { tourNotice } from '../_shared/tourPick.ts'
+import { formatPrice, tourNotice, WAITING_STUDIO_PRE } from '../_shared/tourPick.ts'
+import { studioReady } from '../_shared/tourEngine.ts'
 import { chooseTour, fetchTourCfg, planTours, previousCaptions, type TourPlan } from '../_shared/tourSlot.ts'
 
 const cors = {
@@ -1449,7 +1450,7 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`
   const kit = bd as { colors: string[] | null; kit: { colors?: { primary?: string[]; accent?: string[]; text?: string; bg?: string } } | null; logo_url: string | null } | null
   const brand: CardBrand = { primary: kit?.kit?.colors?.primary?.[0] || kit?.colors?.[0] || '#FF6D29', name: company.business_name, accent: kit?.kit?.colors?.accent?.[0], text: kit?.kit?.colors?.text, bg: kit?.kit?.colors?.bg, logoUrl: kit?.logo_url ?? undefined }
   const card = await renderGraphicCardFull({ bearer: '', isCron: true, cronSecret }, company.id, 'tour_endcard',
-    { bairro: fieldText(tcfg.endcard_place_field), preco: fieldText(tcfg.endcard_price_field), cta: decision.cta }, brand, { width: 1080, height: 1920 })
+    { bairro: fieldText(tcfg.endcard_place_field), preco: formatPrice(fieldText(tcfg.endcard_price_field), tcfg.endcard_currency, tcfg.endcard_locale), cta: decision.cta }, brand, { width: 1080, height: 1920 })
   // Avisos pro dono (reasoning): do tour (pair sem planta, queda de tipo…), da trava da legenda, do QUERO e do recado interno.
   const notice = [tourNotice([...tour.notes, ...guardNotes]), decision.approved ? '' : queroNotice(decision.cta), internalNotesNotice(sp.notes) ?? '', sp.emptied ? EMPTY_CAPTION_NOTICE : ''].filter(Boolean).join(' ')
   const withNotice = (msg: string) => notice ? `${msg} ${notice}` : msg
@@ -1465,6 +1466,15 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`
     // Sem encerramento não sai vídeo (decisão do dono): nada foi gasto.
     console.error('runVideoSlot: encerramento falhou', company.id, piece.id)
     await admin.from('marketing_ai_test_content').update({ reasoning: withNotice('O vídeo não foi feito: não consegui desenhar o encerramento da marca. Nada foi cobrado.') }).eq('id', piece.id)
+    try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runVideoSlot: nota falhou', e) }
+    return
+  }
+  // Estúdio fora do ar: NÃO gasta. A peça fica "aguardando estúdio" e o tick do item-videos retoma (só então paga os trechos).
+  let ready = false
+  try { ready = await studioReady(admin) } catch (e) { console.error('runVideoSlot: conferir estúdio falhou', String(e).slice(0, 200)) }
+  if (!ready) {
+    const pending = { item_id: item.id, kind: tour.kind, photos: tour.photos, endcard_url: card.url, endcard_seconds: tcfg.endcard_seconds, since: new Date().toISOString() }
+    await admin.from('marketing_ai_test_content').update({ reasoning: withNotice(WAITING_STUDIO_PRE), concept: { tour_pending: pending } }).eq('id', piece.id)
     try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runVideoSlot: nota falhou', e) }
     return
   }

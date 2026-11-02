@@ -147,7 +147,7 @@ async function vpsEnabled(admin: any): Promise<boolean> {
 // Estúdio pronto pra montar com encerramento: interruptor ligado + servidor online que sabe fazer o encerramento
 // (um trabalhador antigo, sem a capacidade, ignoraria o encerramento — por isso não serve).
 // deno-lint-ignore no-explicit-any
-async function studioReady(admin: any): Promise<boolean> {
+export async function studioReady(admin: any): Promise<boolean> {
   const { data: flag } = await admin.from('feature_flags').select('enabled').eq('key', 'vps_reel_finish').maybeSingle()
   if (!flag?.enabled) return false
   const { data } = await admin.from('worker_nodes').select('info').eq('status', 'active')
@@ -203,13 +203,22 @@ export async function advanceTour(admin: any, supabaseUrl: string, key: string, 
   const total = tour.clips.length
   const now = () => new Date().toISOString()
   // Entrega o trabalho de acabamento (com ou sem encerramento) pro estúdio. false = não deu pra criar o trabalho.
+  // Troca wait_studio → vps com update CONDICIONAL: só quem pegou a linha cria o media_job (duas consultas ao mesmo tempo
+  // não criam dois trabalhos). Se o insert falhar, devolve a linha pra "aguardando".
   const startJob = async (a: Assembly): Promise<boolean> => {
-    const { data: job } = await admin.from('media_jobs').insert({
-      kind: 'reel_finish', video_tour_id: tour.id,
+    const jobId = crypto.randomUUID()
+    const { data: got } = await admin.from('video_tours').update({ assembly: { ...a, mode: 'vps', job_id: jobId, vps_since: now() }, updated_at: now() })
+      .eq('id', tour.id).eq('status', 'assembling').eq('assembly->>mode', 'wait_studio').select('id').maybeSingle()
+    if (!got) return false
+    const { error } = await admin.from('media_jobs').insert({
+      id: jobId, kind: 'reel_finish', video_tour_id: tour.id,
       input: { outputs: a.outputs.map(o => ({ path: o.path, clips: a.urls.slice(o.from, o.to), ...(a.endcard ? { endcard_url: a.endcard.url, endcard_seconds: a.endcard.seconds } : {}) })) },
-    }).select('id').single()
-    if (!job) return false
-    await admin.from('video_tours').update({ assembly: { ...a, mode: 'vps', job_id: job.id, vps_since: now() }, updated_at: now() }).eq('id', tour.id)
+    })
+    if (error) {
+      console.error('[tour] media_job não criado, volta a aguardar', tour.id, error.message)
+      await admin.from('video_tours').update({ assembly: { ...a, mode: 'wait_studio' }, updated_at: now() }).eq('id', tour.id).eq('assembly->>job_id', jobId)
+      return false
+    }
     return true
   }
   const failStudio = async (a: Assembly, error: string): Promise<Advance> => {
@@ -269,7 +278,7 @@ export async function advanceTour(admin: any, supabaseUrl: string, key: string, 
     }
     const { mode: _m, job_id: _j, vps_since: _s, ...rest } = a
     if (a.endcard) {
-      const fails = (a.vps_fails ?? 0) + (job?.status === 'failed' ? 1 : 0)
+      const fails = (a.vps_fails ?? 0) + (job?.status === 'failed' || waited > VPS_MAX_WAIT_MS ? 1 : 0) // estourar o tempo também conta como recusa
       if (fails >= STUDIO_MAX_FAILS) return await failStudio({ ...rest, vps_fails: fails }, 'estúdio de vídeo recusou o trabalho 3 vezes')
       await admin.from('video_tours').update({ assembly: { ...rest, mode: 'wait_studio', vps_fails: fails }, updated_at: now() }).eq('id', tour.id).eq('status', 'assembling')
       return { status: 'processing', done: total, total, waiting: 'studio' }

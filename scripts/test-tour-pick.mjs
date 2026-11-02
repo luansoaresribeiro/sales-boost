@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 // Roda: node --experimental-strip-types scripts/test-tour-pick.mjs
 // Escolha de foto do tour: qualidade, cômodos a evitar, opening só com fachada/vista, pair só com vizinhos, variação.
-import { tourCfgFrom, pickTour, kindForFormat, weekKinds, parsePhotoScore, tourNotice, PAIR_NOTICE, TOUR_NOTICE_PREFIX } from '../supabase/functions/_shared/tourPick.ts'
+import { tourCfgFrom, pickTour, kindForFormat, weekKinds, parsePhotoScore, tourNotice, PAIR_NOTICE, TOUR_NOTICE_PREFIX, formatPrice, validEndcardUrl } from '../supabase/functions/_shared/tourPick.ts'
+import { needsScore } from '../supabase/functions/_shared/photoScore.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
 // Ficha de teste (a de verdade vive na migration; aqui só prova o código).
@@ -67,6 +68,25 @@ assert.deepEqual(parsePhotoScore('{"room":"Sala","room_conf":0.9,"quality":81.4}
 assert.deepEqual(parsePhotoScore('{"room":"jardim","room_conf":0.9,"light":60,"sharp":70,"framing":80}', rooms), { room: null, room_conf: 0, quality: 70 }); ok('nota: cômodo fora da lista = desconhecido; qualidade pela média')
 assert.equal(parsePhotoScore('não sei', rooms), null); assert.equal(parsePhotoScore('{"room":"sala"}', rooms), null); ok('nota: JSON inválido/sem qualidade = sem nota (nunca inventa)')
 assert.equal(parsePhotoScore('{"room":"sala","room_conf":9,"quality":500}', rooms).quality, 100); ok('nota: valores clampados')
+
+// preço do encerramento: formata milhar/moeda, nunca inventa
+assert.equal(formatPrice('3000000'), 'R$ 3.000.000'); assert.equal(formatPrice(' 850000 '), 'R$ 850.000'); assert.equal(formatPrice(3000000), 'R$ 3.000.000'); ok('preço só dígitos → R$ com milhar pt-BR')
+assert.equal(formatPrice('3.000.000'), 'R$ 3.000.000'); assert.equal(formatPrice('1.500'), 'R$ 1.500'); ok('preço já com milhar fica igual, com moeda')
+assert.equal(formatPrice('0'), ''); assert.equal(formatPrice('000'), ''); assert.equal(formatPrice(''), ''); assert.equal(formatPrice(null), ''); ok('preço 0/vazio não aparece')
+assert.equal(formatPrice('R$ 2.800.000'), 'R$ 2.800.000'); assert.equal(formatPrice('a partir de 900 mil'), 'a partir de 900 mil'); assert.equal(formatPrice('1500,50'), '1500,50'); assert.equal(formatPrice('3.5'), '3.5'); ok('texto com letras/R$/centavos fica como veio')
+assert.equal(formatPrice('1200000', 'US$', 'en-US'), 'US$ 1,200,000'); ok('moeda e idioma vêm da ficha')
+assert.equal(tourCfgFrom({ tour: { endcard_currency: 'US$', endcard_locale: 'en-US' } }).endcard_currency, 'US$'); assert.equal(tourCfgFrom(null).endcard_locale, 'pt-BR'); ok('moeda/idioma da ficha com padrão R$ / pt-BR')
+
+// encerramento: só a URL do nosso Storage (validada antes de qualquer gasto)
+const B = 'https://abc.supabase.co'
+assert.equal(validEndcardUrl(`${B}/storage/v1/object/public/post-images/renders/c1/x.png`, B), true); ok('encerramento do nosso Storage vale')
+for (const bad of [undefined, null, '', 'https://evil.com/x.png', `${B}/storage/v1/object/public/videos/x.png`, `${B}/storage/v1/object/public/post-images/renders/../../x.png`, `${B}/storage/v1/object/public/post-images/renders/a b.png`, 42]) assert.equal(validEndcardUrl(bad, B), false)
+assert.equal(validEndcardUrl(`${B}/storage/v1/object/public/post-images/renders/x.png`, ''), false); ok('encerramento ausente/de fora/com ".." é recusado')
+
+// nota da foto: falha não é tentada de novo por 7 dias
+const now = Date.parse('2026-11-02T12:00:00Z'), day = 86400000
+assert.equal(needsScore({}, now), true); assert.equal(needsScore({ quality: 80, scored_at: 'x' }, now), false); ok('foto sem nota precisa; com nota não')
+assert.equal(needsScore({ score_failed_at: new Date(now - 2 * day).toISOString() }, now), false); assert.equal(needsScore({ score_failed_at: new Date(now - 8 * day).toISOString() }, now), true); assert.equal(needsScore({ score_failed_at: 'lixo' }, now), true); ok('falha recente (<7 dias) não repete; antiga repete')
 
 assert.equal(tourNotice([]), ''); assert.ok(tourNotice(['a', '', 'b']).startsWith(TOUR_NOTICE_PREFIX)); ok('aviso do tour')
 console.log(`${n} grupos ok`)

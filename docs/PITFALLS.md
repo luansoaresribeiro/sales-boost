@@ -934,4 +934,11 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
   ao mesmo tempo podem pagar a nota 2x (centavos) — por isso o planejamento da semana pontua uma vez por imóvel.
 - Legenda do tour: a trava de palavras é por texto; variação nova de "filmado" passa até entrar em `config.tour.forbidden_claims`.
 - Sem `config.tour` na ficha o código só faz `room` (nunca pair/opening) — de propósito (regra 6).
+- **Correções do QA (2026-11-02):** (1) `item-videos` valida `endcard_url` (só `post-images/renders/` do nosso Storage) **antes** de qualquer
+  gasto e o caminho do cron o exige (400 sem ele); (2) estúdio fora do ar na hora de criar = **não gasta**: a peça guarda `concept.tour_pending`
+  e o `tick` do `item-videos` (`resumePending`) retoma em até 48 h — não use `concept` de peça de vídeo pra outra coisa; (3) `startJob` troca
+  `wait_studio→vps` com update condicional (`assembly->>mode`) e só então cria o `media_job` (com `id` gerado antes); (4) estourar 20 min no
+  estúdio conta como recusa (3 = falha); (5) foto que a IA não conseguiu pontuar grava `score_failed_at` e só é tentada de novo depois de 7 dias.
+- **Preço no encerramento** passa por `formatPrice` (milhar + moeda da ficha); o valor guardado no cadastro não muda.
+- A migration do tour **não sobrescreve** `config.tour`/`clip_prompts.opening` já existentes (o que está lá vence).
 

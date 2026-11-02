@@ -40,7 +40,14 @@ async function scoreOne(anthropicKey: string, url: string, cfg: TourCfg): Promis
   } catch (e) { console.error('photoScore: falhou', String(e).slice(0, 200)); return null }
 }
 
-const hasScore = (p: MetaPhoto) => typeof p.quality === 'number' && !!p.scored_at
+export const RETRY_AFTER_FAIL_MS = 7 * 86_400_000 // IA falhou numa foto: não tenta de novo por 7 dias (não gasta à toa)
+export const hasScore = (p: { quality?: unknown; scored_at?: unknown }) => typeof p.quality === 'number' && !!p.scored_at
+/** Precisa pontuar? Sem nota e sem tentativa que falhou nos últimos 7 dias. */
+export const needsScore = (p: { quality?: unknown; scored_at?: unknown; score_failed_at?: unknown }, nowMs = Date.now()): boolean => {
+  if (hasScore(p)) return false
+  const t = typeof p.score_failed_at === 'string' ? Date.parse(p.score_failed_at) : NaN
+  return !(Number.isFinite(t) && nowMs - t < RETRY_AFTER_FAIL_MS)
+}
 
 /**
  * Devolve as fotos do imóvel com a nota; pontua (uma vez) as que ainda não têm.
@@ -50,17 +57,24 @@ const hasScore = (p: MetaPhoto) => typeof p.quality === 'number' && !!p.scored_a
 export async function ensurePhotoScores(admin: Admin, anthropicKey: string, companyId: string, itemId: string, cfg: TourCfg): Promise<TourPhoto[]> {
   const { data: item } = await admin.from('marketing_ai_knowledge').select('id, meta').eq('id', itemId).eq('company_id', companyId).eq('kind', 'product').maybeSingle()
   const photos = ((item?.meta?.photos ?? []) as MetaPhoto[]).filter(p => p && typeof p.url === 'string' && p.url)
-  const todo = photos.filter(p => !hasScore(p)).slice(0, MAX_PER_CALL)
+  const todo = photos.filter(p => needsScore(p)).slice(0, MAX_PER_CALL)
   const fresh = new Map<string, { room: string | null; room_conf: number; quality: number }>()
+  const failed = new Set<string>()
   if (todo.length) {
     const results = await Promise.all(todo.map(p => scoreOne(anthropicKey, p.url, cfg)))
-    todo.forEach((p, i) => { const r = results[i]; if (r) fresh.set(p.url, r) })
-    if (fresh.size) {
+    todo.forEach((p, i) => { const r = results[i]; if (r) fresh.set(p.url, r); else failed.add(p.url) })
+    if (fresh.size || failed.size) {
       try {
         const { data: cur } = await admin.from('marketing_ai_knowledge').select('meta').eq('id', itemId).eq('company_id', companyId).maybeSingle()
         const meta = (cur?.meta ?? {}) as { photos?: MetaPhoto[] }
         const stamp = new Date().toISOString()
-        const merged = (meta.photos ?? []).map(p => (p && fresh.has(p.url) && !hasScore(p) ? { ...p, ...fresh.get(p.url)!, scored_at: stamp, model: MODEL } : p))
+        // Falha também é gravada (score_failed_at, sem nota): a mesma foto só é tentada de novo depois de 7 dias.
+        const merged = (meta.photos ?? []).map(p => {
+          if (!p || hasScore(p)) return p
+          if (fresh.has(p.url)) { const { score_failed_at: _f, ...rest } = p; return { ...rest, ...fresh.get(p.url)!, scored_at: stamp, model: MODEL } }
+          if (failed.has(p.url)) return { ...p, score_failed_at: stamp, score_error: 'IA não devolveu nota válida', model: MODEL }
+          return p
+        })
         await admin.from('marketing_ai_knowledge').update({ meta: { ...meta, photos: merged } }).eq('id', itemId).eq('company_id', companyId)
       } catch (e) { console.error('photoScore: gravar nota falhou (usa só nesta rodada)', String(e).slice(0, 200)) }
     }

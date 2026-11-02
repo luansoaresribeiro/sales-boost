@@ -2149,8 +2149,8 @@ Decisões do dono que fecham as dúvidas do plano do PR A (detalhes e o que mudo
 2. **Tour "2 cômodos" (`pair`) liberado** para sala↔varanda, sala↔cozinha "e outros combos possíveis": a lista de pares
    plausíveis vive na **ficha** (`config.tour.adjacent_rooms`), nada de setor no código. Na aprovação a peça avisa
    "passagem entre cômodos não confirmada por planta".
-3. **Encerramento do vídeo:** logo + bairro + CTA sempre; **preço só se cadastrado, exatamente como no cadastro** (sem formatar
-   nem somar); ~2,5 s; fundo escuro da marca. Feito por **código** (`render-format`, template `tour_endcard`), nunca pela IA
+3. **Encerramento do vídeo:** logo + bairro + CTA sempre; **preço só se cadastrado, com o MESMO valor do cadastro** (nunca soma nem arredonda;
+   formatar milhar e moeda não é inventar — número só de dígitos e maior que 0 vira "R$ 3.000.000", 0 não aparece, texto que já tem letras/"R$" fica como veio; moeda/idioma na ficha); ~2,5 s; fundo escuro da marca. Feito por **código** (`render-format`, template `tour_endcard`), nunca pela IA
    de vídeo (regra 4).
 4. **Mostrar cômodo/nota da foto na tela do catálogo:** não foi pedido — fica fora do PR (só no banco, em `meta.photos[i]`).
 
