@@ -105,11 +105,9 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
       // Vault, ficam aqui embaixo pra não sumirem.
       supabase.from('marketing_ai_test_content').select('*').eq('company_id', companyId).is('planned_for', null).in('status', ['vault', 'draft']).order('created_at', { ascending: false }).limit(12),
     ])
-    setLoose((avulsas ?? []) as Item[])
     const plan = (strat?.content_plan ?? null) as { weekly_mix?: MixItem[] } | null
     setMix(Array.isArray(plan?.weekly_mix) ? plan!.weekly_mix : [])
     setFormatMeta(buildFormatMeta(pb?.config))
-    setItems((posts ?? []) as Item[])
     // Oportunidades das peças (uma consulta em lote). Falhou = null → "Não foi possível verificar" (não afirma tipo).
     const oppIds = [...new Set([...(posts ?? []), ...(avulsas ?? [])].map(p => (p as Item).opportunity_id).filter((x): x is string => !!x))]
     if (!oppIds.length) setOppById({})
@@ -117,6 +115,9 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
       const { data: os, error: oe } = await supabase.from('growth_opportunities').select('id, title, status').eq('company_id', companyId).in('id', oppIds)
       setOppById(oe ? null : Object.fromEntries(((os ?? []) as { id: string; title: string; status: string }[]).map(o => [o.id, o])))
     }
+    // Peças só entram na tela depois da resposta das oportunidades: o Tipo nunca aparece "não identificado" por falta de resposta.
+    setLoose((avulsas ?? []) as Item[])
+    setItems((posts ?? []) as Item[])
     setScheduledIds(new Set(((actions ?? []) as { ref_id: string }[]).map(a => a.ref_id)))
     // null = o dono nunca mexeu → liga sozinho quando há plano da estratégia
     // (mesma regra do cron de domingo no creative-generate).

@@ -207,7 +207,7 @@ export default function MarketingAiHubPage() {
 
   const demo = useMemo(() => (company ? buildGrowthDemo(company, lang) : null), [company, lang])
   const { real, loading: realLoading, error: realError } = useRealGrowth(company?.id ?? '', session?.access_token ?? '', lang)
-  const { summary: strategySummary, loading: strategyLoading } = useStrategySummary(company?.id)
+  const { summary: strategySummary, loading: strategyLoading, error: strategyError } = useStrategySummary(company?.id)
   const flow = useFlowSummary(company?.id)
   const { kpis: realKpis, loading: kpisLoading } = useDecisionKpis(company?.id)
   // Não chamar usePendencias() aqui: ele abre um canal realtime com nome fixo e o DashboardLayout já abre o mesmo —
@@ -225,7 +225,7 @@ export default function MarketingAiHubPage() {
   const stratObjective = strategySummary ? [strategySummary.primary_business_objective || strategySummary.name, strategySummary.topGoal ? `${strategySummary.topGoal.name}${strategySummary.topGoal.target_value != null ? `: ${strategySummary.topGoal.current_progress ?? 0}/${strategySummary.topGoal.target_value}` : ''}` : ''].filter(Boolean).join(' · ') : ''
   const cards = cardModels({
     lang, agents: demoMode ? demo.agents : real?.data.agents ?? null, loading: realLoading, kpis, kpisLoading: demoMode ? false : kpisLoading, flow,
-    strategy: strategySummary ? { status: strategySummary.status, label: stratLabel, objective: stratObjective } : null, strategyLoading: !demoMode && strategyLoading,
+    strategy: strategySummary ? { status: strategySummary.status, label: stratLabel, objective: stratObjective } : null, strategyLoading: !demoMode && strategyLoading, strategyError: !demoMode && strategyError,
   })
   const panelData = real?.hasReal ? real.data : demo
   const panelMode = veilMode({ hasReal: !!real?.hasReal, demoMode, error: !!realError })

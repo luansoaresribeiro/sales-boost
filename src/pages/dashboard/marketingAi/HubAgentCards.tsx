@@ -29,7 +29,7 @@ const TX = {
 
 export interface CardInputs {
   lang: Lang; agents: DemoAgentStatus[] | null; loading: boolean; kpis: DecisionKpis; kpisLoading: boolean; flow: FlowSummary
-  strategy: { status: string; label: string; objective: string } | null; strategyLoading: boolean
+  strategy: { status: string; label: string; objective: string } | null; strategyLoading: boolean; strategyError: boolean
 }
 
 export function cardModels(i: CardInputs): Record<AgentKey, CardModel> {
@@ -42,12 +42,12 @@ export function cardModels(i: CardInputs): Record<AgentKey, CardModel> {
     data: market ? { status: t[market.state], tone: market.state === 'active' ? 'ok' : 'muted', info: market.lastAction } : unk(i.loading),
     opportunities: i.kpisLoading || o == null ? unk(i.kpisLoading)
       : { status: o > 0 ? t.oppWait(o) : t.oppNone, tone: o > 0 ? 'alert' : 'ok', info: flow.oppsApproved != null ? t.approved(flow.oppsApproved) : null, next: o > 0 ? t.oppNext : null },
-    strategy: i.strategyLoading ? unk(true)
+    strategy: i.strategyLoading || i.strategyError ? unk(i.strategyLoading)
       : i.strategy ? { status: i.strategy.label, tone: i.strategy.status === 'active' ? 'ok' : 'alert', info: i.strategy.objective }
       : { status: t.noStrat, tone: 'alert', next: t.stratNext },
     content: i.kpisLoading || a == null ? unk(i.kpisLoading)
       : { status: a > 0 ? t.appr(a) : t.apprNone, tone: a > 0 ? 'alert' : 'ok', info: flow.pagesLive != null ? t.pages(flow.pagesLive) : null, next: a > 0 ? t.apprNext : null },
-    conversion: flow.leads30 == null ? unk(false)
+    conversion: flow.leads30 == null ? unk(flow.loading)
       : { status: t.leads(flow.leads30), tone: 'ok', info: flow.leads30 && flow.tracked30 != null ? t.tracked(flow.tracked30) : null },
   }
 }

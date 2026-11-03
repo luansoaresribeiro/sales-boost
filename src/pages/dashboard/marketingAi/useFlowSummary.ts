@@ -13,12 +13,13 @@ export interface FlowSummary {
   pagesLive: number | null      // páginas de imóvel no ar
   leads30: number | null        // leads dos últimos 30 dias
   tracked30: number | null      // ...desses, com origem rastreada (link da página)
+  loading: boolean              // true até a 1ª resposta; depois, campo nulo = consulta falhou
 }
 
-const EMPTY: FlowSummary = { items: null, signals: null, autoSignals: null, oppsNew: null, oppsApproved: null, lastOppAt: null, pagesLive: null, leads30: null, tracked30: null }
+const EMPTY: FlowSummary = { items: null, signals: null, autoSignals: null, oppsNew: null, oppsApproved: null, lastOppAt: null, pagesLive: null, leads30: null, tracked30: null, loading: false }
 
 export function useFlowSummary(companyId?: string): FlowSummary {
-  const [s, setS] = useState<FlowSummary>(EMPTY)
+  const [s, setS] = useState<FlowSummary>({ ...EMPTY, loading: !!companyId })
   useEffect(() => {
     if (!companyId) { setS(EMPTY); return }
     let cancelled = false
@@ -38,7 +39,7 @@ export function useFlowSummary(companyId?: string): FlowSummary {
       if (cancelled) return
       const n = (i: number) => (r[i].error ? null : r[i].count ?? 0)
       const last = r[5].error ? null : ((r[5].data as { created_at?: string } | null)?.created_at ?? null)
-      setS({ items: n(0), signals: n(1), autoSignals: n(2), oppsNew: n(3), oppsApproved: n(4), lastOppAt: last, pagesLive: n(6), leads30: n(7), tracked30: n(8) })
+      setS({ items: n(0), signals: n(1), autoSignals: n(2), oppsNew: n(3), oppsApproved: n(4), lastOppAt: last, pagesLive: n(6), leads30: n(7), tracked30: n(8), loading: false })
     }).catch(() => { if (!cancelled) setS(EMPTY) })
     return () => { cancelled = true }
   }, [companyId])
