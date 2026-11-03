@@ -193,6 +193,17 @@ Liste os trechos que AFIRMAM COMO FATO uma regra, condição, exceção, permiss
     }
     if (mode === 'regulado') slides = withSource(slides, topic.hosts, a.lang).map(s => a.lockSlide(s))
   }
+
+  // 3) Acento (2026-11-03, Tespon FGTS geral): a IA escreveu "Nenhuma informacao… Cada situacao… pra voce" e nada
+  // conferia o texto ORIGINAL — só a reescrita. Slide sem acento → 1 reescrita pedindo acento → ainda sem: texto seguro
+  // (leve não tem texto seguro: fica e avisa o dono).
+  const noAcc = slides.map((s, i) => (lostAccents(s, a.lang) ? i : -1)).filter(i => i >= 0)
+  await Promise.all(noAcc.map(async i => {
+    const r = await rewriteSlide(slides[i], ['o texto está SEM ACENTO (ex.: "voce", "situacao", "informacao") — reescreva com a ortografia correta do português, com todos os acentos, sem mudar o sentido'])
+    if (r && !lostAccents(r, a.lang) && unitOk(i, r)) { slides[i] = r; return }
+    if (mode === 'leve') { notes.push(`O slide ${i + 1} saiu sem acento — corrija antes de aprovar`); return }
+    slides[i] = fallbackSlide(i, slides[i]); notes.push(`O slide ${i + 1} saiu sem acento e foi trocado pelo texto seguro`)
+  }))
   return { slides, caption, notes, unitOk }
 }
 
