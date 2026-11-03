@@ -779,3 +779,13 @@ Antes: 3 dias fixos, estados `trial_day_1/2/3`. Agora: o total vem do par
 últimas 6h). `claim-diagnostic` ainda grava 3 dias até ser deployada.
 O painel do trial (`TrialSummaryPage`) mostra só contagens reais das
 tabelas existentes; sem dado, "Hermes ainda está analisando".
+
+## Divergência registrada (Pacote A, 2026-11-03): onde peça, imóvel e oportunidade são gravados
+
+- `marketing_ai_test_content.item_id` **não é gravado em peça de texto** (carrossel/post educativo): só os produtores com imóvel
+  (`catalog-package`, `item_video`) gravam. Por isso "educativo" nunca tem imóvel na medição e o Tipo de ativação usa `item_id`
+  como sinal de "tem imóvel" (ver [DECISIONS.md](DECISIONS.md), 2026-11-03 "Pacote A").
+- `opportunity_id` e `intent` são gravados por `saveLabels` (`creative-generate`) num UPDATE separado e tolerante; `intent.funnel.objective`
+  vem da etapa do funil e `intent.opportunity.objective` do plano da oportunidade. Peça antiga pode não ter `intent`.
+- O motivo da escolha do imóvel **não é gravado por peça** (o rodízio, o "Gerar agora" e o pacote do catálogo não deixam marca).
+- A regra de "vaga aberta" do calendário vive em `src/pages/dashboard/marketingAi/calendarSlots.ts` e é usada também pelo topo da Estratégia.

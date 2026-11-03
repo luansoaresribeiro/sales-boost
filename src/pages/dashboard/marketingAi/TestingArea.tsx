@@ -98,6 +98,11 @@ export interface TestPost {
   familia?: string | null
   pilar_ss?: string | null
   pillar?: string | null
+  // Pacote A: intenção da estratégia gravada na peça + ligações (imóvel, oportunidade, receita) usadas pelo calendário.
+  intent?: unknown
+  item_id?: string | null
+  opportunity_id?: string | null
+  recipe?: string | null
 }
 
 // Recomendação de como GRAVAR o vídeo (roteiro), quando o formato é vídeo/reel/story.
