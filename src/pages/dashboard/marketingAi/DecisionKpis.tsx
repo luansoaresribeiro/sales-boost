@@ -10,20 +10,20 @@ import type { FlowSummary } from './useFlowSummary'
 const TX = {
   pt: {
     title: 'Para decidir agora', window: 'janela de 7 dias', noData: 'sem dado ainda', demoTag: 'exemplo',
-    k1: 'Sinais relevantes', r1: 'Sinais com fonte e data dos últimos 7 dias (já filtrados e sem repetição na coleta).',
+    k1: 'Sinais relevantes', r1: 'Sinais com fonte e data dos últimos 7 dias (os automáticos já vêm filtrados e sem repetição da coleta).',
     k2: 'Oportunidades para avaliar', r2: 'Oportunidades aguardando a sua decisão (aprovar ou descartar).', n2: (n: number) => `${n} nova${n === 1 ? '' : 's'} em 7 dias`,
     k3: 'Direcionamento ativo', r3: 'Estratégias principais com status ativo.', none3: 'Nenhuma estratégia ativa — clique para criar.',
-    k4: 'Ações prontas', r4: 'Peças originais que passaram na nota e aguardam sua aprovação, ainda não agendadas (adaptações não contam de novo).', n4: (b: number) => `+ ${b} em revisão (ainda não passaram na nota)`,
+    k4: 'Ações prontas', r4: 'Peças do calendário prontas para aprovar (sem as já agendadas; adaptações não contam de novo).', n4: (b: number) => `+ ${b} em revisão (ainda não passaram na nota)`,
     cStatus: 'Status da coleta', cHint: 'contagens do que o sistema coletou — abre com clique',
     cSignals: (n: number, a: number | null) => `${n} sinal${n === 1 ? '' : 'is'} de mercado${a ? ` (${a} automático${a === 1 ? '' : 's'})` : ''}`,
     cRun: (d: string) => `última rodada de oportunidades ${d}`, cNoRun: 'ainda sem rodada de oportunidades', cNone: 'sem dado ainda',
   },
   en: {
     title: 'To decide now', window: '7-day window', noData: 'no data yet', demoTag: 'example',
-    k1: 'Relevant signals', r1: 'Signals with source and date from the last 7 days (already filtered and de-duplicated at collection).',
+    k1: 'Relevant signals', r1: 'Signals with source and date from the last 7 days (automatic ones already come filtered and de-duplicated from collection).',
     k2: 'Opportunities to review', r2: 'Opportunities waiting for your decision (approve or dismiss).', n2: (n: number) => `${n} new in 7 days`,
     k3: 'Active direction', r3: 'Main strategies with active status.', none3: 'No active strategy — click to create one.',
-    k4: 'Ready actions', r4: 'Original pieces that passed the quality score and await your approval, not yet scheduled (adaptations are not counted again).', n4: (b: number) => `+ ${b} in review (not yet past the quality score)`,
+    k4: 'Ready actions', r4: 'Calendar pieces ready to approve (without the already scheduled ones; adaptations are not counted again).', n4: (b: number) => `+ ${b} in review (not yet past the quality score)`,
     cStatus: 'Collection status', cHint: 'counts of what the system collected — click to open',
     cSignals: (n: number, a: number | null) => `${n} market signal${n === 1 ? '' : 's'}${a ? ` (${a} automatic)` : ''}`,
     cRun: (d: string) => `last opportunity run ${d}`, cNoRun: 'no opportunity run yet', cNone: 'no data yet',
@@ -52,7 +52,7 @@ export default function DecisionKpis({ lang, kpis, loading, demo, strategyName, 
   if (flow.lastOppAt) coll.push(t.cRun(new Date(flow.lastOppAt).toLocaleDateString(locale)))
   else if (flow.oppsApproved != null) coll.push(t.cNoRun)
   return (
-    <div style={{ margin: '24px 32px 0' }}>
+    <div style={{ margin: '24px 32px 0', position: 'relative', zIndex: 1 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.title}</span>
         <span style={{ fontSize: '11px', color: MUTED }}>· {t.window}</span>
