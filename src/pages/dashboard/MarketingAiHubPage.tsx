@@ -107,7 +107,6 @@ function useRealGrowth(companyId: string, token: string, lang: Lang): { real: Re
         supabase.from('leads').select('stage, value_estimate, created_at').eq('company_id', companyId),
         supabase.from('instagram_performance_snapshots').select('captured_for, followers, engagement_rate').eq('company_id', companyId).order('captured_for', { ascending: false }).limit(30),
         supabase.from('insights_reports').select('tab_key, summary, suggestions, created_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(3),
-        supabase.from('companies').select('meta_ads_account_id, whatsapp_phone_number_id').eq('id', companyId).maybeSingle(),
         supabase.from('marketing_ai_ideas').select('created_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('marketing_ai_trends').select('detected_at').eq('company_id', companyId).eq('source', 'instagram_scan').order('detected_at', { ascending: false }).limit(1).maybeSingle(),
       ])
@@ -115,7 +114,7 @@ function useRealGrowth(companyId: string, token: string, lang: Lang): { real: Re
       // "ainda sem linha"), o painel borrado precisa mostrar o erro real.
       const queryErr = results.find(r => r.error)?.error
       if (queryErr) { if (!cancelled) setState({ real: null, loading: false, error: queryErr.message }); return }
-      const [{ data: leadRows }, { data: snapRows }, { data: reportRows }, , { data: ideaRow }, { data: trendRow }] = results
+      const [{ data: leadRows }, { data: snapRows }, { data: reportRows }, { data: ideaRow }, { data: trendRow }] = results
       let ads: { connected: boolean; totals?: { spend: number; revenue: number; roas: number }; error?: string } | null = null
       let adsError: string | null = null
       if (token) {

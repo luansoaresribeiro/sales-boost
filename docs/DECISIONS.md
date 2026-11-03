@@ -2254,9 +2254,9 @@ Pedido do dono, sem migration e sem function:
 
 **Divergências do plano, registradas de propósito:**
 - **Motivo da escolha do imóvel não é gravado por peça.** O `reasoning` da peça é sobre formato/tema, não sobre o imóvel, então a tela
-  NÃO o apresenta como motivo. Mostra só o que o código garante: peça de oportunidade → "vem da oportunidade"; peça do calendário
-  (tem `planned_for`) → "rodízio" (o `pickItem` do `creative-generate` escolhe o menos usado entre os imóveis com 5+ fotos, sem repetir a
-  receita na janela da ficha); sem nenhum dos dois → "sem motivo registrado". Gravar o motivo de verdade é a Fase 4 do plano em
+  NÃO o apresenta como motivo. Mostra só o que o código garante: peça de oportunidade → "vem da oportunidade"; qualquer outra → "sem
+  motivo registrado". (A 1ª versão dizia "rodízio" para toda peça com dia no calendário; o QA reprovou, porque peça do "Gerar agora"
+  com imóvel escolhido pelo dono e do pacote do catálogo também têm dia, e nada na peça diz de onde veio.) Gravar o motivo de verdade é a Fase 4 do plano em
   [ROADMAP.md](ROADMAP.md) ("Pós-validação").
 - **`?item=` não serve para "Lugares perto"**: na Inteligência de Mercado ele redireciona ao Catálogo (links antigos do sino). Foram
   criados `?sub=` (abre a sub-aba: mercado/ideias/lugares/faq) e `?imovel=<id>` (imóvel de "Lugares perto"). O `?tab=ideias` do plano não existia.

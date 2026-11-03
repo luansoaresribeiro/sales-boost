@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL, useSSNames } from './shared'
@@ -29,7 +30,7 @@ const TX = {
     why: 'Por que excluir? O agente aprende com isso pra não repetir.', notePh: 'Quer explicar? (opcional)', delNoReason: 'Excluir sem motivo', cancel: 'Cancelar',
     reasons: { repetido: 'Repetido', texto: 'Texto ruim', foto: 'Foto ruim', errado: 'Informação errada', tom: 'Não tem a cara da marca', outro: 'Outro' } as Record<string, string>,
     itemTitle: 'Imóvel desta peça', itemWhy: 'Por que este imóvel', itemOpen: 'Abrir no Catálogo', itemNearby: 'Lugares perto',
-    whyOpp: 'Peça de uma oportunidade aprovada — o imóvel vem dela.', whyRota: 'escolhido pelo rodízio (o menos usado entre os imóveis com fotos suficientes, sem repetir a mesma receita na janela da ficha).',
+    whyOpp: 'Peça de uma oportunidade aprovada — o imóvel vem dela.',
     whyNone: 'Sem motivo registrado nesta peça.', usedN: (n: number) => `usado em ${n} peça${n === 1 ? '' : 's'} nos últimos 30 dias`, lastPiece: 'Última peça',
     editCap: '✏️ Editar legenda', saveCap: 'Salvar legenda', capSaved: 'Legenda salva — o agente vai aprender com a sua mudança ✓',
   },
@@ -48,7 +49,7 @@ const TX = {
     why: 'Why delete it? The agent learns from this so it does not repeat it.', notePh: 'Want to explain? (optional)', delNoReason: 'Delete without a reason', cancel: 'Cancel',
     reasons: { repetido: 'Repetitive', texto: 'Bad text', foto: 'Bad photo', errado: 'Wrong information', tom: 'Not our brand style', outro: 'Other' } as Record<string, string>,
     itemTitle: 'Property in this piece', itemWhy: 'Why this property', itemOpen: 'Open in Catalog', itemNearby: 'Nearby places',
-    whyOpp: 'Piece from an approved opportunity — the property comes from it.', whyRota: 'picked by the rotation (the least used among properties with enough photos, without repeating the same recipe within the playbook window).',
+    whyOpp: 'Piece from an approved opportunity — the property comes from it.',
     whyNone: 'No reason recorded for this piece.', usedN: (n: number) => `used in ${n} piece${n === 1 ? '' : 's'} in the last 30 days`, lastPiece: 'Last piece',
     editCap: '✏️ Edit caption', saveCap: 'Save caption', capSaved: 'Caption saved — the agent will learn from your change ✓',
   },
@@ -239,9 +240,10 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
           {item.item_id && usage.data.items[item.item_id] && (() => {
             const info = usage.data.items[item.item_id as string]
             const u = usage.data.usage[item.item_id as string]
-            // O motivo da escolha não é gravado por peça: só afirmamos o que o código garante (oportunidade → vem dela;
-            // peça do calendário → rodízio). O "reasoning" da peça é sobre formato/tema, não sobre o imóvel.
-            const why = item.opportunity_id ? tx.whyOpp : item.planned_for ? `${lang === 'en' ? 'Calendar: ' : 'Calendário: '}${tx.whyRota}` : tx.whyNone
+            // O motivo da escolha não é gravado por peça: só afirmamos o que o código garante (oportunidade → vem dela).
+            // Peça com dia no calendário pode vir do rodízio, do "Gerar agora" com imóvel escolhido ou do pacote do
+            // catálogo — sem marcador, não dá pra dizer qual (regra 5). O "reasoning" é sobre formato/tema, não o imóvel.
+            const why = item.opportunity_id ? tx.whyOpp : tx.whyNone
             return (
               <div style={{ padding: '10px 12px', border: `1px solid ${BORDER}`, borderRadius: '10px', background: 'rgba(255,255,255,0.02)', display: 'flex', gap: '10px' }}>
                 {info.cover && <img src={info.cover} alt="" style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />}
@@ -252,8 +254,8 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
                   {usage.data.ok && u && <div style={{ fontSize: '10.5px', color: MUTED }}>{tx.usedN(u.n30)}{u.last ? ` · ${tx.lastPiece} ${dayLabel(u.last)}` : ''}</div>}
                   <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.45, marginTop: '4px' }}><strong>{tx.itemWhy}:</strong> {why}</div>
                   <div style={{ display: 'flex', gap: '12px', marginTop: '5px', flexWrap: 'wrap' }}>
-                    <a href={`/dashboard/catalogo?item=${encodeURIComponent(info.id)}`} style={{ fontSize: '11px', fontWeight: 700, color: ORANGE }}>{tx.itemOpen}</a>
-                    <a href={`/dashboard/marketing-ai/dados?sub=lugares&imovel=${encodeURIComponent(info.id)}`} style={{ fontSize: '11px', fontWeight: 700, color: ORANGE }}>{tx.itemNearby}</a>
+                    <Link to={`/dashboard/catalogo?item=${encodeURIComponent(info.id)}`} style={{ fontSize: '11px', fontWeight: 700, color: ORANGE }}>{tx.itemOpen}</Link>
+                    <Link to={`/dashboard/marketing-ai/dados?sub=lugares&imovel=${encodeURIComponent(info.id)}`} style={{ fontSize: '11px', fontWeight: 700, color: ORANGE }}>{tx.itemNearby}</Link>
                   </div>
                 </div>
               </div>
