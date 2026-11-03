@@ -2283,3 +2283,45 @@ O **painel antigo (receita/ROAS/funil) desceu** para logo abaixo dos indicadores
 ação do dono. Abas da Inteligência de Mercado renomeadas (só rótulos; `?sub=` igual): Mercado → "Insights e evidências", Ideias e trends →
 "Direcionamento e ideias", Lugares → "Inteligência de localização", Dicas → "Base de conhecimento". Oportunidades vazias agora explicam a
 última análise com a data real do livro-caixa (fuso America/Sao_Paulo); "seguimos o direcionamento ativo" só aparece com estratégia main ativa, e com a lista vazia a frase é uma só.
+
+## 2026-11-03 — Pacotes A e B antes da Fase 2 (revisão do dono da proposta "organizar por decisão")
+
+**Contexto.** O dono propôs organizar a experiência por decisão (entender o mercado → definir a direção → oportunidades → executar →
+aprender), fazendo as telas que já existem se conectarem, sem criar telas, agentes ou dashboards novos. Cruzamos a proposta com o que já
+estava feito (PRs #92 e #93) e com as 5 fases. Muita coisa já estava coberta; o que sobrou virou os **Pacotes A, B1 e B2**, descritos em
+[ROADMAP.md](ROADMAP.md), "Pós-validação". Eles são uma camada de conexão sobre o que já existe, não fases novas.
+
+**Ordem (aprovada pelo dono):** validação (Tespon + "Teste Zero", gate do dono) → A → B1 → B2 → Fase 2 → 3 → 4 → 5. Nenhum código dos
+pacotes antes da validação. A Fase 2 só começa com A, B1 e B2 concluídos.
+
+**As 4 decisões:**
+1. **Os pacotes não criam fonte de verdade nova.** Não duplicar o `content_plan`, não criar tabela de direcionamento, não duplicar as
+   relações lead↔peça↔oportunidade e não criar serviço de imóveis antes da Fase 4. Os pacotes só leem o que já existe.
+2. **A regra 5 inclui os estados da tela**, em hub, calendário, catálogo, funil e oportunidades:
+
+   | Situação | O que a tela mostra |
+   |---|---|
+   | Dado real | O dado |
+   | Sem registro | A ausência ("sem registro") |
+   | Carregando | Carregamento |
+   | Erro | "Não foi possível verificar" |
+   | Dado fictício | Só no modo demonstração, com etiqueta |
+
+   Erro e vazio são coisas diferentes: com consulta falhando, a tela nunca diz "não existe" nem "tudo em dia".
+3. **Toda relação que existe pode ser navegada.** Imóvel→peça, peça→oportunidade, lead→peça e lead→oportunidade viram links ou detalhes,
+   usando os ids que já estão no banco, sem tela nova de rastreabilidade. Só se mostra a relação quando ela é inequívoca. Exemplo: um
+   `link_id` só aponta "conteúdo de origem" se levar a uma peça só.
+4. **Mostrar relação não é escolher imóvel.** O Pacote B mostra o que existe. Decidir qual imóvel usar é a Fase 4, que grava um motivo
+   verificável (os atributos que de fato decidiram) e revalida o imóvel antes de publicar.
+
+**Ajustes para as fases seguintes** (detalhe no ROADMAP):
+- **Fase 2:** controlar volume e custo por rodada, sem reinterpretar sinal que não mudou.
+- **Fase 3:** tema sugerido entra como contexto; tese, público e objetivo só mudam com aprovação.
+- **Fase 4:** motivo verificável; imóvel indisponível não publica.
+- **Fase 5:** comercial separado de engajamento, com `results-flow` como dependência; não conta como pronta só com o Instagram.
+
+**Fora dos pacotes, de propósito:**
+- Os botões "Relacionar imóvel" (Fase 4) e "Adicionar ao direcionamento" (Fase 3).
+- Demonstração nas outras telas.
+- Campanha (segue "em breve").
+- WhatsApp e mais agentes.

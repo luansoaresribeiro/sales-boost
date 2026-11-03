@@ -574,11 +574,86 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 
 > Só começa **depois** da validação (teste final com a Tespon / "Teste Zero") — **exceção aprovada pelo dono em 2026-11-03: a Fase 1
 > (só tela, custo zero) foi adiantada**. O plano transforma a Marketing AI de "mostra informação"
-> em "ajuda a decidir". Só a Fase 1 foi implementada (branch `claude/nifty-shannon-ysp818-fase1`, aguardando PR/deploy); a PR de telas de 2026-11-03 só mostra o que já existe (ver
-> [DECISIONS.md](DECISIONS.md)). Ordem: **validação → Fase 1 → Fase 2 → Fase 3 → Fase 4 → Fase 5.**
+> em "ajuda a decidir". Só a Fase 1 foi implementada (PR #93, no ar em 2026-11-03); a PR de telas #92 só mostra o que já existe (ver
+> [DECISIONS.md](DECISIONS.md)).
+>
+> **Ordem atual (revisão do dono de 2026-11-03):** **validação → Pacote A → Pacote B1 → Pacote B2 → Fase 2 → Fase 3 → Fase 4 → Fase 5.**
+> A validação (Tespon + "Teste Zero") é gate do dono: o Pacote A só começa depois dela. A Fase 2 só começa com A, B1 e B2 concluídos.
+> Os pacotes **não são fases novas**: são uma camada de conexão/usabilidade sobre o que já existe, sem IA e sem criar fonte de verdade nova
+> (as 4 regras estão em [DECISIONS.md](DECISIONS.md), 2026-11-03 "Pacotes A e B").
+
+### Pacotes de conexão (antes da Fase 2)
+**Pacote A — orientação (só tela, sem IA).**
+1. Hub, bloco **"O que merece sua atenção"** com 4 linhas separadas:
+   - **Último sinal**: o mais recente com fonte e data, não ignorado e completo (não o sinal bruto).
+   - **Oportunidade**: só as que estão de fato aguardando avaliação.
+   - **Direcionamento**: o tema central da estratégia ativa. Sem tema, não inventa.
+   - **Próxima ação**, por regra fixa nesta ordem: sem estratégia → oportunidade esperando → peça para aprovar → semana sem peças → "Tudo em dia".
+     - Se uma consulta necessária falhar ou não carregar, aparece **"Não foi possível verificar"**. Nunca "não existe" nem "tudo em dia" nesse caso.
+     - "Tudo em dia" só aparece quando todas as verificações foram concluídas e não há nada pendente.
+   - Os 5 cards de agente ficam menores: estado, uma informação útil e a próxima ação.
+2. Estratégia, no topo, **3 blocos que não se misturam**:
+   - **Direcionamento ativo**: o que a estratégia define (objetivo, público, temas).
+   - **Plano da semana**: como isso foi distribuído (`weekly_mix`).
+   - **Próxima ação**: a próxima vaga do calendário, ou "Nenhuma peça planejada".
+   - "Por que essa direção" só cita oportunidade quando ela está ligada de verdade.
+3. Calendário (célula e modal):
+   - **Objetivo**: `intent.funnel.objective`, ou "Sem objetivo registrado".
+   - **Tipo de ativação** por regra explícita (conferir a semântica dos campos no banco antes de fechar):
+
+     | Condição | Tipo |
+     |---|---|
+     | Sem imóvel e sem oportunidade | Educativo sem imóvel |
+     | Com imóvel, família educativo | Educativo com imóvel |
+     | Com imóvel, família tour/oferta | Apresentação de imóvel |
+     | Oportunidade válida | Oportunidade |
+     | Dado incompleto ou contraditório | "Tipo não identificado" |
+
+   - O modal mostra objetivo, tipo, imóvel e oportunidade (se houver). O motivo da escolha só aparece quando estiver registrado.
+
+**Pacote B1 — relações que já existem no banco (só mostrar).**
+4. Catálogo, **"Atividade do imóvel"**: dados e página pública; peças planejadas e publicadas, com o estado de cada uma; oportunidades
+   ligadas (`item_ids`); leads (`leads.item_id`). Bloco vazio diz que está vazio, e isso não é erro.
+5. Funil, **origem do lead**:
+   - Conteúdo de origem só quando o `link_id` leva a uma única peça, sem ambiguidade (conferir antes o que `tracked_links` guarda).
+   - Oportunidade quando `opportunity_id` estiver gravado.
+   - Senão, "Origem não registrada".
+6. Oportunidades: formulário de sinal manual recolhido; corrigir o texto que manda clicar num botão que não existe; "O que falta pra
+   achar mais" fica discreto.
+
+**Pacote B2 — ações novas.**
+7. Botão **"+" vira menu**: Adicionar imóvel · Gerar peça agora · Adicionar sinal de mercado. Cada opção só entra se funcionar de ponta a ponta.
+8. **Ignorar sinal**: `market_signals.meta.ignored` + `meta.ignored_at`, sem migration. A evidência fica preservada.
+9. **Ignorar tendência**: migration mínima com `status` (`active`/`ignored`, respeitando estados que já existam) e a data, se couber.
+   Sai das sugestões ativas sem apagar nada.
+10. **"Ver evidência"** no card de tendência; "Fazer carrossel" vira ação secundária.
+
+**Critérios de aceite (QA de cada pacote).**
+
+| Caso | Esperado |
+|---|---|
+| Imóvel sem peças | "Nenhuma peça relacionada" |
+| Imóvel com peça planejada ou publicada | Mostra a peça e o estado |
+| Imóvel sem oportunidade | Mostra a ausência, não erro |
+| Lead sem origem | "Origem não registrada" |
+| Oportunidade ou tendência ignorada | Sai das sugestões ativas |
+| Sinal ignorado | Evidência preservada |
+| Estratégia sem tema central | Não inventa direcionamento |
+| Peça sem objetivo | "Sem objetivo registrado" |
+| Consulta com erro | Nunca "Tudo em dia" |
+| Demo | Etiqueta visível |
+
+- As contagens batem com a tela de destino (3 peças para aprovar levam a 3 peças reais, sem duplicata).
+- Conferência por SQL de leitura na Tespon e na "Teste Zero".
+- Depois do merge, "Site publicado em getsaleboost.com ✅".
+
+**Fora dos pacotes, de propósito:**
+- "Relacionar imóvel" (Fase 4) e "Adicionar ao direcionamento" (Fase 3) não entram como botão vazio.
+- Demonstração nas outras telas fica segurada, para não espalhar dado fictício.
+- Campanha continua "em breve".
 
 ### As 5 fases
-1. **Tela de decisão (hub).** ✅ *Feita no código em 2026-11-03 (aguardando PR e publicação; ver [DECISIONS.md](DECISIONS.md)).* 4 indicadores de decisão numa **janela de 7 dias**, com regras fixas e visíveis (cada indicador diz de
+1. **Tela de decisão (hub).** ✅ *Feita e no ar (PR #93, 2026-11-03; ver [DECISIONS.md](DECISIONS.md)).* 4 indicadores de decisão numa **janela de 7 dias**, com regras fixas e visíveis (cada indicador diz de
    onde vem e como é calculado; sem dado = "sem dado ainda", nunca 0 fingido).
 2. **Inteligência.** Interpretação de sinais **só dos novos, deduplicados**, com **limite de chamadas de IA e custo registrado**
    (livro-caixa). "O que mudou" compara **semana vs. semana anterior** e só diz "cresceu" quando há evidência (número real dos dois lados).
@@ -598,6 +673,25 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 5. Property matching com mínimo de fotos por formato e motivo gravado (Fase 4).
 6. CRM VRSync com id externo, última sync, status, preço, removidos, falhas; revalidar antes de publicar (Fase 4).
 7. Resultado comercial (CRM/leads) separado de engajamento (Instagram) (Fase 5).
+
+### Ajustes do dono para as Fases 2–5 (revisão de 2026-11-03)
+- **Fase 2:**
+  - Controlar o **volume**, não só o gasto. Registrar por rodada: sinais coletados, que passaram no filtro, interpretados e
+    descartados, custo da rodada e custo acumulado.
+  - Não reinterpretar sinal que não mudou.
+  - Entrega um resumo "o que mudou" com evidência, interpretação e possível impacto, sem dashboard novo.
+  - Plano com teto de custo é mostrado ao dono antes de começar.
+- **Fase 3:** o sinal sugere um tema → o tema entra como contexto → o plano da semana pode usar. Posicionamento, público e objetivo
+  principal só mudam com aprovação.
+- **Fase 4:**
+  - O motivo da escolha do imóvel precisa ser **verificável**: os atributos que de fato decidiram (região, perfil, característica,
+    disponibilidade), não uma justificativa genérica.
+  - Revalidar o imóvel antes de publicar, e criar o serviço comum de imóveis.
+  - Critério de aceite: imóvel indisponível não publica.
+- **Fase 5:**
+  - Separar marketing (alcance, engajamento, salvamentos, cliques) de comercial (conversas, leads, visitas, conversões).
+  - A branch `results-flow` é dependência própria.
+  - Não conta como concluída só com métricas do Instagram. O que não existe aparece como ausente, nunca estimado.
 
 ### Rastreabilidade ponta a ponta
 Cada passo guarda **ids**, para dar pra perguntar "de onde veio isto?" e "deu resultado?":
