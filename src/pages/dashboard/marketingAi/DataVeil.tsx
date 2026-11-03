@@ -66,7 +66,7 @@ export default function DataVeil({ mode, title, message, errorDetail, cta, child
 
   const isError = mode === 'error'
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', minHeight: mode === 'locked' || mode === 'error' ? '340px' : undefined }}>
       {/* Layout preservado, porém borrado e não-interativo. */}
       <div aria-hidden style={{ filter: 'blur(7px)', opacity: 0.5, pointerEvents: 'none', userSelect: 'none' }}>
         {children}

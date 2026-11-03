@@ -655,9 +655,15 @@ regras do código permitem calcular), 1–2 contagens e, em laranja, o que esper
 
 ## Mapa de telas dos agentes (atualizado 2026-11-03)
 
+**Hub, de cima pra baixo (Fase 1, 2026-11-03):** (1) cabeçalho; (2) **4 indicadores de decisão** (`DecisionKpis.tsx` + `useDecisionKpis.ts`;
+cada tile mostra a regra e leva à tela de origem: Sinais → Inteligência de Mercado `?sub=mercado`, Oportunidades → `/dashboard/opportunities`,
+Direcionamento → Estratégia, Ações prontas → `/dashboard/aprovacoes`) e o bloco recolhido **"Status da coleta"**; (3) painel de
+receita/ROAS/funil (`DataVeil` + `GrowthCommandCenter`, desceu); (4) os 5 cards do fluxo. Modo demonstração: indicadores com números de
+exemplo (`buildDecisionDemo`, rotulados "exemplo"). Abas da Inteligência de Mercado (`?sub=`): `mercado` = "Insights e evidências",
+`ideias` = "Direcionamento e ideias", `lugares` = "Inteligência de localização", `faq` = "Base de conhecimento".
 Hub `/dashboard/marketing-ai` (selos = 5 agentes, mesmos ícones dos cards) → cada agente tem a barra "← Voltar" (volta ao hub) e o 🔁
 `FeedbackWidget` ("O que a IA está aprendendo"):
-- 📊 Inteligência de Mercado `/dashboard/marketing-ai/dados` (`?sub=mercado|ideias|lugares|faq`; `?imovel=<id>` escolhe o imóvel de
+- 📊 Inteligência de Mercado `/dashboard/marketing-ai/dados` (`?sub=mercado|ideias|lugares|faq` — rótulos novos acima; `?imovel=<id>` escolhe o imóvel de
   "Lugares perto"; `?item=<id>` redireciona ao Catálogo) — 🔁 `dados`.
 - 💡 Motor de Oportunidades `/dashboard/opportunities` — 🔁 `opportunities` (pilares `competitor`+`tracking`). "Imóveis ligados" linka ao Catálogo.
 - 🧭 Estratégia `/dashboard/marketing-ai/estrategia` — 🔁 `estrategia`.

@@ -2263,3 +2263,23 @@ Pedido do dono, sem migration e sem function:
 - **Nº de peças em 30 dias** = o MAIOR entre as contagens de `marketing_ai_test_content` (sem adaptações) e de `posts`: uma peça aprovada
   vira uma linha em `posts` com o mesmo `item_id`, e somar contaria 2x.
 - **A vaga vazia "no imóvel" não mostra imóvel reservado**: não existe reserva antes da peça nascer (o `pickItem` roda na criação).
+
+## 2026-11-03 — Fase 1 começa antes da validação terminar (decisão do dono), só tela, custo zero
+
+O dono aprovou adiantar a **Fase 1** do plano pós-validação ([ROADMAP.md](ROADMAP.md#pós-validação--marketing-ai-da-informação-à-decisão-plano-de-2026-11-03)):
+só frontend, sem migration, sem função, sem IA, custo zero. O hub ganha 4 indicadores de decisão no topo (janela de 7 dias; cada um mostra a
+regra e leva à tela de origem; sem dado = "sem dado ainda", nunca 0 fingido):
+1. **Sinais relevantes** = `market_signals` com `source_url` preenchido e data nos últimos 7 dias (`observed_at`; se nula, `created_at`).
+   **"Relevante" hoje = passou no filtro da coleta** (fonte e data; a deduplicação só vale para os sinais automáticos, `collected_by='system'` — os manuais não passam por ela). Relevância de verdade (interpretação) = Fase 2.
+2. **Oportunidades para avaliar** = `growth_opportunities` `status='suggested'`; sub-linha "N novas em 7 dias".
+3. **Direcionamento ativo** = `marketing_ai_strategies` `kind='main'` `status='active'` (contagem + nome).
+4. **Ações prontas** = `marketing_ai_test_content` com `status='vault'` (passou na nota = pronta pra aprovar; "peças do calendário prontas para aprovar") e `source_id` nulo (adaptações
+   não contam de novo), **menos as já agendadas** (`agent_actions` `ref_type='marketing_ai_test_content'`, `execution_status='QUEUED'`,
+   `scheduled_at` não nulo — o mesmo recorte de peças que a tela Aprovações usa). **Ressalva:** o número NÃO é idêntico ao "Para aprovar" de lá — a Aprovações lista só até 40 peças e soma também ações pendentes e ideias de `marketing_ai_content`, então o dela pode ser maior; o selo do menu lateral é outro número. `draft` (em revisão, ainda
+   não passou na nota) **não entra no total**; aparece só na sub-linha "+ M em revisão (ainda não passaram na nota)". Busca ids (limite
+   500); consulta falhou ou estourou o limite = "sem dado ainda".
+O **painel antigo (receita/ROAS/funil) desceu** para logo abaixo dos indicadores — nada foi removido. As contagens de coleta (sinais,
+última rodada de oportunidades) saíram das linhas dos cards para o bloco recolhido "Status da coleta"; os cards ficam só com o que pede
+ação do dono. Abas da Inteligência de Mercado renomeadas (só rótulos; `?sub=` igual): Mercado → "Insights e evidências", Ideias e trends →
+"Direcionamento e ideias", Lugares → "Inteligência de localização", Dicas → "Base de conhecimento". Oportunidades vazias agora explicam a
+última análise com a data real do livro-caixa (fuso America/Sao_Paulo); "seguimos o direcionamento ativo" só aparece com estratégia main ativa, e com a lista vazia a frase é uma só.

@@ -572,12 +572,13 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 
 ## Pós-validação — Marketing AI da informação à decisão (plano de 2026-11-03)
 
-> Só começa **depois** da validação (teste final com a Tespon / "Teste Zero"). O plano transforma a Marketing AI de "mostra informação"
-> em "ajuda a decidir". Nada aqui foi implementado; a PR de telas de 2026-11-03 só mostra o que já existe (ver
+> Só começa **depois** da validação (teste final com a Tespon / "Teste Zero") — **exceção aprovada pelo dono em 2026-11-03: a Fase 1
+> (só tela, custo zero) foi adiantada**. O plano transforma a Marketing AI de "mostra informação"
+> em "ajuda a decidir". Só a Fase 1 foi implementada (branch `claude/nifty-shannon-ysp818-fase1`, aguardando PR/deploy); a PR de telas de 2026-11-03 só mostra o que já existe (ver
 > [DECISIONS.md](DECISIONS.md)). Ordem: **validação → Fase 1 → Fase 2 → Fase 3 → Fase 4 → Fase 5.**
 
 ### As 5 fases
-1. **Tela de decisão (hub).** 4 indicadores de decisão numa **janela de 7 dias**, com regras fixas e visíveis (cada indicador diz de
+1. **Tela de decisão (hub).** ✅ *Feita no código em 2026-11-03 (aguardando PR e publicação; ver [DECISIONS.md](DECISIONS.md)).* 4 indicadores de decisão numa **janela de 7 dias**, com regras fixas e visíveis (cada indicador diz de
    onde vem e como é calculado; sem dado = "sem dado ainda", nunca 0 fingido).
 2. **Inteligência.** Interpretação de sinais **só dos novos, deduplicados**, com **limite de chamadas de IA e custo registrado**
    (livro-caixa). "O que mudou" compara **semana vs. semana anterior** e só diz "cresceu" quando há evidência (número real dos dois lados).
