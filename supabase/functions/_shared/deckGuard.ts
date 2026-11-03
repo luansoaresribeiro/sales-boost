@@ -60,7 +60,7 @@ ${t.tips.map((x, i) => `Dica ${i + 1} — Pergunta: ${x.title}\nResposta: ${x.co
 ${t.hosts.length ? `Fonte oficial: ${t.hosts.join(', ')}. No slide final, "text" termina com "Fonte: ${t.hosts[0]}"; a legenda termina com "Fonte: ${t.hosts[0]}".` : ''}
 Regras: um slide do meio por dica, na ordem; explique com as palavras da resposta, sem acrescentar fato, exceção, número, prazo, taxa, lei, imposto ou programa que a resposta não diga. Se uma dica tem número ou nome de lei, copie exatamente. A legenda só explica o que as dicas dizem. Nada de números ou fatos vindos de outro lugar.\n`
   }
-  if (t.mode === 'geral') return `\nMODO DICA GERAL — tema regulado${t.label ? ` (${t.label})` : ''} SEM dica conferida em fonte oficial. Escreva só conselho geral e prático: NENHUM número, prazo, taxa, valor, percentual, nome de lei, imposto ou programa, e nenhuma regra afirmada como fato. Pode incentivar a conferir em fonte oficial ou falar com quem entende.\n`
+  if (t.mode === 'geral') return `\nMODO DICA GERAL — tema regulado${t.label ? ` (${t.label})` : ''} SEM dica conferida em fonte oficial. Escreva só conselho geral e prático: NENHUM número, prazo, taxa, valor, percentual, nome de lei, imposto ou programa, e nenhuma regra afirmada como fato — nem disfarçada de "mito", "erro comum" ou "o que é regra" (não prometa separar mito de regra). Pode incentivar a conferir em fonte oficial ou falar com quem entende.\n`
   return ''
 }
 
@@ -169,7 +169,7 @@ Liste os trechos que AFIRMAM algo (regra, prazo, valor, lei, imposto, programa, 
 TEXTOS:
 ${body}
 
-Liste os trechos que AFIRMAM COMO FATO uma regra, condição, exceção, permissão, proibição, prazo, valor, lei ou obrigação (ex.: "X pode usar", "Y não impede", "é obrigatório"). Conselho geral ("confira com o banco", "peça a documentação"), pergunta e convite NÃO contam. Responda SÓ em JSON: {"unsupported":[{"unit":"slide 2" ou "legenda","claim":"o trecho"}]}`
+Liste os trechos que AFIRMAM COMO FATO uma regra, condição, exceção, permissão, proibição, prazo, valor, lei ou obrigação (ex.: "X pode usar", "Y não impede", "é obrigatório") — inclusive regra DISFARÇADA de "erro comum", "mito" ou "engano" (ex.: "erro: achar que precisa morar na cidade" afirma que NÃO precisa). Conselho geral ("confira com o banco", "peça a documentação"), pergunta e convite NÃO contam. Responda SÓ em JSON: {"unsupported":[{"unit":"slide 2" ou "legenda","claim":"o trecho"}]}`
         const raw = parseJson<{ unsupported?: { unit?: string; claim?: string }[] }>(await ask(q, 500, true), {})
         const bad = new Set<number | 'c'>()
         for (const x of Array.isArray(raw.unsupported) ? raw.unsupported : []) { const u = unitIdx(String(x?.unit ?? '')); if (u !== null && idx.includes(u)) bad.add(u) }

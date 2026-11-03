@@ -26,7 +26,7 @@ import { applyQueroLock, cleanLabels, dropUnknownPilar, fetchSSPillars } from '.
 import { decideVideoCta } from '../_shared/videoCta.ts'
 import { stripInternalNotes, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
 import { ensureNearby, fetchNearbyConfig, fmtDistance, topPlaces } from '../_shared/nearbyPlaces.ts'
-import { buildNearbySlides, buildOfferSlides, pickCoverPhoto, type OfferSlide } from '../_shared/carouselOffer.ts'
+import { buildNearbySlides, buildOfferSlides, pickCoverPhoto, type CoverRooms, type OfferSlide } from '../_shared/carouselOffer.ts'
 import { allowedValues } from '../_shared/numberGuard.ts'
 import { claimPromptRule, captionRewritePrompt, claimCtx, claimNotice, cutClaims, cutHashtags, itemFacts, lockText } from '../_shared/claimLock.ts'
 
@@ -40,7 +40,7 @@ type SupaClient = ReturnType<typeof createClient>
 interface Photo { url: string; path: string }
 interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
 interface RecipeGroup { recipes: string[]; fonte_midia: string; descricao: string }
-interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; fieldMap: { price?: string; bedrooms?: string; location?: string } | null; claimCtx: { terms: string[]; context: string[] } | null }
+interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string } | null; claimCtx: { terms: string[]; context: string[] } | null }
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -69,6 +69,8 @@ async function fetchFichaConfig(admin: SupaClient, verticalKey: string | null): 
     return { pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null,
       // Trava de afirmação de mercado (claimLock): termos e campos de preço/quartos vêm da ficha (regra 6).
       marketClaims: ((c.opportunity_texts as { market_claims?: { pt?: unknown } } | undefined)?.market_claims?.pt as string[] | undefined)?.filter(x => typeof x === 'string' && x.trim()) ?? null,
+      // Capa pelos cômodos da ficha (tour.room_priority / avoid_rooms), igual ao tour em vídeo — nunca a 1ª foto no escuro.
+      coverRooms: (() => { const t = (c.tour ?? {}) as { room_priority?: unknown; avoid_rooms?: unknown }; const a = (v: unknown) => (Array.isArray(v) ? v.filter((y): y is string => typeof y === 'string' && !!y.trim()) : []); return a(t.room_priority).length || a(t.avoid_rooms).length ? { priority: a(t.room_priority), avoid: a(t.avoid_rooms) } : null })(),
       fieldMap: c.opportunity_fields && typeof c.opportunity_fields === 'object' ? c.opportunity_fields as { price?: string; bedrooms?: string; location?: string } : null,
       claimCtx: (() => { const x = (c.opportunity_texts as { market_claims_ctx?: { pt?: { terms?: unknown; context?: unknown } } } | undefined)?.market_claims_ctx?.pt; const a = (v: unknown) => (Array.isArray(v) ? v.filter((y): y is string => typeof y === 'string' && !!y.trim()) : []); return x && a(x.terms).length ? { terms: a(x.terms), context: a(x.context) } : null })() }
   } catch { return null }
@@ -364,7 +366,7 @@ Deno.serve(async (req) => {
           // Instagram aceita até 10 mídias no carrossel — corta aqui, não na publicação.
           // Carrossel de verdade no sistema de slides (decisão do dono, 2026-11-02): capa com a foto de maior nota + tipo/bairro/quartos/preço
           // (só o que está cadastrado) · até 4 fotos reais · slide de dados · fecho com o CTA seguro. Máx. 7. Falhou o desenho: fotos cruas, como era antes.
-          const specs = buildOfferSlides({ photos, staged: useStaged ? staged : [], fields, cta: decision.cta })
+          const specs = buildOfferSlides({ photos, staged: useStaged ? staged : [], fields, cta: decision.cta, rooms: ficha.coverRooms })
           const urls = specs.length ? await renderSlides(supabaseUrl, auth, specs, await getBrand(), handle) : []
           const okAll = specs.length > 0 && urls[0] && urls.filter(Boolean).length >= 3
           if (okAll) {
@@ -397,7 +399,7 @@ Deno.serve(async (req) => {
             // "Metrô · Antero de Quental" — a categoria entra quando o nome sozinho não diz o que é (ex.: estação de metrô).
             const placeLines = near!.top.slice(0, 3).map(p => `${p.label.toLowerCase().split(/\s+/).some(w => w.length > 3 && p.name.toLowerCase().includes(w)) ? '' : `${p.label.split(' ')[0]} · `}${p.name}${near!.precise ? ` · ${fmtDistance(p.distance_m)}` : ''}`)
             // Sistema de slides (PR B): capa com a foto real, lista dos 3 lugares e fecho com CTA — logo e @ vêm do template 'slide'.
-            const specs = buildNearbySlides({ photo: pickCoverPhoto(photos), bairro: String(fields.bairro ?? ''), places: placeLines, cta: decision.cta })
+            const specs = buildNearbySlides({ photo: pickCoverPhoto(photos, ficha.coverRooms), bairro: String(fields.bairro ?? ''), places: placeLines, cta: decision.cta })
             const urls = specs.length ? await renderSlides(supabaseUrl, auth, specs, await getBrand(), handle) : []
             if (specs.length && urls.every(Boolean)) {
               media = urls.map(u => ({ url: u as string, type: 'photo' }))
@@ -406,10 +408,10 @@ Deno.serve(async (req) => {
               // Reserva (desenho falhou): o card antigo "trend" + foto real, como era antes.
               const card = await renderListCard(supabaseUrl, auth, { eyebrow: `Perto do imóvel em ${String(fields.bairro ?? 'Rio')}`.slice(0, 40), title: '3 coisas perto daqui', items: placeLines.join('\n') }, await getBrand())
               if (!card) { skipped.push({ recipe, reason: 'Falha ao gerar o card dos lugares — tente de novo depois.' }); continue }
-              media = [{ url: card, type: 'photo' }, { url: photos[0].url, type: 'photo' }]
+              media = [{ url: card, type: 'photo' }, { url: (pickCoverPhoto(photos, ficha.coverRooms) ?? photos[0]).url, type: 'photo' }]
             }
           } else {
-            media = [{ url: photos[0].url, type: 'photo' }]
+            media = [{ url: (pickCoverPhoto(photos, ficha.coverRooms) ?? photos[0]).url, type: 'photo' }]
           }
           const c = await copy(lessonsTxt + `${recipe === 'post_3_coisas_perto' ? 'Escreva um post "3 coisas perto" deste imóvel' : `Escreva um post sobre como é morar perto deste imóvel em ${fields.bairro ?? 'no bairro'} — estilo de vida, não o imóvel em si`}. Use SÓ estes lugares reais, com o nome exatamente assim (dados do OpenStreetMap):\n${lista.join('\n')}\n${distRule} Nunca diga o endereço/rua do imóvel.\n${fieldsLine}`)
           caption = c.caption; hashtags = c.hashtags; cta = c.cta
@@ -433,8 +435,11 @@ Deno.serve(async (req) => {
           caption = c.caption; hashtags = c.hashtags; cta = c.cta
           provider = 'catalogo_real'
         } else if (recipe === 'stories_enquete_pagaria') {
-          const cardText = `Quanto você pagaria por um ${String(fields.tipo ?? 'imóvel').toLowerCase()} assim em ${fields.bairro ?? 'um bairro como esse'}?`
-          const url = await renderPollCard(supabaseUrl, internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }, photos[0].url, { eyebrow: fields.bairro ? `Enquete · ${fields.bairro}` : 'Enquete', headline: cardText, cta: 'Vote na enquete' }, await getBrand())
+          // Artigo pelo gênero da palavra (Teste Zero 2026-11-03: "por um cobertura"). Terminada em "a" → "uma" (casa, cobertura, sala, loja).
+          const tipoTxt = String(fields.tipo ?? 'imóvel').toLowerCase().trim() || 'imóvel'
+          const art = /a$/.test(tipoTxt.split(/\s+/)[0]) ? 'uma' : 'um'
+          const cardText = `Quanto você pagaria por ${art} ${tipoTxt} assim em ${fields.bairro ?? 'um bairro como esse'}?`
+          const url = await renderPollCard(supabaseUrl, internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }, (pickCoverPhoto(photos, ficha.coverRooms) ?? photos[0]).url, { eyebrow: fields.bairro ? `Enquete · ${fields.bairro}` : 'Enquete', headline: cardText, cta: 'Vote na enquete' }, await getBrand())
           if (!url) { skipped.push({ recipe, reason: 'Falha ao gerar o card — tente de novo depois.' }); continue }
           media = [{ url, type: 'photo' }]
           caption = cardText; hashtags = ''; cta = 'Comenta aqui embaixo 👇'

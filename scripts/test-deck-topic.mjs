@@ -8,7 +8,7 @@ import {
   tipSources, topicCfgOf, topicText, validateGeneral, validateLight, validateRegulated, withSource,
 } from '../supabase/functions/_shared/deckTopic.ts'
 import { decideTopic, guardDeck, topicBlock } from '../supabase/functions/_shared/deckGuard.ts'
-import { deckPromptRules, lostAccents, rewritePrompt } from '../supabase/functions/_shared/deckSlides.ts'
+import { deckPromptRules, inventedNumbers, lostAccents, numbersOf, rewritePrompt } from '../supabase/functions/_shared/deckSlides.ts'
 import { fetchFaqConfig, isPublishable, isOfficiallyReleased, isUsableTip } from '../supabase/functions/_shared/faqCheck.ts'
 import { fetchFormatAliases } from '../supabase/functions/_shared/formatCatalog.ts'
 
@@ -329,6 +329,12 @@ ok('guarda geral: regra afirmada como fato sem número → verificador → texto
   assert.ok(!lostAccents(r.slides[1], 'pt'))
 }
 ok('reescrita sem acento é descartada (vira texto seguro no geral)')
+{ // número da dica conferida não é "inventado" (Tespon ITBI 2026-11-03: aviso falso no 3%). Mesma chave dos dois lados.
+  const tipText = 'Quanto é o ITBI no Rio? No Rio de Janeiro, o ITBI é de 3% sobre o valor de venda ou avaliação do imóvel.'
+  assert.deepEqual(inventedNumbers({ title: 'Como funciona', text: '', items: '3% sobre o valor', cta: '' }, numbersOf(tipText)), [])
+  assert.deepEqual(inventedNumbers({ title: 'Como funciona', text: '', items: '2% para o primeiro imóvel', cta: '' }, numbersOf(tipText)), ['2'])
+}
+ok('número que está na dica conferida não gera aviso; número fora dela gera')
 { // leve: reescreve 1x; se continuar, só avisa
   const slides = [S('capa', 'Primeiro imóvel', ''), S('destaque', '', 'Use o FGTS na entrada.'), S('destaque', '', 'Compare bairros com calma.'), S('fecho', 'Fale com a gente', '', '', 'x')]
   const leve = { mode: 'leve', category: null, label: '', tips: [], hosts: [] }

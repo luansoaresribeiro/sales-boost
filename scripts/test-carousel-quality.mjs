@@ -86,4 +86,17 @@ assert.equal(findRepeatedTheme('Documentos para vender seu imóvel', used), null
 assert.deepEqual(recentThemes([{ idea: 'Barra ou Leblon com 1,5 mi' }, { idea: 'Leblon vs Barra: R$ 1,5 mi' }, { idea: 'Dicas de documentação' }, { idea: null }]), ['Barra ou Leblon com 1,5 mi', 'Dicas de documentação']); ok('lista de temas recentes sem duplicata, só com texto')
 assert.match(themeBlock(used), /NÃO repita o mesmo tema/); assert.equal(themeBlock([]), ''); ok('bloco do prompt do Diretor')
 
+// capa pelos cômodos da ficha (Teste Zero 2026-11-03: notas empatadas → banheiro com toalhas na capa)
+{
+  const R = (n, room, q = 80) => ({ url: `https://x/${n}.jpg`, room, quality: q })
+  const rooms = { priority: ['fachada', 'vista', 'sala', 'varanda', 'cozinha', 'sala_jantar', 'quarto', 'hall'], avoid: ['banheiro', 'corredor', 'area_servico'] }
+  const cob = [R('ban1', 'banheiro'), R('hall', 'hall'), R('q1', 'quarto', 68), R('ban2', 'banheiro'), R('q2', 'quarto')]
+  assert.equal(pickCoverPhoto(cob).url, 'https://x/ban1.jpg') // sem ficha: comportamento antigo
+  assert.equal(pickCoverPhoto(cob, rooms).url, 'https://x/q2.jpg') // quarto (maior nota) antes de hall; banheiro nunca
+  assert.equal(pickCoverPhoto([R('ban', 'banheiro', 95), R('sala', 'sala', 60)], rooms).url, 'https://x/sala.jpg')
+  assert.equal(pickCoverPhoto([R('ban', 'banheiro')], rooms).url, 'https://x/ban.jpg') // só tem o que evitar: usa (nunca vazio)
+  assert.equal(buildOfferSlides({ photos: cob, fields: { tipo: 'Cobertura', bairro: 'Leblon' }, cta: 'x', rooms })[0].photo, 'https://x/q2.jpg')
+}
+ok('capa segue os cômodos da ficha: evita banheiro, prefere a ordem, depois a nota')
+
 console.log(`\n${n} verificações ok`)

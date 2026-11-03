@@ -36,7 +36,7 @@ import { allowedValues } from '../_shared/numberGuard.ts'
 import { pickCoverPhoto, pickMiddlePhotos, type CatalogPhoto } from '../_shared/carouselOffer.ts'
 import { blockingThemes, findRepeatedTheme, pickAlternative, recentThemes, themeBlock, themeRetryNote, weekStartOf } from '../_shared/themeDedupe.ts'
 import { fetchThemeCfg, planWeekThemes, recipeBlocked } from '../_shared/weekThemes.ts'
-import { resolveAlias, tipNumbers, topicText } from '../_shared/deckTopic.ts'
+import { resolveAlias, topicText } from '../_shared/deckTopic.ts'
 import { currentWeekBRT } from '../_shared/publishSlot.ts'
 import { buildOpportunityJob } from '../_shared/opportunityPieceJob.ts'
 import { checkCaption, promptRules as captionRules, rewriteRequest, stripForbidden, findForbidden } from '../_shared/captionGuard.ts'
@@ -879,13 +879,17 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
       // ainda estoura: o desenho descarta as linhas que passariam do rodapé e o reasoning avisa o dono ("slide apertado"). O dono aprova tudo antes de ir ao ar.
       const dataText = [preamble(config, company, playbookBlock), seedBlock, insights.map(i => `${i.title} ${i.description}`).join(' ')].join(' ')  // sem `idea`: é texto da própria IA, não dado
       // regulado: só os números das dicas; geral: nenhum; leve: os dados cadastrados (como sempre foi).
-      const allowed = topic?.mode === 'regulado' ? tipNumbers(topic.tips) : topic?.mode === 'geral' ? new Set<string>() : numbersOf(dataText)
+      // Regulado: numbersOf (mesma chave do inventedNumbers, ex.: "3") sobre o texto das dicas. tipNumbers usa outra chave
+      // ("3|%") e fazia todo número da dica parecer inventado (Tespon ITBI, 2026-11-03: "slide 3 tem número… (3)" com o 3% da dica).
+      // O conteúdo regulado continua conferido pelo validateRegulated do deckGuard (chave dele).
+      const allowed = topic?.mode === 'regulado' ? numbersOf(topic.tips.map(t => `${t.title} ${t.content}`).join(' ')) : topic?.mode === 'geral' ? new Set<string>() : numbersOf(dataText)
       const strictWhy = topic?.mode === 'regulado' ? ['use só o que as dicas conferidas já dizem neste slide, sem acrescentar fato'] : topic?.mode === 'geral' ? ['sem número, prazo, taxa nem nome de lei'] : undefined
       const handle = String(company.instagram_username ?? '').replace(/^@/, '').trim()
       // Foto real do catálogo SÓ quando a vaga cita um imóvel (item_id) e a ficha liga isso (carousel_cover.educativo.photo_when_item).
       // Sem imóvel: design da marca (decisão do dono, 2026-11-02). Nunca staged_photos (mobiliada por IA), nunca foto de outro imóvel.
       const itemPhotos = claimCfg.photoWhenItem && linkedItem ? (linkedItem.meta?.photos ?? []) : []
-      const coverPhoto = pickCoverPhoto(itemPhotos)
+      const coverRooms = itemPhotos.length ? await fetchTourCfg(admin, company.vertical_key ?? null).then(t => ({ priority: t.room_priority, avoid: t.avoid_rooms })).catch(() => null) : null
+      const coverPhoto = pickCoverPhoto(itemPhotos, coverRooms)
       const closerPhoto = coverPhoto ? pickMiddlePhotos(itemPhotos, coverPhoto, 1)[0] ?? coverPhoto : null
       const renderSlide = (sl: DeckSlide, i: number) => renderGraphicCardFull(opts, company.id, 'slide', {
         layout: sl.layout, title: sl.title, text: sl.text, items: sl.items, highlight: sl.highlight, cta: sl.cta, cover_style: coverStyle,

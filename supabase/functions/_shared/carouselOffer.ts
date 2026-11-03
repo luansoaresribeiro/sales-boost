@@ -30,12 +30,26 @@ export function photoScore(p: CatalogPhoto | null | undefined): number | null {
 
 const usable = (photos: CatalogPhoto[] | null | undefined): CatalogPhoto[] => (photos ?? []).filter(p => p && typeof p.url === 'string' && /^https?:\/\//.test(p.url))
 
-/** Foto da capa: a de MAIOR nota (empate = a primeira do cadastro); sem nota em nenhuma → photos[0]. Nunca sorteia. */
-export function pickCoverPhoto(photos: CatalogPhoto[] | null | undefined): CatalogPhoto | null {
+/** Cômodos da ficha (tour.room_priority / tour.avoid_rooms — regra 6): ordem de preferência e o que nunca abre a peça. */
+export interface CoverRooms { priority: string[]; avoid: string[] }
+const roomOf = (p: CatalogPhoto): string => (typeof p.room === 'string' ? p.room : '')
+
+/**
+ * Foto da capa. Com os cômodos da ficha: primeiro foge dos cômodos a evitar (banheiro, área de serviço…), depois segue a
+ * ordem de preferência (fachada, vista, sala…), e só então a MAIOR nota (empate = a primeira do cadastro). Sem ficha, como
+ * antes: maior nota; sem nota em nenhuma → photos[0]. Nunca sorteia. (Teste Zero 2026-11-03: notas empatadas e a capa
+ * saiu no banheiro com toalhas — a 1ª foto do cadastro.)
+ */
+export function pickCoverPhoto(photos: CatalogPhoto[] | null | undefined, rooms?: CoverRooms | null): CatalogPhoto | null {
   const list = usable(photos)
-  let best: CatalogPhoto | null = null, bestScore = -Infinity
-  for (const p of list) { const s = photoScore(p); if (s !== null && s > bestScore) { best = p; bestScore = s } }
-  return best ?? list[0] ?? null
+  if (!list.length) return null
+  const rank = (p: CatalogPhoto, i: number) => {
+    const r = roomOf(p), avoid = rooms && r && rooms.avoid.includes(r) ? 1 : 0
+    const pri = rooms && r ? rooms.priority.indexOf(r) : -1
+    return { p, i, avoid, pri: pri >= 0 ? pri : (rooms?.priority.length ?? 0), s: photoScore(p) }
+  }
+  const ranked = list.map(rank).sort((a, b) => a.avoid - b.avoid || (rooms ? a.pri - b.pri : 0) || (b.s ?? -Infinity) - (a.s ?? -Infinity) || a.i - b.i)
+  return ranked[0].p
 }
 
 /** Fotos do meio: as melhores depois da capa (por nota, desc; sem nota nenhuma = ordem do cadastro). */
@@ -108,11 +122,13 @@ export interface OfferIn {
   /** CTA seguro decidido em código (decideVideoCta): nunca "Comente QUERO" sem resposta aprovada. */
   cta: string
   handle?: string
+  /** Cômodos da ficha pra escolher a capa (opcional). */
+  rooms?: CoverRooms | null
 }
 
 /** Monta os slides da oferta: capa (foto de maior nota + tipo/bairro/quartos/preço) · até 4 fotos · dados · fecho. Máx. 7. */
 export function buildOfferSlides(i: OfferIn): OfferSlide[] {
-  const cover = pickCoverPhoto(i.photos)
+  const cover = pickCoverPhoto(i.photos, i.rooms)
   if (!cover) return []
   const head = offerHeadline(i.fields)
   const q = num(i.fields.quartos), price = formatPrice(i.fields.preco)
