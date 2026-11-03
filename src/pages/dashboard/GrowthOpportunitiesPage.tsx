@@ -29,7 +29,6 @@ const TX = {
     notice: 'Preço anunciado não é preço de venda; interesse de busca não é comprador. Nada é publicado daqui.',
     next: 'Próxima análise automática: semanal (e quando você cadastra um sinal novo).', lastRun: (d: string) => `Última análise: ${d}.`, noRun: 'A primeira análise acontece sozinha na próxima rodada.',
     emptyDate: (d: string) => `Última análise em ${d}: nenhuma oportunidade relevante — seguimos o direcionamento ativo.`, emptyNoDate: 'Nenhuma oportunidade relevante no momento — seguimos o direcionamento ativo.',
-    decidedAll: (d: string) => `Última análise em ${d}: todas as oportunidades encontradas já foram decididas — seguimos o direcionamento ativo.`,
     loading: 'Carregando…', none: 'Ainda não há oportunidades. A análise roda sozinha — veja abaixo o que ajuda a achar mais.',
     latest: 'Última busca', earlier: 'Aprovadas em buscas anteriores', dismissed: (n: number) => `${n} descartada${n === 1 ? '' : 's'}`, showDismissed: 'mostrar', hideDismissed: 'esconder',
     missingTitle: 'O que falta pra achar mais',
@@ -45,7 +44,6 @@ const TX = {
     notice: 'Listed price is not sale price; search interest is not a buyer. Nothing is published from here.',
     next: 'Next automatic analysis: weekly (and when you add a new signal).', lastRun: (d: string) => `Last analysis: ${d}.`, noRun: 'The first analysis runs by itself in the next automatic round.',
     emptyDate: (d: string) => `Last analysis on ${d}: no relevant opportunity — we keep following the active direction.`, emptyNoDate: 'No relevant opportunity right now — we keep following the active direction.',
-    decidedAll: (d: string) => `Last analysis on ${d}: all opportunities found were already decided — we keep following the active direction.`,
     loading: 'Loading…', none: 'No opportunities yet. The analysis runs by itself — see below what helps find more.',
     latest: 'Latest search', earlier: 'Approved in earlier searches', dismissed: (n: number) => `${n} dismissed`, showDismissed: 'show', hideDismissed: 'hide',
     missingTitle: 'What is missing to find more',
@@ -172,12 +170,9 @@ export default function GrowthOpportunitiesPage() {
   // Sem oportunidade pendente: explica o vazio com a data real da última rodada (livro-caixa `run_opportunities`, que registra a
   // rodada mesmo quando ela não gera nada). Sem registro = texto sem data (nunca inventa).
   const lastRunAt = flow.data.ledger?.last_ok_at ?? null
-  const lastOppAt = rows[0]?.created_at ?? null
   const lastRunDay = lastRunAt ? new Date(lastRunAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: '2-digit' }) : null
-  // Rodada que gerou oportunidade registra o custo segundos depois; folga de 10 min separa "gerou e já foram decididas" de "rodou e não gerou".
-  const lastRunGenerated = !!lastRunAt && !!lastOppAt && Date.parse(lastRunAt) - Date.parse(lastOppAt) < 10 * 60_000
   const emptyNote = loading || flow.loading || rows.some(o => o.status === 'suggested') ? null
-    : !lastRunDay ? t.emptyNoDate : lastRunGenerated ? t.decidedAll(lastRunDay) : t.emptyDate(lastRunDay)
+    : !lastRunDay ? t.emptyNoDate : t.emptyDate(lastRunDay)
   const showMissing = !loading && missing.length > 0 && latest.length < 3
 
   return (

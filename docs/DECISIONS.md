@@ -2274,7 +2274,9 @@ regra e leva à tela de origem; sem dado = "sem dado ainda", nunca 0 fingido):
 2. **Oportunidades para avaliar** = `growth_opportunities` `status='suggested'`; sub-linha "N novas em 7 dias".
 3. **Direcionamento ativo** = `marketing_ai_strategies` `kind='main'` `status='active'` (contagem + nome).
 4. **Ações prontas** = `marketing_ai_test_content` com `status` em `vault`/`draft` e `source_id` nulo (adaptações não contam de novo);
-   sub-linha com quantas já estão em `vault` (passaram na nota = "prontas pra aprovar" em Aprovações).
+   **menos as já agendadas** (`agent_actions` `ref_type='marketing_ai_test_content'`, `execution_status='QUEUED'`, `scheduled_at` não nulo — o
+   mesmo filtro da tela Aprovações, para o número bater com o que o dono vê lá). Busca ids (limite 500); consulta falhou ou estourou o
+   limite = "sem dado ainda". Sub-linha: "N prontas para aprovar (`vault`) · M em revisão (`draft`)".
 O **painel antigo (receita/ROAS/funil) desceu** para logo abaixo dos indicadores — nada foi removido. As contagens de coleta (sinais,
 última rodada de oportunidades) saíram das linhas dos cards para o bloco recolhido "Status da coleta"; os cards ficam só com o que pede
 ação do dono. Abas da Inteligência de Mercado renomeadas (só rótulos; `?sub=` igual): Mercado → "Insights e evidências", Ideias e trends →

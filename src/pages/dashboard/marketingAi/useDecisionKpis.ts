@@ -9,10 +9,11 @@ export interface DecisionKpis {
   oppsSuggested: number | null   // oportunidades esperando decisão (status 'suggested')
   oppsNew7: number | null        // ...criadas nos últimos 7 dias
   strategiesActive: number | null // estratégias principais ativas
-  actionsReady: number | null    // peças originais (sem adaptações) em 'vault' ou 'draft'
-  actionsVault: number | null    // ...só as que já passaram na nota ('vault' = pronta pra aprovar)
+  actionsReady: number | null    // peças originais (sem adaptações) em 'vault' ou 'draft', menos as já agendadas
+  actionsVault: number | null    // ...as 'vault' (prontas pra aprovar); o resto (draft) está em revisão
 }
 const EMPTY: DecisionKpis = { signals7: null, oppsSuggested: null, oppsNew7: null, strategiesActive: null, actionsReady: null, actionsVault: null }
+const ACTION_LIMIT = 500
 const DAY = 24 * 3600_000
 
 export function useDecisionKpis(companyId?: string): { kpis: DecisionKpis; loading: boolean } {
@@ -31,12 +32,23 @@ export function useDecisionKpis(companyId?: string): { kpis: DecisionKpis; loadi
       supabase.from('growth_opportunities').select('id', head).eq('company_id', companyId).eq('status', 'suggested'),
       supabase.from('growth_opportunities').select('id', head).eq('company_id', companyId).eq('status', 'suggested').gte('created_at', sinceIso),
       supabase.from('marketing_ai_strategies').select('id', head).eq('company_id', companyId).eq('kind', 'main').eq('status', 'active'),
-      supabase.from('marketing_ai_test_content').select('id', head).eq('company_id', companyId).in('status', ['vault', 'draft']).is('source_id', null),
-      supabase.from('marketing_ai_test_content').select('id', head).eq('company_id', companyId).eq('status', 'vault').is('source_id', null),
+      // Mesmo filtro da ApprovalsPage: peça já agendada (agent_actions QUEUED com scheduled_at) não conta. Busca ids (limite 500).
+      supabase.from('marketing_ai_test_content').select('id, status').eq('company_id', companyId).in('status', ['vault', 'draft']).is('source_id', null).limit(ACTION_LIMIT),
+      supabase.from('agent_actions').select('ref_id').eq('company_id', companyId).eq('ref_type', 'marketing_ai_test_content').eq('execution_status', 'QUEUED').not('scheduled_at', 'is', null).limit(ACTION_LIMIT),
     ]).then(r => {
       if (cancelled) return
       const n = (i: number) => (r[i].error ? null : r[i].count ?? 0)
-      setState({ kpis: { signals7: n(0), oppsSuggested: n(1), oppsNew7: n(2), strategiesActive: n(3), actionsReady: n(4), actionsVault: n(5) }, loading: false })
+      // Qualquer consulta falhou (ou estourou o limite, contagem incerta) = sem dado, nunca número chutado.
+      let actionsReady: number | null = null, actionsVault: number | null = null
+      const pieces = r[4].data as { id: string; status: string }[] | null
+      const queued = r[5].data as { ref_id: string }[] | null
+      if (!r[4].error && !r[5].error && pieces && queued && pieces.length < ACTION_LIMIT && queued.length < ACTION_LIMIT) {
+        const sched = new Set(queued.map(q => q.ref_id))
+        const open = pieces.filter(p => !sched.has(p.id))
+        actionsReady = open.length
+        actionsVault = open.filter(p => p.status === 'vault').length
+      }
+      setState({ kpis: { signals7: n(0), oppsSuggested: n(1), oppsNew7: n(2), strategiesActive: n(3), actionsReady, actionsVault }, loading: false })
     }).catch(() => { if (!cancelled) setState({ kpis: EMPTY, loading: false }) })
     return () => { cancelled = true }
   }, [companyId])
