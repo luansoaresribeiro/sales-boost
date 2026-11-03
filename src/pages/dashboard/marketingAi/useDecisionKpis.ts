@@ -9,8 +9,8 @@ export interface DecisionKpis {
   oppsSuggested: number | null   // oportunidades esperando decisão (status 'suggested')
   oppsNew7: number | null        // ...criadas nos últimos 7 dias
   strategiesActive: number | null // estratégias principais ativas
-  actionsReady: number | null    // peças originais (sem adaptações) em 'vault' ou 'draft', menos as já agendadas
-  actionsVault: number | null    // ...as 'vault' (prontas pra aprovar); o resto (draft) está em revisão
+  actionsReady: number | null    // peças originais (sem adaptações) em 'vault' menos as já agendadas = o que Aprovações mostra
+  actionsVault: number | null    // ...e, à parte, as 'draft' (em revisão, ainda não passaram na nota) — NÃO entram no total
 }
 const EMPTY: DecisionKpis = { signals7: null, oppsSuggested: null, oppsNew7: null, strategiesActive: null, actionsReady: null, actionsVault: null }
 const ACTION_LIMIT = 500
@@ -45,8 +45,8 @@ export function useDecisionKpis(companyId?: string): { kpis: DecisionKpis; loadi
       if (!r[4].error && !r[5].error && pieces && queued && pieces.length < ACTION_LIMIT && queued.length < ACTION_LIMIT) {
         const sched = new Set(queued.map(q => q.ref_id))
         const open = pieces.filter(p => !sched.has(p.id))
-        actionsReady = open.length
-        actionsVault = open.filter(p => p.status === 'vault').length
+        actionsReady = open.filter(p => p.status === 'vault').length   // bate com Aprovações
+        actionsVault = open.filter(p => p.status === 'draft').length   // em revisão (campo reaproveitado: ver comentário da interface)
       }
       setState({ kpis: { signals7: n(0), oppsSuggested: n(1), oppsNew7: n(2), strategiesActive: n(3), actionsReady, actionsVault }, loading: false })
     }).catch(() => { if (!cancelled) setState({ kpis: EMPTY, loading: false }) })

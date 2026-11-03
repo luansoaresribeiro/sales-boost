@@ -13,7 +13,7 @@ const TX = {
     k1: 'Sinais relevantes', r1: 'Sinais com fonte e data dos últimos 7 dias (já filtrados e sem repetição na coleta).',
     k2: 'Oportunidades para avaliar', r2: 'Oportunidades aguardando a sua decisão (aprovar ou descartar).', n2: (n: number) => `${n} nova${n === 1 ? '' : 's'} em 7 dias`,
     k3: 'Direcionamento ativo', r3: 'Estratégias principais com status ativo.', none3: 'Nenhuma estratégia ativa — clique para criar.',
-    k4: 'Ações prontas', r4: 'Peças originais prontas ou em revisão, ainda sem decisão sua e não agendadas (adaptações não contam de novo).', n4: (a: number, b: number) => `${a} pronta${a === 1 ? '' : 's'} para aprovar · ${b} em revisão`,
+    k4: 'Ações prontas', r4: 'Peças originais que passaram na nota e aguardam sua aprovação, ainda não agendadas (adaptações não contam de novo).', n4: (b: number) => `+ ${b} em revisão (ainda não passaram na nota)`,
     cStatus: 'Status da coleta', cHint: 'contagens do que o sistema coletou — abre com clique',
     cSignals: (n: number, a: number | null) => `${n} sinal${n === 1 ? '' : 'is'} de mercado${a ? ` (${a} automático${a === 1 ? '' : 's'})` : ''}`,
     cRun: (d: string) => `última rodada de oportunidades ${d}`, cNoRun: 'ainda sem rodada de oportunidades', cNone: 'sem dado ainda',
@@ -23,7 +23,7 @@ const TX = {
     k1: 'Relevant signals', r1: 'Signals with source and date from the last 7 days (already filtered and de-duplicated at collection).',
     k2: 'Opportunities to review', r2: 'Opportunities waiting for your decision (approve or dismiss).', n2: (n: number) => `${n} new in 7 days`,
     k3: 'Active direction', r3: 'Main strategies with active status.', none3: 'No active strategy — click to create one.',
-    k4: 'Ready actions', r4: 'Original pieces ready or in review, still without your decision and not scheduled (adaptations are not counted again).', n4: (a: number, b: number) => `${a} ready to approve · ${b} in review`,
+    k4: 'Ready actions', r4: 'Original pieces that passed the quality score and await your approval, not yet scheduled (adaptations are not counted again).', n4: (b: number) => `+ ${b} in review (not yet past the quality score)`,
     cStatus: 'Collection status', cHint: 'counts of what the system collected — click to open',
     cSignals: (n: number, a: number | null) => `${n} market signal${n === 1 ? '' : 's'}${a ? ` (${a} automatic)` : ''}`,
     cRun: (d: string) => `last opportunity run ${d}`, cNoRun: 'no opportunity run yet', cNone: 'no data yet',
@@ -44,7 +44,7 @@ export default function DecisionKpis({ lang, kpis, loading, demo, strategyName, 
     { key: 'signals', label: t.k1, value: v(kpis.signals7), rule: t.r1, to: '/dashboard/marketing-ai/dados?sub=mercado' },
     { key: 'opps', label: t.k2, value: v(kpis.oppsSuggested), sub: kpis.oppsNew7 != null && !loading ? t.n2(kpis.oppsNew7) : null, rule: t.r2, to: '/dashboard/opportunities' },
     { key: 'strategy', label: t.k3, value: v(stratN), sub: stratN === 0 && !loading ? t.none3 : strategyName, rule: t.r3, to: '/dashboard/marketing-ai/estrategia' },
-    { key: 'actions', label: t.k4, value: v(kpis.actionsReady), sub: kpis.actionsVault != null && kpis.actionsReady != null && !loading ? t.n4(kpis.actionsVault, kpis.actionsReady - kpis.actionsVault) : null, rule: t.r4, to: '/dashboard/aprovacoes' },
+    { key: 'actions', label: t.k4, value: v(kpis.actionsReady), sub: kpis.actionsVault != null && kpis.actionsReady != null && !loading ? t.n4(kpis.actionsVault) : null, rule: t.r4, to: '/dashboard/aprovacoes' },
   ]
   const locale = lang === 'en' ? 'en-US' : 'pt-BR'
   const coll: string[] = []
