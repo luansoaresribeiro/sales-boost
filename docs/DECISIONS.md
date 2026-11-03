@@ -2237,3 +2237,29 @@ seguida; legenda de vídeo "Trezentos metros quadrados" com m² cadastrado = 737
 
 Limite honesto: a semelhança é por palavras; sem a lista de bairros na ficha, título curto que só troca o bairro pode contar como repetido. Duas vagas que escolhessem o mesmo tema no mesmo segundo, sem reserva do planejamento (peça avulsa),
 ainda dependem da conferência na geração.
+
+## 2026-11-03 — Telas: voltar e 🔁 em todo agente, selos atuais e imóveis ligados ao fluxo (PR só de tela)
+
+Pedido do dono, sem migration e sem function:
+1. **Voltar e 🔁 em todo agente.** Oportunidades ganhou a barra "← Voltar" (vai ao hub) e o círculo 🔁 "O que a IA está aprendendo";
+   o Catálogo ganhou o 🔁. Pilares lidos: Oportunidades = `competitor` + `tracking` (os que existem de mercado; não há pilar
+   "oportunidade" na tabela); Resultados = `tracking` (antes vazio); Catálogo = `content` + as lições do Agente de Conteúdo.
+2. **Selos do hub (real e demo) = os 5 agentes atuais**, com os mesmos ícones dos cards (📊 💡 🧭 ✍️ 🔀). Textos demo sem
+   "concorrentes". Resumo do teste: Ideias abre a sub-aba Ideias, Resultados esperados abre `/dashboard/opportunities`, Análise e
+   Concorrentes abrem a Inteligência de Mercado.
+3. **Imóveis no fluxo.** Hook `useItemUsage` (uma consulta por empresa, cache de 30 s). Calendário mostra o imóvel de cada peça; o
+   modal mostra capa/título/bairro/links e "Por que este imóvel"; o Catálogo mostra "Última peça · Próxima · N peças em 30 dias" (ou
+   "ainda não usado"); "Lugares perto" abre no imóvel pedido e mostra "usado em N peças"; "Imóveis ligados" das oportunidades vira link.
+   Consulta que falha esconde a linha (regra 5: nunca um 0 fingido).
+
+**Divergências do plano, registradas de propósito:**
+- **Motivo da escolha do imóvel não é gravado por peça.** O `reasoning` da peça é sobre formato/tema, não sobre o imóvel, então a tela
+  NÃO o apresenta como motivo. Mostra só o que o código garante: peça de oportunidade → "vem da oportunidade"; qualquer outra → "sem
+  motivo registrado". (A 1ª versão dizia "rodízio" para toda peça com dia no calendário; o QA reprovou, porque peça do "Gerar agora"
+  com imóvel escolhido pelo dono e do pacote do catálogo também têm dia, e nada na peça diz de onde veio.) Gravar o motivo de verdade é a Fase 4 do plano em
+  [ROADMAP.md](ROADMAP.md) ("Pós-validação").
+- **`?item=` não serve para "Lugares perto"**: na Inteligência de Mercado ele redireciona ao Catálogo (links antigos do sino). Foram
+  criados `?sub=` (abre a sub-aba: mercado/ideias/lugares/faq) e `?imovel=<id>` (imóvel de "Lugares perto"). O `?tab=ideias` do plano não existia.
+- **Nº de peças em 30 dias** = o MAIOR entre as contagens de `marketing_ai_test_content` (sem adaptações) e de `posts`: uma peça aprovada
+  vira uma linha em `posts` com o mesmo `item_id`, e somar contaria 2x.
+- **A vaga vazia "no imóvel" não mostra imóvel reservado**: não existe reserva antes da peça nascer (o `pickItem` roda na criação).

@@ -161,11 +161,11 @@ export function buildGrowthDemo(company: Pick<CompanyData, 'id' | 'business_name
   ]
 
   const agents: DemoAgentStatus[] = [
-    { key: 'market', name: L('Inteligência de Mercado', 'Market Intelligence'), icon: '🧭', state: 'active', lastAction: L('Mapeou 3 movimentos de concorrentes', 'Mapped 3 competitor moves') },
-    { key: 'content', name: L('Conteúdo', 'Content'), icon: '✍️', state: 'active', lastAction: (() => { const n = iBetween(4, 10); return L(`Criou ${n} ideias de posts`, `Created ${n} post ideas`) })() },
-    { key: 'ads', name: 'Meta Ads', icon: '🎯', state: 'soon', lastAction: L('Aguardando verificação da Meta', 'Waiting for Meta verification') },
-    { key: 'sales', name: L('Vendas (Funil)', 'Sales (Funnel)'), icon: '🔀', state: 'idle', lastAction: (() => { const n = iBetween(2, 9); return L(`${n} leads aguardando follow-up`, `${n} leads waiting for follow-up`) })() },
-    { key: 'whatsapp', name: L('Atendimento WhatsApp', 'WhatsApp Support'), icon: '💬', state: 'soon', lastAction: L('Aguardando verificação da Meta', 'Waiting for Meta verification') },
+    { key: 'market', name: L('Inteligência de Mercado', 'Market Intelligence'), icon: '📊', state: 'active', lastAction: L('Coletou novos sinais do mercado dos bairros (exemplo)', 'Collected new market signals for the neighborhoods (example)') },
+    { key: 'opportunities', name: L('Motor de Oportunidades', 'Opportunity Engine'), icon: '💡', state: 'active', lastAction: L('Apontou um imóvel sem divulgação (exemplo)', 'Pointed out an unpromoted listing (example)') },
+    { key: 'strategy', name: L('Agente de Estratégia', 'Strategy Agent'), icon: '🧭', state: 'idle', lastAction: L('Propôs o tema da semana — aguardando sua aprovação (exemplo)', 'Proposed the weekly theme — waiting for your approval (example)') },
+    { key: 'content', name: L('Ativação', 'Activation'), icon: '✍️', state: 'active', lastAction: (() => { const n = iBetween(4, 10); return L(`Criou ${n} ideias de posts`, `Created ${n} post ideas`) })() },
+    { key: 'sales', name: L('Resultados e Aprendizado', 'Results & Learning'), icon: '🔀', state: 'idle', lastAction: (() => { const n = iBetween(2, 9); return L(`${n} leads aguardando follow-up`, `${n} leads waiting for follow-up`) })() },
   ]
 
   const cpl = Math.round(adSpend / Math.max(leads, 1))

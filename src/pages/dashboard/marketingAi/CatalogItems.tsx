@@ -11,6 +11,7 @@ import CatalogImport from './CatalogImport'
 import CatalogItemEditor, { FieldInput } from './CatalogItemEditor'
 import VirtualStaging from './VirtualStaging'
 import { useLang } from '../../../contexts/LanguageContext'
+import { useItemUsage, dayLabel } from './useItemUsage'
 
 const TX = {
   pt: {
@@ -23,6 +24,7 @@ const TX = {
     pieces: (n: number) => `${n} peça${n === 1 ? '' : 's'} em rascunho, esperando aprovação:`,
     maxPhotos: (n: number, item: string) => `Máximo de ${n} fotos por ${item}. As fotos a mais não foram enviadas.`,
     full: (n: number) => `Limite de ${n} fotos`,
+    lastPiece: 'Última peça', nextPiece: 'Próxima', n30: (n: number) => `${n} peça${n === 1 ? '' : 's'} em 30 dias`, notUsed: 'ainda não usado',
   },
   en: {
     edit: '✏️ See photos and edit', confirmRemove: (t: string) => `Delete "${t}"? Its photos are deleted and this can't be undone. (Posts already in the calendar stay there.)`, whatToCreate: 'What to create with this ', create: 'Create', notifyDone: '✓ We will notify you at launch', soonNotify: 'Coming soon — notify me',
@@ -34,6 +36,7 @@ const TX = {
     pieces: (n: number) => `${n} draft piece${n === 1 ? '' : 's'}, waiting for approval:`,
     maxPhotos: (n: number, item: string) => `Up to ${n} photos per ${item}. The extra photos were not uploaded.`,
     full: (n: number) => `${n}-photo limit`,
+    lastPiece: 'Last piece', nextPiece: 'Next', n30: (n: number) => `${n} piece${n === 1 ? '' : 's'} in 30 days`, notUsed: 'not used yet',
   },
 } as const
 
@@ -110,8 +113,11 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
   const { session } = useAuth()
   const { lang } = useLang()
   const tx = TX[lang]
+  const { data: usageData, refresh: refreshUsage } = useItemUsage(companyId)
   const [packageBusyId, setPackageBusyId] = useState<string | null>(null)
   const [packageResult, setPackageResult] = useState<{ itemId: string; result: PackageResult | { error: string } } | null>(null)
+  // Pacote gerado = peças novas no calendário: relê o uso dos imóveis.
+  useEffect(() => { if (packageResult) refreshUsage() }, [packageResult]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const generatePackage = async (itemId: string, onlyRecipe?: string) => {
     if (!session) return
@@ -328,6 +334,15 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                   <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '8px' }}>
                     <span style={{ color: photoCount < minPhotos ? '#f87171' : MUTED, fontWeight: photoCount < minPhotos ? 700 : 400 }}>{photoCount}/{minPhotos} {tx.photosN}</span>{f.preco ? ` · R$ ${f.preco}` : ''}{f.quartos ? ` · ${f.quartos}${tx.bedrooms}` : ''}
                   </div>
+                  {!setupMode && usageData.ok && (() => {
+                    const u = usageData.usage[item.id]
+                    const used = u && (u.last || u.next || u.n30 > 0)
+                    return (
+                      <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '8px', lineHeight: 1.45 }}>
+                        {used ? `${tx.lastPiece} ${u.last ? dayLabel(u.last) : '—'} · ${tx.nextPiece} ${u.next ? dayLabel(u.next) : '—'} · ${tx.n30(u.n30)}` : tx.notUsed}
+                      </div>
+                    )
+                  })()}
                   <button onClick={() => setEditing(item)}
                     style={{ width: '100%', padding: '7px 10px', marginBottom: '6px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '7px', color: 'white', fontWeight: 700, fontSize: '11px', cursor: 'pointer', fontFamily: D }}>
                     {tx.edit}

@@ -653,6 +653,22 @@ regras do código permitem calcular), 1–2 contagens e, em laranja, o que esper
   a cada 6 h); o teto mensal mostrado vem da ficha (o secret `MARKET_INTEL_CAP_USD`, se existir, não é visível ao banco); coleta do
   Instagram (estágio 4) aparece como 🚧 em construção.
 
+## Mapa de telas dos agentes (atualizado 2026-11-03)
+
+Hub `/dashboard/marketing-ai` (selos = 5 agentes, mesmos ícones dos cards) → cada agente tem a barra "← Voltar" (volta ao hub) e o 🔁
+`FeedbackWidget` ("O que a IA está aprendendo"):
+- 📊 Inteligência de Mercado `/dashboard/marketing-ai/dados` (`?sub=mercado|ideias|lugares|faq`; `?imovel=<id>` escolhe o imóvel de
+  "Lugares perto"; `?item=<id>` redireciona ao Catálogo) — 🔁 `dados`.
+- 💡 Motor de Oportunidades `/dashboard/opportunities` — 🔁 `opportunities` (pilares `competitor`+`tracking`). "Imóveis ligados" linka ao Catálogo.
+- 🧭 Estratégia `/dashboard/marketing-ai/estrategia` — 🔁 `estrategia`.
+- ✍️ Ativação `/dashboard/marketing-ai/content` — 🔁 `content`. O calendário mostra o imóvel de cada peça; o modal tem "Imóvel desta
+  peça" + "Por que este imóvel".
+- 🔀 Resultados e Aprendizado `/dashboard/marketing-ai/conversao` — 🔁 `conversao` (pilar `tracking`).
+- 📸 Catálogo `/dashboard/catalogo` (`?item=<id>` destaca) — 🔁 `catalogo` (pilar `content` + lições). Cada imóvel mostra a linha de uso.
+- **Uso dos imóveis:** `marketingAi/useItemUsage.ts` (uma consulta por empresa; `marketing_ai_test_content` por `item_id` + `posts`;
+  cache 30 s; falha = `ok:false` e as telas escondem a linha). Fontes e limites em [DECISIONS.md](DECISIONS.md) (2026-11-03).
+- `/dashboard/oportunidades` (tela antiga, tabela `opportunities`) NÃO é `/dashboard/opportunities`; o Resumo do teste agora aponta para a segunda.
+
 ## Estado atual do código
 
 - **Site publicado:** https://getsaleboost.com/ (+ www). O endereço antigo

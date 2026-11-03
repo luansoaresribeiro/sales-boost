@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
 import { useLang } from '../../contexts/LanguageContext'
 import { useShowcase } from '../../contexts/ShowcaseContext'
 import { supabase } from '../../lib/supabase'
+import FeedbackWidget from './marketingAi/FeedbackWidget'
 import FlowStrip from './marketingAi/FlowStrip'
 import { useOppFlow } from './marketingAi/useFlowStripData'
 import { oppSteps } from './marketingAi/flowStripSteps'
@@ -22,7 +24,7 @@ import { PIECES_WAIT_MS, PLAN_WAIT_MS, type PieceStats } from './opportunityPlan
 
 const TX = {
   pt: {
-    title: 'Oportunidades',
+    back: '← Voltar', title: 'Oportunidades',
     sub: 'Onde o seu mercado e o seu catálogo se encontram — com a evidência de cada uma e o que falta pra ter certeza.',
     notice: 'Preço anunciado não é preço de venda; interesse de busca não é comprador. Nada é publicado daqui.',
     next: 'Próxima análise automática: semanal (e quando você cadastra um sinal novo).', lastRun: (d: string) => `Última análise: ${d}.`, noRun: 'A primeira análise acontece sozinha na próxima rodada.',
@@ -36,7 +38,7 @@ const TX = {
     errDecide: 'Não consegui salvar a decisão. Tente de novo.',
   },
   en: {
-    title: 'Opportunities',
+    back: '← Back', title: 'Opportunities',
     sub: 'Where your market and your catalog meet — with the evidence for each one and what is missing to be sure.',
     notice: 'Listed price is not sale price; search interest is not a buyer. Nothing is published from here.',
     next: 'Next automatic analysis: weekly (and when you add a new signal).', lastRun: (d: string) => `Last analysis: ${d}.`, noRun: 'The first analysis runs by itself in the next automatic round.',
@@ -55,6 +57,7 @@ export default function GrowthOpportunitiesPage() {
   const { lang } = useLang()
   const t = TX[lang]
   const { company } = useCompany()
+  const navigate = useNavigate()
   const { session } = useAuth()
   const { readOnly, openPlanModal } = useShowcase()
   const companyId = company?.id ?? null
@@ -166,6 +169,16 @@ export default function GrowthOpportunitiesPage() {
 
   return (
     <div>
+      {/* Mesma barra das seções dos agentes (MarketingAiSectionPage): volta ao hub. */}
+      <div style={{ padding: '14px 20px', borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <button onClick={() => navigate('/dashboard/marketing-ai')}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', fontFamily: D, flexShrink: 0 }}
+          onMouseEnter={e => { e.currentTarget.style.color = ORANGE; e.currentTarget.style.borderColor = 'rgba(255,109,41,0.3)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = MUTED; e.currentTarget.style.borderColor = BORDER }}>
+          {t.back}
+        </button>
+        <span style={{ fontFamily: D, fontSize: '14px', fontWeight: 700, color: 'white' }}>💡 {t.title}</span>
+      </div>
       <div style={{ padding: '28px 20px 20px', borderBottom: `1px solid ${BORDER}` }}>
         <h1 style={{ fontFamily: D, fontSize: '1.5rem', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>{t.title}</h1>
         <p style={{ color: MUTED, fontSize: '13px', lineHeight: 1.5 }}>{t.sub}</p>
@@ -213,6 +226,7 @@ export default function GrowthOpportunitiesPage() {
 
         {companyId && <MarketSignals lang={lang} companyId={companyId} verticalKey={company?.vertical_key ?? null} readOnly={readOnly} openPlanModal={openPlanModal} onChanged={() => { void load() }} />}
       </div>
+      {companyId && <FeedbackWidget companyId={companyId} section="opportunities" />}
     </div>
   )
 }
