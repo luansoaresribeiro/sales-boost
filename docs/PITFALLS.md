@@ -971,3 +971,7 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
   invocação própria, em paralelo, e só enxergava o banco — e o banco só recebe a peça no fim. Reserva de tema tem que ser feita no
   planejamento da semana inteira, antes de disparar (`weekThemes.planWeekThemes`). Número "por extenso" (`trezentos`) também escapava da
   trava de algarismos: use `numberGuard` (extenso → número) em texto que fala do cadastro do imóvel. Janela e limiar de tema vivem na ficha.
+- **Uso do imóvel não se soma entre `marketing_ai_test_content` e `posts` (2026-11-03).** Peça aprovada vira linha em `posts` com o mesmo
+  `item_id` (agent-actions); somar as duas fontes conta 2x. `useItemUsage` usa o maior das duas e ignora adaptações (`source_id` não nulo).
+  Também: `?item=` na Inteligência de Mercado redireciona ao Catálogo — para abrir "Lugares perto" num imóvel use `?sub=lugares&imovel=<id>`.
+  E o `reasoning` da peça fala de formato/tema, não do porquê do imóvel: não o mostre como "motivo do imóvel".

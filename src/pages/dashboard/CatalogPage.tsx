@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useCompany } from '../../contexts/CompanyContext'
 import { useLang } from '../../contexts/LanguageContext'
 import { MUTED, BORDER, D } from './marketingAi/shared'
+import FeedbackWidget from './marketingAi/FeedbackWidget'
 import CatalogItems from './marketingAi/CatalogItems'
 import ProductPhotos from './marketingAi/ProductPhotos'
 import { AvatarSoon } from './BusinessContextButton'
@@ -57,6 +58,7 @@ export default function CatalogPage() {
           </>
         ) : <ProductPhotos companyId={company.id} />}
       </div>
+      <FeedbackWidget companyId={company.id} section="catalogo" />
     </div>
   )
 }

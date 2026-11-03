@@ -569,3 +569,44 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
      com um toque. Perguntas: "(até 3) (até 3)"; caixa de bairros salva texto não adicionado.
   Prints: pasta do teste (sessão de 2026-11-02). *Pronto quando:* um cadastro novo de corretor do Rio passa pelo fluxo todo em português,
   sem número inventado e sem informação contraditória sobre o plano.
+
+## Pós-validação — Marketing AI da informação à decisão (plano de 2026-11-03)
+
+> Só começa **depois** da validação (teste final com a Tespon / "Teste Zero"). O plano transforma a Marketing AI de "mostra informação"
+> em "ajuda a decidir". Nada aqui foi implementado; a PR de telas de 2026-11-03 só mostra o que já existe (ver
+> [DECISIONS.md](DECISIONS.md)). Ordem: **validação → Fase 1 → Fase 2 → Fase 3 → Fase 4 → Fase 5.**
+
+### As 5 fases
+1. **Tela de decisão (hub).** 4 indicadores de decisão numa **janela de 7 dias**, com regras fixas e visíveis (cada indicador diz de
+   onde vem e como é calculado; sem dado = "sem dado ainda", nunca 0 fingido).
+2. **Inteligência.** Interpretação de sinais **só dos novos, deduplicados**, com **limite de chamadas de IA e custo registrado**
+   (livro-caixa). "O que mudou" compara **semana vs. semana anterior** e só diz "cresceu" quando há evidência (número real dos dois lados).
+3. **Direcionamento da estratégia.** Os sinais influenciam os **temas da semana**, mas **nunca** a tese, o público ou o posicionamento
+   sem aprovação do dono. Mudança de estratégia nunca é automática.
+4. **Property matching.** Escolher o imóvel por **tema, região, características e disponibilidade**, com **mínimo de fotos por
+   formato** e o **motivo gravado** na peça (hoje é só o rodízio do `pickItem`, e o motivo não é gravado). Integração com CRM (VRSync):
+   **id externo, última sincronização, status, preço, removidos e falhas**, e **revalidar a disponibilidade antes de publicar**.
+5. **Resultados.** Resultados **comerciais** (CRM/leads: visita, proposta, venda) **separados** do engajamento (Instagram: curtida,
+   comentário) — nunca misturar os dois numa nota só.
+
+### Os 7 ajustes do dono (incorporados nas fases acima)
+1. Hub com 4 indicadores de decisão, janela de 7 dias, regras fixas (Fase 1).
+2. Interpretar só sinais novos, sem repetir, com limite de chamadas e custo registrado (Fase 2).
+3. "O que mudou": semana vs. anterior, só "cresceu" com evidência (Fase 2).
+4. Sinais influenciam temas da semana, nunca tese/público/posicionamento sem aprovação (Fase 3).
+5. Property matching com mínimo de fotos por formato e motivo gravado (Fase 4).
+6. CRM VRSync com id externo, última sync, status, preço, removidos, falhas; revalidar antes de publicar (Fase 4).
+7. Resultado comercial (CRM/leads) separado de engajamento (Instagram) (Fase 5).
+
+### Rastreabilidade ponta a ponta
+Cada passo guarda **ids**, para dar pra perguntar "de onde veio isto?" e "deu resultado?":
+`sinal (market_signals.id) → insight → tema da semana → peça + imóvel (marketing_ai_test_content.id + item_id) → resultado`
+(`posts`/`tracked_links`/`leads` para o resultado comercial; snapshots do Instagram para engajamento). Hoje já existem `item_id`,
+`opportunity_id` e `tracked_links`; faltam os elos sinal→insight→tema e o motivo da escolha do imóvel.
+
+### Não fazer agora
+Mais agentes sem função clara · mais dashboards · fontes de dados sem critério · fontes pagas sem validar o valor antes · automação de
+WhatsApp · embeddings · mudança automática de estratégia.
+
+### Conectores (ordem)
+CRM (VRSync) → Google News RSS → Google Trends (**só com aprovação de custo do dono**) → WhatsApp e Ads por último.

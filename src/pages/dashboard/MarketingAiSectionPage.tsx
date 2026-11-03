@@ -294,7 +294,11 @@ function DadosSection({ company }: { company: CompanyData }) {
   const [params] = useSearchParams()
   const focusItemId = params.get('item')
   const verticalKey = company.vertical_key ?? 'generico'
-  const [picked, setSub] = useState<'mercado' | 'ideias' | 'lugares' | 'faq' | null>(null)
+  type DadosSub = 'mercado' | 'ideias' | 'lugares' | 'faq'
+  // ?sub= abre a sub-aba direto (ex.: Resumo do teste → Ideias; Catálogo/calendário → Lugares perto, com ?imovel=<id>).
+  // Não dá pra usar ?item= aqui: ele redireciona para o Catálogo (links antigos do sino).
+  const subParam = params.get('sub')
+  const [picked, setSub] = useState<DadosSub | null>(subParam === 'mercado' || subParam === 'ideias' || subParam === 'lugares' || subParam === 'faq' ? subParam : null)
   const [schema, setSchema] = useState<CatalogSchema | null | undefined>(undefined)
   useEffect(() => {
     let alive = true
@@ -319,7 +323,7 @@ function DadosSection({ company }: { company: CompanyData }) {
         {schema?.faqCategories && <SubTabButton active={sub === 'faq'} onClick={() => setSub('faq')} icon="❓" label={t.faq} />}
       </div>
       {sub === 'mercado' && schema?.marketIntel ? <MarketFeed lang={lang} companyId={company.id} />
-        : sub === 'lugares' && schema?.nearby ? <NearbyPlaces companyId={company.id} />
+        : sub === 'lugares' && schema?.nearby ? <NearbyPlaces companyId={company.id} focusItemId={params.get('imovel')} />
         : sub === 'faq' && schema?.faqCategories ? <FaqTips companyId={company.id} categories={schema.faqCategories} />
         : <CreativeAgent companyId={company.id} />}
     </div>

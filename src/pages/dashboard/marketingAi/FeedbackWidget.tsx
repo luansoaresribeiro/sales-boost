@@ -9,16 +9,19 @@ import { supabase } from '../../../lib/supabase'
 import { CARD, MUTED, BORDER, D, ORANGE, PILLAR_ICON, timeAgo, type Insight } from './shared'
 import type { LogRow } from './strategyTypes'
 
-type Section = 'dados' | 'estrategia' | 'content' | 'conversao'
+export type FeedbackSection = 'dados' | 'estrategia' | 'content' | 'conversao' | 'opportunities' | 'catalogo'
+type Section = FeedbackSection
 
 const SECTION_LABEL: Record<'pt' | 'en', Record<Section, string>> = {
   pt: {
     dados: 'na Inteligência de Mercado', estrategia: 'no Agente de Estratégia',
     content: 'na Ativação', conversao: 'em Resultados e Aprendizado',
+    opportunities: 'no Motor de Oportunidades', catalogo: 'no Catálogo',
   },
   en: {
     dados: 'in Market Intelligence', estrategia: 'in the Strategy Agent',
     content: 'in Activation', conversao: 'in Results & Learning',
+    opportunities: 'in the Opportunity Engine', catalogo: 'in the Catalog',
   },
 }
 const TX = {
@@ -30,19 +33,33 @@ const TX = {
     memEmpty: 'No lessons yet. When you delete a piece saying why, or edit a caption, the agent learns and starts following it here.' },
 } as const
 const SECTION_PILLARS: Record<Section, Insight['pillar'][]> = {
-  dados: ['tracking', 'competitor'], estrategia: ['strategy'], content: ['content'], conversao: [],
+  dados: ['tracking', 'competitor'], estrategia: ['strategy'], content: ['content'], conversao: ['tracking'],
+  // Oportunidades lê o que é de mercado (concorrência e tendências); Catálogo lê a memória de conteúdo.
+  opportunities: ['competitor', 'tracking'], catalogo: ['content'],
 }
+// Lições (agent_memory conteudo_licoes) aparecem onde o conteúdo é produzido a partir dos itens.
+const HAS_LESSONS = new Set<Section>(['content', 'catalogo'])
 
-export default function FeedbackWidget({ companyId, section, insights }: { companyId: string; section: Section; insights: Insight[] }) {
+export default function FeedbackWidget({ companyId, section, insights: insightsProp }: { companyId: string; section: Section; insights?: Insight[] }) {
   const { lang } = useLang()
   const t = TX[lang]
   const [open, setOpen] = useState(false)
   const [log, setLog] = useState<LogRow[]>([])
+  // Páginas fora do painel de seções (Oportunidades, Catálogo) não têm os insights carregados: busca aqui.
+  const [ownInsights, setOwnInsights] = useState<Insight[]>([])
+  useEffect(() => {
+    if (insightsProp) return
+    let cancelled = false
+    supabase.from('marketing_ai_insights').select('*').eq('company_id', companyId).eq('status', 'open').order('created_at', { ascending: false }).limit(30)
+      .then(({ data }) => { if (!cancelled) setOwnInsights((data ?? []) as Insight[]) })
+    return () => { cancelled = true }
+  }, [companyId, insightsProp])
+  const insights = insightsProp ?? ownInsights
   // Memória do Agente de Conteúdo (agent_memory, role conteudo_licoes —
   // ver supabase/functions/_shared/contentLessons.ts).
   const [lessons, setLessons] = useState<{ id: string; value: string }[]>([])
   useEffect(() => {
-    if (section !== 'content') return
+    if (!HAS_LESSONS.has(section)) return
     let cancelled = false
     supabase.from('agent_memory').select('id, value').eq('company_id', companyId).eq('agent_role', 'conteudo_licoes').eq('type', 'rule').order('key')
       .then(({ data }) => { if (!cancelled) setLessons((data ?? []) as { id: string; value: string }[]) })
@@ -83,7 +100,7 @@ export default function FeedbackWidget({ companyId, section, insights }: { compa
             <button onClick={() => setOpen(false)} style={{ background: 'transparent', border: 'none', color: MUTED, cursor: 'pointer', fontSize: '14px', flexShrink: 0, padding: 0 }}>✕</button>
           </div>
 
-          {section === 'content' && (
+          {HAS_LESSONS.has(section) && (
             <div style={{ marginBottom: '12px' }}>
               <div style={{ fontSize: '9px', fontWeight: 800, color: '#A78BFA', letterSpacing: '0.04em', marginBottom: '6px' }}>🧠 {t.memTitle}</div>
               {lessons.length === 0 ? <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>{t.memEmpty}</div> : (
@@ -99,7 +116,7 @@ export default function FeedbackWidget({ companyId, section, insights }: { compa
             </div>
           )}
 
-          {relevantInsights.length === 0 && log.length === 0 ? (section === 'content' ? null :
+          {relevantInsights.length === 0 && log.length === 0 ? (HAS_LESSONS.has(section) ? null :
             <div style={{ fontSize: '12px', color: MUTED, lineHeight: 1.55 }}>
               {t.noSignal}
             </div>

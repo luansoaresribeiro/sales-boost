@@ -47,7 +47,8 @@ const TX = {
     tAval: 'Avaliações', tOpin: 'Opiniões', tConc: 'Concorrentes', tCresc: 'Crescimento', tPerf: 'Performance', tAud: 'Audiência', tDiag: 'Diagnóstico de links',
     lastScan: 'Última varredura real em', noScan: 'Ainda sem varredura registrada', lastIdea: 'Última ideia gerada em', noIdea: 'Ainda sem ideias geradas',
     connected: 'Conectado', awaitAds: 'Aguardando conexão da conta de anúncios', awaitWa: 'Aguardando conexão do WhatsApp',
-    market: 'Inteligência de Mercado', content: 'Conteúdo', sales: 'Vendas (Funil)', wa: 'Atendimento WhatsApp',
+    market: 'Inteligência de Mercado', opp: 'Motor de Oportunidades', strat: 'Agente de Estratégia', content: 'Ativação', sales: 'Resultados e Aprendizado',
+    oppAction: 'Roda sozinho toda semana — você aprova ou descarta', stratAction: 'Define público, oferta e mensagem — e direciona a Ativação',
     pending: (n: number) => `${n} lead${n === 1 ? '' : 's'} aguardando follow-up`,
     loading: 'Carregando...', sub: 'Seu departamento de crescimento com IA — encontra oportunidades, executa campanhas e transforma dados em vendas. Nada vai ao ar sem sua aprovação.',
     config: '⚙️ Configuração', demo: 'Modo demonstração',
@@ -65,7 +66,8 @@ const TX = {
     tAval: 'Reviews', tOpin: 'Opinions', tConc: 'Competitors', tCresc: 'Growth', tPerf: 'Performance', tAud: 'Audience', tDiag: 'Link diagnostics',
     lastScan: 'Last real scan on', noScan: 'No scan recorded yet', lastIdea: 'Last idea generated on', noIdea: 'No ideas generated yet',
     connected: 'Connected', awaitAds: 'Waiting for the ad account to be connected', awaitWa: 'Waiting for WhatsApp to be connected',
-    market: 'Market Intelligence', content: 'Content', sales: 'Sales (Pipeline)', wa: 'WhatsApp Support',
+    market: 'Market Intelligence', opp: 'Opportunity Engine', strat: 'Strategy Agent', content: 'Activation', sales: 'Results & Learning',
+    oppAction: 'Runs on its own every week — you approve or dismiss', stratAction: 'Sets audience, offer and message — and guides Activation',
     pending: (n: number) => `${n} lead${n === 1 ? '' : 's'} awaiting follow-up`,
     loading: 'Loading...', sub: 'Your AI-powered growth department — finds opportunities, runs campaigns and turns data into sales. Nothing goes live without your approval.',
     config: '⚙️ Settings', demo: 'Demo mode',
@@ -113,7 +115,7 @@ function useRealGrowth(companyId: string, token: string, lang: Lang): { real: Re
       // "ainda sem linha"), o painel borrado precisa mostrar o erro real.
       const queryErr = results.find(r => r.error)?.error
       if (queryErr) { if (!cancelled) setState({ real: null, loading: false, error: queryErr.message }); return }
-      const [{ data: leadRows }, { data: snapRows }, { data: reportRows }, { data: companyRow }, { data: ideaRow }, { data: trendRow }] = results
+      const [{ data: leadRows }, { data: snapRows }, { data: reportRows }, , { data: ideaRow }, { data: trendRow }] = results
       let ads: { connected: boolean; totals?: { spend: number; revenue: number; roas: number }; error?: string } | null = null
       let adsError: string | null = null
       if (token) {
@@ -157,12 +159,14 @@ function useRealGrowth(companyId: string, token: string, lang: Lang): { real: Re
       })
 
       const pending = leads.filter(l => { const s = mapStage(l.stage); return s === 'novo' || s === 'contato' }).length
+      // Os 5 agentes atuais, com os mesmos ícones dos cards (MODULES). Só o que tem dado real mostra "ativo";
+      // Oportunidades e Estratégia não têm leitura própria aqui — ficam "em espera" com a regra real, sem número.
       const agents: DemoAgentStatus[] = [
-        { key: 'market', name: t.market, icon: '🧭', state: trendRow?.detected_at ? 'active' : 'idle', lastAction: trendRow?.detected_at ? `${t.lastScan} ${new Date(trendRow.detected_at).toLocaleDateString(locale)}` : t.noScan },
+        { key: 'market', name: t.market, icon: '📊', state: trendRow?.detected_at ? 'active' : 'idle', lastAction: trendRow?.detected_at ? `${t.lastScan} ${new Date(trendRow.detected_at).toLocaleDateString(locale)}` : t.noScan },
+        { key: 'opportunities', name: t.opp, icon: '💡', state: 'idle', lastAction: t.oppAction },
+        { key: 'strategy', name: t.strat, icon: '🧭', state: 'idle', lastAction: t.stratAction },
         { key: 'content', name: t.content, icon: '✍️', state: ideaRow?.created_at ? 'active' : 'idle', lastAction: ideaRow?.created_at ? `${t.lastIdea} ${new Date(ideaRow.created_at).toLocaleDateString(locale)}` : t.noIdea },
-        { key: 'ads', name: 'Meta Ads', icon: '🎯', state: companyRow?.meta_ads_account_id ? 'active' : 'soon', lastAction: companyRow?.meta_ads_account_id ? t.connected : t.awaitAds },
         { key: 'sales', name: t.sales, icon: '🔀', state: 'idle', lastAction: t.pending(pending) },
-        { key: 'whatsapp', name: t.wa, icon: '💬', state: companyRow?.whatsapp_phone_number_id ? 'active' : 'soon', lastAction: companyRow?.whatsapp_phone_number_id ? t.connected : t.awaitWa },
       ]
 
       const hasReal = leads.length > 0 || snaps.length > 0 || adsConnected

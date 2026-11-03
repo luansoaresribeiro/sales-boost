@@ -10,6 +10,7 @@ import CalendarPostModal from './CalendarPostModal'
 import MakeNowPicker from './MakeNowPicker'
 import { useRealtime } from '../../../lib/useRealtime'
 import { PieceChips } from './PieceLabels'
+import { useItemUsage } from './useItemUsage'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -69,6 +70,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   const token = session?.access_token ?? ''
   const { company } = useCompany()
   const ssNames = useSSNames(companyId)
+  const usage = useItemUsage(companyId)
   const [items, setItems] = useState<Item[]>([])
   const [mix, setMix] = useState<MixItem[]>([])
   const [formatMeta, setFormatMeta] = useState<Record<string, FormatMeta>>({})
@@ -204,6 +206,9 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                       <span style={{ fontSize: '8.5px', fontWeight: 700, color: sm.color }}>● {lang === 'en' ? STATUS_LABEL_EN[status] ?? sm.label : sm.label}{it.quality_score != null ? ` · ${it.quality_score}` : ''}</span>
                       {it.brief?.template && <span style={{ fontSize: '8.5px', color: MUTED }}>· {templateLabel(it.brief.template, lang)}</span>}
                     </div>
+                    {it.item_id && usage.data.items[it.item_id] && (
+                      <div title={usage.data.items[it.item_id].title} style={{ fontSize: '9px', color: 'rgba(255,255,255,0.7)', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🏠 {usage.data.items[it.item_id].title}</div>
+                    )}
                     <div style={{ marginTop: '4px' }}><PieceChips familia={it.familia} pilarSs={it.pilar_ss} tema={it.pillar} ssNames={ssNames} /></div>
                     {it.story_worthy && it.kind !== 'stories' && <div style={{ fontSize: '8.5px', color: '#A78BFA', marginTop: '2px' }}>{t.alsoStory}</div>}
                   </button>
