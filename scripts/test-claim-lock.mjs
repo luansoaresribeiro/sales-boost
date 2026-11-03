@@ -118,4 +118,15 @@ assert.deepEqual(out4.slides.map(x => x.layout), ['capa', 'fecho']); assert.equa
 // comparativo com nome de bairro do CADASTRO como complemento (sem hard-code de setor)
 assert.ok(claimIssues('Sai mais caro em Leblon.', ctx).length > 0); assert.equal(claimIssues('Sai mais caro em Pampulha.', ctx).length, 0); ok('nome do bairro do cadastro conta como complemento de lugar')
 
+// hashtag cortada não conta como afirmação e não baixa a nota (Tespon 2026-11-03: "#imoveisdeluxo")
+{
+  const onlyTag = claimNotice(['#imoveisdeluxo'])
+  assert.match(onlyTag, /^Tirei hashtag sem base no cadastro: #imoveisdeluxo\.$/)
+  assert.deepEqual(qualityFlags({ reasoning: onlyTag }), [])
+  const mixed = claimNotice(['#luxo', 'O bairro mais desejado do Rio.'])
+  assert.match(mixed, /^Tirei afirmação sem fonte: “O bairro mais desejado do Rio\.”\. Tirei hashtag sem base no cadastro: #luxo\.$/)
+  assert.equal(qualityFlags({ reasoning: mixed }).length, 1)
+}
+ok('hashtag cortada: só aviso, sem baixar a nota; frase de mercado continua baixando')
+
 console.log(`\n${n} verificações ok`)
