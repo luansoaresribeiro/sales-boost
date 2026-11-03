@@ -121,7 +121,16 @@ export function rewritePrompt(brandName: string, s: DeckSlide, reasons: { tooLon
   ].filter(Boolean).join('; ')
   return `Você reescreve 1 slide de um carrossel de Instagram de "${brandName}". Motivo: ${why}.
 Slide atual (layout "${s.layout}"): ${JSON.stringify({ title: s.title, text: s.text, items: s.items, highlight: s.highlight, cta: s.cta })}
-Mantenha o layout, o sentido e o formato dos campos ("items" com linhas separadas por \\n; em "comparacao", linhas "lado A | lado B"). Sem emoji, sem inventar nada. Responda SÓ em JSON: {"title":"","text":"","items":"","highlight":"","cta":""}`
+Mantenha o layout, o sentido e o formato dos campos ("items" com linhas separadas por \\n; em "comparacao", linhas "lado A | lado B"). Escreva no mesmo idioma do slide, com ortografia correta e TODOS os acentos (os termos do motivo vêm sem acento só por serem uma lista técnica — não copie esse jeito). Sem emoji, sem inventar nada. Responda SÓ em JSON: {"title":"","text":"","items":"","highlight":"","cta":""}`
+}
+
+// Palavras do português que quase nunca aparecem sem acento em texto bem escrito. Duas ou mais delas sem acento num
+// slide = a reescrita perdeu a acentuação (Tespon, 2026-11-03: "voce", "imovel", "So entao") — tratar como falha.
+const UNACCENTED_PT = /(?<![\p{L}\d])(voce|voces|nao|imovel|imoveis|entao|situacao|condicoes|especifico|proximo|disponivel|tambem|ja|ate|so|credito|municipio|propria|historico)(?![\p{L}\d])/giu
+export function lostAccents(s: Pick<DeckSlide, 'title' | 'text' | 'items' | 'highlight' | 'cta'>, lang?: string | null): boolean {
+  if (lang && !/^pt/i.test(lang)) return false
+  const t = [s.title, s.text, s.items, s.highlight, s.cta].filter(Boolean).join('\n')
+  return (t.match(UNACCENTED_PT) ?? []).length >= 2
 }
 
 export { SLIDE_LAYOUTS }

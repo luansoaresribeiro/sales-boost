@@ -8,7 +8,7 @@ import {
   tipSources, topicCfgOf, topicText, validateGeneral, validateLight, validateRegulated, withSource,
 } from '../supabase/functions/_shared/deckTopic.ts'
 import { decideTopic, guardDeck, topicBlock } from '../supabase/functions/_shared/deckGuard.ts'
-import { deckPromptRules, rewritePrompt } from '../supabase/functions/_shared/deckSlides.ts'
+import { deckPromptRules, lostAccents, rewritePrompt } from '../supabase/functions/_shared/deckSlides.ts'
 import { fetchFaqConfig, isPublishable, isOfficiallyReleased, isUsableTip } from '../supabase/functions/_shared/faqCheck.ts'
 import { fetchFormatAliases } from '../supabase/functions/_shared/formatCatalog.ts'
 
@@ -308,6 +308,27 @@ ok('guarda regulado: IA sem slides → carrossel das dicas')
   assert.equal(r.slides[0].layout, 'capa'); assert.equal(r.slides[3].cta, 'Me chama no direct')
 }
 ok('guarda geral: dígito, lei e prazo caem; slide bom fica; sempre sem fato')
+{ // geral: regra afirmada como fato SEM número (caso Tespon 2026-11-03) — o verificador pega e o slide vira texto seguro
+  const geral = { mode: 'geral', category: 'financiamento', label: 'Financiamento', tips: [], hosts: [] }
+  const claim = 'Morar em outro estado não impede o uso do fundo de garantia.'
+  const slides = [S('capa', 'Fundo de garantia na compra', ''), S('destaque', '', claim), S('destaque', '', 'Confira sua situação com o banco antes.'), S('fecho', 'Dúvidas?', '', '', 'Me chama no direct')]
+  const ask = async (p) => (/AFIRMAM COMO FATO/.test(p) ? (/não impede/.test(p) ? '{"unsupported":[{"unit":"slide 2","claim":"não impede"}]}' : '{"unsupported":[]}') : `{"title":"","text":"${claim}","items":"","highlight":"","cta":""}`)
+  const r = await run(geral, slides, 'Confira com o banco.', ask)
+  assert.notEqual(r.slides[1].text, claim); assert.equal(r.slides[2].text, 'Confira sua situação com o banco antes.')
+  assert.ok(r.notes.some(x => /regra sem fonte/.test(x)), JSON.stringify(r.notes))
+}
+ok('guarda geral: regra afirmada como fato sem número → verificador → texto seguro')
+{ // reescrita que perde os acentos é descartada (caso Tespon: "voce", "imovel", "So entao")
+  assert.equal(lostAccents({ title: '', text: 'Verifique se voce tem saldo. So entao leve ao banco.', items: '', highlight: '', cta: '' }, 'pt'), true)
+  assert.equal(lostAccents({ title: '', text: 'Verifique se você tem saldo. Só então leve ao banco.', items: '', highlight: '', cta: '' }, 'pt'), false)
+  assert.equal(lostAccents({ title: '', text: 'nao imovel voce', items: '', highlight: '', cta: '' }, 'en'), false)
+  const geral = { mode: 'geral', category: 'impostos', label: 'Impostos e taxas', tips: [], hosts: [] }
+  const slides = [S('capa', 'Antes de comprar', ''), S('destaque', '', 'O prazo é de 30 dias para você.'), S('fecho', 'Dúvidas?', '', '', 'x')]
+  const r = await run(geral, slides, '', async (p) => (/Slide atual/.test(p) ? '{"title":"","text":"Voce nao precisa correr com o imovel.","items":"","highlight":"","cta":""}' : '{"unsupported":[]}'))
+  assert.notEqual(r.slides[1].text, 'Voce nao precisa correr com o imovel.')
+  assert.ok(!lostAccents(r.slides[1], 'pt'))
+}
+ok('reescrita sem acento é descartada (vira texto seguro no geral)')
 { // leve: reescreve 1x; se continuar, só avisa
   const slides = [S('capa', 'Primeiro imóvel', ''), S('destaque', '', 'Use o FGTS na entrada.'), S('destaque', '', 'Compare bairros com calma.'), S('fecho', 'Fale com a gente', '', '', 'x')]
   const leve = { mode: 'leve', category: null, label: '', tips: [], hosts: [] }

@@ -119,10 +119,14 @@ export function cutHashtags(tags: string, ctx: ClaimCtx): { text: string; remove
 
 /** "Tirei afirmação sem fonte: …" — o dono vê o que saiu antes de aprovar. */
 export function claimNotice(removed: string[]): string | null {
-  const uniq = [...new Set(removed.map(r => r.replace(/\s+/g, ' ').trim()).filter(Boolean))]
-  if (!uniq.length) return null
+  const all = [...new Set(removed.map(r => r.replace(/\s+/g, ' ').trim()).filter(Boolean))]
+  // Hashtag cortada (ex.: #imoveisdeluxo) não é afirmação: vira só aviso e NÃO baixa a nota (qualityFlags lê só
+  // "Tirei afirmação sem fonte"). Tespon 2026-11-03: um carrossel bom foi pra rascunho só por causa de uma hashtag.
+  const tags = all.filter(r => /^#\S+$/.test(r)), uniq = all.filter(r => !/^#\S+$/.test(r))
+  const tagNote = tags.length ? `Tirei hashtag sem base no cadastro: ${tags.slice(0, 5).join(' ')}.` : ''
+  if (!uniq.length) return tagNote || null
   const shown = uniq.slice(0, 3).map(r => `“${r.length > 90 ? `${r.slice(0, 89).trimEnd()}…` : r}”`).join('; ')
-  return `Tirei afirmação sem fonte: ${shown}${uniq.length > 3 ? ` (+${uniq.length - 3})` : ''}.`
+  return [`Tirei afirmação sem fonte: ${shown}${uniq.length > 3 ? ` (+${uniq.length - 3})` : ''}.`, tagNote].filter(Boolean).join(' ')
 }
 
 export const claimWhy = (issues: string[]): string => issues.some(i => i.startsWith(NUMBER_ISSUE))

@@ -323,6 +323,7 @@ function parseObj(raw: string): Record<string, unknown> {
 // repetir do mesmo tamanho. allowRetry=false (usado na parte 2, mais
 // pesada) nunca tenta de novo, pra nunca arriscar estourar os 150s da
 // execução dentro da qual está rodando.
+const CALL_TIMEOUT_MS = 130_000
 async function callClaudeStep(
   anthropicKey: string, prompt: string, maxTokens: number,
   opts: { allowRetry: boolean; bumpedMaxTokens?: number }, label: string,
@@ -332,13 +333,16 @@ async function callClaudeStep(
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST', headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: tokens, messages: [{ role: 'user', content: prompt }] }),
+        // Teto por chamada abaixo dos 150s da execução (2026-11-03): antes, uma resposta lenta deixava a execução
+        // morrer calada e a estratégia presa em 'generating' (Teste Zero). Agora vira 'failed' com motivo claro.
+        signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       })
       if (!res.ok) { console.error(`callClaudeStep ${label}: Claude respondeu ${res.status}`); return null }
       const data = await res.json()
       const text = (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
       const stopReason = String(data.stop_reason ?? '')
       return { text, stopReason }
-    } catch (e) { console.error(`callClaudeStep ${label}: erro de rede:`, e); return null }
+    } catch (e) { console.error(`callClaudeStep ${label}: erro de rede ou tempo esgotado:`, e); return null }
   }
 
   const first = await attempt(maxTokens)
@@ -542,40 +546,27 @@ Retorne APENAS um JSON:
   }
 }
 
-// ── PASSO 2 (execução do 'continue') — plano tático: funil, metas,
-// orçamento, estimativas, campanha. Execução própria, relógio de 150s
-// zerado. Sem retry (allowRetry:false) — é a parte mais pesada, e mesmo 1
-// retry do mesmo tamanho já arriscaria estourar os 150s desta execução.
-async function runStep2(admin: SupaClient, supabaseUrl: string, cronSecret: string, anthropicKey: string, row: Record<string, unknown>): Promise<void> {
-  const strategyId = String(row.id)
+// ── PASSO 2 (execução do 'continue') — mix da semana + funil. Execução própria, relógio de 150s zerado.
+// Divisão em 2 (2026-11-03): numa empresa nova (Teste Zero) a parte 2 antiga — mix + funil + metas + orçamento +
+// estimativas + campanha numa chamada só de 5000 tokens — cortou por tamanho num dia e no outro passou dos 150s e
+// morreu calada (estratégia presa em 'generating'). Agora: passo 2 = mix + funil; passo 3 ('continue', step=3) =
+// metas + orçamento + estimativas + campanha, cada um com o seu relógio. Sem retry (allowRetry:false).
+type StepCtx = { company: Company; baseline: Awaited<ReturnType<typeof fetchRealBaseline>>; formats: Awaited<ReturnType<typeof fetchFormatCatalog>>; ss: SSContext | null; rules: Awaited<ReturnType<typeof fetchContentRules>>; header: string }
+async function tacticalCtx(admin: SupaClient, supabaseUrl: string, cronSecret: string, row: Record<string, unknown>): Promise<StepCtx | null> {
   const companyId = String(row.company_id)
-  const markFailed = async (reason: string) => {
-    console.error(`strategy-generate step2[${strategyId}]: FALHOU — ${reason}`)
-    await admin.from('marketing_ai_strategies').update({ status: 'failed', reasoning: reason, updated_at: new Date().toISOString() }).eq('id', strategyId)
-    await logStrategyCost(admin, companyId, 'generate', false, reason)
-  }
-  try {
-    const t0 = Date.now()
-    const lap = (label: string) => console.log(`TIMING strategy-generate step2[${strategyId}]: ${label} = ${Date.now() - t0}ms`)
-
-    const { data: companyRow } = await admin.from('companies')
-      .select(COMPANY_SELECT)
-      .eq('id', companyId).maybeSingle()
-    const company = companyRow as Company | null
-    if (!company) { await markFailed('Empresa não encontrada na 2ª etapa.'); return }
-
-    const [dataAgentState, baseline, playbookBlock, formats, ss] = await Promise.all([
-      fetchDataAgentState(supabaseUrl, cronSecret, companyId, 'state'),
-      fetchRealBaseline(admin, companyId),
-      fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers, company.id),
-      fetchFormatCatalog(admin, company.vertical_key ?? 'generico', companyId),
-      fetchSocialSelling(admin, company.vertical_key ?? 'generico', companyId),
-    ])
-    const rules = await fetchContentRules(admin, company.vertical_key ?? 'generico')
-    lap('data-agent + baseline + playbook + formatos (2a etapa)')
-    const prevPlan = (row.content_plan ?? null) as Partial<ContentPlan> | null
-
-    const prompt = `Você é Hermes, continuando o plano tático de uma estratégia cuja tese já foi decidida (parte 1, já gravada) — não questione a tese, só desdobre em plano tático.
+  const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', companyId).maybeSingle()
+  const company = companyRow as Company | null
+  if (!company) return null
+  const [dataAgentState, baseline, playbookBlock, formats, ss] = await Promise.all([
+    fetchDataAgentState(supabaseUrl, cronSecret, companyId, 'state'),
+    fetchRealBaseline(admin, companyId),
+    fetchPlaybookBlock(admin, company.vertical_key ?? 'generico', company.playbook_answers, company.id),
+    fetchFormatCatalog(admin, company.vertical_key ?? 'generico', companyId),
+    fetchSocialSelling(admin, company.vertical_key ?? 'generico', companyId),
+  ])
+  const rules = await fetchContentRules(admin, company.vertical_key ?? 'generico')
+  const prevPlan = (row.content_plan ?? null) as Partial<ContentPlan> | null
+  const header = `Você é Hermes, continuando o plano tático de uma estratégia cuja tese já foi decidida (parte 1, já gravada) — não questione a tese, só desdobre em plano tático.
 
 ${businessPreamble(company, {})}${playbookBlock}${formatCatalogBlock(formats)}${SCOPE_BLOCK}${ss?.block ?? ''}
 
@@ -592,7 +583,95 @@ Linha central de conteúdo: ${prevPlan?.central_line || '—'}${prevPlan?.hero_f
 
 ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
 ${formatDomains(dataAgentState)}
-${baseline ? `\nDADO REAL de performance atual (NÃO invente outro número — use exatamente este quando relevante): ${baseline.label}.` : '\nAinda não há dado real de performance coletado — trate qualquer número de baseline como DESCONHECIDO, nunca assuma 0 nem invente um valor.'}
+${baseline ? `\nDADO REAL de performance atual (NÃO invente outro número — use exatamente este quando relevante): ${baseline.label}.` : '\nAinda não há dado real de performance coletado — trate qualquer número de baseline como DESCONHECIDO, nunca assuma 0 nem invente um valor.'}`
+  return { company, baseline, formats, ss, rules, header }
+}
+
+async function runStep2(admin: SupaClient, supabaseUrl: string, cronSecret: string, anthropicKey: string, row: Record<string, unknown>): Promise<void> {
+  const strategyId = String(row.id)
+  const companyId = String(row.company_id)
+  const markFailed = async (reason: string) => {
+    console.error(`strategy-generate step2[${strategyId}]: FALHOU — ${reason}`)
+    await admin.from('marketing_ai_strategies').update({ status: 'failed', reasoning: reason, updated_at: new Date().toISOString() }).eq('id', strategyId)
+    await logStrategyCost(admin, companyId, 'generate', false, reason)
+  }
+  try {
+    const t0 = Date.now()
+    const lap = (label: string) => console.log(`TIMING strategy-generate step2[${strategyId}]: ${label} = ${Date.now() - t0}ms`)
+    const ctx = await tacticalCtx(admin, supabaseUrl, cronSecret, row)
+    if (!ctx) { await markFailed('Empresa não encontrada na 2ª etapa.'); return }
+    lap('contexto (2a etapa)')
+    const prevPlan = (row.content_plan ?? null) as Partial<ContentPlan> | null
+
+    const prompt = `${ctx.header}
+
+Esta é a PARTE 2 de 3: só o MIX DA SEMANA e o FUNIL. Metas, orçamento e estimativas vêm na parte 3 — não inclua aqui.
+
+REGRAS CRÍTICAS:
+- NUNCA invente taxa de conversão, CPC, CPM, CAC, ROAS ou qualquer métrica histórica que não foi te dada acima.
+${TACTICAL_SCOPE_RULES}
+- Seja específico ao negócio e à tese acima — nunca genérico. Frases curtas.
+${weeklyMixRules(ctx.rules.minVideosPerWeek, ctx.ss)}
+
+Retorne APENAS um JSON:
+{
+  "weekly_mix": ${weeklyMixShape(ctx.ss)},
+  "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","pillar":"chave do pilar de Social Selling que esta etapa fortalece (se houver)","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}]
+}`
+    lap(`prompt 2 montado, ${prompt.length} chars`)
+    const r2 = await callClaudeStep(anthropicKey, prompt, 3000, { allowRetry: false }, 'Parte 2 (mix e funil)')
+    lap(`parte 2 concluída, ok=${r2.ok}`)
+    if (!r2.ok) { await markFailed(r2.reason); return }
+    const funnel = Array.isArray(r2.parsed.funnel_plan) ? r2.parsed.funnel_plan : []
+    await admin.from('marketing_ai_strategies').update({
+      funnel_plan: funnel,
+      content_plan: sanitizeContentPlan({ weekly_mix: r2.parsed.weekly_mix }, ctx.formats, prevPlan, ctx.rules.minVideosPerWeek, planOpts(ctx.ss, funnel)) ?? prevPlan,
+      // status continua 'generating' — só a parte 3 põe 'active'.
+      updated_at: new Date().toISOString(),
+    }).eq('id', strategyId)
+    lap('parte 2 gravada')
+
+    let fired = false
+    try {
+      const res = await fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'continue', step: 3, strategy_id: strategyId, cron_secret: cronSecret }),
+      })
+      fired = res.ok
+      await res.body?.cancel()
+      if (!fired) console.error(`strategy-generate step2[${strategyId}]: 'continue' (passo 3) respondeu HTTP ${res.status}`)
+    } catch (e) { console.error(`strategy-generate step2[${strategyId}]: falha ao disparar o passo 3:`, e) }
+    lap(`passo 3 disparado, ok=${fired}`)
+    if (!fired) await markFailed('Não consegui continuar a geração (falha ao disparar a 3ª etapa) — tente de novo.')
+  } catch (e) {
+    await markFailed(e instanceof Error ? e.message : String(e))
+  }
+}
+
+// ── PASSO 3 (execução do 'continue', step=3) — metas, orçamento, estimativas e rascunho de campanha; ativa a
+// estratégia e pede o calendário do resto da semana. Relógio de 150s próprio.
+async function runStep3(admin: SupaClient, supabaseUrl: string, cronSecret: string, anthropicKey: string, row: Record<string, unknown>): Promise<void> {
+  const strategyId = String(row.id)
+  const companyId = String(row.company_id)
+  const markFailed = async (reason: string) => {
+    console.error(`strategy-generate step3[${strategyId}]: FALHOU — ${reason}`)
+    await admin.from('marketing_ai_strategies').update({ status: 'failed', reasoning: reason, updated_at: new Date().toISOString() }).eq('id', strategyId)
+    await logStrategyCost(admin, companyId, 'generate', false, reason)
+  }
+  try {
+    const t0 = Date.now()
+    const lap = (label: string) => console.log(`TIMING strategy-generate step3[${strategyId}]: ${label} = ${Date.now() - t0}ms`)
+    const ctx = await tacticalCtx(admin, supabaseUrl, cronSecret, row)
+    if (!ctx) { await markFailed('Empresa não encontrada na 3ª etapa.'); return }
+    const { company, baseline } = ctx
+    const funnel = Array.isArray(row.funnel_plan) ? row.funnel_plan as { stage?: string; objective?: string; metric?: string }[] : []
+    const funnelLine = funnel.length ? funnel.map(f => `${f.stage ?? '?'}: ${f.objective ?? ''} (métrica: ${f.metric ?? '—'})`).join(' | ') : '—'
+
+    const prompt = `${ctx.header}
+
+FUNIL JÁ DEFINIDO (parte 2): ${funnelLine}
+
+Esta é a PARTE 3 de 3: metas, orçamento, estimativas e rascunho de campanha. Não repita o funil nem o mix.
 
 REGRAS CRÍTICAS:
 - NUNCA invente taxa de conversão, CPC, CPM, CAC, ROAS ou qualquer métrica histórica que não foi te dada acima.
@@ -600,59 +679,45 @@ REGRAS CRÍTICAS:
 - Metas: no máximo 3, "goal_type" sendo um destes: ${PLANNED_GOAL_TYPES.join('|')}. NÃO preencha baseline — isso é calculado à parte com dado real.
 - Orçamento: só proponha valores SE o dono já informou orçamento mensal (${company.marketing_monthly_budget ? `informou: R$ ${company.marketing_monthly_budget}` : 'não informou'}); caso contrário, campos null e explique em "budget_reasoning" que falta essa informação.
 ${TACTICAL_SCOPE_RULES}
-- Seja específico ao negócio e à tese acima — nunca genérico.
-${weeklyMixRules(rules.minVideosPerWeek, ss)}
+- Frases curtas e específicas ao negócio.
 
 Retorne APENAS um JSON:
 {
-  "weekly_mix": ${weeklyMixShape(ss)},
-  "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","pillar":"chave do pilar de Social Selling que esta etapa fortalece (se houver)","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
   "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}],
   "budget": {"total":null,"currency":"BRL","period":"monthly","paid_ads":null,"organic":null,"creative":null,"other":null,"is_flexible":true,"allocation":[{"channel":"","amount":null,"reason":""}],"budget_reasoning":""},
   "estimates": {"time_to_signals":"","time_to_progress":"","time_to_target":"","confidence":"high|medium|low","risks":"","feasibility_status":"supports_plan|needs_more_data|needs_adjustment|significant_constraints","feasibility_reasoning":""},
   "campaign_draft": {"name":"","goal":""}
 }`
-    lap(`prompt 2 montado, ${prompt.length} chars`)
-
-    // 3200 tokens cortava toda vez no teste real (66-67s, sempre truncado) —
-    // subiu pra 4500 (~95-110s medido, ainda com folga dentro dos 150s desta
-    // execução) depois de confirmar que a parte 2 (funil/metas/orçamento/
-    // estimativas/campanha) precisa mesmo de mais espaço que isso. 5000
-    // (2026-10-09): + o mix semanal de formatos (~300 tokens) — não medido
-    // ainda; se a parte 2 passar de ~140s no log TIMING, rever.
-    const r2 = await callClaudeStep(anthropicKey, prompt, 5000, { allowRetry: false }, 'Parte 2 (plano tático)')
-    lap(`parte 2 concluída, ok=${r2.ok}`)
-    if (!r2.ok) { await markFailed(r2.reason); return }
-    const parsed2 = r2.parsed
-
-    const goals = goalsWithBaselineFrom(parsed2.goals, baseline)
+    lap(`prompt 3 montado, ${prompt.length} chars`)
+    const r3 = await callClaudeStep(anthropicKey, prompt, 2600, { allowRetry: false }, 'Parte 3 (metas e orçamento)')
+    lap(`parte 3 concluída, ok=${r3.ok}`)
+    if (!r3.ok) { await markFailed(r3.reason); return }
+    const parsed3 = r3.parsed
+    const goals = goalsWithBaselineFrom(parsed3.goals, baseline)
 
     if (String(row.kind) === 'main') {
-      // Só agora, com a geração inteira completa, pausa a antiga — se
-      // qualquer etapa tivesse falhado, a empresa continuaria com a
-      // estratégia anterior ativa em vez de ficar sem nenhuma.
+      // Só agora, com a geração inteira completa, pausa a antiga — se qualquer etapa tivesse falhado, a empresa
+      // continuaria com a estratégia anterior ativa em vez de ficar sem nenhuma.
       await admin.from('marketing_ai_strategies').update({ status: 'paused', updated_at: new Date().toISOString() })
         .eq('company_id', companyId).eq('kind', 'main').eq('status', 'active').neq('id', strategyId)
     }
 
     await admin.from('marketing_ai_strategies').update({
-      funnel_plan: Array.isArray(parsed2.funnel_plan) ? parsed2.funnel_plan : [],
-      budget: parsed2.budget && typeof parsed2.budget === 'object' ? parsed2.budget : {},
-      estimates: parsed2.estimates && typeof parsed2.estimates === 'object' ? parsed2.estimates : {},
+      budget: parsed3.budget && typeof parsed3.budget === 'object' ? parsed3.budget : {},
+      estimates: parsed3.estimates && typeof parsed3.estimates === 'object' ? parsed3.estimates : {},
       data_provenance: { baseline_source: baseline ? 'instagram_performance_snapshots' : 'nenhum dado real ainda — metas sem baseline verificado', source: 'data-agent' },
-      content_plan: sanitizeContentPlan({ weekly_mix: parsed2.weekly_mix }, formats, prevPlan, rules.minVideosPerWeek, planOpts(ss, Array.isArray(parsed2.funnel_plan) ? parsed2.funnel_plan : [])) ?? prevPlan,
       status: 'active',
       updated_at: new Date().toISOString(),
     }).eq('id', strategyId)
-    lap('parte 2 gravada, status=active')
+    lap('parte 3 gravada, status=active')
     await logStrategyCost(admin, companyId, 'generate', true)
 
     if (goals.length) {
       await admin.from('marketing_ai_strategy_goals').insert(goals.map(g => ({ ...g, strategy_id: strategyId })))
     }
-    const campaignDraft = parsed2.campaign_draft as { name?: string; goal?: string } | undefined
+    const campaignDraft = parsed3.campaign_draft as { name?: string; goal?: string } | undefined
     if (campaignDraft?.name) {
-      const budgetObj = parsed2.budget as { paid_ads?: number | null } | undefined
+      const budgetObj = parsed3.budget as { paid_ads?: number | null } | undefined
       await admin.from('marketing_ai_campaigns').insert({
         company_id: companyId, name: String(campaignDraft.name).slice(0, 200), goal: campaignDraft.goal ? String(campaignDraft.goal) : null,
         budget: budgetObj?.paid_ads ?? null, status: 'planned',
@@ -661,9 +726,7 @@ Retorne APENAS um JSON:
     lap('goals + campaign draft gravados')
 
     // "Tudo automático" (2026-10-26): estratégia nova ativa → o calendário dos dias que FALTAM da semana atual
-    // (amanhã até domingo) é planejado já, sem esperar o domingo nem um botão. Quem decide se há o que fazer é o
-    // creative-generate (acesso pago, interruptor do calendário, "menos de 2 dias não faz nada", sem duplicar).
-    // Só espera o aceite (202); nunca derruba a estratégia que acabou de ficar pronta.
+    // (amanhã até domingo) é planejado já. Quem decide se há o que fazer é o creative-generate. Só espera o aceite (202).
     if (String(row.kind) === 'main') {
       try {
         const res = await fetch(`${supabaseUrl}/functions/v1/creative-generate`, {
@@ -672,8 +735,8 @@ Retorne APENAS um JSON:
           signal: AbortSignal.timeout(20_000),
         })
         await res.body?.cancel()
-        if (!res.ok) console.error(`strategy-generate step2[${strategyId}]: plan_rest_of_week recusado (HTTP ${res.status})`)
-      } catch (e) { console.error(`strategy-generate step2[${strategyId}]: falha ao pedir o calendário do resto da semana:`, e) }
+        if (!res.ok) console.error(`strategy-generate step3[${strategyId}]: plan_rest_of_week recusado (HTTP ${res.status})`)
+      } catch (e) { console.error(`strategy-generate step3[${strategyId}]: falha ao pedir o calendário do resto da semana:`, e) }
     }
   } catch (e) {
     await markFailed(e instanceof Error ? e.message : String(e))
@@ -893,8 +956,11 @@ Deno.serve(async (req) => {
       // parte 1 ja gravou (thesis presente) -- senao, ja foi processada,
       // falhou, ou a parte 1 ainda nao terminou; ignora sem erro.
       if (!row || row.status !== 'generating' || !row.thesis) return json({ ok: true, skipped: true })
+      const step3 = Number(body.step) === 3
+      // Passo 3 só segue se o passo 2 já gravou o funil (prova de repetição igual à de cima).
+      if (step3 && !(Array.isArray(row.funnel_plan) && row.funnel_plan.length)) return json({ ok: true, skipped: true })
       // @ts-ignore — EdgeRuntime é o global do Supabase Edge Functions pra background tasks
-      EdgeRuntime.waitUntil(runStep2(admin, supabaseUrl, cronSecret, anthropicKey, row as Record<string, unknown>))
+      EdgeRuntime.waitUntil((step3 ? runStep3 : runStep2)(admin, supabaseUrl, cronSecret, anthropicKey, row as Record<string, unknown>))
       return json({ ok: true })
     }
 

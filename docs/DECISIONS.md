@@ -2325,3 +2325,24 @@ pacotes antes da validação. A Fase 2 só começa com A, B1 e B2 concluídos.
 - Demonstração nas outras telas.
 - Campanha (segue "em breve").
 - WhatsApp e mais agentes.
+
+## 2026-11-03 — Validação: 3 correções achadas no teste (estratégia de empresa nova, carrossel regulado, hashtag)
+
+**O que o teste da validação achou** (Tespon + "Teste Zero", antes de liberar o primeiro cliente):
+1. **A estratégia de empresa nova não ficava pronta.** A 2ª parte da geração fazia mix da semana, funil, metas, orçamento,
+   estimativas e campanha numa chamada só, de 5000 tokens. Na "Teste Zero" ela foi cortada por tamanho em 02/11, e em 03/11 passou dos
+   150 s da execução e morreu sem registro, deixando a estratégia presa em "gerando".
+   **Correção:** a geração agora tem 3 passos, cada um com o seu relógio.
+   - Passo 2 (`continue`): mix da semana + funil.
+   - Passo 3 (`continue`, `step: 3`): metas, orçamento, estimativas e campanha. Só esse passo ativa a estratégia e pede o calendário do resto da semana.
+   - Cada chamada à IA tem teto de 130 s: a demora vira "failed" com motivo, nunca mais fica presa.
+2. **Carrossel de tema regulado sem dica liberada** (FGTS na Tespon: a dica estava "revisar", então o modo foi o *geral*):
+   - **Acentos:** a reescrita da trava devolveu listas sem acento ("voce", "imovel", "So entao"). A reescrita agora pede acento, e a que perde os
+     acentos é descartada (`lostAccents` em `_shared/deckSlides.ts`).
+   - **Regra afirmada como fato:** um slide afirmou uma regra sem número ("morar em outro estado não impede o uso"), que o validador de código não
+     pega. O verificador barato de afirmações, que só rodava no modo regulado, agora roda também no modo geral (`_shared/deckGuard.ts`).
+3. **Hashtag cortada baixava a nota.** A trava de frase de mercado tirou "#imoveisdeluxo" e escreveu "Tirei afirmação sem fonte". A nota
+   caiu 25 pontos e um carrossel bom foi para rascunho. Agora a hashtag cortada vira só o aviso "Tirei hashtag sem base no cadastro", que não
+   pesa na nota. Frase de mercado continua baixando (`claimNotice` em `_shared/claimLock.ts`).
+
+Testes em `scripts/test-deck-topic.mjs` e `scripts/test-claim-lock.mjs`, com os casos exatos.
