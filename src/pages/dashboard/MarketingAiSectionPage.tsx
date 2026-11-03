@@ -53,7 +53,7 @@ const TX = {
     notActiveDesc: 'A ativação é feita pela equipe Sales Boost, configurando a marca, o público e os concorrentes. Fale com a gente pra ativar.',
     back: '← Voltar', followers: 'Seguidores', pendingApproval: 'Conteúdo esperando aprovação', newRecs: 'Recomendações novas', competitors: 'Concorrentes monitorados',
     openInsights: 'Insights em aberto', noInsights: 'Nenhum insight aberto agora.', recent: 'Atividade recente', noActivity: 'Nenhuma atividade ainda.',
-    products: 'Produtos', market: 'Mercado', avatar: 'Meu avatar (em breve)', ideas: 'Ideias e trends', nearby: 'Lugares perto', faq: 'Dicas e FAQ', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
+    products: 'Produtos', market: 'Insights e evidências', avatar: 'Meu avatar (em breve)', ideas: 'Direcionamento e ideias', nearby: 'Inteligência de localização', faq: 'Base de conhecimento', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
     funnel: 'Funil de vendas', perf: 'Desempenho dos posts', learn: 'Aprendizado', exper: 'Experimentos', reps: 'Relatórios',
   },
   en: {
@@ -61,7 +61,7 @@ const TX = {
     notActiveDesc: 'Activation is done by the Sales Boost team, setting up the brand, audience and competitors. Contact us to activate it.',
     back: '← Back', followers: 'Followers', pendingApproval: 'Content awaiting approval', newRecs: 'New recommendations', competitors: 'Competitors monitored',
     openInsights: 'Open insights', noInsights: 'No open insights right now.', recent: 'Recent activity', noActivity: 'No activity yet.',
-    products: 'Products', market: 'Market', avatar: 'My avatar (coming soon)', ideas: 'Ideas & trends', nearby: 'Nearby places', faq: 'Tips & FAQ', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
+    products: 'Products', market: 'Insights & evidence', avatar: 'My avatar (coming soon)', ideas: 'Direction & ideas', nearby: 'Location intelligence', faq: 'Knowledge base', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
     funnel: 'Sales pipeline', perf: 'Post performance', learn: 'Learning', exper: 'Experiments', reps: 'Reports',
   },
 } as const

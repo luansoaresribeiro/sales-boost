@@ -313,6 +313,15 @@ export function useDemoAllowed(): boolean {
   return !getTrialInfo(company).isTrial
 }
 
+// Números de exemplo dos 4 indicadores de decisão do hub (modo demonstração) — estáveis por empresa, mesma lógica do resto do demo.
+export function buildDecisionDemo(companyId: string): { signals7: number; oppsSuggested: number; oppsNew7: number; strategiesActive: number; actionsReady: number; actionsVault: number } {
+  const rng = seededRng(`${companyId || 'demo'}:decisao`)
+  const i = (min: number, max: number) => Math.round(min + rng() * (max - min))
+  const oppsSuggested = i(2, 6)
+  const actionsReady = i(4, 12)
+  return { signals7: i(5, 18), oppsSuggested, oppsNew7: Math.min(oppsSuggested, i(1, 4)), strategiesActive: 1, actionsReady, actionsVault: Math.min(actionsReady, i(2, 8)) }
+}
+
 export function useDemoMode(companyId: string | undefined): [boolean, (v: boolean) => void] {
   const allowed = useDemoAllowed()
   const [on, setOn] = useState<boolean>(() => {

@@ -5,12 +5,14 @@ import { useCompany } from '../../contexts/CompanyContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import GrowthCommandCenter from './marketingAi/GrowthCommandCenter'
-import { buildGrowthDemo, useDemoMode, useDemoAllowed, type GrowthDemoData, type CommandInsight, type DemoAgentStatus } from './marketingAi/growthDemo'
+import { buildGrowthDemo, buildDecisionDemo, useDemoMode, useDemoAllowed, type GrowthDemoData, type CommandInsight, type DemoAgentStatus } from './marketingAi/growthDemo'
 import { mapStage, type LeadRow } from './marketingAi/salesReal'
 import type { LeadStageKey } from './marketingAi/salesDemo'
 import DataVeil, { veilMode } from './marketingAi/DataVeil'
 import { MUTED, BORDER, D, SUPABASE_URL } from './marketingAi/shared'
 import { useStrategySummary } from './marketingAi/useStrategySummary'
+import DecisionKpis from './marketingAi/DecisionKpis'
+import { useDecisionKpis } from './marketingAi/useDecisionKpis'
 import { useFlowSummary, type FlowSummary } from './marketingAi/useFlowSummary'
 
 const ORANGE = '#FF6D29'
@@ -25,14 +27,14 @@ interface ModuleDef { section: string; title: string; desc: string; icon: string
 // Oportunidades. O Feedback Loop segue como círculo flutuante (FeedbackWidget.tsx) dentro de cada seção.
 const MODULES = {
   pt: {
-    data: { section: 'dados', title: 'Inteligência de Mercado', desc: 'Coleta os sinais do mercado sozinho, todo dia: notícias, lançamentos, obras e turismo dos bairros dos seus imóveis e da cidade, sempre com a fonte e a data (aba Mercado). Também: concorrentes e tendências do Instagram, lugares perto e dicas conferidas. Seus imóveis ficam no botão + laranja.', icon: '📊' },
+    data: { section: 'dados', title: 'Inteligência de Mercado', desc: 'Coleta os sinais do mercado sozinho, todo dia: notícias, lançamentos, obras e turismo dos bairros dos seus imóveis e da cidade, sempre com a fonte e a data (aba Insights e evidências). Também: concorrentes e tendências do Instagram, lugares perto e dicas conferidas. Seus imóveis ficam no botão + laranja.', icon: '📊' },
     opportunities: { section: '', path: '/dashboard/opportunities', title: 'Motor de Oportunidades', desc: 'Cruza o mercado com os seus dados e aponta onde há negócio: imóvel sem divulgação, procura sem resposta, mudança no bairro. Roda sozinho; você aprova ou descarta.', icon: '💡' },
     strategy: { section: 'estrategia', title: 'Agente de Estratégia', desc: 'Define público, oferta, mensagem e ação comercial: a estratégia da conta e o plano de cada oportunidade aprovada — e direciona a Ativação.', icon: '🧭' },
     content: { section: 'content', title: 'Ativação', desc: 'Produz o que vai para a rua: calendário da semana (feed e stories) vindo da estratégia, peças das oportunidades, a página do imóvel com link rastreável e as conversas (atendimento e respostas a comentários/DMs). Nada sai sem a sua aprovação.', icon: '✍️' },
     conversion: { section: 'conversao', title: 'Resultados e Aprendizado', desc: 'Mede e aprende: funil de vendas (leads, visitas e vendas, com a origem e o corretor de cada lead), desempenho dos posts, a memória do que funcionou, experimentos e relatórios. O que funcionou volta para a próxima estratégia.', icon: '🔀' },
   },
   en: {
-    data: { section: 'dados', title: 'Market Intelligence', desc: 'Collects market signals on its own, every day: news, launches, works and tourism in your listings\' neighborhoods and the city, always with source and date (Market tab). Also: competitors and Instagram trends, nearby places and verified tips. Your listings live in the orange + button.', icon: '📊' },
+    data: { section: 'dados', title: 'Market Intelligence', desc: 'Collects market signals on its own, every day: news, launches, works and tourism in your listings\' neighborhoods and the city, always with source and date (Insights and evidence tab). Also: competitors and Instagram trends, nearby places and verified tips. Your listings live in the orange + button.', icon: '📊' },
     opportunities: { section: '', path: '/dashboard/opportunities', title: 'Opportunity Engine', desc: 'Crosses the market with your data and points to where the business is: unpromoted listings, unanswered demand, neighborhood changes. Runs on its own; you approve or dismiss.', icon: '💡' },
     strategy: { section: 'estrategia', title: 'Strategy Agent', desc: 'Sets audience, offer, message and sales action: the account strategy and the plan for each approved opportunity — and guides Activation.', icon: '🧭' },
     content: { section: 'content', title: 'Activation', desc: 'Produces what goes out: the weekly calendar (feed and stories) from the strategy, opportunity pieces, the listing page with a tracked link and conversations (customer service and comment/DM replies). Nothing goes out without your approval.', icon: '✍️' },
@@ -206,6 +208,7 @@ export default function MarketingAiHubPage() {
   const { real, loading: realLoading, error: realError } = useRealGrowth(company?.id ?? '', session?.access_token ?? '', lang)
   const { summary: strategySummary } = useStrategySummary(company?.id)
   const flow = useFlowSummary(company?.id)
+  const { kpis: realKpis, loading: kpisLoading } = useDecisionKpis(company?.id)
 
   if (!company || !demo) {
     return <div style={{ padding: '48px', color: MUTED, fontSize: '14px' }}>{t.loading}</div>
@@ -213,6 +216,7 @@ export default function MarketingAiHubPage() {
 
   const open = (m: ModuleDef) => navigate(m.path ?? `/dashboard/marketing-ai/${m.section}`)
   const lines = flowLines(lang, flow)
+  const kpis = demoMode ? { ...realKpis, ...buildDecisionDemo(company.id) } : realKpis
   const panelData = real?.hasReal ? real.data : demo
   const panelMode = veilMode({ hasReal: !!real?.hasReal, demoMode, error: !!realError })
 
@@ -241,6 +245,9 @@ export default function MarketingAiHubPage() {
           </label>}
         </div>
       </div>
+
+      {/* Fase 1 (2026-11-03): 4 indicadores de decisão no topo; o painel de receita/ROAS/funil desceu para logo abaixo (nada foi removido). */}
+      <DecisionKpis lang={lang} kpis={kpis} loading={demoMode ? false : kpisLoading} demo={demoMode} strategyName={strategySummary?.name ?? (demoMode ? (lang === 'en' ? 'Example strategy' : 'Estratégia de exemplo') : null)} flow={flow} />
 
       {/* Receita/ROAS/funil agregados: soma o que já é real em cada peça
           (leads → funil, Instagram → crescimento/engajamento, Meta Ads → ao
@@ -300,17 +307,14 @@ export default function MarketingAiHubPage() {
 // a 2ª inscrição derruba a tela inteira ("cannot add postgres_changes callbacks after subscribe()", 2026-10-30).
 // O total de Aprovações já aparece no menu lateral.
 // Linha "ao vivo" de cada card: só contagens reais (useFlowSummary); dado que não carregou some da linha.
-// Item com `alert` é o que espera o dono (laranja).
+// Item com `alert` é o que espera o dono (laranja). Contagens de coleta (sinais, última rodada) ficam no bloco recolhido "Status da coleta" (DecisionKpis).
 type Part = { text: string; alert?: boolean }
 function flowLines(lang: Lang, f: FlowSummary): Record<'data' | 'opportunities' | 'content' | 'conversion', Part[]> {
   const pt = lang === 'pt'
   const pl = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
   const out = { data: [] as Part[], opportunities: [] as Part[], content: [] as Part[], conversion: [] as Part[] }
-  if (f.signals != null) out.data.push({ text: pt ? `${pl(f.signals, 'sinal de mercado', 'sinais de mercado')}${f.autoSignals ? ` (${f.autoSignals} automático${f.autoSignals === 1 ? '' : 's'})` : ''}` : `${pl(f.signals, 'market signal', 'market signals')}${f.autoSignals ? ` (${f.autoSignals} automatic)` : ''}` })
   if (f.oppsNew) out.opportunities.push({ text: pt ? `${pl(f.oppsNew, 'oportunidade', 'oportunidades')} para você revisar` : `${pl(f.oppsNew, 'opportunity', 'opportunities')} to review`, alert: true })
   if (f.oppsApproved != null) out.opportunities.push({ text: pt ? pl(f.oppsApproved, 'aprovada', 'aprovadas') : `${f.oppsApproved} approved` })
-  if (f.lastOppAt) out.opportunities.push({ text: `${pt ? 'última rodada' : 'last run'} ${new Date(f.lastOppAt).toLocaleDateString(pt ? 'pt-BR' : 'en-US')}` })
-  else if (f.oppsApproved != null) out.opportunities.push({ text: pt ? 'ainda sem rodada' : 'no run yet' })
   if (f.pagesLive != null) out.content.push({ text: pt ? pl(f.pagesLive, 'página de imóvel no ar', 'páginas de imóvel no ar') : pl(f.pagesLive, 'listing page live', 'listing pages live') })
   if (f.leads30 != null) out.conversion.push({ text: pt ? `${pl(f.leads30, 'lead', 'leads')} em 30 dias` : `${pl(f.leads30, 'lead', 'leads')} in 30 days` })
   if (f.leads30 && f.tracked30 != null) out.conversion.push({ text: pt ? `${f.tracked30} com origem rastreada` : `${f.tracked30} with tracked source` })

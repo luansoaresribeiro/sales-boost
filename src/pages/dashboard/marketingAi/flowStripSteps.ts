@@ -41,7 +41,7 @@ export function marketSteps(lang: Lang, d: MarketFlow, o: { hasMarket: boolean; 
     desc: pt ? 'Vai acompanhar os perfis concorrentes toda semana. Ainda não está pronto — por enquanto nada é coletado sozinho.' : 'Will follow competitor profiles every week. Not built yet — nothing is collected automatically for now.',
     counts: diagBits.length ? [pt ? `dados do diagnóstico${dgDate ? ` de ${dgDate}` : ''}` : `diagnosis data${dgDate ? ` from ${dgDate}` : ''}`, diagBits.join(' · ')] : [],
   }
-  // 3. Sinais de mercado — aba 🌐 Mercado.
+  // 3. Sinais de mercado — aba 🌐 Insights e evidências.
   const g = d.signals
   const step3: FlowStep = {
     key: 'sinais', status: num(g.total) && g.total > 0 ? 'ok' : 'waiting',

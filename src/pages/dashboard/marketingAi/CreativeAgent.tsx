@@ -151,9 +151,9 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
     <div>
       <div style={{ padding: '12px 16px', background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.2)', borderRadius: '11px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '20px' }}>
         {en ? (<>
-          💡 <strong>Ideas and trends.</strong> Not every post comes from a listing: every week the agent looks at your brand and what is trending in your segment (trends, below) and brings new ideas on its own. Like one? Create a <strong>post</strong> or a <strong>slide carousel</strong> (presentation style, with your brand) in one click — it shows up below the weekly Calendar for you to approve. Nothing is published on its own.
+          💡 <strong>Direction and ideas.</strong> Not every post comes from a listing: every week the agent looks at your brand and what is trending in your segment (trends, below) and brings new ideas on its own. Like one? Create a <strong>post</strong> or a <strong>slide carousel</strong> (presentation style, with your brand) in one click — it shows up below the weekly Calendar for you to approve. Nothing is published on its own.
         </>) : (<>
-          💡 <strong>Ideias e trends.</strong> Nem todo post sai de um imóvel: toda semana o agente olha sua marca e o que está bombando no seu segmento (trends, abaixo) e traz ideias novas sozinho. Gostou de uma? Crie um <strong>post</strong> ou um <strong>carrossel de slides</strong> (tipo apresentação, com a sua marca) com um clique — ele aparece embaixo do Calendário da semana pra você aprovar. Nada é publicado sozinho.
+          💡 <strong>Direcionamento e ideias.</strong> Nem todo post sai de um imóvel: toda semana o agente olha sua marca e o que está bombando no seu segmento (trends, abaixo) e traz ideias novas sozinho. Gostou de uma? Crie um <strong>post</strong> ou um <strong>carrossel de slides</strong> (tipo apresentação, com a sua marca) com um clique — ele aparece embaixo do Calendário da semana pra você aprovar. Nada é publicado sozinho.
         </>)}
       </div>
 
