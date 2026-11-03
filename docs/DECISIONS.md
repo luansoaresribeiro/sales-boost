@@ -2346,3 +2346,30 @@ pacotes antes da validação. A Fase 2 só começa com A, B1 e B2 concluídos.
    pesa na nota. Frase de mercado continua baixando (`claimNotice` em `_shared/claimLock.ts`).
 
 Testes em `scripts/test-deck-topic.mjs` e `scripts/test-claim-lock.mjs`, com os casos exatos.
+
+## 2026-11-03 — Validação, 2ª rodada: o que passou e mais 5 correções
+
+**Passou:**
+- **Estratégia de empresa nova** (3 passos, PR #95): a da "Teste Zero" ficou ativa em cerca de 3 minutos e já planejou o resto da semana.
+- **Carrossel regulado com dica conferida** (Tespon, ITBI): conteúdo fiel à dica e com fonte no fecho.
+- **Carrossel de tema regulado sem dica liberada** (FGTS): saiu com acento, e o verificador trocou os slides com regra sem fonte.
+
+**Corrigido nesta rodada:**
+1. **Vídeo bloqueado em empresa liberada à mão.** `item-videos` exigia `plan` diferente de "free", mas a empresa com `manual_access` passa
+   em todo o resto (`hasPaidAccess`). Resultado: o calendário planejava os 3 tours e eles caíam para foto ("fazem parte do plano").
+   Agora `manual_access` conta como plano no `item-videos`, a mesma regra do resto.
+2. **Capa no pior cômodo.** Com as notas das fotos empatadas, a capa era a 1ª foto do cadastro. Na "Teste Zero", isso deu um banheiro com toalhas
+   na capa do "3 coisas perto" e da enquete. Agora a capa segue a ficha (`tour.avoid_rooms` e `tour.room_priority`, regra 6) antes da nota,
+   em oferta, bairro, enquete e educativo com imóvel (`pickCoverPhoto(photos, rooms)` em `_shared/carouselOffer.ts`). Sem a ficha, nada muda.
+3. **Aviso falso de número no modo regulado.** O "3%" da própria dica do ITBI gerava o aviso "número que não veio dos dados", porque as
+   duas funções usavam chaves diferentes ("3" contra "3|%"). Agora o aviso usa a mesma chave dos dois lados, e o conteúdo regulado continua
+   conferido pelo `validateRegulated`.
+4. **Regra disfarçada de "erro comum"** no modo geral ("erro: achar que precisa morar na cidade" afirma que não precisa). O verificador e a regra de
+   escrita do modo geral agora pegam esse caso, e o modo geral não promete mais "o que é mito e o que é regra".
+5. **Frase de urgência sem fonte numa legenda de tour** ("chega com pouca divulgação e sai rápido", "leads no radar têm vantagem").
+   Migration `20261103210000_frases_urgencia.sql` acrescenta 12 termos à ficha (`market_claims`). Já está aplicada.
+   - De quebra: enquete "por um cobertura" → artigo pelo gênero da palavra ("uma cobertura").
+
+**Ainda a observar (sem correção agora):**
+- O fecho do carrossel de oferta repete a última foto do meio. É o desenho atual.
+- Os dados de teste da cobertura da "Teste Zero" não têm foto de sala nem de varanda.

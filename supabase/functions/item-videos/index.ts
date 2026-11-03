@@ -196,15 +196,15 @@ Deno.serve(async (req) => {
       return json({ ok: true, seen: (rows ?? []).length, ...result, resumed })
     }
 
-    let company: { id: string; plan: string | null; vertical_key: string | null; language?: string | null } | null = null
+    let company: { id: string; plan: string | null; manual_access?: boolean | null; vertical_key: string | null; language?: string | null } | null = null
     if (isCron && body.action === 'create' && typeof body.company_id === 'string') {
-      const { data } = await admin.from('companies').select('id, plan, vertical_key, language').eq('id', body.company_id).maybeSingle()
+      const { data } = await admin.from('companies').select('id, plan, manual_access, vertical_key, language').eq('id', body.company_id).maybeSingle()
       company = data
     } else {
       const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } })
       const { data: { user } } = await userClient.auth.getUser()
       if (!user) return json({ error: 'Unauthorized' }, 401)
-      const { data } = await admin.from('companies').select('id, plan, vertical_key, language').eq('user_id', user.id).maybeSingle()
+      const { data } = await admin.from('companies').select('id, plan, manual_access, vertical_key, language').eq('user_id', user.id).maybeSingle()
       company = data
     }
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
@@ -244,7 +244,9 @@ Deno.serve(async (req) => {
     if (body.action === 'create') {
       const noPlan = await requirePaidAccess(admin, company.id)
       if (noPlan) return noPlan
-      if (!company.plan || company.plan === 'free') return json({ error: 'Os vídeos do imóvel fazem parte do plano.' }, 403)
+      // Acesso liberado à mão (manual_access) conta como plano — mesma regra do hasPaidAccess. Antes, empresa liberada à mão
+      // ficava com tudo menos o vídeo: o calendário planejava o tour e ele caía pra foto (Teste Zero, 2026-11-03).
+      if ((!company.plan || company.plan === 'free') && company.manual_access !== true) return json({ error: 'Os vídeos do imóvel fazem parte do plano.' }, 403)
       const item = await loadItem(body.item_id)
       if (!item) return json({ error: 'Imóvel não encontrado.' }, 404)
       const kind = body.kind as ClipKind
