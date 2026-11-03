@@ -191,9 +191,32 @@ Deno.serve(async (req) => {
         try { result[await advanceVideo(admin, supabaseUrl, serviceKey, row.companies?.vertical_key ?? null, row)]++ }
         catch (e) { console.error('[item-videos] tick falhou', row.id, String(e)) }
       }
+      // Vídeo montado pela VPS: o vps-worker marca o tour 'completed' direto, então ele não entra na busca de cima e a peça
+      // do calendário ficava com a foto pra sempre (Teste Zero, 2026-11-03). Aqui: tours prontos dos últimos 3 dias cuja
+      // peça ainda está sem vídeo → põe o vídeo na peça (advanceVideo com status 'completed' só faz isso).
+      let attached = 0
+      try {
+        const since = new Date(Date.now() - 3 * 86400_000).toISOString()
+        const { data: done } = await admin.from('video_tours').select(`${VIDEO_SELECT}, companies(vertical_key)`)
+          .eq('kind', 'plan').eq('status', 'completed').not('video_path', 'is', null).not('plan->>piece_id', 'is', null)
+          .gte('updated_at', since).order('updated_at', { ascending: false }).limit(30)
+        const list = (done ?? []) as (PlanVideo & { companies: { vertical_key: string | null } | null })[]
+        const ids = [...new Set(list.map(v => v.plan?.piece_id).filter((x): x is string => !!x))]
+        if (ids.length) {
+          const { data: bare } = await admin.from('marketing_ai_test_content').select('id').in('id', ids).is('video_url', null)
+          const need = new Set(((bare ?? []) as { id: string }[]).map(r => r.id))
+          for (const v of list) {
+            if (Date.now() > deadline) break
+            if (!v.plan?.piece_id || !need.has(v.plan.piece_id)) continue
+            need.delete(v.plan.piece_id)
+            try { await advanceVideo(admin, supabaseUrl, serviceKey, v.companies?.vertical_key ?? null, v); attached++ }
+            catch (e) { console.error('[item-videos] ligar vídeo pronto à peça falhou', v.id, String(e)) }
+          }
+        }
+      } catch (e) { console.error('[item-videos] busca de vídeos prontos sem peça falhou', String(e).slice(0, 200)) }
       let resumed = 0
       try { resumed = await resumePending(admin, supabaseUrl, deadline) } catch (e) { console.error('[item-videos] resumePending falhou', String(e).slice(0, 200)) }
-      return json({ ok: true, seen: (rows ?? []).length, ...result, resumed })
+      return json({ ok: true, seen: (rows ?? []).length, ...result, attached, resumed })
     }
 
     let company: { id: string; plan: string | null; manual_access?: boolean | null; vertical_key: string | null; language?: string | null } | null = null

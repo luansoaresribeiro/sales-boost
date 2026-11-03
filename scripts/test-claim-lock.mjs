@@ -129,4 +129,16 @@ assert.ok(claimIssues('Sai mais caro em Leblon.', ctx).length > 0); assert.equal
 }
 ok('hashtag cortada: só aviso, sem baixar a nota; frase de mercado continua baixando')
 
+// valores em dinheiro do cadastro além do preço (ficha opportunity_fields.money) — Teste Zero 2026-11-03: "Condomínio R$ 3.500" era cortado
+{
+  const fields = { tipo: 'Apartamento', bairro: 'Leblon', preco: 3000000, condominio: 3500, iptu: 1200, quartos: 3 }
+  const base = { price: 'preco', bedrooms: 'quartos', location: 'bairro' }
+  const mk = (map) => { const f = itemFacts('Apartamento em Leblon', fields, map); return claimCtx('pt', f.texts, f.nums, [], { places: f.places }) }
+  const txt = 'Condomínio R$ 3.500 · IPTU R$ 1.200.'
+  assert.ok(claimIssues(txt, mk(base)).length > 0) // sem a ficha listar: continua barrado (comportamento antigo)
+  assert.deepEqual(claimIssues(txt, mk({ ...base, money: ['condominio', 'iptu'] })), [])
+  assert.ok(claimIssues('Condomínio R$ 2.900.', mk({ ...base, money: ['condominio', 'iptu'] })).length > 0) // valor diferente do cadastro: barra
+}
+ok('condomínio e IPTU do cadastro (ficha money) passam; valor fora do cadastro continua barrado')
+
 console.log(`\n${n} verificações ok`)

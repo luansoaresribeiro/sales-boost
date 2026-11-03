@@ -126,11 +126,14 @@ Mantenha o layout, o sentido e o formato dos campos ("items" com linhas separada
 
 // Palavras do português que quase nunca aparecem sem acento em texto bem escrito. Duas ou mais delas sem acento num
 // slide = a reescrita perdeu a acentuação (Tespon, 2026-11-03: "voce", "imovel", "So entao") — tratar como falha.
-const UNACCENTED_PT = /(?<![\p{L}\d])(voce|voces|nao|imovel|imoveis|entao|situacao|condicoes|especifico|proximo|disponivel|tambem|ja|ate|so|credito|municipio|propria|historico)(?![\p{L}\d])/giu
+// 2ª versão (2026-11-03, FGTS geral): "Quer entender como funciona pra voce?" tinha só 1 palavra da lista e passou.
+// Palavras longas que NUNCA são certas sem acento contam com 1; as curtas e ambíguas (ja, ate, so) só com 2.
+const UNACCENTED_PT = /(?<![\p{L}\d])(voce|voces|nao|imovel|imoveis|entao|situacao|situacoes|informacao|informacoes|analise|condicoes|decisao|opcao|opcoes|avaliacao|documentacao|simulacao|regiao|duvida|duvidas|especifico|proximo|disponivel|tambem|credito|municipio|propria|historico)(?![\p{L}\d])/giu
+const UNACCENTED_PT_WEAK = /(?<![\p{L}\d])(ja|ate|so)(?![\p{L}\d])/giu
 export function lostAccents(s: Pick<DeckSlide, 'title' | 'text' | 'items' | 'highlight' | 'cta'>, lang?: string | null): boolean {
   if (lang && !/^pt/i.test(lang)) return false
   const t = [s.title, s.text, s.items, s.highlight, s.cta].filter(Boolean).join('\n')
-  return (t.match(UNACCENTED_PT) ?? []).length >= 2
+  return (t.match(UNACCENTED_PT) ?? []).length >= 1 || (t.match(UNACCENTED_PT_WEAK) ?? []).length >= 2
 }
 
 export { SLIDE_LAYOUTS }

@@ -329,6 +329,22 @@ ok('guarda geral: regra afirmada como fato sem número → verificador → texto
   assert.ok(!lostAccents(r.slides[1], 'pt'))
 }
 ok('reescrita sem acento é descartada (vira texto seguro no geral)')
+{ // texto ORIGINAL da IA sem acento (Tespon FGTS geral, 3ª rodada): 1 palavra longa já basta; reescrita com acento entra
+  assert.equal(lostAccents({ title: 'Quer entender como funciona pra voce?', text: '', items: '', highlight: '', cta: '' }, 'pt'), true)
+  assert.equal(lostAccents({ title: '', text: 'Nenhuma informacao geral substitui a analise do seu caso.', items: '', highlight: '', cta: '' }, 'pt'), true)
+  assert.equal(lostAccents({ title: '', text: 'Leve o documento ate o banco.', items: '', highlight: '', cta: '' }, 'pt'), false) // 1 curta só não basta
+  const geral = { mode: 'geral', category: 'impostos', label: 'Impostos e taxas', tips: [], hosts: [] }
+  const slides = [S('capa', 'Antes de comprar', ''), S('destaque', 'Regra de ouro', 'Nenhuma informacao geral substitui a analise do seu caso.'), S('fecho', 'Quer entender como funciona pra voce?', '', '', 'x')]
+  const fixed = await run(geral, slides, '', async (p) => (/SEM ACENTO/.test(p)
+    ? (/Regra de ouro/.test(p) ? '{"title":"Regra de ouro","text":"Nenhuma informação geral substitui a análise do seu caso.","items":"","highlight":"","cta":""}' : '{"title":"Quer entender como funciona pra você?","text":"","items":"","highlight":"","cta":"x"}')
+    : '{"unsupported":[]}'))
+  assert.equal(fixed.slides[1].text, 'Nenhuma informação geral substitui a análise do seu caso.')
+  assert.ok(fixed.slides.every(s => !lostAccents(s, 'pt')))
+  const stubborn = await run(geral, slides, '', async (p) => (/Slide atual/.test(p) ? '{"title":"","text":"Cada situacao e diferente.","items":"","highlight":"","cta":""}' : '{"unsupported":[]}'))
+  assert.ok(stubborn.slides.every(s => !lostAccents(s, 'pt')))
+  assert.ok(stubborn.notes.some(x => /sem acento/.test(x)))
+}
+ok('slide da IA sem acento → reescrita com acento → senão texto seguro')
 { // número da dica conferida não é "inventado" (Tespon ITBI 2026-11-03: aviso falso no 3%). Mesma chave dos dois lados.
   const tipText = 'Quanto é o ITBI no Rio? No Rio de Janeiro, o ITBI é de 3% sobre o valor de venda ou avaliação do imóvel.'
   assert.deepEqual(inventedNumbers({ title: 'Como funciona', text: '', items: '3% sobre o valor', cta: '' }, numbersOf(tipText)), [])
