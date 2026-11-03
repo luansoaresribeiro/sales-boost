@@ -40,7 +40,7 @@ type SupaClient = ReturnType<typeof createClient>
 interface Photo { url: string; path: string }
 interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
 interface RecipeGroup { recipes: string[]; fonte_midia: string; descricao: string }
-interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string } | null; claimCtx: { terms: string[]; context: string[] } | null }
+interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; claimCtx: { terms: string[]; context: string[] } | null }
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -71,7 +71,7 @@ async function fetchFichaConfig(admin: SupaClient, verticalKey: string | null): 
       marketClaims: ((c.opportunity_texts as { market_claims?: { pt?: unknown } } | undefined)?.market_claims?.pt as string[] | undefined)?.filter(x => typeof x === 'string' && x.trim()) ?? null,
       // Capa pelos cômodos da ficha (tour.room_priority / avoid_rooms), igual ao tour em vídeo — nunca a 1ª foto no escuro.
       coverRooms: (() => { const t = (c.tour ?? {}) as { room_priority?: unknown; avoid_rooms?: unknown }; const a = (v: unknown) => (Array.isArray(v) ? v.filter((y): y is string => typeof y === 'string' && !!y.trim()) : []); return a(t.room_priority).length || a(t.avoid_rooms).length ? { priority: a(t.room_priority), avoid: a(t.avoid_rooms) } : null })(),
-      fieldMap: c.opportunity_fields && typeof c.opportunity_fields === 'object' ? c.opportunity_fields as { price?: string; bedrooms?: string; location?: string } : null,
+      fieldMap: c.opportunity_fields && typeof c.opportunity_fields === 'object' ? c.opportunity_fields as { price?: string; bedrooms?: string; location?: string; money?: string[] } : null,
       claimCtx: (() => { const x = (c.opportunity_texts as { market_claims_ctx?: { pt?: { terms?: unknown; context?: unknown } } } | undefined)?.market_claims_ctx?.pt; const a = (v: unknown) => (Array.isArray(v) ? v.filter((y): y is string => typeof y === 'string' && !!y.trim()) : []); return x && a(x.terms).length ? { terms: a(x.terms), context: a(x.context) } : null })() }
   } catch { return null }
 }

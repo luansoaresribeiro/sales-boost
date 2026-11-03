@@ -2373,3 +2373,23 @@ Testes em `scripts/test-deck-topic.mjs` e `scripts/test-claim-lock.mjs`, com os 
 **Ainda a observar (sem correção agora):**
 - O fecho do carrossel de oferta repete a última foto do meio. É o desenho atual.
 - Os dados de teste da cobertura da "Teste Zero" não têm foto de sala nem de varanda.
+
+## 2026-11-03 — Validação, 3ª rodada: vídeo pronto que não chegava na peça + condomínio/IPTU cortados
+
+**Passou:**
+- Os 3 tours da "Teste Zero" saíram pela Higgsfield e pelo estúdio da VPS: 1080×1920, cerca de 7 s, movimento suave em foto real e
+  encerramento com bairro, preço e "Me chama no direct".
+- "3 coisas perto" e enquete da cobertura refeitos. A capa já não é o banheiro, e a enquete diz "uma cobertura".
+
+**Corrigido:**
+1. **Vídeo pronto que não chegava na peça.** Quando a VPS monta o tour, o `vps-worker` marca `video_tours.status = 'completed'` direto. O
+   `tick` do `item-videos` só procurava tours em `generating`/`assembling`, então a peça do calendário ficava com a foto para sempre. Isso afetou só a
+   "Teste Zero": o caminho da VPS com encerramento foi ligado em 02/11, e nenhum cliente real tinha tour nesse caminho. Agora o `tick`
+   também procura tours prontos dos últimos 3 dias cuja peça está sem vídeo e coloca o vídeo nela (`attached` no retorno).
+2. **Condomínio e IPTU cadastrados eram cortados da legenda** ("Tirei afirmação sem fonte: Condomínio R$ 3.500 · IPTU R$ 1.200"), e a
+   nota caía para rascunho. A trava só reconhecia o preço como valor em dinheiro. Agora a ficha lista os outros campos em dinheiro
+   (`opportunity_fields.money`, migration `20261103223000_campos_dinheiro.sql`, já aplicada), e o `itemFacts` aceita esses valores. Valor fora do
+   cadastro continua barrado.
+
+**Observação (não é defeito do fluxo real):** os 2 tours do apartamento saíram com a mesma foto porque o teste pediu as vagas direto, sem o
+planejador da semana. O planejador (`planTours`) já reparte fotos diferentes entre os tours da semana.

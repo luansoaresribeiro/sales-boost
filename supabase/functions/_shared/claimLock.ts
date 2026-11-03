@@ -48,12 +48,18 @@ export function claimCtx(lang: Lang, factTexts: string[], numSources: NumSource[
 }
 
 /** Fatos de UM imóvel do catálogo (título + campos). Preço e quartos entram com unidade quando a ficha diz qual campo é (opportunity_fields). */
-export function itemFacts(title: string, fields: Record<string, unknown> | null | undefined, map?: { price?: string; bedrooms?: string; location?: string } | null): { texts: string[]; nums: NumSource[]; places: string[] } {
+export function itemFacts(title: string, fields: Record<string, unknown> | null | undefined, map?: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null): { texts: string[]; nums: NumSource[]; places: string[] } {
   const f = fields ?? {}
   const texts = [title, ...Object.values(f).filter(v => typeof v === 'string' || typeof v === 'number').map(String)].filter(t => t.trim())
   const nums: NumSource[] = texts.map(t => ({ text: t }))
   const priceRaw = map?.price ? f[map.price] : undefined
   if (priceRaw !== undefined && priceRaw !== null && String(priceRaw).trim()) nums.push({ text: '', numTags: [{ value: String(priceRaw), unit: 'cur' }] })
+  // Outros valores em dinheiro do cadastro (ficha: opportunity_fields.money, ex.: condomínio, IPTU). Sem isso, "Condomínio R$ 3.500"
+  // era cortado como valor sem fonte mesmo estando cadastrado (Teste Zero, 2026-11-03).
+  for (const k of Array.isArray(map?.money) ? map!.money : []) {
+    const v = typeof k === 'string' ? f[k] : undefined
+    if (v !== undefined && v !== null && String(v).trim()) nums.push({ text: '', numTags: [{ value: String(v), unit: 'cur' }] })
+  }
   const bedRaw = map?.bedrooms ? f[map.bedrooms] : undefined
   if (bedRaw !== undefined && bedRaw !== null && String(bedRaw).trim()) nums.push({ text: '', numTags: [{ value: String(bedRaw), unit: 'bed' }] })
   const loc = map?.location ? String(f[map.location] ?? '').trim() : ''
@@ -216,7 +222,7 @@ export async function lockDeckClaims(a: LockDeckIn): Promise<LockDeckOut> {
 }
 
 // ── Ficha do setor (regra 6): termos de mercado, campos de preço/quartos, capa com foto ────────────────────────────
-export interface ClaimCfg { terms: string[] | null; fieldMap: { price?: string; bedrooms?: string; location?: string } | null; photoWhenItem: boolean; ctx: CtxCfg | null }
+export interface ClaimCfg { terms: string[] | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; photoWhenItem: boolean; ctx: CtxCfg | null }
 type Admin = { from: (t: string) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Lê da ficha: market_claims (pt/en), opportunity_fields e carousel_cover.educativo.photo_when_item. Falhou/sem ficha = genéricos, sem foto. */
 export async function loadClaimCfg(admin: Admin, verticalKey: string | null, lang: Lang): Promise<ClaimCfg> {
@@ -224,7 +230,7 @@ export async function loadClaimCfg(admin: Admin, verticalKey: string | null, lan
   if (!verticalKey) return none
   try {
     const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
-    const c = (data?.config ?? {}) as { opportunity_texts?: { market_claims?: Record<string, unknown>; market_claims_ctx?: Record<string, { terms?: unknown; context?: unknown }> }; opportunity_fields?: { price?: string; bedrooms?: string; location?: string }; carousel_cover?: { educativo?: { photo_when_item?: unknown } } }
+    const c = (data?.config ?? {}) as { opportunity_texts?: { market_claims?: Record<string, unknown>; market_claims_ctx?: Record<string, { terms?: unknown; context?: unknown }> }; opportunity_fields?: { price?: string; bedrooms?: string; location?: string; money?: string[] }; carousel_cover?: { educativo?: { photo_when_item?: unknown } } }
     const raw = c.opportunity_texts?.market_claims?.[lang]
     const terms = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string' && !!x.trim()) : []
     const cx = c.opportunity_texts?.market_claims_ctx?.[lang]
