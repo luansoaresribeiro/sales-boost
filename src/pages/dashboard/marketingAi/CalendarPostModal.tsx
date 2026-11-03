@@ -7,6 +7,8 @@ import { ScoreBreakdown, BriefBlock, PostMedia, VideoScript, templateLabel, type
 import { useLang, type Lang } from '../../../contexts/LanguageContext'
 import AdaptModal, { type VaultPost } from './AdaptModal'
 import { PieceChips } from './PieceLabels'
+import PieceIntent from './PieceIntent'
+import type { OppMap } from './activationType'
 import { useItemUsage, dayLabel } from './useItemUsage'
 import { proposeAgentAction, unscheduleAgentAction } from '../../../lib/agentActions'
 import { PUBLISH_HOUR_BRT, plannedPublishAt, publishWhenLabel } from '../../../lib/publishSlot'
@@ -31,7 +33,7 @@ const TX = {
     reasons: { repetido: 'Repetido', texto: 'Texto ruim', foto: 'Foto ruim', errado: 'Informação errada', tom: 'Não tem a cara da marca', outro: 'Outro' } as Record<string, string>,
     itemTitle: 'Imóvel desta peça', itemWhy: 'Por que este imóvel', itemOpen: 'Abrir no Catálogo', itemNearby: 'Inteligência de localização',
     whyOpp: 'Peça de uma oportunidade aprovada — o imóvel vem dela.',
-    whyNone: 'Sem motivo registrado nesta peça.', usedN: (n: number) => `usado em ${n} peça${n === 1 ? '' : 's'} nos últimos 30 dias`, lastPiece: 'Última peça',
+    whyNone: 'Motivo da escolha do imóvel não registrado — o sistema ainda não grava por que este imóvel foi escolhido.', usedN: (n: number) => `usado em ${n} peça${n === 1 ? '' : 's'} nos últimos 30 dias`, lastPiece: 'Última peça',
     editCap: '✏️ Editar legenda', saveCap: 'Salvar legenda', capSaved: 'Legenda salva — o agente vai aprender com a sua mudança ✓',
   },
   en: {
@@ -50,7 +52,7 @@ const TX = {
     reasons: { repetido: 'Repetitive', texto: 'Bad text', foto: 'Bad photo', errado: 'Wrong information', tom: 'Not our brand style', outro: 'Other' } as Record<string, string>,
     itemTitle: 'Property in this piece', itemWhy: 'Why this property', itemOpen: 'Open in Catalog', itemNearby: 'Location intelligence',
     whyOpp: 'Piece from an approved opportunity — the property comes from it.',
-    whyNone: 'No reason recorded for this piece.', usedN: (n: number) => `used in ${n} piece${n === 1 ? '' : 's'} in the last 30 days`, lastPiece: 'Last piece',
+    whyNone: 'Reason for choosing this property not recorded — the system does not yet store why this property was picked.', usedN: (n: number) => `used in ${n} piece${n === 1 ? '' : 's'} in the last 30 days`, lastPiece: 'Last piece',
     editCap: '✏️ Edit caption', saveCap: 'Save caption', capSaved: 'Caption saved — the agent will learn from your change ✓',
   },
 } as const
@@ -63,7 +65,7 @@ const brtLocalInput = (day: string): string => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
-type Post = TestPost & { kind?: string; planned_for?: string | null; recipe?: string | null; item_id?: string | null; opportunity_id?: string | null }
+type Post = TestPost & { kind?: string; planned_for?: string | null }
 
 // Peça do calendário aberta (substitui a antiga aba Vault — decisão do dono
 // 2026-10-14: "pra ver o post clico em cima na grade do calendário"). Mostra a
@@ -72,7 +74,8 @@ type Post = TestPost & { kind?: string; planned_for?: string | null; recipe?: st
 // botões de aprovar: publicar agora ou agendar. Peça que não passou fica em
 // revisão (status 'draft'): mostra o porquê e o dono decide (liberar mesmo
 // assim ou excluir). Nada vai ao público sem o clique do dono (regra 1).
-export default function CalendarPostModal({ post, companyId, onClose, onChanged }: { post: Post; companyId: string; onClose: () => void; onChanged: () => void }) {
+// `oppById`: oportunidades já consultadas em lote pelo calendário; sem ele (Aprovações, outras telas) a peça consulta a sua.
+export default function CalendarPostModal({ post, companyId, onClose, onChanged, oppById }: { post: Post; companyId: string; onClose: () => void; onChanged: () => void; oppById?: OppMap }) {
   const { session } = useAuth()
   const { lang } = useLang(); const tx = TX[lang]
   const token = session?.access_token ?? ''
@@ -80,6 +83,7 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
   const usage = useItemUsage(companyId)
   const [item, setItem] = useState<Post>(post)
   const [adapts, setAdapts] = useState<TestPost[]>([])
+  const [ownOpps, setOwnOpps] = useState<OppMap | undefined>(undefined) // undefined = ainda consultando
   const [adaptOpen, setAdaptOpen] = useState(false)
   const [showAdapts, setShowAdapts] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -101,6 +105,16 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
     setScheduled(sch ? { actionId: sch.id as string, at: sch.scheduled_at as string } : null)
   }, [post.id, companyId])
   useEffect(() => { load() }, [load])
+
+  const oppId = item.opportunity_id
+  useEffect(() => {
+    if (oppById !== undefined || !oppId) return
+    let off = false
+    void supabase.from('growth_opportunities').select('id, title, status').eq('company_id', companyId).eq('id', oppId).maybeSingle()
+      .then(({ data, error }) => { if (!off) setOwnOpps(error ? null : data ? { [oppId]: data as { id: string; title: string; status: string } } : {}) })
+    return () => { off = true }
+  }, [oppById, oppId, companyId])
+  const opps: OppMap | undefined = oppById !== undefined ? oppById : oppId ? ownOpps : {}
 
   const done = async () => { await load(); onChanged() }
 
@@ -261,6 +275,7 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
               </div>
             )
           })()}
+          {opps !== undefined && <PieceIntent mode="full" piece={item} intent={item.intent} oppById={opps} itemTitle={item.item_id ? usage.data.items[item.item_id]?.title : null} />}
           <PieceChips familia={item.familia} pilarSs={item.pilar_ss} tema={item.pillar} ssNames={ssNames} />
           {item.idea && <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{item.idea}</div>}
           {editing ? (

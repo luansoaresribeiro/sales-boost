@@ -6,6 +6,30 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-03 — Pacote A (orientação, só tela): regras do Tipo de ativação e do Objetivo
+
+**O que entrou:** hub "O que merece sua atenção" (4 linhas com estado próprio) e cards de agente enxutos; topo da Estratégia em 4 blocos; Objetivo + Tipo na célula e no modal do calendário. Sem migration, sem function, sem cron.
+
+**Medição (SQL somente leitura, Tespon + Teste Zero, peças do calendário, 03/11):** `familia` educativo nunca tem `item_id`; tour/oferta/bairro sempre têm `item_id` (bairro = a receita "3 coisas perto"); `eventual` não aparece; existem peças antigas com `familia` nula; 1 peça de oportunidade (educativo + `opportunity_id`, `intent` sem `funnel.objective`). Produtores com imóvel (`catalog-package`, `item_video`) sempre gravam `item_id`.
+
+**Tipo de ativação (ordem de precedência; `activationType.ts`, testado em `scripts/test-activation-type.mjs`):**
+
+| # | Condição | Tipo |
+|---|---|---|
+| 1 | `opportunity_id` e a oportunidade existe na empresa com `status='approved'` (mesmo com imóvel) | Oportunidade |
+| 2 | `opportunity_id`, mas oportunidade não achada ou não aprovada | Tipo não identificado |
+| 3 | consulta de oportunidade falhou (e a peça tem `opportunity_id`) | Não foi possível verificar |
+| 4 | `familia` nula ou fora da lista | Tipo não identificado |
+| 5 | tour / oferta / bairro com `item_id` (sem `item_id` = não identificado) | Apresentação de imóvel |
+| 6 | educativo com `item_id` / sem `item_id` | Educativo com imóvel / Educativo sem imóvel |
+| 7 | eventual | Tipo não identificado |
+
+Sem nome de receita nem de setor no código (regra 6). **Objetivo:** `intent.funnel.objective` (rótulo "Objetivo da etapa do funil"); senão `intent.opportunity.objective` ("Objetivo da oportunidade"); senão "Sem objetivo registrado".
+
+**Próxima ação do hub (sim / não / desconhecido por verificação):** sem estratégia ativa → oportunidade `suggested` → peça para aprovar (`kpis.actionsReady`) → semana sem peças (estratégia ativa e 0 peças com `planned_for` de hoje a hoje+6, `source_id` nulo) → "Tudo em dia". Verificação desconhecida antes de achar um "sim" = "Não foi possível verificar"; "Tudo em dia" só com as 4 em "não".
+
+**Motivo da escolha do imóvel:** não existe campo por peça; a tela diz que não é registrado (nunca inventa "rodízio"). Isso é da Fase 4.
+
 - **Setor piloto: imóveis, Rio de Janeiro** — ICP corretor autônomo/
   imobiliária pequena. Motivo: mercado concentrado, decisor único, ticket
   que justifica o setup, e já existia relação (Liga dos Sonhos como

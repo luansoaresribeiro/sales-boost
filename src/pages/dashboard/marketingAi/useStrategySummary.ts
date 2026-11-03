@@ -13,19 +13,22 @@ export interface StrategySummary {
   topGoal: { name: string; target_value: number | null; current_progress: number | null } | null
 }
 
-export function useStrategySummary(companyId?: string): { summary: StrategySummary | null; loading: boolean } {
+export function useStrategySummary(companyId?: string): { summary: StrategySummary | null; loading: boolean; error: boolean } {
   const [summary, setSummary] = useState<StrategySummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false) // consulta falhou ≠ "sem estratégia"
 
   useEffect(() => {
     if (!companyId) { setLoading(false); return }
     let alive = true
     ;(async () => {
-      const { data: strat } = await supabase.from('marketing_ai_strategies')
+      const { data: strat, error: stratErr } = await supabase.from('marketing_ai_strategies')
         .select('id, name, status, primary_business_objective, estimates, updated_at')
         .eq('company_id', companyId).eq('kind', 'main').eq('status', 'active')
         .order('updated_at', { ascending: false }).limit(1).maybeSingle()
       if (!alive) return
+      if (stratErr) { setSummary(null); setError(true); setLoading(false); return }
+      setError(false)
       if (!strat) { setSummary(null); setLoading(false); return }
       const { data: goals } = await supabase.from('marketing_ai_strategy_goals')
         .select('name, target_value, current_progress, priority')
@@ -37,5 +40,5 @@ export function useStrategySummary(companyId?: string): { summary: StrategySumma
     return () => { alive = false }
   }, [companyId])
 
-  return { summary, loading }
+  return { summary, loading, error }
 }

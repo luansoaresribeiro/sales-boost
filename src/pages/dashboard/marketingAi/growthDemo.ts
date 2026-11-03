@@ -314,12 +314,19 @@ export function useDemoAllowed(): boolean {
 }
 
 // Números de exemplo dos 4 indicadores de decisão do hub (modo demonstração) — estáveis por empresa, mesma lógica do resto do demo.
-export function buildDecisionDemo(companyId: string): { signals7: number; oppsSuggested: number; oppsNew7: number; strategiesActive: number; actionsReady: number; actionsVault: number } {
+// Último sinal, título da oportunidade e direcionamento são FICTÍCIOS: só aparecem no demo, sempre com a etiqueta "exemplo".
+export interface DecisionDemo { signals7: number; oppsSuggested: number; oppsNew7: number; strategiesActive: number; actionsReady: number; actionsVault: number; lastSignal: { source: string; date: string }; oppTitle: string; direction: string }
+export function buildDecisionDemo(companyId: string): DecisionDemo {
   const rng = seededRng(`${companyId || 'demo'}:decisao`)
   const i = (min: number, max: number) => Math.round(min + rng() * (max - min))
   const oppsSuggested = i(2, 6)
   const actionsReady = i(4, 12)
-  return { signals7: i(5, 18), oppsSuggested, oppsNew7: Math.min(oppsSuggested, i(1, 4)), strategiesActive: 1, actionsReady, actionsVault: Math.min(actionsReady, i(2, 8)) }
+  const d = new Date(Date.now() - i(0, 3) * 24 * 3600_000)
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return {
+    signals7: i(5, 18), oppsSuggested, oppsNew7: Math.min(oppsSuggested, i(1, 4)), strategiesActive: 1, actionsReady, actionsVault: Math.min(actionsReady, i(2, 8)),
+    lastSignal: { source: 'Fonte de exemplo', date }, oppTitle: 'Oportunidade de exemplo', direction: 'Tema central de exemplo',
+  }
 }
 
 export function useDemoMode(companyId: string | undefined): [boolean, (v: boolean) => void] {

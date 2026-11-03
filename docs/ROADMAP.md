@@ -583,7 +583,7 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 > (as 4 regras estão em [DECISIONS.md](DECISIONS.md), 2026-11-03 "Pacotes A e B").
 
 ### Pacotes de conexão (antes da Fase 2)
-**Pacote A — orientação (só tela, sem IA).**
+**Pacote A — orientação (só tela, sem IA).** **Status (2026-11-03): implementado no branch `claude/nifty-shannon-ysp818-pacote-a`; aguardando aprovação do dono (QA + PR + publicação do site ainda por fazer).** Regra do Tipo de ativação, do Objetivo e a medição em SQL: [DECISIONS.md](DECISIONS.md), 2026-11-03 "Pacote A". Divergências do texto abaixo: o Tipo ganhou "Tipo não identificado" para tour/oferta/bairro sem imóvel e "Não foi possível verificar"; o "motivo" da peça segue sem campo (o modal avisa que não é registrado).
 1. Hub, bloco **"O que merece sua atenção"** com 4 linhas separadas:
    - **Último sinal**: o mais recente com fonte e data, não ignorado e completo (não o sinal bruto).
    - **Oportunidade**: só as que estão de fato aguardando avaliação.

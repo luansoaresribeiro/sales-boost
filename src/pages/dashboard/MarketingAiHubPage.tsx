@@ -13,7 +13,10 @@ import { MUTED, BORDER, D, SUPABASE_URL } from './marketingAi/shared'
 import { useStrategySummary } from './marketingAi/useStrategySummary'
 import DecisionKpis from './marketingAi/DecisionKpis'
 import { useDecisionKpis } from './marketingAi/useDecisionKpis'
-import { useFlowSummary, type FlowSummary } from './marketingAi/useFlowSummary'
+import { useFlowSummary } from './marketingAi/useFlowSummary'
+import AttentionBlock from './marketingAi/AttentionBlock'
+import { useAttention } from './marketingAi/useAttention'
+import { HeroAgentCard, FlowArrow, cardModels } from './marketingAi/HubAgentCards'
 
 const ORANGE = '#FF6D29'
 const CARD = '#150E08'
@@ -83,8 +86,6 @@ const TX = {
   },
 } as const
 type Lang = 'pt' | 'en'
-
-const STRATEGY_STATUS_COLOR: Record<string, string> = { draft: MUTED, active: '#4ade80', paused: '#FBBF24', completed: '#60a5fa', needs_review: '#f87171' }
 
 const STAGE_ORDER: LeadStageKey[] = ['novo', 'contato', 'qualificado', 'proposta', 'venda']
 const stageLabel = (lang: Lang): Record<LeadStageKey, string> => { const t = TX[lang]; return { novo: t.stNovo, contato: t.stContato, qualificado: t.stQual, proposta: t.stProp, venda: t.stVenda } }
@@ -206,17 +207,26 @@ export default function MarketingAiHubPage() {
 
   const demo = useMemo(() => (company ? buildGrowthDemo(company, lang) : null), [company, lang])
   const { real, loading: realLoading, error: realError } = useRealGrowth(company?.id ?? '', session?.access_token ?? '', lang)
-  const { summary: strategySummary } = useStrategySummary(company?.id)
+  const { summary: strategySummary, loading: strategyLoading, error: strategyError } = useStrategySummary(company?.id)
   const flow = useFlowSummary(company?.id)
   const { kpis: realKpis, loading: kpisLoading } = useDecisionKpis(company?.id)
+  // Não chamar usePendencias() aqui: ele abre um canal realtime com nome fixo e o DashboardLayout já abre o mesmo —
+  // a 2ª inscrição derruba a tela inteira ("cannot add postgres_changes callbacks after subscribe()", 2026-10-30).
+  const decisionDemo = useMemo(() => (company && demoMode ? buildDecisionDemo(company.id) : null), [company, demoMode])
+  const attention = useAttention(company?.id, realKpis, kpisLoading, decisionDemo)
 
   if (!company || !demo) {
     return <div style={{ padding: '48px', color: MUTED, fontSize: '14px' }}>{t.loading}</div>
   }
 
   const open = (m: ModuleDef) => navigate(m.path ?? `/dashboard/marketing-ai/${m.section}`)
-  const lines = flowLines(lang, flow)
-  const kpis = demoMode ? { ...realKpis, ...buildDecisionDemo(company.id) } : realKpis
+  const kpis = decisionDemo ? { ...realKpis, ...decisionDemo } : realKpis
+  const stratLabel = strategySummary ? ((t as Record<string, unknown>)[strategySummary.status] as string | undefined) ?? strategySummary.status : ''
+  const stratObjective = strategySummary ? [strategySummary.primary_business_objective || strategySummary.name, strategySummary.topGoal ? `${strategySummary.topGoal.name}${strategySummary.topGoal.target_value != null ? `: ${strategySummary.topGoal.current_progress ?? 0}/${strategySummary.topGoal.target_value}` : ''}` : ''].filter(Boolean).join(' · ') : ''
+  const cards = cardModels({
+    lang, agents: demoMode ? demo.agents : real?.data.agents ?? null, loading: realLoading, kpis, kpisLoading: demoMode ? false : kpisLoading, flow,
+    strategy: strategySummary ? { status: strategySummary.status, label: stratLabel, objective: stratObjective } : null, strategyLoading: !demoMode && strategyLoading, strategyError: !demoMode && strategyError,
+  })
   const panelData = real?.hasReal ? real.data : demo
   const panelMode = veilMode({ hasReal: !!real?.hasReal, demoMode, error: !!realError })
 
@@ -245,6 +255,9 @@ export default function MarketingAiHubPage() {
           </label>}
         </div>
       </div>
+
+      {/* Pacote A (2026-11-03): o que merece atenção agora — 4 linhas com estado próprio, cada uma leva à tela de origem. */}
+      <AttentionBlock lang={lang} data={attention} />
 
       {/* Fase 1 (2026-11-03): 4 indicadores de decisão no topo; o painel de receita/ROAS/funil desceu para logo abaixo (nada foi removido). */}
       <DecisionKpis lang={lang} kpis={kpis} loading={demoMode ? false : kpisLoading} demo={demoMode} strategyName={strategySummary?.name ?? (demoMode ? (lang === 'en' ? 'Example strategy' : 'Estratégia de exemplo') : null)} flow={flow} />
@@ -275,24 +288,15 @@ export default function MarketingAiHubPage() {
             cada agente entrega pro próximo. O Feedback Loop aparece dentro
             de cada card (círculo flutuante), não é mais uma etapa separada. */}
         <div style={{ border: '1px solid rgba(255,109,41,0.18)', borderRadius: '22px', padding: '16px', background: 'rgba(255,109,41,0.035)' }}>
-          <HeroAgentCard m={M.data} badge={t.b1} onClick={() => open(M.data)} summary={<FlowLine parts={lines.data} />} />
+          <HeroAgentCard lang={lang} m={M.data} badge={t.b1} onClick={() => open(M.data)} model={cards.data} />
           <FlowArrow />
-          <HeroAgentCard m={M.opportunities} badge={t.bOpp} onClick={() => open(M.opportunities)} summary={<FlowLine parts={lines.opportunities} />} />
+          <HeroAgentCard lang={lang} m={M.opportunities} badge={t.bOpp} onClick={() => open(M.opportunities)} model={cards.opportunities} />
           <FlowArrow />
-          <HeroAgentCard m={M.strategy} badge={t.b2} onClick={() => open(M.strategy)}
-            summary={strategySummary ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '9.5px', fontWeight: 800, color: STRATEGY_STATUS_COLOR[strategySummary.status] ?? MUTED }}>● {((t as Record<string, unknown>)[strategySummary.status] as string | undefined) ?? strategySummary.status}</span>
-                <span style={{ fontSize: '12px', color: 'white', fontWeight: 700 }}>{strategySummary.primary_business_objective || strategySummary.name}</span>
-                {strategySummary.topGoal && <span style={{ fontSize: '11px', color: MUTED }}>· {strategySummary.topGoal.name}{strategySummary.topGoal.target_value != null ? `: ${strategySummary.topGoal.current_progress ?? 0}/${strategySummary.topGoal.target_value}` : ''}</span>}
-              </div>
-            ) : (
-              <span style={{ fontSize: '12px', color: MUTED }}>{t.noStrat}</span>
-            )} />
+          <HeroAgentCard lang={lang} m={M.strategy} badge={t.b2} onClick={() => open(M.strategy)} model={cards.strategy} />
           <FlowArrow />
-          <HeroAgentCard m={M.content} badge={t.b3} onClick={() => open(M.content)} summary={<FlowLine parts={lines.content} />} />
+          <HeroAgentCard lang={lang} m={M.content} badge={t.b3} onClick={() => open(M.content)} model={cards.content} />
           <FlowArrow />
-          <HeroAgentCard m={M.conversion} badge={t.b4} onClick={() => open(M.conversion)} summary={<FlowLine parts={lines.conversion} />} />
+          <HeroAgentCard lang={lang} m={M.conversion} badge={t.b4} onClick={() => open(M.conversion)} model={cards.conversion} />
         </div>
 
         <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginTop: '14px', maxWidth: '680px' }}>
@@ -300,85 +304,5 @@ export default function MarketingAiHubPage() {
         </p>
       </div>
     </div>
-  )
-}
-
-// Não chamar usePendencias() aqui: ele abre um canal realtime com nome fixo e o DashboardLayout já abre o mesmo —
-// a 2ª inscrição derruba a tela inteira ("cannot add postgres_changes callbacks after subscribe()", 2026-10-30).
-// O total de Aprovações já aparece no menu lateral.
-// Linha "ao vivo" de cada card: só contagens reais (useFlowSummary); dado que não carregou some da linha.
-// Item com `alert` é o que espera o dono (laranja). Contagens de coleta (sinais, última rodada) ficam no bloco recolhido "Status da coleta" (DecisionKpis).
-type Part = { text: string; alert?: boolean }
-function flowLines(lang: Lang, f: FlowSummary): Record<'data' | 'opportunities' | 'content' | 'conversion', Part[]> {
-  const pt = lang === 'pt'
-  const pl = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
-  const out = { data: [] as Part[], opportunities: [] as Part[], content: [] as Part[], conversion: [] as Part[] }
-  if (f.oppsNew) out.opportunities.push({ text: pt ? `${pl(f.oppsNew, 'oportunidade', 'oportunidades')} para você revisar` : `${pl(f.oppsNew, 'opportunity', 'opportunities')} to review`, alert: true })
-  if (f.oppsApproved != null) out.opportunities.push({ text: pt ? pl(f.oppsApproved, 'aprovada', 'aprovadas') : `${f.oppsApproved} approved` })
-  if (f.pagesLive != null) out.content.push({ text: pt ? pl(f.pagesLive, 'página de imóvel no ar', 'páginas de imóvel no ar') : pl(f.pagesLive, 'listing page live', 'listing pages live') })
-  if (f.leads30 != null) out.conversion.push({ text: pt ? `${pl(f.leads30, 'lead', 'leads')} em 30 dias` : `${pl(f.leads30, 'lead', 'leads')} in 30 days` })
-  if (f.leads30 && f.tracked30 != null) out.conversion.push({ text: pt ? `${f.tracked30} com origem rastreada` : `${f.tracked30} with tracked source` })
-  return out
-}
-function FlowLine({ parts }: { parts: Part[] }) {
-  if (!parts.length) return null
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', fontSize: '11.5px' }}>
-      {parts.map((p, i) => (
-        <span key={i} style={{ color: p.alert ? ORANGE : 'rgba(255,255,255,0.7)', fontWeight: p.alert ? 800 : 600 }}>{i > 0 && <span style={{ color: MUTED, marginRight: '6px' }}>·</span>}{p.alert ? '● ' : ''}{p.text}</span>
-      ))}
-    </div>
-  )
-}
-
-// Seta central entre dois cards do fluxo — indica a sequência (Dados →
-// Conteúdo → Conversão), não é só decoração.
-function FlowArrow() {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}>
-      <span style={{ fontSize: '20px', color: 'rgba(255,109,41,0.55)', lineHeight: 1 }}>↓</span>
-    </div>
-  )
-}
-
-// Card hero — usado 3x (Dados, Conteúdo, Conversão), sempre no mesmo tamanho
-// e estilo, formando o fluxo vertical do Growth OS.
-// `summary` é usado só pelo Agente de Estratégia: resumo ao vivo da
-// estratégia ativa, mostrado embaixo da descrição. O card tem o mesmo
-// tamanho dos outros (pedido do dono, 2026-10-07). `compact` continua
-// existindo mas não é mais usado no hub.
-function HeroAgentCard({ m, badge, onClick, compact, summary }: { m: ModuleDef; badge: string; onClick: () => void; compact?: boolean; summary?: React.ReactNode }) {
-  const { lang } = useLang()
-  const [hover, setHover] = useState(false)
-  const iconSize = compact ? 44 : 58
-  return (
-    <button onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{
-        width: '100%', boxSizing: 'border-box', textAlign: 'left', cursor: 'pointer', fontFamily: D,
-        display: 'flex', alignItems: 'center', gap: compact ? '16px' : '20px', flexWrap: 'wrap',
-        background: 'linear-gradient(135deg, rgba(255,109,41,0.12), rgba(255,109,41,0.04))',
-        border: `1px solid ${hover ? 'rgba(255,109,41,0.6)' : 'rgba(255,109,41,0.3)'}`,
-        borderRadius: compact ? '14px' : '18px', padding: compact ? '16px 20px' : '24px 26px',
-        transition: 'border-color 0.18s, box-shadow 0.18s, transform 0.18s',
-        transform: hover ? 'translateY(-2px)' : 'none',
-        boxShadow: hover ? '0 12px 34px rgba(255,109,41,0.18)' : '0 4px 18px rgba(255,109,41,0.08)',
-      }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: `${iconSize}px`, height: `${iconSize}px`, flexShrink: 0, borderRadius: compact ? '12px' : '16px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.25)', fontSize: compact ? '22px' : '30px' }}>
-        {m.icon}
-      </div>
-      <div style={{ flex: 1, minWidth: '220px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: compact ? '16px' : '20px', fontWeight: 800, color: 'white', letterSpacing: '-0.02em' }}>{m.title}</span>
-          <span style={{ fontSize: '9.5px', fontWeight: 800, padding: '3px 9px', borderRadius: '99px', background: 'rgba(255,109,41,0.16)', border: '1px solid rgba(255,109,41,0.35)', color: ORANGE, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            {badge}
-          </span>
-        </div>
-        <p style={{ fontSize: '13px', color: MUTED, margin: 0, lineHeight: 1.55, maxWidth: '560px' }}>{m.desc}</p>
-        {summary && <div style={{ marginTop: '8px' }}>{summary}</div>}
-      </div>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexShrink: 0, padding: compact ? '9px 16px' : '11px 20px', borderRadius: '11px', background: hover ? ORANGE : 'rgba(255,109,41,0.14)', border: `1px solid ${hover ? ORANGE : 'rgba(255,109,41,0.35)'}`, color: hover ? '#0E0B0A' : ORANGE, fontSize: '13px', fontWeight: 800, transition: 'background 0.18s, color 0.18s' }}>
-        {TX[lang].open} <span style={{ transition: 'transform 0.18s', transform: hover ? 'translateX(3px)' : 'none' }}>→</span>
-      </div>
-    </button>
   )
 }
