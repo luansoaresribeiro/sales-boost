@@ -2639,6 +2639,24 @@ forçando pivot e conferir `needs_review`); site. Nada de SQL.
 
 ## 2026-11-04 — Fase 4 (Imóveis e ativação): imóvel indisponível não publica
 
+**Teste controlado em produção (04/11, 18:2x UTC, Teste Zero, sem Instagram conectado: nada podia ser publicado).**
+- **Como foi feito:**
+  - O imóvel "Apartamento em Leblon" foi marcado como `vendido` (manual).
+  - Foi criada 1 ação `QUEUED`/`APPROVED` para a peça dele (`source='test_fase4'`, mesmo formato da aprovação agendada).
+  - Em seguida, `run_scheduled` foi disparado do mesmo jeito que o cron dispara.
+- **Resultado: passou.**
+  - A ação virou `FAILED` com "Imóvel indisponível (vendido). Não publiquei.".
+  - A peça **não** foi apagada (continua `draft`).
+  - Nenhum post foi criado (`posts` da empresa = 0).
+- **Desfeito:** a chave `availability` saiu do imóvel. O `meta` ficou idêntico ao original (md5 conferido) e o imóvel voltou a "disponível (nunca conferido)". A ação de teste ficou como registro (`FAILED`, `source='test_fase4'`).
+- **Não testado aqui:**
+  - A página pública do imóvel, porque ele não tem link público criado. Ela está coberta por teste de código e pelo QA.
+  - A conferência no portal, porque a Teste Zero não tem feed configurado. Está coberta por `scripts/test-item-service.mjs`.
+- **Observações pequenas (sem correção agora, para não abrir frente nova):**
+  1. A mensagem mostra o status cru ("vendido") em vez do rótulo da ficha ("Vendido").
+  2. A resposta do `run_scheduled` contou a ação bloqueada como `executed:1, failed:0`, mas a ação em si ficou `FAILED`. Só a contagem do resumo do cron está imprecisa.
+- **A saída da Fase 4 continua aberta:** falta uma publicação real, com o Instagram de teste conectado e aprovada pelo dono.
+
 **Decisões do dono (2026-11-04):**
 1. **Disponibilidade** = status manual no Catálogo + conferência no link do portal (VRSync) na hora de publicar, para imóvel com `meta.source.listing_id`. Imóvel que sumiu do link = "removido". Sem link do portal configurado: só o status manual.
 2. **Não deu pra conferir na hora de publicar → NÃO publica.** A ação fica na fila, o cron de 5 em 5 min tenta de novo e, depois de 2 h, vira FAILED "Não foi possível verificar a disponibilidade". Imóvel só manual nunca cai nessa regra.
