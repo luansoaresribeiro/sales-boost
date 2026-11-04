@@ -971,6 +971,17 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
   invocação própria, em paralelo, e só enxergava o banco — e o banco só recebe a peça no fim. Reserva de tema tem que ser feita no
   planejamento da semana inteira, antes de disparar (`weekThemes.planWeekThemes`). Número "por extenso" (`trezentos`) também escapava da
   trava de algarismos: use `numberGuard` (extenso → número) em texto que fala do cadastro do imóvel. Janela e limiar de tema vivem na ficha.
+- **Pacote B2 (2026-11-04) — ordem de publicação.** (1) Migration `20261104100000_trends_ignore.sql` ANTES do merge/site: `useFlowStripData`
+  consulta `marketing_ai_trends` com `.neq('status','ignored')` no servidor e, sem a coluna `status`, essas contagens dão erro (a faixa mostra "não
+  foi possível verificar"). (2) `creative-ideas`, `data-agent` e as functions que usam `_shared/opportunityRun.ts`/`opportunityCron.ts` só depois da
+  migration: o `.neq('status', …)` numa coluna que não existe faz a consulta falhar e a varredura apaga as tendências sem recriar. O resto da tela
+  (CreativeAgent, useMarketingAiData) filtra no cliente de propósito e não quebra sem a coluna.
+- **Filtro de "sinal não ignorado" precisa ser `.or('meta->>ignored.is.null,meta->>ignored.neq.true')`** (`NOT_IGNORED_OR`). `.neq('meta->>ignored','true')`
+  sozinho descarta as linhas em que a chave NÃO existe (NULL ≠ 'true' dá NULL) e esconderia todos os sinais normais. Dois `.or()` na mesma consulta
+  funcionam (postgrest-js acrescenta um parâmetro `or` por chamada; o PostgREST combina com AND) — confira numa consulta de leitura ao mexer. E
+  "ignorar" sempre MESCLA a `meta` (ela guarda `provider` etc.): um update com `{ ignored }` sozinho apagaria as outras chaves.
+- **`marketScan.feedCompany` ainda recria as tendências `diagnostico`** (apaga e insere de novo, sem olhar `status`), então uma tendência desse tipo
+  ignorada pode voltar se o diagnóstico grátis rodar de novo para a mesma empresa. `creative-ideas` já respeita as ignoradas (`instagram_scan`).
 - **Uso do imóvel não se soma entre `marketing_ai_test_content` e `posts` (2026-11-03).** Peça aprovada vira linha em `posts` com o mesmo
   `item_id` (agent-actions); somar as duas fontes conta 2x. `useItemUsage` usa o maior das duas e ignora adaptações (`source_id` não nulo).
   Também: `?item=` na Inteligência de Mercado redireciona ao Catálogo — para abrir "Lugares perto" num imóvel use `?sub=lugares&imovel=<id>`.

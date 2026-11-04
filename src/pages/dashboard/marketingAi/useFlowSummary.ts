@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { NOT_IGNORED_OR } from './signalIgnore'
 
 // Resumo ao vivo dos 5 componentes do fluxo (hub do Marketing AI). Só contagens de linhas reais da empresa;
 // consulta que falha vira null e o card simplesmente não mostra aquela linha — nunca um 0 fingido (regra 5).
@@ -27,8 +28,8 @@ export function useFlowSummary(companyId?: string): FlowSummary {
     const head = { count: 'exact' as const, head: true }
     Promise.all([
       supabase.from('marketing_ai_knowledge').select('id', head).eq('company_id', companyId).eq('kind', 'product'),
-      supabase.from('market_signals').select('id', head).eq('company_id', companyId),
-      supabase.from('market_signals').select('id', head).eq('company_id', companyId).eq('collected_by', 'system'),
+      supabase.from('market_signals').select('id', head).eq('company_id', companyId).or(NOT_IGNORED_OR),
+      supabase.from('market_signals').select('id', head).eq('company_id', companyId).eq('collected_by', 'system').or(NOT_IGNORED_OR),
       supabase.from('growth_opportunities').select('id', head).eq('company_id', companyId).eq('status', 'suggested'),
       supabase.from('growth_opportunities').select('id', head).eq('company_id', companyId).eq('status', 'approved'),
       supabase.from('growth_opportunities').select('created_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(1).maybeSingle(),

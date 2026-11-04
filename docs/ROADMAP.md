@@ -622,7 +622,7 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 6. Oportunidades: formulário de sinal manual recolhido; corrigir o texto que manda clicar num botão que não existe; "O que falta pra
    achar mais" fica discreto.
 
-**Pacote B2 — ações novas.**
+**Pacote B2 — ações novas.** — **Estado (2026-11-04): implementado na branch `claude/nifty-shannon-ysp818-pacote-b2`, aguardando aprovação do dono** (ver [DECISIONS.md](DECISIONS.md#2026-11-04--pacote-b2-ações-novas-menu-do--ignorar-sinal-ignorar-tendência-ver-evidência)). Migration `20261104100000_trends_ignore.sql` vem antes do merge; deploy de `creative-ideas`, `data-agent`, `marketing-ai` (e quem usa `_shared/opportunityRun.ts`/`opportunityCron.ts`) e o site só depois dela.
 7. Botão **"+" vira menu**: Adicionar imóvel · Gerar peça agora · Adicionar sinal de mercado. Cada opção só entra se funcionar de ponta a ponta.
 8. **Ignorar sinal**: `market_signals.meta.ignored` + `meta.ignored_at`, sem migration. A evidência fica preservada.
 9. **Ignorar tendência**: migration mínima com `status` (`active`/`ignored`, respeitando estados que já existam) e a data, se couber.

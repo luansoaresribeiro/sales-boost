@@ -110,7 +110,7 @@ function ItemCreationTools({ itemId, companyId, verticalKey, itemLabel, onGenera
 
 // `setupMode` (tela /setup): só cadastrar/adicionar fotos — sem gerar pacote nem
 // ferramentas de criação. `onChanged` avisa quem estiver de olho no status.
-export default function CatalogItems({ companyId, schema, verticalKey, focusItemId, setupMode, onChanged }: { companyId: string; schema: CatalogSchema; verticalKey: string; focusItemId?: string | null; setupMode?: boolean; onChanged?: () => void }) {
+export default function CatalogItems({ companyId, schema, verticalKey, focusItemId, setupMode, onChanged, openCreate, onCreateOpened }: { companyId: string; schema: CatalogSchema; verticalKey: string; focusItemId?: string | null; setupMode?: boolean; onChanged?: () => void; openCreate?: boolean; onCreateOpened?: () => void }) {
   const { session } = useAuth()
   const { lang } = useLang()
   const tx = TX[lang]
@@ -168,6 +168,10 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
 
   // Veio do sino de pendências: rola até o item e destaca com borda laranja.
   useEffect(() => { setHighlightId(focusItemId ?? null) }, [focusItemId])
+  // "+" → Adicionar item (?add=1): abre o formulário de criação e avisa a página pra tirar o parâmetro da URL.
+  const onCreateOpenedRef = useRef(onCreateOpened)
+  onCreateOpenedRef.current = onCreateOpened
+  useEffect(() => { if (openCreate) { setCreating(true); onCreateOpenedRef.current?.() } }, [openCreate])
   useEffect(() => {
     if (!highlightId || loading) return
     const t = setTimeout(() => document.getElementById(`catalog-item-${highlightId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100)

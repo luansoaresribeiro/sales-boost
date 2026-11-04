@@ -55,7 +55,8 @@ export function useMarketingAiData(companyId: string | undefined) {
     setToolRegistry((tools.data ?? []) as ToolRegistryRow[])
     setToolConfigs((toolCfgs.data ?? []) as ToolConfigRow[])
     setCampaigns((camps.data ?? []) as Campaign[])
-    setTrends((trds.data ?? []) as Trend[])
+    // Tendência ignorada (status 'ignored', Pacote B2) sai das ativas; filtra no cliente pro select('*') não depender da coluna.
+    setTrends(((trds.data ?? []) as (Trend & { status?: string | null })[]).filter(t => t.status !== 'ignored'))
     setReports((reps.data ?? []) as MarketingReport[])
     setLoading(false)
   }, [companyId])

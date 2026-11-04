@@ -6,38 +6,14 @@ import { useShowcase } from '../../../contexts/ShowcaseContext'
 import { useCompany } from '../../../contexts/CompanyContext'
 import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
+import TrendCard, { type Trend } from './TrendCard'
 
 const ORANGE = '#FF6D29'
 const MOD_LABEL = {
   pt: { organico: 'Orgânico', stories: 'Stories', campanhas: 'Campanhas' } as Record<string, string>,
   en: { organico: 'Organic', stories: 'Stories', campanhas: 'Campaigns' } as Record<string, string>,
 }
-const RELEVANCE_META: Record<string, { color: string; pt: string; en: string }> = {
-  high: { color: '#f87171', pt: 'Alta', en: 'High' }, medium: { color: '#FBBF24', pt: 'Média', en: 'Medium' }, low: { color: MUTED, pt: 'Baixa', en: 'Low' },
-}
-
 interface Idea { id: string; title: string; hook: string | null; angle: string | null; format: string | null; module: string | null; rationale: string | null; status: string; created_at: string }
-interface Trend { id: string; title: string; description: string | null; category: string | null; relevance: string | null; source: string | null; detected_at: string }
-
-function TrendCard({ t, onDeck, busy }: { t: Trend; onDeck?: () => void; busy?: boolean }) {
-  const en = useLang().lang === 'en'
-  const rel = RELEVANCE_META[t.relevance ?? 'medium'] ?? RELEVANCE_META.medium
-  return (
-    <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '11px', padding: '12px 14px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '5px', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>🔥 {t.title}</span>
-        {t.category && <span style={{ fontSize: '8.5px', fontWeight: 700, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: '99px', padding: '1px 7px' }}>{t.category}</span>}
-        <span style={{ fontSize: '9px', fontWeight: 700, color: rel.color, marginLeft: 'auto' }}>{en ? `${rel.en} relevance` : `${rel.pt} relevância`}</span>
-      </div>
-      {t.description && <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>{t.description}</div>}
-      {onDeck && (
-        <button onClick={onDeck} disabled={busy} style={{ marginTop: '8px', padding: '6px 10px', background: 'rgba(255,109,41,0.12)', border: '1px solid rgba(255,109,41,0.35)', borderRadius: '7px', color: ORANGE, fontWeight: 700, fontSize: '10.5px', cursor: busy ? 'default' : 'pointer', fontFamily: D }}>
-          {busy ? (en ? 'Creating...' : 'Criando...') : (en ? '📑 Make a carousel from this trend' : '📑 Fazer carrossel desta trend')}
-        </button>
-      )}
-    </div>
-  )
-}
 
 // Creative Agent — desde 2026-10-14 é a aba "Ideias e trends" do Agente de
 // Dados (posts do zero, que não saem de um imóvel). Traz IDEIAS de post em cards, com
@@ -49,7 +25,7 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
   const { session } = useAuth()
   const lang = useLang().lang
   const en = lang === 'en'
-  const { readOnly } = useShowcase() // vitrine: não dispara a geração sozinha ao abrir
+  const { readOnly, openPlanModal } = useShowcase() // vitrine: não dispara a geração sozinha ao abrir
   const token = session?.access_token ?? ''
   const [ideas, setIdeas] = useState<Idea[]>([])
   const [trends, setTrends] = useState<Trend[]>([])
@@ -73,12 +49,12 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
   const load = useCallback(async () => {
     const [{ data: i }, { data: t }] = await Promise.all([
       supabase.from('marketing_ai_ideas').select('*').eq('company_id', companyId).neq('status', 'dismissed').order('created_at', { ascending: false }).limit(30),
-      supabase.from('marketing_ai_trends').select('*').eq('company_id', companyId).order('detected_at', { ascending: false }).limit(10),
+      supabase.from('marketing_ai_trends').select('*').eq('company_id', companyId).order('detected_at', { ascending: false }).limit(30),
     ])
     setIdeas((i ?? []) as Idea[])
     setTrends((t ?? []) as Trend[])
     setLoading(false)
-    return (i?.length ?? 0) > 0 || (t?.length ?? 0) > 0
+    return (i?.length ?? 0) > 0 || (t?.length ?? 0) > 0 // (ignoradas também contam: não dispara a varredura de novo)
   }, [companyId])
 
   // Primeira visita sem nada ainda (nem ideia, nem tendência): dispara sozinho
@@ -144,8 +120,19 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
     await load()
   }
 
-  const realTrends = trends.filter(t => t.source === 'instagram_scan')
-  const shownTrends = (realTrends.length > 0 ? realTrends : trends).slice(0, 6)
+  // Ignorar tendência (Pacote B2): status 'ignored' + ignored_at; a linha e a evidência ficam. Filtra NO CLIENTE (select('*')
+  // não quebra se a coluna ainda não existir). Falha ao gravar → mensagem e a lista não muda.
+  const activeTrends = trends.filter(t => t.status !== 'ignored')
+  const ignoredTrends = trends.filter(t => t.status === 'ignored')
+  const realTrends = activeTrends.filter(t => t.source === 'instagram_scan')
+  const shownTrends = (realTrends.length > 0 ? realTrends : activeTrends).slice(0, 6)
+  const setTrendIgnored = async (t: Trend, ignored: boolean) => {
+    if (readOnly) { openPlanModal(); return }
+    setErr('')
+    const { error } = await supabase.from('marketing_ai_trends').update(ignored ? { status: 'ignored', ignored_at: new Date().toISOString() } : { status: 'active', ignored_at: null }).eq('id', t.id).eq('company_id', companyId)
+    if (error) { setErr(ignored ? (en ? 'Could not ignore. Try again.' : 'Não consegui ignorar. Tente de novo.') : (en ? 'Could not restore. Try again.' : 'Não consegui restaurar. Tente de novo.')); return }
+    await load()
+  }
 
   return (
     <div>
@@ -169,8 +156,16 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
           <div style={{ padding: '18px', textAlign: 'center', color: MUTED, fontSize: '12px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '11px' }}>{en ? 'No trends yet.' : 'Nenhuma tendência ainda.'}</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
-            {shownTrends.map(t => <TrendCard key={t.id} t={t} busy={busyId === `${t.id}:deck`} onDeck={readOnly ? undefined : () => generatePost({ id: t.id, title: t.title, hook: null, angle: t.description, format: 'carrossel', module: 'organico', fromTrend: true }, true)} />)}
+            {shownTrends.map(t => <TrendCard key={t.id} t={t} busy={busyId === `${t.id}:deck`} onDeck={readOnly ? undefined : () => generatePost({ id: t.id, title: t.title, hook: null, angle: t.description, format: 'carrossel', module: 'organico', fromTrend: true }, true)} onIgnore={() => setTrendIgnored(t, true)} locked={readOnly} />)}
           </div>
+        )}
+        {ignoredTrends.length > 0 && (
+          <details style={{ marginTop: '12px' }}>
+            <summary style={{ cursor: 'pointer', color: MUTED, fontSize: '12px', fontWeight: 700 }}>{en ? `Ignored trends (${ignoredTrends.length})` : `Tendências ignoradas (${ignoredTrends.length})`}</summary>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px', marginTop: '8px' }}>
+              {ignoredTrends.map(t => <TrendCard key={t.id} t={t} onRestore={() => setTrendIgnored(t, false)} locked={readOnly} />)}
+            </div>
+          </details>
         )}
       </section>
 
