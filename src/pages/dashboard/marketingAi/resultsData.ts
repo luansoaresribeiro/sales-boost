@@ -11,20 +11,26 @@ import {
 // engagement_events.media_ref. Ligação comercial: por imóvel (leads.item_id) / oportunidade — nunca por peça (docs/DECISIONS.md, 2026-11-04).
 
 const LIMIT = 500
+const EV_LIMIT = 5000
 const CHUNK = 100 // ids por consulta (a lista vai na URL)
 type Res = { data: unknown; error: unknown }
-async function rows<T>(p: PromiseLike<Res>): Promise<Src<T>> {
-  try { const r = await p; return r.error ? { ok: false, rows: [] } : { ok: true, rows: (r.data ?? []) as T[] } } catch { return { ok: false, rows: [] } }
+// Leitura cortada pelo limite = soma subcontada: vale como falha ("Não foi possível verificar"), nunca como número real.
+async function rows<T>(p: PromiseLike<Res>, limit = LIMIT): Promise<Src<T>> {
+  try {
+    const r = await p
+    const d = (r.data ?? []) as T[]
+    return r.error || d.length >= limit ? { ok: false, rows: [] } : { ok: true, rows: d }
+  } catch { return { ok: false, rows: [] } }
 }
 async function count(p: PromiseLike<{ count: number | null; error: unknown }>): Promise<CountSrc> {
   try { const r = await p; return r.error || r.count === null ? { ok: false, count: null } : { ok: true, count: r.count } } catch { return { ok: false, count: null } }
 }
 const mediaIdsOf = (p: Src<PostRow>) => [...new Set(p.rows.map(r => r.instagram_media_id).filter((x): x is string => !!x))]
 /** Consulta em blocos de ids; se qualquer bloco falhar o conjunto inteiro falha (nada de soma parcial calada). */
-async function chunked<T>(ids: string[], run: (part: string[]) => PromiseLike<Res>): Promise<Src<T>> {
+async function chunked<T>(ids: string[], run: (part: string[]) => PromiseLike<Res>, limit = LIMIT): Promise<Src<T>> {
   const out: T[] = []
   for (let i = 0; i < ids.length; i += CHUNK) {
-    const r = await rows<T>(run(ids.slice(i, i + CHUNK)))
+    const r = await rows<T>(run(ids.slice(i, i + CHUNK)), limit)
     if (!r.ok) return { ok: false, rows: [] }
     out.push(...r.rows)
   }
@@ -41,7 +47,20 @@ export async function loadPostsAndPerf(companyId: string, col: 'item_id' | 'oppo
 }
 
 export function loadEvents(companyId: string, mediaIds: string[]): Promise<Src<EventRow>> {
-  return chunked<EventRow>(mediaIds, part => supabase.from('engagement_events').select('media_ref, intent_detected, ig_user_id, ig_user').eq('company_id', companyId).not('intent_detected', 'is', null).in('media_ref', part).limit(5000))
+  return chunked<EventRow>(mediaIds, part => supabase.from('engagement_events').select('media_ref, intent_detected, ig_user_id, ig_user').eq('company_id', companyId).not('intent_detected', 'is', null).in('media_ref', part).limit(EV_LIMIT), EV_LIMIT)
+}
+
+// Contadores da empresa toda (não do imóvel): buscados uma vez e reaproveitados por 60 s entre os imóveis abertos.
+const counts = new Map<string, { at: number; p: Promise<{ postsNoItem: CountSrc; leadsNoOrigin: CountSrc }> }>()
+function companyCounts(companyId: string) {
+  const hit = counts.get(companyId)
+  if (hit && Date.now() - hit.at < 60_000) return hit.p
+  const p = Promise.all([
+    count(supabase.from('posts').select('id', { count: 'exact', head: true }).eq('company_id', companyId).is('item_id', null).in('status', ['published', 'publicado'])),
+    count(supabase.from('leads').select('id', { count: 'exact', head: true }).eq('company_id', companyId).is('item_id', null).is('opportunity_id', null).is('link_id', null)),
+  ]).then(([postsNoItem, leadsNoOrigin]) => ({ postsNoItem, leadsNoOrigin }))
+  counts.set(companyId, { at: Date.now(), p })
+  return p
 }
 
 export type Loadable<T> = { state: 'loading' } | { state: 'done'; value: T }
@@ -58,8 +77,8 @@ export function useItemResults(companyId: string, itemId: string, enabled: boole
       const [{ posts, perf }, leads, postsNoItem, leadsNoOrigin] = await Promise.all([
         loadPostsAndPerf(companyId, 'item_id', itemId),
         rows<LeadRow>(supabase.from('leads').select('visit_at, proposal_at, closed_at, closed_value').eq('company_id', companyId).eq('item_id', itemId).limit(LIMIT)),
-        count(supabase.from('posts').select('id', { count: 'exact', head: true }).eq('company_id', companyId).is('item_id', null).in('status', ['published', 'publicado'])),
-        count(supabase.from('leads').select('id', { count: 'exact', head: true }).eq('company_id', companyId).is('item_id', null).is('opportunity_id', null).is('link_id', null)),
+        companyCounts(companyId).then(c => c.postsNoItem),
+        companyCounts(companyId).then(c => c.leadsNoOrigin),
       ])
       const events = posts.ok ? await loadEvents(companyId, mediaIdsOf(posts)) : { ok: false, rows: [] as EventRow[] }
       if (alive) setData({ state: 'done', value: { marketing: marketingBlock(posts, perf), commercial: commercialBlock(leads, posts, events), postsNoItem, leadsNoOrigin } })

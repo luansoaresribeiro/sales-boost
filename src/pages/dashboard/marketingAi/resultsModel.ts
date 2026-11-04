@@ -120,12 +120,12 @@ export function leftOutLines(postsNoItem: CountSrc, leadsNoOrigin: CountSrc, lan
     !c.ok || c.count === null ? fail : c.count === 1 ? one : many.replace('{n}', String(c.count))
   return [
     line(leadsNoOrigin,
-      pt ? '1 lead sem origem registrada' : '1 lead without a recorded origin',
-      pt ? '{n} leads sem origem registrada' : '{n} leads without a recorded origin',
-      pt ? 'Leads sem origem registrada: não foi possível verificar' : 'Leads without a recorded origin: could not verify'),
+      pt ? 'Na empresa toda: 1 lead sem origem registrada' : 'Company-wide: 1 lead without a recorded origin',
+      pt ? 'Na empresa toda: {n} leads sem origem registrada' : 'Company-wide: {n} leads without a recorded origin',
+      pt ? 'Na empresa toda, leads sem origem registrada: não foi possível verificar' : 'Company-wide, leads without a recorded origin: could not verify'),
     line(postsNoItem,
-      pt ? '1 post publicado ficou de fora (imóvel não registrado)' : '1 published post left out (listing not recorded)',
-      pt ? '{n} posts publicados ficaram de fora (imóvel não registrado)' : '{n} published posts left out (listing not recorded)',
-      pt ? 'Posts sem imóvel registrado: não foi possível verificar' : 'Posts without a recorded listing: could not verify'),
+      pt ? 'Na empresa toda: 1 post publicado sem imóvel registrado (fora dos imóveis)' : 'Company-wide: 1 published post without a listing (left out of listings)',
+      pt ? 'Na empresa toda: {n} posts publicados sem imóvel registrado (fora dos imóveis)' : 'Company-wide: {n} published posts without a listing (left out of listings)',
+      pt ? 'Na empresa toda, posts sem imóvel registrado: não foi possível verificar' : 'Company-wide, posts without a recorded listing: could not verify'),
   ]
 }

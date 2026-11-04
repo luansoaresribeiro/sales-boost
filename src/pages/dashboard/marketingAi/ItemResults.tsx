@@ -17,6 +17,7 @@ export default function ItemResults({ itemId, companyId, enabled }: { itemId: st
       <div style={{ fontSize: '11px', fontWeight: 700, color: 'white' }}>{lang === 'en' ? 'Listing result' : 'Resultado do imóvel'}</div>
       <MarketingCard block={v ? v.marketing : 'loading'} scope="item" />
       <CommercialCard block={v ? v.commercial : 'loading'} />
+      <div style={{ fontSize: '10px', color: MUTED, marginTop: '3px' }}>{lang === 'en' ? 'Leads linked only to an opportunity (no listing) appear on the opportunity card.' : 'Leads ligados só a uma oportunidade (sem imóvel) aparecem no card da oportunidade.'}</div>
       {left.map(l => <div key={l} style={{ fontSize: '10px', color: MUTED, marginTop: '3px' }}>{l}</div>)}
     </div>
   )

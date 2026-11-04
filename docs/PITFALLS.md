@@ -1019,3 +1019,7 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - **Post sem `item_id`** (feito fora do catálogo) não entra no "Resultado do imóvel": a tela diz quantos ficaram de fora. Leads de DM/comentário sem
   `item_id`/`opportunity_id`/`link_id` entram em "N leads sem origem registrada".
 - A lista de ids vai na URL da consulta: `resultsData.ts` consulta em blocos de 100 e, se um bloco falha, o conjunto todo vira "não foi possível verificar".
+- **Limite de leitura = falha, não soma:** `resultsData.ts` lê até 500 posts/leads e 5000 eventos por lote de 100 ids; se a leitura bate no limite, o bloco vira "Não foi possível verificar" (soma cortada nunca aparece como número real).
+- **Contadores da empresa toda** ("Na empresa toda: N leads sem origem…") são buscados uma vez (cache de 60 s) e rotulados como da empresa, não do imóvel. Lead só com `opportunity_id` aparece no card da oportunidade, não no imóvel.
+- **Dívida:** cada card de oportunidade aprovada faz 2 consultas de Marketing (posts + métricas); com muitos cards são muitas consultas. Agrupar em 1+1 fica para depois.
+- **RLS conferida em produção (dono, 2026-11-04):** `leads` ("company leads access") e `engagement_events` ("owner read engagement_events") deixam o dono da empresa ler — as telas de resultado dependem disso.
