@@ -208,7 +208,7 @@ export default function GrowthOpportunitiesPage() {
               {emptyNote && rows.length > 0 && <div role="status" style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.8)', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px', padding: '10px 14px', lineHeight: 1.5 }}>{emptyNote}</div>}
               {rows.length === 0 && <div style={{ padding: '24px', textAlign: 'center', color: MUTED, fontSize: '13px', border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>{emptyNote ? `${emptyNote} ${t.noneTail}` : t.none}</div>}
               {latest.length > 0 && <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{t.latest}</div>}
-              {latest.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} results={results[o.id]} linkCodes={linkCodes[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
+              {latest.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} results={results[o.id]} companyId={companyId ?? undefined} linkCodes={linkCodes[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
               {dismissedList.length > 0 && (
                 <div>
                   <button onClick={() => setShowDismissed(v => !v)} aria-expanded={showDismissed}
@@ -217,13 +217,13 @@ export default function GrowthOpportunitiesPage() {
                   </button>
                   {showDismissed && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px', opacity: 0.75 }}>
-                      {dismissedList.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} results={results[o.id]} linkCodes={linkCodes[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
+                      {dismissedList.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} results={results[o.id]} companyId={companyId ?? undefined} linkCodes={linkCodes[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
                     </div>
                   )}
                 </div>
               )}
               {earlier.length > 0 && <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginTop: '6px' }}>{t.earlier}</div>}
-              {earlier.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} results={results[o.id]} linkCodes={linkCodes[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
+              {earlier.map(o => <OpportunityCard key={o.id} o={o} itemNames={itemNames} pieces={pieceStats[o.id]} results={results[o.id]} companyId={companyId ?? undefined} linkCodes={linkCodes[o.id]} busy={busyId === o.id} onDecide={s => decide(o, s)} onPlan={p => patchRow(o.id, p)} />)}
             </>
           )}
 

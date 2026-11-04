@@ -50,8 +50,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     init()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
+      // Link de "Esqueceu a senha?": se o Supabase devolver a pessoa em outra página (URL fora da lista de
+      // redirecionamento cai no Site URL), leva pra tela de nova senha em vez de entrar direto no painel.
+      if (event === 'PASSWORD_RECOVERY' && window.location.pathname !== '/reset-password') {
+        window.location.assign('/reset-password')
+        return
+      }
       setSession(session)
       // Keep the same `user` object reference when it's still the same account —
       // Supabase fires this on every silent token refresh (incl. on tab focus),

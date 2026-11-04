@@ -584,7 +584,9 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 >
 > **Status 2026-11-04:** A, B1, B2 concluídos e no ar (PRs #98, #99, #100). Fase 2 juntada (PR #101), site no ar, `marketing-ai` v43
 > publicada. **Gate medido** (67 sinais, 0 notícia boa barrada): filtro passou para `enforce` com a ficha v2. Oportunidades ainda reprovam nas
-> 5 perguntas, e o custo da coleta passa a ser medido a partir de 05/11: a Fase 2 segue aberta (detalhe em DECISIONS, "Gate da Fase 2"). **Princípio orientador e critérios formais de aceite:** [DECISIONS.md](DECISIONS.md), 2026-11-04 "Critérios de decisão".
+> 5 perguntas, e o custo da coleta passa a ser medido a partir de 05/11: a Fase 2 segue aberta (detalhe em DECISIONS, "Gate da Fase 2").
+> **Reconciliação (dono, 04/11):** a Fase 3 (PR #104) foi implementada antes do gate completo da Fase 2; a saída das Fases 2 e 3
+> NÃO está aprovada. Trabalho antecipado nas Fases 4 e 5 não amplia escopo nem fecha fase (DECISIONS, "Reconciliação dos gates"). **Princípio orientador e critérios formais de aceite:** [DECISIONS.md](DECISIONS.md), 2026-11-04 "Critérios de decisão".
 
 ### Gate e critérios de saída (dono, 2026-11-04 — detalhe em DECISIONS)
 - **Não abrir novas frentes** antes de provar valor comercial. Ordem: publicar `marketing-ai` → conferir bundle e versão → analisar dados reais
@@ -706,6 +708,10 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 - **Fase 5:**
   - Separar marketing (alcance, engajamento, salvamentos, cliques) de comercial (conversas, leads, visitas, conversões).
   - A branch `results-flow` é dependência própria.
+  - **Status 2026-11-04: implementada no branch `claude/nifty-shannon-ysp818-fase5` (só front, sem migration/function; aguardando QA e PR).** Feita do zero
+    sobre a `main`; `results-flow` ficou de fora (decisão do dono) e a "ideia vencedora" não entrou. Detalhe e regra de ligação (por imóvel/oportunidade,
+    não por peça): [DECISIONS.md](DECISIONS.md), 2026-11-04 "Fase 5". Divergência: "visitas" = leads com `visit_at` (convenção Qualificado) e
+    "conversas" = comentários com intenção; DMs continuam sem fonte.
   - Não conta como concluída só com métricas do Instagram. O que não existe aparece como ausente, nunca estimado.
 
 ### Rastreabilidade ponta a ponta

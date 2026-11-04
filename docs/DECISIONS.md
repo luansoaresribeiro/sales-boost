@@ -6,6 +6,42 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-04 — Reconciliação dos gates: Fase 3 implementada antes do gate completo da Fase 2 (dono)
+
+**O que de fato foi aprovado em 04/11:**
+- **Só a troca do filtro de `audit` para `enforce`** (decisão "Ativar e apertar", PR #103). Ela se apoia na medição de qualidade da
+  classificação descrita na entrada seguinte ("Gate da Fase 2"): 67 sinais, 0 falso positivo.
+- **A saída da Fase 2 NÃO foi aprovada.** Ainda faltam:
+  - o custo medido numa coleta real (`market_intel_runs`, fase `collect`, a partir de 05/11);
+  - oportunidades que passem nas 5 perguntas. As 12 mais recentes reprovaram.
+
+**A Fase 3 foi implementada antecipadamente** (PR #104), por decisão do dono de construir no mesmo dia.
+- **O que está provado:**
+  - a trava de aprovação na Teste Zero (proposta em `needs_review`, com a estratégia ativa idêntica à de antes do teste);
+  - os testes de código.
+- **A saída da Fase 3 continua NÃO aprovada.** Ela depende:
+  - do gate completo da Fase 2;
+  - do plano semanal de domingo (temas com `market_context` apontando para sinais reais);
+  - da avaliação comercial do dono sobre os temas.
+
+**Regra operacional (dono):**
+- Trabalho antecipado em fases futuras (3, 4 e 5) não autoriza expandir o escopo nem considerar a fase concluída.
+- A prioridade de execução continua sendo a ordem oficial (Fase 2 → 3 → 4 → 5).
+- Nenhuma funcionalidade nova além dos planos já aprovados enquanto os gates anteriores não estiverem comprovados.
+- O que já foi construído é só terminado e revisado.
+
+**Interpretação do teste de valor comercial (dono):**
+- Não concluir que uma oportunidade não gera resultado só porque não apareceu lead.
+- Para cada ação, registrar:
+  - volume de distribuição (posts publicados, alcance);
+  - período de exposição;
+  - ações realizadas;
+  - feedback dos corretores.
+- Distinguir três situações:
+  - **falta de distribuição:** pouco alcance ou pouco tempo no ar;
+  - **falta de execução:** a ação não foi feita, ou o corretor não respondeu;
+  - **falta de interesse comercial:** houve distribuição e execução, mas não houve resposta.
+
 ## 2026-11-04 — Gate da Fase 2: medição e troca do filtro para `enforce` (dono: "Ativar e apertar")
 
 **Como foi medido.** A reclassificação (`cron_market_intel`, sem custo: não busca nem usa IA) rodou à mão às 14:49 UTC nos 67 sinais
@@ -2616,3 +2652,30 @@ forçando pivot e conferir `needs_review`); site. Nada de SQL.
 **Como desfazer.** Código: reverter o PR e redeployar `agent-actions`, `creative-generate`, `catalog-package`, `item-videos`, `marketing-ai`. Banco (só some o motivo/lista de status; nada depende): `alter table marketing_ai_test_content drop column if exists item_pick; alter table posts drop column if exists item_pick; update vertical_playbooks set config = config - 'availability' where key='imoveis_rio';`. `meta.availability` nos itens pode ficar (ignorado sem a ficha).
 
 **Para publicar (a sessão principal faz):** migrations `20261104160000_item_pick.sql` e `20261104170000_availability_ficha.sql` → deploy `agent-actions --no-verify-jwt`, `creative-generate --no-verify-jwt`, `catalog-package`, `item-videos`, `marketing-ai` (manter as flags atuais de cada uma) → site.
+
+## 2026-11-04 — Fase 5: Resultados (marketing × comercial, lado a lado)
+
+**Decisão do dono.** A Fase 5 foi construída **do zero em cima da `main` atual**; a branch antiga `results-flow` **não** foi juntada nem usada
+(fica como está, para depois). A automação "ideia vencedora" **não** entra. O objetivo é só **relacionar ações de marketing a resultado comercial
+verificável**, sem nota única.
+
+**O que foi feito (só tela; sem migration, sem function nova, sem deploy de function):**
+- `resultsModel.ts` (puro, testado em `scripts/test-results-model.mjs`): dois blocos — **Marketing** {posts publicados, alcance, salvamentos,
+  compartilhamentos, curtidas, comentários} e **Comercial** {conversas, leads, visitas, propostas, vendas, valor informado}. Todo valor é
+  `número | null`; `null` aparece como "sem medição"/"sem dado", **nunca 0**. Nunca soma entre blocos e não existe nota única.
+- Onde aparece: **Catálogo → Ver atividade → "Resultado do imóvel"** (`ItemResults.tsx`); **card da oportunidade aprovada** (lado Marketing via
+  `posts.opportunity_id` ao lado do Comercial de `opportunity_results`); **Resultados (PerformanceTab)** com "Marketing" × "Comercial · conversas"
+  por post (`engagement_events.media_ref`). O hub (`DecisionKpis`) não tem KPI de alcance nem de lead — nada a separar, nada mudou.
+- Linhas obrigatórias: "N leads sem origem registrada" (leads sem `item_id`, `opportunity_id` e `link_id`) e "N posts publicados ficaram de fora
+  (imóvel não registrado)" (posts publicados sem `item_id`).
+- Estados (regra 5): carregando · ausência ("Nenhuma peça publicada ligada a este imóvel") · dado real · "Não foi possível verificar" quando qualquer
+  consulta falha (inclusive migration pendente).
+
+**Regra de ligação (inegociável).** A ligação comercial é **por imóvel e por oportunidade, nunca por peça**: `tracked_links` é único por
+imóvel+oportunidade+canal e `content_id` guarda só a primeira peça. Nenhuma tela diz "esta peça gerou este lead"; a tela escreve "ligação por
+imóvel/oportunidade, não por peça". O único vínculo verificável por peça é **conversa**: `engagement_events.media_ref` = `posts.instagram_media_id`.
+
+**Aprendizado ≠ resultado.** `_shared/learning.ts` (80/20) **não foi alterado**; continua sendo "aprendizado" (score interno conversas×3 + saves/shares)
+e não aparece dentro dos blocos de resultado.
+
+**Como desfazer:** reverter o commit (só front; nenhum dado foi criado).

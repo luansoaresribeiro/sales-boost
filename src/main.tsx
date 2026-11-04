@@ -12,6 +12,7 @@ import { useAuth } from './contexts/AuthContext.tsx'
 import { CompanyProvider, useCompany } from './contexts/CompanyContext.tsx'
 import LoginPage from './pages/auth/LoginPage.tsx'
 import SignupPage from './pages/auth/SignupPage.tsx'
+import { ForgotPasswordPage, ResetPasswordPage } from './pages/auth/PasswordPages.tsx'
 import GscCallbackPage from './pages/auth/GscCallbackPage.tsx'
 import GbpCallbackPage from './pages/auth/GbpCallbackPage.tsx'
 import DashboardLayout from './pages/dashboard/DashboardLayout.tsx'
@@ -131,6 +132,8 @@ function RouterRoot() {
       <Route path="/" element={<App />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/auth/gsc/callback" element={<GscCallbackPage />} />
       <Route path="/auth/gbp/callback" element={<GbpCallbackPage />} />
 
