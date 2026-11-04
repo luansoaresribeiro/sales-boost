@@ -8,7 +8,7 @@
 import { hasPaidAccess } from './access.ts'
 import { collectMarketNews, type NewsOpts, type NewsResult } from './marketNewsRun.ts'
 import { parseIntelConfig } from './marketIntel.ts'
-import { recordRun, reclassifySignals, type ReclassifyResult } from './marketIntelRuns.ts'
+import { recordRun, reclassifySignals, sameAsLastReclassify, type ReclassifyResult } from './marketIntelRuns.ts'
 
 type Admin = { from: (t: string) => any; rpc?: any } // eslint-disable-line @typescript-eslint/no-explicit-any
 export const MI_COMPANIES_PER_CALL = 2
@@ -18,12 +18,13 @@ export interface MarketIntelSummary { ok: boolean; skipped_reason?: string; comp
 
 export async function cronMarketIntel(
   admin: Admin, started = Date.now(),
-  deps: { collect?: (a: Admin, o: NewsOpts) => Promise<NewsResult>; fitsCap?: (companyId: string, estimate: number) => Promise<boolean>; reclassify?: typeof reclassifySignals; record?: typeof recordRun } = {},
+  deps: { collect?: (a: Admin, o: NewsOpts) => Promise<NewsResult>; fitsCap?: (companyId: string, estimate: number) => Promise<boolean>; reclassify?: typeof reclassifySignals; record?: typeof recordRun; sameAsLast?: typeof sameAsLastReclassify } = {},
 ): Promise<MarketIntelSummary> {
   const sum: MarketIntelSummary = { ok: true, companies_checked: 0, collected: 0, searched: 0, added: 0, spent_usd: 0 }
   const collect = deps.collect ?? collectMarketNews
   const reclassify = deps.reclassify ?? reclassifySignals
   const record = deps.record ?? recordRun
+  const sameAsLast = deps.sameAsLast ?? sameAsLastReclassify
   const { data: cfg } = await admin.from('hermes_config').select('auto_strategy_enabled').eq('id', true).maybeSingle()
   if (cfg && cfg.auto_strategy_enabled === false) return { ...sum, skipped_reason: 'auto_strategy_enabled=false no painel Owner' }
 
@@ -44,8 +45,10 @@ export async function cronMarketIntel(
       if (quality && quality.mode !== 'off' && windowOpen()) {
         try {
           const rc: ReclassifyResult = await reclassify(admin, c.id, quality, { started })
-          if (rc.examined > 0 || rc.error) {
-            sum.reclassified = (sum.reclassified ?? 0) + rc.examined; sum.ignored_by_system = (sum.ignored_by_system ?? 0) + rc.ignored
+          // audit repete a mesma leitura todo dia: só grava quando o resultado mudou. enforce grava sempre que avaliou algo.
+          const skipRecord = quality.mode === 'audit' && !rc.error && await sameAsLast(admin, c.id, rc)
+          sum.reclassified = (sum.reclassified ?? 0) + rc.examined; sum.ignored_by_system = (sum.ignored_by_system ?? 0) + rc.ignored
+          if ((rc.examined > 0 || rc.error) && !skipRecord) {
             await record(admin, c.id, 'reclassify', { collected: rc.examined, filtered: rc.failed, accepted: rc.passed, ignored_by_system: quality.mode === 'enforce' ? rc.ignored : 0, details: { mode: rc.mode, version: rc.version, reasons: rc.reasons, samples: rc.samples, partial: rc.partial, ...(rc.error ? { error: rc.error.slice(0, 200) } : {}) } })
           }
         } catch (e) { console.error(`[cron_market_intel] reclassificação ${c.id}:`, String(e)) }

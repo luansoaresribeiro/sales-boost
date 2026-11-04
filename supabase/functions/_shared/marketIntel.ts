@@ -59,13 +59,14 @@ export interface IntelQuality {
   block_url_patterns: string[]      // trecho (minúsculo) do caminho da URL
   block_title_terms: string[]       // termo solto no título (sem acento/caixa, borda de palavra)
   block_title_all: string[][]       // grupos: bloqueia se o título tiver TODOS os termos do grupo (E)
+  news_title_terms: string[]        // sinal de NOTÍCIA no título ("sobe", "diz"...): libera as regras de título (não as de endereço)
   min_summary_chars: number         // 0 = não exige
   kind_terms: Record<string, string[]> // tipo → o texto precisa citar ao menos um termo (tipo sem lista = livre)
   max_per_host_per_run: number      // 0 = sem limite
   trusted_domains: string[]         // passam pelas regras de bloqueio
   min_score: number | null          // nota mínima da fonte (null = não filtra)
 }
-export const QUALITY_OFF: IntelQuality = { mode: 'off', version: 1, block_url_patterns: [], block_title_terms: [], block_title_all: [], min_summary_chars: 0, kind_terms: {}, max_per_host_per_run: 0, trusted_domains: [], min_score: null }
+export const QUALITY_OFF: IntelQuality = { mode: 'off', version: 1, block_url_patterns: [], block_title_terms: [], block_title_all: [], news_title_terms: [], min_summary_chars: 0, kind_terms: {}, max_per_host_per_run: 0, trusted_domains: [], min_score: null }
 const strList = (v: unknown, max: number, maxLen = 120): string[] => (Array.isArray(v) ? v : []).map(x => String(x ?? '').toLowerCase().trim()).filter(x => x && x.length <= maxLen).slice(0, max)
 /** Saneia `news.quality`: ausente/lixo = desligado (nunca bloqueia por engano). */
 export function parseQuality(raw: unknown): IntelQuality {
@@ -79,6 +80,7 @@ export function parseQuality(raw: unknown): IntelQuality {
     mode, version: clamp(q.version, 1, 1000, 1),
     block_url_patterns: strList(q.block_url_patterns, 60), block_title_terms: strList(q.block_title_terms, 100),
     block_title_all: (Array.isArray(q.block_title_all) ? q.block_title_all : []).map(g => strList(g, 6)).filter(g => g.length >= 2).slice(0, 40),
+    news_title_terms: strList(q.news_title_terms, 60),
     min_summary_chars: clamp(q.min_summary_chars, 0, 300, 0), kind_terms: kt, max_per_host_per_run: clamp(q.max_per_host_per_run, 0, 10, 0),
     trusted_domains: strList(q.trusted_domains, 50).filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)),
     min_score: Number.isFinite(sc) && sc >= 0 && sc <= 1 ? sc : null,

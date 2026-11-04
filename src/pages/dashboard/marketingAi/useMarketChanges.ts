@@ -19,7 +19,7 @@ export function useMarketChanges(companyId: string | undefined, enabled = true):
     if (!companyId || !enabled) return
     let cancelled = false
     Promise.all([
-      supabase.from('market_intel_runs').select('phase, searched, collected, filtered, accepted, interpreted, discarded, ignored_by_system, unchanged, cost_usd, month_cost_usd, tokens, created_at')
+      supabase.from('market_intel_runs').select('phase, searched, collected, filtered, accepted, interpreted, discarded, ignored_by_system, unchanged, cost_usd, month_cost_usd, tokens, fingerprint, details, created_at')
         .eq('company_id', companyId).order('created_at', { ascending: false }).limit(20),
       supabase.from('market_signals').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('meta->>ignored', 'true').eq('meta->>ignored_by', 'system'),
     ]).then(([runs, ign]) => {

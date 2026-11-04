@@ -171,7 +171,7 @@ const goodSearch = async (_k, query) => [hit({ title: query, url: `https://news.
 const sql = readFileSync(new URL('../supabase/migrations/20261104120000_market_intel_quality.sql', import.meta.url), 'utf8')
 const QJSON = JSON.parse(/\$json\$([\s\S]*?)\$json\$/.exec(sql)[1])
 const QE = parseQuality({ ...QJSON, mode: 'enforce' }), QA = parseQuality(QJSON)
-assert.equal(QA.mode, 'audit'); assert.equal(QA.version, 1); assert.equal(QE.trusted_domains.length, 6); assert.equal(QE.block_title_all.length, QJSON.block_title_all.length); assert.deepEqual(Object.keys(QE.kind_terms).sort(), ['economy', 'infrastructure', 'tourism']); ok('ficha da migration: JSON válido, modo inicial audit, parseQuality mantém todas as regras')
+assert.equal(QA.mode, 'audit'); assert.equal(QA.version, 1); assert.equal(QE.trusted_domains.length, 14); assert.ok(QE.news_title_terms.length > 5); assert.equal(QE.block_title_all.length, QJSON.block_title_all.length); assert.deepEqual(Object.keys(QE.kind_terms).sort(), ['economy', 'infrastructure', 'tourism']); ok('ficha da migration: JSON válido, modo inicial audit, parseQuality mantém todas as regras')
 assert.ok(!/\bdrop\b/i.test(sql.split('\n').filter(l => !l.trimStart().startsWith('--')).join('\n'))); ok('migration da ficha sem "drop" fora de comentário')
 const run = readFileSync(new URL('../supabase/migrations/20261104110000_market_intel_runs.sql', import.meta.url), 'utf8')
 assert.ok(!/\bdrop\b/i.test(run.split('\n').filter(l => !l.trimStart().startsWith('--')).join('\n')) && /enable row level security/.test(run) && /if not exists \(select 1 from pg_policies/.test(run)); ok('migration da tabela: RLS ligada, policy em bloco condicional, sem "drop" fora de comentário')
@@ -204,6 +204,16 @@ ok(`${BAD.length} amostras ruins medidas (anúncios avulsos, páginas sem valor,
 assert.equal(q('infrastructure', 'Passeio de domingo em Ipanema', 'https://www.blogxyz.com.br/passeio'), 'kind_mismatch'); ok('tipo incoerente com o texto: kind_mismatch')
 assert.equal(q('economy', 'Mercado em Ipanema', 'https://www.blogxyz.com.br/a', 'curto'), 'short_summary'); ok('resumo curto: short_summary')
 assert.equal(q('launch', 'Lançamento em Ipanema', 'https://www.blogxyz.com.br/a'), 'ok'); assert.equal(q('news', 'Qualquer coisa em Ipanema', 'https://www.blogxyz.com.br/b'), 'ok'); ok('tipo sem lista na ficha fica livre')
+// Casos do QA (04/11): notícia de mercado legítima FORA dos portais de confiança não pode ser reprovada (a regra mira o anúncio, não o tema)
+const QA_GOOD = [
+  ['economy', 'Apartamento de 2 quartos fica 10% mais caro em Ipanema, diz FipeZap', 'https://www.blogxyz.com.br/fipezap'],
+  ['economy', 'Preço do m² sobe em Ipanema; apartamento com 3 suítes lidera valorização', 'https://www.blogxyz.com.br/preco-m2'],
+  ['economy', 'Aluguel de 2 quartos sobe 8% no Leblon, aponta pesquisa', 'https://www.blogxyz.com.br/aluguel'],
+  ['infrastructure', 'Obra à venda: construtora vende 500 unidades', 'https://www.blogxyz.com.br/obra-venda'],
+]
+for (const [kind, title, url] of QA_GOOD) assert.equal(q(kind, title, url), 'ok', title)
+for (const d of ['valor.globo.com', 'g1.globo.com', 'estadao.com.br', 'exame.com', 'infomoney.com.br', 'cnnbrasil.com.br', 'extra.globo.com', 'odia.ig.com.br']) assert.equal(q('launch', 'Apartamento para venda em Ipanema', `https://www.${d}/imovel/x`), 'ok', d)
+assert.equal(q('launch', 'Apartamento para venda com 4 quartos', 'https://www.blogxyz.com.br/ap'), 'block_title'); assert.equal(q('launch', 'Sobe o preço: apartamento para venda', 'https://www.kaselle.com.br/imovel/1'), 'block_url'); ok('casos do QA (notícia com quartos/m²/suítes/"à venda" fora dos trusted) passam; anúncio continua reprovando; 8 portais novos de confiança; endereço de anúncio reprova mesmo com "sobe"')
 const GOOD = [ // [tipo, título, url] — títulos reais medidos onde houve; os demais são sintéticos, só para o domínio
   ['infrastructure', 'Metrô da Gávea tem obras retomadas', 'https://oglobo.globo.com/rio/metro-gavea'],
   ['economy', 'Aluguel sobe acima da inflação', 'https://www1.folha.uol.com.br/mercado/aluguel'],

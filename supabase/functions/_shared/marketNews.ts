@@ -86,7 +86,8 @@ export function classifySignalQuality(s: QualityInput, q: IntelQuality, ctx: { h
   try { const u = new URL(s.source_url); path = (u.pathname + u.search).toLowerCase() } catch { /* sem caminho */ }
   if (path && q.block_url_patterns.some(p => path.includes(p))) return 'block_url'
   const title = normalize(s.title)
-  if (q.block_title_terms.some(t => hasTerm(title, normalize(t))) || q.block_title_all.some(g => g.every(t => hasTerm(title, normalize(t))))) return 'block_title'
+  const newsy = q.news_title_terms.some(t => hasTerm(title, normalize(t))) // título com cara de notícia (verbo de variação, fonte de índice): não é anúncio
+  if (!newsy && (q.block_title_terms.some(t => hasTerm(title, normalize(t))) || q.block_title_all.some(g => g.every(t => hasTerm(title, normalize(t)))))) return 'block_title'
   if (q.min_summary_chars > 0 && (s.summary ?? '').length < q.min_summary_chars) return 'short_summary'
   const kt = q.kind_terms[s.kind]
   if (kt?.length) { const text = normalize(`${s.title} ${s.summary ?? ''}`); if (!kt.some(t => hasTerm(text, normalize(t), true))) return 'kind_mismatch' }

@@ -84,6 +84,16 @@ export async function reclassifySignals(admin: Admin, companyId: string, q: Inte
   return res
 }
 
+/** Resultado igual ao da última linha `reclassify`? (audit repete a mesma leitura todo dia: só grava quando muda.) Erro de leitura = diferente (grava). */
+export async function sameAsLastReclassify(admin: Admin, companyId: string, rc: ReclassifyResult): Promise<boolean> {
+  try {
+    const { data, error } = await admin.from('market_intel_runs').select('collected, filtered, accepted, details').eq('company_id', companyId).eq('phase', 'reclassify').order('created_at', { ascending: false }).limit(1).maybeSingle()
+    if (error || !data) return false
+    const sig = (e: number, f: number, a: number, reasons: unknown) => JSON.stringify([e, f, a, Object.entries((reasons ?? {}) as Record<string, number>).sort()])
+    return sig(Number(data.collected), Number(data.filtered), Number(data.accepted), data.details?.reasons) === sig(rc.examined, rc.failed, rc.passed, rc.reasons)
+  } catch { return false }
+}
+
 // ---------- impressão digital do que vai à IA ----------
 export const sha256Hex = async (s: string): Promise<string> =>
   [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map(b => b.toString(16).padStart(2, '0')).join('')

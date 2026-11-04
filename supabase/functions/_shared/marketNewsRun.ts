@@ -20,7 +20,7 @@ export interface NewsResult {
   searched: number; added: number; spent_usd: number; skipped?: string
   // Fase 2 (registro por rodada): ausente = não medido.
   collected?: number; filtered?: number; month_spent_usd?: number
-  details?: { quality_mode: string; quality_version: number; rejected: Record<string, number>; flagged: Record<string, number>; samples: { title: string; host: string; reason: string }[]; skipped?: string }
+  details?: { quality_mode: string; quality_version: number; rejected: Record<string, number>; flagged: Record<string, number>; samples: { title: string; host: string; reason: string }[]; skipped?: string; cap_usd?: number }
 }
 export interface NewsOpts {
   companyId: string
@@ -85,7 +85,7 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
   const done = (): NewsResult => {
     if (out.searched > 0) {
       out.collected = stats.hits; out.filtered = Object.values(stats.rejected).reduce((a, b) => a + b, 0); out.month_spent_usd = spent.total + out.spent_usd
-      out.details = { quality_mode: quality.mode, quality_version: quality.version, rejected: stats.rejected, flagged: stats.flagged, samples: stats.samples, ...(out.skipped ? { skipped: out.skipped } : {}) }
+      out.details = { quality_mode: quality.mode, quality_version: quality.version, rejected: stats.rejected, flagged: stats.flagged, samples: stats.samples, cap_usd: capUsd, ...(out.skipped ? { skipped: out.skipped } : {}) }
     }
     return out
   }

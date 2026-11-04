@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 globalThis.Deno = { env: { get: () => undefined } }
 import { readFileSync } from 'node:fs'
 import { parseQuality } from '../supabase/functions/_shared/marketIntel.ts'
-import { recordRun, reclassifySignals, needsReclassify, interpretFingerprint, fingerprintPayload } from '../supabase/functions/_shared/marketIntelRuns.ts'
+import { recordRun, reclassifySignals, sameAsLastReclassify, needsReclassify, interpretFingerprint, fingerprintPayload } from '../supabase/functions/_shared/marketIntelRuns.ts'
 import { cronMarketIntel } from '../supabase/functions/_shared/marketIntelCron.ts'
 import { runOpportunities } from '../supabase/functions/_shared/opportunityRun.ts'
 import { buildCandidates } from '../supabase/functions/_shared/opportunityEngine.ts'
@@ -95,6 +95,17 @@ const NEWS = (id, meta) => sig(id, 'Lançamento anunciado em Ipanema', 'https://
   await cronMarketIntel(adminOff, Date.now(), { ...deps, reclassify: async () => { off.push('x'); return {} } }); assert.equal(off.length, 0); ok('ficha sem quality (off): não reclassifica')
 }
 
+// ---------- audit: só grava reclassify quando o resultado muda
+{
+  const rc = { mode: 'audit', version: 1, examined: 7, passed: 4, failed: 3, ignored: 0, reasons: { block_title: 2, kind_mismatch: 1 }, samples: [], partial: false }
+  const prev = { collected: 7, filtered: 3, accepted: 4, details: { reasons: { kind_mismatch: 1, block_title: 2 } } }
+  assert.equal(await sameAsLastReclassify(fake({ market_intel_runs: [prev] }), 'c1', rc), true); assert.equal(await sameAsLastReclassify(fake({ market_intel_runs: [{ ...prev, filtered: 2 }] }), 'c1', rc), false); assert.equal(await sameAsLastReclassify(fake({ market_intel_runs: [] }), 'c1', rc), false); assert.equal(await sameAsLastReclassify(fake({}, { readError: { market_intel_runs: 1 } }), 'c1', rc), false); ok('sameAsLastReclassify: igual só se contagens e motivos batem; sem linha ou erro de leitura = grava')
+  const CFGA = { opportunity_fields: { location: 'bairro' }, market_intel: { news: { topics: [{ kind: 'launch', query: '{region} x' }], quality: { ...QJSON, mode: 'audit' } } } }
+  const adm = { from: (t) => { const api = { select: () => api, eq: () => api, limit: () => api, maybeSingle: async () => ({ data: t === 'hermes_config' ? { auto_strategy_enabled: true } : t === 'vertical_playbooks' ? { config: CFGA } : null }), then: (res) => Promise.resolve({ data: t === 'companies' ? [{ id: 'c1', vertical_key: 'k', language: 'pt' }] : [] }).then(res) }; return api } }
+  const mk = (same) => { const phases = []; return { phases, deps: { reclassify: async () => rc, collect: async () => ({ searched: 0, added: 0, spent_usd: 0 }), sameAsLast: async () => same, record: async (_a, _i, p) => { phases.push(p); return true } } } }
+  const a = mk(true); await cronMarketIntel(adm, Date.now(), a.deps); assert.deepEqual(a.phases, []); const b = mk(false); await cronMarketIntel(adm, Date.now(), b.deps); assert.deepEqual(b.phases, ['reclassify']); ok('cron em audit: resultado igual ao da última linha não grava de novo; mudou, grava')
+}
+
 // ---------- impressão digital
 const NOW = new Date('2026-10-28T12:00:00Z')
 const base = (over = {}) => ({
@@ -160,13 +171,25 @@ const fpOf = async (inp, over = {}) => {
     { phase: 'collect', searched: 4, collected: 20, filtered: 15, accepted: 5, cost_usd: '0.032', month_cost_usd: '0.5', created_at: T('04') },
     { phase: 'reclassify', ignored_by_system: 6, created_at: T('03') },
     { phase: 'interpret', unchanged: false, tokens: 1500, interpreted: 3, accepted: 2, created_at: T('02') },
-  ].map(r => ({ searched: null, collected: null, filtered: null, accepted: null, interpreted: null, discarded: null, ignored_by_system: null, unchanged: false, cost_usd: null, month_cost_usd: null, tokens: null, ...r }))
+  ].map(r => ({ searched: null, collected: null, filtered: null, accepted: null, interpreted: null, discarded: null, ignored_by_system: null, unchanged: false, cost_usd: null, month_cost_usd: null, tokens: null, fingerprint: r.phase === 'interpret' ? 'f'.repeat(64) : null, details: null, ...r }))
   const ch = deriveChanges(rows, Date.parse('2026-11-04T15:00:00Z'))
   assert.deepEqual([ch.collect.accepted, ch.collect.filtered, ch.collect.cost, ch.monthCost, ch.interpret.unchanged, ch.interpret.tokens], [5, 15, 0.032, 0.5, true, 0]); assert.equal(ch.interpret.changedAt, T('02')); ok('deriveChanges: última coleta, custo (numeric em texto), acumulado do mês, análise sem mudança e a data da última que mudou')
   const L = describeChanges(ch, 'pt'); assert.equal(L.length, 3)
-  assert.ok(/Última coleta \(04\/11\).*guardadas: 5.*descartadas pelo filtro: 15/.test(L[0])); assert.ok(/nada mudou desde 02\/11/.test(L[1])); assert.ok(/US\$ 0,032 \(estimado\)/.test(L[2]) && /acumulado no mês: US\$ 0,50 de US\$ 5,00/.test(L[2]) && /tokens da análise: 0 \(sem chamada à IA\)/.test(L[2])); ok('frases: coleta guardada/descartada, "nada mudou desde dd/mm", custo da rodada, acumulado vs teto de US$ 5 e tokens')
+  assert.ok(/Última coleta \(04\/11\).*guardadas: 5.*descartadas pelo filtro: 15/.test(L[0])); assert.ok(/nada mudou desde 02\/11/.test(L[1])); assert.ok(/US\$ 0,032 \(estimado\)/.test(L[2]) && /acumulado no mês: US\$ 0,50/.test(L[2]) && /tokens da análise: 0 \(sem chamada à IA\)/.test(L[2])); ok('frases: coleta guardada/descartada, "nada mudou desde dd/mm", custo da rodada, acumulado vs teto de US$ 5 e tokens')
   const nm = deriveChanges([{ ...rows[1], accepted: null, filtered: null, cost_usd: null, month_cost_usd: null }, { ...rows[3], tokens: null, interpreted: null, accepted: null }], Date.parse('2026-11-04T15:00:00Z'))
   const LN = describeChanges(nm, 'pt').join(' | '); assert.ok(/guardadas: não medido/.test(LN) && /descartadas pelo filtro: não medido/.test(LN) && /candidatos analisados: não medido/.test(LN) && /Custo da coleta: não medido/.test(LN) && /acumulado no mês: não medido/.test(LN) && /tokens da análise: não medido/.test(LN) && !/: 0\b/.test(LN)); ok('contador nulo = "não medido", nunca "0"')
+  { // análise que falhou: não vira "rodou — 0 oportunidades" e não serve de referência para "nada mudou desde"
+    const withFp = rows.map(r => (r.phase === 'interpret' ? { ...r, fingerprint: 'a'.repeat(64) } : r))
+    const failedRow = { ...withFp[0], unchanged: false, tokens: 10, accepted: 0, fingerprint: null, details: { error: 'ai_no_answer' }, created_at: T('04') }
+    const f = deriveChanges([failedRow, withFp[1], withFp[3]], Date.parse('2026-11-04T15:00:00Z'))
+    assert.equal(f.interpret.failed, true); assert.equal(f.interpret.changedAt, T('02'))
+    const FL = describeChanges(f, 'pt'); assert.equal(FL[1], 'A última análise falhou (04/11)'); assert.ok(/tokens da análise: não medido/.test(FL[2])); assert.ok(!/oportunidades geradas/.test(FL[1]) && !/nada mudou/.test(FL[1]))
+    const onlyFail = deriveChanges([failedRow, { ...withFp[0], unchanged: true, fingerprint: null, created_at: T('03') }], Date.parse('2026-11-04T15:00:00Z')); assert.equal(onlyFail.interpret.changedAt, null)
+    const ok2 = deriveChanges([{ ...withFp[0], created_at: T('04') }, { ...failedRow, created_at: T('03') }, withFp[3]], Date.parse('2026-11-04T15:00:00Z')); assert.equal(ok2.interpret.changedAt, T('02')); assert.match(describeChanges(ok2, 'pt')[1], /nada mudou desde 02\/11/)
+    ok('análise que falhou: mostra "A última análise falhou (dd/mm)", sem "0 oportunidades"; "nada mudou desde" só usa rodada com impressão digital')
+    const capped = deriveChanges([{ ...rows[1], details: { cap_usd: 3 } }], Date.parse('2026-11-04T15:00:00Z')); assert.equal(capped.capUsd, 3); assert.match(describeChanges(capped, 'pt')[2], /acumulado no mês: US\$ 0,50 de US\$ 3,00/)
+    const nocap = deriveChanges([rows[1]], Date.parse('2026-11-04T15:00:00Z')); assert.equal(nocap.capUsd, null); assert.ok(!/ de US\$/.test(describeChanges(nocap, 'pt')[2])); ok('teto do mês vem da própria rodada (details.cap_usd); sem ele a tela não inventa teto')
+  }
   assert.equal(deriveChanges([rows[1]], Date.parse('2026-12-02T10:00:00Z')).monthCost, null); ok('acumulado de mês anterior não aparece como o do mês atual')
   const e = describeChanges(deriveChanges([]), 'pt'); assert.ok(/nenhuma registrada/.test(e[0]) && /nenhuma registrada/.test(e[1])); assert.equal(ignoredLine(null, 'pt'), 'Ignoradas pelo sistema: não medido'); assert.equal(ignoredLine(1, 'pt'), 'O sistema ignorou 1 notícia por qualidade'); assert.equal(ignoredLine(4, 'en'), 'The system ignored 4 news items for quality'); assert.ok(changesText('pt').empty && changesText('pt').error && changesText('en').loading); ok('sem rodada, contagem de ignorados nula e textos de estado (vazio / erro / carregando)')
   const dm = demoChanges(Date.parse('2026-11-04T15:00:00Z')); assert.ok(describeChanges(dm.changes, 'pt').length === 3 && changesText('pt').example === 'exemplo'); ok('demo tem dados de exemplo e a etiqueta "exemplo"')
