@@ -33,9 +33,9 @@ export const normThesis = (s: unknown): string =>
 
 export const sameThesis = (a: unknown, b: unknown): boolean => { const x = normThesis(a); return !!x && x === normThesis(b) }
 
-/** Já descartaram uma proposta com esta tese? Compara com a ÚLTIMA descartada (lista vinda do banco, qualquer ordem). */
+/** O DONO já descartou uma proposta com esta tese? Compara com a ÚLTIMA descartada por ele (arquivada pelo sistema não conta). */
 export function repeatsDiscarded(thesis: unknown, rows: { thesis?: string | null; data_provenance?: Prov }[]): boolean {
-  const disc = rows.map(r => ({ t: r.thesis, at: proposalOf(r.data_provenance)?.discarded_at ?? '' })).filter(r => r.at).sort((a, b) => b.at.localeCompare(a.at))
+  const disc = rows.map(r => { const p = proposalOf(r.data_provenance); return { t: r.thesis, at: p?.discarded_by === 'owner' ? p.discarded_at ?? '' : '' } }).filter(r => r.at).sort((a, b) => b.at.localeCompare(a.at))
   return disc.length > 0 && sameThesis(thesis, disc[0].t)
 }
 
@@ -43,20 +43,18 @@ interface FunnelLike { stage?: string; pillar?: string; audience?: string; objec
 /**
  * Funil do refresh com público e objetivo da etapa TRAVADOS: cada etapa nova herda audience/objective da etapa atual de mesmo
  * estágio (e mesmo pilar, se houver). Etapa que não existe na estratégia atual não entra (seria público novo sem aprovação).
- * Sem nenhuma etapa aproveitável, o funil atual fica como está.
+ * Etapa atual que a IA não devolveu fica como está (público incluso), na ordem original.
  */
 export function lockFunnel(current: unknown, proposed: unknown): FunnelLike[] {
   const cur = (Array.isArray(current) ? current : []).filter((x): x is FunnelLike => !!x && typeof x === 'object')
   const nxt = (Array.isArray(proposed) ? proposed : []).filter((x): x is FunnelLike => !!x && typeof x === 'object')
-  const used = new Set<FunnelLike>()
-  const out: FunnelLike[] = []
+  const merged = new Map<FunnelLike, FunnelLike>()
   for (const n of nxt) {
-    const match = cur.find(c => !used.has(c) && c.stage === n.stage && (c.pillar ?? '') === (n.pillar ?? '')) ?? cur.find(c => !used.has(c) && c.stage === n.stage)
-    if (!match) continue
-    used.add(match)
-    out.push({ ...n, audience: match.audience ?? '', objective: match.objective ?? '' })
+    const match = cur.find(c => !merged.has(c) && c.stage === n.stage && (c.pillar ?? '') === (n.pillar ?? '')) ?? cur.find(c => !merged.has(c) && c.stage === n.stage)
+    if (match) merged.set(match, { ...n, audience: match.audience ?? '', objective: match.objective ?? '' })
   }
-  return out.length ? out : cur
+  // Toda etapa atual continua (na ordem original): a que a IA devolveu leva o texto novo; a que ela não devolveu fica como está.
+  return cur.map(c => merged.get(c) ?? c)
 }
 
 /** O que o refresh automático grava na estratégia ativa. NUNCA inclui tese, foco, objetivos, restrição, exclusões nem orçamento. */

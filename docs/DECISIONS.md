@@ -2564,7 +2564,9 @@ sempre, sem pular). **Como desfazer:** voltar `mode` para `off` na ficha (para o
 - O modelo aponta a fonte por **código curto** (S1/T1…) em vez do uuid (menos erro de cópia); o código converte para os ids reais antes de gravar. `evidence` ganhou `source_name`
   (o modal mostra "título · fonte · data").
 - Tendência não tem janela de 14 dias (só `status='active'`, 3 mais recentes); a janela vale para sinais.
-- A notificação Telegram/Atividades `STRATEGY_PIVOT` agora só sai se a proposta foi criada; o texto do evento (em `log-bot-event`) não foi alterado.
+- A notificação `STRATEGY_PIVOT` da proposta só sai no fim do passo 3 (status `needs_review`), com texto novo em `log-bot-event` ("Há uma proposta de mudança na sua estratégia esperando você…"); a troca pedida pelo próprio dono mantém o texto de sempre. O registro `proposed` do check-up é fechado como `dismissed` (motivo no texto) quando a proposta é suprimida (tese repetida ou já há proposta aberta).
+- Aprovar: ativa a proposta com UPDATE condicional (`needs_review`) ANTES de pausar a antiga (nunca zero ativas; 409 se já decidida; falha ao pausar devolve a proposta). Só descarte feito pelo dono (`discarded_by='owner'`) suprime tese repetida. `lockFunnel` mantém etapas que a IA não devolveu.
+- Deploy: `strategy-generate`, `creative-generate` e `log-bot-event` (esta é chamada só com `secret` no corpo, sem Authorization → manter `--no-verify-jwt`).
 
 **Como desfazer.** Código: reverter o PR e redeployar `strategy-generate` e `creative-generate`. Proposta aberta sem a tela nova: `update marketing_ai_strategies set status='paused'
 where status='needs_review' and data_provenance ? 'proposal'` (ou aprovar por `update_strategy`). Contexto de mercado: sem deploy de `creative-generate` nada muda; peças já

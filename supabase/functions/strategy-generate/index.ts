@@ -539,7 +539,7 @@ Retorne APENAS um JSON:
       const { data: pastRows } = await admin.from('marketing_ai_strategies').select('thesis, data_provenance').eq('company_id', company.id).eq('kind', 'main').eq('status', 'paused').neq('id', strategyId).order('updated_at', { ascending: false }).limit(30)
       if (repeatsDiscarded(parsed1.thesis, (pastRows ?? []) as { thesis: string | null; data_provenance: Record<string, unknown> | null }[])) {
         await admin.from('marketing_ai_strategies').update(discardPatch(provRow?.data_provenance as Record<string, unknown> | null, 'system', new Date().toISOString())).eq('id', strategyId)
-        await admin.from('marketing_ai_strategy_log').insert({ company_id: company.id, strategy_id: prop.from_strategy_id, decision_type: prop.decision, recommendation: 'O check-up voltou a sugerir uma mudança com a mesma tese que você já descartou — não propus de novo.', reasoning: String(parsed1.thesis).slice(0, 600), status: 'dismissed' })
+        await closeProposalLog(admin, company.id, prop, 'dismissed', prop.reason || 'Mudança sugerida pelo check-up', 'não propus de novo: é a mesma tese que você já descartou')
         await logStrategyCost(admin, company.id, 'generate', true)
         lap('proposta repetida de uma descartada — parou')
         return
@@ -757,6 +757,11 @@ Retorne APENAS um JSON:
     }).eq('id', strategyId)
     lap(`parte 3 gravada, status=${fin.status}`)
     await logStrategyCost(admin, companyId, 'generate', true)
+    // Proposta pronta de verdade → só agora avisa o dono (Telegram/Atividades).
+    if (fin.status === 'needs_review' && prevProposal) {
+      const prefs = company.notification_prefs ?? {}
+      if (prefs.strategy !== false) await notifyStrategy(supabaseUrl, company.telegram_chat_id, companyId, 'STRATEGY_PIVOT', { proposal: true, decision: prevProposal.decision, reason: prevProposal.reason, reasoning: prevProposal.reasoning })
+    }
 
     if (goals.length) {
       await admin.from('marketing_ai_strategy_goals').insert(goals.map(g => ({ ...g, strategy_id: strategyId })))
@@ -849,25 +854,20 @@ Retorne APENAS um JSON: {"status": "ON_TRACK|NEEDS_ADJUSTMENT|UNDERPERFORMING|AT
         // Fase 3 (trava de aprovação): mudança de rumo NUNCA troca a estratégia sozinha. Gera uma PROPOSTA (status
         // 'needs_review') que o dono aprova ou descarta na tela da Estratégia; a ativa continua rodando. Já existe uma
         // proposta aberta? Não gera outra (só fica no log acima).
-        let proposed = false
         const { data: openRows } = await admin.from('marketing_ai_strategies').select('id, status, data_provenance').eq('company_id', company.id).eq('kind', 'main').eq('status', 'needs_review')
-        if (!((openRows ?? []) as { status: string; data_provenance: Record<string, unknown> | null }[]).some(isPendingProposal)) {
+        if (((openRows ?? []) as { status: string; data_provenance: Record<string, unknown> | null }[]).some(isPendingProposal)) {
+          // Já há uma proposta esperando o dono: este registro do check-up não fica aberto pra sempre.
+          await closeProposalLog(admin, company.id, { from_strategy_id: strategyId, decision: decision === 'terminate' ? 'terminate' : 'pivot', reason: String(parsed.recommendation), reasoning: '' }, 'dismissed', String(parsed.recommendation), 'já existe uma proposta aberta esperando você')
+        } else {
           try {
             const res = await fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ action: 'generate', company_id: company.id, cron_secret: cronSecret, as_proposal: true, proposal: { from_strategy_id: strategyId, decision, reason: String(parsed.recommendation), reasoning: String(parsed.reasoning ?? '') } }),
             })
-            proposed = res.ok
             if (!res.ok) console.error(`reanalyze[${strategyId}]: generate recusado (${res.status}): ${await res.text()}`)
           } catch (e) { console.error(`reanalyze[${strategyId}]: falha ao disparar generate:`, e) }
         }
-
-        const prefs = company.notification_prefs ?? {}
-        if (proposed && prefs.strategy !== false) {
-          await notifyStrategy(supabaseUrl, company.telegram_chat_id, company.id, 'STRATEGY_PIVOT', {
-            decision, reason: String(parsed.recommendation), reasoning: String(parsed.reasoning ?? ''),
-          })
-        }
+        // O aviso ao dono NÃO sai aqui: só quando a proposta de fato chega em 'needs_review' (fim do passo 3).
       }
     }
   } catch (err) {
@@ -968,13 +968,13 @@ Retorne APENAS um JSON:
 }
 
 // Fase 3: fecha o registro da proposta no log (o 'proposed' que o check-up gravou; se não achar, grava um novo).
-async function closeProposalLog(admin: SupaClient, companyId: string, p: ProposalMeta | null, status: 'approved' | 'dismissed', text: string): Promise<void> {
+async function closeProposalLog(admin: SupaClient, companyId: string, p: ProposalMeta | null, status: 'approved' | 'dismissed', text: string, note?: string): Promise<void> {
   try {
     if (p?.from_strategy_id) {
-      const { data: open } = await admin.from('marketing_ai_strategy_log').select('id').eq('company_id', companyId).eq('strategy_id', p.from_strategy_id).eq('status', 'proposed').in('decision_type', ['pivot', 'terminate']).order('created_at', { ascending: false }).limit(1).maybeSingle()
-      if (open?.id) { await admin.from('marketing_ai_strategy_log').update({ status }).eq('id', open.id); return }
+      const { data: open } = await admin.from('marketing_ai_strategy_log').select('id, recommendation').eq('company_id', companyId).eq('strategy_id', p.from_strategy_id).eq('status', 'proposed').in('decision_type', ['pivot', 'terminate']).order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (open?.id) { await admin.from('marketing_ai_strategy_log').update({ status, ...(note ? { recommendation: `${String(open.recommendation ?? '')} (${note})`.slice(0, 1200) } : {}) }).eq('id', open.id); return }
     }
-    await admin.from('marketing_ai_strategy_log').insert({ company_id: companyId, strategy_id: p?.from_strategy_id ?? null, decision_type: p?.decision ?? 'pivot', recommendation: text, reasoning: p?.reason ?? '', status })
+    await admin.from('marketing_ai_strategy_log').insert({ company_id: companyId, strategy_id: p?.from_strategy_id ?? null, decision_type: p?.decision ?? 'pivot', recommendation: note ? `${text} (${note})` : text, reasoning: p?.reason ?? '', status })
   } catch (e) { console.error('closeProposalLog falhou', e) }
 }
 
@@ -1263,10 +1263,17 @@ Deno.serve(async (req) => {
         return json({ ok: true })
       }
       // Aprovar: a atual vai pro histórico (pausada), a proposta vira a ativa e o calendário do resto da semana é pedido.
-      const { error: pErr } = await admin.from('marketing_ai_strategies').update({ status: 'paused', updated_at: now }).eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').neq('id', proposalId)
-      if (pErr) throw new Error(pErr.message)
-      const { error } = await admin.from('marketing_ai_strategies').update(approvePatch(prov, now)).eq('id', proposalId).eq('company_id', company.id).eq('status', 'needs_review')
+      // Ordem (nunca fica sem ativa): 1) ativa a proposta com UPDATE condicional (status='needs_review'); 0 linhas = alguém já decidiu →
+      // 409 sem tocar na ativa. 2) só então pausa as outras ativas. Entre 1 e 2 há, por milissegundos, duas ativas (inofensivo); se o 2 falhar,
+      // a proposta volta a 'needs_review' e a ativa antiga segue — nunca zero, nunca duas por muito tempo.
+      const { data: activated, error } = await admin.from('marketing_ai_strategies').update(approvePatch(prov, now)).eq('id', proposalId).eq('company_id', company.id).eq('status', 'needs_review').select('id')
       if (error) throw new Error(error.message)
+      if (!activated?.length) return json({ error: 'Essa proposta não está mais aberta.', code: 'not_pending' }, 409)
+      const { error: pErr } = await admin.from('marketing_ai_strategies').update({ status: 'paused', updated_at: now }).eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').neq('id', proposalId)
+      if (pErr) {
+        await admin.from('marketing_ai_strategies').update({ status: 'needs_review', data_provenance: prov, updated_at: now }).eq('id', proposalId).eq('company_id', company.id)
+        throw new Error(pErr.message)
+      }
       await closeProposalLog(admin, company.id, meta, 'approved', `Você aprovou a mudança: ${String(row.name ?? '').slice(0, 120)}.`)
       if (meta?.campaign_draft?.name) await createCampaignDraft(admin, company.id, meta.campaign_draft).catch(e => console.error('rascunho de campanha da proposta falhou', e))
       try {

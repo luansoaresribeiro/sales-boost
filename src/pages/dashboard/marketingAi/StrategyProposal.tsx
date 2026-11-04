@@ -13,7 +13,7 @@ const TX = {
     loading: 'Verificando…', error: 'Não foi possível verificar', retry: 'Tentar de novo',
     changes: 'O que muda', now: 'Hoje', proposed: 'Proposta', unchanged: 'igual ao de hoje', none: 'Não definido',
     thesis: 'Tese', biz: 'Objetivo de negócio', mkt: 'Objetivo de marketing', audience: 'Público', why: 'Por que o sistema propõe isso',
-    approve: 'Aprovar', discard: 'Descartar', working: 'Salvando…', errAct: 'Não foi possível salvar — tente de novo.',
+    approve: 'Aprovar', discard: 'Descartar', working: 'Salvando…', errAct: 'Não foi possível salvar — tente de novo.', decided: 'Essa proposta já foi decidida.',
     confirmApprove: 'Aprovar esta mudança? A estratégia atual vai para o histórico e a nova passa a valer, inclusive no calendário.',
   },
   en: {
@@ -21,7 +21,7 @@ const TX = {
     loading: 'Checking…', error: 'Could not verify', retry: 'Try again',
     changes: 'What changes', now: 'Today', proposed: 'Proposal', unchanged: 'same as today', none: 'Not defined',
     thesis: 'Thesis', biz: 'Business objective', mkt: 'Marketing objective', audience: 'Audience', why: 'Why the system proposes this',
-    approve: 'Approve', discard: 'Discard', working: 'Saving…', errAct: 'Could not save — try again.',
+    approve: 'Approve', discard: 'Discard', working: 'Saving…', errAct: 'Could not save — try again.', decided: 'This proposal was already decided.',
     confirmApprove: 'Approve this change? The current strategy goes to the history and the new one takes over, including the calendar.',
   },
 } as const
@@ -51,11 +51,15 @@ export default function StrategyProposal({ companyId, active, call, onChanged, r
   const decide = async (action: 'approve_proposal' | 'discard_proposal', id: string) => {
     if (action === 'approve_proposal' && !window.confirm(t.confirmApprove)) return
     setBusy(true); setErr('')
-    try { await call({ action, strategy_id: id }); await onChanged(); await load() } catch { setErr(t.errAct) }
+    try { await call({ action, strategy_id: id }); await onChanged(); await load() }
+    catch (e) {
+      // 409 not_pending: já foi decidida (outra aba/automático) → recarrega pra a proposta velha sumir.
+      if ((e as { code?: string })?.code === 'not_pending') { await onChanged(); await load(); setErr(t.decided) } else setErr(t.errAct)
+    }
     setBusy(false)
   }
 
-  if (st.s === 'none') return null
+  if (st.s === 'none') return err ? <div style={{ fontSize: '12.5px', color: MUTED, maxWidth: '1000px' }}>{err}</div> : null
   const box: React.CSSProperties = { background: CARD, border: `1px solid ${ORANGE}`, borderRadius: '12px', padding: '14px 16px', maxWidth: '1000px' }
   const lbl: React.CSSProperties = { fontSize: '9.5px', fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }
   const txt: React.CSSProperties = { fontSize: '12.5px', color: 'white', lineHeight: 1.55 }

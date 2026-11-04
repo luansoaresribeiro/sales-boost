@@ -22,7 +22,7 @@ async function callStrategy(token: string, body: Record<string, unknown>): Promi
     method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   })
   const data = await res.json().catch(() => ({})) as Record<string, unknown>
-  if (!res.ok) throw new Error(String(data.error ?? 'Erro'))
+  if (!res.ok) throw Object.assign(new Error(String(data.error ?? 'Erro')), { code: data.code })
   return data
 }
 

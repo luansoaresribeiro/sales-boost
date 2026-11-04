@@ -95,6 +95,13 @@ const proposed = [{ stage: 'awareness', pillar: 'a', audience: 'Investidores', o
 const lf = lockFunnel(cur, proposed)
 assert.equal(lf.length, 2); assert.deepEqual(lf.map(f => [f.audience, f.objective]), [['Compradores de 1º imóvel', 'Ser lembrado'], ['Quem já visitou', 'Agendar visita']]); assert.deepEqual(lf.map(f => f.message), ['NOVA', 'NOVA2'])
 assert.deepEqual(lockFunnel(cur, []), cur); assert.deepEqual(lockFunnel(cur, 'lixo'), cur); assert.deepEqual(lockFunnel(cur, [{ stage: 'retention', audience: 'x' }]), cur)
+// etapa que a IA não devolveu continua, intacta e na ordem original
+const three = [{ stage: 'awareness', audience: 'A1', objective: 'O1', message: 'm' }, { stage: 'conversion', audience: 'A2', objective: 'O2' }, { stage: 'retention', audience: 'A3', objective: 'O3' }]
+const only = lockFunnel(three, [{ stage: 'awareness', audience: 'NOVO', objective: 'NOVO', message: 'NOVA' }])
+assert.deepEqual(only.map(f => f.stage), ['awareness', 'conversion', 'retention']); assert.deepEqual(only.map(f => f.audience), ['A1', 'A2', 'A3']); assert.equal(only[0].message, 'NOVA'); assert.deepEqual(only[2], three[2])
+const reordered = lockFunnel(three, [{ stage: 'retention', audience: 'x', message: 'r' }, { stage: 'awareness', audience: 'y' }])
+assert.deepEqual(reordered.map(f => f.stage), ['awareness', 'conversion', 'retention']); assert.deepEqual(reordered.map(f => f.audience), ['A1', 'A2', 'A3'])
+ok('funil: etapa que a IA não devolveu fica (público incluso) na ordem original')
 ok('refresh: público e objetivo de cada etapa vêm da estratégia atual; mensagem/CTA podem mudar; etapa nova (público novo) não entra')
 const strategy = { thesis: 'T', strategic_focus: 'F', primary_business_objective: 'B', primary_marketing_objective: 'M', budget: { total: 100 }, funnel_plan: cur }
 const patch = refreshPatch(strategy, proposed, { central_line: 'nova' }, '2026-11-04T00:00:00Z')
@@ -131,11 +138,28 @@ ok('descartar → fora da lista (pausada, com discarded_at/by); aprovar → ativ
 
 // proposta repetida de uma descartada
 const T1 = 'Porque X, acreditamos Y. Por isso, vamos Z por 90 dias.'
-const past = [{ thesis: 'Outra tese antiga', data_provenance: { proposal: { discarded_at: '2026-10-01T00:00:00Z' } } }, { thesis: T1, data_provenance: { proposal: { discarded_at: '2026-10-20T00:00:00Z' } } }, { thesis: 'Pausada normal', data_provenance: {} }]
+const past = [{ thesis: 'Outra tese antiga', data_provenance: { proposal: { discarded_at: '2026-10-01T00:00:00Z', discarded_by: 'owner' } } }, { thesis: T1, data_provenance: { proposal: { discarded_at: '2026-10-20T00:00:00Z', discarded_by: 'owner' } } }, { thesis: 'Pausada normal', data_provenance: {} }]
 assert.ok(repeatsDiscarded('  porque x, acreditamos y.  por isso vamos z por 90 DIAS ', past)); assert.ok(!repeatsDiscarded('Tese diferente', past)); assert.ok(!repeatsDiscarded(T1, [{ thesis: T1, data_provenance: {} }])); assert.ok(!repeatsDiscarded(T1, []))
 assert.ok(!repeatsDiscarded('Outra tese antiga', past)); assert.ok(sameThesis('Á b', 'a  B')); assert.ok(!sameThesis('', ''))
 ok('mesma tese da ÚLTIMA descartada (ignora acento/caixa/pontuação) não é proposta de novo; tese diferente ou pausada sem descarte é')
+// descartada pelo SISTEMA (dono pediu estratégia nova) não bloqueia
+assert.ok(!repeatsDiscarded(T1, [{ thesis: T1, data_provenance: { proposal: { discarded_at: '2026-10-20T00:00:00Z', discarded_by: 'system' } } }]))
+assert.ok(!repeatsDiscarded(T1, [{ thesis: T1, data_provenance: { proposal: { discarded_at: '2026-10-20T00:00:00Z' } } }]))
+assert.ok(repeatsDiscarded(T1, [{ thesis: T1, data_provenance: { proposal: { discarded_at: '2026-10-01T00:00:00Z', discarded_by: 'owner' } } }, { thesis: 'X', data_provenance: { proposal: { discarded_at: '2026-10-20T00:00:00Z', discarded_by: 'system' } } }]))
+ok('só proposta descartada pelo dono (discarded_by=owner) suprime tese repetida')
 const s1 = src.slice(src.indexOf('async function runStep1'), src.indexOf('// ── PASSO 2'))
-assert.ok(s1.includes('repeatsDiscarded(') && s1.includes("status: 'dismissed'")); ok('runStep1 para e registra no log quando a tese repete a descartada')
+assert.ok(s1.includes('repeatsDiscarded(') && s1.includes("closeProposalLog(")); ok('runStep1 para e registra no log quando a tese repete a descartada')
 
+// aviso ao dono só no fim do passo 3 (proposta realmente em needs_review); log do check-up fecha nos casos suprimidos
+assert.ok(!reBody.includes('STRATEGY_PIVOT') && !/proposed\s*=\s*res\.ok/.test(reBody))
+const s3 = src.slice(src.indexOf('async function runStep3'), src.indexOf('async function runReanalyze'))
+assert.ok(/fin\.status === 'needs_review'[\s\S]*STRATEGY_PIVOT/.test(s3)); ok('STRATEGY_PIVOT da proposta sai só no fim do passo 3, com status needs_review')
+assert.ok(reBody.includes("'já existe uma proposta aberta esperando você'") && s1.includes("closeProposalLog(admin, company.id, prop, 'dismissed'")); ok('registro "proposed" do check-up é fechado (dismissed + motivo) quando suprimido por tese repetida ou proposta já aberta')
+const apr = src.slice(src.indexOf("action === 'approve_proposal'"), src.indexOf("if (action === 'update_strategy')"))
+const iAct = apr.indexOf("approvePatch(prov, now)"), iPause = apr.indexOf("status: 'paused', updated_at: now }).eq('company_id'")
+assert.ok(iAct > 0 && iPause > iAct && /\.select\('id'\)/.test(apr) && apr.includes('activated?.length') && apr.includes("code: 'not_pending'") && apr.includes("status: 'needs_review', data_provenance: prov")); ok('aprovar: ativa a proposta primeiro (condicional, 409 se 0 linhas), depois pausa as outras; falha ao pausar devolve a proposta')
+const bot = readFileSync(new URL('../supabase/functions/log-bot-event/index.ts', import.meta.url), 'utf8')
+assert.ok(bot.includes("case 'STRATEGY_PIVOT'") && bot.includes('Há uma proposta de mudança na sua estratégia esperando você. Abra a tela Estratégia para aprovar ou descartar.')); ok('log-bot-event tem o texto simples do aviso de proposta')
+const ui = readFileSync(new URL('../src/pages/dashboard/marketingAi/StrategyProposal.tsx', import.meta.url), 'utf8')
+assert.ok(ui.includes("'not_pending'") && ui.includes('Essa proposta já foi decidida.')); ok('tela: 409 not_pending recarrega e mostra "Essa proposta já foi decidida."')
 console.log(`\n${n} ok`)

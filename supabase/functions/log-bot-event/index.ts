@@ -29,6 +29,9 @@ function buildNotificationText(eventType: string, data?: Record<string, unknown>
       const novidade = newCount > 0 ? `${newCount} nova(s) desta vez.\n` : ''
       return `📋 Resumo do Agente de Marketing\n${openCount} oportunidade(s) aberta(s) aguardando você:\n${list}\n${novidade}Use /relatorio para mais detalhes.`
     }
+    case 'STRATEGY_PIVOT':
+      // Proposta do check-up (data.proposal) esperando o dono. Troca pedida pelo próprio dono mantém o texto genérico de sempre.
+      return data?.proposal ? '🧭 Há uma proposta de mudança na sua estratégia esperando você. Abra a tela Estratégia para aprovar ou descartar.' : (fallback ?? 'Nova atualização do Sales Boost.')
     case 'REPORT_READY':
       return `📊 Relatório disponível!\nPeríodo: ${(data?.period as string) ?? ''}\nScore: ${(data?.health_score as number) ?? ''}\nUse /relatorio para acessar.`
     case 'AGENT_ACTION': {
