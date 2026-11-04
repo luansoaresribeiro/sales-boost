@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { NOT_IGNORED_OR } from './signalIgnore'
 
 // 4 indicadores de decisão do hub (Fase 1 do plano pós-validação, 2026-11-03). Janela de 7 dias, regras fixas.
 // Só contagens (`head:true`); consulta que falha ou ainda carrega vira null = "sem dado ainda", nunca 0 fingido (regra 5).
@@ -28,7 +29,9 @@ export function useDecisionKpis(companyId?: string): { kpis: DecisionKpis; loadi
     Promise.all([
       // Data do sinal = observed_at (data da notícia, a coleta sempre grava); sem ela, vale created_at (sinais manuais).
       supabase.from('market_signals').select('id', head).eq('company_id', companyId).not('source_url', 'is', null).neq('source_url', '')
-        .or(`observed_at.gte.${sinceDay},and(observed_at.is.null,created_at.gte.${sinceIso})`),
+        .or(`observed_at.gte.${sinceDay},and(observed_at.is.null,created_at.gte.${sinceIso})`)
+        // 2º .or = AND com o 1º (postgrest-js acrescenta um parâmetro `or` por chamada; o PostgREST combina com AND). Sinal ignorado não conta.
+        .or(NOT_IGNORED_OR),
       supabase.from('growth_opportunities').select('id', head).eq('company_id', companyId).eq('status', 'suggested'),
       supabase.from('growth_opportunities').select('id', head).eq('company_id', companyId).eq('status', 'suggested').gte('created_at', sinceIso),
       supabase.from('marketing_ai_strategies').select('id', head).eq('company_id', companyId).eq('kind', 'main').eq('status', 'active'),

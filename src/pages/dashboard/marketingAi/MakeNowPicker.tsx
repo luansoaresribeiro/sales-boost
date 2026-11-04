@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLang } from '../../../contexts/LanguageContext'
 import { MUTED, BORDER, D, SUPABASE_URL } from './shared'
+import { usableFormats } from '../plusOptions'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -10,13 +11,13 @@ const TX = {
     title: '⚡ Gerar uma peça agora', desc: 'Escolha o tipo de criativo. Sai uma peça só, fora do calendário, com nota — e ela aparece aqui embaixo e em Aprovações. Nada vai ao ar sem você aprovar.',
     type: 'Tipo de criativo', item: 'Imóvel', auto: 'Escolher sozinho (o menos usado)', go: 'Gerar agora', going: 'Pedindo...',
     ok: '✅ Pedido feito! A peça aparece aqui em 1–2 minutos (vídeo pode levar mais).', err: 'Não deu pra gerar agora.',
-    video: 'Vídeo usa o teto mensal de IA (cerca de US$ 0,42 por vídeo).', loading: 'Carregando tipos...',
+    video: 'Vídeo usa o teto mensal de IA (cerca de US$ 0,42 por vídeo).', loading: 'Carregando tipos...', none: 'Nenhum tipo de criativo disponível agora (falta imóvel com fotos suficientes).',
   },
   en: {
     title: '⚡ Make one piece now', desc: 'Pick the creative type. One piece is made, outside the calendar, with a score — it shows up below and in Approvals. Nothing goes live without your approval.',
     type: 'Creative type', item: 'Listing', auto: 'Pick for me (least used)', go: 'Make now', going: 'Requesting...',
     ok: '✅ Requested! The piece shows up here in 1–2 minutes (video may take longer).', err: 'Could not make it now.',
-    video: 'Video uses the monthly AI cap (about US$ 0.42 per video).', loading: 'Loading types...',
+    video: 'Video uses the monthly AI cap (about US$ 0.42 per video).', loading: 'Loading types...', none: 'No creative type available right now (no listing with enough photos).',
   },
 } as const
 
@@ -40,8 +41,10 @@ export default function MakeNowPicker({ token, onRequested }: { token: string; o
   useEffect(() => {
     if (!token) return
     call({ action: 'make_now_options' }).then(r => r.json()).then((r: { formats?: Opt[]; items?: { id: string; title: string }[] }) => {
-      const f = Array.isArray(r.formats) ? r.formats : []
-      setFormats(f); setItems(Array.isArray(r.items) ? r.items : [])
+      const its = Array.isArray(r.items) ? r.items : []
+      // Mesma regra do menu "+": formato de imóvel sem imóvel elegível (≥ 5 fotos) daria erro 400, então nem aparece.
+      const f = usableFormats(Array.isArray(r.formats) ? r.formats : [], its)
+      setFormats(f); setItems(its)
       if (f[0]) setFormat(f[0].key)
     }).catch(() => setFormats([]))
   }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -65,7 +68,7 @@ export default function MakeNowPicker({ token, onRequested }: { token: string; o
     <div style={{ padding: '12px 14px', border: `1px solid ${BORDER}`, borderRadius: '10px', background: 'rgba(255,255,255,0.02)', marginBottom: '12px' }}>
       <div style={{ fontSize: '12.5px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>{t.title}</div>
       <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5, marginBottom: '10px' }}>{t.desc}</div>
-      {formats === null ? <div style={{ fontSize: '11px', color: MUTED }}>{t.loading}</div> : (
+      {formats === null ? <div style={{ fontSize: '11px', color: MUTED }}>{t.loading}</div> : formats.length === 0 ? <div style={{ fontSize: '11px', color: MUTED }}>{t.none}</div> : (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'flex-end' }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '10px', color: MUTED, minWidth: 0 }}>
             {t.type}

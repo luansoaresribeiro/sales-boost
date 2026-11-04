@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { NOT_IGNORED_OR } from './signalIgnore'
 
 // Dados reais das faixas de fluxo (um hook por agente). Regra 5: consulta que falha vira null = "sem dado ainda", nunca um 0 fingido.
 // O livro-caixa `agent_performance` é lido pela função company_flow_status (só agregados; confere que a empresa é de quem chama).
@@ -37,13 +38,13 @@ export function useMarketFlow(companyId?: string): { data: MarketFlow; loading: 
     const since7 = new Date(Date.now() - 7 * 24 * 3600_000).toISOString()
     Promise.all([
       flowStatus<NewsLedger>(companyId, 'news'),
-      supabase.from('market_signals').select('id', HEAD).eq('company_id', companyId),
-      supabase.from('market_signals').select('id', HEAD).eq('company_id', companyId).eq('collected_by', 'system'),
-      supabase.from('market_signals').select('id', HEAD).eq('company_id', companyId).gte('created_at', since7),
-      supabase.from('market_signals').select('created_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('market_signals').select('id', HEAD).eq('company_id', companyId).or(NOT_IGNORED_OR),
+      supabase.from('market_signals').select('id', HEAD).eq('company_id', companyId).eq('collected_by', 'system').or(NOT_IGNORED_OR),
+      supabase.from('market_signals').select('id', HEAD).eq('company_id', companyId).gte('created_at', since7).or(NOT_IGNORED_OR),
+      supabase.from('market_signals').select('created_at').eq('company_id', companyId).or(NOT_IGNORED_OR).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('marketing_ai_competitors').select('id', HEAD).eq('company_id', companyId),
-      supabase.from('marketing_ai_trends').select('id', HEAD).eq('company_id', companyId),
-      supabase.from('marketing_ai_trends').select('detected_at').eq('company_id', companyId).order('detected_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('marketing_ai_trends').select('id', HEAD).eq('company_id', companyId).neq('status', 'ignored'), // (precisa da migration 20261104100000_trends_ignore — ver PITFALLS)
+      supabase.from('marketing_ai_trends').select('detected_at').eq('company_id', companyId).neq('status', 'ignored').order('detected_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('marketing_ai_ideas').select('id', HEAD).eq('company_id', companyId).neq('status', 'dismissed'),
       supabase.from('marketing_ai_knowledge').select('meta').eq('company_id', companyId).eq('kind', 'product').limit(300),
       supabase.from('marketing_ai_knowledge').select('id', HEAD).eq('company_id', companyId).eq('module', 'dados').eq('kind', 'faq'),
@@ -85,7 +86,7 @@ export function useOppFlow(companyId?: string | null, refreshKey?: unknown): { d
     let cancelled = false
     Promise.all([
       flowStatus<OppLedger>(companyId, 'opportunities'),
-      supabase.from('market_signals').select('created_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('market_signals').select('created_at').eq('company_id', companyId).or(NOT_IGNORED_OR).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('growth_opportunities').select('id', HEAD).eq('company_id', companyId).eq('status', 'suggested'),
       supabase.from('growth_opportunities').select('id', HEAD).eq('company_id', companyId).eq('status', 'approved'),
       supabase.from('growth_opportunities').select('id', HEAD).eq('company_id', companyId).eq('status', 'approved').not('plan', 'is', null),

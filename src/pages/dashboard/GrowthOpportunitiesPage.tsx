@@ -11,6 +11,7 @@ import { useOppFlow } from './marketingAi/useFlowStripData'
 import { oppSteps } from './marketingAi/flowStripSteps'
 import { callMarketingAi, CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
 import MarketSignals from './marketSignals'
+import { NOT_IGNORED_OR } from './marketingAi/signalIgnore'
 import OpportunityCard, { type Opportunity } from './opportunityCard'
 import type { OppResultRow } from './resultsBrokers'
 import { PIECES_WAIT_MS, PLAN_WAIT_MS, type PieceStats } from './opportunityPlan'
@@ -80,7 +81,7 @@ export default function GrowthOpportunitiesPage() {
     const [opps, cat, sig, comp] = await Promise.all([
       supabase.from('growth_opportunities').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(60),
       supabase.from('marketing_ai_knowledge').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('kind', 'product'),
-      supabase.from('market_signals').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
+      supabase.from('market_signals').select('id', { count: 'exact', head: true }).eq('company_id', companyId).or(NOT_IGNORED_OR),
       supabase.from('marketing_ai_competitors').select('id, hashtags_used').eq('company_id', companyId).limit(50),
     ])
     const list = ((opps.data ?? []) as Opportunity[])

@@ -6,6 +6,30 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-04 — Pacote B2 (ações novas): menu do "+", ignorar sinal, ignorar tendência, "Ver evidência"
+
+**O que mudou:**
+1. **Botão "+" vira menu** (`PlusMenu.tsx`, `plusOptions.ts`, `usePlusOptions.ts`): Adicionar `<item>` (rótulo vem da ficha) · Gerar peça agora · Adicionar sinal.
+   Cada opção só aparece se funciona de ponta a ponta, checado **ao abrir o menu** (não no carregamento): "Gerar peça" chama `make_now_options` (cache ~60 s); vitrine
+   não chama; 402 e zero formatos usáveis somem; falha de rede mostra "Não foi possível verificar"; formato de imóvel sem imóvel com ≥ 5 fotos não conta (o servidor
+   devolveria 400) — `MakeNowPicker` usa a mesma regra. "Adicionar sinal" só com `opportunity_fields.location` na ficha (nada de setor fixo no código). "Gerar peça agora" mantém
+   o aviso de custo e o teto de sempre, sem confirmação extra (decisão da sessão principal). O atalho `sb:open-add` (sino/estratégia) continua direto no Catálogo.
+2. **Ignorar sinal** (sem migration): `market_signals.meta.ignored/ignored_at`, mesclando a meta; ignorados saem da lista, do motor de oportunidades, do gatilho do cron e das
+   contagens, e ficam num bloco "Ignorados (N)" com a evidência completa e "Restaurar". "Apagar" continua existindo.
+3. **Ignorar tendência**: migration aditiva `20261104100000_trends_ignore.sql` (`status` active|ignored + `ignored_at`; o dono só atualiza essas 2 colunas). A varredura semanal
+   (`creative-ideas`) não apaga a ignorada e não recria título igual (normalizado). Bloco "Tendências ignoradas (N)" com "Restaurar".
+4. **Card de tendência** (`marketingAi/TrendCard.tsx`, extraído de `CreativeAgent`): "Ver evidência" é a ação principal e mostra só o que existe (origem pelo `source`, data,
+   categoria, relevância, descrição completa; link só se a descrição trouxer http(s) válido) e a linha honesta "Os posts lidos nesta varredura não ficaram guardados". "Fazer carrossel"
+   virou secundária (mesma ação) e "Ignorar", terciária. A `TrendCard` de `MarketIntelTab.tsx` (outra coisa) não mudou.
+
+**Divergências com o plano:** a função pura do menu mora em `plusOptions.ts` (e não em `usePlusOptions.ts`) para o teste em Node importá-la sem o supabase; "Peças avulsas" não tem rota
+própria — o link leva a `/dashboard/marketing-ai/content` (Calendário, bloco "Peças avulsas"). Em vitrine, "Ignorar" mostra cadeado e abre o modal de plano.
+
+**Migration aplicada em produção em 2026-11-04** (conferido por SQL: colunas `status` default 'active' e `ignored_at`; UPDATE de `authenticated` só nessas 2 colunas; policy de UPDATE criada; 24 tendências existentes ficaram 'active').
+
+**Pendente (sessão principal/dono):** depois do merge, deploy de `creative-ideas`, `data-agent`, `marketing-ai`/`cron_opportunities` (quem importa `opportunityRun`/`opportunityCron`) e
+publicar o site (ordem e motivo em PITFALLS). Conferir por SQL de leitura que o filtro `.or` duplo do `useDecisionKpis` devolve a mesma contagem de antes quando nada está ignorado.
+
 ## 2026-11-04 — Pacote B1 (relações existentes, só tela): atividade do imóvel, origem do lead, tela de oportunidades
 
 **O que mudou (tudo na tela; sem migration, sem function, sem cron):**

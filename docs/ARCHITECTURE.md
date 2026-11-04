@@ -397,6 +397,17 @@ market_signals (id, company_id, kind, region, title, summary, source_name,
   source_url, observed_at, collected_by, meta, created_at)
   -- 2026-10-28 (migration 20261028120000): sinal de mercado com fonte e data.
   -- Etapa 1: vazia; a Etapa 2 deixa o cliente colar à mão (RLS de escrita já existe).
+  -- Pacote B2 (2026-11-04): "Ignorar sinal" grava meta.ignored=true + meta.ignored_at (MESCLA a meta; restaurar = ignored:false e
+  -- tira ignored_at). Sem migration. Quem NÃO conta sinal ignorado: motor de oportunidades (_shared/opportunityRun.ts), gatilho do cron
+  -- (_shared/opportunityCron.ts), contagens da tela (useFlowSummary, useFlowStripData, useDecisionKpis, GrowthOpportunitiesPage).
+  -- Filtro padrão: marketingAi/signalIgnore.ts → NOT_IGNORED_OR ('meta->>ignored.is.null,meta->>ignored.neq.true').
+  -- A lista (marketSignals.tsx, MarketFeed.tsx) mostra os ignorados num bloco recolhível "Ignorados (N)" com a evidência completa.
+marketing_ai_trends (... source: instagram_scan | diagnostico | null) -- 2026-11-04 (migration 20261104100000): + status text
+  -- ('active'|'ignored', default 'active', CHECK) + ignored_at timestamptz. O dono só atualiza essas 2 colunas (grant por coluna + policy
+  -- de UPDATE por empresa). Ignorada sai das sugestões ativas e a linha/evidência fica. Quem filtra: creative-ideas (não apaga a ignorada
+  -- e não recria título igual — _shared/trendIgnore.ts), data-agent, _shared/opportunityRun.ts, CreativeAgent (no servidor desde b130a27 — exige a migration), useMarketingAiData
+  -- (no cliente), useFlowStripData (.neq no servidor — exige a migration). NÃO filtram ainda: marketScan.feedCompany (recria as 'diagnostico'
+  -- sem olhar status — só roda no diagnóstico grátis) e marketing-ai (insere tendências 'sugeridas pela IA' sem checar título repetido).
 growth_opportunities (id, company_id, kind, title, description,
   commercial_problem, evidence jsonb [{type: fact|data|hypothesis, text,
   source, date}], item_ids uuid[], audience, suggested_action,
@@ -632,6 +643,15 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
   `scripts/test-results-brokers.mjs` (+ casos de corretor em `test-public-page.mjs`). As telas caem no comportamento antigo se a migration
   ainda não foi aplicada (consulta de leads sem as colunas novas; sem bloco de resultados).
   - **Reverter:** bloco "Como reverter" na migration; functions e site voltam pelo commit anterior.
+
+## Botão "+" (Pacote B2, 2026-11-04)
+`BusinessContextButton.tsx` abre `PlusMenu.tsx` (menu acima do botão). Regra "só aparece se funciona" em `plusOptions.ts` (função pura, testada
+por `scripts/test-plus-options.mjs`; o hook `usePlusOptions.ts` busca os dados só quando o menu abre, cache de ~60 s): **Adicionar `<item>`**
+(rótulo da ficha; vai a `/dashboard/catalogo?add=1`, que abre o formulário e limpa o parâmetro) · **Gerar peça agora** (só sem vitrine e com
+`make_now_options` 200 trazendo ≥ 1 formato usável: `post` ou imóvel com ≥ 5 fotos; 402/zero formatos some; falha mostra "Não foi possível
+verificar"; abre `MakeNowPicker` num modal e depois oferece "Ver em Peças avulsas" → `/dashboard/marketing-ai/content`) · **Adicionar sinal**
+(só sem vitrine e com `opportunity_fields.location` na ficha → `CatalogSchema.signals`; vai a `/dashboard/opportunities?add=signal`, que abre o
+formulário recolhido, rola e foca). O atalho `sb:open-add` do sino/estratégia continua indo direto ao Catálogo.
 
 ## Faixa de fluxo dos agentes (2026-11-01)
 

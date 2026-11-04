@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { bi, type Bilingual } from '../../lib/verticalPlaybook'
 import { CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
+import { isIgnored, setSignalIgnored, type SignalMeta } from './marketingAi/signalIgnore'
 
 // "Sinais de mercado" (Inteligência comercial, Etapa 2): o cliente cola à mão notícia/lançamento/obra/
 // preço anunciado. Grava direto em `market_signals` (RLS da empresa). O motor
@@ -23,7 +25,8 @@ const TX = {
     save: 'Salvar sinal', saving: 'Salvando…', plan: 'Disponível no plano — ver planos',
     saved: 'Sinal salvo. Se a análise automática estiver ligada na sua conta (estratégia automática, com plano ativo), o sistema considera o sinal na próxima análise: ela roda quando entra sinal novo (no mínimo 24 horas depois da última) e, de qualquer forma, uma vez por semana.',
     addManual: 'Adicionar sinal manual',
-    listTitle: 'Sinais cadastrados', empty: 'Nenhum sinal cadastrado ainda.', del: 'Apagar', confirmDel: 'Apagar este sinal?',
+    ignore: 'Ignorar', restore: 'Restaurar', ignoredTitle: (n: number) => `Ignorados (${n})`, ignoredNote: 'Fora das análises. A evidência continua guardada.', ignoredAt: 'Ignorado em', eIgnore: 'Não consegui ignorar. Tente de novo.', eRestore: 'Não consegui restaurar. Tente de novo.',
+    listTitle: 'Sinais cadastrados', empty: 'Nenhum sinal cadastrado ainda.', allIgnored: 'Todos os sinais estão ignorados.', del: 'Apagar', confirmDel: 'Apagar este sinal?',
     eTitle: 'Informe o título.', eSource: 'Informe o nome da fonte.', eUrl: 'O link precisa começar com http:// ou https:// e ser válido.', eDate: 'Informe a data (não pode ser futura).',
     eSave: 'Não consegui salvar. Tente de novo.', eDel: 'Não consegui apagar. Tente de novo.', loading: 'Carregando…', eLoad: 'Não consegui carregar os sinais.', retry: 'Tentar de novo',
     kinds: { news: 'Notícia', launch: 'Lançamento', infrastructure: 'Obra/infraestrutura', economy: 'Economia/juros', tourism: 'Turismo', rental: 'Aluguel', listing_price: 'Preço anunciado', supply: 'Oferta de imóveis', other: 'Outro' } as Record<Kind, string>,
@@ -37,14 +40,15 @@ const TX = {
     save: 'Save signal', saving: 'Saving…', plan: 'Available on a paid plan — see plans',
     saved: 'Signal saved. If automatic analysis is on for your account (automatic strategy, with an active plan), the system takes the signal into account in the next analysis: it runs when a new signal arrives (at least 24 hours after the last one) and, regardless, once a week.',
     addManual: 'Add manual signal',
-    listTitle: 'Saved signals', empty: 'No signals yet.', del: 'Delete', confirmDel: 'Delete this signal?',
+    ignore: 'Ignore', restore: 'Restore', ignoredTitle: (n: number) => `Ignored (${n})`, ignoredNote: 'Left out of the analyses. The evidence is kept.', ignoredAt: 'Ignored on', eIgnore: 'Could not ignore. Try again.', eRestore: 'Could not restore. Try again.',
+    listTitle: 'Saved signals', empty: 'No signals yet.', allIgnored: 'All signals are ignored.', del: 'Delete', confirmDel: 'Delete this signal?',
     eTitle: 'Enter the title.', eSource: 'Enter the source name.', eUrl: 'The link must start with http:// or https:// and be valid.', eDate: 'Enter the date (cannot be in the future).',
     eSave: 'Could not save. Try again.', eDel: 'Could not delete. Try again.', loading: 'Loading…', eLoad: 'Could not load the signals.', retry: 'Try again',
     kinds: { news: 'News', launch: 'Launch', infrastructure: 'Works/infrastructure', economy: 'Economy/interest rates', tourism: 'Tourism', rental: 'Rental', listing_price: 'Listed price', supply: 'Property supply', other: 'Other' } as Record<Kind, string>,
   },
 } as const
 
-interface Signal { id: string; kind: string; region: string | null; title: string; source_name: string | null; source_url: string | null; observed_at: string | null; collected_by: string | null }
+interface Signal { id: string; kind: string; region: string | null; title: string; source_name: string | null; source_url: string | null; observed_at: string | null; collected_by: string | null; meta: SignalMeta | null; summary: string | null }
 
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const fmtDate = (s: string | null) => (s ? s.split('-').reverse().join('/') : '')
@@ -52,6 +56,8 @@ const validUrl = (u: string) => { try { const p = new URL(u); return p.protocol 
 
 const input: React.CSSProperties = { width: '100%', boxSizing: 'border-box', padding: '9px 11px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${BORDER}`, borderRadius: '8px', color: 'white', fontSize: '13px', fontFamily: 'inherit' }
 const label: React.CSSProperties = { display: 'block', fontSize: '11.5px', color: MUTED, marginBottom: '4px' }
+
+const smallBtn: React.CSSProperties = { background: 'transparent', border: `1px solid ${BORDER}`, color: MUTED, borderRadius: '8px', padding: '5px 10px', fontSize: '12px', cursor: 'pointer', fontFamily: D }
 
 interface Props { lang: 'pt' | 'en'; companyId: string; verticalKey: string | null; readOnly: boolean; openPlanModal: () => void; onChanged: () => void }
 
@@ -64,10 +70,27 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
   const [saving, setSaving] = useState(false)
   const [loadErr, setLoadErr] = useState(false)
   const busy = useRef(false)
+  // "+" → Adicionar sinal (?add=signal): abre o formulário recolhido, rola até ele e foca o primeiro campo.
+  const [params, setParams] = useSearchParams()
+  const [addOpen, setAddOpen] = useState(false)
+  const [focusForm, setFocusForm] = useState(false)
+  const addRef = useRef<HTMLDetailsElement>(null)
+  useEffect(() => {
+    if (params.get('add') !== 'signal') return
+    setAddOpen(true); setFocusForm(true)
+    setParams(p => { const n = new URLSearchParams(p); n.delete('add'); return n }, { replace: true })
+  }, [params, setParams])
+  useEffect(() => {
+    if (!focusForm || !addOpen) return
+    addRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+    document.getElementById('ms-kind')?.focus({ preventScroll: true })
+    setFocusForm(false)
+  }, [focusForm, addOpen])
+  const [listErr, setListErr] = useState('')
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const loadList = useCallback(async () => {
-    const { data, error } = await supabase.from('market_signals').select('id, kind, region, title, source_name, source_url, observed_at, collected_by')
+    const { data, error } = await supabase.from('market_signals').select('id, kind, region, title, summary, source_name, source_url, observed_at, collected_by, meta')
       .eq('company_id', companyId).order('observed_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(50)
     setLoadErr(!!error)
     setList(error ? [] : (data ?? []) as Signal[])
@@ -122,6 +145,18 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
     busy.current = false
   }
 
+  const toggleIgnore = async (s: Signal, ignored: boolean) => {
+    if (readOnly) { openPlanModal(); return }
+    if (busy.current) return
+    busy.current = true
+    const ok = await setSignalIgnored(s.id, companyId, ignored)
+    if (!ok) setListErr(ignored ? t.eIgnore : t.eRestore) // lista não muda se falhou
+    else { setListErr(''); await loadList(); onChanged() }
+    busy.current = false
+  }
+
+  const active = (list ?? []).filter(s => !isIgnored(s.meta))
+  const ignoredList = (list ?? []).filter(s => isIgnored(s.meta))
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF(p => ({ ...p, [k]: e.target.value }))
 
   return (
@@ -131,7 +166,7 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
       <p style={{ color: '#FBBF24', fontSize: '12px', lineHeight: 1.5, margin: '0 0 14px' }}>{t.needSource}</p>
       <p style={{ color: MUTED, fontSize: '12px', lineHeight: 1.5, margin: '-6px 0 14px' }}>{t.autoNote}</p>
 
-      <details style={{ marginBottom: '4px' }}>
+      <details ref={addRef} open={addOpen} onToggle={e => setAddOpen((e.currentTarget as HTMLDetailsElement).open)} style={{ marginBottom: '4px' }}>
         <summary style={{ cursor: 'pointer', color: ORANGE, fontSize: '13px', fontWeight: 700, fontFamily: D }}>{t.addManual}</summary>
         <div style={{ marginTop: '12px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
@@ -163,12 +198,13 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
       </details>
 
       <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', margin: '18px 0 8px' }}>{t.listTitle}</div>
+      {listErr && <div role="alert" style={{ color: '#FBBF24', fontSize: '12.5px', marginBottom: '8px' }}>{listErr}</div>}
       {list === null ? <div style={{ color: MUTED, fontSize: '12.5px' }}>{t.loading}</div>
         : loadErr ? <div style={{ color: '#F87171', fontSize: '12.5px' }}>{t.eLoad} <button type="button" onClick={() => { setList(null); void loadList() }} style={{ background: 'none', border: 'none', color: ORANGE, cursor: 'pointer', fontSize: '12.5px', padding: 0 }}>{t.retry}</button></div>
-        : list.length === 0 ? <div style={{ color: MUTED, fontSize: '12.5px' }}>{t.empty}</div>
+        : active.length === 0 ? <div style={{ color: MUTED, fontSize: '12.5px' }}>{ignoredList.length > 0 ? t.allIgnored : t.empty}</div>
         : (
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {list.map(s => (
+            {active.map(s => (
               <li key={s.id} style={{ border: `1px solid ${BORDER}`, borderRadius: '10px', padding: '10px 12px', display: 'flex', gap: '10px', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <div style={{ minWidth: 0, fontSize: '12.5px', lineHeight: 1.5 }}>
                   <div style={{ color: 'white', fontWeight: 700, overflowWrap: 'anywhere' }}>
@@ -182,14 +218,40 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
                       : (s.source_name || '')}
                   </div>
                 </div>
-                <button onClick={() => remove(s)} aria-disabled={readOnly} title={readOnly ? t.plan : undefined}
-                  style={{ background: 'transparent', border: `1px solid ${BORDER}`, color: MUTED, borderRadius: '8px', padding: '5px 10px', fontSize: '12px', cursor: 'pointer', fontFamily: D, flexShrink: 0 }}>
-                  {readOnly ? '🔒 ' : ''}{t.del}
-                </button>
+                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                  <button onClick={() => toggleIgnore(s, true)} aria-disabled={readOnly} title={readOnly ? t.plan : undefined} style={smallBtn}>{readOnly ? '🔒 ' : ''}{t.ignore}</button>
+                  <button onClick={() => remove(s)} aria-disabled={readOnly} title={readOnly ? t.plan : undefined} style={smallBtn}>{readOnly ? '🔒 ' : ''}{t.del}</button>
+                </div>
               </li>
             ))}
           </ul>
         )}
+
+      {ignoredList.length > 0 && (
+        <details style={{ marginTop: '16px' }}>
+          <summary style={{ cursor: 'pointer', color: MUTED, fontSize: '12.5px', fontWeight: 700 }}>{t.ignoredTitle(ignoredList.length)}</summary>
+          <p style={{ color: MUTED, fontSize: '12px', margin: '6px 0 8px' }}>{t.ignoredNote}</p>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {ignoredList.map(s => (
+              <li key={s.id} style={{ border: `1px dashed ${BORDER}`, borderRadius: '10px', padding: '10px 12px', display: 'flex', gap: '10px', alignItems: 'flex-start', justifyContent: 'space-between', opacity: 0.85 }}>
+                <div style={{ minWidth: 0, fontSize: '12.5px', lineHeight: 1.5 }}>
+                  <div style={{ color: 'white', fontWeight: 700, overflowWrap: 'anywhere' }}>{s.title}</div>
+                  {s.summary && <div style={{ color: MUTED, overflowWrap: 'anywhere' }}>{s.summary}</div>}
+                  <div style={{ color: MUTED, overflowWrap: 'anywhere' }}>
+                    {[t.kinds[s.kind as Kind] ?? s.kind, s.region, fmtDate(s.observed_at)].filter(Boolean).join(' · ')}
+                    {' · '}
+                    {s.source_url && validUrl(s.source_url)
+                      ? <a href={s.source_url} target="_blank" rel="noopener noreferrer" style={{ color: ORANGE }}>{s.source_name || s.source_url}</a>
+                      : (s.source_name || '')}
+                    {s.meta?.ignored_at ? ` · ${t.ignoredAt} ${String(s.meta.ignored_at).slice(0, 10).split('-').reverse().join('/')}` : ''}
+                  </div>
+                </div>
+                <button onClick={() => toggleIgnore(s, false)} aria-disabled={readOnly} title={readOnly ? t.plan : undefined} style={{ ...smallBtn, flexShrink: 0 }}>{readOnly ? '🔒 ' : ''}{t.restore}</button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </section>
   )
 }

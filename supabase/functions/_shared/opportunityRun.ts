@@ -75,8 +75,8 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
     })(),
     rows<EventRow>(admin.from('engagement_events').select('media_ref, intent_detected, created_at').eq('company_id', companyId).gte('created_at', since).limit(3000), 'comentários'),
     rows<CompetitorRow>(admin.from('marketing_ai_competitors').select('name, instagram_url, posting_frequency_days, avg_engagement, followers, hashtags_used, notes, last_analyzed_at').eq('company_id', companyId).limit(50), 'concorrentes'),
-    rows<TrendRow>(admin.from('marketing_ai_trends').select('title, description, category, relevance, detected_at, source').eq('company_id', companyId).order('detected_at', { ascending: false }).limit(30), 'tendências'),
-    rows<SignalRow>(admin.from('market_signals').select('id, kind, region, title, summary, source_name, source_url, observed_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(50), 'sinais de mercado'),
+    rows<TrendRow>(admin.from('marketing_ai_trends').select('title, description, category, relevance, detected_at, source').eq('company_id', companyId).neq('status', 'ignored').order('detected_at', { ascending: false }).limit(30), 'tendências'),
+    rows<SignalRow>(admin.from('market_signals').select('id, kind, region, title, summary, source_name, source_url, observed_at').eq('company_id', companyId).or('meta->>ignored.is.null,meta->>ignored.neq.true').order('created_at', { ascending: false }).limit(50), 'sinais de mercado'),
   ])
 
   const catalog: CatalogItem[] = items.map(i => ({ id: i.id, title: i.title, fields: i.meta?.fields ?? {}, photoCount: i.meta?.photos?.length ?? 0 }))
