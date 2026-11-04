@@ -975,7 +975,8 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
   consulta `marketing_ai_trends` com `.neq('status','ignored')` no servidor e, sem a coluna `status`, essas contagens dão erro (a faixa mostra "não
   foi possível verificar"). (2) `creative-ideas`, `data-agent` e as functions que usam `_shared/opportunityRun.ts`/`opportunityCron.ts` só depois da
   migration: o `.neq('status', …)` numa coluna que não existe faz a consulta falhar e a varredura apaga as tendências sem recriar. O resto da tela
-  (CreativeAgent, useMarketingAiData) filtra no cliente de propósito e não quebra sem a coluna.
+  (useMarketingAiData) filtra no cliente de propósito e não quebra sem a coluna. **Divergência (QA B2, commit b130a27):** o CreativeAgent passou a
+  filtrar no servidor (`.neq`/`.eq('status', …)`, consultas separadas de ativas e ignoradas) e depende da migration — já aplicada em produção em 2026-11-04.
 - **Filtro de "sinal não ignorado" precisa ser `.or('meta->>ignored.is.null,meta->>ignored.neq.true')`** (`NOT_IGNORED_OR`). `.neq('meta->>ignored','true')`
   sozinho descarta as linhas em que a chave NÃO existe (NULL ≠ 'true' dá NULL) e esconderia todos os sinais normais. Dois `.or()` na mesma consulta
   funcionam (postgrest-js acrescenta um parâmetro `or` por chamada; o PostgREST combina com AND) — confira numa consulta de leitura ao mexer. E

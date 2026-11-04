@@ -25,7 +25,9 @@
 **Divergências com o plano:** a função pura do menu mora em `plusOptions.ts` (e não em `usePlusOptions.ts`) para o teste em Node importá-la sem o supabase; "Peças avulsas" não tem rota
 própria — o link leva a `/dashboard/marketing-ai/content` (Calendário, bloco "Peças avulsas"). Em vitrine, "Ignorar" mostra cadeado e abre o modal de plano.
 
-**Pendente (sessão principal/dono):** aplicar a migration antes do merge; depois deploy de `creative-ideas`, `data-agent`, `marketing-ai`/`cron_opportunities` (quem importa `opportunityRun`/`opportunityCron`) e
+**Migration aplicada em produção em 2026-11-04** (conferido por SQL: colunas `status` default 'active' e `ignored_at`; UPDATE de `authenticated` só nessas 2 colunas; policy de UPDATE criada; 24 tendências existentes ficaram 'active').
+
+**Pendente (sessão principal/dono):** depois do merge, deploy de `creative-ideas`, `data-agent`, `marketing-ai`/`cron_opportunities` (quem importa `opportunityRun`/`opportunityCron`) e
 publicar o site (ordem e motivo em PITFALLS). Conferir por SQL de leitura que o filtro `.or` duplo do `useDecisionKpis` devolve a mesma contagem de antes quando nada está ignorado.
 
 ## 2026-11-04 — Pacote B1 (relações existentes, só tela): atividade do imóvel, origem do lead, tela de oportunidades

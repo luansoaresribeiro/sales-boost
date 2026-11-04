@@ -405,7 +405,7 @@ market_signals (id, company_id, kind, region, title, summary, source_name,
 marketing_ai_trends (... source: instagram_scan | diagnostico | null) -- 2026-11-04 (migration 20261104100000): + status text
   -- ('active'|'ignored', default 'active', CHECK) + ignored_at timestamptz. O dono só atualiza essas 2 colunas (grant por coluna + policy
   -- de UPDATE por empresa). Ignorada sai das sugestões ativas e a linha/evidência fica. Quem filtra: creative-ideas (não apaga a ignorada
-  -- e não recria título igual — _shared/trendIgnore.ts), data-agent, _shared/opportunityRun.ts, CreativeAgent (no cliente), useMarketingAiData
+  -- e não recria título igual — _shared/trendIgnore.ts), data-agent, _shared/opportunityRun.ts, CreativeAgent (no servidor desde b130a27 — exige a migration), useMarketingAiData
   -- (no cliente), useFlowStripData (.neq no servidor — exige a migration). NÃO filtram ainda: marketScan.feedCompany (recria as 'diagnostico'
   -- sem olhar status — só roda no diagnóstico grátis) e marketing-ai (insere tendências 'sugeridas pela IA' sem checar título repetido).
 growth_opportunities (id, company_id, kind, title, description,
