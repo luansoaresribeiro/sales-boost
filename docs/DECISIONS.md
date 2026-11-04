@@ -6,6 +6,73 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-04 — Marketing AI profissional + Fábrica de Agentes 3D: arquitetura aprovada, execução condicionada ao gate da Fase 2 (dono)
+
+**Decisão (texto do dono):**
+> O plano de profissionalização do Marketing AI e da Fábrica de Agentes 3D está aprovado como camada de visualização do sistema existente. A preparação de design, documentação e critérios de aceite pode avançar imediatamente, sem alterações no código de produção.
+>
+> A execução começa somente após a avaliação do gate da Fase 2. Se aprovado, inicia-se pelo PR 1 (Bento), seguido do PR 2 (fábrica estática com estados reais) e do PR 3 (movimento orientado por eventos reais).
+>
+> Nenhuma etapa poderá criar funcionalidades comerciais, agentes, tabelas ou complexidade adicional fora do escopo aprovado.
+>
+> A prioridade central do Sales Boost continua sendo identificar oportunidades comerciais relevantes e ajudar a imobiliária a transformá-las em ações e demanda.
+
+**O resultado do gate da Fase 2 decide a ordem:**
+
+| Resultado do gate | O que fazer |
+|---|---|
+| Passou | Começar o PR 1 (Bento). |
+| Passou em parte | Corrigir primeiro o que impede a validação. |
+| Falhou | Concentrar na qualidade da inteligência de mercado. |
+
+Em qualquer um dos casos:
+- O PR 2 só começa com as condições de uso (abaixo) registradas.
+- O PR 3 só começa com o PR 2 juntado e validado.
+
+**Hierarquia da tela:**
+- **A. Inteligência do negócio (Bento):** o valor comercial, a parte mais importante.
+- **B. Fábrica 3D:** a operação dos agentes.
+- **C. Cards de cada agente:** continuam como estão.
+
+**Regras da fábrica (resumo; o plano completo foi aprovado na sessão de 04/11):**
+- **Estações:** são as 5 que já existem — Inteligência de Mercado, Motor de Oportunidades, Agente de Estratégia, Ativação, Resultados e Aprendizado. Nenhum agente novo.
+- **"Processando" só com execução real gravada.** Hoje isso existe só em `agent_actions.execution_status = EXECUTING`.
+  - As outras estações mostram a última rodada e "atualizado às HH:MM".
+  - `QUEUED` aparece como "Agendada", "Na fila" (até 10 min depois do horário) ou "Atrasada" (passou de 10 min), nunca como "Processando".
+- **Selo de maturidade em cada estação,** que só muda quando o gate correspondente for aprovado aqui:
+
+  | Selo | Estações |
+  |---|---|
+  | Operacional | Mercado e Estratégia |
+  | Em validação | Oportunidades e Ativação |
+  | Aguardando dados | Resultados |
+
+- **Movimento só com evento real.**
+  - Cada evento tem uma identificação única (`tabela:id:estado`) e anima uma vez só, mesmo depois de recarregar a página ou de o tempo real reconectar.
+  - Um evento que acontecer durante a queda da conexão precisa aparecer depois que ela voltar.
+- **Releitura que falha mantém o último dado bom,** marcado como "desatualizado". Nunca é mostrado como dado atual.
+- **Teste de falha:**
+  - É uma linha descartável em `agent_actions`, na Teste Zero, já gravada como `FAILED`, com `source='test_factory'`. Não pode ser executada nem publicar nada.
+  - A evidência vai para `qa-relatorios/`. A linha é apagada depois do teste, e nenhum registro real é alterado.
+- **Sem backend novo, sem migration e sem tabela nova.**
+  - As tabelas fora do tempo real (`growth_opportunities`, `market_signals`, `market_intel_runs`, `marketing_ai_strategies`) são relidas quando a aba volta a ficar visível e a cada 10 min.
+- **Desempenho é meta, não garantia:**
+  - 50 quadros por segundo ou mais medidos em aparelhos de referência;
+  - nenhum laço de desenho com a cena parada;
+  - three.js carregado à parte;
+  - versão 2D no celular e quando não houver WebGL.
+
+**Condições de uso da referência 3D** (`agentic-factory-3d.tsx`, repositório `github.com/eugeneshilow/agentic-3d-templates`, conferido em 04/11/2026):
+- **Origem da permissão:** está no README do repositório. Trechos:
+  - "Licensed for use in your own projects, personal or commercial, including sites you build for clients."
+  - "Redistributing or reselling the templates themselves, as templates or starters, is not permitted."
+- **Sem licença formal identificada:** o repositório não tem arquivo LICENSE. Não é licença open source (nem MIT nem Apache).
+- **O que é permitido:** uso interno no Sales Boost, nos termos publicados. O README não exige atribuição.
+- **O que é proibido:** redistribuir ou revender o template.
+- **Antes do PR 2:** conferir de novo o README. Se os termos mudarem e deixarem de permitir o uso, a cena é escrita do zero, só inspirada na ideia.
+- **No código:** o PR 2 terá um comentário com a origem.
+- **Conteúdo fictício do original:** nomes, valores como "$29" e filas inventadas não entram na tela, pela regra 5 (nunca inventar números).
+
 ## 2026-11-04 — Reconciliação dos gates: Fase 3 implementada antes do gate completo da Fase 2 (dono)
 
 **O que de fato foi aprovado em 04/11:**
