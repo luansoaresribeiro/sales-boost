@@ -656,7 +656,7 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 ### As 5 fases
 1. **Tela de decisão (hub).** ✅ *Feita e no ar (PR #93, 2026-11-03; ver [DECISIONS.md](DECISIONS.md)).* 4 indicadores de decisão numa **janela de 7 dias**, com regras fixas e visíveis (cada indicador diz de
    onde vem e como é calculado; sem dado = "sem dado ainda", nunca 0 fingido).
-2. **Inteligência.** Interpretação de sinais **só dos novos, deduplicados**, com **limite de chamadas de IA e custo registrado**
+2. **Inteligência.** 🟡 **Código pronto (2026-11-04), aguardando aprovação do dono** — branch `claude/nifty-shannon-ysp818-fase2`: filtro de qualidade na ficha (começa em `audit`), registro por rodada (`market_intel_runs`), análise que não repete quando nada mudou e bloco "O que mudou" (ver [DECISIONS.md](DECISIONS.md#2026-11-04--fase-2-inteligência-de-mercado-qualidade-registro-por-rodada-e-sem-reinterpretar)). **Falta:** 2 migrations, deploy de `marketing-ai`, site, e depois trocar a ficha de `audit` para `enforce`. Fica de fora desta entrega: "semana vs. semana anterior" com "cresceu" só com evidência dos dois lados (a tela mostra o que mudou desde a última rodada, não a comparação semanal). Interpretação de sinais **só dos novos, deduplicados**, com **limite de chamadas de IA e custo registrado**
    (livro-caixa). "O que mudou" compara **semana vs. semana anterior** e só diz "cresceu" quando há evidência (número real dos dois lados).
 3. **Direcionamento da estratégia.** Os sinais influenciam os **temas da semana**, mas **nunca** a tese, o público ou o posicionamento
    sem aprovação do dono. Mudança de estratégia nunca é automática.

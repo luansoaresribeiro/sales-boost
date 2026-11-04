@@ -19,7 +19,7 @@ export interface Evidence { type: EvType; text: string; source: string | null; d
 // fact = contado dos dados da própria empresa; data = coletado de fora (concorrente, sinal de mercado, tendência).
 // numTags: números do texto que o código SABE a unidade (preço = cur, quartos = bed) — a validação de unidade usa isso.
 export interface NumTag { value: string; unit: 'cur' | 'bed' }
-export interface Fact { id: string; type: 'fact' | 'data'; text: string; source: string; date: string | null; origin: string; numTags?: NumTag[] }
+export interface Fact { id: string; type: 'fact' | 'data'; text: string; source: string; date: string | null; origin: string; numTags?: NumTag[]; signal_id?: string }
 // Textos de setor vêm da FICHA (config.opportunity_texts, regra 6); sem eles valem os genéricos abaixo.
 export interface OppTexts { hypotheses?: string[]; caveat?: string; audienceHint?: string; marketClaims?: string[] }
 
@@ -83,11 +83,11 @@ const AI_SOURCES = /^(ai|ia|llm|claude|gpt|model|modelo|sonnet|haiku|raciocinio|
 
 class FactBook {
   facts: Fact[] = []
-  add(type: 'fact' | 'data', text: string, source: string, date: string | null, origin: string, numTags?: NumTag[]): string {
+  add(type: 'fact' | 'data', text: string, source: string, date: string | null, origin: string, numTags?: NumTag[], signalId?: string): string {
     const dup = this.facts.find(f => f.text === text && f.source === source)
     if (dup) return dup.id
     const id = `F${this.facts.length + 1}`
-    this.facts.push({ id, type, text, source, date, origin, ...(numTags?.length ? { numTags } : {}) })
+    this.facts.push({ id, type, text, source, date, origin, ...(numTags?.length ? { numTags } : {}), ...(signalId ? { signal_id: signalId } : {}) })
     return id
   }
 }
@@ -102,7 +102,10 @@ function describeItem(it: CatalogItem, inp: EngineInput): { text: string; tags: 
   return { text: [it.title, part(fm.type), part(fm.location), part(fm.deal), part(fm.bedrooms), part(fm.price)].filter(Boolean).join(' · '), tags }
 }
 
-export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: Candidate[] } {
+/** Ids dos sinais de mercado que sustentam algum dos fatos dados (sem repetir). */
+export const signalIdsOf = (facts: Fact[]): string[] => [...new Set(facts.map(f => f.signal_id).filter((x): x is string => !!x))]
+
+export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: Candidate[]; usedSignalIds: string[] } {
   const { lang } = inp
   const book = new FactBook()
   const candidates: Candidate[] = []
@@ -237,12 +240,12 @@ export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: 
   }
 
   // ── market_change: sinal/tendência COM fonte E item do catálogo na mesma região ─────────────
-  type Ext = { text: string; source: string; date: string | null; origin: string; hay: string; region: string }
+  type Ext = { id?: string; text: string; source: string; date: string | null; origin: string; hay: string; region: string }
   const ext: Ext[] = []
   for (const s of inp.signals) {
     const src = [s.source_name?.trim(), s.source_url?.trim() ? `(${s.source_url.trim()})` : ''].filter(Boolean).join(' ')
     if (!s.title?.trim() || !src) continue
-    ext.push({ text: clip(`${s.title.trim()}${s.summary?.trim() ? ` — ${s.summary.trim()}` : ''}`, 320), source: src, date: dateOnly(s.observed_at), origin: `signal:${norm(s.source_name ?? s.source_url ?? '')}`, hay: norm(`${s.title} ${s.summary ?? ''}`), region: norm(s.region ?? '') })
+    ext.push({ id: s.id, text: clip(`${s.title.trim()}${s.summary?.trim() ? ` — ${s.summary.trim()}` : ''}`, 320), source: src, date: dateOnly(s.observed_at), origin: `signal:${norm(s.source_name ?? s.source_url ?? '')}`, hay: norm(`${s.title} ${s.summary ?? ''}`), region: norm(s.region ?? '') })
   }
   for (const t of inp.trends) {
     const src = (t.source ?? '').trim()
@@ -255,7 +258,7 @@ export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: 
     const hits = ext.filter(e => (e.region && (e.region === rk || re.test(e.region))) || re.test(e.hay)).slice(0, 4)
     if (hits.length === 0) continue
     const ids = reg.items.slice(0, 2).map(catalogFact)
-    for (const h of hits) ids.push(book.add('data', h.text, h.source, h.date, h.origin))
+    for (const h of hits) ids.push(book.add('data', h.text, h.source, h.date, h.origin, undefined, h.id))
     const origins = new Set(hits.map(h => h.origin))
     candidates.push({
       id: '', kind: 'market_change', item_ids: reg.items.map(i => i.id), fact_ids: ids, region: reg.name, forceHypothesis: false, hypotheses: [],
@@ -270,7 +273,8 @@ export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: 
   }
 
   candidates.forEach((c, i) => { c.id = `C${i + 1}` })
-  return { facts: book.facts, candidates }
+  const used = new Set(candidates.flatMap(c => c.fact_ids))
+  return { facts: book.facts, candidates, usedSignalIds: signalIdsOf(book.facts.filter(f => used.has(f.id))) }
 }
 
 function itemsWord(n: number, lang: Lang): string {

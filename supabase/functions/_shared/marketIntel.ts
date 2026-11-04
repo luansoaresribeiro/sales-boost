@@ -49,6 +49,40 @@ export interface IntelNewsConfig {
   max_searches_per_day: number
   max_searches_per_month: number
   max_new_per_day: number
+  quality: IntelQuality
+}
+/** Filtro de qualidade da ficha (`news.quality`, Fase 2). mode: off = não avalia; audit = avalia e só registra; enforce = reprova de verdade. */
+export type QualityMode = 'off' | 'audit' | 'enforce'
+export interface IntelQuality {
+  mode: QualityMode
+  version: number
+  block_url_patterns: string[]      // trecho (minúsculo) do caminho da URL
+  block_title_terms: string[]       // termo solto no título (sem acento/caixa, borda de palavra)
+  block_title_all: string[][]       // grupos: bloqueia se o título tiver TODOS os termos do grupo (E)
+  min_summary_chars: number         // 0 = não exige
+  kind_terms: Record<string, string[]> // tipo → o texto precisa citar ao menos um termo (tipo sem lista = livre)
+  max_per_host_per_run: number      // 0 = sem limite
+  trusted_domains: string[]         // passam pelas regras de bloqueio
+  min_score: number | null          // nota mínima da fonte (null = não filtra)
+}
+export const QUALITY_OFF: IntelQuality = { mode: 'off', version: 1, block_url_patterns: [], block_title_terms: [], block_title_all: [], min_summary_chars: 0, kind_terms: {}, max_per_host_per_run: 0, trusted_domains: [], min_score: null }
+const strList = (v: unknown, max: number, maxLen = 120): string[] => (Array.isArray(v) ? v : []).map(x => String(x ?? '').toLowerCase().trim()).filter(x => x && x.length <= maxLen).slice(0, max)
+/** Saneia `news.quality`: ausente/lixo = desligado (nunca bloqueia por engano). */
+export function parseQuality(raw: unknown): IntelQuality {
+  if (!raw || typeof raw !== 'object') return { ...QUALITY_OFF }
+  const q = raw as Record<string, unknown>
+  const mode: QualityMode = q.mode === 'audit' || q.mode === 'enforce' ? q.mode : 'off'
+  const kt: Record<string, string[]> = {}
+  if (q.kind_terms && typeof q.kind_terms === 'object') for (const [k, v] of Object.entries(q.kind_terms as Record<string, unknown>)) { const l = strList(v, 60); if (NEWS_KINDS.includes(k as SignalKind) && l.length) kt[k] = l }
+  const sc = q.min_score == null || q.min_score === '' ? NaN : Number(q.min_score)
+  return {
+    mode, version: clamp(q.version, 1, 1000, 1),
+    block_url_patterns: strList(q.block_url_patterns, 60), block_title_terms: strList(q.block_title_terms, 100),
+    block_title_all: (Array.isArray(q.block_title_all) ? q.block_title_all : []).map(g => strList(g, 6)).filter(g => g.length >= 2).slice(0, 40),
+    min_summary_chars: clamp(q.min_summary_chars, 0, 300, 0), kind_terms: kt, max_per_host_per_run: clamp(q.max_per_host_per_run, 0, 10, 0),
+    trusted_domains: strList(q.trusted_domains, 50).filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)),
+    min_score: Number.isFinite(sc) && sc >= 0 && sc <= 1 ? sc : null,
+  }
 }
 export interface IntelConfig { cap_usd?: number; split: Record<MarketSource, number>; news: IntelNewsConfig | null }
 
@@ -83,11 +117,12 @@ export function parseIntelConfig(raw: unknown): IntelConfig | null {
     if (topics.length) {
       out.news = {
         city, topics,
-        exclude_domains: (Array.isArray(nn.exclude_domains) ? nn.exclude_domains : []).map(d => String(d ?? '').toLowerCase().trim()).filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)).slice(0, 50),
+        exclude_domains: (Array.isArray(nn.exclude_domains) ? nn.exclude_domains : []).map(d => String(d ?? '').toLowerCase().trim()).filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)).slice(0, 80),
         days: clamp(nn.days, 1, 90, 30), max_regions: clamp(nn.max_regions, 1, 6, 3), max_results: clamp(nn.max_results, 1, HARD_MAX_RESULTS, 5),
         max_searches_per_day: clamp(nn.max_searches_per_day, 1, HARD_MAX_SEARCHES_PER_DAY, 8),
         max_searches_per_month: clamp(nn.max_searches_per_month, 1, 1000, 250),
         max_new_per_day: clamp(nn.max_new_per_day, 1, 30, 10),
+        quality: parseQuality(nn.quality),
       }
     }
   }

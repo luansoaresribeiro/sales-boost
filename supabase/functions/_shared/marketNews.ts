@@ -3,10 +3,11 @@
 // vem da ficha (`config.market_intel.news`, regra 6; limites em dólar e rotação em marketIntel.ts). Nada é inventado: o sinal guarda título, trecho, domínio, link e data
 // da própria fonte; sem data válida, sem região no texto, portal de anúncio ou link não-https = descartado.
 
-import { normalizeTitle, normalizeUrl, type SignalKind } from './marketIntel.ts'
+import { QUALITY_OFF, normalizeTitle, normalizeUrl, type IntelQuality, type SignalKind } from './marketIntel.ts'
 
-export interface TavilyHit { title?: unknown; url?: unknown; content?: unknown; published_date?: unknown }
-export interface NewsSignal { kind: SignalKind; region: string; title: string; summary: string | null; source_name: string; source_url: string; observed_at: string; collected_by: 'system'; meta: { provider: 'tavily'; topic: SignalKind } }
+export interface TavilyHit { title?: unknown; url?: unknown; content?: unknown; published_date?: unknown; score?: unknown }
+export interface NewsMeta { provider: 'tavily'; topic: SignalKind; score?: number | null; quality_v?: number; quality_ok?: boolean }
+export interface NewsSignal { kind: SignalKind; region: string; title: string; summary: string | null; source_name: string; source_url: string; observed_at: string; collected_by: 'system'; meta: NewsMeta }
 
 export const normalize = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
@@ -60,24 +61,83 @@ export function validSourceDate(v: unknown, nowMs: number, days: number): string
   return new Date(t).toISOString().slice(0, 10)
 }
 
-/** Resultado da Tavily -> sinais aceitos (os filtros de verdade, em código). `seen` evita repetir link; `seenTitles` repete título (mesma notícia em outro portal). */
-export function filterHits(hits: TavilyHit[], o: { region: string; kind: SignalKind; days: number; excludeDomains: string[]; nowMs: number; seen?: Set<string>; seenTitles?: Set<string> }): NewsSignal[] {
-  const out: NewsSignal[] = []
+/** Termo com borda de palavra só nas letras (dígito colado vale: "435m²" casa "m²"; "cada venda" não casa "a venda"). `prefix`: só a borda da esquerda ("hotel" casa "hoteleira"). Texto e termo já normalizados. */
+export function hasTerm(textNorm: string, termNorm: string, prefix = false): boolean {
+  if (!termNorm) return false
+  let from = 0
+  for (;;) {
+    const i = textNorm.indexOf(termNorm, from)
+    if (i < 0) return false
+    const before = i === 0 ? '' : textNorm[i - 1], after = textNorm[i + termNorm.length] ?? ''
+    if (!/[a-z]/.test(before) && (prefix || !/[a-z]/.test(after))) return true
+    from = i + 1
+  }
+}
+
+export type QualityVerdict = 'ok' | 'block_url' | 'block_title' | 'short_summary' | 'kind_mismatch' | 'host_cap' | 'low_score'
+export interface QualityInput { kind: string; title: string; summary: string | null; source_url: string; score?: number | null }
+
+/** Qualidade do sinal pelas regras da ficha (pura). 'ok' ou o motivo. Fonte de confiança passa; regra desligada nunca reprova. `hostCount` = quantos do mesmo site já entraram na rodada. */
+export function classifySignalQuality(s: QualityInput, q: IntelQuality, ctx: { hostCount?: number } = {}): QualityVerdict {
+  if (q.mode === 'off') return 'ok'
+  const host = httpsHost(s.source_url)
+  if (host && isExcluded(host, q.trusted_domains)) return 'ok'
+  let path = ''
+  try { const u = new URL(s.source_url); path = (u.pathname + u.search).toLowerCase() } catch { /* sem caminho */ }
+  if (path && q.block_url_patterns.some(p => path.includes(p))) return 'block_url'
+  const title = normalize(s.title)
+  if (q.block_title_terms.some(t => hasTerm(title, normalize(t))) || q.block_title_all.some(g => g.every(t => hasTerm(title, normalize(t))))) return 'block_title'
+  if (q.min_summary_chars > 0 && (s.summary ?? '').length < q.min_summary_chars) return 'short_summary'
+  const kt = q.kind_terms[s.kind]
+  if (kt?.length) { const text = normalize(`${s.title} ${s.summary ?? ''}`); if (!kt.some(t => hasTerm(text, normalize(t), true))) return 'kind_mismatch' }
+  if (q.max_per_host_per_run > 0 && (ctx.hostCount ?? 0) >= q.max_per_host_per_run) return 'host_cap'
+  if (q.min_score != null && typeof s.score === 'number' && s.score < q.min_score) return 'low_score'
+  return 'ok'
+}
+
+export interface FilterReport { signals: NewsSignal[]; rejected: Record<string, number>; flagged: Record<string, number>; samples: { title: string; host: string; reason: string }[] }
+export interface FilterOpts { region: string; kind: SignalKind; days: number; excludeDomains: string[]; nowMs: number; seen?: Set<string>; seenTitles?: Set<string>; quality?: IntelQuality; hostCounts?: Map<string, number> }
+
+/** Resultado da Tavily -> sinais aceitos (os filtros de verdade, em código) + contagem por motivo e até 5 amostras. `seen` evita repetir link; `seenTitles` repete título (mesma notícia em outro portal).
+ *  Qualidade (ficha): enforce reprova; audit deixa passar e conta em `flagged` (meta.quality_ok=false); off não avalia. */
+export function filterHitsReport(hits: TavilyHit[], o: FilterOpts): FilterReport {
+  const rep: FilterReport = { signals: [], rejected: {}, flagged: {}, samples: [] }
   const seen = o.seen ?? new Set<string>()
   const seenTitles = o.seenTitles ?? new Set<string>()
+  const q = o.quality ?? QUALITY_OFF
+  const hostCounts = o.hostCounts ?? new Map<string, number>()
+  const rej = (reason: string, h: TavilyHit, host: string | null, into = rep.rejected) => {
+    into[reason] = (into[reason] ?? 0) + 1
+    if (rep.samples.length < 5) rep.samples.push({ title: sanitizeText(h.title, 120), host: host ?? '', reason })
+  }
   for (const h of hits) {
     const host = httpsHost(h.url)
-    if (!host || isExcluded(host, o.excludeDomains)) continue
+    if (!host) { rej('bad_url', h, null); continue }
+    if (isExcluded(host, o.excludeDomains)) { rej('excluded_domain', h, host); continue }
     const date = validSourceDate(h.published_date, o.nowMs, o.days)
-    if (!date) continue
+    if (!date) { rej('no_date', h, host); continue }
     const title = sanitizeText(h.title, 200)
-    if (!title || !mentionsRegion(o.region, title, h.content)) continue
+    if (!title || !mentionsRegion(o.region, title, h.content)) { rej('no_region', h, host); continue }
     const url = normalizeUrl(h.url)?.slice(0, 500)
     const tk = normalizeTitle(title)
-    if (!url || seen.has(url) || (tk && seenTitles.has(tk))) continue
-    seen.add(url); if (tk) seenTitles.add(tk)
+    if (!url || seen.has(url) || (tk && seenTitles.has(tk))) { rej('duplicate', h, host); continue }
     const summary = sanitizeText(h.content, 300)
-    out.push({ kind: o.kind, region: o.region, title, summary: summary || null, source_name: host.slice(0, 120), source_url: url, observed_at: date, collected_by: 'system', meta: { provider: 'tavily', topic: o.kind } })
+    const score = typeof h.score === 'number' && Number.isFinite(h.score) ? h.score : null
+    let verdict: QualityVerdict = 'ok'
+    if (q.mode !== 'off') {
+      verdict = classifySignalQuality({ kind: o.kind, title, summary: summary || null, source_url: url, score }, q, { hostCount: hostCounts.get(host) ?? 0 })
+      if (verdict !== 'ok' && q.mode === 'enforce') { rej(verdict, h, host); continue }
+      if (verdict !== 'ok') rej(verdict, h, host, rep.flagged)
+    }
+    seen.add(url); if (tk) seenTitles.add(tk)
+    hostCounts.set(host, (hostCounts.get(host) ?? 0) + 1)
+    rep.signals.push({
+      kind: o.kind, region: o.region, title, summary: summary || null, source_name: host.slice(0, 120), source_url: url, observed_at: date, collected_by: 'system',
+      meta: { provider: 'tavily', topic: o.kind, score, ...(q.mode !== 'off' ? { quality_v: q.version, quality_ok: verdict === 'ok' } : {}) },
+    })
   }
-  return out
+  return rep
 }
+
+/** Compatível com o uso antigo: só os sinais aceitos. */
+export const filterHits = (hits: TavilyHit[], o: FilterOpts): NewsSignal[] => filterHitsReport(hits, o).signals

@@ -4,6 +4,8 @@ import type { Lang } from '../../../contexts/LanguageContext'
 import { MUTED, BORDER, D, ORANGE, CARD } from './shared'
 import type { DecisionKpis as Kpis } from './useDecisionKpis'
 import type { FlowSummary } from './useFlowSummary'
+import { useMarketChanges } from './useMarketChanges'
+import { changesText, demoChanges, describeChanges, ignoredLine } from './marketChanges'
 
 // Bloco de decisão do hub (Fase 1 do plano pós-validação, 2026-11-03): 4 indicadores com regra fixa e visível + "Status da coleta"
 // recolhido. Sem dado (carregando ou erro) = "sem dado ainda", nunca 0 fingido. Em modo demonstração os números vêm de buildDecisionDemo.
@@ -32,12 +34,14 @@ const TX = {
 
 interface Tile { key: string; label: string; value: string | null; sub?: string | null; rule: string; to: string }
 
-export default function DecisionKpis({ lang, kpis, loading, demo, strategyName, flow }: {
-  lang: Lang; kpis: Kpis; loading: boolean; demo: boolean; strategyName: string | null; flow: FlowSummary
+export default function DecisionKpis({ lang, companyId, kpis, loading, demo, strategyName, flow }: {
+  lang: Lang; companyId?: string; kpis: Kpis; loading: boolean; demo: boolean; strategyName: string | null; flow: FlowSummary
 }) {
   const t = TX[lang]
   const navigate = useNavigate()
   const [openColl, setOpenColl] = useState(false)
+  const { state: mc } = useMarketChanges(companyId, !demo) // Fase 2: "o que mudou" (rodadas registradas); demo usa exemplo com etiqueta
+  const ct = changesText(lang)
   const v = (n: number | null) => (loading || n == null ? null : String(n))
   const stratN = kpis.strategiesActive
   const tiles: Tile[] = [
@@ -51,6 +55,11 @@ export default function DecisionKpis({ lang, kpis, loading, demo, strategyName, 
   if (flow.signals != null) coll.push(t.cSignals(flow.signals, flow.autoSignals))
   if (flow.lastOppAt) coll.push(t.cRun(new Date(flow.lastOppAt).toLocaleDateString(locale)))
   else if (flow.oppsApproved != null) coll.push(t.cNoRun)
+  if (demo) { const d = demoChanges(); coll.push(...describeChanges(d.changes, lang), ignoredLine(d.systemIgnored, lang), `(${ct.example})`) }
+  else if (mc.status === 'ready') coll.push(...describeChanges(mc.changes, lang), ignoredLine(mc.systemIgnored, lang))
+  else if (mc.status === 'empty') coll.push(ct.empty, ignoredLine(mc.systemIgnored, lang))
+  else if (mc.status === 'error') coll.push(ct.error)
+  else coll.push(ct.loading)
   return (
     <div style={{ margin: '24px 32px 0', position: 'relative', zIndex: 1 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { bi, type Bilingual } from '../../lib/verticalPlaybook'
 import { CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
 import { isIgnored, setSignalIgnored, type SignalMeta } from './marketingAi/signalIgnore'
+import { ignoredNote } from './marketingAi/signalMeta'
 
 // "Sinais de mercado" (Inteligência comercial, Etapa 2): o cliente cola à mão notícia/lançamento/obra/
 // preço anunciado. Grava direto em `market_signals` (RLS da empresa). O motor
@@ -243,7 +244,7 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
                     {s.source_url && validUrl(s.source_url)
                       ? <a href={s.source_url} target="_blank" rel="noopener noreferrer" style={{ color: ORANGE }}>{s.source_name || s.source_url}</a>
                       : (s.source_name || '')}
-                    {s.meta?.ignored_at ? ` · ${t.ignoredAt} ${String(s.meta.ignored_at).slice(0, 10).split('-').reverse().join('/')}` : ''}
+                    {` · ${ignoredNote(s.meta, lang)}`}{s.meta?.ignored_at ? ` · ${t.ignoredAt} ${String(s.meta.ignored_at).slice(0, 10).split('-').reverse().join('/')}` : ''}
                   </div>
                 </div>
                 <button onClick={() => toggleIgnore(s, false)} aria-disabled={readOnly} title={readOnly ? t.plan : undefined} style={{ ...smallBtn, flexShrink: 0 }}>{readOnly ? '🔒 ' : ''}{t.restore}</button>

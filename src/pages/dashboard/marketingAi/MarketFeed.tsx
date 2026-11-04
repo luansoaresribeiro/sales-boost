@@ -3,6 +3,9 @@ import { supabase } from '../../../lib/supabase'
 import { CARD, MUTED, BORDER, D, ORANGE } from './shared'
 import { useShowcase } from '../../../contexts/ShowcaseContext'
 import { isIgnored, setSignalIgnored, type SignalMeta } from './signalIgnore'
+import { ignoredNote } from './signalMeta'
+import { useMarketChanges } from './useMarketChanges'
+import MarketChanges from './MarketChanges'
 
 // "Mercado" (Inteligência de Mercado, estágio 3): o feed do que o sistema coletou sozinho (e do que o dono colou à mão)
 // em `market_signals`, com fonte e data da própria fonte. Sem botão de gerar: a coleta é diária e automática (cron
@@ -50,6 +53,8 @@ export default function MarketFeed({ lang, companyId }: { lang: 'pt' | 'en'; com
   const [kind, setKind] = useState('')
   const [delErr, setDelErr] = useState(false)
   const [ignErr, setIgnErr] = useState('')
+  const [ignOpen, setIgnOpen] = useState(false)
+  const { state: changes, reload: reloadChanges } = useMarketChanges(companyId)
   const { readOnly, openPlanModal } = useShowcase()
   const busy = useRef(false)
 
@@ -85,7 +90,7 @@ export default function MarketFeed({ lang, companyId }: { lang: 'pt' | 'en'; com
     busy.current = true; setIgnErr('')
     const ok = await setSignalIgnored(s.id, companyId, ignored)
     if (!ok) setIgnErr(ignored ? t.eIgnore : t.eRestore) // a lista não muda se falhou
-    else await load()
+    else { await load(); reloadChanges() }
     busy.current = false
   }
 
@@ -105,6 +110,7 @@ export default function MarketFeed({ lang, companyId }: { lang: 'pt' | 'en'; com
   return (
     <section style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '16px', maxWidth: '900px' }}>
       <p style={{ color: MUTED, fontSize: '12.5px', lineHeight: 1.55, margin: '0 0 10px' }}>{t.intro}</p>
+      <MarketChanges lang={lang} state={changes} onShowIgnored={() => setIgnOpen(true)} />
       {lastRun !== undefined && (
         <div role="status" style={{ fontSize: '12.5px', color: 'white', fontWeight: 600, marginBottom: '12px' }}>
           {lastRun ? `${t.lastRun}: ${fmtDayMonth(lastRun)} — ${t.next}: ${sameLocalDay(lastRun) ? t.tomorrow : t.nextDaily}` : t.never}
@@ -148,7 +154,7 @@ export default function MarketFeed({ lang, companyId }: { lang: 'pt' | 'en'; com
           </ul>
         )}
       {ignoredList.length > 0 && (
-        <details style={{ marginTop: '16px' }}>
+        <details style={{ marginTop: '16px' }} open={ignOpen} onToggle={e => setIgnOpen((e.currentTarget as HTMLDetailsElement).open)}>
           <summary style={{ cursor: 'pointer', color: MUTED, fontSize: '12.5px', fontWeight: 700 }}>{t.ignoredTitle(ignoredList.length)}</summary>
           <p style={{ color: MUTED, fontSize: '12px', margin: '6px 0 8px' }}>{t.ignoredNote}</p>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -157,7 +163,7 @@ export default function MarketFeed({ lang, companyId }: { lang: 'pt' | 'en'; com
                 <div style={{ minWidth: 0, fontSize: '12.5px', lineHeight: 1.5 }}>
                   <div style={{ color: 'white', fontWeight: 700, overflowWrap: 'anywhere' }}>{s.title}</div>
                   {evidence(s, httpsHost(s.source_url))}
-                  {s.meta?.ignored_at && <div style={{ color: MUTED }}>{t.ignoredAt} {fmtDate(String(s.meta.ignored_at).slice(0, 10))}</div>}
+                  <div style={{ color: MUTED }}>{ignoredNote(s.meta, lang)}{s.meta?.ignored_at ? ` · ${t.ignoredAt} ${fmtDate(String(s.meta.ignored_at).slice(0, 10))}` : ''}</div>
                 </div>
                 <button onClick={() => toggleIgnore(s, false)} title={readOnly ? t.plan : undefined} style={{ ...btn, flexShrink: 0 }}>{readOnly ? '🔒 ' : ''}{t.restore}</button>
               </li>

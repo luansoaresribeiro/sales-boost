@@ -260,7 +260,7 @@ export default function MarketingAiHubPage() {
       <AttentionBlock lang={lang} data={attention} />
 
       {/* Fase 1 (2026-11-03): 4 indicadores de decisão no topo; o painel de receita/ROAS/funil desceu para logo abaixo (nada foi removido). */}
-      <DecisionKpis lang={lang} kpis={kpis} loading={demoMode ? false : kpisLoading} demo={demoMode} strategyName={strategySummary?.name ?? (demoMode ? (lang === 'en' ? 'Example strategy' : 'Estratégia de exemplo') : null)} flow={flow} />
+      <DecisionKpis lang={lang} companyId={company.id} kpis={kpis} loading={demoMode ? false : kpisLoading} demo={demoMode} strategyName={strategySummary?.name ?? (demoMode ? (lang === 'en' ? 'Example strategy' : 'Estratégia de exemplo') : null)} flow={flow} />
 
       {/* Receita/ROAS/funil agregados: soma o que já é real em cada peça
           (leads → funil, Instagram → crescimento/engajamento, Meta Ads → ao

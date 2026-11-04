@@ -7,10 +7,11 @@
 // com base, nem chama a IA (custo zero). Só LÊ dados da empresa e só ESCREVE em growth_opportunities
 // e agent_performance — nada é publicado ou enviado (regra 1).
 import {
-  buildCandidates, type CatalogItem, type CompetitorRow, type EngineInput, type EventRow, type FieldMap, type Lang,
+  buildCandidates, signalIdsOf, type CatalogItem, type CompetitorRow, type EngineInput, type EventRow, type FieldMap, type Lang,
   type OppTexts, type PostRow, type SignalRow, type TrendRow,
 } from './opportunityEngine.ts'
-import { MAX_CANDIDATES_TO_LLM, buildPrompt, compareScored, finalize, parseLlm, score } from './opportunityOutput.ts'
+import { MAX_CANDIDATES_TO_LLM, OPP_PROMPT_VERSION, buildPrompt, compareScored, finalize, parseLlm, score } from './opportunityOutput.ts'
+import { interpretFingerprint, recordRun, type RunInput } from './marketIntelRuns.ts'
 
 type Admin = { from: (t: string) => any; rpc?: any } // eslint-disable-line @typescript-eslint/no-explicit-any
 export type Llm = (prompt: string, maxTokens: number) => Promise<{ text: string; tokens: number }>
@@ -18,7 +19,7 @@ export type Llm = (prompt: string, maxTokens: number) => Promise<{ text: string;
 export const WINDOW_DAYS = 60
 const REUSE_WINDOW_MS = 90_000 // duplo clique: devolve a rodada que acabou de sair em vez de gastar IA de novo
 
-export interface RunResult { ok: boolean; status: number; error?: string; run_id?: string | null; generated: number; considered: number; reused?: boolean }
+export interface RunResult { ok: boolean; status: number; error?: string; run_id?: string | null; generated: number; considered: number; reused?: boolean; unchanged?: boolean }
 
 type Bilingual = { pt?: string; en?: string } | string | undefined
 const pick = (b: Bilingual, lang: Lang): string => (typeof b === 'string' ? b : b?.[lang] ?? b?.pt ?? '')
@@ -94,17 +95,31 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
   const sentFacts = facts.filter(f => usedFactIds.has(f.id))
   const prompt = buildPrompt({ lang, businessName: String(co.business_name ?? ''), itemLabel: input.itemLabel, facts: sentFacts, candidates: top, windowDays: WINDOW_DAYS, texts, photoCounts })
 
+  // Fase 2 (2026-11-04): mesmo conteúdo da última interpretação bem-sucedida = não chama a IA (nada mudou). O relógio de 7 dias zera pela linha de sucesso.
+  // Falha nunca grava impressão digital (o registro da falha vai com fingerprint nulo). Tabela ausente/erro de leitura = interpreta normalmente.
+  const sentSignalIds = signalIdsOf(sentFacts).slice(0, 50)
+  const fingerprint = await interpretFingerprint({ lang, promptVersion: OPP_PROMPT_VERSION, businessName: String(co.business_name ?? ''), itemLabel: input.itemLabel, facts: sentFacts, candidates: top, photoCounts, texts })
+  const runBase = { interpreted: top.length, details: { used_signal_ids: sentSignalIds, facts: sentFacts.length, prompt_version: OPP_PROMPT_VERSION } }
+  const prev = await lastInterpretation(admin, companyId)
+  if (prev?.fingerprint === fingerprint) {
+    await logCost(admin, companyId, started, 0, true, `sem mudança desde ${prev.at.slice(0, 10)} (${top.length} candidato(s) iguais aos da última análise)`)
+    await recordRun(admin, companyId, 'interpret', { ...runBase, accepted: 0, discarded: 0, unchanged: true, fingerprint, tokens: 0 })
+    return { ok: true, status: 200, run_id: null, generated: 0, considered: top.length, unchanged: true }
+  }
+
   let answer: { text: string; tokens: number }
   try {
     answer = await llm(prompt, 2500)
   } catch (e) {
     await logCost(admin, companyId, started, 0, false, String(e))
+    await recordRun(admin, companyId, 'interpret', fail(runBase, 'ai_no_answer', 0))
     return { ok: false, status: 502, generated: 0, considered: top.length, error: lang === 'en' ? 'The AI did not answer. Try again in a minute.' : 'A IA não respondeu. Tente de novo em um minuto.' }
   }
   const { text, tokens } = answer
   const parsed = parseLlm(text)
   if (!parsed) {
     await logCost(admin, companyId, started, tokens, false, 'resposta da IA ilegível')
+    await recordRun(admin, companyId, 'interpret', fail(runBase, 'ai_unreadable', tokens))
     return { ok: false, status: 502, generated: 0, considered: top.length, error: lang === 'en' ? 'The AI answer could not be read. Try again.' : 'Não consegui ler a resposta da IA. Tente de novo.' }
   }
 
@@ -120,10 +135,12 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
     })))
     if (error) {
       await logCost(admin, companyId, started, tokens, false, error.message)
+      await recordRun(admin, companyId, 'interpret', fail(runBase, 'save_failed', tokens))
       return { ok: false, status: 500, generated: 0, considered: top.length, error: `growth_opportunities: ${error.message}` }
     }
   }
   await logCost(admin, companyId, started, tokens, true, `${drafts.length} oportunidade(s) de ${top.length} candidato(s)`)
+  await recordRun(admin, companyId, 'interpret', { ...runBase, accepted: drafts.length, discarded: Math.max(0, top.length - drafts.length), unchanged: false, fingerprint, tokens })
   return { ok: true, status: 200, run_id: drafts.length > 0 ? runId : null, generated: drafts.length, considered: top.length }
 }
 
@@ -136,3 +153,13 @@ async function logCost(admin: Admin, companyId: string, started: number, tokens:
     })
   } catch { /* não-fatal */ }
 }
+
+// Última interpretação bem-sucedida (a que tem impressão digital). Erro/tabela ausente = null (interpreta normalmente).
+async function lastInterpretation(admin: Admin, companyId: string): Promise<{ fingerprint: string; at: string } | null> {
+  try {
+    const { data, error } = await admin.from('market_intel_runs').select('fingerprint, created_at').eq('company_id', companyId).eq('phase', 'interpret').not('fingerprint', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle()
+    if (error || !data?.fingerprint) return null
+    return { fingerprint: String(data.fingerprint), at: String(data.created_at ?? '') }
+  } catch { return null }
+}
+const fail = (base: RunInput, why: string, tokens: number): RunInput => ({ ...base, accepted: 0, discarded: 0, unchanged: false, fingerprint: null, tokens, details: { ...base.details, error: why } })

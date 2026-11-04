@@ -566,6 +566,27 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     - **Tela (estágio 3):** aba "🌐 Mercado" em Dados (`marketingAi/MarketFeed.tsx`): feed de `market_signals` com filtros por
       bairro e tipo, selo "Automático", fonte (domínio com link) e data da fonte, apagar; "Última coleta: dd/mm — próxima:
       amanhã" lido de `agent_performance` (se o RLS impedir a leitura, a linha some). Sem botão de gerar.
+  - **Fase 2 — Inteligência de mercado (2026-11-04 — 🟡 código pronto no branch `claude/nifty-shannon-ysp818-fase2`; falta aplicar 2 migrations,
+    deploy de `marketing-ai` e publicar o site; sem PR ainda).** Decisão e medição: [DECISIONS.md](DECISIONS.md#2026-11-04--fase-2-inteligência-de-mercado-qualidade-registro-por-rodada-e-sem-reinterpretar).
+    - **Filtro de qualidade na ficha** (`config.market_intel.news.quality`, migration `20261104120000_market_intel_quality.sql`): `mode` off | audit | enforce,
+      `version`, `block_url_patterns`, `block_title_terms`, `block_title_all` (grupos "E"; sem regex), `min_summary_chars`, `kind_terms` (por tipo, casa o começo da
+      palavra), `max_per_host_per_run`, `trusted_domains` (passam pelas regras), `min_score` (nota da Tavily; `null` = não filtra). Código genérico:
+      `parseQuality` (`marketIntel.ts`), `classifySignalQuality` e `filterHitsReport` (`marketNews.ts`; o `filterHits` antigo é só um invólucro). Novos sinais gravam
+      `meta.score`, `meta.quality_v`, `meta.quality_ok`; só `collected_by='system'`. `exclude_domains` continua valendo desde já (a Tavily nem devolve).
+    - **Reclassificação** dos sinais já gravados (`reclassifySignals`, `_shared/marketIntelRuns.ts`), chamada dentro do `cronMarketIntel` ANTES dos limites de
+      orçamento: até 150 por empresa por chamada, guarda de 40 s. Sem `quality_v` (ou versão menor) e reprovado → mescla `ignored:true, ignored_at, ignored_by:'system',
+      ignored_reason, quality_v` (nunca apaga; `owner_restored:true` nunca é ignorado). `audit` só conta e registra (não escreve no sinal). A tela mostra
+      "Ignorado pelo sistema: <motivo>" x "Ignorado por você"; restaurar limpa `ignored_by/ignored_reason` e grava `owner_restored:true`.
+    - **Registro por rodada** — tabela `market_intel_runs` (migration `20261104110000_market_intel_runs.sql`; RLS: dono da empresa lê, ninguém de fora escreve): uma
+      linha por `collect` (pesquisado/coletado/filtrado/aceito, custo da rodada e acumulado do mês), `reclassify` e `interpret` (candidatos, oportunidades, tokens,
+      `fingerprint`, `unchanged`). `recordRun` nunca derruba a coleta/análise. Campo nulo = "não medido".
+    - **Não reinterpretar sem mudança** (`runOpportunities`): SHA-256 do conteúdo enviado à IA (texto/fonte/tipo dos fatos, tipo/região/itens dos candidatos, idioma,
+      `OPP_PROMPT_VERSION`; sem datas nem ids F1/C1). Igual ao da última análise bem-sucedida → não chama a IA, grava `unchanged=true, tokens=0` e a linha
+      `run_opportunities` ("sem mudança", sucesso) que zera o relógio de 7 dias. Gatilhos de 24 h/7 dias inalterados. **Suba `OPP_PROMPT_VERSION` ao mexer em
+      `buildPrompt`/`finalize`.** `buildCandidates` agora devolve `usedSignalIds`.
+    - **Tela "O que mudou"** (sem tela nova): bloco no topo do feed de Mercado (`MarketChanges.tsx`) e linhas no "Status da coleta" do hub (`DecisionKpis.tsx`), via
+      `useMarketChanges.ts` + `marketChanges.ts` (puro). Estados: carregando / "Não foi possível verificar" (erro ou tabela ausente) / "Ainda não há rodada registrada" /
+      contador nulo = "não medido" / demo com a etiqueta "exemplo". Testes: `scripts/test-market-news.mjs` (amostras reais) e `scripts/test-market-runs.mjs`.
   - **Tela:** sem botões de gerar; mostra "Próxima análise automática: semanal (e quando você cadastra um sinal novo)"
     e a data da última análise; oportunidade aprovada sem plano mostra "Montando o plano…" (recarrega a cada 10 s por 2
     min, depois "o plano sai na próxima rodada automática"); botões "Aprovar plano"/"Desfazer aprovação".

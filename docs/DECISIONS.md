@@ -2464,3 +2464,42 @@ Testes em `scripts/test-deck-topic.mjs` e `scripts/test-claim-lock.mjs`, com os 
 
 **Observação (não é defeito do fluxo real):** os 2 tours do apartamento saíram com a mesma foto porque o teste pediu as vagas direto, sem o
 planejador da semana. O planejador (`planTours`) já reparte fotos diferentes entre os tours da semana.
+
+## 2026-11-04 — Fase 2 (inteligência de mercado): qualidade, registro por rodada e sem reinterpretar
+
+**Estado:** código pronto no branch `claude/nifty-shannon-ysp818-fase2`, sem PR, sem migration aplicada e sem deploy. **Aguarda aprovação do dono.** Fica dentro do teto de
+US$ 5/cliente/mês já decidido e não cria gasto novo (a IA só deixa de ser chamada quando nada mudou).
+
+**Medição que motivou (04/11/2026, Tespon + "Teste Zero", 47 sinais automáticos, todos da Tavily):**
+- Cerca de **60% eram ruins**: (a) **anúncios avulsos de imobiliárias** ("... para venda com 4 quartos em Ipanema", "Flat para venda - Leblon - RJ", "... 112,00 m² privativos,
+  3 quartos", "8 Imóveis encontrados Ipanema", "Imóveis em Barra da Tijuca | Lançamentos RJ", "Arc Ipanema ... | Apto" — sites de ~17 imobiliárias/portais de lançamento);
+  (b) **páginas sem valor** (Moovit "Como chegar até…", Wikipedia, Skyscanner, Threads, Catho "Vaga de Emprego…", "Termos de Uso", "Descubra a magia do Rio");
+  (c) **tipo errado** (um anúncio de apartamento marcado como infraestrutura).
+- **Bons**: O Globo, Folha ("Metrô da Gávea tem obras retomadas", "Aluguel sobe acima da inflação"), Metrô CPTM, ABIH-RJ, Riotur, Panrotas, Mercado&Eventos, Monitor
+  Mercantil, Veja Rio, Terra, mais veloz ("Carta ao mercado"), e um limítrofe (enjoy: "Bairros do Rio com Melhor Mobilidade").
+- As regras da ficha `imoveis_rio` saem dessa medição (nada inventado) e as amostras viraram casos de teste (`scripts/test-market-news.mjs`).
+
+**O que foi decidido/feito:**
+1. **Filtro de qualidade na ficha** (regra 6; código genérico). Começa em **`audit`**: só conta e registra o que reprovaria. Passar a `enforce` é uma troca na ficha
+   (`update ... jsonb_set(config,'{market_intel,news,quality,mode}','"enforce"')`), depois de ver a contagem em `market_intel_runs`. Os domínios novos de `exclude_domains`
+   valem desde já. Sinais ruins já gravados são **ignorados** (não apagados) pelo sistema, com motivo; o que o dono restaurar o sistema não ignora de novo.
+2. **Registro por rodada** em tabela nova `market_intel_runs` (volume e custo, não só gasto — pedido do dono em 2026-11-03).
+3. **Não reinterpretar sem mudança**: mesma impressão digital da última análise = nenhuma chamada à IA.
+4. **"O que mudou"** sem tela nova: bloco no feed de Mercado + linhas no "Status da coleta" do hub.
+
+**Divergências do plano (registradas, não escondidas):**
+- O plano pedia "2 últimas linhas" de `market_intel_runs`; a tela lê as **20 últimas** e pega a mais recente de cada fase (cada dia grava até 3 linhas).
+- `audit` não escreve nada no sinal; por isso, no `audit`, a reclassificação reavalia os mesmos sinais mais novos (até 150) a cada dia — é só leitura. Ao trocar para
+  `enforce`, também reprovam os que o `audit` já marcou `quality_ok:false` na coleta.
+- **Domínios que não entraram em `exclude_domains`** por falta do endereço exato na medição (só o nome curto): twoimoveis, familybrokersimobiliaria, kaselle, lancamentosrj /
+  lancamentos-rj, miguezimobiliaria, novosimoveisrio, podiumimoveis, porta8, robertoalmeidaimoveis, suacasadigital, casapeimoveis, 313imoveis, lartcorretores,
+  evandroimoveisrj, vgimobiliaria, visitrio, ladorio. Entram só pelas regras de título/endereço; se o dono quiser, é só listar o domínio completo na ficha.
+- A regra de endereço `/imoveis/` (sugerida) também pode pegar a seção de notícias de imóveis de um portal que NÃO está em `trusted_domains` (ex.: Terra). Por isso o
+  início é em `audit`: confira `details.reasons`/`samples` antes de `enforce` e, se preciso, ponha o portal em `trusted_domains` ou tire o padrão.
+- `kind_terms` só existe para infraestrutura, turismo e economia (os tipos em que a medição achou tipo errado); lançamento/notícia/outro ficam livres.
+
+**Para publicar (a sessão principal faz):** migration `20261104110000_market_intel_runs.sql`, depois `20261104120000_market_intel_quality.sql`; deploy de `marketing-ai`
+(inclui `cron_market_intel`, `cron_opportunities` e `run_opportunities`); site. Sem a tabela, a tela mostra "Não foi possível verificar" e a análise segue normal (interpreta
+sempre, sem pular). **Como desfazer:** voltar `mode` para `off` na ficha (para o filtro e a reclassificação); sinais ignorados pelo sistema são restaurados na própria tela
+("Ver e restaurar") ou por SQL (`meta.ignored=false`); rollback comentado em cada migration.
+
