@@ -9,6 +9,7 @@
 // abaixo do teto de 150 s — PITFALLS "Limite de 150s").
 import type { FieldMap, Lang } from './opportunityEngine.ts'
 import { MAX_PLANS_PER_DAY, buildPlanPrompt, describePlanItem, finalizePlan, parsePlan, type OpportunityPlan, type PlanItem, type PlanOpp } from './opportunityPlan.ts'
+import { availabilityOf, itemCfgFrom } from './itemService.ts'
 import type { Llm } from './opportunityRun.ts'
 
 type Admin = { from: (t: string) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -56,7 +57,8 @@ export async function createOpportunityPlan(admin: Admin, companyId: string, opp
   let items: PlanItem[] = []
   if (itemIds.length) {
     const { data } = await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('company_id', companyId).eq('kind', 'product').in('id', itemIds).limit(50)
-    items = ((data ?? []) as { id: string; title: string; meta: { fields?: Record<string, unknown>; photos?: unknown[] } | null }[]).map(i => ({ id: i.id, title: i.title, fields: i.meta?.fields ?? {}, photoCount: i.meta?.photos?.length ?? 0 }))
+    const icfg = itemCfgFrom(pb?.config)
+    items = ((data ?? []) as { id: string; title: string; meta: { fields?: Record<string, unknown>; photos?: unknown[] } | null }[]).filter(i => !availabilityOf(i, icfg.availability).blocking).map(i => ({ id: i.id, title: i.title, fields: i.meta?.fields ?? {}, photoCount: i.meta?.photos?.length ?? 0 }))
   }
   const opp: PlanOpp = {
     title: String(row.title ?? ''), commercial_problem: row.commercial_problem ?? null, audience: row.audience ?? null, suggested_action: row.suggested_action ?? null,

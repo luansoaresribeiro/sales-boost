@@ -2636,6 +2636,23 @@ gravadas com `intent.market_context` continuam válidas (campo extra ignorado). 
 **Para publicar (a sessão principal faz):** deploy de `strategy-generate` e `creative-generate` (ambos de cliente real — testar em Tespon/Teste Zero antes: rodar `reanalyze`
 forçando pivot e conferir `needs_review`); site. Nada de SQL.
 
+
+## 2026-11-04 — Fase 4 (Imóveis e ativação): imóvel indisponível não publica
+
+**Decisões do dono (2026-11-04):**
+1. **Disponibilidade** = status manual no Catálogo + conferência no link do portal (VRSync) na hora de publicar, para imóvel com `meta.source.listing_id`. Imóvel que sumiu do link = "removido". Sem link do portal configurado: só o status manual.
+2. **Não deu pra conferir na hora de publicar → NÃO publica.** A ação fica na fila, o cron de 5 em 5 min tenta de novo e, depois de 2 h, vira FAILED "Não foi possível verificar a disponibilidade". Imóvel só manual nunca cai nessa regra.
+3. **Página pública `/p/<código>`** de imóvel indisponível mostra "este imóvel não está mais disponível" e esconde botões e formulário de contato (o servidor também recusa clique e lead).
+4. **Relacionar imóvel por tema/região fica FORA** desta fase: só se grava o motivo real da rotação de hoje (o menos usado em 21 dias, com a trava de repetição).
+
+**O que foi feito.** Serviço único `supabase/functions/_shared/itemService.ts` (partes puras testadas em `scripts/test-item-service.mjs`; cópia mínima para a tela em `src/lib/itemAvailability.ts`). Status/bloqueios/rótulos vêm da ficha (`vertical_playbooks.config.availability`, regra 6; ficha sem a chave = nada bloqueado). Status guardado em `marketing_ai_knowledge.meta.availability {status, source, checked_at, note}`; sem ele = "disponível, nunca conferido". Mínimo de fotos agora vem da ficha em todo o servidor (antes 5 fixo). Motivo da escolha em `item_pick` (jsonb) na peça e no post, gravado em UPDATE à parte; só dados reais (candidatos, uso em 21 dias, fotos, disponibilidade), sem texto de IA. Trava de publicação em `agent-actions` `execute()`: conferência ANTES de marcar EXECUTING e de qualquer publishTo*; bloqueado → FAILED "Imóvel indisponível (…). Não publiquei." (peça não é apagada; volta ao Vault se estava 'publishing'). Caminhos escolhidos pelo dono (`catalog-package`, `item-videos`, `make_now`) devolvem 400 em português; `item-videos` confere ANTES de pagar a Higgsfield. Calendário, oportunidades (plano, peças, motor) e "Gerar agora" não oferecem imóvel indisponível: a vaga vira "pra fazer"/peça sem imóvel, nunca troca imóvel em silêncio.
+
+**Divergências registradas (nada apagado).** (a) A conferência no portal só roda no momento de publicar (e no máximo 1x por hora por imóvel, cache em `meta.availability.checked_at`); não há varredura periódica. (b) `item_id` agora também vai no payload da ação do Telegram e do modal do calendário (nova tentativa depois de a peça ser apagada não perde o imóvel). (c) `plusOptions`/`usePlusOptions` não mudaram: a lista de imóveis vem do `make_now_options`, que agora usa o serviço (fotos da ficha + disponível). (d) Peças de oportunidade com imóvel indisponível viram peça de texto (já era o comportamento para pouca foto).
+
+**Como desfazer.** Código: reverter o PR e redeployar `agent-actions`, `creative-generate`, `catalog-package`, `item-videos`, `marketing-ai`. Banco (só some o motivo/lista de status; nada depende): `alter table marketing_ai_test_content drop column if exists item_pick; alter table posts drop column if exists item_pick; update vertical_playbooks set config = config - 'availability' where key='imoveis_rio';`. `meta.availability` nos itens pode ficar (ignorado sem a ficha).
+
+**Para publicar (a sessão principal faz):** migrations `20261104160000_item_pick.sql` e `20261104170000_availability_ficha.sql` → deploy `agent-actions --no-verify-jwt`, `creative-generate --no-verify-jwt`, `catalog-package`, `item-videos`, `marketing-ai` (manter as flags atuais de cada uma) → site.
+
 ## 2026-11-04 — Fase 5: Resultados (marketing × comercial, lado a lado)
 
 **Decisão do dono.** A Fase 5 foi construída **do zero em cima da `main` atual**; a branch antiga `results-flow` **não** foi juntada nem usada

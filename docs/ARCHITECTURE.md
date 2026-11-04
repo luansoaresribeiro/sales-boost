@@ -839,3 +839,7 @@ tabelas existentes; sem dado, "Hermes ainda está analisando".
   vem da etapa do funil e `intent.opportunity.objective` do plano da oportunidade. Peça antiga pode não ter `intent`.
 - O motivo da escolha do imóvel **não é gravado por peça** (o rodízio, o "Gerar agora" e o pacote do catálogo não deixam marca).
 - A regra de "vaga aberta" do calendário vive em `src/pages/dashboard/marketingAi/calendarSlots.ts` e é usada também pelo topo da Estratégia.
+
+
+## Imóveis e disponibilidade (Fase 4, 2026-11-04)
+`supabase/functions/_shared/itemService.ts` é o serviço único: `listPickableItems` (fotos mínimas da ficha + disponível), `availabilityOf`, `revalidate` (status manual + link do portal, prazo de 8 s, cache de 1 h em `meta.availability.checked_at`), `rankItems` (rotação "menos usado em 21 dias") e `buildPickReason`/`saveItemPick` (motivo em `item_pick`). Ficha: `vertical_playbooks.config.availability {statuses, blocking, default, removed, labels}`. Trava de publicação em `agent-actions` `execute()`. Decisões em [DECISIONS.md](DECISIONS.md#2026-11-04--fase-4-imóveis-e-ativação-imóvel-indisponível-não-publica). Diverge do texto antigo "O motivo da escolha não é gravado": agora é, quando a peça é nova (peças antigas seguem "motivo não registrado").

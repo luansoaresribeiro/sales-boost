@@ -7,6 +7,10 @@ import { mapStage } from './salesReal'
 import { STAGE_EN } from './labels.i18n'
 import { useItemActivity, type Block, type PieceTest } from './useItemActivity'
 import CalendarPostModal from './CalendarPostModal'
+import { useItemUsage } from './useItemUsage'
+import { useAvailabilityCfg } from './useAvailabilityCfg'
+import { useCompany } from '../../../contexts/CompanyContext'
+import { availabilityOf, statusLabel } from '../../../lib/itemAvailability'
 import ItemResults from './ItemResults'
 
 // "Atividade do imóvel" (Pacote B1): peças, oportunidades e leads ligados a um imóvel, só leitura.
@@ -15,14 +19,14 @@ import ItemResults from './ItemResults'
 
 const TX = {
   pt: {
-    open: '📊 Ver atividade', close: 'Ocultar atividade', title: 'Atividade deste imóvel', loading: 'Carregando…', error: 'Não foi possível verificar',
+    open: '📊 Ver atividade', close: 'Ocultar atividade', title: 'Atividade deste imóvel', availability: 'Disponibilidade', neverChecked: 'disponível (nunca conferido)', loading: 'Carregando…', error: 'Não foi possível verificar',
     pieces: 'Peças', noPieces: 'Nenhuma peça relacionada', opps: 'Oportunidades', noOpps: 'Nenhuma oportunidade ligada', leads: 'Leads', noLeads: 'Nenhum lead ligado',
     seeOpps: 'Ver em Oportunidades', capped: (n: number) => `Mostrando as ${n} mais recentes.`, noIdea: 'Peça sem título', publishing: 'Publicando', noName: 'Lead sem nome',
     postSt: { aprovado: 'Aprovada', approved: 'Aprovada', agendado: 'Agendada', scheduled: 'Agendada', publicado: 'Publicada', published: 'Publicada', rascunho: 'Rascunho', draft: 'Rascunho' } as Record<string, string>,
     oppSt: { suggested: 'Aguardando avaliação', approved: 'Aprovada', dismissed: 'Descartada' } as Record<string, string>,
   },
   en: {
-    open: '📊 See activity', close: 'Hide activity', title: 'Activity for this listing', loading: 'Loading…', error: 'Could not verify',
+    open: '📊 See activity', close: 'Hide activity', title: 'Activity for this listing', availability: 'Availability', neverChecked: 'available (never checked)', loading: 'Loading…', error: 'Could not verify',
     pieces: 'Pieces', noPieces: 'No related pieces', opps: 'Opportunities', noOpps: 'No linked opportunities', leads: 'Leads', noLeads: 'No linked leads',
     seeOpps: 'See in Opportunities', capped: (n: number) => `Showing the ${n} most recent.`, noIdea: 'Untitled piece', publishing: 'Publishing', noName: 'Unnamed lead',
     postSt: { aprovado: 'Approved', approved: 'Approved', agendado: 'Scheduled', scheduled: 'Scheduled', publicado: 'Published', published: 'Published', rascunho: 'Draft', draft: 'Draft' } as Record<string, string>,
@@ -54,6 +58,12 @@ export default function ItemActivity({ itemId, companyId }: { itemId: string; co
   const [open, setOpen] = useState(false)
   const [piece, setPiece] = useState<PieceTest | null>(null)
   const d = useItemActivity(companyId, itemId, open)
+  // Fase 4: status de disponibilidade (ficha). Sem ficha/consulta falhou: não mostra nada (nunca afirma "disponível" sem saber).
+  const { company } = useCompany()
+  const availCfg = useAvailabilityCfg(company?.vertical_key)
+  const usage = useItemUsage(companyId)
+  const info = usage.data.ok ? usage.data.items[itemId] : undefined
+  const av = availCfg && info ? availabilityOf({ meta: { availability: info.availability } }, availCfg) : null
   const common = { loadingTx: tx.loading, errorTx: tx.error, capped: tx.capped }
   // Peças: as duas fontes numa lista só (uma peça aprovada deixa de existir em teste e passa a existir em posts — sem repetição).
   const pieces: Block<{ key: string; at: string; label: string; stLabel: string; color: string; test?: PieceTest }> =
@@ -72,6 +82,7 @@ export default function ItemActivity({ itemId, companyId }: { itemId: string; co
       {open && (
         <div style={{ marginTop: '8px', padding: '8px 10px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '8px' }}>
           <div style={{ fontSize: '11px', fontWeight: 700, color: 'white' }}>{tx.title}</div>
+          {av && <div style={{ fontSize: '10.5px', color: av.blocking ? '#f87171' : MUTED, marginTop: '2px' }}>{tx.availability}: {av.never_checked ? tx.neverChecked : statusLabel(availCfg ?? null, av.status, lang)}</div>}
           <Section title={tx.pieces} block={pieces} empty={tx.noPieces} {...common} render={p => (
             <div key={p.key} style={row}>
               {p.test

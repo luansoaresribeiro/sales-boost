@@ -6,6 +6,7 @@
 // 'cron_opportunities'. Não há botão de gerar (princípio "Tudo automático"): a única ação humana é aprovar.
 // Nada é publicado: cada peça nasce rascunho na Central de Aprovações (regra 1). Aprovar o plano de novo, o cron e o
 // duplo clique não geram de novo: `pieces_generated_at` é reservado de forma atômica ANTES de despachar.
+import { availabilityOf, fetchItemCfg } from './itemService.ts'
 import type { Lang } from './opportunityEngine.ts'
 import type { OpportunityPlan } from './opportunityPlan.ts'
 import { CREATED_TASK_KEY, PIECES_TASK_KEY, RETRY_TASK_KEY, decidePieces, idempotency, type PieceSpec } from './opportunityPieces.ts'
@@ -21,7 +22,7 @@ const tr = (lang: Lang, pt: string, en: string) => (lang === 'en' ? en : pt)
 export interface PiecesRunResult { ok: boolean; status: number; error?: string; dispatched?: number; reused?: boolean; code?: 'daily_limit' | 'not_ready' | 'migration_pending' | 'dispatch_failed' }
 
 export async function generateOpportunityPieces(admin: Admin, companyId: string, opportunityId: unknown, dispatch: Dispatch): Promise<PiecesRunResult> {
-  const { data: co } = await admin.from('companies').select('language').eq('id', companyId).maybeSingle()
+  const { data: co } = await admin.from('companies').select('language, vertical_key').eq('id', companyId).maybeSingle()
   const lang: Lang = co?.language === 'en' ? 'en' : 'pt'
   if (!isUuid(opportunityId)) return { ok: false, status: 400, error: 'opportunity_id é obrigatório.' }
 
@@ -55,7 +56,9 @@ export async function generateOpportunityPieces(admin: Admin, companyId: string,
   const photoCounts: Record<string, number> = {}
   if (itemIds.length) {
     const { data } = await admin.from('marketing_ai_knowledge').select('id, meta').eq('company_id', companyId).eq('kind', 'product').in('id', itemIds).limit(50)
-    for (const i of (data ?? []) as { id: string; meta: { photos?: unknown[] } | null }[]) photoCounts[i.id] = i.meta?.photos?.length ?? 0
+    // Fase 4: imóvel indisponível conta como 0 fotos → a peça sai de texto, nunca com imóvel vendido/alugado.
+    const icfg = await fetchItemCfg(admin, co?.vertical_key ?? null)
+    for (const i of (data ?? []) as { id: string; meta: { photos?: unknown[] } | null }[]) photoCounts[i.id] = availabilityOf(i, icfg.availability).blocking ? 0 : (i.meta?.photos?.length ?? 0)
   }
   const decision = decidePieces({ plan, photoCounts, usedToday: usedToday ?? 0, existingPieces: existing, lang })
   if (decision.skip === 'daily_limit') return { ok: true, status: 200, code: 'daily_limit', dispatched: 0 }

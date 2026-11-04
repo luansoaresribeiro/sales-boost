@@ -20,6 +20,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
+import { isSafeUrl } from '../_shared/safeUrl.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -51,21 +52,6 @@ export interface Listing {
 
 // ── Proteção do proxy: só https, nada de endereço interno, poucos redirects
 // validados um a um (evita usar a function pra bater em rede privada). ────
-function isSafeUrl(raw: string): URL | null {
-  let u: URL
-  try { u = new URL(raw) } catch { return null }
-  if (u.protocol !== 'https:') return null
-  if (u.username || u.password) return null
-  const h = u.hostname.toLowerCase()
-  if (!h.includes('.') || h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal') || h.endsWith('.localhost')) return null
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(h)) {
-    const [a, b] = h.split('.').map(Number)
-    if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)) return null
-  }
-  if (h.startsWith('[') || h.includes(':')) return null // IPv6 literal: não precisa, não aceita
-  return u
-}
-
 async function safeFetch(raw: string, timeoutMs: number): Promise<Response> {
   let url = isSafeUrl(raw)
   for (let hop = 0; hop < 4 && url; hop++) {

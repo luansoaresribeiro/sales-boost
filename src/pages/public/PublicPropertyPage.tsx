@@ -16,12 +16,12 @@ const D = "'Bricolage Grotesque', system-ui, sans-serif"
 interface PageData {
   lang: 'pt' | 'en'; title: string; company: { name: string; logo_url: string | null }
   fields: { key: string; label: string; value: string }[]; photos: string[]
-  buttons: { whatsapp: boolean; dm: boolean }; consent_text: string
+  buttons: { whatsapp: boolean; dm: boolean }; consent_text: string; unavailable?: boolean
 }
 
 const TX = {
   pt: {
-    loading: 'Carregando…', notFoundTitle: 'Página não encontrada', notFoundBody: 'Este link não está mais disponível. Fale com quem te enviou o link.',
+    loading: 'Carregando…', goneTitle: 'Este imóvel não está mais disponível', goneBody: 'Ele foi vendido, alugado ou retirado. Fale com quem te enviou o link para conhecer outras opções.', notFoundTitle: 'Página não encontrada', notFoundBody: 'Este link não está mais disponível. Fale com quem te enviou o link.',
     photo: (i: number, n: number) => `Foto ${i} de ${n}`, details: 'Detalhes', talk: 'Fale com a gente', whatsapp: 'Chamar no WhatsApp', dm: 'Mandar mensagem no Instagram',
     or: 'ou deixe seu contato e responderemos', name: 'Seu nome', contact: 'Seu WhatsApp ou e-mail', message: 'Mensagem (opcional)', send: 'Enviar', sending: 'Enviando…',
     sentTitle: 'Recebemos seu contato', sentBody: 'Quem cuida deste imóvel vai responder por aqui o quanto antes.',
@@ -30,7 +30,7 @@ const TX = {
     errLimit: 'Muitas tentativas. Tente de novo mais tarde.', errGeneric: 'Não deu certo agora. Tente de novo em alguns minutos.',
   },
   en: {
-    loading: 'Loading…', notFoundTitle: 'Page not found', notFoundBody: 'This link is no longer available. Please contact whoever sent it to you.',
+    loading: 'Loading…', goneTitle: 'This property is no longer available', goneBody: 'It was sold, rented or taken off the market. Please contact whoever sent you the link to see other options.', notFoundTitle: 'Page not found', notFoundBody: 'This link is no longer available. Please contact whoever sent it to you.',
     photo: (i: number, n: number) => `Photo ${i} of ${n}`, details: 'Details', talk: 'Talk to us', whatsapp: 'Chat on WhatsApp', dm: 'Message us on Instagram',
     or: 'or leave your contact and we will reply', name: 'Your name', contact: 'Your WhatsApp or email', message: 'Message (optional)', send: 'Send', sending: 'Sending…',
     sentTitle: 'We got your contact', sentBody: 'Whoever looks after this property will reply as soon as possible.',
@@ -131,6 +131,15 @@ export default function PublicPropertyPage() {
     )
   }
 
+  if (data.unavailable) {
+    return shell(
+      <div style={{ padding: '80px 24px', textAlign: 'center', maxWidth: '380px' }}>
+        {data.company.logo_url && <img src={data.company.logo_url} alt="" style={{ height: '36px', maxWidth: '120px', objectFit: 'contain', marginBottom: '18px' }} />}
+        <div style={{ fontSize: '22px', fontWeight: 800, marginBottom: '10px' }}>{tx.goneTitle}</div>
+        <p style={{ color: MUTED, fontSize: '14.5px', lineHeight: 1.6 }}>{tx.goneBody}</p>
+      </div>,
+    )
+  }
   const n = data.photos.length
   const goTo = (i: number) => setPhotoIdx(Math.min(Math.max(i, 0), n - 1))
   const nav = { position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: '38px', height: '38px', borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.55)', color: 'white', fontSize: '18px', cursor: 'pointer' } as const

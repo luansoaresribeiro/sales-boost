@@ -8,6 +8,7 @@ import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import ItemVideos from './ItemVideos'
 import PublicPageButton from './PublicPageButton'
 import ItemActivity from './ItemActivity'
+import ItemAvailability from './ItemAvailability'
 import CatalogImport from './CatalogImport'
 import CatalogItemEditor, { FieldInput } from './CatalogItemEditor'
 import VirtualStaging from './VirtualStaging'
@@ -44,7 +45,7 @@ const TX = {
 const ORANGE = '#FF6D29'
 
 interface Photo { url: string; path: string }
-interface ItemMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
+interface ItemMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown>; availability?: { status?: unknown; source?: unknown; checked_at?: unknown } | null }
 interface CatalogItem { id: string; title: string; image_url: string | null; meta: ItemMeta | null; created_at: string }
 
 
@@ -339,6 +340,7 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                   <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '8px' }}>
                     <span style={{ color: photoCount < minPhotos ? '#f87171' : MUTED, fontWeight: photoCount < minPhotos ? 700 : 400 }}>{photoCount}/{minPhotos} {tx.photosN}</span>{f.preco ? ` · R$ ${f.preco}` : ''}{f.quartos ? ` · ${f.quartos}${tx.bedrooms}` : ''}
                   </div>
+                  {!setupMode && <ItemAvailability itemId={item.id} companyId={companyId} verticalKey={verticalKey} meta={item.meta as never} onChanged={load} />}
                   {!setupMode && usageData.ok && (() => {
                     const u = usageData.usage[item.id]
                     const used = u && (u.last || u.next || u.n30 > 0)

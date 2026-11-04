@@ -214,7 +214,7 @@ function HistoryRow({ a, busy, onRetry }: { a: AgentAction; busy: boolean; onRet
       <span style={{ fontSize: '14px' }}>{CHANNEL_ICON[a.channel ?? 'internal'] ?? '⚙️'}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
-        <div style={{ fontSize: '9.5px', color: MUTED }}>{a.agent_name ?? a.agent_key} · {new Date(a.created_at).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' })}{a.execution_error ? ` · ${a.execution_error.slice(0, 60)}` : ''}</div>
+        <div style={{ fontSize: '9.5px', color: MUTED }}>{a.agent_name ?? a.agent_key} · {new Date(a.created_at).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' })}{a.execution_error ? ` · ${a.execution_error.slice(0, 60)}` : ''}{(a.execution_result as { waiting?: string } | null)?.waiting === 'availability_unverifiable' ? (lang === 'en' ? ' · checking availability, retrying' : ' · conferindo a disponibilidade, tentando de novo') : ''}</div>
       </div>
       <span style={{ fontSize: '9px', fontWeight: 700, color: ap.color, flexShrink: 0 }}>{lang === 'en' ? APPROVAL_LABEL_EN[a.approval_status] ?? ap.label : ap.label}</span>
       <span style={{ fontSize: '9px', fontWeight: 700, color: ex.color, flexShrink: 0 }}>{lang === 'en' ? EXECUTION_LABEL_EN[a.execution_status] ?? ex.label : ex.label}</span>

@@ -5,6 +5,7 @@
 // página desligada, empresa sem plano pago, imóvel apagado) — quem tenta adivinhar códigos não aprende nada. Nunca devolve campo
 // fora da lista branca da ficha, nem foto mobiliada (staged), nem telefone/Instagram que o dono não aprovou. Nada é enviado ao
 // visitante e nenhum IP é guardado (visitor_hash = SHA-256 com sal). Corretor (Etapa 7): o telefone dele só sai no redirecionamento do clique.
+import { availabilityOf, itemCfgFrom } from './itemService.ts'
 import { hasPaidAccess } from './access.ts'
 import {
   LEAD_SOURCE, LEAD_STAGE_NEW, NOT_FOUND_BODY, appendLinkOnce, clientIp, consentText, generateCode, instagramHandle, instagramUrl, isBot,
@@ -55,6 +56,7 @@ interface Live {
   page: { contact_phone: string | null; contact_ig: string | null }
   company: { id: string; name: string; logo: string | null }
   fields: ReturnType<typeof publicFields>; photos: string[]
+  unavailable: boolean   // Fase 4: imóvel vendido/alugado/removido — a página avisa e esconde contato
 }
 /** Carrega a página no ar. null = qualquer motivo para não existir (a camada de cima responde o mesmo 404). */
 async function loadLive(admin: Admin, code: unknown): Promise<Live | null> {
@@ -82,6 +84,7 @@ async function loadLive(admin: Admin, code: unknown): Promise<Live | null> {
       page: { contact_phone: page.contact_phone ?? null, contact_ig: page.contact_ig ?? null },
       company: { id: co.id, name: String(co.business_name ?? ''), logo },
       fields: publicFields(pb?.config?.catalog_fields, cfg, item.meta?.fields, lang), photos,
+      unavailable: availabilityOf(item, itemCfgFrom(pb?.config).availability).blocking,
     }
   } catch (e) { console.error('[public_page] loadLive:', String(e)); return null }
 }
@@ -147,6 +150,7 @@ export async function handlePublicPage(admin: Admin, action: string, body: Recor
         else if ((mine.count ?? 0) === 0 && (hour.count ?? 0) < LIMITS.viewPerLinkHour) await logEvent(admin, live, 'view', hash)
       }
       const cc = live.cfg.country_code
+      if (live.unavailable) return { status: 200, body: { ok: true, unavailable: true, lang: live.lang, title: live.title, company: { name: live.company.name, logo_url: live.company.logo }, fields: [], photos: [], buttons: { whatsapp: false, dm: false }, consent_text: '' } }
       return { status: 200, body: {
         ok: true, lang: live.lang, title: live.title, company: { name: live.company.name, logo_url: live.company.logo },
         fields: live.fields, photos: live.photos,
@@ -155,6 +159,7 @@ export async function handlePublicPage(admin: Admin, action: string, body: Recor
       } }
     }
 
+    if (live.unavailable) return NOT_FOUND // imóvel indisponível: sem clique de contato e sem formulário (o servidor também recusa)
     if (action === 'public_page_event') {
       const ev = body.event as 'click_whatsapp' | 'click_dm'
       let url = ev === 'click_whatsapp' ? whatsappUrl(live.page.contact_phone, live.title, live.lang, live.cfg.country_code) : instagramUrl(live.page.contact_ig)
