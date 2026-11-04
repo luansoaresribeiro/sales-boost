@@ -47,14 +47,17 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
   }, [company?.vertical_key])
 
   const load = useCallback(async () => {
-    const [{ data: i }, { data: t }] = await Promise.all([
+    const [{ data: i }, { data: ta }, { data: tg }] = await Promise.all([
       supabase.from('marketing_ai_ideas').select('*').eq('company_id', companyId).neq('status', 'dismissed').order('created_at', { ascending: false }).limit(30),
-      supabase.from('marketing_ai_trends').select('*').eq('company_id', companyId).order('detected_at', { ascending: false }).limit(30),
+      // Ativas e ignoradas em consultas separadas: as ignoradas não roubam as vagas das ativas.
+      supabase.from('marketing_ai_trends').select('*').eq('company_id', companyId).neq('status', 'ignored').order('detected_at', { ascending: false }).limit(10),
+      supabase.from('marketing_ai_trends').select('*').eq('company_id', companyId).eq('status', 'ignored').order('detected_at', { ascending: false }).limit(30),
     ])
+    const t = [...(ta ?? []), ...(tg ?? [])]
     setIdeas((i ?? []) as Idea[])
     setTrends((t ?? []) as Trend[])
     setLoading(false)
-    return (i?.length ?? 0) > 0 || (t?.length ?? 0) > 0 // (ignoradas também contam: não dispara a varredura de novo)
+    return (i?.length ?? 0) > 0 || t.length > 0 // (ignoradas também contam: não dispara a varredura de novo)
   }, [companyId])
 
   // Primeira visita sem nada ainda (nem ideia, nem tendência): dispara sozinho
@@ -153,7 +156,7 @@ export default function CreativeAgent({ companyId, module }: { companyId: string
             : (en ? 'As soon as the next weekly cycle scans real posts from your segment, the trends will show up here.' : 'Assim que o próximo ciclo semanal escanear posts reais do seu segmento, as tendências aparecem aqui.')}
         </div>
         {shownTrends.length === 0 ? (
-          <div style={{ padding: '18px', textAlign: 'center', color: MUTED, fontSize: '12px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '11px' }}>{en ? 'No trends yet.' : 'Nenhuma tendência ainda.'}</div>
+          <div style={{ padding: '18px', textAlign: 'center', color: MUTED, fontSize: '12px', background: CARD, border: `1px dashed ${BORDER}`, borderRadius: '11px' }}>{ignoredTrends.length > 0 ? (en ? 'All trends are ignored.' : 'Todas as tendências estão ignoradas.') : (en ? 'No trends yet.' : 'Nenhuma tendência ainda.')}</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
             {shownTrends.map(t => <TrendCard key={t.id} t={t} busy={busyId === `${t.id}:deck`} onDeck={readOnly ? undefined : () => generatePost({ id: t.id, title: t.title, hook: null, angle: t.description, format: 'carrossel', module: 'organico', fromTrend: true }, true)} onIgnore={() => setTrendIgnored(t, true)} locked={readOnly} />)}

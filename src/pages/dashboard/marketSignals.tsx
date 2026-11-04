@@ -26,7 +26,7 @@ const TX = {
     saved: 'Sinal salvo. Se a análise automática estiver ligada na sua conta (estratégia automática, com plano ativo), o sistema considera o sinal na próxima análise: ela roda quando entra sinal novo (no mínimo 24 horas depois da última) e, de qualquer forma, uma vez por semana.',
     addManual: 'Adicionar sinal manual',
     ignore: 'Ignorar', restore: 'Restaurar', ignoredTitle: (n: number) => `Ignorados (${n})`, ignoredNote: 'Fora das análises. A evidência continua guardada.', ignoredAt: 'Ignorado em', eIgnore: 'Não consegui ignorar. Tente de novo.', eRestore: 'Não consegui restaurar. Tente de novo.',
-    listTitle: 'Sinais cadastrados', empty: 'Nenhum sinal cadastrado ainda.', del: 'Apagar', confirmDel: 'Apagar este sinal?',
+    listTitle: 'Sinais cadastrados', empty: 'Nenhum sinal cadastrado ainda.', allIgnored: 'Todos os sinais estão ignorados.', del: 'Apagar', confirmDel: 'Apagar este sinal?',
     eTitle: 'Informe o título.', eSource: 'Informe o nome da fonte.', eUrl: 'O link precisa começar com http:// ou https:// e ser válido.', eDate: 'Informe a data (não pode ser futura).',
     eSave: 'Não consegui salvar. Tente de novo.', eDel: 'Não consegui apagar. Tente de novo.', loading: 'Carregando…', eLoad: 'Não consegui carregar os sinais.', retry: 'Tentar de novo',
     kinds: { news: 'Notícia', launch: 'Lançamento', infrastructure: 'Obra/infraestrutura', economy: 'Economia/juros', tourism: 'Turismo', rental: 'Aluguel', listing_price: 'Preço anunciado', supply: 'Oferta de imóveis', other: 'Outro' } as Record<Kind, string>,
@@ -41,7 +41,7 @@ const TX = {
     saved: 'Signal saved. If automatic analysis is on for your account (automatic strategy, with an active plan), the system takes the signal into account in the next analysis: it runs when a new signal arrives (at least 24 hours after the last one) and, regardless, once a week.',
     addManual: 'Add manual signal',
     ignore: 'Ignore', restore: 'Restore', ignoredTitle: (n: number) => `Ignored (${n})`, ignoredNote: 'Left out of the analyses. The evidence is kept.', ignoredAt: 'Ignored on', eIgnore: 'Could not ignore. Try again.', eRestore: 'Could not restore. Try again.',
-    listTitle: 'Saved signals', empty: 'No signals yet.', del: 'Delete', confirmDel: 'Delete this signal?',
+    listTitle: 'Saved signals', empty: 'No signals yet.', allIgnored: 'All signals are ignored.', del: 'Delete', confirmDel: 'Delete this signal?',
     eTitle: 'Enter the title.', eSource: 'Enter the source name.', eUrl: 'The link must start with http:// or https:// and be valid.', eDate: 'Enter the date (cannot be in the future).',
     eSave: 'Could not save. Try again.', eDel: 'Could not delete. Try again.', loading: 'Loading…', eLoad: 'Could not load the signals.', retry: 'Try again',
     kinds: { news: 'News', launch: 'Launch', infrastructure: 'Works/infrastructure', economy: 'Economy/interest rates', tourism: 'Tourism', rental: 'Rental', listing_price: 'Listed price', supply: 'Property supply', other: 'Other' } as Record<Kind, string>,
@@ -201,7 +201,7 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
       {listErr && <div role="alert" style={{ color: '#FBBF24', fontSize: '12.5px', marginBottom: '8px' }}>{listErr}</div>}
       {list === null ? <div style={{ color: MUTED, fontSize: '12.5px' }}>{t.loading}</div>
         : loadErr ? <div style={{ color: '#F87171', fontSize: '12.5px' }}>{t.eLoad} <button type="button" onClick={() => { setList(null); void loadList() }} style={{ background: 'none', border: 'none', color: ORANGE, cursor: 'pointer', fontSize: '12.5px', padding: 0 }}>{t.retry}</button></div>
-        : active.length === 0 ? <div style={{ color: MUTED, fontSize: '12.5px' }}>{t.empty}</div>
+        : active.length === 0 ? <div style={{ color: MUTED, fontSize: '12.5px' }}>{ignoredList.length > 0 ? t.allIgnored : t.empty}</div>
         : (
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {active.map(s => (

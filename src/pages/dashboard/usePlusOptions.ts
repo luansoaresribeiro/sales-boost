@@ -38,7 +38,7 @@ export function usePlusOptions(open: boolean, o: { companyId: string; verticalKe
     }
     if (readOnly) { setCheck({ status: 'idle' }); return } // vitrine: nem chama (o guard abriria o modal de plano)
     if (checkCache && checkCache.companyId === companyId && now - checkCache.at < TTL_MS) { setCheck(checkCache.value); return }
-    if (!token) { setCheck({ status: 'checking' }); return }
+    if (!token) { setCheck({ status: 'failed' }); return } // sem token não dá pra verificar (refaz sozinho quando o token chegar)
     setCheck({ status: 'checking' })
     void checkMakeNow(token).then(v => {
       if (v.status === 'ok' || v.status === 'plan') checkCache = { companyId, at: Date.now(), value: v }

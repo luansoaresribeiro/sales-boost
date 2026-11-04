@@ -19,14 +19,14 @@ const TX = {
     intro: 'O sistema busca sozinho, todo dia, notícias, lançamentos, obras e turismo da região dos seus imóveis. Cada item mostra a fonte e a data em que foi publicado. Apague o que não fizer sentido — nada aqui vai ao público.',
     lastRun: 'Última coleta', next: 'próxima', tomorrow: 'amanhã', nextDaily: 'na próxima rodada diária', never: 'Ainda não houve coleta automática.',
     region: 'Bairro/região', kind: 'Tipo', all: 'Todos', auto: 'Automático', ignore: 'Ignorar', restore: 'Restaurar', ignoredTitle: (n: number) => `Ignorados (${n})`, ignoredNote: 'Fora das análises. A evidência continua guardada.', ignoredAt: 'Ignorado em', eIgnore: 'Não consegui ignorar. Tente de novo.', eRestore: 'Não consegui restaurar. Tente de novo.', plan: 'Disponível no plano', del: 'Apagar', confirmDel: 'Apagar este item?', source: 'Fonte', published: 'Publicado em',
-    empty: 'Nenhum item ainda. A primeira coleta acontece sozinha, no próximo ciclo diário.', emptyFilter: 'Nenhum item com esses filtros.',
+    allIgnored: 'Todos os itens estão ignorados.', empty: 'Nenhum item ainda. A primeira coleta acontece sozinha, no próximo ciclo diário.', emptyFilter: 'Nenhum item com esses filtros.',
     loading: 'Carregando…', eLoad: 'Não consegui carregar o feed.', retry: 'Tentar de novo', eDel: 'Não consegui apagar. Tente de novo.',
   },
   en: {
     intro: 'The system automatically searches every day for news, launches, works and tourism around your properties. Each item shows the source and the date it was published. Delete whatever does not make sense — nothing here goes public.',
     lastRun: 'Last collection', next: 'next', tomorrow: 'tomorrow', nextDaily: 'on the next daily round', never: 'No automatic collection yet.',
     region: 'Neighborhood/region', kind: 'Type', all: 'All', auto: 'Automatic', ignore: 'Ignore', restore: 'Restore', ignoredTitle: (n: number) => `Ignored (${n})`, ignoredNote: 'Left out of the analyses. The evidence is kept.', ignoredAt: 'Ignored on', eIgnore: 'Could not ignore. Try again.', eRestore: 'Could not restore. Try again.', plan: 'Available on the plan', del: 'Delete', confirmDel: 'Delete this item?', source: 'Source', published: 'Published on',
-    empty: 'No items yet. The first collection happens on its own in the next daily cycle.', emptyFilter: 'No items match these filters.',
+    allIgnored: 'All items are ignored.', empty: 'No items yet. The first collection happens on its own in the next daily cycle.', emptyFilter: 'No items match these filters.',
     loading: 'Loading…', eLoad: 'Could not load the feed.', retry: 'Try again', eDel: 'Could not delete. Try again.',
   },
 } as const
@@ -124,7 +124,7 @@ export default function MarketFeed({ lang, companyId }: { lang: 'pt' | 'en'; com
       {ignErr && <div role="alert" style={{ color: '#FBBF24', fontSize: '12.5px', marginBottom: '8px' }}>{ignErr}</div>}
       {list === null ? <div style={{ color: MUTED, fontSize: '12.5px' }}>{t.loading}</div>
         : loadErr ? <div style={{ color: '#F87171', fontSize: '12.5px' }}>{t.eLoad} <button type="button" onClick={() => { setList(null); void load() }} style={{ background: 'none', border: 'none', color: ORANGE, cursor: 'pointer', fontSize: '12.5px', padding: 0 }}>{t.retry}</button></div>
-        : shown.length === 0 ? <div style={{ color: MUTED, fontSize: '12.5px' }}>{list.length === 0 ? t.empty : t.emptyFilter}</div>
+        : shown.length === 0 ? <div style={{ color: MUTED, fontSize: '12.5px' }}>{list.length === 0 ? t.empty : list.every(s => isIgnored(s.meta)) ? t.allIgnored : t.emptyFilter}</div>
         : (
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {shown.map(s => {
