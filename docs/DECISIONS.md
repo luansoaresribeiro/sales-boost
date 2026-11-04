@@ -6,6 +6,31 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-04 — Gate da Fase 2: medição e troca do filtro para `enforce` (dono: "Ativar e apertar")
+
+**Como foi medido.** A reclassificação (`cron_market_intel`, sem custo: não busca nem usa IA) rodou à mão às 14:49 UTC nos 67 sinais
+automáticos já gravados (Tespon 39, Teste Zero 28). Cada sinal foi classificado à mão como útil, duvidoso ou lixo. O veredito do filtro foi
+reproduzido localmente com o próprio `classifySignalQuality` e bateu exatamente com o que ficou gravado em `market_intel_runs`.
+
+| | v1 (audit) | v2 (enforce) |
+|---|---|---|
+| Lixo barrado | 33 de 46 | **46 de 46** |
+| Notícia útil ou duvidosa barrada (falso positivo) | 0 de 21 | **0 de 21** |
+| Lixo que ainda passa | 13 (anúncio de lançamento sem "venda", Booking, Skyscanner, app de shopping, depósito de bagagem, vale-transporte, Threads) | 0 |
+
+- **Precisão do que passa:** v1 = 14 úteis + 7 duvidosos + 13 lixos em 34; v2 = 14 úteis + 7 duvidosos em 21.
+- **Duplicados:** o recorde de turistas estrangeiros veio de 4 sites, e o "Oscar do Turismo" de 2. O filtro não junta a mesma notícia em
+  portais diferentes; fica como limitação conhecida (sem regra nova agora).
+- **Custo:** reclassificação = US$ 0. O custo por rodada de coleta passa a ser gravado em `market_intel_runs` a partir de 05/11, porque a
+  coleta de 04/11 rodou antes da `marketing-ai` v43.
+- **Oportunidades contra as 5 perguntas: reprovadas.** Das 12 mais recentes, 8 são "imóvel sem post há 60 dias" (lembrete interno, repetido
+  quase todo dia), e 4 usam o mercado de forma vaga. Uma delas foi montada a partir de anúncios-lixo ("Concorrência visível no Leblon").
+  Nenhuma usou as notícias boas que existiam (aluguel acima da inflação, recorde de turismo, metrô da Gávea, estúdios no alto padrão). O filtro
+  em `enforce` tira o lixo da entrada do motor; a qualidade das oportunidades é medida de novo depois das próximas rodadas.
+- **Decisão:** ficha v2 em `enforce` (migration `20261104150000_market_intel_quality_v2.sql`; regras e reversão no cabeçalho). As amostras
+  ficam travadas em `scripts/test-market-news.mjs`. **A Fase 2 não fecha aqui:** o critério de saída pede custo medido na coleta e oportunidades
+  que passem nas 5 perguntas.
+
 ## 2026-11-04 — Critérios de decisão (dono): princípio orientador, gate da Fase 2 e critérios de saída
 
 **Princípio orientador do roadmap:** o diferencial do SalesBoost não será ter mais agentes, telas ou funcionalidades — será identificar algo

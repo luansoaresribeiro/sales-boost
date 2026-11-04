@@ -266,4 +266,39 @@ assert.equal(classifySignalQuality({ kind: 'launch', title: 'Lançamento em Ipan
   const none = await collectMarketNews(fakeAdmin(), mk({ search: goodSearch, canStart: () => false })); assert.equal(none.collected, undefined); assert.equal(none.details, undefined); ok('rodada sem busca: nada medido (undefined, não 0)')
 }
 
+{ // --- Gate da Fase 2 (04/11/2026): ficha v2 em enforce. Amostras = os 13 lixos que a v1 deixava passar + 10 manchetes que precisam passar.
+  const sql2 = readFileSync(new URL('../supabase/migrations/20261104150000_market_intel_quality_v2.sql', import.meta.url), 'utf8')
+  const Q2 = parseQuality(JSON.parse(/\$json\$([\s\S]*?)\$json\$/.exec(sql2)[1]))
+  assert.equal(Q2.mode, 'enforce'); assert.equal(Q2.version, 2); assert.equal(Q2.trusted_domains.length, 14); assert.ok(Q2.block_title_all.length <= 40)
+  assert.ok(/quality,version\}'\) = '1'/.test(sql2) && !/\bdrop\b/i.test(sql2.split('\n').filter(l => !l.trimStart().startsWith('--')).join('\n'))); ok('ficha v2: enforce, versão 2, só troca quem está na v1, sem "drop"')
+  const c2 = (kind, title, url, summary = 'Texto da fonte com mais de quarenta caracteres para passar o mínimo do resumo.') => classifySignalQuality({ kind, title, summary, source_url: url }, Q2)
+  const LEAKS = [ // [tipo, título, url, resumo] — reais, medidos na Tespon e na Teste Zero
+    ['infrastructure', 'Estação Jardim de Alah/Leblon do metrô recebe exposição ...', 'https://abihrj.com.br/noticias/exposicao-bailarinas', 'A estação Jardim de Alah/Leblon, da Linha 4 do metrô, recebe a exposição da artista.'],
+    ['infrastructure', 'Depósito de bagagem Estação de Metrô Leblon 24/7 | Radical Storage', 'https://radicalstorage.com/pt/deposito-bagagem/rio/leblon'],
+    ['infrastructure', 'Shopping Metrô Santa Cruz - Apps on Google Play', 'https://play.google.com/store/apps/details?id=x'],
+    ['news', 'Latitud Barra da Tijuca: 3 & 4 Bedrooms, Ready to Move In', 'https://evandroimoveisrj.com.br/en/latitud-barra'],
+    ['launch', 'Lançamentos em Copacabana: Apartamentos na Planta | Lançamentos RJ', 'https://lancamentosrj.com/busca-imoveis-bairro/copacabana'],
+    ['launch', 'Botafogo tem endereço. E tem oportunidade.', 'https://threads.com/@elensilvia.imoveis/video/DeM9'],
+    ['launch', 'We Barra by Living: 2 a 4 quartos a partir de R$ 910.230', 'https://twoimoveis.com.br/we-barra-by-living'],
+    ['launch', 'Jaguaripe 289 | Lancamento em Ipanema', 'https://kaselle.com.br/1637/jaguaripe-289/lancamento/ficha'],
+    ['launch', 'Apartamento, Garden, 3 Quartos com 1 Suíte | Botafogo ...', 'https://miguezimobiliaria.com.br/apartamento-botafogo-rio-de-janeiro'],
+    ['launch', 'Sensia Barra a partir de R$ 875.990', 'https://twoimoveis.com.br/sensia-barra'],
+    ['infrastructure', 'Praia da Barra da Tijuca - Metrô Jardim Oceânico - 4 Quartos', 'https://skyscanner.gg/hotels/brazil/rio-de-janeiro-hotels/cobertura'],
+    ['launch', 'Venda em Ipanema - Studio com varanda', 'https://semfronteirasimoveis.com.br/venda-em-ipanema-studio-com-varanda'],
+    ['infrastructure', 'Linhas e operadoras de vale-transporte do Rio de Janeiro', 'https://otimizapro.com/tarifa/rj', 'Barra da Tijuca (via Linha Vermelha) Ônibus RIOCARD R$ 15,95.'],
+  ]
+  for (const [k, t, u, s] of LEAKS) assert.notEqual(c2(k, t, u, s), 'ok', t)
+  ok('ficha v2: os 13 lixos que passavam na v1 agora são barrados')
+  const NEWS = [ // manchetes de notícia de fonte NÃO confiável: precisam passar (falso positivo zero)
+    ['infrastructure', 'Prefeitura anuncia obras de revitalização na orla da Barra'], ['launch', 'Cyrela lança empreendimento de alto padrão em Botafogo'],
+    ['launch', 'Lançamento em Ipanema esgota unidades em uma semana'], ['economy', 'Preço do aluguel em Copacabana dispara com alta do turismo'],
+    ['economy', 'Apartamentos de 2 quartos com suíte são os mais procurados no Rio, diz pesquisa', 'Pesquisa do mercado imobiliário aponta preferência por plantas compactas com suíte.'], ['launch', 'Studio com varanda vira tendência entre investidores no Leblon'],
+    ['tourism', 'Réveillon deve lotar hotéis de Copacabana'], ['economy', 'Imóveis a partir de R$ 300 mil ganham força com novo MCMV, que amplia o financiamento'],
+    ['infrastructure', 'Estação de metrô da Gávea deve abrir em 2028'], ['economy', 'Juros altos travam financiamento imobiliário no Rio'],
+  ]
+  for (const [k, t, s] of NEWS) assert.equal(c2(k, t, 'https://exemplonoticias.com.br/rio/noticia-2026', s ?? `${t}. Resumo da reportagem com mais de quarenta caracteres.`), 'ok', t)
+  ok('ficha v2: 10 manchetes de notícia continuam passando')
+  assert.equal(c2('economy', 'Aluguel sobe acima da inflação; veja onde é mais caro', 'https://www1.folha.uol.com.br/mercado/2026/10/aluguel.shtml'), 'ok'); ok('ficha v2: portal confiável continua passando')
+}
+
 console.log(`\n${n} verificações ok`)
