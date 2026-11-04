@@ -10,7 +10,7 @@ import { supabase } from '../../../lib/supabase'
 // contaria 2x: o nº em 30 dias é o MAIOR das duas contagens (menor número seguro, nunca inventado).
 // Consulta que falha = `ok: false` e as telas ESCONDEM a linha (regra 5: nada de "0" fingido).
 
-export interface ItemInfo { id: string; title: string; cover: string | null; bairro: string | null }
+export interface ItemInfo { id: string; title: string; cover: string | null; bairro: string | null; availability: { status?: unknown; source?: unknown; checked_at?: unknown } | null }
 export interface ItemUse {
   last: string | null   // YYYY-MM-DD da última peça (planejada ou criada, até hoje)
   next: string | null   // YYYY-MM-DD da próxima peça planejada (depois de hoje)
@@ -35,9 +35,9 @@ async function fetchUsage(companyId: string): Promise<ItemUsageData> {
   ])
   if (kn.error || tc.error || ps.error) return EMPTY
   const items: Record<string, ItemInfo> = {}
-  for (const r of (kn.data ?? []) as { id: string; title: string; image_url: string | null; meta: { photos?: { url: string }[]; fields?: Record<string, unknown> } | null }[]) {
+  for (const r of (kn.data ?? []) as { id: string; title: string; image_url: string | null; meta: { photos?: { url: string }[]; fields?: Record<string, unknown>; availability?: { status?: unknown; source?: unknown; checked_at?: unknown } | null } | null }[]) {
     const bairro = r.meta?.fields?.bairro
-    items[r.id] = { id: r.id, title: r.title, cover: r.image_url ?? r.meta?.photos?.[0]?.url ?? null, bairro: bairro ? String(bairro) : null }
+    items[r.id] = { id: r.id, title: r.title, cover: r.image_url ?? r.meta?.photos?.[0]?.url ?? null, bairro: bairro ? String(bairro) : null, availability: r.meta?.availability ?? null }
   }
   const today = isoDay(new Date())
   const since = isoDay(new Date(Date.now() - 30 * 86400000))

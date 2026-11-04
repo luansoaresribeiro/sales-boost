@@ -103,6 +103,7 @@ export interface TestPost {
   item_id?: string | null
   opportunity_id?: string | null
   recipe?: string | null
+  item_pick?: unknown   // Fase 4: motivo real da escolha do imóvel (itemService.buildPickReason)
 }
 
 // Recomendação de como GRAVAR o vídeo (roteiro), quando o formato é vídeo/reel/story.

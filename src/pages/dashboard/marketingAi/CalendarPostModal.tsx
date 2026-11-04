@@ -10,6 +10,9 @@ import { PieceChips } from './PieceLabels'
 import PieceIntent from './PieceIntent'
 import { marketEvidence, type OppMap } from './activationType'
 import { useItemUsage, dayLabel } from './useItemUsage'
+import { useAvailabilityCfg } from './useAvailabilityCfg'
+import { useCompany } from '../../../contexts/CompanyContext'
+import { availabilityOf, parseItemPick, pickReasonText, statusLabel } from '../../../lib/itemAvailability'
 import { proposeAgentAction, unscheduleAgentAction } from '../../../lib/agentActions'
 import { PUBLISH_HOUR_BRT, plannedPublishAt, publishWhenLabel } from '../../../lib/publishSlot'
 
@@ -34,7 +37,7 @@ const TX = {
     inspired: 'Tema inspirado em',
     itemTitle: 'Imóvel desta peça', itemWhy: 'Por que este imóvel', itemOpen: 'Abrir no Catálogo', itemNearby: 'Inteligência de localização',
     whyOpp: 'Peça de uma oportunidade aprovada — o imóvel vem dela.',
-    whyNone: 'Motivo da escolha do imóvel não registrado — o sistema ainda não grava por que este imóvel foi escolhido.', usedN: (n: number) => `usado em ${n} peça${n === 1 ? '' : 's'} nos últimos 30 dias`, lastPiece: 'Última peça',
+    whyNone: 'Motivo da escolha do imóvel não registrado (peça criada antes do registro do motivo).', gone: (st: string) => `Imóvel indisponível (${st}) — esta peça não será publicada. Mude o status no Catálogo se ele voltou a estar disponível.`, usedN: (n: number) => `usado em ${n} peça${n === 1 ? '' : 's'} nos últimos 30 dias`, lastPiece: 'Última peça',
     editCap: '✏️ Editar legenda', saveCap: 'Salvar legenda', capSaved: 'Legenda salva — o agente vai aprender com a sua mudança ✓',
   },
   en: {
@@ -54,7 +57,7 @@ const TX = {
     inspired: 'Theme inspired by',
     itemTitle: 'Property in this piece', itemWhy: 'Why this property', itemOpen: 'Open in Catalog', itemNearby: 'Location intelligence',
     whyOpp: 'Piece from an approved opportunity — the property comes from it.',
-    whyNone: 'Reason for choosing this property not recorded — the system does not yet store why this property was picked.', usedN: (n: number) => `used in ${n} piece${n === 1 ? '' : 's'} in the last 30 days`, lastPiece: 'Last piece',
+    whyNone: 'Reason for choosing this property not recorded (piece made before reasons were stored).', gone: (st: string) => `Property unavailable (${st}) — this piece will not be published. Change its status in the Catalog if it is available again.`, usedN: (n: number) => `used in ${n} piece${n === 1 ? '' : 's'} in the last 30 days`, lastPiece: 'Last piece',
     editCap: '✏️ Edit caption', saveCap: 'Save caption', capSaved: 'Caption saved — the agent will learn from your change ✓',
   },
 } as const
@@ -83,6 +86,8 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged,
   const token = session?.access_token ?? ''
   const ssNames = useSSNames(companyId)
   const usage = useItemUsage(companyId)
+  const { company } = useCompany()
+  const availCfg = useAvailabilityCfg(company?.vertical_key)
   const [item, setItem] = useState<Post>(post)
   const [adapts, setAdapts] = useState<TestPost[]>([])
   const [ownOpps, setOwnOpps] = useState<OppMap | undefined>(undefined) // undefined = ainda consultando
@@ -130,7 +135,7 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged,
         action_type: 'create_content', channel: 'instagram', source: 'vault',
         ref_type: 'marketing_ai_test_content', ref_id: p.id, title: p.idea ?? (lang === 'en' ? 'Calendar post' : 'Post do calendário'),
         agent_interpretation: lang === 'en' ? `Approved by the owner in the calendar (score ${p.quality_score ?? '—'}).` : `Aprovado pelo dono no calendário (nota ${p.quality_score ?? '—'}).`,
-        payload: { idea: p.idea, caption: p.caption, hashtags: p.hashtags, cta: p.cta, image_url: p.image_url, media: p.media },
+        payload: { idea: p.idea, caption: p.caption, hashtags: p.hashtags, cta: p.cta, image_url: p.image_url, media: p.media, item_id: (p as Post).item_id ?? null },
         approve_now: true,
       })
       if (action.execution_status === 'EXECUTED' && (action.execution_result as { published_to_instagram?: boolean } | null)?.published_to_instagram) setOkMsg(tx.published)
@@ -152,7 +157,7 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged,
         action_type: 'create_content', channel: 'instagram', source: 'vault',
         ref_type: 'marketing_ai_test_content', ref_id: item.id, title: item.idea ?? (lang === 'en' ? 'Calendar post' : 'Post do calendário'),
         agent_interpretation: lang === 'en' ? `Approved by the owner in the calendar (score ${item.quality_score ?? '—'}), scheduled.` : `Aprovado pelo dono no calendário (nota ${item.quality_score ?? '—'}), agendado.`,
-        payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags, cta: item.cta, image_url: item.image_url, media: item.media },
+        payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags, cta: item.cta, image_url: item.image_url, media: item.media, item_id: item.item_id ?? null },
         scheduled_at: iso,
       })
       setOkMsg(`${tx.scheduledFor} ${fmtScheduled(iso, lang)} ✓`)
@@ -259,7 +264,10 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged,
             // O motivo da escolha não é gravado por peça: só afirmamos o que o código garante (oportunidade → vem dela).
             // Peça com dia no calendário pode vir do rodízio, do "Gerar agora" com imóvel escolhido ou do pacote do
             // catálogo — sem marcador, não dá pra dizer qual (regra 5). O "reasoning" é sobre formato/tema, não o imóvel.
-            const why = item.opportunity_id ? tx.whyOpp : tx.whyNone
+            // Fase 4: o motivo vem do que o sistema gravou na hora da escolha (item_pick). Sem ele, só afirmamos o que o código garante.
+            const pick = parseItemPick(item.item_pick)
+            const why = pick ? pickReasonText(pick, lang, availCfg ?? null) : item.opportunity_id ? tx.whyOpp : tx.whyNone
+            const av = availCfg ? availabilityOf({ meta: { availability: info.availability } }, availCfg) : null
             return (
               <div style={{ padding: '10px 12px', border: `1px solid ${BORDER}`, borderRadius: '10px', background: 'rgba(255,255,255,0.02)', display: 'flex', gap: '10px' }}>
                 {info.cover && <img src={info.cover} alt="" style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />}
@@ -269,6 +277,7 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged,
                   {info.bairro && <div style={{ fontSize: '11px', color: MUTED }}>{info.bairro}</div>}
                   {usage.data.ok && u && <div style={{ fontSize: '10.5px', color: MUTED }}>{tx.usedN(u.n30)}{u.last ? ` · ${tx.lastPiece} ${dayLabel(u.last)}` : ''}</div>}
                   <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.45, marginTop: '4px' }}><strong>{tx.itemWhy}:</strong> {why}</div>
+                  {av?.blocking && <div role="alert" style={{ fontSize: '11.5px', color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: '8px', padding: '7px 10px', marginTop: '6px', lineHeight: 1.45 }}>⚠️ {tx.gone(statusLabel(availCfg ?? null, av.status, lang).toLowerCase())}</div>}
                   <div style={{ display: 'flex', gap: '12px', marginTop: '5px', flexWrap: 'wrap' }}>
                     <Link to={`/dashboard/catalogo?item=${encodeURIComponent(info.id)}`} style={{ fontSize: '11px', fontWeight: 700, color: ORANGE }}>{tx.itemOpen}</Link>
                     <Link to={`/dashboard/marketing-ai/dados?sub=lugares&imovel=${encodeURIComponent(info.id)}`} style={{ fontSize: '11px', fontWeight: 700, color: ORANGE }}>{tx.itemNearby}</Link>

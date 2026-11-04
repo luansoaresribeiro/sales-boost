@@ -1,3 +1,4 @@
+import { fetchItemCfg, ownerBlockMessage } from '../_shared/itemService.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { advanceTour, clipPrompt, estimateUsd, hfHeaders, SECONDS, studioReady, submitAll, VIDEO_BUCKET, type ClipKind, type TourRow } from '../_shared/tourEngine.ts'
@@ -146,6 +147,8 @@ async function resumePending(admin: Admin, supabaseUrl: string, deadline: number
       if (!company || await requirePaidAccess(admin, company.id)) { await setPiece(withN('O vídeo não foi feito: a conta não tem plano ativo. Nada foi cobrado.'), true); continue }
       const { data: item } = await admin.from('marketing_ai_knowledge').select('id, meta').eq('id', pend.item_id).eq('company_id', company.id).eq('kind', 'product').maybeSingle()
       const have = new Set(((item?.meta?.photos ?? []) as { url: string }[]).map(p => p.url))
+      const blockedMsg = item ? ownerBlockMessage(item as never, { ...(await fetchItemCfg(admin, company.vertical_key)), minPhotos: 0 }) : null
+      if (blockedMsg) { await setPiece(withN(`O vídeo não foi feito: ${blockedMsg} Nada foi cobrado.`), true); continue }
       if (!item || pend.photos.some(u => !have.has(u))) { await setPiece(withN('O vídeo não foi feito: as fotos do imóvel mudaram. Nada foi cobrado.'), true); continue }
       // Reserva ANTES de pagar: só segue quem conseguiu tirar o pedido da peça (e a peça ainda existe).
       const { data: claim } = await admin.from('marketing_ai_test_content').update({ concept: null })
@@ -272,6 +275,9 @@ Deno.serve(async (req) => {
       if ((!company.plan || company.plan === 'free') && company.manual_access !== true) return json({ error: 'Os vídeos do imóvel fazem parte do plano.' }, 403)
       const item = await loadItem(body.item_id)
       if (!item) return json({ error: 'Imóvel não encontrado.' }, 404)
+      // Fase 4: imóvel indisponível = 400 ANTES de qualquer gasto na Higgsfield.
+      const blockMsg = ownerBlockMessage(item, await fetchItemCfg(admin, company.vertical_key))
+      if (blockMsg && !/fotos reais/.test(blockMsg)) return json({ error: blockMsg, code: 'item_unavailable' }, 400)
       const kind = body.kind as ClipKind
       if (!KINDS.includes(kind)) return json({ error: 'Tipo de vídeo inválido.' }, 400)
       const photos = Array.isArray(body.photos) ? body.photos.map(String) : []

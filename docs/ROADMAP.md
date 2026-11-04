@@ -702,6 +702,7 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
     disponibilidade), não uma justificativa genérica.
   - Revalidar o imóvel antes de publicar, e criar o serviço comum de imóveis.
   - Critério de aceite: imóvel indisponível não publica.
+  - **Status (2026-11-04): implementado na branch `claude/nifty-shannon-ysp818-fase4`, aguardando aprovação/merge do dono** (migrations + deploy pela sessão principal). Relacionar imóvel por tema/região ficou fora (decisão do dono).
 - **Fase 5:**
   - Separar marketing (alcance, engajamento, salvamentos, cliques) de comercial (conversas, leads, visitas, conversões).
   - A branch `results-flow` é dependência própria.

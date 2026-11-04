@@ -6,6 +6,7 @@
 // ~110s do PITFALLS "Limite de 150s") e as consultas ao banco levam poucos segundos. Sem candidato
 // com base, nem chama a IA (custo zero). Só LÊ dados da empresa e só ESCREVE em growth_opportunities
 // e agent_performance — nada é publicado ou enviado (regra 1).
+import { availabilityOf, itemCfgFrom } from './itemService.ts'
 import {
   buildCandidates, signalIdsOf, type CatalogItem, type CompetitorRow, type EngineInput, type EventRow, type FieldMap, type Lang,
   type OppTexts, type PostRow, type SignalRow, type TrendRow,
@@ -80,7 +81,9 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
     rows<SignalRow>(admin.from('market_signals').select('id, kind, region, title, summary, source_name, source_url, observed_at').eq('company_id', companyId).or('meta->>ignored.is.null,meta->>ignored.neq.true').order('created_at', { ascending: false }).limit(50), 'sinais de mercado'),
   ])
 
-  const catalog: CatalogItem[] = items.map(i => ({ id: i.id, title: i.title, fields: i.meta?.fields ?? {}, photoCount: i.meta?.photos?.length ?? 0 }))
+  // Fase 4: imóvel vendido/alugado/removido não vira oportunidade nova (ficha sem availability = nada filtrado).
+  const icfg = itemCfgFrom(pb?.config)
+  const catalog: CatalogItem[] = items.filter(i => !availabilityOf(i, icfg.availability).blocking).map(i => ({ id: i.id, title: i.title, fields: i.meta?.fields ?? {}, photoCount: i.meta?.photos?.length ?? 0 }))
   const input: EngineInput = {
     lang, now: new Date(), windowDays: WINDOW_DAYS, fieldMap, labels, itemLabel: cfg.vocabulary?.item ?? 'Item',
     catalog, posts, events, competitors, trends, signals, instagramConnected: !!co.instagram_user_id, texts,

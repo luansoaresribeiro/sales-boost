@@ -10,6 +10,7 @@ import { familyOf, fetchFormatAliases, fetchFormatCatalog, type ContentFormat } 
 import { resolveAlias } from './deckTopic.ts'
 import { buildOpportunityIntent, type SlotIntent } from './slotIntent.ts'
 import { MAX_PIECES_PER_PLAN } from './opportunityPlan.ts'
+import { availabilityOf, fetchItemCfg } from './itemService.ts'
 import { itemUsable, resolveFormatKey, videoFree, type PieceMode } from './opportunityPieces.ts'
 
 // deno-lint-ignore no-explicit-any
@@ -44,7 +45,9 @@ export async function buildOpportunityJob(admin: Admin, company: { id: string; v
   if (mode === 'item') {
     const planItems = [...((row.plan as { item_ids?: unknown }).item_ids as unknown[] ?? []), ...((row.item_ids as unknown[]) ?? [])]
     const { data: it } = isUuid(p.item_id) ? await admin.from('marketing_ai_knowledge').select('id, meta').eq('id', p.item_id).eq('company_id', company.id).eq('kind', 'product').maybeSingle() : { data: null }
-    const photos = (it?.meta as { photos?: unknown[] } | null)?.photos?.length ?? 0
+    // Fase 4: imóvel indisponível (vendido/alugado/removido) → a peça vira texto, sem imóvel; mínimo de fotos vem da ficha.
+    const icfg = await fetchItemCfg(admin, company.vertical_key)
+    const photos = !it || availabilityOf(it, icfg.availability).blocking ? 0 : ((it.meta as { photos?: unknown[] } | null)?.photos?.length ?? 0)
     if (it && itemUsable(p.item_id, planItems, photos)) itemId = it.id as string
     else mode = 'text' // sem foto real suficiente: nunca inventa imagem de imóvel (regra 4)
   }

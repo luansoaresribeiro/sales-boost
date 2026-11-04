@@ -20,6 +20,7 @@
  * empilhar mais conteúdo em cima do que o pacote já agendou.
  */
 import { loadLessons, lessonsBlock } from '../_shared/contentLessons.ts'
+import { buildPickReason, cleanItemPick, fetchItemCfg, availabilityOf, ownerBlockMessage, saveItemPick, type PickItem } from '../_shared/itemService.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { applyQueroLock, cleanLabels, dropUnknownPilar, fetchSSPillars } from '../_shared/slotIntent.ts'
@@ -272,7 +273,12 @@ Deno.serve(async (req) => {
     const meta = (item.meta ?? {}) as CatalogMeta
     const photos = meta.photos ?? []
     const fields = meta.fields ?? {}
-    if (photos.length < 5) return json({ error: 'Item precisa de pelo menos 5 fotos reais pra gerar o pacote.' }, 400)
+    // Fase 4: mínimo de fotos da ficha + disponibilidade (itemService). Vendido/alugado/removido = 400 em português, nada é gerado.
+    const itemCfg = await fetchItemCfg(admin, company.vertical_key as string | null)
+    const blockMsg = ownerBlockMessage(item, itemCfg)
+    if (blockMsg) return json({ error: blockMsg, code: 'item_unavailable' }, 400)
+    // Motivo da escolha: vem do planejamento (modo interno); sem ele, o dono escolheu o imóvel.
+    const itemPick = (internal ? cleanItemPick(body.item_pick) : null) ?? buildPickReason({ rule: 'owner_choice', cfg: itemCfg, item: { id: item.id as string, title: String(item.title ?? ''), photos: photos.length, fields: fields as Record<string, unknown>, availability: availabilityOf(item, itemCfg.availability) } satisfies PickItem })
 
     // Trava do QUERO (vale pra toda receita): "Comente QUERO" só com a resposta deste imóvel aprovada.
     // Intenção da estratégia + rótulos só chegam pelo modo interno (cron_secret) — o botão do dono não manda.
@@ -481,6 +487,7 @@ Deno.serve(async (req) => {
             else await admin.from('agent_performance').insert({ company_id: company.id, agent_role: 'cmo', task_key: 'opportunity_piece_created', task_description: `opp:${opportunityId} peça ${row!.id}`, latency_ms: 0, tokens_used: 0, success: true }) // marca que a peça existiu (a exclusão do rascunho não a apaga)
           } catch (e) { console.error('catalog-package: opportunity_id falhou', e) }
         }
+        await saveItemPick(admin, row!.id as string, itemPick) // UPDATE à parte e tolerante (PITFALLS)
         await scoreTestContent(supabaseUrl, serviceKey, company.id as string, row!.id as string)
         generated.push({ recipe, pillar: pillarKey, planned_for: slot.date, id: row!.id as string, over_capacity: slot.overCapacity })
       }

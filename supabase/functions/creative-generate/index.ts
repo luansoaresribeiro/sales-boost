@@ -40,6 +40,7 @@ import { fetchThemeCfg, planWeekThemes, recipeBlocked } from '../_shared/weekThe
 import { resolveAlias, topicText } from '../_shared/deckTopic.ts'
 import { currentWeekBRT } from '../_shared/publishSlot.ts'
 import { buildOpportunityJob } from '../_shared/opportunityPieceJob.ts'
+import { buildPickReason, cleanItemPick, fetchItemCfg, getItem, listPickableItems, ownerBlockMessage, rankItems, saveItemPick, usageLastDays, type ItemPick } from '../_shared/itemService.ts'
 import { checkCaption, promptRules as captionRules, rewriteRequest, stripForbidden, findForbidden } from '../_shared/captionGuard.ts'
 import { formatPrice, tourNotice, WAITING_STUDIO_PRE } from '../_shared/tourPick.ts'
 import { studioReady } from '../_shared/tourEngine.ts'
@@ -481,6 +482,7 @@ interface GenOpts {
   itemId?: string | null
   // Etapa 4B: oportunidade que originou a peça (vem de buildOpportunityJob, já conferida no banco). Gravada em saveLabels.
   opportunityId?: string | null
+  itemPick?: ItemPick | null   // Fase 4: motivo da escolha do imóvel (gravado em UPDATE à parte)
   ideaId?: string | null
   skipImage?: boolean
   // Escolha manual do dono no botão "Gerar post de teste": undefined/null =
@@ -792,6 +794,11 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   brief.reasoning = [brief.reasoning, lock.notice, internalNotesNotice(sp.notes), sp.emptied ? EMPTY_CAPTION_NOTICE : null].filter(Boolean).join(' ') || brief.reasoning
 
   // Imóvel citado pela vaga (só quando a vaga traz item_id): fonte dos fatos da trava de mercado e das fotos reais da capa/fecho do educativo.
+  // Fase 4: imóvel que ficou indisponível entre o planejamento e agora → a peça sai sem imóvel (nunca troca por outro em silêncio).
+  if (opts.itemId) {
+    const msg = ownerBlockMessage(await getItem(admin, company.id, opts.itemId), { ...(await fetchItemCfg(admin, company.vertical_key ?? null)), minPhotos: 0 })
+    if (msg) { console.error('generateForCompany: imóvel indisponível — peça sem imóvel', company.id, opts.itemId); opts = { ...opts, itemId: null, itemPick: null } }
+  }
   const linkedItem = opts.itemId ? (await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('id', opts.itemId).eq('company_id', company.id).eq('kind', 'product').maybeSingle()).data as { id: string; title: string | null; meta: { fields?: Record<string, unknown>; photos?: CatalogPhoto[] } | null } | null : null
 
   // Carrossel de slides: validado e, se o tema pede, conferido ANTES de gravar — legenda e arte saem do mesmo texto conferido.
@@ -843,6 +850,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   }).select('id').single()
   if (insErr) throw new Error(insErr.message)
   await saveLabels(admin, inserted.id, opts.labels, opts.intent, opts.opportunityId)
+  await saveItemPick(admin, inserted.id, opts.itemId ? opts.itemPick : null)
   // Dica usada num carrossel regulado conta como usada (rodízio das menos usadas).
   if (topic?.mode === 'regulado') {
     await Promise.all(topic.tips.map(t => admin.from('marketing_ai_knowledge').update({ meta: { ...t.meta, used_count: (t.meta?.used_count ?? 0) + 1 } }).eq('id', t.id).eq('company_id', company.id)))
@@ -1230,7 +1238,7 @@ const VIDEO_RECIPE = 'video_imovel'
 const DECK_FORMAT = 'carrossel_slides' // genérico (formatCatalog.ts)
 // familia/pilar_ss/tema = rótulo único da peça (tema = pilar de conteúdo da ficha, gravado em `pillar`);
 // intent = a intenção da estratégia pra esta vaga (buildSlotIntent). Todos opcionais (vaga antiga/avulsa).
-interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string; familia?: string; pilar_ss?: string; tema?: string; intent?: SlotIntent | null; opportunity_id?: string; tour?: TourPlan; theme_idea?: string; theme_note?: string; market_context?: MarketContext }
+interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string; familia?: string; pilar_ss?: string; tema?: string; intent?: SlotIntent | null; opportunity_id?: string; item_pick?: ItemPick | null; tour?: TourPlan; theme_idea?: string; theme_note?: string; market_context?: MarketContext }
 
 async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: ReturnType<typeof weekSlots>, plan: ContentPlan, funnelPlan: unknown = null, ssPillars: { key: string; name: string; why?: string }[] = []): Promise<{ planned: number; days: { date: string; posts: number; note: string }[]; todo: { format: string; name: string; per_week: number; purpose: string }[] }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -1241,10 +1249,12 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
   const themeCfg = await fetchThemeCfg(admin, company.vertical_key ?? null)
   const weekOf = dates[0] ?? new Date().toISOString().slice(0, 10)
   const cooldownSince = new Date(Date.parse(`${weekStartOf(weekOf)}T00:00:00Z`) - themeCfg.cooldownWeeks * 7 * 86400000).toISOString()
-  const [formats, aliases, { data: itemRows }, { data: usedRows }, { data: existingRows }, { data: pkgRows }, { data: themeRows }] = await Promise.all([
+  // Fase 4: mínimo de fotos e status de disponibilidade vêm da ficha (itemService); vendido/alugado/removido não entram na rotação.
+  const itemCfg = await fetchItemCfg(admin, company.vertical_key ?? null)
+  const [formats, aliases, pickable, { data: usedRows }, { data: existingRows }, { data: pkgRows }, { data: themeRows }] = await Promise.all([
     fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
     fetchFormatAliases(admin, company.vertical_key ?? 'generico'),
-    admin.from('marketing_ai_knowledge').select('id, meta').eq('company_id', company.id).eq('kind', 'product'),
+    listPickableItems(admin, company.id, itemCfg),
     admin.from('marketing_ai_test_content').select('item_id').eq('company_id', company.id).not('item_id', 'is', null).gte('created_at', since),
     admin.from('marketing_ai_test_content').select('planned_for, item_id, recipe').eq('company_id', company.id).in('planned_for', dates),
     // Trava de repetição (2026-11-02): oferta = mesmo imóvel + mesma receita; educativo = tema parecido. Janela de N semanas da ficha.
@@ -1256,17 +1266,17 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
   const recipeOf = new Map(formats.map(f => [f.key, f.recipe]))
   const usage = new Map<string, number>()
   for (const r of (usedRows ?? []) as { item_id: string }[]) usage.set(r.item_id, (usage.get(r.item_id) ?? 0) + 1)
-  const items = ((itemRows ?? []) as { id: string; meta: { photos?: unknown[] } | null }[])
-    .filter(it => (it.meta?.photos?.length ?? 0) >= 5).map(it => it.id)
+  const items = pickable.items
+  const itemIds = items.map(i => i.id)
   // Tour: no máximo 1 por imóvel na semana (decisão do dono 2026-11-02) — só repete se houver um único imóvel elegível.
   const videoItems = new Set(((existingRows ?? []) as { item_id: string | null; recipe: string | null }[]).filter(r => r.recipe === VIDEO_RECIPE && r.item_id).map(r => r.item_id as string))
-  const pickItem = (avoid?: Set<string>, strict = false): string | null => {
-    if (!items.length) return null
-    const free = avoid ? items.filter(i => !avoid.has(i)) : items
-    if (strict && !free.length) return null   // oferta: todos os imóveis já usaram essa receita na janela → fica "pra fazer" em vez de repetir
-    const id = [...(free.length ? free : items)].sort((a, b) => (usage.get(a) ?? 0) - (usage.get(b) ?? 0))[0]
-    usage.set(id, (usage.get(id) ?? 0) + 1)
-    return id
+  // Mesma rotação de antes (o menos usado em 21 dias), agora devolvendo o MOTIVO junto (item_pick). Indisponível já ficou de fora da lista.
+  const pickItem = (avoid?: Set<string>, strict = false): { id: string; pick: ItemPick } | null => {
+    const rank = rankItems(items, usage, { avoid, strict })   // strict e nada livre = null: a oferta fica "pra fazer" em vez de repetir
+    if (!rank) return null
+    const item = items.find(i => i.id === rank.id)!
+    usage.set(rank.id, (usage.get(rank.id) ?? 0) + 1)
+    return { id: rank.id, pick: buildPickReason({ rule: 'least_used', item, cfg: itemCfg, rank }) }
   }
   const existing = ((existingRows ?? []) as { planned_for: string; item_id: string | null; recipe: string | null }[]).map(r => ({ ...r }))
   const alreadyFilled = (date: string, recipe: string | undefined, producer: string): boolean => {
@@ -1299,18 +1309,18 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
       jobs.push({ date: slot.date, producer: 'post', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format, ...labelsOf(slot) }); continue
     }
     if (slot.producer === 'item_video') {
-      const itemId = pickItem(videoItems)
-      if (!itemId) { addTodo(slot); continue }
-      videoItems.add(itemId)
-      jobs.push({ date: slot.date, producer: 'item_video', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format: slot.format, recipe: VIDEO_RECIPE, item_id: itemId, ...labelsOf(slot) })
+      const picked = pickItem(videoItems)
+      if (!picked) { addTodo(slot); continue }
+      videoItems.add(picked.id)
+      jobs.push({ date: slot.date, producer: 'item_video', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format: slot.format, recipe: VIDEO_RECIPE, item_id: picked.id, item_pick: picked.pick, ...labelsOf(slot) })
       continue
     }
     // Oferta: o MESMO imóvel não repete a mesma receita antes de N semanas (ficha) nem 2x na semana (código; ângulo = receita).
     const recipeKey = recipe ? String(recipe) : ''
-    const itemId = recipeKey ? pickItem(new Set(items.filter(i => recipeBlocked(pkgHistory, i, recipeKey, slot.date, themeCfg.cooldownWeeks))), true) : null
-    if (!recipe || !itemId) { addTodo(slot); continue }
-    pkgHistory.push({ item_id: itemId, recipe: recipeKey, date: slot.date })
-    jobs.push({ date: slot.date, producer: 'item_package', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe, item_id: itemId, ...labelsOf(slot) })
+    const picked = recipeKey ? pickItem(new Set(itemIds.filter(i => recipeBlocked(pkgHistory, i, recipeKey, slot.date, themeCfg.cooldownWeeks))), true) : null
+    if (!recipe || !picked) { addTodo(slot); continue }
+    pkgHistory.push({ item_id: picked.id, recipe: recipeKey, date: slot.date })
+    jobs.push({ date: slot.date, producer: 'item_package', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe, item_id: picked.id, item_pick: picked.pick, ...labelsOf(slot) })
   }
 
   // Temas da semana INTEIRA reservados antes de disparar (vagas rodam em paralelo e não se enxergam): 1 pedido curto ao Diretor
@@ -1377,19 +1387,19 @@ async function makeNowJob(admin: SupaClient, company: Company, formatKey: string
   if (f.producer === 'post') return job
   const recipe = f.producer === 'item_video' ? VIDEO_RECIPE : f.recipe
   if (!recipe) return 'Esse tipo de criativo ainda não tem receita pronta.'
-  const { data: rows } = await admin.from('marketing_ai_knowledge').select('id, meta').eq('company_id', company.id).eq('kind', 'product')
-  const ok = ((rows ?? []) as { id: string; meta: { photos?: unknown[] } | null }[]).filter(r => (r.meta?.photos?.length ?? 0) >= 5).map(r => r.id)
-  if (!ok.length) return 'Precisa de um imóvel com pelo menos 5 fotos reais no catálogo.'
-  let pick = itemId && ok.includes(itemId) ? itemId : null
-  if (itemId && !pick) return 'Esse imóvel não foi encontrado ou tem menos de 5 fotos.'
-  if (!pick) {
-    const since = new Date(Date.now() - 21 * 86400000).toISOString()
-    const { data: used } = await admin.from('marketing_ai_test_content').select('item_id').eq('company_id', company.id).in('item_id', ok).gte('created_at', since)
-    const n = new Map<string, number>()
-    for (const r of (used ?? []) as { item_id: string }[]) n.set(r.item_id, (n.get(r.item_id) ?? 0) + 1)
-    pick = [...ok].sort((a, b) => (n.get(a) ?? 0) - (n.get(b) ?? 0))[0]
+  // Fase 4: mínimo de fotos da ficha + disponibilidade (itemService). Imóvel escolhido pelo dono e indisponível = recusa clara (400).
+  const itemCfg = await fetchItemCfg(admin, company.vertical_key ?? null)
+  if (itemId) {
+    const msg = ownerBlockMessage(await getItem(admin, company.id, itemId), itemCfg)
+    if (msg) return msg
   }
-  return { ...job, recipe, item_id: pick }
+  const { items: ok } = await listPickableItems(admin, company.id, itemCfg)
+  if (!ok.length) return `Precisa de um imóvel disponível com pelo menos ${itemCfg.minPhotos} fotos reais no catálogo.`
+  const chosen = itemId ? ok.find(i => i.id === itemId) : undefined
+  if (itemId && !chosen) return `Esse imóvel não foi encontrado ou tem menos de ${itemCfg.minPhotos} fotos.`
+  if (chosen) return { ...job, recipe, item_id: chosen.id, item_pick: buildPickReason({ rule: 'owner_choice', item: chosen, cfg: itemCfg }) }
+  const rank = rankItems(ok, await usageLastDays(admin, company.id, 21, ok.map(i => i.id)))!
+  return { ...job, recipe, item_id: rank.id, item_pick: buildPickReason({ rule: 'least_used', item: ok.find(i => i.id === rank.id)!, cfg: itemCfg, rank }) }
 }
 
 // Uma vaga do calendário (chamada interna, relógio próprio de 150s).
@@ -1416,13 +1426,13 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
       // Só o card genérico (post_card, em setor que não desligou) usa o
       // caminho de imagem+template; qualquer outro formato de post — inclusive
       // um antigo que ficou numa estratégia — sai como carrossel de slides.
-      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', itemId: job.item_id ?? null, forceGeneral: job.format === FAQ_FORMAT, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: withMarketContext(job.intent, job.market_context), opportunityId: job.opportunity_id ?? null, reservedTheme: job.theme_idea ?? null, themeNote: job.theme_note ?? null })
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', itemId: job.item_id ?? null, forceGeneral: job.format === FAQ_FORMAT, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: withMarketContext(job.intent, job.market_context), opportunityId: job.opportunity_id ?? null, itemPick: job.item_pick ?? null, reservedTheme: job.theme_idea ?? null, themeNote: job.theme_note ?? null })
       return
     }
     if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }
     const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/catalog-package`, {
       method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ item_id: job.item_id, only_recipe: job.recipe, planned_for: job.date || undefined, loose: !job.date, cron_secret: cronSecret, company_id: company.id, intent: intentBlock(job.intent) || undefined, familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar, ...(job.opportunity_id ? { opportunity_id: job.opportunity_id } : {}) }),
+      body: JSON.stringify({ item_id: job.item_id, only_recipe: job.recipe, planned_for: job.date || undefined, loose: !job.date, cron_secret: cronSecret, company_id: company.id, intent: intentBlock(job.intent) || undefined, familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar, item_pick: job.item_pick ?? undefined, ...(job.opportunity_id ? { opportunity_id: job.opportunity_id } : {}) }),
     })
     const r = await res.json().catch(() => ({})) as { error?: string; generated?: unknown[] }
     if (!res.ok || !r.generated?.length) console.error('runPlanSlot: catalog-package sem peça', company.id, job.date, job.recipe, res.status, r.error)
@@ -1595,6 +1605,7 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`
   }).select('id').single()
   if (error || !piece) { console.error('runVideoSlot: peça não gravada', company.id, error?.message); return }
   await saveLabels(admin, piece.id, job, job.intent)
+  await saveItemPick(admin, piece.id, job.item_pick)
   if (!card) {
     // Sem encerramento não sai vídeo (decisão do dono): nada foi gasto.
     console.error('runVideoSlot: encerramento falhou', company.id, piece.id)
@@ -1668,7 +1679,7 @@ Deno.serve(async (req) => {
       }
       const rawJob = body.slot as SlotJob | undefined
       // Campos novos (rótulo + intenção) revalidados: lista fixa / formato fixo / slice.
-      const job = rawJob ? { ...rawJob, familia: undefined, pilar_ss: undefined, tema: undefined, ...cleanLabels(rawJob), intent: cleanIntent(rawJob.intent), theme_idea: typeof rawJob.theme_idea === 'string' && rawJob.theme_idea.trim() ? rawJob.theme_idea.trim().slice(0, 140) : undefined, theme_note: typeof rawJob.theme_note === 'string' && rawJob.theme_note.trim() ? rawJob.theme_note.trim().slice(0, 300) : undefined, market_context: cleanMarketContext(rawJob.market_context) ?? undefined } as SlotJob : undefined
+      const job = rawJob ? { ...rawJob, familia: undefined, pilar_ss: undefined, tema: undefined, ...cleanLabels(rawJob), intent: cleanIntent(rawJob.intent), theme_idea: typeof rawJob.theme_idea === 'string' && rawJob.theme_idea.trim() ? rawJob.theme_idea.trim().slice(0, 140) : undefined, theme_note: typeof rawJob.theme_note === 'string' && rawJob.theme_note.trim() ? rawJob.theme_note.trim().slice(0, 300) : undefined, market_context: cleanMarketContext(rawJob.market_context) ?? undefined, item_pick: cleanItemPick(rawJob.item_pick) } as SlotJob : undefined
       if (!job || !/^\d{4}-\d{2}-\d{2}$/.test(String(job.date)) || !['post', 'item_package', 'item_video'].includes(String(job.producer))) return json({ error: 'vaga inválida' }, 400)
       const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', body.company_id).maybeSingle()
       const company = companyRow as Company | null
@@ -1779,12 +1790,12 @@ Deno.serve(async (req) => {
 
     // Opções do "Gerar agora": só tipos que funcionam hoje (mesmo filtro do make_now).
     if (body.action === 'make_now_options') {
-      const [formats, { data: rows }] = await Promise.all([
+      const [formats, itemCfg] = await Promise.all([
         fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id),
-        admin.from('marketing_ai_knowledge').select('id, title, meta').eq('company_id', company.id).eq('kind', 'product').order('created_at', { ascending: false }),
+        fetchItemCfg(admin, company.vertical_key ?? null),
       ])
-      const items = ((rows ?? []) as { id: string; title: string | null; meta: { photos?: unknown[] } | null }[])
-        .filter(r => (r.meta?.photos?.length ?? 0) >= 5).map(r => ({ id: r.id, title: r.title ?? 'Imóvel' }))
+      // Fase 4: mesma regra do servidor (fotos mínimas da ficha + disponível) — o que a tela oferece é o que o make_now aceita.
+      const items = (await listPickableItems(admin, company.id, itemCfg, { newestFirst: true })).items.map(r => ({ id: r.id, title: r.title || 'Imóvel' }))
       const canMake = (f: typeof formats[number]) => f.status === 'live' && f.producer !== 'dm' && (f.producer === 'post' || f.producer === 'item_video' || !!f.recipe)
       const view = (f: typeof formats[number]) => ({ key: f.key, name: f.name, producer: f.producer, status: f.status, can_make: canMake(f), media: f.media ?? null, surface: f.surface ?? (f.producer === 'item_video' ? 'reels' : f.producer === 'dm' ? 'dm' : 'feed') })
       // formats = o que dá pra gerar agora; all = a lista inteira da ficha
