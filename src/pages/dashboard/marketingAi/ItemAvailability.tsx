@@ -2,14 +2,14 @@ import { useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useLang } from '../../../contexts/LanguageContext'
 import { MUTED, BORDER, D } from './shared'
-import { useAvailabilityCfg } from './useAvailabilityCfg'
+import { useAvailabilityState } from './useAvailabilityCfg'
 import { availabilityOf, statusLabel } from '../../../lib/itemAvailability'
 
 // Fase 4: status de disponibilidade do imóvel no Catálogo (manual). As opções, o que bloqueia e os nomes vêm da ficha do setor.
 // Imóvel sem status = "disponível, nunca conferido". Status que bloqueia: o sistema não cria peça nem publica esse imóvel.
 const TX = {
-  pt: { label: 'Disponibilidade', never: 'Disponível (nunca conferido)', portal: 'conferido no portal', manual: 'marcado por você', blocked: 'Não entra em peças nem é publicado.', err: 'Não foi possível salvar o status.' },
-  en: { label: 'Availability', never: 'Available (never checked)', portal: 'checked on the portal', manual: 'set by you', blocked: 'Not used in pieces and not published.', err: 'Could not save the status.' },
+  pt: { label: 'Disponibilidade', never: 'Disponível (nunca conferido)', portal: 'conferido no portal', manual: 'marcado por você', blocked: 'Não entra em peças nem é publicado.', err: 'Não foi possível salvar o status.', unverifiable: 'Não foi possível verificar' },
+  en: { label: 'Availability', never: 'Available (never checked)', portal: 'checked on the portal', manual: 'set by you', blocked: 'Not used in pieces and not published.', err: 'Could not save the status.', unverifiable: 'Could not verify' },
 } as const
 
 interface Meta { availability?: { status?: unknown; source?: unknown; checked_at?: unknown } | null; [k: string]: unknown }
@@ -17,14 +17,18 @@ interface Meta { availability?: { status?: unknown; source?: unknown; checked_at
 export default function ItemAvailability({ itemId, companyId, verticalKey, meta, onChanged }: { itemId: string; companyId: string; verticalKey: string; meta: Meta | null; onChanged: () => void }) {
   const { lang } = useLang()
   const tx = TX[lang]
-  const cfg = useAvailabilityCfg(verticalKey)
+  const { cfg, failed } = useAvailabilityState(verticalKey)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  if (!cfg) return null // ficha sem disponibilidade (ou carregando/falhou): não afirma nada
+  if (failed) return <div role="status" style={{ fontSize: '10px', color: '#FBBF24', margin: '0 0 8px' }}>{tx.unverifiable}</div>
+  if (!cfg) return null // carregando, ou ficha sem disponibilidade (nada a mostrar)
   const av = availabilityOf({ meta }, cfg)
   const change = async (status: string) => {
     setBusy(true); setErr('')
-    const next = { ...(meta ?? {}), availability: { status, source: 'manual', checked_at: new Date().toISOString() } }
+    // Relê o meta atual logo antes de gravar e troca SÓ meta.availability (não atropela foto/campo editado há pouco).
+    const { data: cur, error: rerr } = await supabase.from('marketing_ai_knowledge').select('meta').eq('id', itemId).eq('company_id', companyId).maybeSingle()
+    if (rerr || !cur) { setBusy(false); setErr(tx.err); return }
+    const next = { ...((cur.meta ?? {}) as Record<string, unknown>), availability: { status, source: 'manual', checked_at: new Date().toISOString() } }
     const { error } = await supabase.from('marketing_ai_knowledge').update({ meta: next }).eq('id', itemId).eq('company_id', companyId)
     setBusy(false)
     if (error) setErr(tx.err); else onChanged()

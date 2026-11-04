@@ -229,6 +229,14 @@ async function proposeAction(admin: Supa, companyId: string, b: any, autoMode: b
     const blocked = await earlyBlock(admin, companyId, typeof b.ref_id === 'string' ? b.ref_id : null, b.payload?.item_id)
     if (blocked) return json({ error: blocked, code: 'item_unavailable' }, 409)
   }
+  // Fase 4: o item_id da peça vai junto no payload, pra nova tentativa depois de a peça ser apagada ainda conferir o imóvel.
+  let payload = b.payload ?? {}
+  if (b.ref_type === 'marketing_ai_test_content' && typeof b.ref_id === 'string' && typeof payload.item_id !== 'string') {
+    try {
+      const { data: tc } = await admin.from('marketing_ai_test_content').select('item_id').eq('id', b.ref_id).eq('company_id', companyId).maybeSingle()
+      if (tc?.item_id) payload = { ...payload, item_id: tc.item_id }
+    } catch (e) { console.error('agent-actions: copiar item_id pro payload falhou', String(e).slice(0, 200)) }
+  }
   const row = {
     company_id: companyId,
     agent_key: b.agent_key ?? 'marketing',
@@ -242,7 +250,7 @@ async function proposeAction(admin: Supa, companyId: string, b: any, autoMode: b
     agent_interpretation: b.agent_interpretation ?? null,
     reason: b.reason ?? null,
     expected_outcome: b.expected_outcome ?? null,
-    payload: b.payload ?? {},
+    payload,
     risk_level: b.risk_level ?? 'low',
     priority: b.priority ?? 'normal',
     source: b.source ?? 'manual',
@@ -519,14 +527,17 @@ async function execute(admin: Supa, act: any, fromCron = false): Promise<any> {
 // Devolve a linha da ação quando segurou a execução; null = pode seguir. Peça sem imóvel passa direto.
 // deno-lint-ignore no-explicit-any
 async function availabilityGate(admin: Supa, act: any, fromCron: boolean): Promise<any | null> {
-  let itemId: string | null = null
+  let itemId: string | null = typeof act.payload?.item_id === 'string' ? act.payload.item_id : null
+  let readFailed = false
   try {
-    // item_id da peça de teste; se a linha já foi apagada (nova tentativa depois de uma falha), vale o que foi guardado no payload da ação.
-    const { data: tc } = await admin.from('marketing_ai_test_content').select('item_id').eq('id', act.ref_id).eq('company_id', act.company_id).maybeSingle()
-    itemId = (tc?.item_id as string | null | undefined) ?? (typeof act.payload?.item_id === 'string' ? act.payload.item_id : null)
-  } catch (e) { console.error('agent-actions: ler item_id da peça falhou', String(e).slice(0, 200)) }
-  if (!itemId) return null
-  const v = await revalidate(admin, act.company_id, itemId)
+    // item_id da peça de teste; se a linha já foi apagada (nova tentativa depois de uma falha), vale o que foi guardado no payload da ação (gravado na proposta).
+    const { data: tc, error } = await admin.from('marketing_ai_test_content').select('item_id').eq('id', act.ref_id).eq('company_id', act.company_id).maybeSingle()
+    if (error) readFailed = true
+    else itemId = (tc?.item_id as string | null | undefined) ?? itemId
+  } catch (e) { readFailed = true; console.error('agent-actions: ler item_id da peça falhou', String(e).slice(0, 200)) }
+  // Falha ao LER nunca vira "sem imóvel": sem item_id conhecido, segura como não verificável (tenta de novo / falha em 2 h).
+  if (!itemId && !readFailed) return null
+  const v = itemId ? await revalidate(admin, act.company_id, itemId) : { state: 'unverifiable' as const, reason: 'não consegui ler a peça' }
   if (v.state === 'ok') return null
   const backToVault = () => admin.from('marketing_ai_test_content').update({ status: 'vault' }).eq('id', act.ref_id).eq('company_id', act.company_id).eq('status', 'publishing')
   if (v.state === 'blocked') {

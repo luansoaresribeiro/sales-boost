@@ -10,6 +10,8 @@
 // Partes PURAS no topo (testadas em scripts/test-item-service.mjs com `node --experimental-strip-types`, sem relógio
 // nem rede implícitos); partes com I/O embaixo. A tela tem uma cópia mínima em src/lib/itemAvailability.ts.
 
+import { isSafeUrl } from './safeUrl.ts'
+
 // deno-lint-ignore no-explicit-any
 type Admin = { from: (t: string) => any }
 
@@ -62,6 +64,15 @@ export function minPhotosFrom(catalogFields: unknown): number {
 export function itemCfgFrom(config: unknown): ItemCfg {
   const c = (config && typeof config === 'object' ? config : {}) as { catalog_fields?: unknown; availability?: unknown }
   return { minPhotos: minPhotosFrom(c.catalog_fields), availability: parseAvailabilityCfg(c.availability) }
+}
+
+/** Como fetchItemCfg, mas erro de leitura = null (ficha SEM a chave continua sendo um ItemCfg válido). Usada pela trava de publicação. */
+export async function fetchItemCfgStrict(admin: Admin, verticalKey: string | null): Promise<ItemCfg | null> {
+  try {
+    const { data, error } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey ?? 'generico').eq('enabled', true).maybeSingle()
+    if (error) return null
+    return itemCfgFrom(data?.config)
+  } catch { return null }
 }
 
 export async function fetchItemCfg(admin: Admin, verticalKey: string | null): Promise<ItemCfg> {
@@ -122,6 +133,15 @@ export async function listPickableItems(admin: Admin, companyId: string, cfg: It
   if (opts.newestFirst) q = q.order('created_at', { ascending: false })
   const { data } = await q
   return filterPickable((data ?? []) as ItemLike[], cfg)
+}
+
+/** Lê o imóvel distinguindo "não existe" (item null) de "falhou a leitura" (failed). */
+export async function getItemChecked(admin: Admin, companyId: string, itemId: string): Promise<{ item: ItemLike | null; failed: boolean }> {
+  try {
+    const { data, error } = await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('id', itemId).eq('company_id', companyId).eq('kind', 'product').maybeSingle()
+    if (error) return { item: null, failed: true }
+    return { item: (data ?? null) as ItemLike | null, failed: false }
+  } catch { return { item: null, failed: true } }
 }
 
 export async function getItem(admin: Admin, companyId: string, itemId: string): Promise<ItemLike | null> {
@@ -244,13 +264,7 @@ export function extractListingIds(xml: string): Set<string> {
 export type FeedResult = { ok: true; ids: Set<string> } | { ok: false; error: string }
 export type FeedFetcher = (url: string) => Promise<FeedResult>
 
-function safeFeedUrl(raw: string): boolean {
-  try {
-    const u = new URL(raw)
-    const h = u.hostname.toLowerCase()
-    return u.protocol === 'https:' && !u.username && !u.password && h.includes('.') && !/(^localhost$|\.local$|\.internal$|\.localhost$)/.test(h)
-  } catch { return false }
-}
+const safeFeedUrl = (raw: string): boolean => isSafeUrl(raw) !== null
 
 /** Baixa o link do portal com prazo de 8 s. Qualquer falha (rede, prazo, status, XML sem anúncios) = "não deu pra conferir". */
 export async function fetchFeedIds(url: string, timeoutMs = FEED_TIMEOUT_MS, fetchFn: typeof fetch = fetch): Promise<FeedResult> {
@@ -339,25 +353,46 @@ export function unverifiableOutcome(sinceIso: string | null | undefined, nowMs: 
 
 export const UNVERIFIABLE_FAIL_MESSAGE = 'Não foi possível verificar a disponibilidade'
 
-/** Confere o imóvel agora (banco + link do portal). Nunca lança: erro inesperado = unverifiable, nunca "ok". */
+// Memória por feed_url (60 s): uma rodada do cron com N ações do mesmo link baixa o XML uma vez só (8 s × N estouraria os 150 s).
+const feedMemo = new Map<string, { at: number; p: Promise<FeedResult> }>()
+const FEED_MEMO_MS = 60_000
+export const memoFeed = (url: string, fn: FeedFetcher = u => fetchFeedIds(u), now = Date.now()): Promise<FeedResult> => {
+  const hit = feedMemo.get(url)
+  if (hit && now - hit.at < FEED_MEMO_MS) return hit.p
+  const p = fn(url)
+  feedMemo.set(url, { at: now, p })
+  return p
+}
+export const clearFeedMemo = () => feedMemo.clear()
+
+/** Confere o imóvel agora (banco + link do portal). Nunca lança. Erro de leitura (ficha, empresa, imóvel, integração) = unverifiable, NUNCA "ok". */
 export async function revalidate(admin: Admin, companyId: string, itemId: string, opts: { cfg?: ItemCfg; verticalKey?: string | null; fetchFeed?: FeedFetcher; now?: number } = {}): Promise<Revalidation> {
+  const unread = (what: string): Revalidation => ({ state: 'unverifiable', reason: `não consegui ler ${what}` })
   try {
-    let cfg = opts.cfg
+    let cfg: ItemCfg | null | undefined = opts.cfg
     if (!cfg) {
       let vk = opts.verticalKey
-      if (vk === undefined) { const { data: co } = await admin.from('companies').select('vertical_key').eq('id', companyId).maybeSingle(); vk = co?.vertical_key ?? null }
-      cfg = await fetchItemCfg(admin, vk ?? null)
+      if (vk === undefined) {
+        const { data: co, error } = await admin.from('companies').select('vertical_key').eq('id', companyId).maybeSingle()
+        if (error || !co) return unread('a empresa')
+        vk = co.vertical_key ?? null
+      }
+      cfg = await fetchItemCfgStrict(admin, vk ?? null)
+      if (!cfg) return unread('a ficha do setor')
     }
     if (!cfg.availability) return { state: 'ok' }
-    const item = await getItem(admin, companyId, itemId)
+    const { item, failed } = await getItemChecked(admin, companyId, itemId)
+    if (failed) return unread('o catálogo')
     let feedUrl: string | null = null
     if (item?.meta?.source?.listing_id !== undefined) {
-      const { data: integ } = await admin.from('company_integrations').select('metadata').eq('company_id', companyId).eq('type', 'portal_feed').maybeSingle()
+      const { data: integ, error } = await admin.from('company_integrations').select('metadata').eq('company_id', companyId).eq('type', 'portal_feed').maybeSingle()
+      if (error) return unread('a integração do portal')
       const u = (integ?.metadata as { feed_url?: unknown } | null)?.feed_url
       feedUrl = typeof u === 'string' && u.trim() ? u.trim() : null
     }
+    const base = opts.fetchFeed ?? (url => fetchFeedIds(url))
     return await revalidateWith({
-      item, cfg, feedUrl, now: opts.now ?? Date.now(), fetchFeed: opts.fetchFeed ?? (url => fetchFeedIds(url)),
+      item, cfg, feedUrl, now: opts.now ?? Date.now(), fetchFeed: url => memoFeed(url, base, opts.now ?? Date.now()),
       save: a => saveAvailability(admin, companyId, itemId, a),
     })
   } catch (e) {

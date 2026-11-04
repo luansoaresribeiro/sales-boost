@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 // Fase 4 (2026-11-04): disponibilidade do imóvel, conferência no portal, regra de 2 h, motivo da escolha.
 import {
   parseAvailabilityCfg, itemCfgFrom, availabilityOf, filterPickable, rankItems, buildPickReason, cleanItemPick, ownerBlockMessage,
-  extractListingIds, fetchFeedIds, revalidateWith, unverifiableOutcome, FEED_CACHE_MS, UNVERIFIABLE_MAX_MS,
+  extractListingIds, fetchFeedIds, revalidate, memoFeed, clearFeedMemo, getItemChecked, fetchItemCfgStrict, revalidateWith, unverifiableOutcome, FEED_CACHE_MS, UNVERIFIABLE_MAX_MS,
 } from '../supabase/functions/_shared/itemService.ts'
 import * as front from '../src/lib/itemAvailability.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
@@ -111,6 +111,42 @@ assert.equal(FEED_CACHE_MS, 3600_000)
 const since = new Date(NOW).toISOString()
 assert.equal(unverifiableOutcome(since, NOW + 5 * 60_000), 'retry'); assert.equal(unverifiableOutcome(since, NOW + UNVERIFIABLE_MAX_MS - 1), 'retry')
 assert.equal(unverifiableOutcome(since, NOW + UNVERIFIABLE_MAX_MS), 'fail'); assert.equal(unverifiableOutcome(since, NOW + 3 * 3600_000), 'fail'); assert.equal(unverifiableOutcome(null, NOW), 'retry'); ok('não verificável: tenta de novo por 2 h, depois falha')
+
+// ── F1: SSRF (IP literal, cada redirecionamento) ──
+for (const u of ['https://169.254.169.254/latest', 'https://10.0.0.5/f.xml', 'https://127.0.0.1/f.xml', 'https://192.168.1.1/f.xml', 'https://172.16.0.1/f.xml', 'https://100.64.0.1/f.xml', 'https://0.0.0.0/f.xml', 'https://[::1]/f.xml', 'https://[fc00::1]/f.xml', 'https://[fe80::1]/f.xml', 'https://[::ffff:10.0.0.1]/f.xml']) {
+  const r = await fetchFeedIds(u, 8000, async () => { throw new Error('não podia nem chamar') }); assert.equal(r.ok, false, u)
+}
+for (const loc of ['https://169.254.169.254/x', 'https://10.0.0.5/f.xml', 'https://[::1]/x']) {
+  let calls = 0
+  const r = await fetchFeedIds('https://crm.example.com/f.xml', 8000, async () => { calls++; return mkRes('', 302, { location: loc }) })
+  assert.equal(r.ok, false); assert.equal(calls, 1, 'não seguiu o redirecionamento')
+}
+let rv = await revalidateWith(deps(withListing(), { fetchFeed: (u) => fetchFeedIds(u, 8000, async () => mkRes('', 302, { location: 'https://169.254.169.254/x' })) })); assert.notEqual(rv.state, 'ok'); assert.equal(rv.state, 'unverifiable')
+assert.ok(/isSafeUrl/.test(readFileSync(new URL('../supabase/functions/portal-import/index.ts', import.meta.url), 'utf8')) && !/function isSafeUrl/.test(readFileSync(new URL('../supabase/functions/portal-import/index.ts', import.meta.url), 'utf8'))); ok('F1: IP interno/IPv6 e redirecionamento para eles = recusado (não verificável); portal-import usa o mesmo _shared/safeUrl')
+
+// ── F2/F4: erro de leitura NUNCA vira ok nem "sumiu" ──
+const mkAdmin = (tables) => ({ from: (t) => { const q = { select: () => q, eq: () => q, maybeSingle: async () => tables[t] ?? { data: null, error: null } }; return q } })
+const okFicha = { data: { config: FICHA }, error: null }
+const itemRow = { data: { id: 'i', title: 'x', meta: { photos: ph(5) } }, error: null }
+let r2 = await revalidate(mkAdmin({ vertical_playbooks: { data: null, error: { message: 'boom' } }, marketing_ai_knowledge: itemRow }), 'c', 'i', { verticalKey: 'imoveis_rio' }); assert.equal(r2.state, 'unverifiable')
+r2 = await revalidate(mkAdmin({ vertical_playbooks: okFicha, marketing_ai_knowledge: { data: null, error: { message: 'boom' } } }), 'c', 'i', { verticalKey: 'imoveis_rio' }); assert.equal(r2.state, 'unverifiable')
+r2 = await revalidate(mkAdmin({ companies: { data: null, error: { message: 'boom' } } }), 'c', 'i'); assert.equal(r2.state, 'unverifiable')
+r2 = await revalidate(mkAdmin({ vertical_playbooks: okFicha, marketing_ai_knowledge: { data: null, error: null } }), 'c', 'i', { verticalKey: 'imoveis_rio' }); assert.equal(r2.state, 'blocked')
+r2 = await revalidate(mkAdmin({ vertical_playbooks: { data: { config: {} }, error: null }, marketing_ai_knowledge: itemRow }), 'c', 'i', { verticalKey: 'x' }); assert.equal(r2.state, 'ok')
+r2 = await revalidate(mkAdmin({ vertical_playbooks: okFicha, marketing_ai_knowledge: { data: { id: 'i', meta: { photos: ph(5), source: { listing_id: 'L1' } } }, error: null }, company_integrations: { data: null, error: { message: 'boom' } } }), 'c', 'i', { verticalKey: 'imoveis_rio' }); assert.equal(r2.state, 'unverifiable')
+assert.equal(await fetchItemCfgStrict(mkAdmin({ vertical_playbooks: { data: null, error: { message: 'x' } } }), 'k'), null)
+assert.equal((await getItemChecked(mkAdmin({ marketing_ai_knowledge: { data: null, error: { message: 'x' } } }), 'c', 'i')).failed, true); ok('F2/F4: erro ao ler ficha/empresa/imóvel/integração = não verificável; ficha sem a chave = ok; imóvel realmente ausente = bloqueado')
+
+// ── F3: executor — erro de leitura segura, item_id vai no payload ──
+const aa = readFileSync(new URL('../supabase/functions/agent-actions/index.ts', import.meta.url), 'utf8')
+const gate = aa.slice(aa.indexOf('async function availabilityGate('), aa.indexOf('async function earlyBlock('))
+assert.ok(/readFailed/.test(gate) && /if \(!itemId && !readFailed\) return null/.test(gate) && /unverifiable/.test(gate)); assert.ok(/copiar item_id pro payload/.test(aa) && /payload,\n/.test(aa)); ok('F3: leitura do item_id que falha segura a ação; proposta copia item_id pro payload')
+
+// ── F6: o mesmo link é baixado uma vez por rodada ──
+clearFeedMemo(); let dl = 0
+const slow = async () => { dl++; return { ok: true, ids: new Set(['L1']) } }
+await Promise.all([1, 2, 3, 4, 5].map(() => memoFeed('https://crm.example.com/f.xml', slow))); assert.equal(dl, 1)
+await memoFeed('https://outro.example.com/f.xml', slow); assert.equal(dl, 2); ok('F6: N ações do mesmo link = 1 download')
 
 // ── cópia da tela bate com o servidor ──
 assert.deepEqual(front.parseAvailabilityCfg(FICHA.availability), cfg.availability)

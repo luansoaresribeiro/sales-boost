@@ -37,6 +37,7 @@ const TX = {
     inspired: 'Tema inspirado em',
     itemTitle: 'Imóvel desta peça', itemWhy: 'Por que este imóvel', itemOpen: 'Abrir no Catálogo', itemNearby: 'Inteligência de localização',
     whyOpp: 'Peça de uma oportunidade aprovada — o imóvel vem dela.',
+    holdAvail: 'Não consegui conferir se o imóvel ainda está disponível. Vou tentar de novo a cada 5 minutos por até 2 horas; se não conseguir, não publico.',
     whyNone: 'Motivo da escolha do imóvel não registrado (peça criada antes do registro do motivo).', gone: (st: string) => `Imóvel indisponível (${st}) — esta peça não será publicada. Mude o status no Catálogo se ele voltou a estar disponível.`, usedN: (n: number) => `usado em ${n} peça${n === 1 ? '' : 's'} nos últimos 30 dias`, lastPiece: 'Última peça',
     editCap: '✏️ Editar legenda', saveCap: 'Salvar legenda', capSaved: 'Legenda salva — o agente vai aprender com a sua mudança ✓',
   },
@@ -57,6 +58,7 @@ const TX = {
     inspired: 'Theme inspired by',
     itemTitle: 'Property in this piece', itemWhy: 'Why this property', itemOpen: 'Open in Catalog', itemNearby: 'Location intelligence',
     whyOpp: 'Piece from an approved opportunity — the property comes from it.',
+    holdAvail: 'I could not check whether the property is still available. I will retry every 5 minutes for up to 2 hours; if I cannot, I will not publish.',
     whyNone: 'Reason for choosing this property not recorded (piece made before reasons were stored).', gone: (st: string) => `Property unavailable (${st}) — this piece will not be published. Change its status in the Catalog if it is available again.`, usedN: (n: number) => `used in ${n} piece${n === 1 ? '' : 's'} in the last 30 days`, lastPiece: 'Last piece',
     editCap: '✏️ Edit caption', saveCap: 'Save caption', capSaved: 'Caption saved — the agent will learn from your change ✓',
   },
@@ -140,6 +142,7 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged,
       })
       if (action.execution_status === 'EXECUTED' && (action.execution_result as { published_to_instagram?: boolean } | null)?.published_to_instagram) setOkMsg(tx.published)
       else if (action.execution_status === 'FAILED') setError(action.execution_error ?? tx.pubFail)
+      else if ((action.execution_result as { waiting?: string } | null)?.waiting === 'availability_unverifiable') setError(tx.holdAvail)
       else setOkMsg(tx.approvedPosts)
       await done()
     } catch (e) { setError(e instanceof Error ? e.message : tx.pubErr) }
