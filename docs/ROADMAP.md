@@ -581,6 +581,18 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 > A validação (Tespon + "Teste Zero") é gate do dono: o Pacote A só começa depois dela. A Fase 2 só começa com A, B1 e B2 concluídos.
 > Os pacotes **não são fases novas**: são uma camada de conexão/usabilidade sobre o que já existe, sem IA e sem criar fonte de verdade nova
 > (as 4 regras estão em [DECISIONS.md](DECISIONS.md), 2026-11-03 "Pacotes A e B").
+>
+> **Status 2026-11-04:** A, B1, B2 concluídos e no ar (PRs #98, #99, #100). Fase 2 juntada (PR #101), site no ar; falta publicar a `marketing-ai`
+> e passar pelo gate de qualidade abaixo. **Princípio orientador e critérios formais de aceite:** [DECISIONS.md](DECISIONS.md), 2026-11-04 "Critérios de decisão".
+
+### Gate e critérios de saída (dono, 2026-11-04 — detalhe em DECISIONS)
+- **Não abrir novas frentes** antes de provar valor comercial. Ordem: publicar `marketing-ai` → conferir bundle e versão → analisar dados reais
+  (Tespon + Teste Zero) → medir a qualidade da classificação → decidir audit → enforce → só então Fase 3.
+- **Gate audit → enforce:** precisão dos sinais comercialmente relevantes, falsos positivos, duplicados/sem mudança, custo por rodada e acumulado,
+  oportunidades que merecem atenção. Não basta a coleta funcionar tecnicamente.
+- **Saída por fase:** Fase 2 = informação relevante com custo e qualidade controlados · Fase 3 = a inteligência influencia o direcionamento sem mudar o
+  posicionamento sozinha (e o plano semanal funciona sem oportunidade) · Fase 4 = estratégia ligada a imóvel real, sem divulgar indisponível ·
+  Fase 5 = ação de marketing ligada a resultado comercial verificável.
 
 ### Pacotes de conexão (antes da Fase 2)
 **Pacote A — orientação (só tela, sem IA).** **Status (2026-11-03): implementado no branch `claude/nifty-shannon-ysp818-pacote-a`; aguardando aprovação do dono (QA + PR + publicação do site ainda por fazer).** Regra do Tipo de ativação, do Objetivo e a medição em SQL: [DECISIONS.md](DECISIONS.md), 2026-11-03 "Pacote A". Divergências do texto abaixo: o Tipo ganhou "Tipo não identificado" para tour/oferta/bairro sem imóvel e "Não foi possível verificar"; o "motivo" da peça segue sem campo (o modal avisa que não é registrado).
