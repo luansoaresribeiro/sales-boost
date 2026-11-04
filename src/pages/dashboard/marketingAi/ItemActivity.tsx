@@ -7,6 +7,7 @@ import { mapStage } from './salesReal'
 import { STAGE_EN } from './labels.i18n'
 import { useItemActivity, type Block, type PieceTest } from './useItemActivity'
 import CalendarPostModal from './CalendarPostModal'
+import ItemResults from './ItemResults'
 
 // "Atividade do imóvel" (Pacote B1): peças, oportunidades e leads ligados a um imóvel, só leitura.
 // Só consulta ao abrir. A página pública continua no botão "Página pública" do card.
@@ -96,6 +97,7 @@ export default function ItemActivity({ itemId, companyId }: { itemId: string; co
               </div>
             )
           }} />
+          <ItemResults itemId={itemId} companyId={companyId} enabled={open} />
         </div>
       )}
       {piece && <CalendarPostModal post={piece} companyId={companyId} onClose={() => setPiece(null)} onChanged={() => setPiece(null)} />}

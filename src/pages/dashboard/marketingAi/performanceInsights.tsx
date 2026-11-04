@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D } from './shared'
 import { PERF_TX, localeOf, FORMAT_EN, FUNNEL_EN, DAY_NAMES_EN } from './performance.i18n'
+import type { ConvState } from './resultsData'
 import { Panel, Heatmap, NotAvailable, DeltaBadge } from './performanceParts'
 import {
   metricText, DAY_NAMES, SLOT_NAMES,
@@ -23,7 +24,11 @@ const SORTS: { key: SortKey; tk: 'reach' | 'sRate' | 'sharesShort' | 'saves' | '
   { key: 'shares', tk: 'sharesShort' }, { key: 'saves', tk: 'saves' },
   { key: 'comments', tk: 'comments' }, { key: 'followersGained', tk: 'sFollowersGen' },
 ]
-function ContentCard({ c, rank }: { c: ContentPerf; rank?: number }) {
+const CONV_TX = {
+  pt: { mkt: 'Marketing', com: 'Comercial · conversas', none: 'sem dado', err: 'Não foi possível verificar', load: 'Carregando…', hint: 'comentários com intenção neste post' },
+  en: { mkt: 'Marketing', com: 'Commercial · conversations', none: 'no data', err: 'Could not verify', load: 'Loading…', hint: 'comments with intent on this post' },
+} as const
+function ContentCard({ c, rank, conv }: { c: ContentPerf; rank?: number; conv?: ConvState }) {
   const { lang } = useLang()
   const t = PERF_TX[lang]
   return (
@@ -39,12 +44,21 @@ function ContentCard({ c, rank }: { c: ContentPerf; rank?: number }) {
           <div style={{ fontSize: '9.5px', color: MUTED, marginTop: '1px' }}>{FMT_ICON[c.type]} {c.pillar} · {new Date(c.date).toLocaleDateString(localeOf(lang), { day: '2-digit', month: 'short' })}</div>
         </div>
       </div>
+      {conv && <div style={{ fontSize: '8.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: '3px' }}>{CONV_TX[lang].mkt}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
         <Mini label={t.reach} value={metricText(c.reach, 'int', lang)} />
         <Mini label={t.sRate} value={metricText(c.engagementRate, 'pct', lang)} color={ORANGE} />
         <Mini label={t.sharesShort} value={metricText(c.shares, 'int', lang)} />
         <Mini label={t.savesShort} value={metricText(c.saves, 'int', lang)} />
       </div>
+      {conv && (
+        <div style={{ marginTop: '7px', paddingTop: '6px', borderTop: `1px solid ${BORDER}` }}>
+          <div style={{ fontSize: '8.5px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', marginBottom: '2px' }}>{CONV_TX[lang].com}</div>
+          <div title={CONV_TX[lang].hint} style={{ fontSize: '11.5px', fontWeight: 700, color: conv.state === 'error' ? '#FBBF24' : 'white' }}>
+            {conv.state === 'loading' ? CONV_TX[lang].load : conv.state === 'error' ? CONV_TX[lang].err : (conv.byMedia[c.id] ?? 0).toLocaleString(localeOf(lang))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -56,7 +70,7 @@ function Mini({ label, value, color }: { label: string; value: string; color?: s
     </div>
   )
 }
-export function ContentSectionPerf({ content }: { content: ContentPerf[] }) {
+export function ContentSectionPerf({ content, conv }: { content: ContentPerf[]; conv?: ConvState }) {
   const t = PERF_TX[useLang().lang]
   const [sort, setSort] = useState<SortKey>('reach')
   const sorted = [...content].sort((a, b) => Number(b[sort] ?? 0) - Number(a[sort] ?? 0))
@@ -72,11 +86,11 @@ export function ContentSectionPerf({ content }: { content: ContentPerf[] }) {
     }>
       <div style={{ fontSize: '11px', fontWeight: 700, color: GREEN, marginBottom: '9px' }}>{t.top5}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '9px', marginBottom: '18px' }}>
-        {top.map((c, i) => <ContentCard key={c.id} c={c} rank={i + 1} />)}
+        {top.map((c, i) => <ContentCard key={c.id} c={c} rank={i + 1} conv={conv} />)}
       </div>
       <div style={{ fontSize: '11px', fontWeight: 700, color: RED, marginBottom: '9px' }}>{t.below}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '9px' }}>
-        {bottom.map(c => <ContentCard key={c.id} c={c} />)}
+        {bottom.map(c => <ContentCard key={c.id} c={c} conv={conv} />)}
       </div>
     </Panel>
   )

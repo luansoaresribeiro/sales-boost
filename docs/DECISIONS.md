@@ -2635,3 +2635,30 @@ gravadas com `intent.market_context` continuam válidas (campo extra ignorado). 
 
 **Para publicar (a sessão principal faz):** deploy de `strategy-generate` e `creative-generate` (ambos de cliente real — testar em Tespon/Teste Zero antes: rodar `reanalyze`
 forçando pivot e conferir `needs_review`); site. Nada de SQL.
+
+## 2026-11-04 — Fase 5: Resultados (marketing × comercial, lado a lado)
+
+**Decisão do dono.** A Fase 5 foi construída **do zero em cima da `main` atual**; a branch antiga `results-flow` **não** foi juntada nem usada
+(fica como está, para depois). A automação "ideia vencedora" **não** entra. O objetivo é só **relacionar ações de marketing a resultado comercial
+verificável**, sem nota única.
+
+**O que foi feito (só tela; sem migration, sem function nova, sem deploy de function):**
+- `resultsModel.ts` (puro, testado em `scripts/test-results-model.mjs`): dois blocos — **Marketing** {posts publicados, alcance, salvamentos,
+  compartilhamentos, curtidas, comentários} e **Comercial** {conversas, leads, visitas, propostas, vendas, valor informado}. Todo valor é
+  `número | null`; `null` aparece como "sem medição"/"sem dado", **nunca 0**. Nunca soma entre blocos e não existe nota única.
+- Onde aparece: **Catálogo → Ver atividade → "Resultado do imóvel"** (`ItemResults.tsx`); **card da oportunidade aprovada** (lado Marketing via
+  `posts.opportunity_id` ao lado do Comercial de `opportunity_results`); **Resultados (PerformanceTab)** com "Marketing" × "Comercial · conversas"
+  por post (`engagement_events.media_ref`). O hub (`DecisionKpis`) não tem KPI de alcance nem de lead — nada a separar, nada mudou.
+- Linhas obrigatórias: "N leads sem origem registrada" (leads sem `item_id`, `opportunity_id` e `link_id`) e "N posts publicados ficaram de fora
+  (imóvel não registrado)" (posts publicados sem `item_id`).
+- Estados (regra 5): carregando · ausência ("Nenhuma peça publicada ligada a este imóvel") · dado real · "Não foi possível verificar" quando qualquer
+  consulta falha (inclusive migration pendente).
+
+**Regra de ligação (inegociável).** A ligação comercial é **por imóvel e por oportunidade, nunca por peça**: `tracked_links` é único por
+imóvel+oportunidade+canal e `content_id` guarda só a primeira peça. Nenhuma tela diz "esta peça gerou este lead"; a tela escreve "ligação por
+imóvel/oportunidade, não por peça". O único vínculo verificável por peça é **conversa**: `engagement_events.media_ref` = `posts.instagram_media_id`.
+
+**Aprendizado ≠ resultado.** `_shared/learning.ts` (80/20) **não foi alterado**; continua sendo "aprendizado" (score interno conversas×3 + saves/shares)
+e não aparece dentro dos blocos de resultado.
+
+**Como desfazer:** reverter o commit (só front; nenhum dado foi criado).

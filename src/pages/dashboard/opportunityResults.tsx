@@ -7,17 +7,17 @@ import { attributionCodes, metric, type OppResultRow } from './resultsBrokers'
 
 const TX = {
   pt: {
-    title: 'Resultados', pieces: 'Peças aprovadas', visits: 'Visitas à página', clicks: 'Cliques', leads: 'Leads', visitsSched: 'Visitas agendadas (leads em Qualificado)',
+    title: 'Comercial (leads e vendas)', pieces: 'Peças aprovadas', visits: 'Visitas à página', clicks: 'Cliques', leads: 'Leads', visitsSched: 'Visitas agendadas (leads em Qualificado)',
     proposals: 'Propostas', sales: 'Vendas', value: 'Valor das vendas', noData: 'sem dado', noSales: 'sem vendas ainda', notInformed: 'valor não informado',
     ofWith: (n: number, m: number) => `${n} de ${m} ${m === 1 ? 'venda' : 'vendas'} com valor`, attribution: 'Atribuição',
-    fixed: 'Leads que chegam por comentário ou DM ainda não são atribuídos a oportunidades.',
+    fixed: 'Leads que chegam por comentário ou DM ainda não são atribuídos a oportunidades. Ligação por imóvel/oportunidade, não por peça.',
     noLink: 'Esta oportunidade ainda não tem link rastreável (o link entra nas peças quando o imóvel tem página pública no ar).',
   },
   en: {
-    title: 'Results', pieces: 'Approved pieces', visits: 'Page visits', clicks: 'Clicks', leads: 'Leads', visitsSched: 'Scheduled visits (leads in Qualified)',
+    title: 'Commercial (leads and sales)', pieces: 'Approved pieces', visits: 'Page visits', clicks: 'Clicks', leads: 'Leads', visitsSched: 'Scheduled visits (leads in Qualified)',
     proposals: 'Proposals', sales: 'Sales', value: 'Sales value', noData: 'no data', noSales: 'no sales yet', notInformed: 'value not informed',
     ofWith: (n: number, m: number) => `${n} of ${m} ${m === 1 ? 'sale' : 'sales'} with a value`, attribution: 'Attribution',
-    fixed: 'Leads that arrive by comment or DM are not yet attributed to opportunities.',
+    fixed: 'Leads that arrive by comment or DM are not yet attributed to opportunities. Linked by listing/opportunity, not by piece.',
     noLink: 'This opportunity has no trackable link yet (the link is added to pieces when the property has a live public page).',
   },
 } as const
