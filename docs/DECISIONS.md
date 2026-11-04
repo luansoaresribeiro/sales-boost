@@ -57,7 +57,7 @@ Em qualquer um dos casos:
 - **Sem backend novo, sem migration e sem tabela nova.**
   - As tabelas fora do tempo real (`growth_opportunities`, `market_signals`, `market_intel_runs`, `marketing_ai_strategies`) são relidas quando a aba volta a ficar visível e a cada 10 min.
 - **Desempenho é meta, não garantia:**
-  - 50 quadros por segundo ou mais medidos em aparelhos de referência;
+  - 50 quadros por segundo ou mais medidos em aparelhos de referência: notebook Lenovo do dono, Samsung Galaxy A54 5G (8 GB RAM) e o Chromium do Playwright;
   - nenhum laço de desenho com a cena parada;
   - three.js carregado à parte;
   - versão 2D no celular e quando não houver WebGL.
