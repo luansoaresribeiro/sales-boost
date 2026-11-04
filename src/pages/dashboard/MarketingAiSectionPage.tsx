@@ -118,7 +118,7 @@ export default function MarketingAiSectionPage() {
   // A configuração dos agentes (autonomia/objetivo) foi consolidada em
   // Configurações → Agentes, o lar único de config do cliente. Deep links
   // antigos pra cá redirecionam pra lá.
-  if (section === 'configuracao') return <Navigate to="/dashboard/settings?tab=agentes" replace />
+  if (section === 'configuracao') return <Navigate to="/dashboard/aprovacoes" replace />
   // Conexões e Contexto do Negócio foram consolidados em Configurações.
   if (section === 'conexoes') return <Navigate to="/dashboard/settings?tab=conexoes" replace />
   if (section === 'context') return <Navigate to="/dashboard/settings?tab=contexto" replace />

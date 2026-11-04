@@ -8,33 +8,37 @@ import { useAgentConfig, AUTONOMY_OPTIONS, type Autonomy } from './agentConfig'
 const ORANGE = '#FF6D29'
 const CARD = '#150E08'
 
-// Configurações → Aprovações (2026-11-04, dono): só 2 opções, padrão "Pedir aprovação".
+// Página Aprovações do menu (2026-11-04, dono; antes ficava em Configurações → Aprovações): só 2 opções, padrão "Pedir aprovação".
 // A escolha vale para a Central de Aprovações: grava companies.agent_automatic_mode, que a function agent-actions lê
-// para auto-aprovar ação interna. Publicar no Instagram continua exigindo o clique do dono (CalendarPostModal approve_now),
-// e as respostas automáticas de comentário/DM seguem a regra de cada automação, não esta chave.
+// (proposeAction) para auto-aprovar e executar na hora a ação proposta sem clique do dono — hoje só a recomendação da
+// aba Desempenho, que vira RASCUNHO. Publicar no Instagram continua exigindo o clique do dono (approve_now/scheduled_at
+// em CalendarPostModal e ApprovalsPage). Respostas automáticas de comentário/DM seguem a regra de cada automação
+// (instagram-webhook: execution_mode + allowed_auto_actions), não esta chave. ATENÇÃO: não há trava dentro da
+// function impedindo o modo automático de publicar — a garantia depende de quem chama (ver docs/PITFALLS.md).
 // Fonte da verdade = banco. Antes, o navegador podia LIGAR o modo automático sozinho se tivesse "executar" salvo;
 // agora o navegador só copia o que o banco diz.
 const TX = {
   pt: {
-    title: 'Aprovações', sub: 'Como as ações dos agentes chegam até você. Você pode mudar quando quiser; salva na hora.',
+    title: 'Como as ações chegam até você', sub: 'Você pode mudar quando quiser; salva na hora.',
     rule: 'Regra que nenhuma opção desliga: nada é publicado no seu público nem enviado a um cliente sem a sua aprovação. O modo automático só acelera o trabalho interno.',
     loading: 'Carregando sua escolha...', loadErr: 'Não foi possível verificar a sua escolha atual. Tente recarregar a página.',
     saveErr: 'Não foi possível salvar. Sua escolha anterior continua valendo.', saved: 'Salvo.',
     opts: null as Record<string, { label: string; desc: string }> | null,
   },
   en: {
-    title: 'Approvals', sub: 'How agent actions reach you. You can change this any time; it saves right away.',
+    title: 'How agent actions reach you', sub: 'You can change this any time; it saves right away.',
     rule: 'A rule no option turns off: nothing is published to your audience or sent to a customer without your approval. Automatic mode only speeds up internal work.',
     loading: 'Loading your choice...', loadErr: "Couldn't check your current choice. Try reloading the page.",
     saveErr: "Couldn't save. Your previous choice is still active.", saved: 'Saved.',
     opts: {
       aprovar: { label: 'Ask for approval', desc: 'Default. The AI prepares everything as drafts and every agent action waits for your OK in Approvals.' },
-      executar: { label: 'Run automatically', desc: 'Internal agent actions (organize funnel, draft, optimize) are approved on their own. Actually publishing and sending messages still need your confirmation.' },
+      executar: { label: 'Run automatically', desc: 'Internal agent actions (organize funnel, draft, optimize) are approved on their own. Publishing to Instagram always waits for your click. Automatic replies to comments and DMs follow each automation\'s own rule, not this option.' },
     } as Record<string, { label: string; desc: string }> | null,
   },
 }
 
-export default function AgentConfigTab({ company }: { company: Pick<CompanyData, 'id'> }) {
+// compact: versão do topo da página Aprovações (título menor, sem margem de seção). Mesma lógica, mesma coluna.
+export default function AgentConfigTab({ company, compact = false }: { company: Pick<CompanyData, 'id'>; compact?: boolean }) {
   const { lang } = useLang()
   const t = TX[lang]
   const [, update] = useAgentConfig(company.id)
@@ -67,7 +71,7 @@ export default function AgentConfigTab({ company }: { company: Pick<CompanyData,
 
   const options = AUTONOMY_OPTIONS.map(o => ({ ...o, ...(t.opts?.[o.key] ?? {}) }))
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '760px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? '12px' : '20px', maxWidth: '760px' }}>
       <section>
         <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', marginBottom: '3px' }}>{t.title}</div>
         <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '14px' }}>{t.sub}</div>
@@ -93,7 +97,7 @@ export default function AgentConfigTab({ company }: { company: Pick<CompanyData,
         )}
         {msg && <div style={{ fontSize: '11.5px', marginTop: '10px', color: msg.ok ? '#4ade80' : '#f87171' }}>{msg.text}</div>}
       </section>
-      <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, borderTop: `1px solid ${BORDER}`, paddingTop: '16px' }}>{t.rule}</div>
+      <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, borderTop: `1px solid ${BORDER}`, paddingTop: compact ? '10px' : '16px' }}>{t.rule}</div>
     </div>
   )
 }

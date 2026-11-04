@@ -5,6 +5,24 @@
 > Ao aprender uma armadilha nova, adicionar aqui no mesmo PR que a corrige
 > (ver [ORCHESTRATION.md](ORCHESTRATION.md)).
 
+## Modo automático (`agent_automatic_mode`) não tem trava de publicação dentro da function (2026-11-04)
+
+**O que a chave faz.** Só o `agent-actions` → `proposeAction` lê a chave:
+- `auto = approve_now || (agent_automatic_mode && automation_enabled !== false)`;
+- com `auto`, a ação nasce `AUTO_APPROVED` e **executa na hora**.
+
+**O que ela executa sozinha hoje.** Só a recomendação da aba Desempenho (`PerformanceTab.tsx`, `create_content` sem peça), que vira **rascunho** em `marketing_ai_content`.
+
+**O que ela não faz:**
+- **não publica:** todo ponto que publica no Instagram passa `approve_now` ou `scheduled_at`, que é o clique do dono (`CalendarPostModal` e `ApprovalsPage`);
+- **não comanda as respostas a comentário e DM:** quem decide é cada automação (`instagram-webhook`: `execution_mode = 'automatic'` + `allowed_auto_actions`).
+
+**A armadilha.** Não existe trava independente dentro da Edge Function. Se um código novo propuser uma ação de publicação (ex.: `ref_type = 'marketing_ai_content'`) **sem** `approve_now` e com o modo automático ligado, ela é aprovada e publicada sem o clique do dono.
+
+**Regra até existir a trava:**
+- todo ponto que propõe ação de publicação precisa passar o clique explícito do dono;
+- a trava no servidor ("modo automático nunca executa publicação") fica como candidata a um PR próprio, porque é mudança de Edge Function.
+
 ## `verify_jwt` × chamada de cron
 
 Toda edge function chamada por `net.http_post` do pg_cron autentica via
