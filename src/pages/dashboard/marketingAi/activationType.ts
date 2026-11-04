@@ -36,3 +36,16 @@ export function pieceObjective(intent: unknown): PieceObjective | null {
   if (o) return { key: 'opportunity', label: 'Objetivo da oportunidade', text: o }
   return null
 }
+
+export interface MarketEvidence { id: string; title: string; source_name: string | null; source_url: string | null; observed_at: string | null }
+/** "Tema inspirado em": só devolve algo se a peça gravou evidência (intent.market_context.evidence). Nunca deduz nada. Link só http(s). */
+export function marketEvidence(intent: unknown): MarketEvidence[] {
+  const ev = (intent as { market_context?: { evidence?: unknown } } | null)?.market_context?.evidence
+  if (!Array.isArray(ev)) return []
+  return ev.slice(0, 8).flatMap(e => {
+    const title = str((e as { title?: unknown })?.title)
+    if (!title) return []
+    const url = str((e as { source_url?: unknown }).source_url)
+    return [{ id: str((e as { id?: unknown }).id) || title, title, source_name: str((e as { source_name?: unknown }).source_name) || null, source_url: url && /^https?:\/\//i.test(url) ? url : null, observed_at: str((e as { observed_at?: unknown }).observed_at) || null }]
+  })
+}

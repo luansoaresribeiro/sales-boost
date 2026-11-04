@@ -46,9 +46,14 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente ·
    `claim-diagnostic` dispara a 1ª estratégia sozinha logo após o cadastro;
    um despachante (`action:'cron_dispatch'`, pg_cron diário) reavalia
    semanalmente (`reanalyze`) e atualiza o plano tático mensalmente OU
-   quando o check-up pede ajuste (`action:'refresh'` — mantém a tese, só
-   refaz funil/metas/orçamento, silencioso). Estratégia NOVA (`generate`)
-   só quando o check-up decide PIVOT/TERMINATE, **ou pelo botão do dono
+   quando o check-up pede ajuste (`action:'refresh'` — **desde a Fase 3,
+   2026-11-04:** só refaz plano de conteúdo (mix/pilares/linha central) e metas;
+   tese, foco, os 2 objetivos, orçamento e o público/objetivo de cada etapa do funil
+   ficam como estão — `_shared/strategyLock.ts`; silencioso). Estratégia NOVA
+   (`generate`) a partir do check-up (PIVOT/TERMINATE) agora nasce como **proposta**
+   (`status:'needs_review'`, metadados em `data_provenance.proposal`) e a ativa continua
+   rodando; o dono aprova/descarta na tela (`approve_proposal` / `discard_proposal`,
+   só JWT do dono). Estratégia nova imediata só **pelo botão do dono
    "Pedir nova estratégia"** (`StrategySection.tsx` — pede confirmação + o
    "por quê", usa o mesmo caminho de código do pivô automático) — só nesses
    casos avisa o dono (Telegram + Atividades).

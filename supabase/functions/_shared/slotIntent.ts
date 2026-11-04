@@ -3,6 +3,7 @@
 // etapa do funil ligada (público · mensagem · CTA) e a linha central. Funções
 // PURAS (testáveis fora do Deno). Sem pilar de Social Selling na ficha, não há
 // intenção: o prompt fica idêntico ao de antes.
+import { cleanMarketContext, type MarketContext } from './marketContext.ts'
 import { decideVideoCta, queroNotice, sanitizeCaptionCta, type VideoAutomation } from './videoCta.ts'
 
 export interface SlotIntent {
@@ -16,6 +17,8 @@ export interface SlotIntent {
   central_line: string
   /** Intenção que vem de uma OPORTUNIDADE aprovada (Etapa 4B), não de um pilar de Social Selling: `pilar_ss` fica vazio. */
   opportunity?: OppIntent
+  /** Sinais/tendências que inspiraram o TEMA da semana (cópia da evidência no momento do plano). Só informação: não entra no prompt da peça. */
+  market_context?: MarketContext
 }
 export interface OppIntent { title: string; objective: string; audience: string; buyer_problem: string; value_proposition: string; key_message: string; cta: string }
 
@@ -151,7 +154,17 @@ export function cleanIntent(x: unknown): SlotIntent | null {
     pillar_plan: s(r.pillar_plan, 300),
     funnel: f ? { stage: s(f.stage, 30), objective: s(f.objective, 160), audience: s(f.audience, 160), message: s(f.message, 200), cta: s(f.cta, 100) } : null,
     central_line: s(r.central_line, 300),
+    ...mcOf(r.market_context),
   }
+}
+
+const mcOf = (x: unknown): { market_context?: MarketContext } => { const m = cleanMarketContext(x); return m ? { market_context: m } : {} }
+
+/** Junta o contexto de mercado à intenção da vaga. Sem intenção (setor sem pilar de Social Selling) cria uma "casca" só com o contexto: intentBlock() dela é vazio, então o prompt da peça não muda. */
+export function withMarketContext(intent: SlotIntent | null | undefined, mc: unknown): SlotIntent | null {
+  const m = cleanMarketContext(mc)
+  if (!m) return intent ?? null
+  return { ...(intent ?? { pilar_ss: '', pilar_ss_name: '', pillar_plan: '', funnel: null, central_line: '' }), market_context: m }
 }
 
 /** Pilares de Social Selling da ficha (onboarding_v2.social_selling.pillars). Vazio = setor sem social selling. */

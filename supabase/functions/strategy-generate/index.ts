@@ -53,6 +53,11 @@
  * dono aprovar, nunca aplica sozinho. Não precisou da divisão em 2 passos
  * (resposta pequena, 900 tokens, sempre coube no tempo).
  *
+ * TRAVA DE APROVAÇÃO (Fase 3, 2026-11-04): posicionamento, público e objetivos só mudam com o dono. O refresh automático
+ * só mexe em plano de conteúdo + metas; PIVOT/TERMINATE automático gera uma PROPOSTA (status 'needs_review', metadados em
+ * data_provenance.proposal) e a ativa continua rodando; `approve_proposal`/`discard_proposal` (JWT do dono) decidem.
+ * Lógica pura em _shared/strategyLock.ts. "Pedir nova estratégia" (botão do dono) continua imediata: o clique É a aprovação.
+ *
  * Interativo (generate/reanalyze/update_*) só: JWT do dono. 'continue' só:
  * cron_secret + Bearer de service role.
  */
@@ -63,6 +68,7 @@ import { fetchContentRules, fetchFormatCatalog, formatCatalogBlock, sanitizeCont
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { setupMissing } from '../_shared/setupReady.ts'
 import { parseSSConfig, type SSConfig } from '../_shared/socialSelling.ts'
+import { approvePatch, discardPatch, finishPlan, isPendingProposal, proposalOf, refreshPatch, repeatsDiscarded, type ProposalMeta } from '../_shared/strategyLock.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 type SupaClient = ReturnType<typeof createClient>
@@ -525,6 +531,21 @@ Retorne APENAS um JSON:
     }).eq('id', strategyId)
     lap('parte 1 gravada')
 
+    // Proposta de pivô automático (Fase 3): se o dono já descartou uma proposta com ESTA mesma tese, não propõe de novo —
+    // só registra no log e para aqui (poupa os passos 2 e 3). A estratégia ativa nunca foi tocada.
+    const { data: provRow } = await admin.from('marketing_ai_strategies').select('data_provenance').eq('id', strategyId).maybeSingle()
+    const prop = proposalOf(provRow?.data_provenance as Record<string, unknown> | null)
+    if (prop) {
+      const { data: pastRows } = await admin.from('marketing_ai_strategies').select('thesis, data_provenance').eq('company_id', company.id).eq('kind', 'main').eq('status', 'paused').neq('id', strategyId).order('updated_at', { ascending: false }).limit(30)
+      if (repeatsDiscarded(parsed1.thesis, (pastRows ?? []) as { thesis: string | null; data_provenance: Record<string, unknown> | null }[])) {
+        await admin.from('marketing_ai_strategies').update(discardPatch(provRow?.data_provenance as Record<string, unknown> | null, 'system', new Date().toISOString())).eq('id', strategyId)
+        await closeProposalLog(admin, company.id, prop, 'dismissed', prop.reason || 'Mudança sugerida pelo check-up', 'não propus de novo: é a mesma tese que você já descartou')
+        await logStrategyCost(admin, company.id, 'generate', true)
+        lap('proposta repetida de uma descartada — parou')
+        return
+      }
+    }
+
     let fired = false
     try {
       // Function deployada com --no-verify-jwt (ver CLAUDE.md) -- so o
@@ -648,6 +669,14 @@ Retorne APENAS um JSON:
   }
 }
 
+async function createCampaignDraft(admin: SupaClient, companyId: string, draft: { name?: string; goal?: string }, budget?: { paid_ads?: number | null }): Promise<void> {
+  if (!draft?.name) return
+  await admin.from('marketing_ai_campaigns').insert({
+    company_id: companyId, name: String(draft.name).slice(0, 200), goal: draft.goal ? String(draft.goal) : null,
+    budget: budget?.paid_ads ?? null, status: 'planned',
+  })
+}
+
 // ── PASSO 3 (execução do 'continue', step=3) — metas, orçamento, estimativas e rascunho de campanha; ativa a
 // estratégia e pede o calendário do resto da semana. Relógio de 150s próprio.
 async function runStep3(admin: SupaClient, supabaseUrl: string, cronSecret: string, anthropicKey: string, row: Record<string, unknown>): Promise<void> {
@@ -695,39 +724,57 @@ Retorne APENAS um JSON:
     const parsed3 = r3.parsed
     const goals = goalsWithBaselineFrom(parsed3.goals, baseline)
 
-    if (String(row.kind) === 'main') {
+    // Fase 3: proposta de pivô automático NÃO ativa nada — fica 'needs_review' esperando o dono; a ativa segue rodando.
+    // Geração pedida pelo dono (botão) ou 1ª estratégia: ativa como sempre.
+    const fin = finishPlan(row as { kind?: string; data_provenance?: Record<string, unknown> | null })
+    if (fin.pausePrevious) {
       // Só agora, com a geração inteira completa, pausa a antiga — se qualquer etapa tivesse falhado, a empresa
       // continuaria com a estratégia anterior ativa em vez de ficar sem nenhuma.
       await admin.from('marketing_ai_strategies').update({ status: 'paused', updated_at: new Date().toISOString() })
         .eq('company_id', companyId).eq('kind', 'main').eq('status', 'active').neq('id', strategyId)
     }
+    if (fin.supersedeProposals) {
+      // O dono pediu uma estratégia nova: propostas automáticas ainda abertas perdem o sentido (não apaga, só arquiva).
+      const { data: open } = await admin.from('marketing_ai_strategies').select('id, status, data_provenance').eq('company_id', companyId).eq('kind', 'main').eq('status', 'needs_review').neq('id', strategyId)
+      for (const o of (open ?? []) as { id: string; status: string; data_provenance: Record<string, unknown> | null }[]) {
+        if (isPendingProposal(o)) await admin.from('marketing_ai_strategies').update(discardPatch(o.data_provenance, 'system', new Date().toISOString())).eq('id', o.id)
+      }
+    }
 
+    const prevProv = (row.data_provenance && typeof row.data_provenance === 'object' ? row.data_provenance : {}) as Record<string, unknown>
+    const prevProposal = proposalOf(prevProv)
     await admin.from('marketing_ai_strategies').update({
       budget: parsed3.budget && typeof parsed3.budget === 'object' ? parsed3.budget : {},
       estimates: parsed3.estimates && typeof parsed3.estimates === 'object' ? parsed3.estimates : {},
-      data_provenance: { baseline_source: baseline ? 'instagram_performance_snapshots' : 'nenhum dado real ainda — metas sem baseline verificado', source: 'data-agent' },
-      status: 'active',
+      data_provenance: {
+        ...prevProv,
+        baseline_source: baseline ? 'instagram_performance_snapshots' : 'nenhum dado real ainda — metas sem baseline verificado', source: 'data-agent',
+        // O rascunho de campanha só nasce se o dono aprovar a proposta.
+        ...(prevProposal ? { proposal: { ...prevProposal, campaign_draft: (parsed3.campaign_draft as { name?: string; goal?: string } | undefined) ?? null } } : {}),
+      },
+      status: fin.status,
       updated_at: new Date().toISOString(),
     }).eq('id', strategyId)
-    lap('parte 3 gravada, status=active')
+    lap(`parte 3 gravada, status=${fin.status}`)
     await logStrategyCost(admin, companyId, 'generate', true)
+    // Proposta pronta de verdade → só agora avisa o dono (Telegram/Atividades).
+    if (fin.status === 'needs_review' && prevProposal) {
+      const prefs = company.notification_prefs ?? {}
+      if (prefs.strategy !== false) await notifyStrategy(supabaseUrl, company.telegram_chat_id, companyId, 'STRATEGY_PIVOT', { proposal: true, decision: prevProposal.decision, reason: prevProposal.reason, reasoning: prevProposal.reasoning })
+    }
 
     if (goals.length) {
       await admin.from('marketing_ai_strategy_goals').insert(goals.map(g => ({ ...g, strategy_id: strategyId })))
     }
     const campaignDraft = parsed3.campaign_draft as { name?: string; goal?: string } | undefined
-    if (campaignDraft?.name) {
-      const budgetObj = parsed3.budget as { paid_ads?: number | null } | undefined
-      await admin.from('marketing_ai_campaigns').insert({
-        company_id: companyId, name: String(campaignDraft.name).slice(0, 200), goal: campaignDraft.goal ? String(campaignDraft.goal) : null,
-        budget: budgetObj?.paid_ads ?? null, status: 'planned',
-      })
+    if (fin.createCampaign && campaignDraft?.name) {
+      await createCampaignDraft(admin, companyId, campaignDraft, parsed3.budget as { paid_ads?: number | null } | undefined)
     }
     lap('goals + campaign draft gravados')
 
     // "Tudo automático" (2026-10-26): estratégia nova ativa → o calendário dos dias que FALTAM da semana atual
     // (amanhã até domingo) é planejado já. Quem decide se há o que fazer é o creative-generate. Só espera o aceite (202).
-    if (String(row.kind) === 'main') {
+    if (fin.planRestOfWeek) {
       try {
         const res = await fetch(`${supabaseUrl}/functions/v1/creative-generate`, {
           method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}` },
@@ -804,22 +851,23 @@ Retorne APENAS um JSON: {"status": "ON_TRACK|NEEDS_ADJUSTMENT|UNDERPERFORMING|AT
           if (!res.ok) console.error(`reanalyze[${strategyId}]: refresh recusado (${res.status}): ${await res.text()}`)
         } catch (e) { console.error(`reanalyze[${strategyId}]: falha ao disparar refresh:`, e) }
       } else if (decision === 'pivot' || decision === 'terminate') {
-        // So aqui (mudanca de rumo de verdade) gera estrategia NOVA e
-        // avisa o dono com o motivo -- check-up que so refina fica quieto.
-        try {
-          const res = await fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'generate', company_id: company.id, cron_secret: cronSecret }),
-          })
-          if (!res.ok) console.error(`reanalyze[${strategyId}]: generate recusado (${res.status}): ${await res.text()}`)
-        } catch (e) { console.error(`reanalyze[${strategyId}]: falha ao disparar generate:`, e) }
-
-        const prefs = company.notification_prefs ?? {}
-        if (prefs.strategy !== false) {
-          await notifyStrategy(supabaseUrl, company.telegram_chat_id, company.id, 'STRATEGY_PIVOT', {
-            decision, reason: String(parsed.recommendation), reasoning: String(parsed.reasoning ?? ''),
-          })
+        // Fase 3 (trava de aprovação): mudança de rumo NUNCA troca a estratégia sozinha. Gera uma PROPOSTA (status
+        // 'needs_review') que o dono aprova ou descarta na tela da Estratégia; a ativa continua rodando. Já existe uma
+        // proposta aberta? Não gera outra (só fica no log acima).
+        const { data: openRows } = await admin.from('marketing_ai_strategies').select('id, status, data_provenance').eq('company_id', company.id).eq('kind', 'main').eq('status', 'needs_review')
+        if (((openRows ?? []) as { status: string; data_provenance: Record<string, unknown> | null }[]).some(isPendingProposal)) {
+          // Já há uma proposta esperando o dono: este registro do check-up não fica aberto pra sempre.
+          await closeProposalLog(admin, company.id, { from_strategy_id: strategyId, decision: decision === 'terminate' ? 'terminate' : 'pivot', reason: String(parsed.recommendation), reasoning: '' }, 'dismissed', String(parsed.recommendation), 'já existe uma proposta aberta esperando você')
+        } else {
+          try {
+            const res = await fetch(`${supabaseUrl}/functions/v1/strategy-generate`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'generate', company_id: company.id, cron_secret: cronSecret, as_proposal: true, proposal: { from_strategy_id: strategyId, decision, reason: String(parsed.recommendation), reasoning: String(parsed.reasoning ?? '') } }),
+            })
+            if (!res.ok) console.error(`reanalyze[${strategyId}]: generate recusado (${res.status}): ${await res.text()}`)
+          } catch (e) { console.error(`reanalyze[${strategyId}]: falha ao disparar generate:`, e) }
         }
+        // O aviso ao dono NÃO sai aqui: só quando a proposta de fato chega em 'needs_review' (fim do passo 3).
       }
     }
   } catch (err) {
@@ -850,7 +898,7 @@ async function runRefresh(admin: SupaClient, supabaseUrl: string, cronSecret: st
     let learningPhrases: string[] = []
     try { const lr = await fetchLearning(admin, company.id); learningBlock = learningPromptBlock(lr); learningPhrases = learningHighlights(lr) } catch (e) { console.error('learning 80/20 falhou (ignorado):', e) }
 
-    const prompt = `Você é Hermes, ATUALIZANDO uma estratégia ativa (refresh de rotina mensal, ou porque o check-up semanal pediu ajuste) — a TESE principal já está decidida e NÃO deve mudar aqui, só o plano tático (funil/metas/orçamento/prioridades) precisa refletir o que já funcionou até agora + os dados mais recentes.
+    const prompt = `Você é Hermes, ATUALIZANDO uma estratégia ativa (refresh de rotina mensal, ou porque o check-up semanal pediu ajuste) — a TESE principal, os objetivos, o PÚBLICO e o orçamento já foram aprovados pelo dono e NÃO mudam aqui; só o plano de conteúdo (mix, pilares, linha central) e as metas precisam refletir o que já funcionou até agora + os dados mais recentes.
 
 ${businessPreamble(company, {})}${playbookBlock}${formatCatalogBlock(formats)}${SCOPE_BLOCK}${ss?.block ?? ''}
 
@@ -875,7 +923,7 @@ ${baseline ? `Dado real ATUAL: ${baseline.label}.` : 'Ainda sem dado real de per
 ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
 ${formatDomains(dataAgentState)}
 ${learningBlock}
-REGRAS: mantenha a tese intacta; priorize (regra 80/20) manter e reforçar o que os sinais reais mostram que já funciona, reservando só uma fatia menor pra testar algo novo; NUNCA invente métrica que não foi te dada acima; metas no máximo 3 (goal_type: ${PLANNED_GOAL_TYPES.join('|')}), NÃO preencha baseline.
+REGRAS: mantenha a tese, os objetivos e o público intactos (em cada etapa do funil copie "audience" e "objective" exatamente como estão acima; ajuste só mensagem, formato, CTA e métrica); não mexa no orçamento; priorize (regra 80/20) manter e reforçar o que os sinais reais mostram que já funciona, reservando só uma fatia menor pra testar algo novo; NUNCA invente métrica que não foi te dada acima; metas no máximo 3 (goal_type: ${PLANNED_GOAL_TYPES.join('|')}), NÃO preencha baseline.
 ${TACTICAL_SCOPE_RULES}
 ${weeklyMixRules(rules.minVideosPerWeek, ss)}
 
@@ -884,8 +932,7 @@ Retorne APENAS um JSON:
   "what_changed": "2-4 frases: o que mudou no plano tático e por quê, citando os sinais reais que motivaram",
   "weekly_mix": ${weeklyMixShape(ss)},
   "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","pillar":"chave do pilar de Social Selling que esta etapa fortalece (se houver)","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}],
-  "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}],
-  "budget": {"total":null,"currency":"BRL","period":"monthly","paid_ads":null,"organic":null,"creative":null,"other":null,"is_flexible":true,"allocation":[{"channel":"","amount":null,"reason":""}],"budget_reasoning":""}
+  "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}]
 }`
 
     const r = await callClaudeStep(anthropicKey, prompt, 5000, { allowRetry: false }, 'Refresh (atualização mensal)')
@@ -893,13 +940,11 @@ Retorne APENAS um JSON:
     const parsed = r.parsed
     const goals = goalsWithBaselineFrom(parsed.goals, baseline)
 
-    await admin.from('marketing_ai_strategies').update({
-      funnel_plan: Array.isArray(parsed.funnel_plan) ? parsed.funnel_plan : strategy.funnel_plan,
-      budget: parsed.budget && typeof parsed.budget === 'object' ? parsed.budget : strategy.budget,
-      content_plan: sanitizeContentPlan({ weekly_mix: parsed.weekly_mix }, formats, prevPlan, rules.minVideosPerWeek, planOpts(ss, Array.isArray(parsed.funnel_plan) ? parsed.funnel_plan : strategy.funnel_plan)) ?? prevPlan,
-      last_refreshed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }).eq('id', strategyId)
+    // Trava de aprovação (Fase 3): só plano de conteúdo + funil (com público/objetivo da etapa travados) + metas. Tese,
+    // foco, objetivos e orçamento nunca entram neste UPDATE (ver _shared/strategyLock.ts).
+    const patch = refreshPatch(strategy as { funnel_plan?: unknown }, parsed.funnel_plan, null, new Date().toISOString())
+    patch.content_plan = sanitizeContentPlan({ weekly_mix: parsed.weekly_mix }, formats, prevPlan, rules.minVideosPerWeek, planOpts(ss, patch.funnel_plan)) ?? prevPlan
+    await admin.from('marketing_ai_strategies').update(patch).eq('id', strategyId)
 
     if (goals.length) {
       await admin.from('marketing_ai_strategy_goals').delete().eq('strategy_id', strategyId)
@@ -920,6 +965,17 @@ Retorne APENAS um JSON:
     console.error(`runRefresh[${strategyId}]:`, err)
     await logStrategyCost(admin, company.id, 'refresh', false, err instanceof Error ? err.message : String(err))
   }
+}
+
+// Fase 3: fecha o registro da proposta no log (o 'proposed' que o check-up gravou; se não achar, grava um novo).
+async function closeProposalLog(admin: SupaClient, companyId: string, p: ProposalMeta | null, status: 'approved' | 'dismissed', text: string, note?: string): Promise<void> {
+  try {
+    if (p?.from_strategy_id) {
+      const { data: open } = await admin.from('marketing_ai_strategy_log').select('id, recommendation').eq('company_id', companyId).eq('strategy_id', p.from_strategy_id).eq('status', 'proposed').in('decision_type', ['pivot', 'terminate']).order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (open?.id) { await admin.from('marketing_ai_strategy_log').update({ status, ...(note ? { recommendation: `${String(open.recommendation ?? '')} (${note})`.slice(0, 1200) } : {}) }).eq('id', open.id); return }
+    }
+    await admin.from('marketing_ai_strategy_log').insert({ company_id: companyId, strategy_id: p?.from_strategy_id ?? null, decision_type: p?.decision ?? 'pivot', recommendation: note ? `${text} (${note})` : text, reasoning: p?.reason ?? '', status })
+  } catch (e) { console.error('closeProposalLog falhou', e) }
 }
 
 Deno.serve(async (req) => {
@@ -1096,7 +1152,14 @@ Deno.serve(async (req) => {
       // recomendação esperando aprovação (por isso status:'implemented',
       // não 'proposed').
       const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
-      if (kind === 'main' && reason) {
+      // Pivô AUTOMÁTICO (só cron): nasce como proposta, sem tocar na ativa. Botão do dono nunca passa por aqui.
+      let proposalMeta: ProposalMeta | null = null
+      if (isCron && kind === 'main' && body.as_proposal === true) {
+        const pr = (body.proposal && typeof body.proposal === 'object' ? body.proposal : {}) as Record<string, unknown>
+        const fromId = typeof pr.from_strategy_id === 'string' && /^[0-9a-f-]{36}$/i.test(pr.from_strategy_id) ? pr.from_strategy_id : null
+        proposalMeta = { from_strategy_id: fromId, decision: pr.decision === 'terminate' ? 'terminate' : 'pivot', reason: String(pr.reason ?? '').slice(0, 600), reasoning: String(pr.reasoning ?? '').slice(0, 1200) }
+      }
+      if (kind === 'main' && reason && !proposalMeta) {
         const { data: oldActive } = await admin.from('marketing_ai_strategies').select('id').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').maybeSingle()
         if (oldActive) {
           await admin.from('marketing_ai_strategy_log').insert({
@@ -1115,6 +1178,7 @@ Deno.serve(async (req) => {
       const { data: inserted, error: insErr } = await admin.from('marketing_ai_strategies').insert({
         company_id: company.id, kind, parent_strategy_id: parentId,
         name: 'Gerando estratégia...', status: 'generating', created_by: 'ai',
+        ...(proposalMeta ? { data_provenance: { proposal: proposalMeta } } : {}),
       }).select('id').single()
       if (insErr) throw new Error(insErr.message)
 
@@ -1143,8 +1207,9 @@ Deno.serve(async (req) => {
       return json({ ok: true, strategy_id: strategyId, deferred: true })
     }
 
-    // 'refresh' -- ATUALIZA a estrategia ativa no lugar (metas, funil,
-    // orcamento, prioridades) com dado novo + o que ja funcionou -- a TESE
+    // 'refresh' -- ATUALIZA a estrategia ativa no lugar (metas, plano de
+    // conteudo e funil com publico/objetivo travados; orcamento, tese e
+    // objetivos NAO mudam sem o dono -- Fase 3, strategyLock.ts) com dado novo + o que ja funcionou -- a TESE
     // principal nunca muda aqui (isso so acontece via 'generate', e so
     // quando o reanalyze decidiu PIVOT/TERMINATE). Disparado: (a) pelo
     // cron_dispatch, 1x por mes por empresa; (b) pelo proprio reanalyze
@@ -1178,6 +1243,47 @@ Deno.serve(async (req) => {
       for (const k of allowed) if (k in (patch ?? {})) safePatch[k] = patch[k]
       const { error } = await admin.from('marketing_ai_strategy_goals').update(safePatch).eq('id', goalId)
       if (error) throw new Error(error.message)
+      return json({ ok: true })
+    }
+
+    // ── Fase 3: o dono decide sobre a PROPOSTA de mudança de rumo (só JWT do dono; cron nunca aprova nem descarta). ──
+    if (action === 'approve_proposal' || action === 'discard_proposal') {
+      if (isCron) return json({ error: 'Só o dono decide sobre uma proposta.' }, 403)
+      const proposalId = String(body.strategy_id ?? '')
+      const { data: row } = await admin.from('marketing_ai_strategies').select('id, name, kind, status, thesis, data_provenance').eq('id', proposalId).eq('company_id', company.id).maybeSingle()
+      if (!row || row.kind !== 'main' || !isPendingProposal(row as { status: string; data_provenance: Record<string, unknown> | null })) return json({ error: 'Essa proposta não está mais aberta.', code: 'not_pending' }, 409)
+      const prov = row.data_provenance as Record<string, unknown> | null
+      const meta = proposalOf(prov)
+      const now = new Date().toISOString()
+      if (action === 'discard_proposal') {
+        // Fica no histórico (status 'paused' + data_provenance.proposal.discarded_*); a estratégia ativa não é tocada.
+        const { error } = await admin.from('marketing_ai_strategies').update(discardPatch(prov, 'owner', now)).eq('id', proposalId).eq('company_id', company.id).eq('status', 'needs_review')
+        if (error) throw new Error(error.message)
+        await closeProposalLog(admin, company.id, meta, 'dismissed', `Você descartou a proposta de mudança: ${String(row.name ?? '').slice(0, 120)}.`)
+        return json({ ok: true })
+      }
+      // Aprovar: a atual vai pro histórico (pausada), a proposta vira a ativa e o calendário do resto da semana é pedido.
+      // Ordem (nunca fica sem ativa): 1) ativa a proposta com UPDATE condicional (status='needs_review'); 0 linhas = alguém já decidiu →
+      // 409 sem tocar na ativa. 2) só então pausa as outras ativas. Entre 1 e 2 há, por milissegundos, duas ativas (inofensivo); se o 2 falhar,
+      // a proposta volta a 'needs_review' e a ativa antiga segue — nunca zero, nunca duas por muito tempo.
+      const { data: activated, error } = await admin.from('marketing_ai_strategies').update(approvePatch(prov, now)).eq('id', proposalId).eq('company_id', company.id).eq('status', 'needs_review').select('id')
+      if (error) throw new Error(error.message)
+      if (!activated?.length) return json({ error: 'Essa proposta não está mais aberta.', code: 'not_pending' }, 409)
+      const { error: pErr } = await admin.from('marketing_ai_strategies').update({ status: 'paused', updated_at: now }).eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').neq('id', proposalId)
+      if (pErr) {
+        await admin.from('marketing_ai_strategies').update({ status: 'needs_review', data_provenance: prov, updated_at: now }).eq('id', proposalId).eq('company_id', company.id)
+        throw new Error(pErr.message)
+      }
+      await closeProposalLog(admin, company.id, meta, 'approved', `Você aprovou a mudança: ${String(row.name ?? '').slice(0, 120)}.`)
+      if (meta?.campaign_draft?.name) await createCampaignDraft(admin, company.id, meta.campaign_draft).catch(e => console.error('rascunho de campanha da proposta falhou', e))
+      try {
+        const res = await fetch(`${supabaseUrl}/functions/v1/creative-generate`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify({ action: 'plan_rest_of_week', company_id: company.id, cron_secret: cronSecret }), signal: AbortSignal.timeout(20_000),
+        })
+        await res.body?.cancel()
+        if (!res.ok) console.error(`approve_proposal[${proposalId}]: plan_rest_of_week recusado (HTTP ${res.status})`)
+      } catch (e) { console.error(`approve_proposal[${proposalId}]: falha ao pedir o calendário:`, e) }
       return json({ ok: true })
     }
 

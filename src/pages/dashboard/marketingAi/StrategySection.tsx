@@ -11,6 +11,7 @@ import { BudgetPanel, FunnelPanel, EstimatesPanel, InitiativesPanel, MonitoringP
 import IntelligenceDomainsPanel from './IntelligenceDomainsPanel'
 import HermesGapsPanel from './HermesGapsPanel'
 import StrategyTopBlocks from './StrategyTopBlocks'
+import StrategyProposal from './StrategyProposal'
 import {
   type Strategy, type Goal, type LogRow, type Budget,
   STATUS_COLOR, EMPTY_BUDGET, strategyLabels,
@@ -21,7 +22,7 @@ async function callStrategy(token: string, body: Record<string, unknown>): Promi
     method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   })
   const data = await res.json().catch(() => ({})) as Record<string, unknown>
-  if (!res.ok) throw new Error(String(data.error ?? 'Erro'))
+  if (!res.ok) throw Object.assign(new Error(String(data.error ?? 'Erro')), { code: data.code })
   return data
 }
 
@@ -348,6 +349,7 @@ export default function StrategySection({ company }: { company: CompanyData }) {
 
       {active && active.status !== 'generating' && active.status !== 'failed' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+          {!viewing && <StrategyProposal companyId={company.id} active={main} call={b => callStrategy(token, b)} onChanged={() => Promise.all([loadMain(), loadLog()]).then(() => undefined)} readOnly={readOnly} />}
           <StrategyTopBlocks active={active} main={main} />
           <StrategyBlock title={t.bOverview}><OverviewPanel strategy={active} /></StrategyBlock>
           <HermesGapsPanel company={company} />
