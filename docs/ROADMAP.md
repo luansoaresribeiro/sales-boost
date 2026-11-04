@@ -582,8 +582,9 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 > Os pacotes **não são fases novas**: são uma camada de conexão/usabilidade sobre o que já existe, sem IA e sem criar fonte de verdade nova
 > (as 4 regras estão em [DECISIONS.md](DECISIONS.md), 2026-11-03 "Pacotes A e B").
 >
-> **Status 2026-11-04:** A, B1, B2 concluídos e no ar (PRs #98, #99, #100). Fase 2 juntada (PR #101), site no ar; falta publicar a `marketing-ai`
-> e passar pelo gate de qualidade abaixo. **Princípio orientador e critérios formais de aceite:** [DECISIONS.md](DECISIONS.md), 2026-11-04 "Critérios de decisão".
+> **Status 2026-11-04:** A, B1, B2 concluídos e no ar (PRs #98, #99, #100). Fase 2 juntada (PR #101), site no ar, `marketing-ai` v43
+> publicada. **Gate medido** (67 sinais, 0 notícia boa barrada): filtro passou para `enforce` com a ficha v2. Oportunidades ainda reprovam nas
+> 5 perguntas, e o custo da coleta passa a ser medido a partir de 05/11: a Fase 2 segue aberta (detalhe em DECISIONS, "Gate da Fase 2"). **Princípio orientador e critérios formais de aceite:** [DECISIONS.md](DECISIONS.md), 2026-11-04 "Critérios de decisão".
 
 ### Gate e critérios de saída (dono, 2026-11-04 — detalhe em DECISIONS)
 - **Não abrir novas frentes** antes de provar valor comercial. Ordem: publicar `marketing-ai` → conferir bundle e versão → analisar dados reais
