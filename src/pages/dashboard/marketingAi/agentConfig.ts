@@ -5,7 +5,9 @@
 // os agentes passam a de fato obedecer a esse nível de autonomia.
 import { useCallback, useState } from 'react'
 
-export type Autonomy = 'sugerir' | 'aprovar' | 'executar'
+// 2026-11-04 (dono): só 2 opções em Configurações → Aprovações. "Apenas sugerir" saiu; valor antigo salvo no
+// navegador vira 'aprovar'. A fonte da verdade é companies.agent_automatic_mode (ver AgentConfigTab).
+export type Autonomy = 'aprovar' | 'executar'
 export type Objective = 'vendas' | 'leads' | 'seguidores' | 'cac'
 
 export interface AgentConfig { autonomy: Autonomy; objective: Objective }
@@ -13,9 +15,8 @@ export interface AgentConfig { autonomy: Autonomy; objective: Objective }
 export const DEFAULT_AGENT_CONFIG: AgentConfig = { autonomy: 'aprovar', objective: 'vendas' }
 
 export const AUTONOMY_OPTIONS: { key: Autonomy; label: string; desc: string; icon: string }[] = [
-  { key: 'sugerir', label: 'Apenas sugerir', icon: '💭', desc: 'A IA aponta o que fazer, mas não cria nada sozinha. Você decide e executa tudo.' },
-  { key: 'aprovar', label: 'Pedir aprovação', icon: '✋', desc: 'A IA prepara tudo (posts, follow-ups, campanhas) como rascunho e espera o seu OK antes de qualquer coisa ir ao público.' },
-  { key: 'executar', label: 'Executar automaticamente', icon: '⚡', desc: 'A IA toca as ações internas sozinha (organizar funil, rascunhar, otimizar). Publicar de verdade e enviar mensagem ainda confirmam com você.' },
+  { key: 'aprovar', label: 'Pedir aprovação', icon: '✋', desc: 'Padrão. A IA prepara tudo como rascunho e cada ação dos agentes espera o seu OK em Aprovações.' },
+  { key: 'executar', label: 'Executar automaticamente', icon: '⚡', desc: 'As ações internas dos agentes (organizar funil, rascunhar, otimizar) são aprovadas sozinhas. Publicar de verdade e enviar mensagem ainda confirmam com você.' },
 ]
 
 export const OBJECTIVE_OPTIONS: { key: Objective; label: string; desc: string; icon: string }[] = [
@@ -34,7 +35,8 @@ export function useAgentConfig(companyId: string | undefined): [AgentConfig, (pa
     if (typeof localStorage === 'undefined') return DEFAULT_AGENT_CONFIG
     try {
       const raw = localStorage.getItem(cfgKey(companyId))
-      return raw ? { ...DEFAULT_AGENT_CONFIG, ...JSON.parse(raw) } : DEFAULT_AGENT_CONFIG
+      const saved = raw ? { ...DEFAULT_AGENT_CONFIG, ...JSON.parse(raw) } : DEFAULT_AGENT_CONFIG
+      return saved.autonomy === 'executar' || saved.autonomy === 'aprovar' ? saved : { ...saved, autonomy: 'aprovar' }
     } catch { return DEFAULT_AGENT_CONFIG }
   })
   const update = useCallback((patch: Partial<AgentConfig>) => {
