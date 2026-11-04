@@ -6,6 +6,39 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-04 — Critérios de decisão (dono): princípio orientador, gate da Fase 2 e critérios de saída
+
+**Princípio orientador do roadmap:** o diferencial do SalesBoost não será ter mais agentes, telas ou funcionalidades — será identificar algo
+relevante no mercado, entender por que aquilo importa para uma imobiliária e transformar essa informação numa ação comercial que gere
+resultado. **Não adicionar funcionalidade nova** antes de provar que a inteligência gera valor comercial. A arquitetura aprovada não muda.
+
+1. **Gate de qualidade da Fase 2 (audit → enforce).** Só passar a `enforce` com critérios objetivos, medidos com SQL de leitura na Tespon e
+   Teste Zero (`market_intel_runs`, `market_signals`) e registrados aqui: precisão dos sinais comercialmente relevantes; falsos positivos
+   (notícia boa barrada); duplicados/sem mudança; custo por rodada e acumulado; se surgem oportunidades que merecem a atenção de uma
+   imobiliária. Coleta funcionando tecnicamente não basta.
+2. **Sinal ≠ tendência ≠ oportunidade.** Sinal = informação coletada de uma fonte. Tendência = padrão identificado a partir de um ou mais
+   sinais. Oportunidade = possibilidade comercial concreta para **esta** imobiliária. Ex.: sinal "mais notícias de investimento na região X";
+   tendência "interesse comercial crescendo em X"; oportunidade "a imobiliária tem imóveis adequados em X e pode fazer campanha para o público Y".
+   Notícia interessante sem ação comercial plausível é informação de mercado, não oportunidade.
+3. **Relevância comercial.** Toda oportunidade responde: por que importa para esta imobiliária; qual público é afetado; qual região ou tipo de
+   imóvel; qual ação comercial é possível; qual evidência sustenta. Sem isso, não é oportunidade. (Na Fase 2 isso é conferido nas oportunidades
+   geradas, sem código novo.)
+4. **A Fase 3 não depende de oportunidades.** A estratégia define posicionamento, público e objetivos; a inteligência alimenta o contexto; a
+   oportunidade só acelera ou modifica ações específicas, quando justificada; o plano semanal funciona mesmo sem nenhuma oportunidade.
+5. **Teste de valor comercial já nas Fases 2–4** (avaliação controlada com Tespon e Teste Zero, manual, sem dashboard nem banco novo):
+   oportunidades que a imobiliária considera relevantes; oportunidades que viraram ação; ações que geraram conversa ou lead; feedback de
+   corretores e gestores.
+6. **Critérios de saída por fase** (uma fase não fecha só porque o código foi implementado):
+   | Fase | O que precisa estar comprovado |
+   |---|---|
+   | 2 | A inteligência coleta informação relevante, com custo e qualidade controlados. |
+   | 3 | A inteligência influencia o direcionamento sem alterar o posicionamento automaticamente. |
+   | 4 | O sistema conecta estratégia a imóveis reais e executa sem divulgar imóvel indisponível. |
+   | 5 | É possível relacionar ações de marketing a resultados comerciais verificáveis. |
+
+**Forma de reportar ao dono:** mudança de status → só o que mudou (PR, deploy, testes, resultados); mudança de arquitetura ou prioridade → só a
+seção atualizada; revisão geral → o roadmap completo.
+
 ## 2026-11-04 — Pacote B2 (ações novas): menu do "+", ignorar sinal, ignorar tendência, "Ver evidência"
 
 **O que mudou:**
