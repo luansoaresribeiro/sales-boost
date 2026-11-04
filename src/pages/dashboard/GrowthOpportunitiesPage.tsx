@@ -227,12 +227,12 @@ export default function GrowthOpportunitiesPage() {
           )}
 
           {showMissing && (
-            <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '14px 16px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 800, color: 'white', marginBottom: '8px' }}>{t.missingTitle}</div>
-              <ul style={{ margin: 0, paddingLeft: '18px', color: MUTED, fontSize: '12.5px', lineHeight: 1.7 }}>
+            <details style={{ padding: '2px 4px' }}>
+              <summary style={{ cursor: 'pointer', fontSize: '11.5px', color: 'rgba(255,255,255,0.45)' }}>{t.missingTitle}</summary>
+              <ul style={{ margin: '6px 0 0', paddingLeft: '18px', color: 'rgba(255,255,255,0.45)', fontSize: '11.5px', lineHeight: 1.6 }}>
                 {missing.map(m => <li key={m}>{m}</li>)}
               </ul>
-            </div>
+            </details>
           )}
         </div>
 

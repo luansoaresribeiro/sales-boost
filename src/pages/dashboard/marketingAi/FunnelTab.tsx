@@ -10,6 +10,7 @@ import { mapLeadRow, STAGE_TO_DB, type LeadRow } from './salesReal'
 import DataVeil, { veilMode } from './DataVeil'
 import { STAGE_EN, TEMP_EN } from './labels.i18n'
 import { forwardUrl, parseMoney, stampsForStage, valueColumnFor, type StageKey } from '../resultsBrokers'
+import { leadOrigin, type OriginLookups } from './leadOrigin'
 import ChannelFilter, { ChannelBadge, type ChannelFilterValue } from './ChannelFilter'
 
 const ORANGE = '#FF6D29'
@@ -24,7 +25,7 @@ const TX = {
     emptyMsg: 'Assim que o primeiro lead chegar (Instagram, WhatsApp ou anúncios), o funil mostra os leads de verdade aqui, sozinho. Ligue o Modo demonstração pra ver o layout com exemplos.',
     seeExample: 'Ver exemplo (modo demonstração)', sameFunnel: 'Instagram e WhatsApp no mesmo funil — filtre pela origem.',
     leadsInFunnel: 'Leads no funil', conversion: 'Conversão', pipelineValue: 'Valor no pipeline', noReplyLbl: 'Sem resposta', empty: 'vazio',
-    broker: 'Corretor', forward: 'Encaminhar por WhatsApp', forwardHint: 'Abre o seu WhatsApp com o resumo — nada é enviado por nós.', valProposal: 'Valor da proposta', valSale: 'Valor da venda', valNone: 'valor não informado', valInform: 'informar valor', valPh: 'Opcional, ex.: 850000', valConfirm: 'Confirmar', valSkip: 'Pular (sem valor)', valSave: 'Salvar valor', valCancel: 'Cancelar', valBad: 'Valor inválido — use só números.', valVisit: 'ao ir para Qualificado, conta como visita agendada nos Resultados',
+    broker: 'Corretor', forward: 'Encaminhar por WhatsApp', forwardHint: 'Abre o seu WhatsApp com o resumo — nada é enviado por nós.', valProposal: 'Valor da proposta', valSale: 'Valor da venda', valNone: 'valor não informado', origin: 'Origem', originNone: 'Origem não registrada', originUnverified: 'Não foi possível verificar', valInform: 'informar valor', valPh: 'Opcional, ex.: 850000', valConfirm: 'Confirmar', valSkip: 'Pular (sem valor)', valSave: 'Salvar valor', valCancel: 'Cancelar', valBad: 'Valor inválido — use só números.', valVisit: 'ao ir para Qualificado, conta como visita agendada nos Resultados',
   },
   en: {
     noReply: '⚠️ No reply — risk of going cold', drafted: '✓ Follow-up drafted, awaiting your approval', draftBtn: 'Draft follow-up', advance: 'Advance stage',
@@ -34,7 +35,7 @@ const TX = {
     emptyMsg: 'As soon as the first lead arrives (Instagram, WhatsApp or ads), the pipeline shows the real leads here on its own. Turn on Demo mode to see the layout with examples.',
     seeExample: 'See an example (demo mode)', sameFunnel: 'Instagram and WhatsApp in the same pipeline — filter by source.',
     leadsInFunnel: 'Leads in pipeline', conversion: 'Conversion', pipelineValue: 'Pipeline value', noReplyLbl: 'No reply', empty: 'empty',
-    broker: 'Broker', forward: 'Forward by WhatsApp', forwardHint: 'Opens your WhatsApp with the summary — nothing is sent by us.', valProposal: 'Proposal value', valSale: 'Sale value', valNone: 'value not informed', valInform: 'add value', valPh: 'Optional, e.g. 850000', valConfirm: 'Confirm', valSkip: 'Skip (no value)', valSave: 'Save value', valCancel: 'Cancel', valBad: 'Invalid value — numbers only.', valVisit: 'moving to Qualified counts as a scheduled visit in Results',
+    broker: 'Broker', forward: 'Forward by WhatsApp', forwardHint: 'Opens your WhatsApp with the summary — nothing is sent by us.', valProposal: 'Proposal value', valSale: 'Sale value', origin: 'Source', originNone: 'Source not recorded', originUnverified: 'Could not verify', valNone: 'value not informed', valInform: 'add value', valPh: 'Optional, e.g. 850000', valConfirm: 'Confirm', valSkip: 'Skip (no value)', valSave: 'Save value', valCancel: 'Cancel', valBad: 'Invalid value — numbers only.', valVisit: 'moving to Qualified counts as a scheduled visit in Results',
   },
 } as const
 
@@ -46,14 +47,15 @@ function nextStage(key: LeadStageKey): LeadStageKey | null {
 // Dados extras do lead real (Etapas 6 e 7): datas/valores carimbados, corretor da vez e resumo para encaminhar.
 interface Extra {
   contact: string | null; notes: string | null; item_id: string | null; assigned_broker_id: string | null
+  link_id: string | null; opportunity_id: string | null; source: string | null
   proposal_value: number | null; closed_value: number | null; visit_at: string | null; proposal_at: string | null; closed_at: string | null
 }
 interface Broker { id: string; name: string; phone: string }
 interface Prompt { id: string; col: 'proposal_value' | 'closed_value'; nx: StageKey | null }
 
-function LeadCard({ lead, drafted, onDraft, onAdvance, extra, broker, countryCode, itemTitle, prompt, onPrompt, onValue, onCancel }: {
+function LeadCard({ lead, drafted, onDraft, onAdvance, extra, broker, countryCode, itemTitle, lookups, prompt, onPrompt, onValue, onCancel }: {
   lead: DemoLead; drafted: boolean; onDraft: () => void; onAdvance: () => void
-  extra?: Extra; broker?: Broker; countryCode: string | null; itemTitle?: string | null; prompt: Prompt | null; onPrompt: (col: Prompt['col']) => void; onValue: (raw: string) => boolean; onCancel: () => void // onValue devolve true se o valor é inválido
+  extra?: Extra; broker?: Broker; countryCode: string | null; itemTitle?: string | null; lookups?: OriginLookups; prompt: Prompt | null; onPrompt: (col: Prompt['col']) => void; onValue: (raw: string) => boolean; onCancel: () => void // onValue devolve true se o valor é inválido
 }) {
   const [val, setVal] = useState('')
   const [bad, setBad] = useState(false)
@@ -67,6 +69,7 @@ function LeadCard({ lead, drafted, onDraft, onAdvance, extra, broker, countryCod
   const href = extra && broker ? forwardUrl(broker.phone, { name: lead.name, contact: extra.contact, item: itemTitle ?? null, message: extra.notes }, lang, countryCode) : null
   const submit = (skip: boolean) => { if (onValue(skip ? '' : val)) setBad(true); else { setBad(false); setVal('') } }
   const mine = prompt?.id === lead.id ? prompt : null
+  const origin = extra && lookups ? leadOrigin(extra, lookups, lang) : null
   return (
     <div style={{ background: CARD, border: `1px solid ${lead.noReply ? 'rgba(251,191,36,0.35)' : BORDER}`, borderRadius: '10px', padding: '11px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '5px' }}>
@@ -81,6 +84,12 @@ function LeadCard({ lead, drafted, onDraft, onAdvance, extra, broker, countryCod
         <span style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)' }}>{lead.lastContact}</span>
       </div>
       <div style={{ fontSize: '10.5px', color: MUTED, lineHeight: 1.45, marginBottom: '8px', overflowWrap: 'anywhere' }}>{lead.note}</div>
+      {origin && (
+        <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '6px', lineHeight: 1.45 }}>
+          {tx.origin}: {origin.unverified ? <span style={{ color: '#FBBF24' }}>{tx.originUnverified}</span>
+            : origin.registered ? origin.lines.map((l, i) => <div key={i} style={{ color: 'white' }}>{l}</div>) : tx.originNone}
+        </div>
+      )}
       {extra && broker && <div style={{ fontSize: '10.5px', color: 'white', marginBottom: '6px' }}>{tx.broker}: <strong>{broker.name}</strong></div>}
       {valCol && !mine && (
         <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '6px' }}>
@@ -150,15 +159,17 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
   const [extras, setExtras] = useState<Record<string, Extra>>({})
   const [brokers, setBrokers] = useState<Broker[]>([])
   const [itemTitles, setItemTitles] = useState<Record<string, string>>({})
+  const [lookups, setLookups] = useState<OriginLookups>({ itemTitles: {}, linkChannels: {}, oppTitles: {}, failed: { items: false, links: false, opps: false } })
   // DDI do WhatsApp vem da ficha (regra 6). Sem ficha/campo: só funciona número digitado com "+".
   const [countryCode, setCountryCode] = useState<string | null>(null)
   const [prompt, setPrompt] = useState<Prompt | null>(null)
 
   const load = useCallback(async () => {
     const base = 'id, name, contact, channel, stage, value_estimate, last_contact_at, notes, created_at'
-    const ext = 'item_id, visit_at, proposal_at, proposal_value, closed_at, closed_value, assigned_broker_id'
+    const ext = 'item_id, visit_at, proposal_at, proposal_value, closed_at, closed_value, assigned_broker_id, link_id, opportunity_id, source'
     // Etapas 6 e 7: colunas novas. Se a migration ainda não foi aplicada, a consulta com elas falha — cai na antiga (o funil não quebra).
     let res: { data: unknown; error: { message: string } | null } = await supabase.from('leads').select(`${base}, ${ext}`).eq('company_id', company.id).order('created_at', { ascending: false })
+    const fellBack = !!res.error // colunas novas ausentes: a origem não dá pra verificar (nunca "não registrada")
     if (res.error) res = await supabase.from('leads').select(base).eq('company_id', company.id).order('created_at', { ascending: false })
     const { data, error } = res
     if (error) { setLoadError(error.message); return }
@@ -167,18 +178,30 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
     setRealLeads(rows.map(mapLeadRow))
     setExtras(Object.fromEntries(rows.map(r => [r.id, {
       contact: r.contact, notes: r.notes, item_id: r.item_id ?? null, assigned_broker_id: r.assigned_broker_id ?? null,
+      link_id: r.link_id ?? null, opportunity_id: r.opportunity_id ?? null, source: r.source ?? null,
       proposal_value: r.proposal_value ?? null, closed_value: r.closed_value ?? null, visit_at: r.visit_at ?? null, proposal_at: r.proposal_at ?? null, closed_at: r.closed_at ?? null,
     }])))
     const itemIds = [...new Set(rows.map(r => r.item_id).filter((x): x is string => !!x))]
-    const [b, it, pb] = await Promise.all([
+    const linkIds = [...new Set(rows.map(r => r.link_id).filter((x): x is string => !!x))]
+    const oppIds = [...new Set(rows.map(r => r.opportunity_id).filter((x): x is string => !!x))]
+    const [b, it, pb, lkRes, opRes] = await Promise.all([
       supabase.from('brokers').select('id, name, phone').eq('company_id', company.id),
       itemIds.length ? supabase.from('marketing_ai_knowledge').select('id, title').in('id', itemIds) : Promise.resolve({ data: [], error: null }),
       company.vertical_key ? supabase.from('vertical_playbooks').select('config').eq('key', company.vertical_key).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      linkIds.length ? supabase.from('tracked_links').select('id, channel').eq('company_id', company.id).in('id', linkIds) : Promise.resolve({ data: [], error: null }),
+      oppIds.length ? supabase.from('growth_opportunities').select('id, title').eq('company_id', company.id).in('id', oppIds) : Promise.resolve({ data: [], error: null }),
     ])
     const cc = String((pb.data as { config?: { public_page?: { country_code?: unknown } } } | null)?.config?.public_page?.country_code ?? '').replace(/\D/g, '')
     setCountryCode(cc.length >= 1 && cc.length <= 3 ? cc : null)
     setBrokers(b.error ? [] : (b.data ?? []) as Broker[])
-    setItemTitles(it.error ? {} : Object.fromEntries(((it.data ?? []) as { id: string; title: string }[]).map(i => [i.id, i.title])))
+    const titles: Record<string, string> = it.error ? {} : Object.fromEntries(((it.data ?? []) as { id: string; title: string }[]).map(i => [i.id, i.title]))
+    setItemTitles(titles)
+    setLookups({
+      itemTitles: titles,
+      linkChannels: lkRes.error ? {} : Object.fromEntries(((lkRes.data ?? []) as { id: string; channel: string }[]).map(l => [l.id, l.channel])),
+      oppTitles: opRes.error ? {} : Object.fromEntries(((opRes.data ?? []) as { id: string; title: string }[]).map(o => [o.id, o.title])),
+      failed: { items: fellBack || !!it.error, links: fellBack || !!lkRes.error, opps: fellBack || !!opRes.error },
+    })
   }, [company.id, company.vertical_key])
   useEffect(() => { void load() }, [load])
   useRealtime('leads', company.id, load)
@@ -277,7 +300,7 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
                 {colLeads.map(l => (
                   <LeadCard key={l.id} lead={l} drafted={drafted.has(l.id)} onDraft={() => draft(l.id)} onAdvance={() => advance(l.id)}
                     extra={isReal ? extras[l.id] : undefined} broker={isReal ? brokers.find(b => b.id === extras[l.id]?.assigned_broker_id) : undefined} countryCode={countryCode}
-                    itemTitle={isReal && extras[l.id]?.item_id ? itemTitles[extras[l.id].item_id as string] : null}
+                    itemTitle={isReal && extras[l.id]?.item_id ? itemTitles[extras[l.id].item_id as string] : null} lookups={lookups}
                     prompt={prompt} onPrompt={col => setPrompt({ id: l.id, col, nx: null })} onValue={submitValue} onCancel={() => setPrompt(null)} />
                 ))}
                 {colLeads.length === 0 && (

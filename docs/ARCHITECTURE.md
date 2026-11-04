@@ -613,6 +613,7 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     `click_dm`/`lead`, `visitor_hash`, nunca IP), e `leads` ganha `item_id`, `opportunity_id`, `link_id`, `consent_at`, `consent_text`.
     RLS: dono/owner só leem; escrita só service role. Variável opcional `PUBLIC_PAGE_SALT` (sal do hash do visitante; sem ela usa `CRON_SECRET`). Ficha `imoveis_rio.config.public_page` = `fields` (lista branca), `min_photos`,
     `country_code`, `caption_line`.
+  - **Limitação (2026-11-04, Pacote B1):** o link rastreável **não identifica uma peça** — é único por (imóvel, oportunidade, canal) e `content_id` guarda só a primeira peça que o criou, mas várias peças podem usar o mesmo link. O funil (`leadOrigin.ts`) mostra imóvel + canal (+ oportunidade se `opportunity_id`), nunca peça de origem, e não se infere peça por `content_id`. Para ter peça de origem seria preciso um vínculo confiável (ex.: link por peça).
   - **Ações do `marketing-ai`:** públicas (sem login, antes de auth/cron): `public_page_get`, `public_page_event`,
     `public_page_lead`. Com login + plano pago: `get_public_page` (prévia/estado) e `set_public_page {item_id, enabled}` (aprovação).
   - **Onde o link entra:** `opportunityCron.ts` → `attachTrackedLinks` (rascunhos de oportunidade, canal `caption`, uma vez só,
