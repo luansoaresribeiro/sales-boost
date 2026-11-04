@@ -611,11 +611,12 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 
    - O modal mostra objetivo, tipo, imóvel e oportunidade (se houver). O motivo da escolha só aparece quando estiver registrado.
 
-**Pacote B1 — relações que já existem no banco (só mostrar).**
+**Pacote B1 — relações que já existem no banco (só mostrar).** — **Estado (2026-11-04): implementado na branch `claude/nifty-shannon-ysp818-pacote-b1`, aguardando aprovação do dono** (ver [DECISIONS.md](DECISIONS.md#2026-11-04--pacote-b1-relações-existentes-só-tela-atividade-do-imóvel-origem-do-lead-tela-de-oportunidades)).
 4. Catálogo, **"Atividade do imóvel"**: dados e página pública; peças planejadas e publicadas, com o estado de cada uma; oportunidades
    ligadas (`item_ids`); leads (`leads.item_id`). Bloco vazio diz que está vazio, e isso não é erro.
 5. Funil, **origem do lead**:
    - Conteúdo de origem só quando o `link_id` leva a uma única peça, sem ambiguidade (conferir antes o que `tracked_links` guarda).
+     **Divergência (2026-11-04):** conferido — `tracked_links` NÃO leva a uma peça (único por imóvel+oportunidade+canal; `content_id` = só a 1ª peça). Logo o funil mostra imóvel + canal da página pública e a oportunidade, e **não** a peça de origem.
    - Oportunidade quando `opportunity_id` estiver gravado.
    - Senão, "Origem não registrada".
 6. Oportunidades: formulário de sinal manual recolhido; corrigir o texto que manda clicar num botão que não existe; "O que falta pra

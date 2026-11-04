@@ -21,7 +21,8 @@ const TX = {
     needSource: 'A fonte é obrigatória: sinal sem fonte é ignorado pelo sistema. Use o mesmo nome de região do seu catálogo para a ligação funcionar.',
     kind: 'Tipo', t: 'Título', summary: 'Resumo (opcional)', region: 'Região', source: 'Nome da fonte', url: 'Link da fonte (recomendado)', date: 'Data em que foi publicado/visto',
     save: 'Salvar sinal', saving: 'Salvando…', plan: 'Disponível no plano — ver planos',
-    saved: "Sinal salvo. Clique em 'Encontrar oportunidades' para o sistema considerar (há um intervalo de 90 segundos entre buscas).",
+    saved: 'Sinal salvo. Se a análise automática estiver ligada na sua conta (estratégia automática, com plano ativo), o sistema considera o sinal na próxima análise: ela roda quando entra sinal novo (no mínimo 24 horas depois da última) e, de qualquer forma, uma vez por semana.',
+    addManual: 'Adicionar sinal manual',
     listTitle: 'Sinais cadastrados', empty: 'Nenhum sinal cadastrado ainda.', del: 'Apagar', confirmDel: 'Apagar este sinal?',
     eTitle: 'Informe o título.', eSource: 'Informe o nome da fonte.', eUrl: 'O link precisa começar com http:// ou https:// e ser válido.', eDate: 'Informe a data (não pode ser futura).',
     eSave: 'Não consegui salvar. Tente de novo.', eDel: 'Não consegui apagar. Tente de novo.', loading: 'Carregando…', eLoad: 'Não consegui carregar os sinais.', retry: 'Tentar de novo',
@@ -34,7 +35,8 @@ const TX = {
     needSource: 'The source is required: a signal without a source is ignored by the system. Use the same region name as your catalog so the link works.',
     kind: 'Type', t: 'Title', summary: 'Summary (optional)', region: 'Region', source: 'Source name', url: 'Source link (recommended)', date: 'Date it was published/seen',
     save: 'Save signal', saving: 'Saving…', plan: 'Available on a paid plan — see plans',
-    saved: "Signal saved. Click 'Find opportunities' for the system to consider it (there is a 90-second gap between searches).",
+    saved: 'Signal saved. If automatic analysis is on for your account (automatic strategy, with an active plan), the system takes the signal into account in the next analysis: it runs when a new signal arrives (at least 24 hours after the last one) and, regardless, once a week.',
+    addManual: 'Add manual signal',
     listTitle: 'Saved signals', empty: 'No signals yet.', del: 'Delete', confirmDel: 'Delete this signal?',
     eTitle: 'Enter the title.', eSource: 'Enter the source name.', eUrl: 'The link must start with http:// or https:// and be valid.', eDate: 'Enter the date (cannot be in the future).',
     eSave: 'Could not save. Try again.', eDel: 'Could not delete. Try again.', loading: 'Loading…', eLoad: 'Could not load the signals.', retry: 'Try again',
@@ -129,6 +131,9 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
       <p style={{ color: '#FBBF24', fontSize: '12px', lineHeight: 1.5, margin: '0 0 14px' }}>{t.needSource}</p>
       <p style={{ color: MUTED, fontSize: '12px', lineHeight: 1.5, margin: '-6px 0 14px' }}>{t.autoNote}</p>
 
+      <details style={{ marginBottom: '4px' }}>
+        <summary style={{ cursor: 'pointer', color: ORANGE, fontSize: '13px', fontWeight: 700, fontFamily: D }}>{t.addManual}</summary>
+        <div style={{ marginTop: '12px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
         <div><label style={label} htmlFor="ms-kind">{t.kind}</label>
           <select id="ms-kind" style={input} value={f.kind} onChange={set('kind')}>{KINDS.map(k => <option key={k} value={k}>{t.kinds[k]}</option>)}</select></div>
@@ -154,6 +159,8 @@ export default function MarketSignals({ lang, companyId, verticalKey, readOnly, 
         {saving ? t.saving : readOnly ? `🔒 ${t.save}` : t.save}
       </button>
       {msg && <div role="status" style={{ fontSize: '12.5px', marginTop: '10px', color: msg.ok ? '#4ade80' : '#FBBF24' }}>{msg.text}</div>}
+        </div>
+      </details>
 
       <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', margin: '18px 0 8px' }}>{t.listTitle}</div>
       {list === null ? <div style={{ color: MUTED, fontSize: '12.5px' }}>{t.loading}</div>

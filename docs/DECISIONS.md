@@ -6,6 +6,29 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-04 — Pacote B1 (relações existentes, só tela): atividade do imóvel, origem do lead, tela de oportunidades
+
+**O que mudou (tudo na tela; sem migration, sem function, sem cron):**
+1. **Catálogo, "Ver atividade"** no card do imóvel (`ItemActivity.tsx` + `useItemActivity.ts`). Só consulta quando o dono abre. Mostra peças (em teste e já
+   aprovadas, com data e estado; a peça em teste abre o mesmo modal do calendário), oportunidades (`growth_opportunities.item_ids`) e leads
+   (`leads.item_id`). Cada bloco tem o seu estado: carregando / "Nenhuma … ligada" (ausência, não é erro) / "Não foi possível verificar". Os rótulos de estado da
+   peça em teste (`STATUS_META`) saíram do calendário para `shared.ts` e são a fonte única. A página pública continua no botão "Página pública".
+2. **Funil, "Origem"** no card do lead (`leadOrigin.ts`): imóvel + canal do link da página pública (legenda/DM/bio) quando há `link_id`; oportunidade só
+   com `opportunity_id`; nada disso → "Origem não registrada". Consulta auxiliar que falha (ou colunas novas ausentes) → "Não foi possível verificar", nunca "não registrada".
+3. **Oportunidades:** formulário de sinal manual recolhido ("Adicionar sinal manual"; a lista de sinais salvos continua visível). O texto de "sinal
+   salvo" citava o botão inexistente "Encontrar oportunidades" e um intervalo de 90 s; agora descreve o que o código faz (`opportunityCron.ts`: o
+   agendamento roda a cada 6 h; faz nova rodada se entrou sinal depois da última, com no mínimo 24 h entre rodadas, e de qualquer forma após 7 dias).
+   O texto avisa que isso vale quando a análise automática está ligada na conta (o cron só roda p/ empresas com `auto_strategy=true`, plano ativo e ficha com o motor de oportunidades).
+   "O que falta pra achar mais" ficou recolhível e apagado.
+4. **Origem no funil:** com o select novo em fallback (colunas não lidas) a origem é sempre "Não foi possível verificar"; enquanto as consultas auxiliares não voltam, "Verificando…". Teste: `scripts/test-lead-origin.mjs`.
+
+**Limitação registrada (não resolvida de propósito):** o funil **não mostra a peça de origem** do lead. `tracked_links` é único por (imóvel, oportunidade,
+canal) e `content_id` guarda só a primeira peça que criou o link; vários posts com o mesmo imóvel/canal compartilham o mesmo link. Por isso **não se
+atribui peça ao lead por inferência a partir de `tracked_links.content_id`**. Só entra "peça de origem" quando existir uma relação confiável (ex.: link por
+peça), o que seria mudança de modelo — fora do B1.
+
+**Conferências pendentes (dono/QA):** contagens do bloco = SQL só leitura na Tespon e na "Teste Zero"; depois do merge, verificar o bundle publicado antes do "Site publicado ✅".
+
 ## 2026-11-03 — Pacote A (orientação, só tela): regras do Tipo de ativação e do Objetivo
 
 **O que entrou:** hub "O que merece sua atenção" (4 linhas com estado próprio) e cards de agente enxutos; topo da Estratégia em 4 blocos; Objetivo + Tipo na célula e no modal do calendário. Sem migration, sem function, sem cron.

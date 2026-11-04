@@ -7,7 +7,7 @@ import PieceIntent from './PieceIntent'
 import type { OppMap } from './activationType'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
-import { CARD, MUTED, BORDER, D, SUPABASE_URL, useSSNames } from './shared'
+import { CARD, MUTED, BORDER, D, SUPABASE_URL, useSSNames, STATUS_META } from './shared'
 import { templateLabel, type TestPost } from './TestingArea'
 import CalendarPostModal from './CalendarPostModal'
 import MakeNowPicker from './MakeNowPicker'
@@ -45,13 +45,6 @@ const TX = {
   },
 } as const
 const KIND_ICON: Record<string, string> = { organico: '📝', stories: '📖', campanhas: '🎯' }
-const STATUS_META: Record<string, { label: string; color: string }> = {
-  draft: { label: 'Avaliando', color: MUTED },
-  review: { label: 'Nota baixa — revisar', color: '#FBBF24' },
-  vault: { label: 'Pronta pra aprovar', color: '#A78BFA' },
-  scheduled: { label: 'Agendado', color: GREEN },
-  adapt: { label: 'Adaptando', color: MUTED },
-}
 
 type Item = TestPost & { kind?: string; planned_for: string | null; item_id?: string | null; recipe?: string | null; story_worthy?: boolean | null; opportunity_id?: string | null }
 // Formatos genéricos (não vêm da ficha) e a família que o servidor dá a eles (formatCatalog.ts).
