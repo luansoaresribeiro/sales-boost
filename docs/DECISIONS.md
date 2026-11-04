@@ -6,6 +6,42 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-04 — Reconciliação dos gates: Fase 3 implementada antes do gate completo da Fase 2 (dono)
+
+**O que de fato foi aprovado em 04/11:**
+- **Só a troca do filtro de `audit` para `enforce`** (decisão "Ativar e apertar", PR #103). Ela se apoia na medição de qualidade da
+  classificação descrita na entrada seguinte ("Gate da Fase 2"): 67 sinais, 0 falso positivo.
+- **A saída da Fase 2 NÃO foi aprovada.** Ainda faltam:
+  - o custo medido numa coleta real (`market_intel_runs`, fase `collect`, a partir de 05/11);
+  - oportunidades que passem nas 5 perguntas. As 12 mais recentes reprovaram.
+
+**A Fase 3 foi implementada antecipadamente** (PR #104), por decisão do dono de construir no mesmo dia.
+- **O que está provado:**
+  - a trava de aprovação na Teste Zero (proposta em `needs_review`, com a estratégia ativa idêntica à de antes do teste);
+  - os testes de código.
+- **A saída da Fase 3 continua NÃO aprovada.** Ela depende:
+  - do gate completo da Fase 2;
+  - do plano semanal de domingo (temas com `market_context` apontando para sinais reais);
+  - da avaliação comercial do dono sobre os temas.
+
+**Regra operacional (dono):**
+- Trabalho antecipado em fases futuras (3, 4 e 5) não autoriza expandir o escopo nem considerar a fase concluída.
+- A prioridade de execução continua sendo a ordem oficial (Fase 2 → 3 → 4 → 5).
+- Nenhuma funcionalidade nova além dos planos já aprovados enquanto os gates anteriores não estiverem comprovados.
+- O que já foi construído é só terminado e revisado.
+
+**Interpretação do teste de valor comercial (dono):**
+- Não concluir que uma oportunidade não gera resultado só porque não apareceu lead.
+- Para cada ação, registrar:
+  - volume de distribuição (posts publicados, alcance);
+  - período de exposição;
+  - ações realizadas;
+  - feedback dos corretores.
+- Distinguir três situações:
+  - **falta de distribuição:** pouco alcance ou pouco tempo no ar;
+  - **falta de execução:** a ação não foi feita, ou o corretor não respondeu;
+  - **falta de interesse comercial:** houve distribuição e execução, mas não houve resposta.
+
 ## 2026-11-04 — Gate da Fase 2: medição e troca do filtro para `enforce` (dono: "Ativar e apertar")
 
 **Como foi medido.** A reclassificação (`cron_market_intel`, sem custo: não busca nem usa IA) rodou à mão às 14:49 UTC nos 67 sinais
