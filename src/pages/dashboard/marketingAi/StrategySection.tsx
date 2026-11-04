@@ -11,6 +11,7 @@ import { BudgetPanel, FunnelPanel, EstimatesPanel, InitiativesPanel, MonitoringP
 import IntelligenceDomainsPanel from './IntelligenceDomainsPanel'
 import HermesGapsPanel from './HermesGapsPanel'
 import StrategyTopBlocks from './StrategyTopBlocks'
+import StrategyProposal from './StrategyProposal'
 import {
   type Strategy, type Goal, type LogRow, type Budget,
   STATUS_COLOR, EMPTY_BUDGET, strategyLabels,
@@ -348,6 +349,7 @@ export default function StrategySection({ company }: { company: CompanyData }) {
 
       {active && active.status !== 'generating' && active.status !== 'failed' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+          {!viewing && <StrategyProposal companyId={company.id} active={main} call={b => callStrategy(token, b)} onChanged={() => Promise.all([loadMain(), loadLog()]).then(() => undefined)} readOnly={readOnly} />}
           <StrategyTopBlocks active={active} main={main} />
           <StrategyBlock title={t.bOverview}><OverviewPanel strategy={active} /></StrategyBlock>
           <HermesGapsPanel company={company} />

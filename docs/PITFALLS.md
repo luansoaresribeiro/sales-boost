@@ -995,3 +995,16 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
   (lê erro como "sem registro anterior") e a tela mostra "Não foi possível verificar" — aplicar a migration ANTES de esperar economia de IA. (6) `owner_restored:true` na `meta` é o que
   impede o sistema de ignorar de novo; não remova ao mexer em `signalMeta.ts`/`signalIgnore.ts`.
 
+
+## Trava de aprovação da estratégia (Fase 3, 2026-11-04)
+
+- **Status `archived` NÃO existe no CHECK de `marketing_ai_strategies.status`** (`draft, active, paused, completed, needs_review, generating, failed`).
+  Proposta descartada / estratégia antiga = `paused`; o que distingue "descartada" é `data_provenance.proposal.discarded_at` (a tabela não tem coluna `meta`;
+  `data_provenance` é o jsonb livre). Não escreva `archived` sem migration.
+- **`data_provenance` é gravado no passo 3** da geração: o passo 3 agora faz *merge* (`...prevProv`) — voltar a sobrescrever apaga `proposal` e a proposta vira
+  uma estratégia "normal" sem aviso.
+- **`needs_review` só nasce com `data_provenance.proposal`**; `isPendingProposal` exige os dois. Linha `needs_review` sem `proposal` (legado) não aparece na tela.
+- O `update_strategy` (JWT do dono) ainda aceita `status` e `thesis` no patch — é decisão do dono, não automação; a trava vale para o código AUTOMÁTICO (refresh/pivô).
+- `quality_version` do sinal vem de `meta.quality_v` (não `quality_version`); sinal antigo sem carimbo entra como `null`.
+- Sem `deno` no ambiente do agente: `strategy-generate/index.ts` e `creative-generate/index.ts` não foram checados por tipo; a lógica nova está em `_shared` (puro,
+  checado por `tsc` + `scripts/test-fase3-direcionamento.mjs`, que também confere por texto os pontos de ligação).

@@ -8,7 +8,7 @@ import { useLang, type Lang } from '../../../contexts/LanguageContext'
 import AdaptModal, { type VaultPost } from './AdaptModal'
 import { PieceChips } from './PieceLabels'
 import PieceIntent from './PieceIntent'
-import type { OppMap } from './activationType'
+import { marketEvidence, type OppMap } from './activationType'
 import { useItemUsage, dayLabel } from './useItemUsage'
 import { proposeAgentAction, unscheduleAgentAction } from '../../../lib/agentActions'
 import { PUBLISH_HOUR_BRT, plannedPublishAt, publishWhenLabel } from '../../../lib/publishSlot'
@@ -31,6 +31,7 @@ const TX = {
     adaptContent: '✨ Adaptar Conteúdo', adaptations: 'Adaptações', approvePub: 'Aprovar/Publicar',
     why: 'Por que excluir? O agente aprende com isso pra não repetir.', notePh: 'Quer explicar? (opcional)', delNoReason: 'Excluir sem motivo', cancel: 'Cancelar',
     reasons: { repetido: 'Repetido', texto: 'Texto ruim', foto: 'Foto ruim', errado: 'Informação errada', tom: 'Não tem a cara da marca', outro: 'Outro' } as Record<string, string>,
+    inspired: 'Tema inspirado em',
     itemTitle: 'Imóvel desta peça', itemWhy: 'Por que este imóvel', itemOpen: 'Abrir no Catálogo', itemNearby: 'Inteligência de localização',
     whyOpp: 'Peça de uma oportunidade aprovada — o imóvel vem dela.',
     whyNone: 'Motivo da escolha do imóvel não registrado — o sistema ainda não grava por que este imóvel foi escolhido.', usedN: (n: number) => `usado em ${n} peça${n === 1 ? '' : 's'} nos últimos 30 dias`, lastPiece: 'Última peça',
@@ -50,6 +51,7 @@ const TX = {
     adaptContent: '✨ Adapt Content', adaptations: 'Adaptations', approvePub: 'Approve/Publish',
     why: 'Why delete it? The agent learns from this so it does not repeat it.', notePh: 'Want to explain? (optional)', delNoReason: 'Delete without a reason', cancel: 'Cancel',
     reasons: { repetido: 'Repetitive', texto: 'Bad text', foto: 'Bad photo', errado: 'Wrong information', tom: 'Not our brand style', outro: 'Other' } as Record<string, string>,
+    inspired: 'Theme inspired by',
     itemTitle: 'Property in this piece', itemWhy: 'Why this property', itemOpen: 'Open in Catalog', itemNearby: 'Location intelligence',
     whyOpp: 'Piece from an approved opportunity — the property comes from it.',
     whyNone: 'Reason for choosing this property not recorded — the system does not yet store why this property was picked.', usedN: (n: number) => `used in ${n} piece${n === 1 ? '' : 's'} in the last 30 days`, lastPiece: 'Last piece',
@@ -276,6 +278,17 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged,
             )
           })()}
           {opps !== undefined && <PieceIntent mode="full" piece={item} intent={item.intent} oppById={opps} itemTitle={item.item_id ? usage.data.items[item.item_id]?.title : null} />}
+          {marketEvidence(item.intent).length > 0 && (
+            <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>
+              <strong style={{ color: 'rgba(255,255,255,0.75)' }}>{tx.inspired}:</strong>{' '}
+              {marketEvidence(item.intent).map((e, i) => (
+                <span key={e.id}>{i > 0 ? ' · ' : ''}
+                  {e.source_url ? <a href={e.source_url} target="_blank" rel="noopener noreferrer" style={{ color: ORANGE, fontWeight: 700 }}>{e.title}</a> : e.title}
+                  {e.source_name ? ` · ${e.source_name}` : ''}{e.observed_at ? ` · ${dayLabel(e.observed_at.slice(0, 10))}` : ''}
+                </span>
+              ))}
+            </div>
+          )}
           <PieceChips familia={item.familia} pilarSs={item.pilar_ss} tema={item.pillar} ssNames={ssNames} />
           {item.idea && <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{item.idea}</div>}
           {editing ? (

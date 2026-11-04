@@ -21,7 +21,8 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchFormatAliases, fetchContentRules, ensureMinVideos, labelMix, familyOf, type ContentPlan } from '../_shared/formatCatalog.ts'
-import { applyQueroLock, buildSlotIntent, cleanIntent, cleanLabels, dropUnknownPilar, fetchSSPillars, intentBlock, type SlotIntent } from '../_shared/slotIntent.ts'
+import { fetchMarketItems, buildMarketContext, cleanMarketContext, type MarketContext } from '../_shared/marketContext.ts'
+import { applyQueroLock, buildSlotIntent, cleanIntent, withMarketContext, cleanLabels, dropUnknownPilar, fetchSSPillars, intentBlock, type SlotIntent } from '../_shared/slotIntent.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { fitsCap, HF_EDIT_COST_USD, logPhotoRetouch } from '../_shared/spendCap.ts'
 import { privateFieldKeys } from '../_shared/nearbyPlaces.ts'
@@ -1229,7 +1230,7 @@ const VIDEO_RECIPE = 'video_imovel'
 const DECK_FORMAT = 'carrossel_slides' // genérico (formatCatalog.ts)
 // familia/pilar_ss/tema = rótulo único da peça (tema = pilar de conteúdo da ficha, gravado em `pillar`);
 // intent = a intenção da estratégia pra esta vaga (buildSlotIntent). Todos opcionais (vaga antiga/avulsa).
-interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string; familia?: string; pilar_ss?: string; tema?: string; intent?: SlotIntent | null; opportunity_id?: string; tour?: TourPlan; theme_idea?: string; theme_note?: string }
+interface SlotJob { date: string; producer: 'post' | 'item_package' | 'item_video'; name: string; pillar: string; purpose: string; recipe?: string; item_id?: string; format?: string; familia?: string; pilar_ss?: string; tema?: string; intent?: SlotIntent | null; opportunity_id?: string; tour?: TourPlan; theme_idea?: string; theme_note?: string; market_context?: MarketContext }
 
 async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: ReturnType<typeof weekSlots>, plan: ContentPlan, funnelPlan: unknown = null, ssPillars: { key: string; name: string; why?: string }[] = []): Promise<{ planned: number; days: { date: string; posts: number; note: string }[]; todo: { format: string; name: string; per_week: number; purpose: string }[] }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -1320,8 +1321,14 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
     if (postJobs.length && key) {
       const history = blockingThemes(((themeRows ?? []) as { idea: string | null; planned_for: string | null; created_at: string | null }[]).map(r => ({ idea: r.idea, date: r.planned_for || r.created_at })), weekOf, themeCfg)
       const slotsT = postJobs.map((j, i) => ({ key: `v${i + 1}`, date: j.date, hint: `${j.name} — ${j.purpose || j.pillar}${j.intent ? ` · ${intentBlock(j.intent).replace(/\s+/g, ' ').slice(0, 260)}` : ''}` }))
-      const assigned = await planWeekThemes({ slots: slotsT, history, cfg: themeCfg, brand: company.business_name, ask: p => callModel(key, p, 700, CHEAP_MODEL) })
-      postJobs.forEach((j, i) => { const a = assigned.get(`v${i + 1}`); if (a?.idea) j.theme_idea = a.idea; if (a?.note) j.theme_note = a.note })
+      // Contexto de mercado (opcional, montado em código, sem IA nova): sem sinal/tendência elegível o pedido é idêntico ao de antes.
+      const market = await fetchMarketItems(admin, company.id)
+      const assigned = await planWeekThemes({ slots: slotsT, history, cfg: themeCfg, brand: company.business_name, market, ask: p => callModel(key, p, 700, CHEAP_MODEL) })
+      postJobs.forEach((j, i) => {
+        const a = assigned.get(`v${i + 1}`); if (a?.idea) j.theme_idea = a.idea; if (a?.note) j.theme_note = a.note
+        const mc = a?.idea && a.market ? buildMarketContext(a.market, market) : null
+        if (mc) j.market_context = mc
+      })
     }
   } catch (e) { console.error('planWeekFromStrategy: reserva de temas falhou (segue sem ela)', company.id, e) }
 
@@ -1409,7 +1416,7 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
       // Só o card genérico (post_card, em setor que não desligou) usa o
       // caminho de imagem+template; qualquer outro formato de post — inclusive
       // um antigo que ficou numa estratégia — sai como carrossel de slides.
-      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', itemId: job.item_id ?? null, forceGeneral: job.format === FAQ_FORMAT, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: job.intent ?? null, opportunityId: job.opportunity_id ?? null, reservedTheme: job.theme_idea ?? null, themeNote: job.theme_note ?? null })
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', itemId: job.item_id ?? null, forceGeneral: job.format === FAQ_FORMAT, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: withMarketContext(job.intent, job.market_context), opportunityId: job.opportunity_id ?? null, reservedTheme: job.theme_idea ?? null, themeNote: job.theme_note ?? null })
       return
     }
     if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }
@@ -1661,7 +1668,7 @@ Deno.serve(async (req) => {
       }
       const rawJob = body.slot as SlotJob | undefined
       // Campos novos (rótulo + intenção) revalidados: lista fixa / formato fixo / slice.
-      const job = rawJob ? { ...rawJob, familia: undefined, pilar_ss: undefined, tema: undefined, ...cleanLabels(rawJob), intent: cleanIntent(rawJob.intent), theme_idea: typeof rawJob.theme_idea === 'string' && rawJob.theme_idea.trim() ? rawJob.theme_idea.trim().slice(0, 140) : undefined, theme_note: typeof rawJob.theme_note === 'string' && rawJob.theme_note.trim() ? rawJob.theme_note.trim().slice(0, 300) : undefined } as SlotJob : undefined
+      const job = rawJob ? { ...rawJob, familia: undefined, pilar_ss: undefined, tema: undefined, ...cleanLabels(rawJob), intent: cleanIntent(rawJob.intent), theme_idea: typeof rawJob.theme_idea === 'string' && rawJob.theme_idea.trim() ? rawJob.theme_idea.trim().slice(0, 140) : undefined, theme_note: typeof rawJob.theme_note === 'string' && rawJob.theme_note.trim() ? rawJob.theme_note.trim().slice(0, 300) : undefined, market_context: cleanMarketContext(rawJob.market_context) ?? undefined } as SlotJob : undefined
       if (!job || !/^\d{4}-\d{2}-\d{2}$/.test(String(job.date)) || !['post', 'item_package', 'item_video'].includes(String(job.producer))) return json({ error: 'vaga inválida' }, 400)
       const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', body.company_id).maybeSingle()
       const company = companyRow as Company | null

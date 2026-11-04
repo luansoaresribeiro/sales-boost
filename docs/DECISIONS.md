@@ -2538,3 +2538,37 @@ sempre, sem pular). **Como desfazer:** voltar `mode` para `off` na ficha (para o
 
 **Ajustes pós-QA da Fase 2 (2026-11-04, mesmo branch):** (1) a tela trata análise que falhou ("A última análise falhou (dd/mm)") e só usa rodada com impressão digital em "nada mudou desde"; (2) a ficha passou a mirar o **anúncio**, não o tema: grupos com termo de oferta, `"à venda"` só junto de outro termo de anúncio, e novo campo `news_title_terms` (verbo de variação/fonte de índice libera as regras de título; as de endereço continuam), mais 8 portais em `trusted_domains` (valor, g1, estadão, exame, infomoney, cnn brasil, extra, o dia); modo segue `audit`; (3) em `audit` a linha `reclassify` só é gravada quando o resultado muda; (4) o teto mensal exibido vem de `details.cap_usd` gravado pela própria rodada (sem teto fixo na tela; rodada antiga sem o campo mostra só o acumulado). Falso positivo ainda possível: anúncio que use verbo de notícia no título ("Sobe o preço…") passa pelas regras de título, mas o endereço `/imovel/` ainda o pega.
 
+
+
+## 2026-11-04 — Fase 3: Direcionamento (trava de aprovação + contexto de mercado nos temas)
+
+**Contexto.** Regra do dono: posicionamento, público e objetivos só mudam com a aprovação dele. O código violava isso em dois pontos que eram
+**automáticos**: (1) o `refresh` (mensal ou pedido pelo check-up) reescrevia funil (público/objetivo da etapa) e orçamento sem perguntar; (2) o
+`reanalyze` decidindo PIVOT/TERMINATE gerava e **ativava** uma estratégia nova, pausando a antiga.
+
+**Mudança de comportamento automático existente (declarada):**
+1. `refresh` automático agora só altera **plano de conteúdo** (mix semanal, pilares, linha central), **metas** e a parte do funil que não é público/objetivo da etapa
+   (mensagem, formato, CTA, métrica). Tese, foco, os 2 objetivos e o **orçamento** ficam como estão. Etapa de funil nova (público novo) não entra.
+2. PIVOT/TERMINATE automático cria uma **proposta** (`status='needs_review'`; a ativa segue rodando; sem campanha-rascunho nem calendário até aprovar). Tela da Estratégia:
+   bloco "Proposta de mudança" (hoje × proposta de tese, objetivos e público) com **Aprovar** / **Descartar**. Aprovar: a atual vai para `paused`, a proposta vira `active`,
+   cria o rascunho de campanha e pede o calendário do resto da semana. Descartar: `paused` + `data_provenance.proposal.discarded_at/by`; a ativa não é tocada.
+   Se o check-up voltar com a **mesma tese** da última descartada, não propõe de novo (só registra no log) — conferido logo após o passo 1, poupando os passos 2 e 3.
+   Já existindo proposta aberta, não gera outra.
+3. **Continua imediato** o botão "Pedir nova estratégia" (o clique do dono É a aprovação); ao ativar, propostas automáticas abertas são arquivadas.
+4. Contexto de mercado nos temas da semana — ver [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md). Sem sinal = nada muda. Fora do escopo (de propósito): botão "Adicionar ao direcionamento".
+
+**Divergências do plano (registradas):**
+- `archived` não existe no CHECK de status → descartada/antiga = `paused` + `data_provenance.proposal` (sem migration; ver PITFALLS).
+- Além de `audience`, o `objective` de cada etapa do funil também fica travado (são "objetivos"); e o orçamento deixou de ser reescrito pelo refresh. Se o dono quiser o
+  orçamento/objetivo de etapa de volta no refresh, é uma linha em `refreshPatch`/`lockFunnel`.
+- O modelo aponta a fonte por **código curto** (S1/T1…) em vez do uuid (menos erro de cópia); o código converte para os ids reais antes de gravar. `evidence` ganhou `source_name`
+  (o modal mostra "título · fonte · data").
+- Tendência não tem janela de 14 dias (só `status='active'`, 3 mais recentes); a janela vale para sinais.
+- A notificação Telegram/Atividades `STRATEGY_PIVOT` agora só sai se a proposta foi criada; o texto do evento (em `log-bot-event`) não foi alterado.
+
+**Como desfazer.** Código: reverter o PR e redeployar `strategy-generate` e `creative-generate`. Proposta aberta sem a tela nova: `update marketing_ai_strategies set status='paused'
+where status='needs_review' and data_provenance ? 'proposal'` (ou aprovar por `update_strategy`). Contexto de mercado: sem deploy de `creative-generate` nada muda; peças já
+gravadas com `intent.market_context` continuam válidas (campo extra ignorado). Sem migration nesta fase.
+
+**Para publicar (a sessão principal faz):** deploy de `strategy-generate` e `creative-generate` (ambos de cliente real — testar em Tespon/Teste Zero antes: rodar `reanalyze`
+forçando pivot e conferir `needs_review`); site. Nada de SQL.
