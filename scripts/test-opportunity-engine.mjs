@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 // Roda: node --experimental-strip-types scripts/test-opportunity-engine.mjs
 // Motor de oportunidades (Etapa 1 da Inteligência comercial): regras de candidato + validação da saída da IA + prioridade.
 import { buildCandidates } from '../supabase/functions/_shared/opportunityEngine.ts'
-import { finalize, parseLlm, buildPrompt, promptSafe, hasProtectedTerm, numbersAllowed, allowedNumbers, cleanText, score, compareScored } from '../supabase/functions/_shared/opportunityOutput.ts'
+import { finalize, parseLlm, buildPrompt, promptSafe, hasProtectedTerm, numbersAllowed, allowedNumbers, cleanText, cleanAction, score, compareScored } from '../supabase/functions/_shared/opportunityOutput.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
 const NOW = new Date('2026-10-28T12:00:00Z')
@@ -212,5 +212,15 @@ const base = (over = {}) => ({
   const c = buildCandidates(base({ posts: [{ item_id: 'i1', status: 'publicado', published_at: '2026-10-10T10:00:00Z', created_at: '2026-10-10T10:00:00Z', content: 'x', instagram_media_id: 'm1' }] })).candidates.find(x => x.kind === 'low_traction')
   assert.ok(!/pre[çc]o/i.test(c.hypotheses.join(' ') + c.fallback.problem)); const fc = buildCandidates(base({ posts: [{ item_id: 'i1', status: 'publicado', published_at: '2026-10-10T10:00:00Z', created_at: '2026-10-10T10:00:00Z', content: 'x', instagram_media_id: 'm1' }], texts: { hypotheses: ['H-DA-FICHA'] } })).candidates.find(x => x.kind === 'low_traction')
   assert.deepEqual(fc.hypotheses, ['H-DA-FICHA']); ok('hipóteses genéricas por padrão; as da ficha substituem')
+}
+{ // Ação sugerida (2026-11-04): trava cortou frase → ação do código, nunca sobra sem ação comercial
+  const al = allowedNumbers(['Cobertura em Leblon · Quartos: 4 · Preço: 4800000'])
+  const FB = 'Conferir a fonte e, se fizer sentido, criar uma peça ligando Leblon aos itens do catálogo.'
+  // caso real (Teste Zero, 04/11): a 1ª frase tinha número sem fonte e caiu; sobrava só a frase vazia
+  assert.equal(cleanAction('Publique 3 posts por semana para subir 40% o alcance. Registre no Sales Boost após aprovação.', al, null, FB), FB)
+  assert.equal(cleanAction('Crie um carrossel da cobertura do Leblon com as fotos reais. Responda os comentários no mesmo dia.', al, null, FB), 'Crie um carrossel da cobertura do Leblon com as fotos reais. Responda os comentários no mesmo dia.')
+  assert.equal(cleanAction('', al, null, FB), FB); assert.equal(cleanAction(null, al, null, FB), FB); assert.equal(cleanAction('Ideal para jovens casais solteiros.', al, null, FB), FB)
+  assert.equal(cleanText('Publique 3 posts por semana para subir 40% o alcance. Registre no Sales Boost após aprovação.', al, 400), 'Registre no Sales Boost após aprovação.')
+  ok('ação: frase cortada pela trava → ação do código (sem sobra vazia); ação limpa passa inteira')
 }
 console.log(`\n${n} grupos ok`)

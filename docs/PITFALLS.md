@@ -1027,3 +1027,10 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - **Contadores da empresa toda** ("Na empresa toda: N leads sem origem…") são buscados uma vez (cache de 60 s) e rotulados como da empresa, não do imóvel. Lead só com `opportunity_id` aparece no card da oportunidade, não no imóvel.
 - **Dívida:** cada card de oportunidade aprovada faz 2 consultas de Marketing (posts + métricas); com muitos cards são muitas consultas. Agrupar em 1+1 fica para depois.
 - **RLS conferida em produção (dono, 2026-11-04):** `leads` ("company leads access") e `engagement_events` ("owner read engagement_events") deixam o dono da empresa ler — as telas de resultado dependem disso.
+
+## Ação sugerida da oportunidade não pode sobrar vazia (2026-11-04)
+- A trava de texto (`cleanText`: número sem fonte, termo protegido, promessa sem evidência) corta **frases**. Na ação sugerida, cortar a frase
+  principal deixava só sobra sem ação comercial (caso real, Teste Zero 04/11: ficou só "Registre no Sales Boost após aprovação."), o que reprova a
+  pergunta 4 das 5 ("qual ação comercial é possível?").
+- Regra: `cleanAction` em `_shared/opportunityOutput.ts` — se a trava cortar QUALQUER frase da ação, usa a ação do código do candidato
+  (`fallback.action`, sempre concreta). Não voltar a usar `cleanText` na ação. Teste em `scripts/test-opportunity-engine.mjs`.

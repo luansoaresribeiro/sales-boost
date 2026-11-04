@@ -135,10 +135,24 @@ export function hasUnsupportedClaim(sentence: string, guard: ClaimGuard): boolea
 }
 
 // Tira da frase o que não passa (número inventado / classe protegida / afirmação de mercado sem dado). Frase = até . ! ? ou quebra de linha.
+const sentences = (s: string): string[] => s.replace(/[ \t]+/g, ' ').trim().split(/(?<=[.!?])\s+|\n+/).filter(p => p.trim())
+const sentenceOk = (p: string, allowed: AllowedNumbers, guard?: ClaimGuard | null): boolean =>
+  numbersAllowed(p, allowed) && !hasProtectedTerm(p) && !(guard && hasUnsupportedClaim(p, guard))
+
 export function cleanText(s: unknown, allowed: AllowedNumbers, max: number, guard?: ClaimGuard | null): string {
   if (typeof s !== 'string') return ''
-  const parts = s.replace(/[ \t]+/g, ' ').trim().split(/(?<=[.!?])\s+|\n+/)
-  return parts.filter(p => p.trim() && numbersAllowed(p, allowed) && !hasProtectedTerm(p) && !(guard && hasUnsupportedClaim(p, guard))).join(' ').trim().slice(0, max)
+  return sentences(s).filter(p => sentenceOk(p, allowed, guard)).join(' ').trim().slice(0, max)
+}
+
+/** Ação sugerida (2026-11-04): se a trava cortar QUALQUER frase da ação da IA, a ação inteira vira a do código (`fallback`).
+ *  Motivo: cortar frase deixava sobras sem ação comercial (ex.: só "Registre no Sales Boost após aprovação."), reprovando a pergunta 4
+ *  ("qual ação comercial é possível?"). A ação do código é sempre uma ação concreta e verificável. */
+export function cleanAction(s: unknown, allowed: AllowedNumbers, guard: ClaimGuard | null | undefined, fallback: string): string {
+  if (typeof s !== 'string' || !s.trim()) return fallback
+  const parts = sentences(s)
+  const kept = parts.filter(p => sentenceOk(p, allowed, guard))
+  if (!kept.length || kept.length < parts.length) return fallback
+  return kept.join(' ').trim().slice(0, 400) || fallback
 }
 
 export interface LlmOpportunity {
@@ -272,7 +286,7 @@ export function finalize(opts: { lang: Lang; candidates: Candidate[]; facts: Fac
         evidence,
         item_ids: c.item_ids,
         audience: audience || null,
-        suggested_action: actionForPhotos(cleanText(raw.suggested_action, allowed, 400, guard) || c.fallback.action, c.item_ids, opts.photoCounts, lang),
+        suggested_action: actionForPhotos(cleanAction(raw.suggested_action, allowed, guard, c.fallback.action), c.item_ids, opts.photoCounts, lang),
         how_to_measure: cleanText(raw.how_to_measure, allowed, 300, guard) || c.fallback.measure,
         confidence: sc.confidence,
         needs_validation: sc.needs,
