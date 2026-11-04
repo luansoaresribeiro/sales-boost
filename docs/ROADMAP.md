@@ -705,6 +705,10 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
 - **Fase 5:**
   - Separar marketing (alcance, engajamento, salvamentos, cliques) de comercial (conversas, leads, visitas, conversões).
   - A branch `results-flow` é dependência própria.
+  - **Status 2026-11-04: implementada no branch `claude/nifty-shannon-ysp818-fase5` (só front, sem migration/function; aguardando QA e PR).** Feita do zero
+    sobre a `main`; `results-flow` ficou de fora (decisão do dono) e a "ideia vencedora" não entrou. Detalhe e regra de ligação (por imóvel/oportunidade,
+    não por peça): [DECISIONS.md](DECISIONS.md), 2026-11-04 "Fase 5". Divergência: "visitas" = leads com `visit_at` (convenção Qualificado) e
+    "conversas" = comentários com intenção; DMs continuam sem fonte.
   - Não conta como concluída só com métricas do Instagram. O que não existe aparece como ausente, nunca estimado.
 
 ### Rastreabilidade ponta a ponta

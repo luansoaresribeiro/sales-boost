@@ -157,7 +157,10 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente ·
     `performance`/`history` leem de volta), `strategy-generate` (lê via
     `fetchDataAgentState` a cada rodada). O loop é real pra
     engajamento/alcance/leads. **Não fecha pra receita** — ver gap em
-    [LEARNING.md](LEARNING.md).
+    [LEARNING.md](LEARNING.md). **Fase 5 (2026-11-04):** as telas já mostram
+    Marketing e Comercial lado a lado, por imóvel e por oportunidade (nunca
+    por peça), com "sem dado"/"Não foi possível verificar" em vez de 0 —
+    ver [LEARNING.md](LEARNING.md) e [DECISIONS.md](DECISIONS.md).
 
 ### Hermes do produto ≠ agentes de desenvolvimento
 

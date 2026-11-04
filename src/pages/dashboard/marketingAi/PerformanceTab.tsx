@@ -15,6 +15,7 @@ import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import { useDemoMode } from './growthDemo'
 import { buildPerformanceDemo, type PerformanceData, type Recommendation } from './performanceDemo'
 import { proposeAgentAction } from '../../../lib/agentActions'
+import { useConversationsByMedia } from './resultsData'
 import { PERF_TX, localeOf } from './performance.i18n'
 import logo from '../../../assets/logo.png'
 import {
@@ -75,6 +76,8 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
 
   const connected = !!live
   const data = live ?? demo
+  // Fase 5: "conversas" por post (engagement_events.media_ref = id da mídia). Só com dado real — no exemplo não há conversa de verdade.
+  const conv = useConversationsByMedia(company.id, connected ? data.content.map(c => c.id) : [], connected)
   const days = RANGES.find(r => r.key === range)?.days ?? 30
 
   const handleCreate = async (r: Recommendation) => {
@@ -154,7 +157,7 @@ export default function PerformanceTab({ company, onCreateContent }: { company: 
       </div>
 
       <EngagementSection e={data.engagement} />
-      <ContentSectionPerf content={data.content} />
+      <ContentSectionPerf content={data.content} conv={connected ? conv : undefined} />
       <ContentTypeSection types={data.contentTypes} conclusion={data.contentTypeConclusion} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '14px' }}>

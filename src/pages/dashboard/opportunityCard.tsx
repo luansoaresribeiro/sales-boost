@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useLang } from '../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
 import OpportunityResults from './opportunityResults'
+import OpportunityMarketing from './opportunityMarketing'
 import type { OppResultRow } from './resultsBrokers'
 import OpportunityPlan, { type PieceStats, type PlanData, type PlanPatch } from './opportunityPlan'
 
@@ -57,8 +58,8 @@ function Block({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export default function OpportunityCard({ o, itemNames, pieces, results, linkCodes, busy, onDecide, onPlan }: {
-  o: Opportunity; itemNames: Record<string, string>; pieces?: PieceStats; results?: OppResultRow; linkCodes?: string[]; busy: boolean; onDecide: (status: Opportunity['status']) => void; onPlan: (patch: Partial<PlanPatch>) => void
+export default function OpportunityCard({ o, itemNames, pieces, results, companyId, linkCodes, busy, onDecide, onPlan }: {
+  o: Opportunity; itemNames: Record<string, string>; pieces?: PieceStats; results?: OppResultRow; companyId?: string; linkCodes?: string[]; busy: boolean; onDecide: (status: Opportunity['status']) => void; onPlan: (patch: Partial<PlanPatch>) => void
 }) {
   const { lang } = useLang()
   const t = TX[lang]
@@ -122,6 +123,7 @@ export default function OpportunityCard({ o, itemNames, pieces, results, linkCod
       </div>
       {o.status === 'suggested' && <div style={{ fontSize: '10.5px', color: MUTED, marginTop: '8px' }}>{t.approveHint}</div>}
       {o.status === 'approved' && <OpportunityPlan opportunityId={o.id} plan={o.plan ?? null} approvedAt={o.plan_approved_at ?? null} itemNames={itemNames} decidedAt={o.decided_at ?? null} piecesGeneratedAt={o.pieces_generated_at ?? null} pieces={pieces} onChange={onPlan} />}
+      {o.status === 'approved' && companyId && <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: `1px solid ${BORDER}` }}><OpportunityMarketing companyId={companyId} oppId={o.id} /></div>}
       {o.status === 'approved' && results && <OpportunityResults row={results} codes={linkCodes ?? []} />}
     </div>
   )

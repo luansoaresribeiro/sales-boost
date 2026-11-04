@@ -1008,3 +1008,14 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - `quality_version` do sinal vem de `meta.quality_v` (não `quality_version`); sinal antigo sem carimbo entra como `null`.
 - Sem `deno` no ambiente do agente: `strategy-generate/index.ts` e `creative-generate/index.ts` não foram checados por tipo; a lógica nova está em `_shared` (puro,
   checado por `tsc` + `scripts/test-fase3-direcionamento.mjs`, que também confere por texto os pontos de ligação).
+
+## Resultados lado a lado (Fase 5, 2026-11-04)
+
+- **Nunca ligar lead a peça.** `tracked_links` é único por imóvel+oportunidade+canal e `content_id` guarda só a primeira peça; a ligação comercial é por
+  imóvel/oportunidade. Só a conversa (comentário com intenção) liga a uma peça, via `engagement_events.media_ref` = `posts.instagram_media_id`.
+- **`null` ≠ 0:** `resultsModel.ts` devolve `null` para "sem medição/sem dado" e a tela mostra o texto; 0 só quando a consulta deu certo e o dado existe.
+  Consulta que falha (inclusive coluna/migration ausente — `engagement_events` e `leads` não têm migration de criação, ver "Deriva de migrations") vira
+  "Não foi possível verificar", nunca "sem resultado".
+- **Post sem `item_id`** (feito fora do catálogo) não entra no "Resultado do imóvel": a tela diz quantos ficaram de fora. Leads de DM/comentário sem
+  `item_id`/`opportunity_id`/`link_id` entram em "N leads sem origem registrada".
+- A lista de ids vai na URL da consulta: `resultsData.ts` consulta em blocos de 100 e, se um bloco falha, o conjunto todo vira "não foi possível verificar".
