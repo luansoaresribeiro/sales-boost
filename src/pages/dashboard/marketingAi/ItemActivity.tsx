@@ -16,14 +16,14 @@ const TX = {
   pt: {
     open: '📊 Ver atividade', close: 'Ocultar atividade', title: 'Atividade deste imóvel', loading: 'Carregando…', error: 'Não foi possível verificar',
     pieces: 'Peças', noPieces: 'Nenhuma peça relacionada', opps: 'Oportunidades', noOpps: 'Nenhuma oportunidade ligada', leads: 'Leads', noLeads: 'Nenhum lead ligado',
-    seeOpps: 'Ver em Oportunidades', capped: (n: number) => `Mostrando as ${n} mais recentes.`, noIdea: 'Peça sem título', noName: 'Lead sem nome',
+    seeOpps: 'Ver em Oportunidades', capped: (n: number) => `Mostrando as ${n} mais recentes.`, noIdea: 'Peça sem título', publishing: 'Publicando', noName: 'Lead sem nome',
     postSt: { aprovado: 'Aprovada', approved: 'Aprovada', agendado: 'Agendada', scheduled: 'Agendada', publicado: 'Publicada', published: 'Publicada', rascunho: 'Rascunho', draft: 'Rascunho' } as Record<string, string>,
     oppSt: { suggested: 'Aguardando avaliação', approved: 'Aprovada', dismissed: 'Descartada' } as Record<string, string>,
   },
   en: {
     open: '📊 See activity', close: 'Hide activity', title: 'Activity for this listing', loading: 'Loading…', error: 'Could not verify',
     pieces: 'Pieces', noPieces: 'No related pieces', opps: 'Opportunities', noOpps: 'No linked opportunities', leads: 'Leads', noLeads: 'No linked leads',
-    seeOpps: 'See in Opportunities', capped: (n: number) => `Showing the ${n} most recent.`, noIdea: 'Untitled piece', noName: 'Unnamed lead',
+    seeOpps: 'See in Opportunities', capped: (n: number) => `Showing the ${n} most recent.`, noIdea: 'Untitled piece', publishing: 'Publishing', noName: 'Unnamed lead',
     postSt: { aprovado: 'Approved', approved: 'Approved', agendado: 'Scheduled', scheduled: 'Scheduled', publicado: 'Published', published: 'Published', rascunho: 'Draft', draft: 'Draft' } as Record<string, string>,
     oppSt: { suggested: 'Awaiting review', approved: 'Approved', dismissed: 'Dismissed' } as Record<string, string>,
   },
@@ -61,7 +61,7 @@ export default function ItemActivity({ itemId, companyId }: { itemId: string; co
       : {
         state: 'ok', capped: d.tests.capped || d.posts.capped,
         rows: [
-          ...d.tests.rows.map(t => { const sm = STATUS_META[t.status] ?? STATUS_META.draft; return { key: `t-${t.id}`, at: t.planned_for ?? t.created_at, label: t.idea || tx.noIdea, stLabel: sm.label, color: sm.color, test: t } }),
+          ...d.tests.rows.map(t => { const sm = STATUS_META[t.status] ?? { label: t.status === 'publishing' ? tx.publishing : t.status, color: MUTED }; return { key: `t-${t.id}`, at: t.planned_for ?? t.created_at, label: t.idea || tx.noIdea, stLabel: sm.label, color: sm.color, test: t } }),
           ...d.posts.rows.map(p => ({ key: `p-${p.id}`, at: p.published_at ?? p.created_at, label: (p.content ?? '').slice(0, 60) || tx.noIdea, stLabel: tx.postSt[p.status] ?? p.status, color: MUTED })),
         ].sort((a, b) => (a.at < b.at ? 1 : -1)),
       }

@@ -25,7 +25,7 @@ const TX = {
     emptyMsg: 'Assim que o primeiro lead chegar (Instagram, WhatsApp ou anúncios), o funil mostra os leads de verdade aqui, sozinho. Ligue o Modo demonstração pra ver o layout com exemplos.',
     seeExample: 'Ver exemplo (modo demonstração)', sameFunnel: 'Instagram e WhatsApp no mesmo funil — filtre pela origem.',
     leadsInFunnel: 'Leads no funil', conversion: 'Conversão', pipelineValue: 'Valor no pipeline', noReplyLbl: 'Sem resposta', empty: 'vazio',
-    broker: 'Corretor', forward: 'Encaminhar por WhatsApp', forwardHint: 'Abre o seu WhatsApp com o resumo — nada é enviado por nós.', valProposal: 'Valor da proposta', valSale: 'Valor da venda', valNone: 'valor não informado', origin: 'Origem', originNone: 'Origem não registrada', originUnverified: 'Não foi possível verificar', valInform: 'informar valor', valPh: 'Opcional, ex.: 850000', valConfirm: 'Confirmar', valSkip: 'Pular (sem valor)', valSave: 'Salvar valor', valCancel: 'Cancelar', valBad: 'Valor inválido — use só números.', valVisit: 'ao ir para Qualificado, conta como visita agendada nos Resultados',
+    broker: 'Corretor', forward: 'Encaminhar por WhatsApp', forwardHint: 'Abre o seu WhatsApp com o resumo — nada é enviado por nós.', valProposal: 'Valor da proposta', valSale: 'Valor da venda', valNone: 'valor não informado', origin: 'Origem', originNone: 'Origem não registrada', originUnverified: 'Não foi possível verificar', originChecking: 'Verificando…', valInform: 'informar valor', valPh: 'Opcional, ex.: 850000', valConfirm: 'Confirmar', valSkip: 'Pular (sem valor)', valSave: 'Salvar valor', valCancel: 'Cancelar', valBad: 'Valor inválido — use só números.', valVisit: 'ao ir para Qualificado, conta como visita agendada nos Resultados',
   },
   en: {
     noReply: '⚠️ No reply — risk of going cold', drafted: '✓ Follow-up drafted, awaiting your approval', draftBtn: 'Draft follow-up', advance: 'Advance stage',
@@ -35,7 +35,7 @@ const TX = {
     emptyMsg: 'As soon as the first lead arrives (Instagram, WhatsApp or ads), the pipeline shows the real leads here on its own. Turn on Demo mode to see the layout with examples.',
     seeExample: 'See an example (demo mode)', sameFunnel: 'Instagram and WhatsApp in the same pipeline — filter by source.',
     leadsInFunnel: 'Leads in pipeline', conversion: 'Conversion', pipelineValue: 'Pipeline value', noReplyLbl: 'No reply', empty: 'empty',
-    broker: 'Broker', forward: 'Forward by WhatsApp', forwardHint: 'Opens your WhatsApp with the summary — nothing is sent by us.', valProposal: 'Proposal value', valSale: 'Sale value', origin: 'Source', originNone: 'Source not recorded', originUnverified: 'Could not verify', valNone: 'value not informed', valInform: 'add value', valPh: 'Optional, e.g. 850000', valConfirm: 'Confirm', valSkip: 'Skip (no value)', valSave: 'Save value', valCancel: 'Cancel', valBad: 'Invalid value — numbers only.', valVisit: 'moving to Qualified counts as a scheduled visit in Results',
+    broker: 'Broker', forward: 'Forward by WhatsApp', forwardHint: 'Opens your WhatsApp with the summary — nothing is sent by us.', valProposal: 'Proposal value', valSale: 'Sale value', origin: 'Source', originNone: 'Source not recorded', originUnverified: 'Could not verify', originChecking: 'Checking…', valNone: 'value not informed', valInform: 'add value', valPh: 'Optional, e.g. 850000', valConfirm: 'Confirm', valSkip: 'Skip (no value)', valSave: 'Save value', valCancel: 'Cancel', valBad: 'Invalid value — numbers only.', valVisit: 'moving to Qualified counts as a scheduled visit in Results',
   },
 } as const
 
@@ -70,6 +70,7 @@ function LeadCard({ lead, drafted, onDraft, onAdvance, extra, broker, countryCod
   const submit = (skip: boolean) => { if (onValue(skip ? '' : val)) setBad(true); else { setBad(false); setVal('') } }
   const mine = prompt?.id === lead.id ? prompt : null
   const origin = extra && lookups ? leadOrigin(extra, lookups, lang) : null
+  const originPending = !!extra && !lookups
   return (
     <div style={{ background: CARD, border: `1px solid ${lead.noReply ? 'rgba(251,191,36,0.35)' : BORDER}`, borderRadius: '10px', padding: '11px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '5px' }}>
@@ -84,6 +85,7 @@ function LeadCard({ lead, drafted, onDraft, onAdvance, extra, broker, countryCod
         <span style={{ fontSize: '9.5px', color: 'rgba(255,255,255,0.3)' }}>{lead.lastContact}</span>
       </div>
       <div style={{ fontSize: '10.5px', color: MUTED, lineHeight: 1.45, marginBottom: '8px', overflowWrap: 'anywhere' }}>{lead.note}</div>
+      {originPending && <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '6px' }}>{tx.origin}: {tx.originChecking}</div>}
       {origin && (
         <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '6px', lineHeight: 1.45 }}>
           {tx.origin}: {origin.unverified ? <span style={{ color: '#FBBF24' }}>{tx.originUnverified}</span>
@@ -159,7 +161,8 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
   const [extras, setExtras] = useState<Record<string, Extra>>({})
   const [brokers, setBrokers] = useState<Broker[]>([])
   const [itemTitles, setItemTitles] = useState<Record<string, string>>({})
-  const [lookups, setLookups] = useState<OriginLookups>({ itemTitles: {}, linkChannels: {}, oppTitles: {}, failed: { items: false, links: false, opps: false } })
+  // Consultas da origem + quais leads elas cobrem. Lead fora de `covered` (acabou de chegar) mostra "Verificando…", nunca ausência.
+  const [lookups, setLookups] = useState<{ lk: OriginLookups; covered: Set<string> } | null>(null)
   // DDI do WhatsApp vem da ficha (regra 6). Sem ficha/campo: só funciona número digitado com "+".
   const [countryCode, setCountryCode] = useState<string | null>(null)
   const [prompt, setPrompt] = useState<Prompt | null>(null)
@@ -196,12 +199,12 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
     setBrokers(b.error ? [] : (b.data ?? []) as Broker[])
     const titles: Record<string, string> = it.error ? {} : Object.fromEntries(((it.data ?? []) as { id: string; title: string }[]).map(i => [i.id, i.title]))
     setItemTitles(titles)
-    setLookups({
+    setLookups({ covered: new Set(rows.map(r => r.id)), lk: {
       itemTitles: titles,
       linkChannels: lkRes.error ? {} : Object.fromEntries(((lkRes.data ?? []) as { id: string; channel: string }[]).map(l => [l.id, l.channel])),
       oppTitles: opRes.error ? {} : Object.fromEntries(((opRes.data ?? []) as { id: string; title: string }[]).map(o => [o.id, o.title])),
-      failed: { items: fellBack || !!it.error, links: fellBack || !!lkRes.error, opps: fellBack || !!opRes.error },
-    })
+      failed: { columns: fellBack, items: !!it.error, links: !!lkRes.error, opps: !!opRes.error },
+    } })
   }, [company.id, company.vertical_key])
   useEffect(() => { void load() }, [load])
   useRealtime('leads', company.id, load)
@@ -300,7 +303,7 @@ export default function FunnelTab({ company }: { company: Pick<CompanyData, 'id'
                 {colLeads.map(l => (
                   <LeadCard key={l.id} lead={l} drafted={drafted.has(l.id)} onDraft={() => draft(l.id)} onAdvance={() => advance(l.id)}
                     extra={isReal ? extras[l.id] : undefined} broker={isReal ? brokers.find(b => b.id === extras[l.id]?.assigned_broker_id) : undefined} countryCode={countryCode}
-                    itemTitle={isReal && extras[l.id]?.item_id ? itemTitles[extras[l.id].item_id as string] : null} lookups={lookups}
+                    itemTitle={isReal && extras[l.id]?.item_id ? itemTitles[extras[l.id].item_id as string] : null} lookups={lookups?.covered.has(l.id) ? lookups.lk : undefined}
                     prompt={prompt} onPrompt={col => setPrompt({ id: l.id, col, nx: null })} onValue={submitValue} onCancel={() => setPrompt(null)} />
                 ))}
                 {colLeads.length === 0 && (

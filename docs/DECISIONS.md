@@ -18,7 +18,9 @@
 3. **Oportunidades:** formulário de sinal manual recolhido ("Adicionar sinal manual"; a lista de sinais salvos continua visível). O texto de "sinal
    salvo" citava o botão inexistente "Encontrar oportunidades" e um intervalo de 90 s; agora descreve o que o código faz (`opportunityCron.ts`: o
    agendamento roda a cada 6 h; faz nova rodada se entrou sinal depois da última, com no mínimo 24 h entre rodadas, e de qualquer forma após 7 dias).
+   O texto avisa que isso vale quando a análise automática está ligada na conta (o cron só roda p/ empresas com `auto_strategy=true`, plano ativo e ficha com o motor de oportunidades).
    "O que falta pra achar mais" ficou recolhível e apagado.
+4. **Origem no funil:** com o select novo em fallback (colunas não lidas) a origem é sempre "Não foi possível verificar"; enquanto as consultas auxiliares não voltam, "Verificando…". Teste: `scripts/test-lead-origin.mjs`.
 
 **Limitação registrada (não resolvida de propósito):** o funil **não mostra a peça de origem** do lead. `tracked_links` é único por (imóvel, oportunidade,
 canal) e `content_id` guarda só a primeira peça que criou o link; vários posts com o mesmo imóvel/canal compartilham o mesmo link. Por isso **não se

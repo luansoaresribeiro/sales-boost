@@ -16,14 +16,14 @@ export interface ActivityOpp { id: string; title: string; status: string; create
 export interface ActivityLead { id: string; name: string | null; contact: string | null; stage: string | null; created_at: string }
 export interface ItemActivityData { tests: Block<PieceTest>; posts: Block<PiecePost>; opps: Block<ActivityOpp>; leads: Block<ActivityLead> }
 
-const LIMIT = 50
+const LIMIT = 50 // mostradas; a consulta pede LIMIT + 1 só pra saber se há mais
 const loading = <T,>(): Block<T> => ({ state: 'loading' })
 const INITIAL: ItemActivityData = { tests: loading(), posts: loading(), opps: loading(), leads: loading() }
 
 function toBlock<T>(r: { data: unknown; error: unknown }): Block<T> {
   if (r.error) return { state: 'error' }
-  const rows = (r.data ?? []) as T[]
-  return { state: 'ok', rows, capped: rows.length >= LIMIT }
+  const all = (r.data ?? []) as T[]
+  return { state: 'ok', rows: all.slice(0, LIMIT), capped: all.length > LIMIT }
 }
 
 export function useItemActivity(companyId: string, itemId: string, enabled: boolean): ItemActivityData {
@@ -34,10 +34,10 @@ export function useItemActivity(companyId: string, itemId: string, enabled: bool
     setData(INITIAL)
     const settle = <K extends keyof ItemActivityData>(k: K, p: PromiseLike<{ data: unknown; error: unknown }>) =>
       p.then(r => toBlock(r), () => ({ state: 'error' as const })).then(b => { if (alive) setData(d => ({ ...d, [k]: b })) })
-    void settle('tests', supabase.from('marketing_ai_test_content').select('*').eq('company_id', companyId).eq('item_id', itemId).is('source_id', null).order('created_at', { ascending: false }).limit(LIMIT))
-    void settle('posts', supabase.from('posts').select('id, content, status, created_at, published_at').eq('company_id', companyId).eq('item_id', itemId).order('created_at', { ascending: false }).limit(LIMIT))
-    void settle('opps', supabase.from('growth_opportunities').select('id, title, status, created_at').eq('company_id', companyId).contains('item_ids', [itemId]).order('created_at', { ascending: false }).limit(LIMIT))
-    void settle('leads', supabase.from('leads').select('id, name, contact, stage, created_at').eq('company_id', companyId).eq('item_id', itemId).order('created_at', { ascending: false }).limit(LIMIT))
+    void settle('tests', supabase.from('marketing_ai_test_content').select('*').eq('company_id', companyId).eq('item_id', itemId).is('source_id', null).order('created_at', { ascending: false }).limit(LIMIT + 1))
+    void settle('posts', supabase.from('posts').select('id, content, status, created_at, published_at').eq('company_id', companyId).eq('item_id', itemId).order('created_at', { ascending: false }).limit(LIMIT + 1))
+    void settle('opps', supabase.from('growth_opportunities').select('id, title, status, created_at').eq('company_id', companyId).contains('item_ids', [itemId]).order('created_at', { ascending: false }).limit(LIMIT + 1))
+    void settle('leads', supabase.from('leads').select('id, name, contact, stage, created_at').eq('company_id', companyId).eq('item_id', itemId).order('created_at', { ascending: false }).limit(LIMIT + 1))
     return () => { alive = false }
   }, [companyId, itemId, enabled])
   return data

@@ -9,7 +9,7 @@
 export interface OriginIds { item_id: string | null; link_id: string | null; opportunity_id: string | null }
 export interface OriginLookups {
   itemTitles: Record<string, string>; linkChannels: Record<string, string>; oppTitles: Record<string, string>
-  failed: { items: boolean; links: boolean; opps: boolean }
+  failed: { columns: boolean; items: boolean; links: boolean; opps: boolean } // columns: o select com link_id/opportunity_id caiu no fallback (as colunas não foram lidas)
 }
 export interface Origin { lines: string[]; unverified: boolean; registered: boolean }
 
@@ -25,6 +25,8 @@ const W = {
 export function leadOrigin(ids: OriginIds, lk: OriginLookups, lang: 'pt' | 'en'): Origin {
   const w = W[lang]
   const lines: string[] = []
+  // Colunas não lidas (fallback): os ids vêm nulos por falta de leitura, não por ausência — nunca "não registrada".
+  if (lk.failed.columns) return { lines, unverified: true, registered: false }
   let unverified = false
   let title: string | null = null
   if (ids.item_id) {
