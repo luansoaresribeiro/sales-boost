@@ -11,12 +11,17 @@ import {
   capUsdOf, monthStartIso, normalizeUrl, normalizeTitle, parseIntelConfig, remainingFor, rotate, searchesToday, spentBySource, tavilyCostFromEnv,
   type IntelNewsConfig, type SearchUnit,
 } from './marketIntel.ts'
-import { filterHits, pickRegions, type NewsSignal, type TavilyHit } from './marketNews.ts'
+import { filterHitsReport, pickRegions, type TavilyHit } from './marketNews.ts'
 
 type Admin = { from: (t: string) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
 export type NewsSearch = (key: string, query: string, cfg: IntelNewsConfig, timeoutMs: number) => Promise<TavilyHit[]>
 
-export interface NewsResult { searched: number; added: number; spent_usd: number; skipped?: string }
+export interface NewsResult {
+  searched: number; added: number; spent_usd: number; skipped?: string
+  // Fase 2 (registro por rodada): ausente = não medido.
+  collected?: number; filtered?: number; month_spent_usd?: number
+  details?: { quality_mode: string; quality_version: number; rejected: Record<string, number>; flagged: Record<string, number>; samples: { title: string; host: string; reason: string }[]; skipped?: string; cap_usd?: number }
+}
 export interface NewsOpts {
   companyId: string
   lang: 'pt' | 'en'
@@ -73,6 +78,17 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
   if (newsRows.some(r => (r.created_at ?? '') >= dayStart)) return { ...out, skipped: 'já coletou hoje' }
 
   const spent = spentBySource(rows)
+  // Estatística da rodada (só é lida se houve busca): quantos resultados vieram, quantos o filtro barrou e por quê.
+  const quality = cfg.quality
+  const stats = { hits: 0, rejected: {} as Record<string, number>, flagged: {} as Record<string, number>, samples: [] as { title: string; host: string; reason: string }[] }
+  const hostCounts = new Map<string, number>()
+  const done = (): NewsResult => {
+    if (out.searched > 0) {
+      out.collected = stats.hits; out.filtered = Object.values(stats.rejected).reduce((a, b) => a + b, 0); out.month_spent_usd = spent.total + out.spent_usd
+      out.details = { quality_mode: quality.mode, quality_version: quality.version, rejected: stats.rejected, flagged: stats.flagged, samples: stats.samples, cap_usd: capUsd, ...(out.skipped ? { skipped: out.skipped } : {}) }
+    }
+    return out
+  }
   let remaining = remainingFor('news', { split: intel.split, capUsd, spent })
   const monthLeft = cfg.max_searches_per_month - newsRows.length
   let newLeft = cfg.max_new_per_day - (newToday.count ?? 0)
@@ -144,13 +160,17 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
     for (let j = 0; j < batch.length; j++) {
       const r = results[j], b = batch[j]
       if (r.err || newLeft <= 0) continue
-      const cands = filterHits(r.hits, { region: b.u.region, kind: b.u.topic.kind, days: cfg.days, excludeDomains: cfg.exclude_domains, nowMs: now, seen, seenTitles })
-      for (const s of cands as NewsSignal[]) {
+      const rep = filterHitsReport(r.hits, { region: b.u.region, kind: b.u.topic.kind, days: cfg.days, excludeDomains: cfg.exclude_domains, nowMs: now, seen, seenTitles, quality, hostCounts })
+      stats.hits += r.hits.length
+      for (const [k, v] of Object.entries(rep.rejected)) stats.rejected[k] = (stats.rejected[k] ?? 0) + v
+      for (const [k, v] of Object.entries(rep.flagged)) stats.flagged[k] = (stats.flagged[k] ?? 0) + v
+      for (const x of rep.samples) if (stats.samples.length < 5) stats.samples.push(x)
+      for (const s of rep.signals) {
         if (newLeft <= 0) break
         const { error } = await admin.from('market_signals').insert({ company_id: o.companyId, ...s })
         if (error) {
           if ((error as { code?: string }).code === '23505') continue // já existe (índice único): ok
-          log(o.companyId, `insert: ${error.message}`); out.skipped = 'erro ao gravar sinal'; return out
+          log(o.companyId, `insert: ${error.message}`); out.skipped = 'erro ao gravar sinal'; return done()
         }
         out.added++; newLeft--
       }
@@ -158,5 +178,5 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
     if (failed) { out.skipped = 'falha na busca'; break }
     if (stop) break
   }
-  return out
+  return done()
 }

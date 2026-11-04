@@ -987,3 +987,11 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
   `item_id` (agent-actions); somar as duas fontes conta 2x. `useItemUsage` usa o maior das duas e ignora adaptações (`source_id` não nulo).
   Também: `?item=` na Inteligência de Mercado redireciona ao Catálogo — para abrir "Lugares perto" num imóvel use `?sub=lugares&imovel=<id>`.
   E o `reasoning` da peça fala de formato/tema, não do porquê do imóvel: não o mostre como "motivo do imóvel".
+- **Fase 2 de mercado (2026-11-04) — armadilhas.** (1) Termo da ficha casa por **borda de palavra só nas letras** (`hasTerm`): `"a venda"` não casa "cada venda"; `"m²"` casa
+  "435m²"; já os termos de `kind_terms` casam só o **começo** da palavra (`hotel` casa "hoteleira"). Termo curto demais bloqueia notícia boa — por isso `audit` primeiro. (2) `audit`
+  não escreve no sinal: a reclassificação reavalia os mesmos até 150 a cada dia (só leitura); `enforce` carimba `quality_v`. (3) Mexeu em `buildPrompt`/`finalize`/validação de
+  oportunidade? Suba `OPP_PROMPT_VERSION` (`opportunityOutput.ts`), senão a impressão digital não muda e a análise "não vê mudança". (4) A impressão digital NÃO inclui datas nem ids
+  F1/C1; se um dia entrar dado novo no prompt, ponha-o em `fingerprintPayload` (`marketIntelRuns.ts`). (5) `market_intel_runs` ausente: `recordRun` loga e segue, a análise não pula
+  (lê erro como "sem registro anterior") e a tela mostra "Não foi possível verificar" — aplicar a migration ANTES de esperar economia de IA. (6) `owner_restored:true` na `meta` é o que
+  impede o sistema de ignorar de novo; não remova ao mexer em `signalMeta.ts`/`signalIgnore.ts`.
+

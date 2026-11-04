@@ -13,6 +13,8 @@ import { norm, type Candidate, type Evidence, type Fact, type Lang, type OppKind
 
 export const MAX_OPPORTUNITIES = 3
 export const MAX_CANDIDATES_TO_LLM = 5
+/** Versão do prompt/validação. Suba quando mexer em buildPrompt/finalize: muda a impressão digital e força uma nova interpretação (marketIntelRuns.ts). */
+export const OPP_PROMPT_VERSION = 1
 export type Confidence = 'high' | 'medium' | 'low' | 'needs_validation'
 
 export interface OpportunityDraft {
