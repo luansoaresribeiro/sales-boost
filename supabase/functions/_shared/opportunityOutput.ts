@@ -14,7 +14,7 @@ import { norm, type Candidate, type Evidence, type Fact, type Lang, type OppKind
 export const MAX_OPPORTUNITIES = 3
 export const MAX_CANDIDATES_TO_LLM = 5
 /** Versão do prompt/validação. Suba quando mexer em buildPrompt/finalize: muda a impressão digital e força uma nova interpretação (marketIntelRuns.ts). */
-export const OPP_PROMPT_VERSION = 2
+export const OPP_PROMPT_VERSION = 3
 export type Confidence = 'high' | 'medium' | 'low' | 'needs_validation'
 
 export interface OpportunityDraft {
@@ -184,6 +184,23 @@ export function cleanAction(s: unknown, allowed: AllowedNumbers, guard: ClaimGua
   return kept.join(' ').trim().slice(0, 400) || fallback
 }
 
+/** Oportunidade de mercado (2026-11-05, dono): o centro tem que ser o sinal de mercado, não a fila interna de peças.
+ *  Frase que gira em torno de "peças prontas/preparadas" + aprovar/publicar/revisar (ou "esperando publicação") é lembrete
+ *  da fila de Aprovações — no market_change ela cai no texto do código (fallback), que parte da fonte de mercado. */
+const BACKLOG_PIECES = /(?:^|[^a-z])(?:pecas?|posts?|conteudos?|pieces?)\s+(?:ja\s+|already\s+)?(?:prontas?|preparad[ao]s?|ready|prepared|parad[ao]s?|represad[ao]s?|pendentes?)/
+const BACKLOG_VERB = /(?:^|[^a-z])(?:aprov\w*|public\w*|revis\w*|approv\w*|publish\w*|review\w*)/
+const WAITING_PUB = /esperando\s+(?:a\s+)?publicac|aguardando\s+(?:a\s+)?publicac|waiting\s+(?:to\s+be\s+|for\s+)?publish/
+/** Ação: "aprovar/publicar/revisar" + "peças prontas" (ou "esperando publicação"). */
+export function isBacklogCentric(text: string): boolean {
+  const t = norm(text ?? '')
+  return WAITING_PUB.test(t) || (BACKLOG_PIECES.test(t) && BACKLOG_VERB.test(t))
+}
+/** Título/problema: basta girar em torno das peças prontas — o problema comercial do market_change é o sinal, não a fila. */
+export function mentionsBacklog(text: string): boolean {
+  const t = norm(text ?? '')
+  return WAITING_PUB.test(t) || BACKLOG_PIECES.test(t)
+}
+
 export interface LlmOpportunity {
   candidate_id?: unknown; title?: unknown; description?: unknown; commercial_problem?: unknown; audience?: unknown
   suggested_action?: unknown; how_to_measure?: unknown; cited_fact_ids?: unknown; hypotheses?: unknown
@@ -229,7 +246,8 @@ REGRAS INEGOCIÁVEIS:
 6. "how_to_measure": diga o que olhar (comentários, mensagens, pedidos de contato), sem meta numérica.
 7. Adjetivo ou opinião de mercado ("disputado", "valorizado", "alto padrão", "nobre", "em alta", "ticket elevado", "procurado"…) só pode aparecer se a MESMA ideia estiver escrita nos fatos. Sem fato que diga isso, descreva só o que os fatos dizem, sem qualificar o local, o valor ou a demanda.
 8. Fotos: cada candidato com item ligado diz quantas fotos reais o item tem. Se for ZERO, "suggested_action" NÃO pode mandar publicar/postar/criar peça com fotos: a primeira ação é adicionar fotos reais ao item. Nunca invente que o item tem fotos.
-9. Idioma de TODOS os textos: ${lang === 'en' ? 'English' : 'português do Brasil'}.
+9. Candidato tipo=market_change: a oportunidade é o SINAL DE MERCADO. Título, problema e "suggested_action" precisam partir do sinal (ex.: criar uma peça ligando a notícia aos itens da região). Peças já preparadas são só contexto — elas já aparecem na fila de Aprovações; NÃO faça da oportunidade "aprovar/publicar as peças prontas".
+10. Idioma de TODOS os textos: ${lang === 'en' ? 'English' : 'português do Brasil'}.
 
 Responda APENAS com JSON, sem markdown:
 {"opportunities":[{"candidate_id":"C1","title":"até 90 caracteres","description":"2-3 frases","commercial_problem":"1-2 frases: o que isso custa ao comercial","audience":"","suggested_action":"","how_to_measure":"","cited_fact_ids":["F1"],"hypotheses":["Pode ser…"]}]}
@@ -343,6 +361,13 @@ export function finalizeChecked(opts: { lang: Lang; candidates: Candidate[]; fac
       how_to_measure: cleanText(raw.how_to_measure, allowed, 300, guard) || c.fallback.measure,
       confidence: sc.confidence,
       needs_validation: sc.needs,
+    }
+    // Oportunidade de mercado não pode virar lembrete da fila de Aprovações: título/problema/ação centrados em
+    // "aprovar as peças prontas" voltam para o texto do código, que parte do sinal de mercado.
+    if (c.kind === 'market_change') {
+      if (mentionsBacklog(d.title)) d.title = c.fallback.title
+      if (mentionsBacklog(d.commercial_problem)) d.commercial_problem = c.fallback.problem
+      if (sentences(d.suggested_action).some(isBacklogCentric)) d.suggested_action = actionForPhotos(c.fallback.action, c.item_ids, opts.photoCounts, lang)
     }
     // Rede final: nem o texto do código (fallback) pode afirmar período/ausência que os fatos não sustentam.
     const bad = (['title', 'description', 'commercial_problem', 'suggested_action', 'how_to_measure'] as const).filter(k => sentences(d[k]).some(p => violatesEvidence(p, ev)))
