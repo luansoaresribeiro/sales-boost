@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 // Roda: node --experimental-strip-types scripts/test-opportunity-engine.mjs
 // Motor de oportunidades (Etapa 1 da Inteligência comercial): regras de candidato + validação da saída da IA + prioridade.
 import { buildCandidates } from '../supabase/functions/_shared/opportunityEngine.ts'
-import { finalize, parseLlm, buildPrompt, promptSafe, hasProtectedTerm, numbersAllowed, allowedNumbers, cleanText, cleanAction, score, compareScored } from '../supabase/functions/_shared/opportunityOutput.ts'
+import { finalize, finalizeChecked, splitSpeculation, parseLlm, buildPrompt, promptSafe, hasProtectedTerm, numbersAllowed, allowedNumbers, cleanText, cleanAction, score, compareScored } from '../supabase/functions/_shared/opportunityOutput.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
 const NOW = new Date('2026-10-28T12:00:00Z')
@@ -222,5 +222,82 @@ const base = (over = {}) => ({
   assert.equal(cleanAction('', al, null, FB), FB); assert.equal(cleanAction(null, al, null, FB), FB); assert.equal(cleanAction('Ideal para jovens casais solteiros.', al, null, FB), FB)
   assert.equal(cleanText('Publique 3 posts por semana para subir 40% o alcance. Registre no Sales Boost após aprovação.', al, 400), 'Registre no Sales Boost após aprovação.')
   ok('ação: frase cortada pela trava → ação do código (sem sobra vazia); ação limpa passa inteira')
+}
+
+// ── Porta de evidência (2026-11-05): período e "nenhum post" só com dado ──────────────────────────────────────────
+const DAY = 86400000
+const itemAt = (days, id = 'i1', over = {}) => ({ id, title: 'Apto Leblon', fields: { bairro: 'Leblon', preco: '1.200.000', quartos: 3, tipo: 'Apartamento' }, photoCount: 6, createdAt: new Date(NOW.getTime() - days * DAY).toISOString(), ...over })
+const llmOf = (c, over = {}) => ({ candidate_id: c.id, title: 'Leblon sem posts', description: 'Há um item em Leblon sem post.', commercial_problem: 'Quem procura em Leblon não vê o item.', suggested_action: 'Criar uma peça com as fotos reais.', how_to_measure: 'Comentários e mensagens.', ...over })
+const allText = (d) => [d.title, d.description, d.commercial_problem, d.suggested_action, d.how_to_measure].join(' | ')
+// (a) dados completos → oportunidade válida; item velho → janela de 60 dias é verdade
+{
+  const r = buildCandidates(base({ catalog: [itemAt(90)], pieces: [] }))
+  const c = r.candidates[0]; assert.ok(r.facts.some(f => f.text.includes('últimos 60 dias')))
+  const o = finalizeChecked({ lang: 'pt', candidates: r.candidates, facts: r.facts, llm: [llmOf(c, { description: 'Nos últimos 60 dias nenhum post saiu sobre Leblon.' })] })
+  assert.equal(o.notValidated.length, 0); assert.equal(o.drafts.length, 1); assert.ok(o.drafts[0].description.includes('últimos 60 dias'))
+  ok('evidência (a): dados completos → oportunidade válida; período do fato passa')
+  const q = finalize({ lang: 'pt', candidates: r.candidates, facts: r.facts, llm: [llmOf(c, { description: 'O item está no catálogo há mais de 60 dias. Há um item em Leblon sem post.' })] })
+  assert.ok(!allText(q[0]).includes('mais de')); assert.ok(q[0].description.includes('sem post'))
+  ok('evidência: "mais de" não passa nem quando o número 60 está no fato')
+}
+// (b) item de 3 dias + 7 peças não publicadas: nada de content_gap com "60 dias"
+{
+  const pieces = Array.from({ length: 7 }, () => ({ item_id: 'i1' }))
+  const r = buildCandidates(base({ catalog: [itemAt(3)], pieces }))
+  assert.equal(r.candidates.some(x => x.kind === 'content_gap'), false); assert.ok(!r.facts.some(f => f.text.includes('60')))
+  const r2 = buildCandidates(base({ catalog: [itemAt(3)] })) // sem peças: item novo demais, não é lacuna
+  assert.equal(r2.candidates.length, 0)
+  const r3 = buildCandidates(base({ catalog: [itemAt(10)] })) // 10 dias: lacuna, mas o período é a IDADE
+  const f3 = r3.facts.find(f => f.origin === 'posts'); assert.ok(f3.text.includes('há 10 dias') && !f3.text.includes('60'))
+  assert.ok(!r3.candidates[0].fallback.title.includes('60'))
+  // peças prontas + sinal de mercado na região: fato verdadeiro "N peças, nenhuma publicada"
+  const sig = { kind: 'launch', region: 'Leblon', title: 'Novo metrô', summary: null, source_name: 'Jornal X', source_url: 'https://x.com/a', observed_at: '2026-10-01' }
+  const r4 = buildCandidates(base({ catalog: [itemAt(3)], pieces, signals: [sig] }))
+  assert.ok(r4.facts.some(f => f.origin === 'pieces' && f.text.includes('7 peças preparadas') && f.text.includes('nenhuma publicada')))
+  ok('evidência (b): item de 3 dias com 7 peças → sem content_gap, sem "60"; item de 10 dias usa a idade; fato de peças é verdadeiro')
+}
+// (c) IA inventa "há mais de 60 dias no catálogo" → frase sai / cai no texto do código
+{
+  const r = buildCandidates(base({ catalog: [itemAt(10)] })); const c = r.candidates[0]
+  const o = finalize({ lang: 'pt', candidates: r.candidates, facts: r.facts, llm: [llmOf(c, { title: 'Dois imóveis no Leblon sem posts há mais de 60 dias', description: 'Estão no catálogo há mais de 60 dias sem nenhum post. Há um item em Leblon sem post.', commercial_problem: 'Parado há 2 meses.', suggested_action: 'Criar uma peça. Item parado há meses.' })] })
+  assert.equal(o.length, 1); const t = allText(o[0])
+  assert.ok(!/60|meses|mais de/.test(t), t); assert.equal(o[0].title, c.fallback.title); assert.equal(o[0].suggested_action, c.fallback.action)
+  assert.equal(o[0].description, 'Há um item em Leblon sem post.')
+  ok('evidência (c): "há mais de 60 dias", "2 meses", "há meses" removidos; título e ação voltam ao texto do código')
+}
+// (d) fato diz que há peças; IA diz "nenhum post" → sai
+{
+  const sig = { kind: 'launch', region: 'Leblon', title: 'Novo metrô', summary: null, source_name: 'Jornal X', source_url: 'https://x.com/a', observed_at: '2026-10-01' }
+  const r = buildCandidates(base({ catalog: [itemAt(3)], pieces: [{ item_id: 'i1' }, { item_id: 'i1' }], signals: [sig] }))
+  const c = r.candidates.find(x => x.kind === 'market_change')
+  const o = finalize({ lang: 'pt', candidates: r.candidates, facts: r.facts, llm: [llmOf(c, { description: 'Existe um novo metrô em Leblon. Nenhum post foi feito sobre o bairro.', commercial_problem: 'Sem nenhum post, o bairro fica de fora.' })] })
+  assert.equal(o.length, 1); assert.ok(!/nenhum post|sem nenhum/i.test(allText(o[0])), allText(o[0])); assert.ok(o[0].description.includes('novo metrô'))
+  assert.equal(o[0].commercial_problem, c.fallback.problem)
+  // sem nenhum fato de ausência, também sai
+  const r2 = buildCandidates(base({ catalog: [itemAt(3)], signals: [sig] })); const c2 = r2.candidates.find(x => x.kind === 'market_change')
+  const o2 = finalize({ lang: 'pt', candidates: r2.candidates, facts: r2.facts, llm: [llmOf(c2, { description: 'Sem posts no período. Existe um novo metrô em Leblon.' })] })
+  assert.equal(o2[0].description, 'Existe um novo metrô em Leblon.')
+  ok('evidência (d): "nenhum post" removido quando há peças preparadas ou quando nenhum fato afirma a ausência')
+}
+// (e) candidato sem fato com fonte → NOT_VALIDATED, não vira rascunho
+{
+  const empty = { id: 'C1', kind: 'content_gap', item_ids: ['i1'], fact_ids: [], region: 'Leblon', forceHypothesis: false, hypotheses: [], validationReasons: [], fallback: { title: 't', problem: 'p', action: 'a', measure: 'm' } }
+  const ghost = { ...empty, id: 'C2', fact_ids: ['F404'] }
+  const o = finalizeChecked({ lang: 'pt', candidates: [empty, ghost], facts: [], llm: [{ candidate_id: 'C1' }, { candidate_id: 'C2' }] })
+  assert.equal(o.drafts.length, 0); assert.equal(o.notValidated.length, 2); assert.ok(o.notValidated[0].reasons[0].length > 0)
+  // texto do código que afirma ausência sem fato também não passa (rede final)
+  const fact = { id: 'F1', type: 'fact', text: 'Há 1 item em Leblon.', source: 'Catálogo', date: null, origin: 'catalog' }
+  const bad = { ...empty, fact_ids: ['F1'], fallback: { ...empty.fallback, title: 'Nenhum post sobre Leblon nos últimos 60 dias' } }
+  const o2 = finalizeChecked({ lang: 'pt', candidates: [bad], facts: [fact], llm: [{ candidate_id: 'C1' }] })
+  assert.equal(o2.drafts.length, 0); assert.equal(o2.notValidated[0].kind, 'content_gap')
+  ok('evidência (e): sem fato com fonte, ou texto final sem lastro → NOT_VALIDATED e fora da fila')
+}
+// (f) especulação vira hipótese rotulada
+{
+  assert.deepEqual(splitSpeculation('O item está no Leblon. Pode ser que o preço esteja alto.'), { facts: 'O item está no Leblon.', hyps: ['Pode ser que o preço esteja alto.'] })
+  const r = buildCandidates(base({ catalog: [itemAt(90)] })); const c = r.candidates[0]
+  const o = finalize({ lang: 'pt', candidates: r.candidates, facts: r.facts, llm: [llmOf(c, { description: 'Há um item em Leblon sem post. Talvez o preço esteja alto.' })] })
+  assert.ok(!/talvez/i.test(o[0].description)); assert.ok(o[0].evidence.some(e => e.type === 'hypothesis' && /Talvez/.test(e.text)))
+  ok('evidência (f): frase especulativa sai do texto e entra como hipótese rotulada')
 }
 console.log(`\n${n} grupos ok`)

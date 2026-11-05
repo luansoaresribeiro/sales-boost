@@ -9,9 +9,9 @@
 import { availabilityOf, itemCfgFrom } from './itemService.ts'
 import {
   buildCandidates, signalIdsOf, type CatalogItem, type CompetitorRow, type EngineInput, type EventRow, type FieldMap, type Lang,
-  type OppTexts, type PostRow, type SignalRow, type TrendRow,
+  type OppTexts, type PieceRow, type PostRow, type SignalRow, type TrendRow,
 } from './opportunityEngine.ts'
-import { MAX_CANDIDATES_TO_LLM, OPP_PROMPT_VERSION, buildPrompt, compareScored, finalize, parseLlm, score } from './opportunityOutput.ts'
+import { MAX_CANDIDATES_TO_LLM, OPP_PROMPT_VERSION, buildPrompt, compareScored, finalizeChecked, parseLlm, score, type NotValidated } from './opportunityOutput.ts'
 import { interpretFingerprint, recordRun, type RunInput } from './marketIntelRuns.ts'
 
 type Admin = { from: (t: string) => any; rpc?: any } // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -20,7 +20,7 @@ export type Llm = (prompt: string, maxTokens: number) => Promise<{ text: string;
 export const WINDOW_DAYS = 60
 const REUSE_WINDOW_MS = 90_000 // duplo clique: devolve a rodada que acabou de sair em vez de gastar IA de novo
 
-export interface RunResult { ok: boolean; status: number; error?: string; run_id?: string | null; generated: number; considered: number; reused?: boolean; unchanged?: boolean }
+export interface RunResult { ok: boolean; status: number; error?: string; run_id?: string | null; generated: number; considered: number; reused?: boolean; unchanged?: boolean; not_validated?: NotValidated[] }
 
 type Bilingual = { pt?: string; en?: string } | string | undefined
 const pick = (b: Bilingual, lang: Lang): string => (typeof b === 'string' ? b : b?.[lang] ?? b?.pt ?? '')
@@ -66,8 +66,8 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
   for (const f of [...(cfg.catalog_fields?.required ?? []), ...(cfg.catalog_fields?.optional ?? [])]) labels[f.key] = pick(f.label, lang).replace(/\s*\(.*\)\s*$/, '')
 
   const since = new Date(Date.now() - WINDOW_DAYS * 86400000).toISOString()
-  const [items, posts, events, competitors, trends, signals] = await Promise.all([
-    rows<{ id: string; title: string; meta: { fields?: Record<string, unknown>; photos?: unknown[] } | null }>(admin.from('marketing_ai_knowledge').select('id, title, meta').eq('company_id', companyId).eq('kind', 'product').limit(200), 'catálogo'),
+  const [items, posts, pieces, events, competitors, trends, signals] = await Promise.all([
+    rows<{ id: string; title: string; created_at?: string | null; meta: { fields?: Record<string, unknown>; photos?: unknown[] } | null }>(admin.from('marketing_ai_knowledge').select('id, title, meta, created_at').eq('company_id', companyId).eq('kind', 'product').limit(200), 'catálogo'),
     (async (): Promise<PostRow[]> => {
       const full = await admin.from('posts').select('id, item_id, status, published_at, created_at, content, instagram_media_id').eq('company_id', companyId).or(`created_at.gte.${since},published_at.gte.${since}`).limit(1000)
       if (!full.error) return (full.data ?? []) as PostRow[]
@@ -75,6 +75,8 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
       const base = await admin.from('posts').select('id, status, published_at, created_at, content, instagram_media_id').eq('company_id', companyId).or(`created_at.gte.${since},published_at.gte.${since}`).limit(1000)
       return ((base.data ?? []) as PostRow[]).map(p => ({ ...p, item_id: null }))
     })(),
+    // Peças preparadas (qualquer status) por item: não são post publicado, mas o item já tem conteúdo a caminho.
+    rows<PieceRow>(admin.from('marketing_ai_test_content').select('item_id').eq('company_id', companyId).not('item_id', 'is', null).limit(1000), 'peças preparadas'),
     rows<EventRow>(admin.from('engagement_events').select('media_ref, intent_detected, created_at').eq('company_id', companyId).gte('created_at', since).limit(3000), 'comentários'),
     rows<CompetitorRow>(admin.from('marketing_ai_competitors').select('name, instagram_url, posting_frequency_days, avg_engagement, followers, hashtags_used, notes, last_analyzed_at').eq('company_id', companyId).limit(50), 'concorrentes'),
     rows<TrendRow>(admin.from('marketing_ai_trends').select('title, description, category, relevance, detected_at, source').eq('company_id', companyId).neq('status', 'ignored').order('detected_at', { ascending: false }).limit(30), 'tendências'),
@@ -83,10 +85,10 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
 
   // Fase 4: imóvel vendido/alugado/removido não vira oportunidade nova (ficha sem availability = nada filtrado).
   const icfg = itemCfgFrom(pb?.config)
-  const catalog: CatalogItem[] = items.filter(i => !availabilityOf(i, icfg.availability).blocking).map(i => ({ id: i.id, title: i.title, fields: i.meta?.fields ?? {}, photoCount: i.meta?.photos?.length ?? 0 }))
+  const catalog: CatalogItem[] = items.filter(i => !availabilityOf(i, icfg.availability).blocking).map(i => ({ id: i.id, title: i.title, fields: i.meta?.fields ?? {}, photoCount: i.meta?.photos?.length ?? 0, createdAt: i.created_at ?? null }))
   const input: EngineInput = {
     lang, now: new Date(), windowDays: WINDOW_DAYS, fieldMap, labels, itemLabel: cfg.vocabulary?.item ?? 'Item',
-    catalog, posts, events, competitors, trends, signals, instagramConnected: !!co.instagram_user_id, texts,
+    catalog, posts, pieces, events, competitors, trends, signals, instagramConnected: !!co.instagram_user_id, texts,
   }
   const photoCounts = Object.fromEntries(catalog.map(i => [i.id, i.photoCount]))
   const { facts, candidates } = buildCandidates(input)
@@ -126,7 +128,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
     return { ok: false, status: 502, generated: 0, considered: top.length, error: lang === 'en' ? 'The AI answer could not be read. Try again.' : 'Não consegui ler a resposta da IA. Tente de novo.' }
   }
 
-  const drafts = finalize({ lang, candidates: top, facts: sentFacts, llm: parsed, marketClaims: texts.marketClaims, photoCounts })
+  const { drafts, notValidated } = finalizeChecked({ lang, candidates: top, facts: sentFacts, llm: parsed, marketClaims: texts.marketClaims, photoCounts })
   const validIds = new Set(catalog.map(i => i.id))
   const runId = crypto.randomUUID()
   if (drafts.length > 0) {
@@ -142,9 +144,12 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
       return { ok: false, status: 500, generated: 0, considered: top.length, error: `growth_opportunities: ${error.message}` }
     }
   }
-  await logCost(admin, companyId, started, tokens, true, `${drafts.length} oportunidade(s) de ${top.length} candidato(s)`)
-  await recordRun(admin, companyId, 'interpret', { ...runBase, accepted: drafts.length, discarded: Math.max(0, top.length - drafts.length), unchanged: false, fingerprint, tokens })
-  return { ok: true, status: 200, run_id: drafts.length > 0 ? runId : null, generated: drafts.length, considered: top.length }
+  // NOT_VALIDATED: não entra na fila (growth_opportunities.status só aceita suggested/approved/dismissed e não há coluna meta — sem migration).
+  // O motivo fica no registro da rodada (market_intel_runs.details), no log e no retorno.
+  if (notValidated.length) console.warn(`[opportunities] ${companyId} não validadas:`, JSON.stringify(notValidated))
+  await logCost(admin, companyId, started, tokens, true, `${drafts.length} oportunidade(s) de ${top.length} candidato(s)${notValidated.length ? `; ${notValidated.length} não validada(s)` : ''}`)
+  await recordRun(admin, companyId, 'interpret', { ...runBase, details: { ...runBase.details, ...(notValidated.length ? { not_validated: notValidated } : {}) }, accepted: drafts.length, discarded: Math.max(0, top.length - drafts.length), unchanged: false, fingerprint, tokens })
+  return { ok: true, status: 200, run_id: drafts.length > 0 ? runId : null, generated: drafts.length, considered: top.length, ...(notValidated.length ? { not_validated: notValidated } : {}) }
 }
 
 // Custo da IA registrado como as outras actions (agent_performance); nunca derruba o fluxo.

@@ -24,7 +24,11 @@ export interface Fact { id: string; type: 'fact' | 'data'; text: string; source:
 export interface OppTexts { hypotheses?: string[]; caveat?: string; audienceHint?: string; marketClaims?: string[] }
 
 export interface FieldMap { location: string; price?: string; type?: string; bedrooms?: string; deal?: string }
-export interface CatalogItem { id: string; title: string; fields: Record<string, unknown>; photoCount: number }
+export interface CatalogItem { id: string; title: string; fields: Record<string, unknown>; photoCount: number; createdAt?: string | null }
+// Peça preparada no Sales Boost (marketing_ai_test_content), de qualquer status — NÃO é post publicado.
+export interface PieceRow { item_id: string | null }
+/** Idade mínima (dias) do item pra contar como lacuna de conteúdo: item recém-cadastrado ainda não "ficou sem post". */
+export const MIN_GAP_AGE_DAYS = 7
 export interface PostRow { id?: string; item_id: string | null; status: string | null; published_at: string | null; created_at: string | null; content: string | null; instagram_media_id: string | null }
 export interface EventRow { media_ref: string | null; intent_detected: string | null; created_at: string | null }
 export interface CompetitorRow { name: string | null; instagram_url: string | null; posting_frequency_days: number | null; avg_engagement: number | null; followers: number | null; hashtags_used: string[] | null; notes: string | null; last_analyzed_at: string | null }
@@ -40,6 +44,7 @@ export interface EngineInput {
   itemLabel: string // vocabulary.item (singular), ex.: "Imóvel"
   catalog: CatalogItem[]
   posts: PostRow[]
+  pieces?: PieceRow[] // peças preparadas (qualquer status); ausente = não informado
   events: EventRow[]
   competitors: CompetitorRow[]
   trends: TrendRow[]
@@ -133,18 +138,34 @@ export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: 
   }
 
   // ── content_gap: região do catálogo sem NENHUM post (qualquer status) na janela ──────────
+  // Evidência (2026-11-05): o período citado vem dos DADOS — nunca a janela fixa quando o item é mais novo que ela —
+  // e item que já tem peça preparada não é "sem conteúdo" (a peça já aparece na fila de aprovação; não duplicamos).
+  const pieces = inp.pieces ?? []
+  const piecesOf = (id: string) => pieces.filter(p => p.item_id === id).length
+  const ageDays = (it: CatalogItem): number | null => { const t = it.createdAt ? Date.parse(it.createdAt) : NaN; return Number.isFinite(t) ? Math.floor((inp.now.getTime() - t) / 86400000) : null }
   for (const [, reg] of byRegion) {
     if (reg.items.some(it => postsOfItem(it.id).length > 0)) continue
-    const n = reg.items.length
-    const ids = reg.items.slice(0, 3).map(catalogFact)
+    if (reg.items.some(it => piecesOf(it.id) > 0)) continue // peças prontas e não publicadas: a fila de aprovação já mostra
+    const elig = reg.items.filter(it => { const a = ageDays(it); return a == null || a >= MIN_GAP_AGE_DAYS }) // cadastrado há poucos dias não é lacuna
+    if (elig.length === 0) continue
+    const n = elig.length
+    const ages = elig.map(ageDays)
+    const known = ages.every((a): a is number => a != null)
+    const newest = known ? Math.min(...(ages as number[])) : null
+    const young = newest != null && newest < inp.windowDays // item mais novo que a janela: diz a idade, não a janela
+    const ids = elig.slice(0, 3).map(catalogFact)
     ids.push(book.add('fact', tr(lang, `${n === 1 ? 'Há 1 item' : `Há ${n} itens`} do catálogo em "${reg.name}" (${regionLabel}).`, `There ${n === 1 ? 'is 1 item' : `are ${n} items`} in the catalog in "${reg.name}" (${regionLabel}).`), srcCatalog, null, 'catalog'))
-    ids.push(book.add('fact', tr(lang, `Nenhum post registrado no Sales Boost para ${n === 1 ? 'esse item' : 'esses itens'} nos últimos ${inp.windowDays} dias.`, `No post registered in Sales Boost for ${n === 1 ? 'this item' : 'these items'} in the last ${inp.windowDays} days.`), srcPosts, today, 'posts'))
+    ids.push(book.add('fact', young
+      ? tr(lang, `Nenhum post registrado no Sales Boost para ${n === 1 ? 'esse item, cadastrado' : 'esses itens, o mais recente cadastrado'} há ${newest} dias.`, `No post registered in Sales Boost for ${n === 1 ? 'this item, registered' : 'these items, the newest registered'} ${newest} days ago.`)
+      : tr(lang, `Nenhum post registrado no Sales Boost para ${n === 1 ? 'esse item' : 'esses itens'} nos últimos ${inp.windowDays} dias.`, `No post registered in Sales Boost for ${n === 1 ? 'this item' : 'these items'} in the last ${inp.windowDays} days.`), srcPosts, today, 'posts'))
     candidates.push({
-      id: '', kind: 'content_gap', item_ids: reg.items.map(i => i.id), fact_ids: ids, region: reg.name, forceHypothesis: false, hypotheses: [],
+      id: '', kind: 'content_gap', item_ids: elig.map(i => i.id), fact_ids: ids, region: reg.name, forceHypothesis: false, hypotheses: [],
       validationReasons: inp.instagramConnected ? [] : [noIg],
       fallback: {
-        title: tr(lang, `Nenhum post sobre ${reg.name} nos últimos ${inp.windowDays} dias`, `No posts about ${reg.name} in the last ${inp.windowDays} days`),
-        problem: tr(lang, `Há ${itemsWord(n, lang)} do catálogo nessa região, mas nada foi publicado sobre ${n === 1 ? 'ele' : 'eles'} no período — quem procura nessa região não encontra ${n === 1 ? 'esse item' : 'esses itens'} no seu perfil.`, `There ${n === 1 ? 'is 1 item' : `are ${n} items`} in the catalog in this region, but nothing was published about ${n === 1 ? 'it' : 'them'} in the period — people looking in this region do not find ${n === 1 ? 'it' : 'them'} on your profile.`),
+        title: young
+          ? tr(lang, `Nenhum post sobre ${reg.name} para ${n === 1 ? 'o item cadastrado' : 'os itens cadastrados'} há ${newest} dias`, `No posts about ${reg.name} for ${n === 1 ? 'the item registered' : 'the items registered'} ${newest} days ago`)
+          : tr(lang, `Nenhum post sobre ${reg.name} nos últimos ${inp.windowDays} dias`, `No posts about ${reg.name} in the last ${inp.windowDays} days`),
+        problem: tr(lang, `Há ${itemsWord(n, lang)} do catálogo nessa região, mas nada foi publicado sobre ${n === 1 ? 'ele' : 'eles'} — quem procura nessa região não encontra ${n === 1 ? 'esse item' : 'esses itens'} no seu perfil.`, `There ${n === 1 ? 'is 1 item' : `are ${n} items`} in the catalog in this region, but nothing was published about ${n === 1 ? 'it' : 'them'} — people looking in this region do not find ${n === 1 ? 'it' : 'them'} on your profile.`),
         action: tr(lang, `Criar e aprovar uma peça sobre ${reg.name} usando as fotos reais do catálogo.`, `Create and approve a piece about ${reg.name} using the real catalog photos.`),
         measure: tr(lang, 'Ver, depois que a peça for publicada, quantos comentários e mensagens ela recebe sobre esse item.', 'After the piece is published, check how many comments and messages it gets about this item.'),
       },
@@ -259,6 +280,15 @@ export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: 
     if (hits.length === 0) continue
     const ids = reg.items.slice(0, 2).map(catalogFact)
     for (const h of hits) ids.push(book.add('data', h.text, h.source, h.date, h.origin, undefined, h.id))
+    // Peças já preparadas nessa região: fato verdadeiro (e trava contra a IA dizer "nenhum post").
+    const nPieces = reg.items.reduce((a, it) => a + piecesOf(it.id), 0)
+    if (nPieces > 0) {
+      const published = new Set(posts.filter(p => p.item_id && (p.published_at || p.instagram_media_id)).map(p => p.item_id))
+      const nPub = reg.items.filter(it => published.has(it.id)).length
+      ids.push(book.add('fact', nPub === 0
+        ? tr(lang, `${nPieces === 1 ? '1 peça preparada' : `${nPieces} peças preparadas`} no Sales Boost para itens em "${reg.name}", nenhuma publicada.`, `${nPieces === 1 ? '1 piece prepared' : `${nPieces} pieces prepared`} in Sales Boost for items in "${reg.name}", none published.`)
+        : tr(lang, `${nPieces === 1 ? '1 peça preparada' : `${nPieces} peças preparadas`} no Sales Boost para itens em "${reg.name}"; ${nPub === 1 ? '1 item' : `${nPub} itens`} com post publicado.`, `${nPieces === 1 ? '1 piece prepared' : `${nPieces} pieces prepared`} in Sales Boost for items in "${reg.name}"; ${nPub === 1 ? '1 item' : `${nPub} items`} with a published post.`), tr(lang, 'Peças preparadas no Sales Boost', 'Pieces prepared in Sales Boost'), today, 'pieces'))
+    }
     const origins = new Set(hits.map(h => h.origin))
     candidates.push({
       id: '', kind: 'market_change', item_ids: reg.items.map(i => i.id), fact_ids: ids, region: reg.name, forceHypothesis: false, hypotheses: [],
