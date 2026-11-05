@@ -295,6 +295,18 @@ Telegram (`notifyMarketing()` → Cloudflare Worker `marketing-bot` →
   `hermes-lead-alert` só deixa o aviso de lead pro buddy quando ele vai
   avisar agora (`buddyDeliversNow`); senão avisa ele mesmo e marca o lead
   como avisado em `telegram_buddy_sent` (nem some, nem duplica).
+- **Auditoria do fluxo do Telegram (2026-11-04, só leitura).** Feita a partir do código e do `cron.job` de produção. Divergências registradas, **não corrigidas** (escopo separado):
+  - Os avisos `OPPORTUNITY_DETECTED` e `REPORT_READY` mandam "Use /relatorio", mas `/relatorio`, `/diagnostico` e `/concorrentes` respondem só "acesse o dashboard" (`telegram-webhook`, cerca da linha 245).
+  - `telegram-webhook` grava `start`, `conectar_ok` e `chat_response` em `bot_notifications` **sem `company_id`**. Por isso as conversas nunca aparecem na Atividade da empresa.
+  - `enzo-daily-report` (`DAILY_REPORT`) e `daily-briefing` **não têm agendamento em produção**, mas o rótulo "Relatório diário" existe na tela de Atividade.
+  - O `monthly-report` avulso também não tem agendamento. O mensal que roda é o `periodic-report` (dia 1, 10:00 UTC).
+  - `hermes-lead-alert` e `hermes-daily-scan` mandam direto para a API do Telegram e **não gravam** em `bot_notifications`. O Telegram amigo grava.
+  - Não há como o dono desligar:
+    - os `AGENT_ACTION` do `creative-generate` (plano semanal e post de teste diário);
+    - `hermes-daily-scan`;
+    - `REPORT_READY`.
+  - O pivô manual de estratégia (`strategy-generate`, cerca da linha 1171) chega com o texto genérico "Nova atualização do Sales Boost.", porque falta template e mensagem.
+  - `bot_notifications` está no tempo real do banco, mas a tela de Atividade só lia uma vez. A correção, só de tela, entra no PR B (Atividade no sino).
 - **`vendas-bot`** (Cloudflare Worker) ainda não migrado — mesmo ponto
   cego de logs que `marketing-bot` tinha antes.
 - **`group-manager`** (Cloudflare Worker) cria grupos/convida bots — usa

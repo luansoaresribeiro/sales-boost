@@ -243,7 +243,7 @@ export default function MarketingAiHubPage() {
           <p style={{ color: MUTED, fontSize: '13px' }}>{t.sub}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          <button onClick={() => navigate('/dashboard/settings?tab=agentes')}
+          <button onClick={() => navigate('/dashboard/aprovacoes')}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '8px 14px', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '10px', cursor: 'pointer', fontFamily: D, color: MUTED, fontSize: '12px', fontWeight: 700 }}
             onMouseEnter={e => { e.currentTarget.style.color = ORANGE; e.currentTarget.style.borderColor = 'rgba(255,109,41,0.3)' }}
             onMouseLeave={e => { e.currentTarget.style.color = MUTED; e.currentTarget.style.borderColor = BORDER }}>

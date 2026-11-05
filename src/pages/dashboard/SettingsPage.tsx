@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { markProfileSaved } from '../../lib/profileConfirm'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useCompany } from '../../contexts/CompanyContext'
 import { useLang } from '../../contexts/LanguageContext'
 import { d } from '../../i18n-dash'
@@ -10,7 +10,6 @@ import NotificationsCard from './settings/NotificationsCard'
 import BusinessUnderstandingCard from './settings/BusinessUnderstandingCard'
 import CompanyLanguageCard from './settings/CompanyLanguageCard'
 import BrokersCard from './settings/BrokersCard'
-import AgentConfigTab from './marketingAi/AgentConfigTab'
 import AccountTab from './settings/AccountTab'
 import ConnectionsTab from './marketingAi/ConnectionsTab'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
@@ -195,16 +194,18 @@ export default function SettingsPage() {
   const T = d[lang].settings
   const X = TX[lang]
 
-  // 'agentes' = aba "Aprovações" (renomeada em 2026-11-04; ?tab=agentes antigo continua valendo). 'conta' = "Sua conta".
-  type SettingsTab = 'info' | 'integrations' | 'agentes' | 'conexoes' | 'conta'
+  // 2026-11-04 (dono): a escolha "Pedir aprovação / Executar automaticamente" saiu daqui e foi para a página Aprovações
+  // do menu. Links antigos (?tab=agentes / ?tab=aprovacoes) levam para lá. 'conta' = "Sua conta".
+  type SettingsTab = 'info' | 'integrations' | 'conexoes' | 'conta'
   const tabFromParam = (p: string | null): SettingsTab =>
-    p === 'integracoes' ? 'integrations' : p === 'agentes' || p === 'aprovacoes' ? 'agentes' : p === 'conexoes' ? 'conexoes' : p === 'conta' ? 'conta' : 'info'
+    p === 'integracoes' ? 'integrations' : p === 'conexoes' ? 'conexoes' : p === 'conta' ? 'conta' : 'info'
   const [tab, setTab] = useState<SettingsTab>(tabFromParam(searchParams.get('tab')))
+  const navigate = useNavigate()
 
   useEffect(() => {
     const p = searchParams.get('tab')
+    if (p === 'agentes' || p === 'aprovacoes') { navigate('/dashboard/aprovacoes', { replace: true }); return }
     if (p === 'integracoes') setTab('integrations')
-    if (p === 'agentes' || p === 'aprovacoes') setTab('agentes')
     if (p === 'conta') setTab('conta')
     if (p === 'conexoes') setTab('conexoes')
     const section = searchParams.get('section')
@@ -218,7 +219,7 @@ export default function SettingsPage() {
       else if (++tries >= 25) clearInterval(timer)
     }, 200)
     return () => clearInterval(timer)
-  }, [searchParams])
+  }, [searchParams, navigate])
 
   // Tipos de estabelecimento (geridos pelo dono no painel owner).
   useEffect(() => { fetchBusinessTypes().then(setBusinessTypes) }, [])
@@ -422,7 +423,7 @@ export default function SettingsPage() {
 
         {/* Tab switcher */}
         <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '5px', marginBottom: '24px', width: 'fit-content', flexWrap: 'wrap' }}>
-          {(['info', 'agentes', 'conexoes', 'integrations', 'conta'] as const).map(key => [key, X.tabs[key]] as const).map(([key, label]) => (
+          {(['info', 'conexoes', 'integrations', 'conta'] as const).map(key => [key, X.tabs[key]] as const).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
               style={{ padding: '9px 18px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, background: tab === key ? ORANGE : 'transparent', color: tab === key ? '#000' : MUTED, transition: 'all 0.15s' }}>
               {label}
@@ -434,16 +435,6 @@ export default function SettingsPage() {
           <div style={{ background: 'rgba(255,109,41,0.06)', border: '1px solid rgba(255,109,41,0.2)', borderRadius: '12px', padding: '14px 18px', marginBottom: '20px', fontSize: '13px', color: MUTED, lineHeight: 1.6 }}>
             👋 <strong style={{ color: 'white' }}>{X.welcomeBold}</strong>{X.welcomeRest}
           </div>
-        )}
-
-        {tab === 'agentes' && (
-          companyId ? (
-            <AgentConfigTab company={{ id: companyId }} />
-          ) : (
-            <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '22px', fontSize: '13px', color: MUTED, lineHeight: 1.6 }}>
-              {X.createFirst1}<strong style={{ color: 'white' }}>{X.tabs.info}</strong>{X.createFirst2}{X.configAgents}
-            </div>
-          )
         )}
 
         {tab === 'integrations' && <NotificationsCard />}

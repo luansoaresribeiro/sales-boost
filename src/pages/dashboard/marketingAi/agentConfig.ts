@@ -5,7 +5,7 @@
 // os agentes passam a de fato obedecer a esse nível de autonomia.
 import { useCallback, useState } from 'react'
 
-// 2026-11-04 (dono): só 2 opções em Configurações → Aprovações. "Apenas sugerir" saiu; valor antigo salvo no
+// 2026-11-04 (dono): só 2 opções, na página Aprovações do menu (saiu de Configurações na mesma data). "Apenas sugerir" saiu; valor antigo salvo no
 // navegador vira 'aprovar'. A fonte da verdade é companies.agent_automatic_mode (ver AgentConfigTab).
 export type Autonomy = 'aprovar' | 'executar'
 export type Objective = 'vendas' | 'leads' | 'seguidores' | 'cac'
@@ -16,7 +16,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = { autonomy: 'aprovar', objectiv
 
 export const AUTONOMY_OPTIONS: { key: Autonomy; label: string; desc: string; icon: string }[] = [
   { key: 'aprovar', label: 'Pedir aprovação', icon: '✋', desc: 'Padrão. A IA prepara tudo como rascunho e cada ação dos agentes espera o seu OK em Aprovações.' },
-  { key: 'executar', label: 'Executar automaticamente', icon: '⚡', desc: 'As ações internas dos agentes (organizar funil, rascunhar, otimizar) são aprovadas sozinhas. Publicar de verdade e enviar mensagem ainda confirmam com você.' },
+  { key: 'executar', label: 'Executar automaticamente', icon: '⚡', desc: 'As ações internas dos agentes (organizar funil, rascunhar, otimizar) são aprovadas sozinhas. Publicar no Instagram sempre espera o seu clique. Respostas automáticas a comentários e DMs seguem a regra de cada automação, não esta opção.' },
 ]
 
 export const OBJECTIVE_OPTIONS: { key: Objective; label: string; desc: string; icon: string }[] = [

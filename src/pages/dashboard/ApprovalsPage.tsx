@@ -12,6 +12,7 @@ import CalendarPostModal from './marketingAi/CalendarPostModal'
 import type { TestPost } from './marketingAi/TestingArea'
 import { PieceChips } from './marketingAi/PieceLabels'
 import { useSSNames } from './marketingAi/shared'
+import AgentConfigTab from './marketingAi/AgentConfigTab'
 
 const EXEC_LABEL_EN: Record<string, string> = { organico: 'Organic', cliente: 'Reply to customer', campanha: 'Campaign' }
 const RISK_EN: Record<string, string> = { high: 'high', medium: 'medium', low: 'low' }
@@ -351,6 +352,12 @@ export default function ApprovalsPage() {
       </div>
 
       <div style={{ padding: '28px 32px', maxWidth: '820px' }}>
+        {/* 2026-11-04 (dono): a escolha "Pedir aprovação / Executar automaticamente" mora aqui (saiu de Configurações). */}
+        {companyId && (
+          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px 18px', marginBottom: '28px' }}>
+            <AgentConfigTab company={{ id: companyId }} compact />
+          </div>
+        )}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px', color: MUTED }}>{d[lang].common.loading}</div>
         ) : (

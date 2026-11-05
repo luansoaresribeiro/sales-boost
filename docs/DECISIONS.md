@@ -6,6 +6,18 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-04 — Escolha de aprovação passa a morar na página Aprovações (dono)
+- **Mudança:** "Pedir aprovação / Executar automaticamente" saiu de Configurações e foi para o topo da página **Aprovações** do menu.
+- **O que não muda:**
+  - é o mesmo componente (`AgentConfigTab`, modo `compact`) e grava a mesma coluna (`companies.agent_automatic_mode`);
+  - os links antigos `?tab=agentes` e `?tab=aprovacoes` redirecionam para `/dashboard/aprovacoes`.
+- **Texto corrigido para dizer o que o código faz:**
+  - publicar no Instagram sempre espera o clique do dono;
+  - as respostas automáticas a comentários e DMs seguem a regra de cada automação, não esta opção.
+  - O texto antigo dizia que "enviar mensagem" também confirmava com o dono, o que não é verdade quando a automação está como automática.
+- **Risco técnico registrado** em [PITFALLS.md](PITFALLS.md): não há trava independente de publicação dentro da function.
+- **Ordem combinada:** PR A (este) → QA A → aprovação do dono → PR B (Atividade dentro do sino) → QA B → um único deploy do site.
+
 ## 2026-11-04 — Marketing AI profissional + Fábrica de Agentes 3D: arquitetura aprovada, execução condicionada ao gate da Fase 2 (dono)
 
 **Decisão (texto do dono):**
