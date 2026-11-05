@@ -24,6 +24,7 @@
   4. Guardar o motivo do descarte e ampliar a amostra auditável.
 - **À parte:** investigar o 502 da IA (Tespon).
 - **Decisões deste PR:** peça pronta não publicada NÃO vira oportunidade de lacuna (a fila de aprovação já mostra); item com menos de 7 dias não é lacuna; oportunidade não validada não entra na fila (fica em `market_intel_runs.details.not_validated`, no log e no retorno).
+- **05/11 noite — oportunidade de mercado não vira "aprove as peças prontas" (dono autorizou):** na rodada da Teste Zero (22:08 UTC, v47) a oportunidade de `market_change` saiu centrada em aprovar/publicar as 7 peças prontas, que já estão na fila de Aprovações. Correção: regra 9 no prompt (`OPP_PROMPT_VERSION` 3) + trava no código (`isBacklogCentric`/`mentionsBacklog` em `opportunityOutput.ts`): se título, problema ou ação de um `market_change` girar em torno das peças prontas, o texto cai no padrão do código, que parte do sinal de mercado. Sem migration, sem dado alterado; vale depois de publicar a `marketing-ai`. Rollback: republicar a `marketing-ai` a partir de `5eb30a0`.
 
 ## 2026-11-04 — Escolha de aprovação passa a morar na página Aprovações (dono)
 - **Mudança:** "Pedir aprovação / Executar automaticamente" saiu de Configurações e foi para o topo da página **Aprovações** do menu.

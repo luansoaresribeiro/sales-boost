@@ -300,4 +300,25 @@ const allText = (d) => [d.title, d.description, d.commercial_problem, d.suggeste
   assert.ok(!/talvez/i.test(o[0].description)); assert.ok(o[0].evidence.some(e => e.type === 'hypothesis' && /Talvez/.test(e.text)))
   ok('evidência (f): frase especulativa sai do texto e entra como hipótese rotulada')
 }
+// ── market_change não vira lembrete da fila (2026-11-05): ação/título "aprovar as peças prontas" → texto do código
+{
+  const sig = { kind: 'launch', region: 'Leblon', title: 'Novo metrô', summary: null, source_name: 'Jornal X', source_url: 'https://x.com/a', observed_at: '2026-10-01' }
+  const r = buildCandidates(base({ catalog: [itemAt(3)], pieces: Array.from({ length: 7 }, () => ({ item_id: 'i1' })), signals: [sig] }))
+  const c = r.candidates.find(x => x.kind === 'market_change')
+  const o = finalize({ lang: 'pt', candidates: r.candidates, facts: r.facts, llm: [llmOf(c, {
+    title: 'Leblon em destaque e sete peças prontas esperando publicação',
+    commercial_problem: 'As peças prontas paradas deixam o bairro sem divulgação.',
+    suggested_action: 'Revise as sete peças já preparadas no Sales Boost e aprove a publicação das que estiverem adequadas. Priorize a cobertura.',
+  })] })
+  assert.equal(o.length, 1)
+  assert.equal(o[0].title, c.fallback.title)
+  assert.equal(o[0].commercial_problem, c.fallback.problem)
+  assert.equal(o[0].suggested_action, c.fallback.action)
+  // ação de mercado de verdade passa intacta
+  const o2 = finalize({ lang: 'pt', candidates: r.candidates, facts: r.facts, llm: [llmOf(c, { title: 'Novo metrô em Leblon', suggested_action: 'Criar uma peça ligando o novo metrô ao apartamento em Leblon.' })] })
+  assert.equal(o2[0].title, 'Novo metrô em Leblon'); assert.equal(o2[0].suggested_action, 'Criar uma peça ligando o novo metrô ao apartamento em Leblon.')
+  // o prompt diz que peça preparada é só contexto
+  assert.ok(/market_change: a oportunidade é o SINAL DE MERCADO/.test(buildPrompt({ lang: 'pt', businessName: 'X', itemLabel: 'Imóvel', facts: r.facts, candidates: r.candidates, windowDays: 60 })))
+  ok('market_change: "aprovar as peças prontas" vira o texto do código; ação ligada ao sinal passa intacta')
+}
 console.log(`\n${n} grupos ok`)
