@@ -5,6 +5,14 @@
 > Ao aprender uma armadilha nova, adicionar aqui no mesmo PR que a corrige
 > (ver [ORCHESTRATION.md](ORCHESTRATION.md)).
 
+## Domínio de confiança passava patrocinado; catálogo contava como "fonte independente" — 2026-11-05
+
+**O que aconteceu.** Na rodada real de 05/11 à noite saíram oportunidades de mercado apoiadas em aviso de serviço do metrô, conteúdo patrocinado do O Globo (`/conteudo-de-marca/`), guia genérico de bairro e uma obra embargada contada como 2 fontes (R7 + O Dia). A tela dizia "3 fontes independentes" mas uma delas era o próprio catálogo.
+
+**Causa.** (1) `trusted_domains` pulava TODAS as regras em `classifySignalQuality`, então patrocinado de portal bom passava. (2) `score` contava origens distintas, e o fato do catálogo (e das peças/posts) era uma origem. (3) A mesma notícia em dois sites era dois fatos, duas origens. (4) Descrição não passava pela trava de "peças prontas".
+
+**Solução.** `signalStrength` (regras `weak_*`/`impact_terms` da ficha) vale até para domínio de confiança e só MARCA (nunca reprova). O motor recalcula a força com a ficha atual e só cria `market_change` com >= 1 evento forte; eventos iguais são agrupados (`groupEvents`); a independência do `market_change` conta só eventos externos fortes. Antes de mexer em `trusted_domains` ou `score`, rode `scripts/test-market-news.mjs` e `scripts/test-opportunity-engine.mjs`.
+
 ## Opportunity Engine inventou período (60 dias) — 2026-11-05
 
 **O que aconteceu.** Na Teste Zero saiu "Dois imóveis no Leblon sem posts nos últimos 60 dias" ("no catálogo há mais de 60 dias sem nenhum post"). Os dois itens tinham 3 dias e havia 7 peças prontas em `marketing_ai_test_content`.

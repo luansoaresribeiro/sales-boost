@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 // Roda: node --experimental-strip-types scripts/test-opportunity-engine.mjs
 // Motor de oportunidades (Etapa 1 da Inteligência comercial): regras de candidato + validação da saída da IA + prioridade.
-import { buildCandidates } from '../supabase/functions/_shared/opportunityEngine.ts'
-import { finalize, finalizeChecked, splitSpeculation, parseLlm, buildPrompt, promptSafe, hasProtectedTerm, numbersAllowed, allowedNumbers, cleanText, cleanAction, score, compareScored } from '../supabase/functions/_shared/opportunityOutput.ts'
+import { readFileSync } from 'node:fs'
+import { parseQuality } from '../supabase/functions/_shared/marketIntel.ts'
+import { buildCandidates, sameEvent } from '../supabase/functions/_shared/opportunityEngine.ts'
+import { finalize, finalizeChecked, splitSpeculation, parseLlm, buildPrompt, promptSafe, hasProtectedTerm, numbersAllowed, allowedNumbers, cleanText, cleanAction, score, compareScored, OPP_PROMPT_VERSION, hasAllAnswers } from '../supabase/functions/_shared/opportunityOutput.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
 const NOW = new Date('2026-10-28T12:00:00Z')
@@ -227,7 +229,8 @@ const base = (over = {}) => ({
 // ── Porta de evidência (2026-11-05): período e "nenhum post" só com dado ──────────────────────────────────────────
 const DAY = 86400000
 const itemAt = (days, id = 'i1', over = {}) => ({ id, title: 'Apto Leblon', fields: { bairro: 'Leblon', preco: '1.200.000', quartos: 3, tipo: 'Apartamento' }, photoCount: 6, createdAt: new Date(NOW.getTime() - days * DAY).toISOString(), ...over })
-const llmOf = (c, over = {}) => ({ candidate_id: c.id, title: 'Leblon sem posts', description: 'Há um item em Leblon sem post.', commercial_problem: 'Quem procura em Leblon não vê o item.', suggested_action: 'Criar uma peça com as fotos reais.', how_to_measure: 'Comentários e mensagens.', ...over })
+const ANS = { what_changed: 'Novo metrô.', why_it_matters: 'Muda o acesso.', who_is_affected: 'Quem busca na região.', what_to_do: 'Criar uma peça.', evidence: 'F2' }
+const llmOf = (c, over = {}) => ({ candidate_id: c.id, answers: ANS, title: 'Leblon sem posts', description: 'Há um item em Leblon sem post.', commercial_problem: 'Quem procura em Leblon não vê o item.', suggested_action: 'Criar uma peça com as fotos reais.', how_to_measure: 'Comentários e mensagens.', ...over })
 const allText = (d) => [d.title, d.description, d.commercial_problem, d.suggested_action, d.how_to_measure].join(' | ')
 // (a) dados completos → oportunidade válida; item velho → janela de 60 dias é verdade
 {
@@ -320,5 +323,95 @@ const allText = (d) => [d.title, d.description, d.commercial_problem, d.suggeste
   // o prompt diz que peça preparada é só contexto
   assert.ok(/market_change: a oportunidade é o SINAL DE MERCADO/.test(buildPrompt({ lang: 'pt', businessName: 'X', itemLabel: 'Imóvel', facts: r.facts, candidates: r.candidates, windowDays: 60 })))
   ok('market_change: "aprovar as peças prontas" vira o texto do código; ação ligada ao sinal passa intacta')
+}
+
+// ── Correção 2 (05/11/2026 noite): sinal forte × fraco, evento único, independência, tarefa repetida, descrição, 5 perguntas ──
+{
+  const sql3 = readFileSync(new URL('../supabase/migrations/20261106120000_market_intel_quality_v3.sql', import.meta.url), 'utf8')
+  const Q3 = parseQuality(JSON.parse(/\$json\$([\s\S]*?)\$json\$/.exec(sql3.split('\n').filter(l => !l.trimStart().startsWith('--')).join('\n'))[1]))
+  const sg = (title, summary, url, name, kind = 'infrastructure', region = 'Barra') => ({ id: `s-${name}-${title.length}`, kind, region, title, summary, source_name: name, source_url: url, observed_at: '2026-11-03' })
+  const R7 = sg('Prefeitura embarga obra irregular em quiosque na Praia ...', 'Obra irregular de quiosque na Barra foi embargada pela prefeitura.', 'https://noticias.r7.com/rio/quiosque', 'noticias.r7.com')
+  const ODIA = sg('Obra irregular de quiosque é embargada na Barra da Tijuca', 'A obra irregular do quiosque, na Barra, foi embargada.', 'https://odia.ig.com.br/rio/quiosque', 'odia.ig.com.br')
+  const METRO1 = sg('Linha 2 do Metrô do Rio terá destinos diferentes neste fim de semana', 'Barra: aviso de operação.', 'https://metrocptm.com.br/n/linha-2', 'metrocptm.com.br')
+  const METRO2 = sg('Funcionamento do MetrôRio neste fim de semana (17 e 18 ...', 'Barra: horários.', 'https://metrorio.com.br/aviso', 'metrorio.com.br')
+  const GUIA = sg('Barra da Tijuca ... | Guia de Bairros', 'Guia do bairro Barra com informações gerais sobre a região.', 'https://buske.ai/guia-de-bairros/barra-da-tijuca', 'buske.ai', 'news')
+  const GLOBO = sg('Estúdios ganham espaço entre os imóveis "triple A"', 'Conteúdo de marca sobre estúdios na Barra.', 'https://oglobo.globo.com/conteudo-de-marca/estudios', 'oglobo.globo.com', 'launch')
+  const AMP = sg('Transações Imobiliárias Realizadas | Amplitude Real Estate — Incorporação Residencial Estância Pernambuco Leblon', 'Aquisição do terreno para incorporação residencial no Leblon.', 'https://amplitudere.com.br/transacoes', 'amplitudere.com.br', 'launch', 'Leblon')
+  const FOLHA = sg('Metrô da Gávea tem obras retomadas após dez anos', 'Obras da estação foram retomadas no Leblon após dez anos.', 'https://www1.folha.uol.com.br/cotidiano/gavea.shtml', 'folha.uol.com.br', 'infrastructure', 'Leblon')
+  const barra = (n = 2) => Array.from({ length: n }, (_, i) => ({ id: `b${i + 1}`, title: `Apto Barra ${i + 1}`, fields: { bairro: 'Barra', preco: '900.000', quartos: 2, tipo: 'Apartamento' }, photoCount: 0, createdAt: '2026-10-01T00:00:00Z' }))
+  const mc = (r) => r.candidates.find(c => c.kind === 'market_change')
+
+  // evento único
+  assert.equal(sameEvent(R7.title, ODIA.title, 'Barra'), true); assert.equal(sameEvent(AMP.title, FOLHA.title, 'Leblon'), false); assert.equal(sameEvent(METRO1.title, GLOBO.title, 'Barra'), false)
+  const r1 = buildCandidates(base({ catalog: barra(), signals: [R7, ODIA] }))
+  const c1 = mc(r1); const ext1 = r1.facts.filter(f => f.type === 'data')
+  assert.equal(ext1.length, 1); assert.ok(ext1[0].source.includes('(+ também publicado em odia.ig.com.br)')); assert.equal(ext1[0].signal_ids.length, 2)
+  assert.equal(score(c1, r1.facts).independent, 1); assert.equal(c1.validationReasons.length, 1)
+  ok('quiosque R7 + O Dia = UM evento, UMA fonte independente (precisa validar); Amplitude × Folha não se juntam')
+  // fortes de verdade: 2 eventos distintos
+  const NEWS2 = sg('Prefeitura anuncia novo terminal de ônibus que deve valorizar imóveis na Barra', 'Terminal na Barra deve aumentar a procura por moradia perto.', 'https://exemplo.com.br/terminal', 'exemplo.com.br')
+  const r2 = buildCandidates(base({ catalog: barra(), signals: [NEWS2, GLOBO, AMP, { ...AMP, region: 'Barra', title: 'Incorporadora compra terreno na Barra para lançamento', source_name: 'amplitudere.com.br', source_url: 'https://amplitudere.com.br/t2', summary: 'Compra de terreno na Barra para lançamento residencial.' }], quality: Q3 }))
+  const c2 = mc(r2); assert.ok(c2); const s2 = score(c2, r2.facts)
+  assert.equal(s2.independent, 2); assert.equal(s2.confidence === 'high' || s2.confidence === 'medium', true); assert.ok(r2.facts.some(f => f.weak && /evidência fraca/.test(f.source)))
+  ok('2 eventos fortes = 2 fontes independentes; patrocinado entra só como contexto rotulado e não conta')
+
+  // só sinais fracos → sem market_change
+  const weakAll = buildCandidates(base({ catalog: barra(), signals: [R7, ODIA, METRO1, METRO2, GUIA, GLOBO], quality: Q3 }))
+  assert.equal(mc(weakAll), undefined)
+  assert.equal(mc(buildCandidates(base({ catalog: barra(), signals: [R7, ODIA, METRO1, METRO2, GUIA, GLOBO] }))) != null, true) // sem a ficha: tudo forte (comportamento antigo)
+  ok('Barra só com sinais fracos (metrô, guia, patrocinado, embargo) → nenhuma oportunidade de mercado')
+
+  // caso Teste Zero (Leblon): Amplitude forte + Folha (sem impacto = fraco) + 2 itens + 7 peças continua gerando oportunidade
+  const leb = [itemAt(30, 'i1'), itemAt(30, 'i2', { title: 'Apto Leblon 2' })]
+  const rz = buildCandidates(base({ catalog: leb, pieces: Array.from({ length: 7 }, () => ({ item_id: 'i1' })), signals: [AMP, FOLHA], quality: Q3 }))
+  const cz = mc(rz); assert.ok(cz)
+  assert.ok(rz.facts.some(f => f.weak && f.text.includes('Gávea'))); assert.equal(rz.facts.filter(f => f.type === 'data' && !f.weak).length, 1)
+  const oz = finalize({ lang: 'pt', candidates: rz.candidates, facts: rz.facts, llm: [llmOf(cz)] })
+  assert.equal(oz.length, 1); assert.equal(oz[0].kind, 'market_change'); assert.equal(oz[0].needs_validation, true)
+  assert.ok(oz[0].priority_reasons.some(x => x.startsWith('1 fonte independente')))
+  const rz2 = buildCandidates(base({ catalog: leb, pieces: [], signals: [AMP, { ...FOLHA, summary: 'Obras retomadas; expectativa de valorização dos imóveis no Leblon.' }], quality: Q3 }))
+  assert.equal(rz2.facts.filter(f => f.type === 'data' && !f.weak).length, 2); assert.equal(score(mc(rz2), rz2.facts).independent, 2)
+  ok('Leblon (Teste Zero): Amplitude forte + Folha fraca + 7 peças ainda gera oportunidade; Folha com "valorização dos imóveis" vira 2ª fonte forte')
+
+  // tarefa repetida: mesmos itens + mesma ação ("Adicionar fotos reais…")
+  const rb = buildCandidates(base({ catalog: barra(2), signals: [NEWS2, AMP && { ...AMP, region: 'Barra', title: 'Compra de terreno na Barra para lançamento', source_url: 'https://amplitudere.com.br/t3', summary: 'Terreno na Barra.' }] }))
+  const cm = mc(rb), cg = rb.candidates.find(c => c.kind === 'content_gap'); assert.ok(cm && cg)
+  assert.deepEqual([...cm.item_ids].sort(), [...cg.item_ids].sort())
+  const outb = finalizeChecked({ lang: 'pt', candidates: rb.candidates, facts: rb.facts, llm: [llmOf(cm), llmOf(cg)], photoCounts: { b1: 0, b2: 0 } })
+  assert.equal(outb.drafts.length, 1); assert.equal(outb.drafts[0].priority_rank, 1); assert.ok(outb.drafts[0].suggested_action.startsWith('Adicionar fotos reais'))
+  assert.equal(outb.notValidated.length, 1); assert.match(outb.notValidated[0].reasons[0], /^Mesma tarefa da oportunidade #1 \(mesmos itens, mesma ação\)\.$/)
+  const enb = finalizeChecked({ lang: 'en', candidates: rb.candidates, facts: rb.facts, llm: [llmOf(cm), llmOf(cg)], photoCounts: { b1: 0, b2: 0 } })
+  assert.match(enb.notValidated[0].reasons[0], /^Same task as opportunity #1/)
+  // ações diferentes (itens com foto): as duas ficam, ranking contíguo
+  const outc = finalizeChecked({ lang: 'pt', candidates: rb.candidates, facts: rb.facts, llm: [llmOf(cm, { suggested_action: 'Criar uma peça ligando o terminal aos itens.' }), llmOf(cg)], photoCounts: { b1: 3, b2: 3 } })
+  assert.equal(outc.drafts.length, 2); assert.deepEqual(outc.drafts.map(d => d.priority_rank), [1, 2]); assert.equal(outc.notValidated.length, 0)
+  ok('mesma ação "Adicionar fotos reais…" nos mesmos itens: fica 1, a outra vai para não validadas; ações diferentes ficam')
+
+  // descrição sem fila de peças
+  const sig = { kind: 'launch', region: 'Leblon', title: 'Novo metrô', summary: null, source_name: 'Jornal X', source_url: 'https://x.com/a', observed_at: '2026-10-01' }
+  const rd = buildCandidates(base({ catalog: [itemAt(3)], pieces: Array.from({ length: 7 }, () => ({ item_id: 'i1' })), signals: [sig] })); const cd = mc(rd)
+  const od = finalize({ lang: 'pt', candidates: rd.candidates, facts: rd.facts, llm: [llmOf(cd, { description: 'Existe um novo metrô em Leblon, e há sete peças preparadas aguardando publicação.' })] })
+  assert.ok(!/pecas|peças|aguardando/i.test(od[0].description), od[0].description)
+  const od2 = finalize({ lang: 'pt', candidates: rd.candidates, facts: rd.facts, llm: [llmOf(cd, { description: 'Existe um novo metrô em Leblon. Há sete peças preparadas aguardando publicação.' })] })
+  assert.equal(od2[0].description, 'Existe um novo metrô em Leblon.')
+  ok('descrição do market_change: frase de "peças preparadas aguardando publicação" é removida')
+
+  // 5 perguntas
+  const ro = buildCandidates(base({ catalog: [itemAt(3)], signals: [sig] })); const co = mc(ro)
+  for (const bad of [undefined, null, 'texto', {}, { ...ANS, evidence: '   ' }, { ...ANS, what_to_do: '' }, { ...ANS, why_it_matters: 5 }]) {
+    const o = finalizeChecked({ lang: 'pt', candidates: ro.candidates, facts: ro.facts, llm: [{ ...llmOf(co), answers: bad }] })
+    assert.equal(o.drafts.length, 0); assert.equal(o.notValidated[0].reasons[0], 'Não respondeu às 5 perguntas (o que mudou, por que importa, quem é afetado, o que fazer, qual evidência).')
+  }
+  assert.equal(finalize({ lang: 'pt', candidates: ro.candidates, facts: ro.facts, llm: [llmOf(co)] }).length, 1); assert.equal(hasAllAnswers(ANS), true)
+  // outros tipos não exigem
+  const rg = buildCandidates(base()); assert.equal(finalize({ lang: 'pt', candidates: rg.candidates, facts: rg.facts, llm: [{ candidate_id: 'C1' }] }).length, 1)
+  ok('market_change sem as 5 respostas (ausente/vazia/não-texto) → não validado; content_gap não exige')
+
+  // prompt v4
+  assert.equal(OPP_PROMPT_VERSION, 4)
+  const pr = buildPrompt({ lang: 'pt', businessName: 'X', itemLabel: 'Item', facts: r2.facts, candidates: [c2], windowDays: 60 })
+  assert.ok(/\[fraca\]/.test(pr) && /NUNCA pode ser a base/.test(pr) && /"answers"/.test(pr) && /what_changed/.test(pr))
+  assert.ok(!/pre[çc]o|bairro|im[óo]vel/i.test(buildPrompt({ lang: 'pt', businessName: 'X', itemLabel: 'Item', facts: [], candidates: [], windowDays: 60 })))
+  ok('prompt v4: fato fraco marcado [fraca], regra de contexto, 5 respostas pedidas, ainda sem palavra de setor')
 }
 console.log(`\n${n} grupos ok`)

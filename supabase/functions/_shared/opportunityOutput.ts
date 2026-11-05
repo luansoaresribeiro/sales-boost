@@ -14,7 +14,7 @@ import { norm, type Candidate, type Evidence, type Fact, type Lang, type OppKind
 export const MAX_OPPORTUNITIES = 3
 export const MAX_CANDIDATES_TO_LLM = 5
 /** Versão do prompt/validação. Suba quando mexer em buildPrompt/finalize: muda a impressão digital e força uma nova interpretação (marketIntelRuns.ts). */
-export const OPP_PROMPT_VERSION = 3
+export const OPP_PROMPT_VERSION = 4
 export type Confidence = 'high' | 'medium' | 'low' | 'needs_validation'
 
 export interface OpportunityDraft {
@@ -204,12 +204,20 @@ export function mentionsBacklog(text: string): boolean {
 export interface LlmOpportunity {
   candidate_id?: unknown; title?: unknown; description?: unknown; commercial_problem?: unknown; audience?: unknown
   suggested_action?: unknown; how_to_measure?: unknown; cited_fact_ids?: unknown; hypotheses?: unknown
+  answers?: unknown // as 5 perguntas (o que mudou, por que importa, quem é afetado, o que fazer, qual evidência) — obrigatórias no market_change; não vão pro banco
+}
+export const ANSWER_KEYS = ['what_changed', 'why_it_matters', 'who_is_affected', 'what_to_do', 'evidence'] as const
+/** As 5 respostas existem e nenhuma está vazia? (texto de pergunta não respondida = candidato não validado) */
+export function hasAllAnswers(a: unknown): boolean {
+  if (!a || typeof a !== 'object' || Array.isArray(a)) return false
+  const o = a as Record<string, unknown>
+  return ANSWER_KEYS.every(k => typeof o[k] === 'string' && (o[k] as string).trim().length > 0)
 }
 export function parseLlm(raw: string): LlmOpportunity[] | null {
   const tryParse = (t: string): unknown => { try { return JSON.parse(t) } catch { return undefined } }
   const m = raw.match(/\{[\s\S]*\}/)
   const obj = (tryParse(raw) ?? (m ? tryParse(m[0]) : undefined)) as { opportunities?: unknown } | undefined
-  return obj && Array.isArray(obj.opportunities) ? obj.opportunities as LlmOpportunity[] : null
+  return obj && Array.isArray(obj.opportunities) ? (obj.opportunities as unknown[]).filter((o): o is LlmOpportunity => !!o && typeof o === 'object') : null
 }
 
 // Texto vindo do banco (título de imóvel, nota de concorrente, sinal de mercado…) vai pro prompt como DADO:
@@ -221,7 +229,7 @@ export const promptSafe = (v: unknown, max = 200): string => {
 
 export function buildPrompt(opts: { lang: Lang; businessName: string; itemLabel: string; facts: Fact[]; candidates: Candidate[]; windowDays: number; texts?: OppTexts; photoCounts?: Record<string, number> }): string {
   const { lang, facts, candidates } = opts
-  const factLines = facts.map(f => `${f.id} [${f.type === 'fact' ? 'FATO' : 'DADO'}] ${promptSafe(f.text)} (fonte: ${promptSafe(f.source, 120)}${f.date ? `; data: ${f.date}` : ''})`).join('\n')
+  const factLines = facts.map(f => `${f.id} [${f.type === 'fact' ? 'FATO' : 'DADO'}]${f.weak ? ' [fraca]' : ''} ${promptSafe(f.text)} (fonte: ${promptSafe(f.source, 120)}${f.date ? `; data: ${f.date}` : ''})`).join('\n')
   const candLines = candidates.map(c => `${c.id} · tipo=${c.kind} · fatos=${c.fact_ids.join(',')}${photoNote(c.item_ids, opts.photoCounts)}${c.forceHypothesis ? ' · A CAUSA É SÓ HIPÓTESE (use o tom "pode ser…", nunca afirme a causa)' : ''}${c.validationReasons.length ? ` · ATENÇÃO: ${promptSafe(c.validationReasons.join(' '), 300)}` : ''}`).join('\n')
   const caveat = opts.texts?.caveat ?? 'Valor anunciado não é valor fechado; interesse de busca não é cliente.'
   const hint = opts.texts?.audienceHint ?? '"quem busca perto do trabalho", "quem quer trocar por algo maior"'
@@ -247,10 +255,12 @@ REGRAS INEGOCIÁVEIS:
 7. Adjetivo ou opinião de mercado ("disputado", "valorizado", "alto padrão", "nobre", "em alta", "ticket elevado", "procurado"…) só pode aparecer se a MESMA ideia estiver escrita nos fatos. Sem fato que diga isso, descreva só o que os fatos dizem, sem qualificar o local, o valor ou a demanda.
 8. Fotos: cada candidato com item ligado diz quantas fotos reais o item tem. Se for ZERO, "suggested_action" NÃO pode mandar publicar/postar/criar peça com fotos: a primeira ação é adicionar fotos reais ao item. Nunca invente que o item tem fotos.
 9. Candidato tipo=market_change: a oportunidade é o SINAL DE MERCADO. Título, problema e "suggested_action" precisam partir do sinal (ex.: criar uma peça ligando a notícia aos itens da região). Peças já preparadas são só contexto — elas já aparecem na fila de Aprovações; NÃO faça da oportunidade "aprovar/publicar as peças prontas".
-10. Idioma de TODOS os textos: ${lang === 'en' ? 'English' : 'português do Brasil'}.
+10. Fato marcado [fraca] (serviço, patrocinado, guia genérico ou sem impacto no mercado) NUNCA pode ser a base de uma oportunidade: é só contexto. Não cite como prova nem faça dele o título ou a ação.
+11. Para CADA oportunidade preencha "answers" com 5 respostas curtas, só com base nos fatos: "what_changed" (o que mudou), "why_it_matters" (por que importa ao comercial), "who_is_affected" (quem é afetado), "what_to_do" (o que fazer), "evidence" (qual fato prova, citando o id). Sem resposta para alguma, não devolva a oportunidade.
+12. Idioma de TODOS os textos: ${lang === 'en' ? 'English' : 'português do Brasil'}.
 
 Responda APENAS com JSON, sem markdown:
-{"opportunities":[{"candidate_id":"C1","title":"até 90 caracteres","description":"2-3 frases","commercial_problem":"1-2 frases: o que isso custa ao comercial","audience":"","suggested_action":"","how_to_measure":"","cited_fact_ids":["F1"],"hypotheses":["Pode ser…"]}]}
+{"opportunities":[{"candidate_id":"C1","title":"até 90 caracteres","description":"2-3 frases","commercial_problem":"1-2 frases: o que isso custa ao comercial","audience":"","suggested_action":"","how_to_measure":"","cited_fact_ids":["F1"],"hypotheses":["Pode ser…"],"answers":{"what_changed":"","why_it_matters":"","who_is_affected":"","what_to_do":"","evidence":"F1"}}]}
 Se nenhum candidato tiver base suficiente, responda {"opportunities":[]}.`
 }
 
@@ -274,10 +284,14 @@ export interface Scored { c: Candidate; evCount: number; independent: number; ne
 
 export function score(c: Candidate, facts: Fact[]): Scored {
   const fs = c.fact_ids.map(id => facts.find(f => f.id === id)).filter((f): f is Fact => !!f)
-  const evCount = fs.length
-  const independent = new Set(fs.map(f => f.origin)).size
+  // Evidência fraca é só contexto: não conta como evidência nem como fonte.
+  const evCount = fs.filter(f => !f.weak).length
+  // Fonte independente (2026-11-05): no market_change só contam EVENTOS externos fortes (mesma notícia em 2 portais = 1; item do catálogo,
+  // peças e posts da própria empresa nunca contam). Nos demais tipos a contagem antiga de origens continua (a base deles é dado da própria empresa).
+  const own = new Set(['catalog', 'posts', 'pieces', 'events'])
+  const independent = c.kind === 'market_change' ? new Set(fs.filter(f => !f.weak && !own.has(f.origin)).map(f => f.origin)).size : new Set(fs.map(f => f.origin)).size
   const needs = c.forceHypothesis || evCount < 2 || c.validationReasons.length > 0
-  const confidence: Confidence = needs ? 'needs_validation' : evCount >= 4 && independent >= 3 ? 'high' : evCount >= 2 && independent >= 2 ? 'medium' : 'low'
+  const confidence: Confidence = needs ? 'needs_validation' : c.kind === 'market_change' ? (evCount >= 4 && independent >= 2 ? 'high' : independent >= 2 ? 'medium' : 'low') : evCount >= 4 && independent >= 3 ? 'high' : evCount >= 2 && independent >= 2 ? 'medium' : 'low'
   return { c, evCount, independent, needs, confidence }
 }
 // (1) evidências com fonte, (2) itens ligados, (3) fontes independentes; (4) "precisa validar" sempre por último.
@@ -335,6 +349,11 @@ export function finalizeChecked(opts: { lang: Lang; candidates: Candidate[]; fac
       notValidated.push({ candidate_id: c.id, kind: c.kind, reasons: [tr(lang, 'Nenhum fato com fonte sustenta este candidato.', 'No sourced fact backs this candidate.')] })
       continue
     }
+    // Oportunidade de mercado precisa responder as 5 perguntas (o que mudou, por que importa, quem é afetado, o que fazer, qual evidência).
+    if (c.kind === 'market_change' && !hasAllAnswers(raw.answers)) {
+      notValidated.push({ candidate_id: c.id, kind: c.kind, reasons: [tr(lang, 'Não respondeu às 5 perguntas (o que mudou, por que importa, quem é afetado, o que fazer, qual evidência).', 'Did not answer the 5 questions (what changed, why it matters, who is affected, what to do, what evidence).')] })
+      continue
+    }
     // Porta de evidência: período/ausência só valem se os fatos DESTE candidato dizem o mesmo.
     const ev = evidenceGuard(own)
     const guard: ClaimGuard = { ...baseGuard, ev }
@@ -367,6 +386,7 @@ export function finalizeChecked(opts: { lang: Lang; candidates: Candidate[]; fac
     if (c.kind === 'market_change') {
       if (mentionsBacklog(d.title)) d.title = c.fallback.title
       if (mentionsBacklog(d.commercial_problem)) d.commercial_problem = c.fallback.problem
+      d.description = sentences(d.description).filter(p => !mentionsBacklog(p)).join(' ') // descrição não tem texto do código: vazia é aceitável
       if (sentences(d.suggested_action).some(isBacklogCentric)) d.suggested_action = actionForPhotos(c.fallback.action, c.item_ids, opts.photoCounts, lang)
     }
     // Rede final: nem o texto do código (fallback) pode afirmar período/ausência que os fatos não sustentam.
@@ -378,5 +398,17 @@ export function finalizeChecked(opts: { lang: Lang; candidates: Candidate[]; fac
     drafts.push({ s: sc, d })
   }
   drafts.sort((a, b) => compareScored(a.s, b.s))
-  return { drafts: drafts.slice(0, MAX_OPPORTUNITIES).map((x, i, arr) => ({ ...x.d, priority_rank: i + 1, priority_reasons: priorityReasons(x.s, arr[i + 1]?.s ?? null, lang) })), notValidated }
+  // Mesma tarefa (mesmos itens + mesma ação) em duas oportunidades: fica a de melhor posição; a outra sai com o motivo.
+  const kept: typeof drafts = [], taskKey = new Map<string, number>()
+  for (const x of drafts) {
+    const key = x.d.item_ids.length ? `${[...x.d.item_ids].sort().join(',')}|${norm(x.d.suggested_action)}` : ''
+    const at = key ? taskKey.get(key) : undefined
+    if (at != null) {
+      notValidated.push({ candidate_id: x.s.c.id, kind: x.d.kind, reasons: [tr(lang, `Mesma tarefa da oportunidade #${at + 1} (mesmos itens, mesma ação).`, `Same task as opportunity #${at + 1} (same items, same action).`)] })
+      continue
+    }
+    if (key) taskKey.set(key, kept.length)
+    kept.push(x)
+  }
+  return { drafts: kept.slice(0, MAX_OPPORTUNITIES).map((x, i, arr) => ({ ...x.d, priority_rank: i + 1, priority_reasons: priorityReasons(x.s, arr[i + 1]?.s ?? null, lang) })), notValidated }
 }
