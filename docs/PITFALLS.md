@@ -5,6 +5,24 @@
 > Ao aprender uma armadilha nova, adicionar aqui no mesmo PR que a corrige
 > (ver [ORCHESTRATION.md](ORCHESTRATION.md)).
 
+## Opportunity Engine inventou período (60 dias) — 2026-11-05
+
+**O que aconteceu.** Na Teste Zero saiu "Dois imóveis no Leblon sem posts nos últimos 60 dias" ("no catálogo há mais de 60 dias sem nenhum post"). Os dois itens tinham 3 dias e havia 7 peças prontas em `marketing_ai_test_content`.
+
+**Causa.**
+- `content_gap` usava a janela fixa de 60 dias no texto do fato, sem olhar a idade do item (o loader nem lia `created_at`).
+- O "60" do fato entrava em `allowedNumbers` (unidade dia), então a IA podia escrever "há mais de 60 dias".
+- O loader só lia `posts`; peças preparadas (qualquer status) ficavam invisíveis, daí o "nenhum post registrado".
+
+**Correção (código, não só prompt).**
+- Período vem dos dados: item novo diz "cadastrado há N dias"; item com menos de 7 dias ou com peça preparada não gera `content_gap`.
+- `evidenceGuard` / `violatesEvidence` (`opportunityOutput.ts`): duração ("há N dias", "mais de", "desde", "há meses") e "nenhum post" só passam se um fato do MESMO candidato diz igual; fato de peças preparadas bloqueia "nenhum post".
+- Frase barrada cai no texto do código (`fallback`). Se nem o texto final se sustenta, ou o candidato não tem fato com fonte, vira NOT_VALIDATED: não entra em `growth_opportunities` (o CHECK de `status` só tem suggested/approved/dismissed e não há coluna `meta`; sem migration). O motivo fica em `market_intel_runs.details.not_validated`, no `console.warn` e no retorno (`not_validated`).
+- Frase especulativa ("pode ser", "talvez") fora do campo de hipóteses vira evidência `hypothesis`.
+- `OPP_PROMPT_VERSION` 1 → 2 (nova interpretação na próxima rodada).
+
+**Regra.** Texto novo no motor que cite período ou ausência precisa nascer de um fato com a mesma expressão.
+
 ## Modo automático (`agent_automatic_mode`) não tem trava de publicação dentro da function (2026-11-04)
 
 **O que a chave faz.** Só o `agent-actions` → `proposeAction` lê a chave:

@@ -6,6 +6,25 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-05 — Gate da Fase 2 — resultado: APROVADA PARCIALMENTE
+- **Cobertura:** só Tespon e Teste Zero foram processadas. Ana Souza é conta vitrine e não foi processada.
+- **Coleta: OK.**
+  - Teste Zero: 15 achados, 2 aceitos, US$ 0,032.
+  - Tespon: 31 achados, 8 aceitos, US$ 0,064.
+  - Mês: US$ 0,128 de US$ 0,32; teto US$ 5.
+- **Qualidade do sinal:** dos 10 aceitos, 2 úteis (lançamento Claris da Tegra; turismo Riotur), 1 duplicado de tema, 1 insuficiente e 6 irrelevantes (páginas de agência, listagem, guia e metrô). A história do quiosque apareceu duplicada em 2 sites.
+- **Falsos negativos:** só dá pra auditar em parte (5 amostras por empresa).
+- **Motor de oportunidades: REPROVADO.**
+  - Inventou o período de 60 dias ("no catálogo há mais de 60 dias", item de 3 dias, com 7 peças prontas ignoradas).
+  - Ainda não saiu oportunidade a partir dos sinais novos. Em 05/11 às 18:17 UTC a Tespon recebeu 502 da IA, e a Teste Zero foi barrada pela regra de 24h por 18 segundos.
+- **Bloqueios, em ordem:**
+  1. Porta de evidência (este PR; ver PITFALLS "Opportunity Engine inventou período").
+  2. Regras de filtro por setor: bloquear página de listagem, catálogo e institucional, mantendo lançamento e expansão de concorrente. É mudança de configuração em `vertical_playbooks` por migration de dados, aguardando as regras do dono.
+  3. Deduplicação semântica entre sites.
+  4. Guardar o motivo do descarte e ampliar a amostra auditável.
+- **À parte:** investigar o 502 da IA (Tespon).
+- **Decisões deste PR:** peça pronta não publicada NÃO vira oportunidade de lacuna (a fila de aprovação já mostra); item com menos de 7 dias não é lacuna; oportunidade não validada não entra na fila (fica em `market_intel_runs.details.not_validated`, no log e no retorno).
+
 ## 2026-11-04 — Escolha de aprovação passa a morar na página Aprovações (dono)
 - **Mudança:** "Pedir aprovação / Executar automaticamente" saiu de Configurações e foi para o topo da página **Aprovações** do menu.
 - **O que não muda:**

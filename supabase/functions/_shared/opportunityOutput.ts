@@ -14,7 +14,7 @@ import { norm, type Candidate, type Evidence, type Fact, type Lang, type OppKind
 export const MAX_OPPORTUNITIES = 3
 export const MAX_CANDIDATES_TO_LLM = 5
 /** Versão do prompt/validação. Suba quando mexer em buildPrompt/finalize: muda a impressão digital e força uma nova interpretação (marketIntelRuns.ts). */
-export const OPP_PROMPT_VERSION = 1
+export const OPP_PROMPT_VERSION = 2
 export type Confidence = 'high' | 'medium' | 'low' | 'needs_validation'
 
 export interface OpportunityDraft {
@@ -121,16 +121,45 @@ export const DEFAULT_MARKET_CLAIMS: Record<Lang, string[]> = {
   pt: ['disputado', 'disputada', 'disputados', 'disputadas', 'concorrido', 'concorrida', 'valorizado', 'valorizada', 'valorizados', 'valorizadas', 'valorizacao', 'alto padrao', 'nobre', 'nobres', 'em alta', 'badalado', 'badalada', 'cobicado', 'cobicada', 'ticket elevado', 'ticket alto', 'muito procurado', 'muito procurada', 'bairro quente', 'mercado aquecido', 'alta demanda', 'luxo', 'sofisticado', 'sofisticada'],
   en: ['competitive', 'in demand', 'high demand', 'hot market', 'hot neighborhood', 'upscale', 'high-end', 'high end', 'prime location', 'sought-after', 'sought after', 'booming', 'appreciating', 'appreciation', 'luxury', 'high ticket', 'premium', 'coveted'],
 }
-export interface ClaimGuard { terms: string[]; factsNorm: string }
+export interface ClaimGuard { terms: string[]; factsNorm: string; ev?: EvidenceGuard }
 export const claimRe = (t: string) => new RegExp('(?:^|[^a-z])' + norm(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[^a-z])')
 /** Monta a trava: termos (ficha ou genéricos) + o texto dos fatos em que eles podem aparecer. */
 export function claimGuard(lang: Lang, factTexts: string[], fichaTerms?: string[] | null): ClaimGuard {
   const terms = (fichaTerms?.length ? fichaTerms : DEFAULT_MARKET_CLAIMS[lang]).filter(t => typeof t === 'string' && t.trim())
   return { terms, factsNorm: norm(factTexts.join(' \n ')) }
 }
+
+// ── Porta de evidência (2026-11-05): período/duração e "nenhum post" só valem se um FATO diz o mesmo ─────────────────
+// A IA escreveu "há mais de 60 dias no catálogo" quando o item tinha 3 dias, e "nenhum post" com 7 peças prontas. O número
+// "60" passava (estava no fato da janela). Agora a duração tem que bater em número + unidade + qualificador ("mais de",
+// "desde"…) com algum fato do candidato, e a ausência de post só vale se um fato a afirma e nenhum fato de peças a contradiz.
+export interface EvidenceGuard { factsNorm: string; timeKeys: Set<string>; absence: boolean; pieces: boolean }
+const UNIT_KEY: Record<string, string> = { dia: 'd', dias: 'd', day: 'd', days: 'd', semana: 'w', semanas: 'w', week: 'w', weeks: 'w', mes: 'm', meses: 'm', month: 'm', months: 'm', ano: 'y', anos: 'y', year: 'y', years: 'y' }
+const NUMWORD = 'um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|quinze|vinte|trinta|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen|twenty|thirty'
+const TIME_RE = new RegExp('(?:^|[^a-z0-9])(\\d+(?:[.,]\\d+)?|' + NUMWORD + ')\\s+(dias?|semanas?|meses|mes|anos?|days?|weeks?|months?|years?)(?![a-z])', 'g')
+const QUALIFIERS = ['mais de', 'menos de', 'mais que', 'pelo menos', 'no minimo', 'quase', 'cerca de', 'more than', 'less than', 'at least', 'almost', 'nearly', 'over']
+const VAGUE = /(?:^|[^a-z])(ha muito tempo|ha muito|faz tempo|faz muito tempo|ha meses|ha semanas|ha anos|ha bastante tempo|for a long time|for months|for weeks|for years|desde|since)(?![a-z])/g
+const ABSENCE = /(?:^|[^a-z])(?:(?:nenhum|nenhuma|zero|nunca)\s+(?:\w+\s+)?(?:post|posts|publicac\w+|peca|pecas|conteudo)|sem\s+(?:nenhum\s+|nenhuma\s+)?(?:post|posts|publicac\w+)|nao ha (?:post|posts|publicac\w+)|no posts?|never (?:posted|published)|without (?:any )?posts?|nothing (?:was )?(?:posted|published)|nada (?:foi )?publicad\w+)(?![a-z])/
+const timeKey = (num: string, unit: string) => `${num.replace(',', '.')}|${UNIT_KEY[unit] ?? unit}`
+const timeTokens = (n: string): string[] => [...n.matchAll(TIME_RE)].map(m => timeKey(m[1], m[2]))
+export function evidenceGuard(facts: Pick<Fact, 'text' | 'origin'>[]): EvidenceGuard {
+  const factsNorm = norm(facts.map(f => f.text).join(' \n '))
+  return { factsNorm, timeKeys: new Set(timeTokens(factsNorm)), absence: ABSENCE.test(factsNorm), pieces: facts.some(f => f.origin === 'pieces') }
+}
+/** A frase afirma período/duração ou ausência de post que nenhum fato do candidato sustenta? */
+export function violatesEvidence(sentence: string, g: EvidenceGuard): boolean {
+  const n = norm(sentence)
+  const toks = timeTokens(n)
+  if (toks.some(t => !g.timeKeys.has(t))) return true
+  if (toks.length && QUALIFIERS.some(q => claimRe(q).test(n) && !claimRe(q).test(g.factsNorm))) return true
+  for (const m of n.matchAll(VAGUE)) if (!claimRe(m[1]).test(g.factsNorm)) return true
+  if (ABSENCE.test(n) && (!g.absence || g.pieces)) return true
+  return false
+}
 /** A frase afirma algo de mercado que não está nos fatos? */
 export function hasUnsupportedClaim(sentence: string, guard: ClaimGuard): boolean {
   const n = norm(sentence)
+  if (guard.ev && violatesEvidence(sentence, guard.ev)) return true
   return guard.terms.some(t => { const re = claimRe(t); return re.test(n) && !re.test(guard.factsNorm) })
 }
 
@@ -192,7 +221,7 @@ ${candLines}
 </dados>
 
 REGRAS INEGOCIÁVEIS:
-1. Use APENAS os fatos acima. Não invente fato, número, data, valor, métrica, notícia, localização, empresa ou nome. Não escreva NENHUM dígito que não esteja nos fatos (para contagens, use palavras). Não escreva datas.
+1. Use APENAS os fatos acima. Não invente fato, número, data, valor, métrica, notícia, localização, empresa ou nome. Não escreva NENHUM dígito que não esteja nos fatos (para contagens, use palavras). Não escreva datas. Não escreva períodos ou durações ("há N dias", "nos últimos…", "há mais de…", "desde…", "há meses") nem "nenhum post"/"sem nenhum post" a menos que um fato diga exatamente isso; o código remove essas frases.
 2. O que não está nos fatos é HIPÓTESE: coloque em "hypotheses" (frases curtas começando por "Pode ser…"/"May be…"), nunca nos outros campos como se fosse certo.
 3. Nada de promessa: nunca "+X% de vendas", "vai vender", "garantido", "dobra". ${caveat}
 4. Público ("audience"): NUNCA segmente por raça, cor, religião, sexo/gênero, deficiência, situação familiar (ter ou não filhos/crianças, famílias, estado civil), idade ou origem/nacionalidade (Fair Housing / antidiscriminação). Descreva o público por NECESSIDADE, momento de compra ou de uso, localização ou categoria do item (ex.: ${hint}). Se não houver base, deixe "audience" vazio.
@@ -254,45 +283,75 @@ export function priorityReasons(s: Scored, next: Scored | null, lang: Lang): str
   return out
 }
 
+// Frase que especula ("pode ser", "talvez"…) não pode ficar como afirmação: vira hipótese rotulada (evidence type 'hypothesis').
+const SPECULATION = /(?:^|[^a-z])(?:pode ser|podem ser|talvez|provavelmente|possivelmente|deve estar|devem estar|parece que|pode estar|podem estar|may be|might|probably|perhaps|possibly|could be|may not)(?![a-z])/
+export function splitSpeculation(text: string): { facts: string; hyps: string[] } {
+  const parts = sentences(text)
+  return { facts: parts.filter(p => !SPECULATION.test(norm(p))).join(' ').trim(), hyps: parts.filter(p => SPECULATION.test(norm(p))) }
+}
+
+export interface NotValidated { candidate_id: string; kind: OppKind; reasons: string[] }
+export interface Finalized { drafts: OpportunityDraft[]; notValidated: NotValidated[] }
+
 // Junta a redação da IA com os candidatos do código, valida e ordena. Devolve no máximo 3.
-export function finalize(opts: { lang: Lang; candidates: Candidate[]; facts: Fact[]; llm: LlmOpportunity[]; marketClaims?: string[] | null; photoCounts?: Record<string, number> }): OpportunityDraft[] {
+// Candidato cujas afirmações não se sustentam (sem fato com fonte, ou texto final ainda afirma período/ausência sem dado)
+// NÃO vira oportunidade: vai em `notValidated` (o chamador registra o motivo; nada entra na fila de aprovação).
+export function finalize(opts: Parameters<typeof finalizeChecked>[0]): OpportunityDraft[] { return finalizeChecked(opts).drafts }
+
+export function finalizeChecked(opts: { lang: Lang; candidates: Candidate[]; facts: Fact[]; llm: LlmOpportunity[]; marketClaims?: string[] | null; photoCounts?: Record<string, number> }): Finalized {
   const { lang, candidates, facts } = opts
   const allowed = allowedNumbers(facts)
-  const guard = claimGuard(lang, facts.map(f => f.text), opts.marketClaims)
+  const baseGuard = claimGuard(lang, facts.map(f => f.text), opts.marketClaims)
   const byId = new Map(facts.map(f => [f.id, f]))
   const drafts: { s: Scored; d: Omit<OpportunityDraft, 'priority_rank' | 'priority_reasons'> }[] = []
+  const notValidated: NotValidated[] = []
   const seen = new Set<string>()
   for (const raw of opts.llm) {
     const cid = typeof raw.candidate_id === 'string' ? raw.candidate_id : ''
     const c = candidates.find(x => x.id === cid)
     if (!c || seen.has(cid)) continue
     seen.add(cid)
+    // Sem NENHUM fato com fonte por trás, não há o que afirmar.
+    const own = c.fact_ids.map(id => byId.get(id)).filter((f): f is Fact => !!f)
+    if (own.length === 0) {
+      notValidated.push({ candidate_id: c.id, kind: c.kind, reasons: [tr(lang, 'Nenhum fato com fonte sustenta este candidato.', 'No sourced fact backs this candidate.')] })
+      continue
+    }
+    // Porta de evidência: período/ausência só valem se os fatos DESTE candidato dizem o mesmo.
+    const ev = evidenceGuard(own)
+    const guard: ClaimGuard = { ...baseGuard, ev }
     // Evidência fact/data: os do candidato (código) + os ids extras que a IA citou SE existirem na entrada.
     const cited = Array.isArray(raw.cited_fact_ids) ? raw.cited_fact_ids.filter((x): x is string => typeof x === 'string' && byId.has(x)) : []
     const factIds = [...new Set([...c.fact_ids, ...cited])].slice(0, 8)
     // A prioridade/confiança contam só as evidências do PRÓPRIO candidato (código): citar mais fatos não sobe a nota.
     const sc = score(c, facts)
-    const evidence: Evidence[] = factIds.map(id => byId.get(id)!).map(f => ({ type: f.type, text: f.text, source: f.source, date: f.date }))
-    const hyps = [...c.hypotheses, ...(Array.isArray(raw.hypotheses) ? raw.hypotheses : []).map(h => cleanText(h, allowed, 220, guard))]
+    const evidence: Evidence[] = factIds.map(id => byId.get(id)).filter((f): f is Fact => !!f).map(f => ({ type: f.type, text: f.text, source: f.source, date: f.date }))
+    const description = splitSpeculation(cleanText(raw.description, allowed, 600, guard))
+    const problem = splitSpeculation(cleanText(raw.commercial_problem, allowed, 400, guard))
+    const hyps = [...c.hypotheses, ...(Array.isArray(raw.hypotheses) ? raw.hypotheses : []).map(h => cleanText(h, allowed, 220, guard)), ...description.hyps, ...problem.hyps]
     for (const h of hyps) if (h && !evidence.some(e => e.type === 'hypothesis' && e.text === h) && evidence.filter(e => e.type === 'hypothesis').length < 4) evidence.push({ type: 'hypothesis', text: h, source: hypSource(lang), date: null })
     const audience = cleanText(raw.audience, allowed, 200, guard)
-    drafts.push({
-      s: sc,
-      d: {
-        kind: c.kind,
-        title: cleanText(raw.title, allowed, 120, guard) || c.fallback.title,
-        description: cleanText(raw.description, allowed, 600, guard),
-        commercial_problem: cleanText(raw.commercial_problem, allowed, 400, guard) || c.fallback.problem,
-        evidence,
-        item_ids: c.item_ids,
-        audience: audience || null,
-        suggested_action: actionForPhotos(cleanAction(raw.suggested_action, allowed, guard, c.fallback.action), c.item_ids, opts.photoCounts, lang),
-        how_to_measure: cleanText(raw.how_to_measure, allowed, 300, guard) || c.fallback.measure,
-        confidence: sc.confidence,
-        needs_validation: sc.needs,
-      },
-    })
+    const d = {
+      kind: c.kind,
+      title: cleanText(raw.title, allowed, 120, guard) || c.fallback.title,
+      description: description.facts,
+      commercial_problem: problem.facts || c.fallback.problem,
+      evidence,
+      item_ids: c.item_ids,
+      audience: audience || null,
+      suggested_action: actionForPhotos(cleanAction(raw.suggested_action, allowed, guard, c.fallback.action), c.item_ids, opts.photoCounts, lang),
+      how_to_measure: cleanText(raw.how_to_measure, allowed, 300, guard) || c.fallback.measure,
+      confidence: sc.confidence,
+      needs_validation: sc.needs,
+    }
+    // Rede final: nem o texto do código (fallback) pode afirmar período/ausência que os fatos não sustentam.
+    const bad = (['title', 'description', 'commercial_problem', 'suggested_action', 'how_to_measure'] as const).filter(k => sentences(d[k]).some(p => violatesEvidence(p, ev)))
+    if (bad.length) {
+      notValidated.push({ candidate_id: c.id, kind: c.kind, reasons: [tr(lang, `O texto final afirma período ou ausência de post que os fatos não sustentam (${bad.join(', ')}).`, `The final text states a period or absence of posts the facts do not back (${bad.join(', ')}).`)] })
+      continue
+    }
+    drafts.push({ s: sc, d })
   }
   drafts.sort((a, b) => compareScored(a.s, b.s))
-  return drafts.slice(0, MAX_OPPORTUNITIES).map((x, i, arr) => ({ ...x.d, priority_rank: i + 1, priority_reasons: priorityReasons(x.s, arr[i + 1]?.s ?? null, lang) }))
+  return { drafts: drafts.slice(0, MAX_OPPORTUNITIES).map((x, i, arr) => ({ ...x.d, priority_rank: i + 1, priority_reasons: priorityReasons(x.s, arr[i + 1]?.s ?? null, lang) })), notValidated }
 }
