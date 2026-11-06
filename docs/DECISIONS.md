@@ -6,6 +6,18 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-06 — Correção 3 do Opportunity Engine (fila sem repetição, tarefa única, Instagram desconectado)
+- **Motivo:** na Tespon a fila chegou a 19 oportunidades abertas, muitas repetindo o mesmo tipo e os mesmos itens (cada rodada só inseria). Três oportunidades pediam a MESMA ação ("adicionar fotos reais") para itens diferentes. Na Teste Zero o texto dizia "sem presença nas redes" / "invisíveis" / "imóveis parados" com o Instagram NÃO conectado: o sistema não sabe o que existe fora dele.
+- **Regras do dono (valem no código):**
+  - Repetida = mesmo tipo + mesmos itens (em qualquer ordem). Para `market_change`, também precisa ter ao menos um sinal externo em comum (mesma URL da fonte). **Nunca** se compara título nem texto da descrição.
+  - Só linha `suggested`, sem plano e sem decisão é atualizada. Aprovada, descartada ou com plano nunca é tocada.
+  - Evidência mais forte não se perde: as evidências antigas e novas são unidas (até 12, fatos antes de hipóteses). Se a leitura nova tem confiança MENOR que a antiga, o texto antigo fica; se for igual ou maior, entra o texto novo.
+  - Mesma ação para itens diferentes vira UMA tarefa, com todos os itens listados (dá pra acompanhar item por item). Confiança = a mais baixa do grupo; "precisa validar" se qualquer um precisa. Não junta ações diferentes, nem as sem item.
+  - Instagram desconectado NÃO é "sem posts": o sistema só pode dizer "não dá pra saber". Frase de presença externa sem dado vira hipótese rotulada (ou cai no texto do código). "Sem post no Sales Boost" continua valendo quando um fato diz isso. `OPP_PROMPT_VERSION` 4 → 5.
+- **Nada é descartado automaticamente:** as oportunidades velhas que já estão na fila continuam lá. Limpeza só com uma 2ª autorização do dono.
+- **Não publicado:** só código e testes (`scripts/test-opportunity-merge.mjs`, `scripts/test-opportunity-engine.mjs`). Sem migration, sem deploy.
+- **Divergência registrada:** a frase convertida em hipótese põe só a 1ª letra em minúscula (não a frase toda), para não estragar nomes de bairro.
+
 ## 2026-11-06 — Diagnóstico: perguntas com mais de uma resposta (dono, feedback de cliente)
 - **Motivo:** um cliente disse que algumas perguntas deveriam aceitar 2 ou mais respostas.
 - **Divergência que foi encontrada:**

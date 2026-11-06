@@ -408,10 +408,87 @@ const allText = (d) => [d.title, d.description, d.commercial_problem, d.suggeste
   ok('market_change sem as 5 respostas (ausente/vazia/não-texto) → não validado; content_gap não exige')
 
   // prompt v4
-  assert.equal(OPP_PROMPT_VERSION, 4)
+  assert.equal(OPP_PROMPT_VERSION, 5)
   const pr = buildPrompt({ lang: 'pt', businessName: 'X', itemLabel: 'Item', facts: r2.facts, candidates: [c2], windowDays: 60 })
   assert.ok(/\[fraca\]/.test(pr) && /NUNCA pode ser a base/.test(pr) && /"answers"/.test(pr) && /what_changed/.test(pr))
   assert.ok(!/pre[çc]o|bairro|im[óo]vel/i.test(buildPrompt({ lang: 'pt', businessName: 'X', itemLabel: 'Item', facts: [], candidates: [], windowDays: 60 })))
   ok('prompt v4: fato fraco marcado [fraca], regra de contexto, 5 respostas pedidas, ainda sem palavra de setor')
+}
+
+// ── Correção 3 (2026-11-06): presença externa sem dado + mesma ação em itens diferentes ─────────────────────────────
+{
+  const mkF = (id, text, origin = 'catalog', type = 'fact', source = 'Catálogo cadastrado no Sales Boost') => ({ id, type, text, source, date: null, origin })
+  const mkC = (id, kind, item_ids, fact_ids, over = {}) => ({ id, kind, item_ids, fact_ids, region: null, forceHypothesis: false, hypotheses: [], validationReasons: [], fallback: { title: 'Título do código', problem: 'Problema do código.', action: 'Criar uma peça com as fotos.', measure: 'Ver comentários.' }, ...over })
+  const T = { title: 'Concorrentes publicando vendas no Leblon enquanto seus imóveis ficam parados', description: 'Concorrentes publicam vendas no Leblon, com fotos disponíveis, mas sem presença nas redes. Não há post registrado no Sales Boost para esses itens.', commercial_problem: 'Os itens da Teste Zero no mesmo bairro estão invisíveis nas redes e perdem visitas.' }
+  const facts = [mkF('F1', 'Apto no Leblon.'), mkF('F2', 'Concorrentes publicam vendas no Leblon.', 'signal:x', 'data', 'x.com (https://x.com/a)'), mkF('F3', 'Nenhum post registrado no Sales Boost para esses itens.', 'posts', 'fact', 'Posts registrados no Sales Boost')]
+  const cm = mkC('C1', 'market_change', ['i1'], ['F1', 'F2', 'F3'])
+  const run = (over = {}, extra = {}) => finalizeChecked({ lang: 'pt', candidates: [cm], facts, llm: [llmOf(cm, { ...T, suggested_action: 'Criar uma peça ligando o bairro aos itens.', ...over })], ...extra })
+
+  // (d) Instagram desconectado: título/problema → texto do código; frase vira hipótese rotulada; ausência "no Sales Boost" continua valendo
+  const d = run({}, { instagramConnected: false }).drafts[0]
+  assert.equal(d.title, 'Título do código'); assert.equal(d.commercial_problem, 'Problema do código.')
+  assert.ok(!/redes|parados|invis/i.test(d.description)); assert.ok(d.description.includes('Não há post registrado no Sales Boost para esses itens.'))
+  const hy = d.evidence.filter(e => e.type === 'hypothesis').map(e => e.text)
+  assert.ok(hy.some(h => h.startsWith('Pode ser que concorrentes publicam vendas no Leblon') && h.endsWith('o Instagram não está conectado.')))
+  assert.ok(hy.some(h => /invisíveis nas redes/.test(h)))
+  const den = run({ title: 'Competitors post sales while your listings are sitting idle' }, { instagramConnected: false, lang: 'en' })
+  assert.equal(den.drafts[0].title, 'Título do código')
+  ok('IG desconectado: título/problema caem no texto do código, "sem presença nas redes" vira hipótese rotulada, "sem post no Sales Boost" segue')
+
+  // IG desconectado sempre barra, mesmo em frase com ausência + Instagram, e na ação
+  assert.equal(run({ suggested_action: 'Mostrar os itens, hoje invisíveis nas redes.' }, { instagramConnected: false }).drafts[0].suggested_action, 'Criar uma peça com as fotos.')
+  assert.equal(run({ description: 'Nenhum post no Instagram para esses itens.' }, { instagramConnected: true }).drafts[0].description, '') // conectado MAS sem fato do Instagram que diga a ausência
+  assert.equal(run({ how_to_measure: 'Sem divulgação, ver comentários.' }, { instagramConnected: false }).drafts[0].how_to_measure, 'Ver comentários.')
+  // hipótese: especulativa liberada, afirmativa cai
+  const hh = run({ hypotheses: ['Pode ser que os itens fiquem invisíveis nas redes.', 'Os itens estão invisíveis nas redes.'] }, { instagramConnected: false }).drafts[0].evidence.filter(e => e.type === 'hypothesis').map(e => e.text)
+  assert.ok(hh.includes('Pode ser que os itens fiquem invisíveis nas redes.')); assert.ok(!hh.includes('Os itens estão invisíveis nas redes.'))
+  ok('presença externa: ação/medida/descrição barradas; hipótese "pode ser…" liberada, afirmação como hipótese cai')
+
+  // (e) conectado + fato do Instagram dizendo a ausência → liberado
+  const facts2 = [...facts, mkF('F4', 'Nenhum post no Instagram da empresa para esses itens.', 'instagram:x', 'data', 'Instagram da empresa')]
+  const cm2 = mkC('C1', 'market_change', ['i1'], ['F1', 'F2', 'F3', 'F4'])
+  const e = finalizeChecked({ lang: 'pt', candidates: [cm2], facts: facts2, llm: [llmOf(cm2, T)], instagramConnected: true }).drafts[0]
+  assert.equal(e.title, T.title); assert.equal(e.commercial_problem, T.commercial_problem); assert.ok(e.description.includes('sem presença nas redes'))
+  const e2 = finalizeChecked({ lang: 'pt', candidates: [cm2], facts: facts2, llm: [llmOf(cm2, T)], instagramConnected: false }).drafts[0]
+  assert.equal(e2.title, 'Título do código')
+  ok('IG conectado COM fato do Instagram que diz a ausência → frases externas liberadas; desconectado → barradas')
+
+  // (c) 3 tarefas de fotos (Barra 2 + Ipanema 2 + Botafogo 1) → 1 tarefa com 5 itens
+  const fb = [mkF('B1', 'Apto Barra 1.'), mkF('B2', 'Apto Barra 2.'), mkF('B3', 'Posts na Barra.', 'posts', 'fact', 'Posts'), mkF('P1', 'Apto Ipanema 1.'), mkF('P2', 'Apto Ipanema 2.'), mkF('O1', 'Apto Botafogo.')]
+  const cB = mkC('C1', 'content_gap', ['b1', 'b2'], ['B1', 'B2', 'B3']), cI = mkC('C2', 'content_gap', ['p1', 'p2'], ['P1', 'P2']), cO = mkC('C3', 'content_gap', ['o1'], ['O1'])
+  const pc = { b1: 0, b2: 0, p1: 0, p2: 0, o1: 0 }
+  const L = [llmOf(cB, { title: 'Fotos da Barra' }), llmOf(cI, { title: 'Fotos de Ipanema' }), llmOf(cO, { title: 'Fotos de Botafogo' })].map(x => ({ ...x, description: '', commercial_problem: 'Itens sem foto.' }))
+  const c3 = finalizeChecked({ lang: 'pt', candidates: [cB, cI, cO], facts: fb, llm: L, photoCounts: pc, instagramConnected: true })
+  assert.equal(c3.drafts.length, 1)
+  const t = c3.drafts[0]
+  assert.deepEqual(t.item_ids, ['b1', 'b2', 'p1', 'p2', 'o1']); assert.equal(t.title, 'Adicionar fotos reais a 5 itens do catálogo')
+  assert.equal(t.description, 'Inclui: Fotos da Barra; Fotos de Ipanema; Fotos de Botafogo.')
+  assert.equal(t.confidence, 'needs_validation'); assert.equal(t.needs_validation, true); assert.equal(t.priority_rank, 1)
+  assert.equal(t.evidence.filter(x => x.type !== 'hypothesis').length, 6)
+  assert.equal(c3.notValidated.length, 2); assert.ok(c3.notValidated.every(x => x.reasons[0] === 'Juntada na tarefa única da oportunidade #1 (mesma ação para itens diferentes).'))
+  assert.deepEqual(c3.notValidated.map(x => x.candidate_id).sort(), ['C2', 'C3'])
+  const c3en = finalizeChecked({ lang: 'en', candidates: [cB, cI, cO], facts: fb, llm: L, photoCounts: pc })
+  assert.equal(c3en.drafts[0].title, 'Add real photos to 5 catalog items'); assert.ok(c3en.drafts[0].description.startsWith('Includes: ')); assert.match(c3en.notValidated[0].reasons[0], /^Merged into the single task of opportunity #1/)
+  // confiança = a mais baixa; sem nenhum "precisa validar", fica a menor (low < medium)
+  const cO2 = mkC('C3', 'content_gap', ['o1'], ['O1', 'B3'])
+  const c3b = finalizeChecked({ lang: 'pt', candidates: [cB, cI, cO2], facts: fb, llm: L, photoCounts: pc })
+  assert.equal(c3b.drafts[0].confidence, 'low'); assert.equal(c3b.drafts[0].needs_validation, false)
+  ok('(c) 3 tarefas "adicionar fotos" (2+2+1 itens) → 1 tarefa com 5 itens, títulos na descrição, 2 em notValidated, confiança mais baixa, needs se qualquer')
+
+  // (g) ações DIFERENTES na mesma região não juntam; item_ids vazio não junta
+  const pc2 = { b1: 3, b2: 3, p1: 0, p2: 0 }
+  const g = finalizeChecked({ lang: 'pt', candidates: [cB, cI], facts: fb, llm: [llmOf(cB, { suggested_action: 'Criar peça ligando o Leblon aos itens.', description: '' }), llmOf(cI, { description: '' })], photoCounts: pc2 })
+  assert.equal(g.drafts.length, 2); assert.equal(g.notValidated.length, 0)
+  const e1 = mkC('C1', 'positioning', [], ['B1']), e2b = mkC('C2', 'positioning', [], ['B1'])
+  const g2 = finalizeChecked({ lang: 'pt', candidates: [e1, e2b], facts: fb, llm: [llmOf(e1), llmOf(e2b)] })
+  assert.equal(g2.drafts.length, 2)
+  ok('(g) ações diferentes na mesma região e candidatos sem item não são juntados')
+
+  // (h) ranking contíguo depois de juntar (4º candidato com ação própria entra depois)
+  const cX = mkC('C4', 'content_gap', ['x1'], ['B1', 'B3'], { fallback: { title: 'T', problem: 'P.', action: 'Criar peça.', measure: 'M.' } })
+  const h = finalizeChecked({ lang: 'pt', candidates: [cB, cI, cO, cX], facts: fb, llm: [...L, llmOf(cX, { description: '', suggested_action: 'Mostrar o item em um carrossel.' })], photoCounts: { ...pc, x1: 4 } })
+  assert.deepEqual(h.drafts.map(x => x.priority_rank), [1, 2]); assert.equal(h.drafts.length, 2); assert.ok(h.drafts.every(x => x.priority_reasons.length >= 2))
+  assert.ok(h.drafts.find(x => x.item_ids.length === 5)); assert.ok(h.drafts.find(x => x.item_ids[0] === 'x1'))
+  ok('(h) priority_rank contíguo e ordenado depois da consolidação; motivos recalculados')
 }
 console.log(`\n${n} grupos ok`)
