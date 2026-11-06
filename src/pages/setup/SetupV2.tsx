@@ -75,7 +75,7 @@ export function EtapaForm({ companyId, v2, stepKey, initialAnswers, initialStatu
     <div>
       {step?.subtitle && <p style={{ fontSize: '13px', color: MUTED, lineHeight: 1.55, margin: '0 0 16px' }}>{bi(step.subtitle, lang)}</p>}
       {qs.map(q => (
-        <QuestionField key={q.key} q={q} value={answers[q.key]} state={fieldState(q, answers, status)} highlight={focusKey === q.key}
+        <QuestionField key={q.key} q={q} value={answers[q.key]} answers={answers} state={fieldState(q, answers, status)} highlight={focusKey === q.key}
           onChange={v => setA(q.key, v)} onState={s => setS(q.key, s)} lang={lang} businessType={businessType} />
       ))}
       {left > 0 && <div style={{ fontSize: '12.5px', color: MUTED, margin: '0 0 10px', lineHeight: 1.5 }}>{t.left(left)}</div>}
