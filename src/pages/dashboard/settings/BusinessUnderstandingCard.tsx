@@ -208,7 +208,7 @@ export default function BusinessUnderstandingCard({ companyId }: { companyId: st
             <div key={st.key} style={{ paddingTop: '14px', borderTop: `1px solid ${BORDER}`, marginTop: '6px' }}>
               <div style={{ fontSize: '11px', fontWeight: 800, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '12px' }}>{bi(st.title, lang)}</div>
               {qs.map(q => (
-                <QuestionField key={q.key} q={q} value={playbookAnswers[q.key]} state={fieldState(q, playbookAnswers, answerStatus)} highlight={focusKey === q.key}
+                <QuestionField key={q.key} q={q} value={playbookAnswers[q.key]} answers={playbookAnswers} state={fieldState(q, playbookAnswers, answerStatus)} highlight={focusKey === q.key}
                   onChange={v => setAnswer(q.key, v)} onState={s => setV2State(q.key, s)} lang={lang} businessType={businessType} />
               ))}
             </div>

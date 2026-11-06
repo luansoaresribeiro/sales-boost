@@ -6,6 +6,23 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-06 — Diagnóstico: perguntas com mais de uma resposta (dono, feedback de cliente)
+- **Motivo:** um cliente disse que algumas perguntas deveriam aceitar 2 ou mais respostas.
+- **Divergência que foi encontrada:**
+  - 3 perguntas já aceitavam várias respostas (tipos de imóvel, padrão, serviços), mas a tela não avisava.
+  - O aviso "(até N)" só aparecia quando havia limite.
+- **Tela** (`QuestionField`, que vale no diagnóstico, no /setup e em Configurações):
+  - pergunta de várias respostas mostra "(pode marcar mais de uma)" ou "(marque até N)";
+  - o limite é de verdade: as outras opções ficam apagadas e aparece "Você já marcou N. Para trocar, desmarque uma.";
+  - a gravação também corta no limite.
+- **Ficha `imoveis_rio`** (migration `20261106130000_diagnostico_multipla.sql`, aplicada só depois do merge e da publicação do site):
+  - **faixa de preço e faixa de aluguel:** até 3 respostas;
+  - **"E depois disso?"** (`prioridades_secundarias`) entra no diagnóstico e não repete a prioridade principal (`exclude_from`);
+  - **papel e gasto por mês:** continuam com 1 resposta.
+- **Respostas antigas:** nunca são apagadas nem convertidas.
+  - Uma resposta em texto (de quando a pergunta era de escolha única) continua gravada como está e aparece marcada na tela.
+  - Ela só vira lista quando a própria pessoa mexe na pergunta.
+
 ## 2026-11-05 — Gate da Fase 2 — resultado: APROVADA PARCIALMENTE
 - **Cobertura:** só Tespon e Teste Zero foram processadas. Ana Souza é conta vitrine e não foi processada.
 - **Coleta: OK.**
