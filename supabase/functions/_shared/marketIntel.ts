@@ -65,8 +65,12 @@ export interface IntelQuality {
   max_per_host_per_run: number      // 0 = sem limite
   trusted_domains: string[]         // passam pelas regras de bloqueio
   min_score: number | null          // nota mínima da fonte (null = não filtra)
+  // Força do sinal (2026-11-05, v3): NÃO reprova — só marca "fraco" (vale como contexto, nunca como base de oportunidade). Ausente = tudo forte.
+  weak_url_patterns: string[]       // trecho do caminho da URL (vale até em domínio de confiança: patrocinado, guia genérico)
+  weak_title_terms: string[]        // termo no título (borda de palavra; vale até em domínio de confiança: aviso de serviço, embargo…)
+  impact_terms: Record<string, string[]> // tipo → título+trecho precisa citar ao menos um termo (prefixo) de impacto; sem lista = livre
 }
-export const QUALITY_OFF: IntelQuality = { mode: 'off', version: 1, block_url_patterns: [], block_title_terms: [], block_title_all: [], news_title_terms: [], min_summary_chars: 0, kind_terms: {}, max_per_host_per_run: 0, trusted_domains: [], min_score: null }
+export const QUALITY_OFF: IntelQuality = { mode: 'off', version: 1, block_url_patterns: [], block_title_terms: [], block_title_all: [], news_title_terms: [], min_summary_chars: 0, kind_terms: {}, max_per_host_per_run: 0, trusted_domains: [], min_score: null, weak_url_patterns: [], weak_title_terms: [], impact_terms: {} }
 const strList = (v: unknown, max: number, maxLen = 120): string[] => (Array.isArray(v) ? v : []).map(x => String(x ?? '').toLowerCase().trim()).filter(x => x && x.length <= maxLen).slice(0, max)
 /** Saneia `news.quality`: ausente/lixo = desligado (nunca bloqueia por engano). */
 export function parseQuality(raw: unknown): IntelQuality {
@@ -75,6 +79,8 @@ export function parseQuality(raw: unknown): IntelQuality {
   const mode: QualityMode = q.mode === 'audit' || q.mode === 'enforce' ? q.mode : 'off'
   const kt: Record<string, string[]> = {}
   if (q.kind_terms && typeof q.kind_terms === 'object') for (const [k, v] of Object.entries(q.kind_terms as Record<string, unknown>)) { const l = strList(v, 60); if (NEWS_KINDS.includes(k as SignalKind) && l.length) kt[k] = l }
+  const it: Record<string, string[]> = {}
+  if (q.impact_terms && typeof q.impact_terms === 'object') for (const [k, v] of Object.entries(q.impact_terms as Record<string, unknown>)) { const l = strList(v, 60); if (NEWS_KINDS.includes(k as SignalKind) && l.length) it[k] = l }
   const sc = q.min_score == null || q.min_score === '' ? NaN : Number(q.min_score)
   return {
     mode, version: clamp(q.version, 1, 1000, 1),
@@ -84,6 +90,7 @@ export function parseQuality(raw: unknown): IntelQuality {
     min_summary_chars: clamp(q.min_summary_chars, 0, 300, 0), kind_terms: kt, max_per_host_per_run: clamp(q.max_per_host_per_run, 0, 10, 0),
     trusted_domains: strList(q.trusted_domains, 50).filter(d => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)),
     min_score: Number.isFinite(sc) && sc >= 0 && sc <= 1 ? sc : null,
+    weak_url_patterns: strList(q.weak_url_patterns, 60), weak_title_terms: strList(q.weak_title_terms, 100), impact_terms: it,
   }
 }
 export interface IntelConfig { cap_usd?: number; split: Record<MarketSource, number>; news: IntelNewsConfig | null }

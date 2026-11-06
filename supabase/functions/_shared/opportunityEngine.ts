@@ -11,6 +11,9 @@
 // ficha (config.opportunity_fields) e os rótulos de config.catalog_fields; o nome do item vem
 // de config.vocabulary.item.
 
+import { signalStrength } from './marketNews.ts'
+import { normalizeTitle, type IntelQuality } from './marketIntel.ts'
+
 export type Lang = 'pt' | 'en'
 export type EvType = 'fact' | 'data' | 'hypothesis'
 export type OppKind = 'content_gap' | 'low_traction' | 'unmet_demand' | 'positioning' | 'market_change' | 'other'
@@ -19,7 +22,7 @@ export interface Evidence { type: EvType; text: string; source: string | null; d
 // fact = contado dos dados da própria empresa; data = coletado de fora (concorrente, sinal de mercado, tendência).
 // numTags: números do texto que o código SABE a unidade (preço = cur, quartos = bed) — a validação de unidade usa isso.
 export interface NumTag { value: string; unit: 'cur' | 'bed' }
-export interface Fact { id: string; type: 'fact' | 'data'; text: string; source: string; date: string | null; origin: string; numTags?: NumTag[]; signal_id?: string }
+export interface Fact { id: string; type: 'fact' | 'data'; text: string; source: string; date: string | null; origin: string; numTags?: NumTag[]; signal_id?: string; signal_ids?: string[]; weak?: boolean }
 // Textos de setor vêm da FICHA (config.opportunity_texts, regra 6); sem eles valem os genéricos abaixo.
 export interface OppTexts { hypotheses?: string[]; caveat?: string; audienceHint?: string; marketClaims?: string[] }
 
@@ -51,6 +54,7 @@ export interface EngineInput {
   signals: SignalRow[]
   instagramConnected: boolean
   texts?: OppTexts // já no idioma de `lang`
+  quality?: IntelQuality // regras de força do sinal da ficha (recalculadas aqui: vale p/ sinal já coletado); ausente = tudo forte
 }
 
 export interface Candidate {
@@ -88,11 +92,11 @@ const AI_SOURCES = /^(ai|ia|llm|claude|gpt|model|modelo|sonnet|haiku|raciocinio|
 
 class FactBook {
   facts: Fact[] = []
-  add(type: 'fact' | 'data', text: string, source: string, date: string | null, origin: string, numTags?: NumTag[], signalId?: string): string {
+  add(type: 'fact' | 'data', text: string, source: string, date: string | null, origin: string, numTags?: NumTag[], signalId?: string, extra?: { signal_ids?: string[]; weak?: boolean }): string {
     const dup = this.facts.find(f => f.text === text && f.source === source)
     if (dup) return dup.id
     const id = `F${this.facts.length + 1}`
-    this.facts.push({ id, type, text, source, date, origin, ...(numTags?.length ? { numTags } : {}), ...(signalId ? { signal_id: signalId } : {}) })
+    this.facts.push({ id, type, text, source, date, origin, ...(numTags?.length ? { numTags } : {}), ...(signalId ? { signal_id: signalId } : {}), ...(extra?.signal_ids?.length ? { signal_ids: extra.signal_ids } : {}), ...(extra?.weak ? { weak: true } : {}) })
     return id
   }
 }
@@ -108,7 +112,7 @@ function describeItem(it: CatalogItem, inp: EngineInput): { text: string; tags: 
 }
 
 /** Ids dos sinais de mercado que sustentam algum dos fatos dados (sem repetir). */
-export const signalIdsOf = (facts: Fact[]): string[] => [...new Set(facts.map(f => f.signal_id).filter((x): x is string => !!x))]
+export const signalIdsOf = (facts: Fact[]): string[] => [...new Set(facts.flatMap(f => [f.signal_id, ...(f.signal_ids ?? [])]).filter((x): x is string => !!x))]
 
 export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: Candidate[]; usedSignalIds: string[] } {
   const { lang } = inp
@@ -261,25 +265,31 @@ export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: 
   }
 
   // ── market_change: sinal/tendência COM fonte E item do catálogo na mesma região ─────────────
-  type Ext = { id?: string; text: string; source: string; date: string | null; origin: string; hay: string; region: string }
   const ext: Ext[] = []
   for (const s of inp.signals) {
     const src = [s.source_name?.trim(), s.source_url?.trim() ? `(${s.source_url.trim()})` : ''].filter(Boolean).join(' ')
     if (!s.title?.trim() || !src) continue
-    ext.push({ id: s.id, text: clip(`${s.title.trim()}${s.summary?.trim() ? ` — ${s.summary.trim()}` : ''}`, 320), source: src, date: dateOnly(s.observed_at), origin: `signal:${norm(s.source_name ?? s.source_url ?? '')}`, hay: norm(`${s.title} ${s.summary ?? ''}`), region: norm(s.region ?? '') })
+    // Força: recalculada com a ficha de hoje (fonte da verdade). Sem link (ou sem regras) = forte.
+    const st = inp.quality && s.source_url?.trim() ? signalStrength({ kind: s.kind ?? '', title: s.title, summary: s.summary?.trim() || null, source_url: s.source_url.trim() }, inp.quality) : { strength: 'strong' as const }
+    ext.push({ id: s.id, title: s.title.trim(), summary: s.summary?.trim() ?? '', text: clip(`${s.title.trim()}${s.summary?.trim() ? ` — ${s.summary.trim()}` : ''}`, 320), source: src, host: (s.source_name?.trim() || s.source_url || '').trim(), date: dateOnly(s.observed_at), origin: `signal:${norm(s.source_name ?? s.source_url ?? '')}`, hay: norm(`${s.title} ${s.summary ?? ''}`), region: norm(s.region ?? ''), weak: st.strength === 'weak' })
   }
   for (const t of inp.trends) {
     const src = (t.source ?? '').trim()
-    if (!t.title?.trim() || !src || AI_SOURCES.test(norm(src))) continue
-    ext.push({ text: clip(`${t.title.trim()}${t.description?.trim() ? `: ${t.description.trim()}` : ''}`, 320), source: src, date: dateOnly(t.detected_at), origin: `trend:${norm(src)}`, hay: norm(`${t.title} ${t.description ?? ''}`), region: '' })
+    if (!t.title?.trim() || !src || AI_SOURCES.test(norm(src))) continue // tendência não tem link: sempre forte (comportamento anterior)
+    ext.push({ title: t.title.trim(), summary: t.description?.trim() ?? '', text: clip(`${t.title.trim()}${t.description?.trim() ? `: ${t.description.trim()}` : ''}`, 320), source: src, host: src, date: dateOnly(t.detected_at), origin: `trend:${norm(src)}`, hay: norm(`${t.title} ${t.description ?? ''}`), region: '', weak: false })
   }
   for (const [rk, reg] of byRegion) {
     if (rk.length < 3) continue
     const re = new RegExp(`(^|[^a-z0-9])${rk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`)
-    const hits = ext.filter(e => (e.region && (e.region === rk || re.test(e.region))) || re.test(e.hay)).slice(0, 4)
-    if (hits.length === 0) continue
+    const matched = ext.filter(e => (e.region && (e.region === rk || re.test(e.region))) || re.test(e.hay))
+    // Mesma notícia em dois portais = UM evento (uma origem). Só evento com ao menos 1 fonte FORTE vira oportunidade; o fraco entra como contexto rotulado.
+    const events = groupEvents(matched, reg.name)
+    const strongEv = events.filter(g => g.strong).slice(0, 4)
+    if (strongEv.length === 0) continue
+    const weakEv = events.filter(g => !g.strong).slice(0, 2)
     const ids = reg.items.slice(0, 2).map(catalogFact)
-    for (const h of hits) ids.push(book.add('data', h.text, h.source, h.date, h.origin, undefined, h.id))
+    for (const g of strongEv) ids.push(book.add('data', g.rep.text, eventSource(g, lang, false), g.rep.date, g.origin, undefined, g.rep.id, { signal_ids: g.ids }))
+    for (const g of weakEv) ids.push(book.add('data', g.rep.text, eventSource(g, lang, true), g.rep.date, g.origin, undefined, g.rep.id, { signal_ids: g.ids, weak: true }))
     // Peças já preparadas nessa região: fato verdadeiro (e trava contra a IA dizer "nenhum post").
     const nPieces = reg.items.reduce((a, it) => a + piecesOf(it.id), 0)
     if (nPieces > 0) {
@@ -289,10 +299,9 @@ export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: 
         ? tr(lang, `${nPieces === 1 ? '1 peça preparada' : `${nPieces} peças preparadas`} no Sales Boost para itens em "${reg.name}", nenhuma publicada.`, `${nPieces === 1 ? '1 piece prepared' : `${nPieces} pieces prepared`} in Sales Boost for items in "${reg.name}", none published.`)
         : tr(lang, `${nPieces === 1 ? '1 peça preparada' : `${nPieces} peças preparadas`} no Sales Boost para itens em "${reg.name}"; ${nPub === 1 ? '1 item' : `${nPub} itens`} com post publicado.`, `${nPieces === 1 ? '1 piece prepared' : `${nPieces} pieces prepared`} in Sales Boost for items in "${reg.name}"; ${nPub === 1 ? '1 item' : `${nPub} items`} with a published post.`), tr(lang, 'Peças preparadas no Sales Boost', 'Pieces prepared in Sales Boost'), today, 'pieces'))
     }
-    const origins = new Set(hits.map(h => h.origin))
     candidates.push({
       id: '', kind: 'market_change', item_ids: reg.items.map(i => i.id), fact_ids: ids, region: reg.name, forceHypothesis: false, hypotheses: [],
-      validationReasons: origins.size < 2 ? [tr(lang, 'Só uma fonte de mercado cita essa região — confirme antes de agir.', 'Only one market source mentions this region — confirm before acting.')] : [],
+      validationReasons: strongEv.length < 2 ? [tr(lang, 'Só uma fonte de mercado cita essa região — confirme antes de agir.', 'Only one market source mentions this region — confirm before acting.')] : [],
       fallback: {
         title: tr(lang, `Mudança de mercado ligada a ${reg.name}`, `Market change tied to ${reg.name}`),
         problem: tr(lang, `Uma fonte de mercado cita ${reg.name} e há item do catálogo ali — pode haver uma janela para falar disso antes de outros.`, `A market source mentions ${reg.name} and there is a catalog item there — there may be a window to talk about it before others.`),
@@ -309,4 +318,37 @@ export function buildCandidates(inp: EngineInput): { facts: Fact[]; candidates: 
 
 function itemsWord(n: number, lang: Lang): string {
   return n === 1 ? tr(lang, '1 item', '1 item') : tr(lang, `${n} itens`, `${n} items`)
+}
+
+// ── Eventos: a mesma notícia em portais diferentes conta UMA vez ──────────────────────────────────────────────────────
+export interface Ext { id?: string; title: string; summary: string; text: string; source: string; host: string; date: string | null; origin: string; hay: string; region: string; weak: boolean }
+export interface EventGroup { rep: Ext; members: Ext[]; strong: boolean; origin: string; ids: string[] }
+const STOP = new Set(['para', 'como', 'mais', 'menos', 'entre', 'sobre', 'apos', 'desde', 'neste', 'nesta', 'esta', 'este', 'esse', 'essa', 'pela', 'pelo', 'pelas', 'pelos', 'muito', 'ainda', 'tambem', 'seus', 'suas', 'dele', 'dela', 'quando', 'onde', 'sera', 'serao', 'tera', 'tem', 'foi', 'sao', 'pode', 'podem', 'with', 'from', 'this', 'that', 'have', 'will', 'been', 'were', 'their', 'into', 'over', 'after', 'about'])
+const sigWords = (t: string, skip: Set<string>): Set<string> => new Set(normalizeTitle(t).split(' ').filter(w => w.length >= 4 && !STOP.has(w) && !skip.has(w)))
+/** Mesmo evento? Títulos com palavras significativas (≥4 letras, sem stopword, sem o nome da região) em comum: Jaccard ≥ 0,5 OU ≥ 3 palavras compartilhadas (título truncado pelo portal). */
+export function sameEvent(a: string, b: string, regionName = ''): boolean {
+  const skip = new Set(normalizeTitle(regionName).split(' ').filter(Boolean))
+  const wa = sigWords(a, skip), wb = sigWords(b, skip)
+  if (!wa.size || !wb.size) return false
+  const inter = [...wa].filter(w => wb.has(w)).length
+  return inter >= 3 || inter / (wa.size + wb.size - inter) >= 0.5
+}
+/** Agrupa fontes da mesma região em eventos (ordem de entrada preservada). Representante = primeira fonte forte do grupo (senão a primeira). */
+export function groupEvents(items: Ext[], regionName = ''): EventGroup[] {
+  const groups: Ext[][] = []
+  for (const it of items) {
+    const g = groups.find(m => m.some(x => sameEvent(x.title, it.title, regionName)))
+    if (g) g.push(it); else groups.push([it])
+  }
+  return groups.map(members => {
+    const strong = members.some(m => !m.weak)
+    const rep = members.find(m => !m.weak) ?? members[0]
+    return { rep, members, strong, origin: `event:${normalizeTitle(rep.title).slice(0, 80)}`, ids: [...new Set(members.map(m => m.id).filter((x): x is string => !!x))] }
+  })
+}
+function eventSource(g: EventGroup, lang: Lang, weak: boolean): string {
+  const others = [...new Set(g.members.filter(m => m !== g.rep && m.host && m.host !== g.rep.host).map(m => m.host))]
+  return g.rep.source
+    + (others.length ? tr(lang, ` (+ também publicado em ${others.join(', ')})`, ` (+ also published by ${others.join(', ')})`) : '')
+    + (weak ? tr(lang, ' · evidência fraca (serviço/patrocinado/sem impacto)', ' · weak evidence (service/sponsored/no impact)') : '')
 }

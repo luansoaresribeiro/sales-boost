@@ -12,6 +12,7 @@ import {
   type OppTexts, type PieceRow, type PostRow, type SignalRow, type TrendRow,
 } from './opportunityEngine.ts'
 import { MAX_CANDIDATES_TO_LLM, OPP_PROMPT_VERSION, buildPrompt, compareScored, finalizeChecked, parseLlm, score, type NotValidated } from './opportunityOutput.ts'
+import { parseQuality } from './marketIntel.ts'
 import { interpretFingerprint, recordRun, type RunInput } from './marketIntelRuns.ts'
 
 type Admin = { from: (t: string) => any; rpc?: any } // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -49,7 +50,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
 
   // Ficha do setor (regra 6): quais campos são região/preço/tipo/quartos e como se chamam.
   const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', co.vertical_key ?? '').eq('enabled', true).maybeSingle()
-  const cfg = (pb?.config ?? {}) as { opportunity_fields?: FieldMap; catalog_fields?: { required?: { key: string; label?: Bilingual }[]; optional?: { key: string; label?: Bilingual; private?: boolean }[] }; vocabulary?: { item?: string }; opportunity_texts?: { low_traction_hypotheses?: Record<string, string[]>; caveat?: Bilingual; audience_hint?: Bilingual; market_claims?: { pt?: string[]; en?: string[] } } }
+  const cfg = (pb?.config ?? {}) as { opportunity_fields?: FieldMap; catalog_fields?: { required?: { key: string; label?: Bilingual }[]; optional?: { key: string; label?: Bilingual; private?: boolean }[] }; vocabulary?: { item?: string }; market_intel?: { news?: { quality?: unknown } }; opportunity_texts?: { low_traction_hypotheses?: Record<string, string[]>; caveat?: Bilingual; audience_hint?: Bilingual; market_claims?: { pt?: string[]; en?: string[] } } }
   const fieldMap = cfg.opportunity_fields
   if (!fieldMap?.location) {
     return { ok: false, status: 400, generated: 0, considered: 0, error: lang === 'en' ? 'This business type does not have opportunity fields set up yet.' : 'Este setor ainda não tem os campos de oportunidades configurados na ficha.' }
@@ -89,6 +90,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
   const input: EngineInput = {
     lang, now: new Date(), windowDays: WINDOW_DAYS, fieldMap, labels, itemLabel: cfg.vocabulary?.item ?? 'Item',
     catalog, posts, pieces, events, competitors, trends, signals, instagramConnected: !!co.instagram_user_id, texts,
+    quality: cfg.market_intel?.news?.quality ? parseQuality(cfg.market_intel.news.quality) : undefined, // força do sinal: regras da ficha de hoje
   }
   const photoCounts = Object.fromEntries(catalog.map(i => [i.id, i.photoCount]))
   const { facts, candidates } = buildCandidates(input)

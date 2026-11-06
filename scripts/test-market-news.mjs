@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 // Notícias automáticas v2 (2026-11-01): filtros em código, tópicos/kind da ficha, rotação, reserva de dólar no livro-caixa,
 // 1 rodada por dia, lotes de 3 em paralelo, falha da Tavily, dedupe por URL normalizada/título. Cron da coleta em test-market-intel.mjs.
 import { readFileSync } from 'node:fs'
-import { filterHits, filterHitsReport, classifySignalQuality, hasTerm, pickRegions, buildQuery, sanitizeText } from '../supabase/functions/_shared/marketNews.ts'
+import { filterHits, filterHitsReport, classifySignalQuality, signalStrength, hasTerm, pickRegions, buildQuery, sanitizeText } from '../supabase/functions/_shared/marketNews.ts'
 import { parseIntelConfig, parseQuality } from '../supabase/functions/_shared/marketIntel.ts'
 import { collectMarketNews } from '../supabase/functions/_shared/marketNewsRun.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
@@ -299,6 +299,41 @@ assert.equal(classifySignalQuality({ kind: 'launch', title: 'Lançamento em Ipan
   for (const [k, t, s] of NEWS) assert.equal(c2(k, t, 'https://exemplonoticias.com.br/rio/noticia-2026', s ?? `${t}. Resumo da reportagem com mais de quarenta caracteres.`), 'ok', t)
   ok('ficha v2: 10 manchetes de notícia continuam passando')
   assert.equal(c2('economy', 'Aluguel sobe acima da inflação; veja onde é mais caro', 'https://www1.folha.uol.com.br/mercado/2026/10/aluguel.shtml'), 'ok'); ok('ficha v2: portal confiável continua passando')
+}
+
+{ // --- Correção 2 (05/11/2026 noite): força do sinal (forte × fraco). Ficha v3 lida da migration; casos reais da rodada de 05/11.
+  const sql3 = readFileSync(new URL('../supabase/migrations/20261106120000_market_intel_quality_v3.sql', import.meta.url), 'utf8')
+  const J3 = JSON.parse(/\$json\$([\s\S]*?)\$json\$/.exec(sql3.split('\n').filter(l => !l.trimStart().startsWith('--')).join('\n'))[1])
+  const Q3 = parseQuality(J3)
+  assert.equal(Q3.mode, 'enforce'); assert.equal(Q3.version, 3); assert.equal(Q3.trusted_domains.length, 14); assert.equal(Q3.block_title_all.length, J3.block_title_all.length)
+  assert.equal(Q3.weak_url_patterns.length, 6); assert.equal(Q3.weak_title_terms.length, 14); assert.deepEqual(Object.keys(Q3.impact_terms), ['infrastructure']); assert.equal(Q3.impact_terms.infrastructure.length, 16)
+  assert.ok(Q3.block_url_patterns.includes('/guia-de-bairros')); assert.ok(!/\bdrop\b/i.test(sql3.split('\n').filter(l => !l.trimStart().startsWith('--')).join('\n')))
+  assert.ok(/ROLLBACK/.test(sql3) && /"version": 2/.test(sql3)); ok('ficha v3 (migration): JSON válido, enforce, versão 3, parseQuality mantém tudo, rollback para a v2 no arquivo')
+  const st = (kind, title, url, summary = 'Resumo qualquer da reportagem.') => signalStrength({ kind, title, summary, source_url: url }, Q3)
+  // fracos (inclusive em domínio de confiança)
+  assert.deepEqual(st('launch', 'Estúdios ganham espaço entre os imóveis "triple A"', 'https://oglobo.globo.com/conteudo-de-marca/estudios-triple-a'), { strength: 'weak', reason: 'weak_url' }); ok('patrocinado do O Globo (domínio de confiança) = fraco')
+  assert.equal(classifySignalQuality({ kind: 'launch', title: 'Estúdios ganham espaço', summary: 'x'.repeat(60), source_url: 'https://oglobo.globo.com/conteudo-de-marca/a' }, Q3), 'ok'); ok('confiança continua passando no filtro de bloqueio (fraco só marca)')
+  assert.equal(st('infrastructure', 'Linha 2 do Metrô do Rio terá destinos diferentes neste fim de semana', 'https://metrocptm.com.br/noticias/linha-2').reason, 'weak_title')
+  assert.equal(st('infrastructure', 'Funcionamento do MetrôRio neste fim de semana (17 e 18 de outubro)', 'https://metrorio.com.br/aviso').strength, 'weak'); ok('avisos de fim de semana do metrô = fracos')
+  assert.equal(st('news', 'Barra da Tijuca ... | Guia de Bairros', 'https://buske.ai/guia-de-bairros/barra-da-tijuca').reason, 'weak_url')
+  assert.equal(classifySignalQuality({ kind: 'news', title: 'Barra da Tijuca | Guia de Bairros', summary: 'x'.repeat(60), source_url: 'https://buske.ai/guia-de-bairros/barra-da-tijuca' }, Q3), 'block_url'); ok('guia de bairros: fraco e barrado em coleta nova (enforce)')
+  assert.equal(st('infrastructure', 'Prefeitura embarga obra irregular em quiosque na Praia da Barra', 'https://noticias.r7.com/rio/embargo').reason, 'weak_title')
+  assert.equal(st('infrastructure', 'Obra irregular de quiosque é embargada na Barra da Tijuca', 'https://odia.ig.com.br/rio/quiosque').reason, 'weak_title'); ok('embargo de quiosque (R7 e O Dia) = fraco')
+  assert.deepEqual(st('infrastructure', 'Metrô da Gávea tem obras retomadas após dez anos', 'https://www1.folha.uol.com.br/cotidiano/2026/gavea.shtml', 'Obras da estação da Gávea foram retomadas após dez anos paradas.'), { strength: 'weak', reason: 'no_impact' }); ok('infraestrutura sem impacto no texto = fraco (no_impact)')
+  assert.equal(st('infrastructure', 'Metrô da Gávea tem obras retomadas após dez anos', 'https://www1.folha.uol.com.br/cotidiano/2026/gavea.shtml', 'Obras da estação retomadas; a expectativa é de valorização dos imóveis do entorno.').strength, 'strong'); ok('infraestrutura com "valorização dos imóveis" = forte')
+  assert.equal(st('launch', 'Transações Imobiliárias Realizadas | Amplitude Real Estate — Incorporação Residencial Estância Pernambuco Leblon', 'https://amplitudere.com.br/transacoes', 'Aquisição do terreno para incorporação residencial no Leblon.').strength, 'strong'); ok('lançamento da Amplitude = forte')
+  // ficha antiga/sem os campos, e modo off: tudo forte
+  const Q2only = parseQuality({ mode: 'enforce', version: 2, block_url_patterns: ['/x'] })
+  assert.deepEqual(signalStrength({ kind: 'launch', title: 'Funcionamento neste fim de semana', summary: '', source_url: 'https://a.com/conteudo-de-marca/x' }, Q2only), { strength: 'strong' })
+  assert.equal(signalStrength({ kind: 'launch', title: 'Funcionamento', summary: '', source_url: 'https://a.com/conteudo-de-marca/x' }, { ...Q3, mode: 'off' }).strength, 'strong'); ok('sem os campos novos (ou modo off) = tudo forte, comportamento antigo')
+  // coleta: grava strength/weak_reason na meta, nunca rejeita por fraco, conta em flagged
+  const rep = filterHitsReport([
+    hit({ title: 'Funcionamento do MetrôRio neste fim de semana em Ipanema', url: 'https://metrorio.com.br/aviso', content: 'Metrô de Ipanema funciona em horário especial neste fim de semana. Veja.' }),
+    hit({ title: 'Metrô chega a Ipanema e valoriza imóveis', url: 'https://oglobo.globo.com/rio/metro-ipanema', content: 'Obra em Ipanema deve valorizar os imóveis da região.' }),
+  ], { region: 'Ipanema', kind: 'infrastructure', days: 30, excludeDomains: [], nowMs: NOW, quality: Q3 })
+  assert.equal(rep.signals.length, 2); assert.equal(Object.keys(rep.rejected).length, 0)
+  assert.deepEqual([rep.signals[0].meta.strength, rep.signals[0].meta.weak_reason, rep.signals[1].meta.strength, rep.signals[1].meta.weak_reason], ['weak', 'weak_title', 'strong', undefined]); assert.equal(rep.flagged.weak_title, 1)
+  const off = filterHitsReport([hit()], { region: 'Ipanema', kind: 'infrastructure', days: 30, excludeDomains: [], nowMs: NOW }); assert.equal(off.signals[0].meta.strength, undefined); ok('coleta: meta.strength/weak_reason gravados, fraco não reprova e é contado; modo off não muda a meta')
 }
 
 console.log(`\n${n} verificações ok`)

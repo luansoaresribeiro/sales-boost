@@ -6,7 +6,7 @@
 import { QUALITY_OFF, normalizeTitle, normalizeUrl, type IntelQuality, type SignalKind } from './marketIntel.ts'
 
 export interface TavilyHit { title?: unknown; url?: unknown; content?: unknown; published_date?: unknown; score?: unknown }
-export interface NewsMeta { provider: 'tavily'; topic: SignalKind; score?: number | null; quality_v?: number; quality_ok?: boolean }
+export interface NewsMeta { provider: 'tavily'; topic: SignalKind; score?: number | null; quality_v?: number; quality_ok?: boolean; strength?: 'strong' | 'weak'; weak_reason?: WeakReason }
 export interface NewsSignal { kind: SignalKind; region: string; title: string; summary: string | null; source_name: string; source_url: string; observed_at: string; collected_by: 'system'; meta: NewsMeta }
 
 export const normalize = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -96,6 +96,21 @@ export function classifySignalQuality(s: QualityInput, q: IntelQuality, ctx: { h
   return 'ok'
 }
 
+export type WeakReason = 'weak_url' | 'weak_title' | 'no_impact'
+/** Força do sinal pelas regras da ficha (pura). Fraco = serviço, patrocinado, guia genérico ou sem impacto no mercado: serve de contexto, nunca de base de oportunidade.
+ *  Diferente de classifySignalQuality, vale TAMBÉM para domínio de confiança (portal bom publica aviso de serviço e conteúdo de marca). Campo ausente na ficha = tudo forte. */
+export function signalStrength(s: { kind: string; title: string; summary: string | null; source_url: string }, q: IntelQuality): { strength: 'strong' | 'weak'; reason?: WeakReason } {
+  if (q.mode === 'off') return { strength: 'strong' }
+  let path = ''
+  try { const u = new URL(s.source_url); path = (u.pathname + u.search).toLowerCase() } catch { /* sem caminho */ }
+  if (path && q.weak_url_patterns.some(p => p && path.includes(p))) return { strength: 'weak', reason: 'weak_url' }
+  const title = normalize(s.title ?? '')
+  if (q.weak_title_terms.some(t => hasTerm(title, normalize(t)))) return { strength: 'weak', reason: 'weak_title' }
+  const it = q.impact_terms[s.kind]
+  if (it?.length) { const text = normalize(`${s.title ?? ''} ${s.summary ?? ''}`); if (!it.some(t => hasTerm(text, normalize(t), true))) return { strength: 'weak', reason: 'no_impact' } }
+  return { strength: 'strong' }
+}
+
 export interface FilterReport { signals: NewsSignal[]; rejected: Record<string, number>; flagged: Record<string, number>; samples: { title: string; host: string; reason: string }[] }
 export interface FilterOpts { region: string; kind: SignalKind; days: number; excludeDomains: string[]; nowMs: number; seen?: Set<string>; seenTitles?: Set<string>; quality?: IntelQuality; hostCounts?: Map<string, number> }
 
@@ -130,11 +145,13 @@ export function filterHitsReport(hits: TavilyHit[], o: FilterOpts): FilterReport
       if (verdict !== 'ok' && q.mode === 'enforce') { rej(verdict, h, host); continue }
       if (verdict !== 'ok') rej(verdict, h, host, rep.flagged)
     }
+    const st = q.mode !== 'off' ? signalStrength({ kind: o.kind, title, summary: summary || null, source_url: url }, q) : null
+    if (st?.reason) { const k = 'weak_' + st.reason.replace(/^weak_/, ''); rep.flagged[k] = (rep.flagged[k] ?? 0) + 1 } // só conta: fraco nunca reprova
     seen.add(url); if (tk) seenTitles.add(tk)
     hostCounts.set(host, (hostCounts.get(host) ?? 0) + 1)
     rep.signals.push({
       kind: o.kind, region: o.region, title, summary: summary || null, source_name: host.slice(0, 120), source_url: url, observed_at: date, collected_by: 'system',
-      meta: { provider: 'tavily', topic: o.kind, score, ...(q.mode !== 'off' ? { quality_v: q.version, quality_ok: verdict === 'ok' } : {}) },
+      meta: { provider: 'tavily', topic: o.kind, score, ...(q.mode !== 'off' ? { quality_v: q.version, quality_ok: verdict === 'ok', strength: st!.strength, ...(st!.reason ? { weak_reason: st!.reason } : {}) } : {}) },
     })
   }
   return rep
