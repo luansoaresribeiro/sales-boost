@@ -18,6 +18,7 @@ import { norm, type Lang } from './opportunityEngine.ts'
 import { normalizeSlide, rewritePrompt, type DeckSlide } from './deckSlides.ts'
 import { parseJson } from './faqCheck.ts'
 import { NUMBER_ISSUE, unsourcedNumbers } from './numberGuard.ts'
+import { parseTrendCfg, type TrendCfg } from './pieceGuard.ts'
 
 export const PRICE_RANGE_ISSUE = 'valor em dinheiro sem fonte'
 
@@ -222,31 +223,34 @@ export async function lockDeckClaims(a: LockDeckIn): Promise<LockDeckOut> {
 }
 
 // ── Ficha do setor (regra 6): termos de mercado, campos de preço/quartos, capa com foto ────────────────────────────
-export interface ClaimCfg { terms: string[] | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; photoWhenItem: boolean; ctx: CtxCfg | null }
+export interface ClaimCfg { terms: string[] | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; photoWhenItem: boolean; ctx: CtxCfg | null; trends: TrendCfg | null }
 type Admin = { from: (t: string) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Lê da ficha: market_claims (pt/en), opportunity_fields e carousel_cover.educativo.photo_when_item. Falhou/sem ficha = genéricos, sem foto. */
 export async function loadClaimCfg(admin: Admin, verticalKey: string | null, lang: Lang): Promise<ClaimCfg> {
-  const none: ClaimCfg = { terms: null, fieldMap: null, photoWhenItem: false, ctx: null }
+  const none: ClaimCfg = { terms: null, fieldMap: null, photoWhenItem: false, ctx: null, trends: null }
   if (!verticalKey) return none
   try {
     const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
-    const c = (data?.config ?? {}) as { opportunity_texts?: { market_claims?: Record<string, unknown>; market_claims_ctx?: Record<string, { terms?: unknown; context?: unknown }> }; opportunity_fields?: { price?: string; bedrooms?: string; location?: string; money?: string[] }; carousel_cover?: { educativo?: { photo_when_item?: unknown } } }
+    const c = (data?.config ?? {}) as { opportunity_texts?: { market_claims?: Record<string, unknown>; market_trends?: Record<string, unknown>; market_claims_ctx?: Record<string, { terms?: unknown; context?: unknown }> }; opportunity_fields?: { price?: string; bedrooms?: string; location?: string; money?: string[] }; carousel_cover?: { educativo?: { photo_when_item?: unknown } } }
     const raw = c.opportunity_texts?.market_claims?.[lang]
     const terms = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string' && !!x.trim()) : []
     const cx = c.opportunity_texts?.market_claims_ctx?.[lang]
     const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()) : [])
     const ctx: CtxCfg | null = cx && strs(cx.terms).length ? { terms: strs(cx.terms), context: strs(cx.context) } : null
-    return { ctx, terms: terms.length ? terms : null, fieldMap: c.opportunity_fields && typeof c.opportunity_fields === 'object' ? c.opportunity_fields : null, photoWhenItem: c.carousel_cover?.educativo?.photo_when_item === true }
+    return { ctx, trends: parseTrendCfg(c.opportunity_texts?.market_trends?.[lang]), terms: terms.length ? terms : null, fieldMap: c.opportunity_fields && typeof c.opportunity_fields === 'object' ? c.opportunity_fields : null, photoWhenItem: c.carousel_cover?.educativo?.photo_when_item === true }
   } catch (e) { console.error('claimLock: ficha não lida (segue com os termos genéricos)', e); return none }
 }
 
 // ── Nota: motivos de nota baixa decididos em CÓDIGO (sem chamada de IA) ──────────────────────────────────────────
 export const QUALITY_PENALTY = 25
-export interface QualityFlag { key: 'afirmacao_sem_fonte' | 'capa_fraca'; label: string }
+export interface QualityFlag { key: 'afirmacao_sem_fonte' | 'capa_fraca' | 'tendencia_sem_fonte' | 'card_no_lugar'; label: string }
 /** "Tirei afirmação sem fonte" no reasoning = a IA tentou afirmar sem dado (a frase já saiu, mas a peça precisa de olho). Capa-índice (itens na capa) = capa fraca. */
 export function qualityFlags(p: { reasoning?: string | null; slides?: unknown }): QualityFlag[] {
   const out: QualityFlag[] = []
   if (/Tirei afirmação sem fonte/.test(String(p.reasoning ?? ''))) out.push({ key: 'afirmacao_sem_fonte', label: 'a IA tentou afirmar algo de mercado sem fonte (a frase foi retirada)' })
+  // A.6: afirmação de tendência de mercado sem sinal com fonte ("Precisa de fonte:") e carrossel que virou card único (slides não saíram).
+  if (/Precisa de fonte:/.test(String(p.reasoning ?? ''))) out.push({ key: 'tendencia_sem_fonte', label: 'a peça afirma tendência de mercado sem fonte' })
+  if (/Troquei o carrossel por um card único/.test(String(p.reasoning ?? ''))) out.push({ key: 'card_no_lugar', label: 'os slides não saíram e a peça virou um card único' })
   const first = Array.isArray(p.slides) ? (p.slides[0] as { layout?: string; text?: string } | undefined) : undefined
   if (first && first.layout === 'capa' && /( · .+){2,}/.test(String(first.text ?? ''))) out.push({ key: 'capa_fraca', label: 'a capa parece um índice dos slides, não um gancho' })
   return out
