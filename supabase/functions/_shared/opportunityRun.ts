@@ -12,6 +12,7 @@ import {
   type OppTexts, type PieceRow, type PostRow, type SignalRow, type TrendRow,
 } from './opportunityEngine.ts'
 import { MAX_CANDIDATES_TO_LLM, OPP_PROMPT_VERSION, buildPrompt, compareScored, finalizeChecked, parseLlm, score, type NotValidated } from './opportunityOutput.ts'
+import { planUpserts, type OpenRow } from './opportunityMerge.ts'
 import { parseQuality } from './marketIntel.ts'
 import { interpretFingerprint, recordRun, type RunInput } from './marketIntelRuns.ts'
 
@@ -21,7 +22,7 @@ export type Llm = (prompt: string, maxTokens: number) => Promise<{ text: string;
 export const WINDOW_DAYS = 60
 const REUSE_WINDOW_MS = 90_000 // duplo clique: devolve a rodada que acabou de sair em vez de gastar IA de novo
 
-export interface RunResult { ok: boolean; status: number; error?: string; run_id?: string | null; generated: number; considered: number; reused?: boolean; unchanged?: boolean; not_validated?: NotValidated[] }
+export interface RunResult { ok: boolean; status: number; error?: string; run_id?: string | null; generated: number; updated?: number; considered: number; reused?: boolean; unchanged?: boolean; not_validated?: NotValidated[] }
 
 type Bilingual = { pt?: string; en?: string } | string | undefined
 const pick = (b: Bilingual, lang: Lang): string => (typeof b === 'string' ? b : b?.[lang] ?? b?.pt ?? '')
@@ -130,11 +131,27 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
     return { ok: false, status: 502, generated: 0, considered: top.length, error: lang === 'en' ? 'The AI answer could not be read. Try again.' : 'Não consegui ler a resposta da IA. Tente de novo.' }
   }
 
-  const { drafts, notValidated } = finalizeChecked({ lang, candidates: top, facts: sentFacts, llm: parsed, marketClaims: texts.marketClaims, photoCounts })
+  const { drafts, notValidated } = finalizeChecked({ lang, candidates: top, facts: sentFacts, llm: parsed, marketClaims: texts.marketClaims, photoCounts, instagramConnected: input.instagramConnected })
   const validIds = new Set(catalog.map(i => i.id))
   const runId = crypto.randomUUID()
+  // Correção 3: oportunidade equivalente a uma ABERTA (mesmo tipo + mesmos itens [+ mesmo sinal]) atualiza a linha em vez de inserir outra.
+  let toInsert = drafts, updated = 0
+  const mergedInto: string[] = []
   if (drafts.length > 0) {
-    const { error } = await admin.from('growth_opportunities').insert(drafts.map(d => ({
+    const open = await admin.from('growth_opportunities').select('id, kind, item_ids, evidence, confidence, needs_validation, title, description, commercial_problem, audience, suggested_action, how_to_measure, status, plan_generated_at, decided_at').eq('company_id', companyId).eq('status', 'suggested').limit(200)
+    if (open.error) console.warn(`[opportunities] ${companyId} fila aberta ilegível, inserindo direto:`, open.error.message)
+    else {
+      const plan = planUpserts(drafts, (open.data ?? []) as OpenRow[], { runId, lang, validIds })
+      toInsert = [...plan.inserts]
+      for (const u of plan.updates) {
+        const { data: hit, error: upErr } = await admin.from('growth_opportunities').update(u.patch).eq('id', u.id).eq('company_id', companyId).eq('status', 'suggested').select('id')
+        if (upErr || !hit?.length) { console.warn(`[opportunities] ${companyId} não atualizou ${u.id} (vai como linha nova):`, upErr?.message ?? 'linha não está mais aberta'); toInsert.push(u.draft); continue }
+        updated++; mergedInto.push(u.id)
+      }
+    }
+  }
+  if (toInsert.length > 0) {
+    const { error } = await admin.from('growth_opportunities').insert(toInsert.map(d => ({
       company_id: companyId, kind: d.kind, title: d.title, description: d.description || null, commercial_problem: d.commercial_problem,
       evidence: d.evidence, item_ids: d.item_ids.filter(id => validIds.has(id)), audience: d.audience, suggested_action: d.suggested_action,
       how_to_measure: d.how_to_measure, confidence: d.confidence, needs_validation: d.needs_validation, status: 'suggested',
@@ -149,9 +166,11 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
   // NOT_VALIDATED: não entra na fila (growth_opportunities.status só aceita suggested/approved/dismissed e não há coluna meta — sem migration).
   // O motivo fica no registro da rodada (market_intel_runs.details), no log e no retorno.
   if (notValidated.length) console.warn(`[opportunities] ${companyId} não validadas:`, JSON.stringify(notValidated))
-  await logCost(admin, companyId, started, tokens, true, `${drafts.length} oportunidade(s) de ${top.length} candidato(s)${notValidated.length ? `; ${notValidated.length} não validada(s)` : ''}`)
-  await recordRun(admin, companyId, 'interpret', { ...runBase, details: { ...runBase.details, ...(notValidated.length ? { not_validated: notValidated } : {}) }, accepted: drafts.length, discarded: Math.max(0, top.length - drafts.length), unchanged: false, fingerprint, tokens })
-  return { ok: true, status: 200, run_id: drafts.length > 0 ? runId : null, generated: drafts.length, considered: top.length, ...(notValidated.length ? { not_validated: notValidated } : {}) }
+  const inserted = toInsert.length
+  const generated = inserted + updated
+  await logCost(admin, companyId, started, tokens, true, `${generated} oportunidade(s) de ${top.length} candidato(s) (${inserted} nova(s), ${updated} atualizada(s))${notValidated.length ? `; ${notValidated.length} não validada(s)` : ''}`)
+  await recordRun(admin, companyId, 'interpret', { ...runBase, details: { ...runBase.details, updated, ...(mergedInto.length ? { merged_into: mergedInto } : {}), ...(notValidated.length ? { not_validated: notValidated } : {}) }, accepted: generated, discarded: Math.max(0, top.length - generated), unchanged: false, fingerprint, tokens })
+  return { ok: true, status: 200, run_id: inserted > 0 ? runId : null, generated, updated, considered: top.length, ...(notValidated.length ? { not_validated: notValidated } : {}) }
 }
 
 // Custo da IA registrado como as outras actions (agent_performance); nunca derruba o fluxo.

@@ -13,6 +13,16 @@
 
 **Solução.** `signalStrength` (regras `weak_*`/`impact_terms` da ficha) vale até para domínio de confiança e só MARCA (nunca reprova). O motor recalcula a força com a ficha atual e só cria `market_change` com >= 1 evento forte; eventos iguais são agrupados (`groupEvents`); a independência do `market_change` conta só eventos externos fortes. Antes de mexer em `trusted_domains` ou `score`, rode `scripts/test-market-news.mjs` e `scripts/test-opportunity-engine.mjs`.
 
+## Fila de oportunidades acumulou repetidas entre rodadas — 2026-11-06
+
+**O que aconteceu.** Na Tespon havia 19 oportunidades abertas (`suggested`), muitas com o mesmo tipo e os mesmos itens, e 3 com a mesma ação ("adicionar fotos reais") em itens diferentes.
+
+**Causa.** Cada rodada só fazia `insert`; nada olhava o que já estava aberto. A consolidação antiga só juntava dentro da MESMA rodada e exigia mesmos itens.
+
+**Correção.** `opportunityMerge.ts` (puro): `planUpserts` atualiza a linha aberta equivalente (tipo + itens [+ sinal externo no `market_change`]; nunca título) e `consolidateByAction` junta a mesma ação em itens diferentes. Update falho ou linha que já saiu de `suggested` volta como insert (nada se perde). As antigas NÃO são apagadas sozinhas.
+
+**Regra.** Texto que afirma o que está fora do Sales Boost (redes, "invisível", "parado") só vale com Instagram conectado e fato do Instagram dizendo a ausência (`violatesExternal`). Mexeu nisso? Suba `OPP_PROMPT_VERSION` e rode `scripts/test-opportunity-merge.mjs` + `scripts/test-opportunity-engine.mjs`.
+
 ## Opportunity Engine inventou período (60 dias) — 2026-11-05
 
 **O que aconteceu.** Na Teste Zero saiu "Dois imóveis no Leblon sem posts nos últimos 60 dias" ("no catálogo há mais de 60 dias sem nenhum post"). Os dois itens tinham 3 dias e havia 7 peças prontas em `marketing_ai_test_content`.
