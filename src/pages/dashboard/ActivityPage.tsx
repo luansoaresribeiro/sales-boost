@@ -17,12 +17,13 @@ const BORDER = 'rgba(255,255,255,0.06)'
 // lá — por isso "chega no Telegram todo dia" mas "não aparece em Atividades"
 // eram, na prática, dois sistemas desconectados. Corrigido aqui: agora lê
 // da tabela certa, a mesma que já tem histórico real.
-interface BotNotifRow { id: string; bot_name: string | null; event_type: string; message: string; created_at: string }
+export interface BotNotifRow { id: string; bot_name: string | null; event_type: string; message: string; created_at: string }
 
 const EVENT_META: Record<string, { icon: string; label: string }> = {
   DAILY_REPORT: { icon: '📋', label: 'Relatório diário' },
   WEEKLY_REPORT: { icon: '🗓️', label: 'Relatório semanal' },
   MONTHLY_REPORT: { icon: '📊', label: 'Relatório mensal' },
+  ANNUAL_REPORT: { icon: '🏆', label: 'Relatório anual' },
   AGENT_ACTION: { icon: '🤖', label: 'Ação do agente' },
   OPPORTUNITY_DETECTED: { icon: '💰', label: 'Oportunidade detectada' },
   NEW_COMPETITOR: { icon: '🧭', label: 'Novo concorrente' },
@@ -32,18 +33,18 @@ const EVENT_META: Record<string, { icon: string; label: string }> = {
   concorrentes: { icon: '🧭', label: 'Concorrentes' },
 }
 const EVENT_LABEL_EN: Record<string, string> = {
-  DAILY_REPORT: 'Daily report', WEEKLY_REPORT: 'Weekly report', MONTHLY_REPORT: 'Monthly report', AGENT_ACTION: 'Agent action',
+  DAILY_REPORT: 'Daily report', WEEKLY_REPORT: 'Weekly report', MONTHLY_REPORT: 'Monthly report', ANNUAL_REPORT: 'Annual report', AGENT_ACTION: 'Agent action',
   OPPORTUNITY_DETECTED: 'Opportunity detected', NEW_COMPETITOR: 'New competitor', chat_response: 'Chat reply',
   conectar_ok: 'Connection', relatorio: 'Report', concorrentes: 'Competitors',
 }
-const eventMeta = (t: string, lang: 'pt' | 'en' = 'pt') => {
+export const eventMeta = (t: string, lang: 'pt' | 'en' = 'pt') => {
   const m = EVENT_META[t] ?? { icon: '🤖', label: t.replace(/_/g, ' ').toLowerCase().replace(/^./, c => c.toUpperCase()) }
   return lang === 'en' && EVENT_LABEL_EN[t] ? { ...m, label: EVENT_LABEL_EN[t] } : m
 }
 
 // Primeira linha da mensagem vira o título curto da lista; o resto some no
 // preview (2 linhas) e volta inteiro ao abrir o popup.
-function firstLine(msg: string): string {
+export function firstLine(msg: string): string {
   const l = msg.split('\n').find(s => s.trim().length > 0) ?? msg
   return l.replace(/^#+\s*/, '').trim()
 }
@@ -68,7 +69,41 @@ const DEMO_ACTIVITY: BotNotifRow[] = [
   { id: 'demo-4', bot_name: 'marketing', event_type: 'DAILY_REPORT', message: 'Relatório diário\nEngajamento subiu 12% depois dos posts das 19h.', created_at: new Date(_n - 30 * 3600e3).toISOString() },
 ]
 
-export default function ActivityPage() {
+// Popup de mensagem inteira — usado aqui e nos relatórios em destaque (ReportsPage).
+export function MessageModal({ row, lang, onClose }: { row: BotNotifRow; lang: 'pt' | 'en'; onClose: () => void }) {
+  const m = eventMeta(row.event_type, lang)
+  return (
+  <div onClick={() => onClose()} style={{
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
+  }}>
+    <div onClick={e => e.stopPropagation()} style={{
+      background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px',
+      maxWidth: '640px', width: '100%', maxHeight: '80vh', overflowY: 'auto',
+    }}>
+      <div style={{ padding: '22px 28px', borderBottom: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,109,41,0.7)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          {m.icon} {m.label}
+          {' · '}
+          {new Date(row.created_at).toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+        </span>
+        <button onClick={() => onClose()}
+          style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '20px', cursor: 'pointer', lineHeight: 1, padding: '4px' }}>
+          ✕
+        </button>
+      </div>
+      <div style={{ padding: '28px' }}>
+        <div style={{ fontSize: '13.5px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+          {row.message}
+        </div>
+      </div>
+    </div>
+  </div>
+  )
+}
+
+// embedded = dentro da página Relatórios (sem o cabeçalho próprio). A rota /atividades redireciona pra lá.
+export default function ActivityPage({ embedded = false }: { embedded?: boolean }) {
   const { user } = useAuth()
   const { lang } = useLang()
   const [activity, setActivity] = useState<BotNotifRow[]>([])
@@ -101,16 +136,16 @@ export default function ActivityPage() {
 
   return (
     <div>
-      <div style={{ padding: '28px 32px 24px', borderBottom: `1px solid ${BORDER}` }}>
+      {!embedded && <div style={{ padding: '28px 32px 24px', borderBottom: `1px solid ${BORDER}` }}>
         <h1 style={{ fontFamily: D, fontSize: '1.5rem', fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: '4px' }}>
           ✨ {lang === 'en' ? 'Agent activity' : 'Atividade do agente'}
         </h1>
         <p style={{ color: MUTED, fontSize: '13px' }}>
           {lang === 'en' ? 'Everything the agent sent to Telegram — reports, actions and opportunities found.' : 'Tudo que o agente mandou pro Telegram — relatórios, ações e oportunidades encontradas.'}
         </p>
-      </div>
+      </div>}
 
-      <div style={{ padding: '28px 32px' }}>
+      <div style={{ padding: embedded ? '0 32px 28px' : '28px 32px' }}>
         {loading ? (
           <div style={{ color: MUTED, fontSize: '14px' }}>{lang === 'en' ? 'Loading...' : 'Carregando...'}</div>
         ) : noCompany ? (
@@ -174,37 +209,7 @@ export default function ActivityPage() {
         )}
       </div>
 
-      {selected && (() => {
-        const m = eventMeta(selected.event_type, lang)
-        return (
-          <div onClick={() => setSelected(null)} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
-          }}>
-            <div onClick={e => e.stopPropagation()} style={{
-              background: CARD, border: `1px solid ${BORDER}`, borderRadius: '16px',
-              maxWidth: '640px', width: '100%', maxHeight: '80vh', overflowY: 'auto',
-            }}>
-              <div style={{ padding: '22px 28px', borderBottom: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,109,41,0.7)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  {m.icon} {m.label}
-                  {' · '}
-                  {new Date(selected.created_at).toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                </span>
-                <button onClick={() => setSelected(null)}
-                  style={{ background: 'transparent', border: 'none', color: MUTED, fontSize: '20px', cursor: 'pointer', lineHeight: 1, padding: '4px' }}>
-                  ✕
-                </button>
-              </div>
-              <div style={{ padding: '28px' }}>
-                <div style={{ fontSize: '13.5px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
-                  {selected.message}
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
+      {selected && <MessageModal row={selected} lang={lang} onClose={() => setSelected(null)} />}
     </div>
   )
 }

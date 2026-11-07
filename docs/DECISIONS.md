@@ -2914,3 +2914,17 @@ imóvel/oportunidade, não por peça". O único vínculo verificável por peça 
 e não aparece dentro dos blocos de resultado.
 
 **Como desfazer:** reverter o commit (só front; nenhum dado foi criado).
+
+## 2026-11-07 — Menu: abas Imóveis e Relatórios
+
+- **Decisão do dono (opção 1):** o menu lateral ganha a aba do catálogo logo abaixo de "Agentes" (seção Marketing AI) e "Atividades" é
+  substituída por **"Relatórios"**.
+- **Catálogo:** leva à mesma página do botão "+" → Adicionar item (`/dashboard/catalogo`). O rótulo **não é fixo no código**: vem da ficha
+  (`vertical_playbooks.config.vocabulary.catalog`, hoje "Meus imóveis" no setor imobiliário; ficha sem catálogo = "Catálogo"/"Catalog"). A ficha só tem
+  esse nome em um idioma (sem versão en) — decidir se vale um campo bilíngue (migration, não feita).
+- **Relatórios** (`/dashboard/relatorios`): em cima, os relatórios que o sistema já grava em `bot_notifications` (`WEEKLY_REPORT`,
+  `MONTHLY_REPORT`, `ANNUAL_REPORT`, da `periodic-report`), cada um abrindo inteiro no mesmo popup de mensagem da Atividade; embaixo, o histórico de
+  atividades (mesmo componente, mesma regra de exemplo marcado). O relatório diário continua só no histórico. O "relatório de saúde" (tabela `reports`)
+  segue na própria `/dashboard/relatorio` (link no topo da nova página), não foi misturado.
+- `/dashboard/atividades` redireciona para `/dashboard/relatorios`; o destino padrão de empresa com Marketing AI desligado também.
+- Só tela: nenhuma migration, função ou dado novo. **Como desfazer:** reverter o commit.

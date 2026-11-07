@@ -15,6 +15,8 @@ import { usePendencias } from '../../lib/usePendencias'
 import { importDiagnosisAnswers } from '../../lib/onboardingV2'
 import { useSetupStatus } from '../../lib/useSetupStatus'
 import { supabase } from '../../lib/supabase'
+import { fetchCatalogSchema } from '../../lib/verticalPlaybook'
+import { CATALOG_PATH } from './plusOptions'
 import logo from '../../assets/logo.png'
 
 const ORANGE = '#FF6D29'
@@ -28,13 +30,13 @@ const iconStroke = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, str
 type NavItem = { to: string; label: string; icon: React.ReactNode; end?: boolean; badge?: number }
 type NavSection = { section?: string; accent?: boolean; items: NavItem[] }
 
-function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: boolean; marketingAi: boolean }, businessName: string | null, approvalsCount = 0): NavSection[] {
+function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: boolean; marketingAi: boolean }, businessName: string | null, approvalsCount = 0, catalogLabel: string | null = null): NavSection[] {
   return [
     {
       items: [
         {
-          to: '/dashboard/atividades', label: T.layout.nav.activities,
-          icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M2.25 12c0-1.146.294-2.257.85-3.24a.75.75 0 0 1 1.32.72A5.98 5.98 0 0 0 3.75 12a5.98 5.98 0 0 0 .67 2.52.75.75 0 0 1-1.32.72A7.48 7.48 0 0 1 2.25 12ZM8.03 5.47a.75.75 0 0 1 0 1.06 5.98 5.98 0 0 0-1.75 4.22 5.98 5.98 0 0 0 1.75 4.22.75.75 0 1 1-1.06 1.06A7.48 7.48 0 0 1 4.78 10.75c0-2.07.84-3.95 2.19-5.3a.75.75 0 0 1 1.06.02Z" /><path d="M9.75 10.75a2.25 2.25 0 1 1 4.5 0 2.25 2.25 0 0 1-4.5 0Z" /><path d="M15.97 5.45a.75.75 0 0 1 1.06-.02 7.48 7.48 0 0 1 2.19 5.3 7.48 7.48 0 0 1-2.19 5.3.75.75 0 1 1-1.06-1.06 5.98 5.98 0 0 0 1.75-4.22 5.98 5.98 0 0 0-1.75-4.22.75.75 0 0 1 0-1.06ZM19.58 9.48a.75.75 0 0 1 1.32-.72c.556.983.85 2.094.85 3.24a7.48 7.48 0 0 1-.85 3.24.75.75 0 1 1-1.32-.72A5.98 5.98 0 0 0 20.25 12a5.98 5.98 0 0 0-.67-2.52Z" /></svg>,
+          to: '/dashboard/relatorios', label: T.layout.nav.reports,
+          icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></svg>,
         },
       ],
     },
@@ -49,7 +51,11 @@ function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: bool
         // Aba Agentes (C.2, 2026-11-07): fábrica 3D + os 5 cartões dos agentes.
         to: '/dashboard/agentes', label: T.layout.nav.agents,
         icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><circle cx="6" cy="7" r="2.2" /><circle cx="18" cy="7" r="2.2" /><circle cx="12" cy="18" r="2.2" /><path d="M8.2 7h7.6M7.2 9l3.8 7M16.8 9 13 16" /></svg>,
-      }],
+      }, ...(catalogLabel ? [{
+        // Aba do catálogo (07/11): mesma página do "+" → Adicionar item. Rótulo vem da ficha do setor (vocabulary.catalog).
+        to: CATALOG_PATH, label: catalogLabel,
+        icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M21 8.5 12 4 3 8.5v7L12 20l9-4.5v-7Z" /><path d="m3 8.5 9 4.5 9-4.5M12 13v7" /></svg>,
+      }] : [])],
     }] : []),
     {
       section: T.layout.sections.progress, accent: true,
@@ -135,7 +141,16 @@ function SidebarInner({ isMobile, open, onNavigate, onClose, approvalsCount }: {
   const { company } = useCompany()
   const flags = { agentesMenu: company?.agent_enabled ?? false, marketingAi: company?.marketing_ai_enabled ?? true }
 
-  const navSections = makeNavSections(T, flags, company?.business_name ?? null, approvalsCount)
+  // Rótulo da aba do catálogo: vem da ficha do setor (vocabulary.catalog); ficha sem catálogo = "Catálogo"/"Catalog" genérico.
+  // Só aparece depois de resolvido (evita piscar o nome errado).
+  const [catalogLabel, setCatalogLabel] = useState<string | null>(null)
+  const cVertical = company?.vertical_key ?? 'generico'
+  useEffect(() => {
+    let alive = true
+    void fetchCatalogSchema(cVertical).then(sc => { if (alive) setCatalogLabel(sc?.catalogLabel ?? T.layout.nav.catalog) })
+    return () => { alive = false }
+  }, [cVertical, T.layout.nav.catalog])
+  const navSections = makeNavSections(T, flags, company?.business_name ?? null, approvalsCount, catalogLabel)
   const bottomItems = makeBottomItems(T)
 
   const handleSignOut = async () => { await signOut(); navigate('/') }
