@@ -43,6 +43,16 @@
 3. **Semana 3:** B.4 e a operação real.
 4. **Semana 4:** medição, entrevista com o parceiro e a decisão sobre uma proposta paga de continuidade.
 
+### Pedidos do dono registrados em 07/11 (cada um com autorização própria)
+| # | Pedido | Onde entra | Decisões pendentes do dono |
+|---|---|---|---|
+| R.1 | **Painel do dashboard e Fábrica 3D "hoje"** | **Não entra agora.** O plano em vigor tira as telas do curto prazo até haver evidência do piloto. Se o dono quiser trazer para agora, é uma mudança de plano explícita. | — |
+| R.2 | **Botão "Gerar tour virtual" por imóvel, pago (US$ 4 ou R$ 29)**, sem repetir geração no Higgsfield | Proposta, depois da semana 1. É **oferta comercial** (ajuda a agir: tour para divulgar o imóvel) e mexe em gasto e em pagamento. | Preço final por país; forma de cobrar (o pagamento ainda não existe: N2/N4); o que acontece se a geração falhar (refazer sem custo? devolver?); se entra no piloto como cortesia |
+| R.3 | **Mapa do imóvel (ordem + quais cômodos se ligam)** antes de gerar, para não pagar duas vezes | Junto com o R.2. Lição de 08/10: entre cômodos que não se tocam, a IA inventa a passagem, então a ordem é decisiva. | — |
+| R.4 | **Demonstração no site:** 2 fotos lado a lado, botão "Gerar tour virtual", carregando, e o vídeo pronto com o título "Fotos de imóvel viram vídeos que vendem" | Pode entrar na semana 1 ou 2 como **material de prospecção** (ajuda a conversa com as imobiliárias). | Quais 2 fotos reais (com permissão) e o vídeo **gerado de verdade** a partir delas |
+| R.5 | **Conferir a integração com o Instagram antes do piloto com Instagram:** leitura de dados da conta, métricas e insights, leitura dos posts, publicação, renovação e guarda dos tokens | Entra como **A.7**, antes da B.4 com Instagram. É só verificação: confirmar com teste real o que já existe, não presumir. | Conta de Instagram de teste ou do parceiro, cadastrada como testadora |
+| R.6 | **Atividade dentro do sino** com uma cor diferente das notificações, discreta | Entra no **PR B** (fila "Depois"). Fica registrado como requisito de tela. | — |
+
 **Plano B:** sem parceiro até a semana 2, continuar prospectando e **não voltar a construir telas**. No produto, só correção de defeito.
 
 **Revisão semanal:** toda segunda-feira (prospecção, qualidade do produto e avanço do piloto). O agendamento depende de autorização do dono.
