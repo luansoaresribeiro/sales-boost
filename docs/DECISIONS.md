@@ -6,6 +6,22 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-06 — Ordem de trabalho: núcleo → telas → Telegram (dono)
+- **Ordem:**
+  1. O núcleo funcionando de verdade: Correção 3, relatório da fila, fechar a Fase 2, processo completo nas contas de teste, IA depois da recarga e teste final.
+  2. As telas: PR B, Bento, Fábrica 3D, cadastro e pagamento.
+  3. O Telegram.
+- **Detalhes, critérios e dependências:** [ROADMAP.md](ROADMAP.md), seção "Ordem aprovada".
+- **Motivo:** o dono quer um Sales Boost que encontre oportunidades comerciais relevantes e ajude a transformá-las em ações e demanda, e não mais funcionalidades, telas ou conteúdo de IA.
+  - O Telegram vem por último porque usa as mesmas regras, filas e permissões das telas.
+- **Etapa concluída:** só com o critério de pronto comprovado. Código juntado ou publicado não conta.
+- **Instagram:**
+  - @getsaleboost **não** pode ser usado em teste de publicação sem uma autorização específica do dono;
+  - o caminho é uma conta de teste ligada à Teste Zero;
+  - sem conta de teste, a etapa para, a limitação é documentada e uma alternativa é proposta;
+  - nem em teste algo é publicado sem o clique do dono.
+- **Toda etapa precisa de autorização antes de começar.** Isso vem depois de apresentar o objetivo, o escopo, os riscos e o critério de pronto.
+
 ## 2026-11-06 — Correção 3 do Opportunity Engine (fila sem repetição, tarefa única, Instagram desconectado)
 - **Motivo:** na Tespon a fila chegou a 19 oportunidades abertas, muitas repetindo o mesmo tipo e os mesmos itens (cada rodada só inseria). Três oportunidades pediam a MESMA ação ("adicionar fotos reais") para itens diferentes. Na Teste Zero o texto dizia "sem presença nas redes" / "invisíveis" / "imóveis parados" com o Instagram NÃO conectado: o sistema não sabe o que existe fora dele.
 - **Regras do dono (valem no código):**

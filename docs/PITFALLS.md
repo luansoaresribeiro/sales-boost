@@ -201,6 +201,11 @@ dono. Consequências:
   (Workers Builds), não nos secrets do GitHub.
 - Em branch de PR a Cloudflare comenta "Deployment successful", mas é só
   versão de prévia — o domínio só muda com push no `main`.
+- **Juntar o PR é publicar (2026-11-06).** O plano "publicar PR A e PR B juntos, uma vez só" não funcionou:
+  - o PR A (#113) foi ao ar sozinho no merge de 05/11;
+  - o diagnóstico multi-resposta (#117) também, antes do `npx wrangler deploy` do dono, que falhou porque a pasta `dist` não existia no computador dele.
+  - **Para segurar uma tela, não junte o PR** (ou junte os dois PRs em sequência).
+  - **Para conferir se subiu,** baixe o bundle de getsaleboost.com e procure um texto novo da tela.
 
 ## Popup de boas-vindas mostra números inventados
 
