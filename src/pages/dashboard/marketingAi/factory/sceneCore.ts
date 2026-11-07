@@ -7,10 +7,17 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
-export type ViewMode = 'overview' | 'side' | 'focus'
-export const FPS_LOW_BELOW = 40      // abaixo disso: qualidade baixa (sem sombras, pixelRatio 1)
-export const FPS_LEAVE_BELOW = 30    // continua abaixo disso depois: versão simples
-const FPS_WINDOW_MS = 1500           // 2 janelas de 1,5 s de interação = os "primeiros ~3 s"
+// Escada de desempenho (C.2.1), cada degrau só depois de uma janela de 1,5 s ruim:
+//   1) qualidade baixa (sem sombras, pixelRatio 1)  2) robôs congelados (pose estática do estado, ainda mostra a verdade)  3) versão leve, lembrada no aparelho.
+// Janela de interação (girar/aproximar): ruim = abaixo de 40 fps (degrau 1) / 30 fps (degraus 2 e 3). Janela de movimento ambiente
+// (robôs, limitado a ~30 fps de propósito): ruim = abaixo de 20 fps de verdade.
+export const FPS_LOW_BELOW = 40
+export const FPS_LEAVE_BELOW = 30
+export const AMBIENT_BAD_BELOW = 20
+export const AMBIENT_FPS = 30        // teto do movimento ambiente (respiração/trabalho dos robôs)
+const FPS_WINDOW_MS = 1500
+const HOME_TARGET = new THREE.Vector3(0, 1.0, 0.8)
+const BOUNDS = { x: 11, zMin: -6, zMax: 7, yMax: 4 }   // o alvo da câmera não sai da área da fábrica
 const MAX_PIXEL_RATIO = 1.5
 const SHADOW_SIZE = 1024
 const BG = 0x0e0b0a
@@ -19,7 +26,8 @@ export interface CoreOptions {
   container: HTMLElement
   reduceMotion: boolean
   startLow: boolean
-  onSlow: () => void          // fps continua baixo mesmo na qualidade baixa
+  onSlow: () => void          // degrau 3: continua ruim mesmo congelado → versão leve
+  onFrozen: () => void        // degrau 2: robôs congelados
   onContextLost: () => void
   onQualityLow: () => void
 }
@@ -57,8 +65,11 @@ export interface Core {
   dom: HTMLCanvasElement
   track: <T extends { dispose(): void }>(x: T) => T
   requestRender: () => void
-  onBeforeRender: (fn: () => void) => void
-  setView: (mode: ViewMode, target?: THREE.Vector3, instant?: boolean) => void
+  onBeforeRender: (fn: (ts: number) => void) => void
+  home: (instant?: boolean) => void
+  flyTo: (target: THREE.Vector3, instant?: boolean, shift?: { right?: number; down?: number }) => void
+  setAmbient: (want: boolean) => void   // há robô que se mexe? (laço ambiente só roda se sim)
+  ambientOn: () => boolean              // querendo E não congelado E sem "reduzir movimento"
   dispose: () => void
 }
 
@@ -96,43 +107,61 @@ export function createCore(o: CoreOptions): Core {
   fill.position.set(7, 6, -8)
   scene.add(fill)
 
+  // Câmera livre: arrastar gira, pinça/rodinha aproxima, dois dedos/botão direito desloca. Limites: não atravessa o chão
+  // (maxPolarAngle < 90°), zoom mínimo/máximo, alvo preso na área da fábrica (clampTarget). O dedo no canvas NÃO rola a página
+  // (touch-action none) — por isso a cortina aberta ocupa no máximo ~70% da altura da tela e a página rola pelo resto.
   const controls = new OrbitControls(camera, dom)
   controls.enableDamping = !o.reduceMotion
   controls.dampingFactor = 0.09
-  controls.enablePan = false
-  controls.minDistance = 7; controls.maxDistance = 60
-  controls.minPolarAngle = 0.15; controls.maxPolarAngle = Math.PI * 0.49
-  controls.rotateSpeed = 0.55
-  if (matchMedia('(pointer:coarse)').matches) { // celular: o dedo rola a página; o 3D se muda pelos botões de visão
-    controls.enableRotate = false; controls.enableZoom = false; dom.style.touchAction = 'pan-y'
+  controls.enablePan = true; controls.screenSpacePanning = false; controls.panSpeed = 0.8
+  controls.minDistance = 4.5; controls.maxDistance = 60
+  controls.minPolarAngle = 0.12; controls.maxPolarAngle = Math.PI * 0.47
+  controls.rotateSpeed = 0.55; controls.zoomSpeed = 0.8
+  controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
+  controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }
+  dom.style.touchAction = 'none'
+  const clampTarget = () => {
+    const t = controls.target
+    const d = new THREE.Vector3(THREE.MathUtils.clamp(t.x, -BOUNDS.x, BOUNDS.x) - t.x, THREE.MathUtils.clamp(t.y, 0, BOUNDS.yMax) - t.y, THREE.MathUtils.clamp(t.z, BOUNDS.zMin, BOUNDS.zMax) - t.z)
+    if (d.lengthSq() > 0) { t.add(d); camera.position.add(d) }
   }
 
-  // ---- desenho sob demanda: nenhum requestAnimationFrame contínuo ----
-  let raf = 0, paused = false, disposed = false
-  const hooks: (() => void)[] = []
+  // ---- desenho sob demanda: sem requestAnimationFrame com a cena parada ----
+  // O laço só existe quando há motivo: interação/voo de câmera/estado novo (até assentar) OU movimento ambiente dos robôs (≤ 30 fps).
+  // Cortina fechada = esta cena nem existe. Fora da tela ou aba oculta = nada roda.
+  let raf = 0, timer = 0, paused = false, disposed = false, ambientWanted = false, frozen = false
+  const hooks: ((ts: number) => void)[] = []
   let tween: { t0: number; dur: number; p0: THREE.Vector3; t1: THREE.Vector3; p1: THREE.Vector3; tg0: THREE.Vector3 } | null = null
-  // medição de fps: só frames consecutivos (intervalo < 400 ms) contam como "interação"
-  let lastTs = 0, accDt = 0, accFrames = 0, phase: 0 | 1 | 2 = o.startLow ? 1 : 0
+  const ambientOn = () => ambientWanted && !frozen && !o.reduceMotion
+  // medição de fps por tipo de janela; só intervalos < 400 ms contam
+  const acc = { busy: { dt: 0, n: 0 }, amb: { dt: 0, n: 0 } }
+  let lastTs = 0, phase: 1 | 2 | 3 | 4 = o.startLow ? 2 : 1   // 1 cheia · 2 qualidade baixa · 3 robôs congelados · 4 sem degrau (já foi pra versão leve)
 
-  const schedule = () => { if (!raf && !paused && !disposed) raf = requestAnimationFrame(frame) }
-  const sample = (ts: number) => {
-    if (phase === 2) return
-    if (lastTs && ts - lastTs < 400) { accDt += ts - lastTs; accFrames++ }
+  const schedule = () => {
+    if (disposed || paused) return
+    if (timer) { clearTimeout(timer); timer = 0 }
+    if (!raf) raf = requestAnimationFrame(frame)
+  }
+  const stepDown = () => {
+    if (phase === 1) { low = true; applyQuality(); phase = 2; o.onQualityLow() }
+    else if (phase === 2) { frozen = true; phase = 3; schedule(); o.onFrozen() }
+    else if (phase === 3) { phase = 4; o.onSlow() }
+  }
+  const sample = (ts: number, busy: boolean) => {
+    if (phase === 4) return
+    const a = busy ? acc.busy : acc.amb
+    if (lastTs && ts - lastTs < 400) { a.dt += ts - lastTs; a.n++ }
     lastTs = ts
-    if (accDt < FPS_WINDOW_MS) return
-    const fps = accFrames / (accDt / 1000)
-    accDt = 0; accFrames = 0
-    if (phase === 0) {
-      if (fps >= FPS_LOW_BELOW) { phase = 2; return }
-      low = true; applyQuality(); phase = 1; o.onQualityLow()
-    } else {
-      phase = 2
-      if (fps < FPS_LEAVE_BELOW) o.onSlow()
-    }
+    if (a.dt < FPS_WINDOW_MS) return
+    const fps = a.n / (a.dt / 1000)
+    acc.busy = { dt: 0, n: 0 }; acc.amb = { dt: 0, n: 0 }
+    const bad = busy ? fps < (phase === 1 ? FPS_LOW_BELOW : FPS_LEAVE_BELOW) : fps < AMBIENT_BAD_BELOW
+    if (bad) stepDown()
   }
   function frame(ts: number) {
     raf = 0
     if (disposed || paused) return
+    const w0 = performance.now()
     let busy = controls.update()
     if (tween) {
       const k = Math.min(1, (ts - tween.t0) / tween.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2
@@ -142,12 +171,13 @@ export function createCore(o: CoreOptions): Core {
       if (k >= 1) tween = null
       busy = true
     }
-    hooks.forEach(h => h())
+    hooks.forEach(h => h(ts))
     renderer.render(scene, camera)
-    sample(ts)
+    sample(ts, busy)
     if (busy) schedule()
+    else if (ambientOn() && !timer) timer = window.setTimeout(() => { timer = 0; schedule() }, Math.max(0, 1000 / AMBIENT_FPS - (performance.now() - w0) - 8))
   }
-  controls.addEventListener('change', schedule)
+  controls.addEventListener('change', () => { clampTarget(); schedule() })
 
   const resize = () => {
     const w = Math.max(1, container.clientWidth), h = Math.max(1, container.clientHeight)
@@ -159,34 +189,45 @@ export function createCore(o: CoreOptions): Core {
   ro.observe(container)
   // Fora da tela ou aba oculta: não desenha nada. Ao voltar, desenha 1 quadro.
   let inView = true
-  const syncPause = () => { paused = !inView || document.hidden; if (paused && raf) { cancelAnimationFrame(raf); raf = 0 } else if (!paused) { lastTs = 0; schedule() } }
+  const syncPause = () => {
+    paused = !inView || document.hidden
+    if (paused) { if (raf) cancelAnimationFrame(raf); raf = 0; if (timer) clearTimeout(timer); timer = 0 } else { lastTs = 0; schedule() }
+  }
   const io = new IntersectionObserver(es => { inView = es[es.length - 1].isIntersecting; syncPause() })
   io.observe(container)
   document.addEventListener('visibilitychange', syncPause)
   const lost = (e: Event) => { e.preventDefault(); o.onContextLost() }
   dom.addEventListener('webglcontextlost', lost)
 
-  const setView = (mode: ViewMode, target?: THREE.Vector3, instant = false) => {
-    const fit = Math.max(0.95, 1.8 / camera.aspect)
-    const tg = mode === 'focus' && target ? target.clone().add(new THREE.Vector3(0, 1.2, 0)) : new THREE.Vector3(0, 1.0, 0.8)
-    const p = mode === 'overview' ? new THREE.Vector3(0, 10.5 * fit, 15 * fit)
-      : mode === 'side' ? new THREE.Vector3(0, 3.2 * fit, 19 * fit)
-      : tg.clone().add(new THREE.Vector3(0, 4.2, 11))
-    if (o.reduceMotion || instant) { camera.position.copy(p); controls.target.copy(tg); camera.lookAt(tg); schedule(); return }
+  const fit = () => Math.max(1.12, 1.8 / camera.aspect)
+  const go = (p: THREE.Vector3, tg: THREE.Vector3, instant: boolean) => {
+    if (o.reduceMotion || instant) { tween = null; camera.position.copy(p); controls.target.copy(tg); camera.lookAt(tg); schedule(); return }
     tween = { t0: performance.now(), dur: 650, p0: camera.position.clone(), p1: p, tg0: controls.target.clone(), t1: tg }
     schedule()
   }
+  const home = (instant = false) => go(new THREE.Vector3(0, 10.5 * fit(), 15 * fit()), HOME_TARGET.clone(), instant)
+  // Voo até uma estação: mantém o ângulo de giro atual, aproxima e olha de uma altura confortável.
+  // shift: deixa a estação fora do painel (right = ela aparece à esquerda do centro; down = aparece mais acima, pra folha de baixo do celular).
+  const flyTo = (target: THREE.Vector3, instant = false, shift: { right?: number; down?: number } = {}) => {
+    const aim = target.clone().add(new THREE.Vector3(0, 1.3 - (shift.down ?? 0), 0))
+    if (shift.right) { const r = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0); r.y = 0; aim.add(r.normalize().multiplyScalar(shift.right)) }
+    const sph = new THREE.Spherical().setFromVector3(camera.position.clone().sub(controls.target))
+    sph.radius = THREE.MathUtils.clamp(10.5 * Math.max(1, 1.15 / camera.aspect), controls.minDistance, controls.maxDistance)
+    sph.phi = THREE.MathUtils.clamp(sph.phi, 0.95, 1.3)
+    go(aim.clone().add(new THREE.Vector3().setFromSpherical(sph)), aim, instant)
+  }
   resize()
-  setView('overview', undefined, true)
+  home(true)
   applyQuality()
 
   const dispose = () => {
     disposed = true
     if (raf) cancelAnimationFrame(raf)
+    if (timer) clearTimeout(timer)
+    raf = 0; timer = 0
     ro.disconnect(); io.disconnect()
     document.removeEventListener('visibilitychange', syncPause)
     dom.removeEventListener('webglcontextlost', lost)
-    controls.removeEventListener('change', schedule)
     controls.dispose()
     scene.traverse(n => {
       const m = n as THREE.Mesh
@@ -200,5 +241,5 @@ export function createCore(o: CoreOptions): Core {
     renderer.forceContextLoss()
     dom.remove()
   }
-  return { scene, camera, dom, track, requestRender: schedule, onBeforeRender: fn => { hooks.push(fn) }, setView, dispose }
+  return { scene, camera, dom, track, requestRender: schedule, onBeforeRender: fn => { hooks.push(fn) }, home, flyTo, setAmbient: w => { ambientWanted = w; schedule() }, ambientOn, dispose }
 }

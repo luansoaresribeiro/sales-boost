@@ -1101,3 +1101,14 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - **Ordem de rotação:** o `Kit.add` usa `Euler 'YXZ'` (gira em X e depois em Y); com o padrão `XYZ` as setas da esteira apontam pro lado errado.
 - **Desenho sob demanda:** o `OrbitControls` com amortecimento só para de pedir quadro quando `controls.update()` devolve `false`; em aparelho lento isso leva mais tempo em segundos (não é laço contínuo — parado de verdade dá 0 `requestAnimationFrame`).
 - **React:** `border` + `borderColor` no mesmo `style` gera aviso a cada re-render; use uma cor só calculada.
+
+## Fábrica 3D (C.2.1): laço de animação, escada de desempenho e rAF de terceiros (2026-11-07)
+
+- **O dashboard já tem `requestAnimationFrame` de fora da fábrica:** `gsap/ScrollTrigger` (`_rafBugFix`) chama rAF ~60×/s em qualquer página, mesmo com a cortina fechada. Pra provar "zero rAF da fábrica" filtre pela pilha de chamada (sem `gsap`/`ScrollTrigger`), senão o número nunca é 0.
+- **Movimento ambiente tem que ter medida própria:** o teto de ~30 fps de propósito faria qualquer janela de fps parecer "ruim" na escada. Por isso há dois tipos de janela (interação <40/<30 fps; ambiente <20 fps) em `sceneCore.sample`. Se mexer nos limites, rode o teste de CPU 20x (cada degrau aparece em ~2-5 s).
+- **Depois do degrau "robôs congelados" não há mais quadros sozinhos:** o último degrau (versão leve) só dispara se a pessoa interagir (girar) e continuar lento — é de propósito (parado não gasta nada).
+- **`controls.update()` do OrbitControls reescreve a posição da câmera:** em teste/harness não dê `camera.position.set(...)` direto; use `core.flyTo(..., true)`/`core.home(true)`.
+- **Alvo preso na área:** o clamp precisa mover a câmera junto com o alvo (translação), senão a câmera "pula" ao encostar no limite (`clampTarget` em `sceneCore.ts`).
+- **Celular + câmera livre:** `touch-action: none` no canvas impede o dedo de rolar a página. Limite de ~70% da altura e o alinhamento automático ao abrir deixam uma faixa rolável; não aumente a altura sem rever isso.
+- **Cartão com botão dentro de botão:** o cartão do agente na aba Agentes virou `div` com dois botões (mostrar na fábrica / "Abrir"); botão aninhado é HTML inválido e quebra o foco do teclado.
+- **Teste com a fábrica aberta sem GPU:** a escada dispara sozinha (WebGL por software); para prints use a janela dos primeiros ~3 s ou o harness em página em branco (`reduceMotion` + `startLow` na criação do núcleo).

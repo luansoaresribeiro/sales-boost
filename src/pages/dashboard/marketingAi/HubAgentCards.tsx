@@ -63,21 +63,13 @@ export function FlowArrow() {
 
 // Card hero — mesmo tamanho e estilo nos 5, formando o fluxo vertical do Growth OS (pedido do dono, 2026-10-07).
 // Na aba Agentes (C.2) o cartão também fala com a fábrica: `selected` destaca, `onSelect` dispara ao focar (teclado/clique), `id` serve de âncora.
-export function HeroAgentCard({ m, badge, onClick, model, lang, id, selected, onSelect }: { m: CardModule; badge: string; onClick: () => void; model: CardModel; lang: Lang; id?: string; selected?: boolean; onSelect?: () => void }) {
+export function HeroAgentCard({ m, badge, onClick, model, lang, id, selected, onSelect, onShow }: { m: CardModule; badge: string; onClick: () => void; model: CardModel; lang: Lang; id?: string; selected?: boolean; onSelect?: () => void; onShow?: () => void }) {
   const [hover, setHover] = useState(false)
   const t = TX[lang]
   const color = model.tone === 'alert' ? ORANGE : model.tone === 'ok' ? '#4ade80' : MUTED
-  return (
-    <button id={id} aria-current={selected || undefined} onFocus={onSelect} onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} title={m.desc}
-      style={{
-        width: '100%', boxSizing: 'border-box', textAlign: 'left', cursor: 'pointer', fontFamily: D,
-        display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap',
-        background: 'linear-gradient(135deg, rgba(255,109,41,0.12), rgba(255,109,41,0.04))',
-        border: `1px solid ${hover || selected ? 'rgba(255,109,41,0.6)' : 'rgba(255,109,41,0.3)'}`, outline: selected ? '2px solid rgba(255,109,41,0.55)' : 'none', outlineOffset: '2px',
-        borderRadius: '18px', padding: '20px 26px', transition: 'border-color 0.18s, box-shadow 0.18s, transform 0.18s',
-        transform: hover ? 'translateY(-2px)' : 'none',
-        boxShadow: hover || selected ? '0 12px 34px rgba(255,109,41,0.18)' : '0 4px 18px rgba(255,109,41,0.08)',
-      }}>
+  const lit = hover || selected
+  const body = (
+    <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '58px', height: '58px', flexShrink: 0, borderRadius: '16px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.25)', fontSize: '30px' }}>{m.icon}</div>
       <div style={{ flex: 1, minWidth: '220px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
@@ -88,9 +80,35 @@ export function HeroAgentCard({ m, badge, onClick, model, lang, id, selected, on
         {model.info && <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '3px', lineHeight: 1.45 }}>{model.info}</div>}
         {model.next && <div style={{ fontSize: '12px', color: ORANGE, fontWeight: 700, marginTop: '3px' }}>{t.nextLbl}: {model.next}</div>}
       </div>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexShrink: 0, padding: '11px 20px', borderRadius: '11px', background: hover ? ORANGE : 'rgba(255,109,41,0.14)', border: `1px solid ${hover ? ORANGE : 'rgba(255,109,41,0.35)'}`, color: hover ? '#0E0B0A' : ORANGE, fontSize: '13px', fontWeight: 800, transition: 'background 0.18s, color 0.18s' }}>
-        {t.open} <span style={{ transition: 'transform 0.18s', transform: hover ? 'translateX(3px)' : 'none' }}>→</span>
+    </>
+  )
+  const openBtn = (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexShrink: 0, padding: '11px 20px', borderRadius: '11px', background: hover ? ORANGE : 'rgba(255,109,41,0.14)', border: `1px solid ${hover ? ORANGE : 'rgba(255,109,41,0.35)'}`, color: hover ? '#0E0B0A' : ORANGE, fontSize: '13px', fontWeight: 800, transition: 'background 0.18s, color 0.18s' }}>
+      {t.open} <span style={{ transition: 'transform 0.18s', transform: hover ? 'translateX(3px)' : 'none' }}>→</span>
+    </span>
+  )
+  const frame = {
+    width: '100%', boxSizing: 'border-box', textAlign: 'left', cursor: 'pointer', fontFamily: D,
+    display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap',
+    background: 'linear-gradient(135deg, rgba(255,109,41,0.12), rgba(255,109,41,0.04))',
+    border: `1px solid ${lit ? 'rgba(255,109,41,0.6)' : 'rgba(255,109,41,0.3)'}`, outline: selected ? '2px solid rgba(255,109,41,0.55)' : 'none', outlineOffset: '2px',
+    borderRadius: '18px', padding: '20px 26px', transition: 'border-color 0.18s, box-shadow 0.18s, transform 0.18s',
+    transform: hover ? 'translateY(-2px)' : 'none',
+    boxShadow: lit ? '0 12px 34px rgba(255,109,41,0.18)' : '0 4px 18px rgba(255,109,41,0.08)',
+  } as const
+  // Aba Agentes (C.2.1): tocar no cartão mostra a estação na fábrica (abre a cortina, voa até ela); só o botão "Abrir" vai pra tela do agente.
+  if (onShow) {
+    const main = { display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap', flex: 1, minWidth: '260px', background: 'none', border: 'none', padding: 0, margin: 0, textAlign: 'left', color: 'inherit', font: 'inherit', cursor: 'pointer' } as const
+    return (
+      <div id={id} aria-current={selected || undefined} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{ ...frame, cursor: 'default' }}>
+        <button type="button" title={m.desc} onFocus={onSelect} onClick={onShow} style={main}>{body}</button>
+        <button type="button" aria-label={`${t.open}: ${m.title}`} onClick={onClick} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: D }}>{openBtn}</button>
       </div>
+    )
+  }
+  return (
+    <button id={id} aria-current={selected || undefined} onFocus={onSelect} onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} title={m.desc} style={frame}>
+      {body}{openBtn}
     </button>
   )
 }

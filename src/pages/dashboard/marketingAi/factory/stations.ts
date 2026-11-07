@@ -7,6 +7,7 @@ import type { Core } from './sceneCore'
 import { Kit } from './sceneCore'
 import { buildConveyor, buildReturnDuct } from './conveyor'
 import { STATION_KEYS, type StateKind, type StationKey } from './factoryState'
+import { buildRobots } from './robots'
 
 export const ORANGE = 0xff6d29
 const RED = 0xa32a22
@@ -79,6 +80,7 @@ export interface Factory {
   setSelected: (k: StationKey | null) => void
   setHover: (k: StationKey | null) => void
   worldPos: (k: StationKey) => THREE.Vector3
+  freeze: () => void      // escada de desempenho: robôs param na pose estática do estado (continua mostrando a verdade)
 }
 
 export function buildFactory(core: Core, lang: 'pt' | 'en'): Factory {
@@ -124,9 +126,16 @@ export function buildFactory(core: Core, lang: 'pt' | 'en'): Factory {
   const selRing = marker(selMat, 2.2), hoverRing = marker(hoverMat, 2.2)
   const place = (me: THREE.Mesh, k: StationKey | null) => { if (!k) { me.visible = false; return }; const [x, z] = STATION_POS[k]; me.position.set(x, 0.38, z); me.visible = true }
 
+  // Robôs (C.2.1): pose vem do estado real (robotState). O movimento ambiente só roda se algum robô descansa/trabalha.
+  const robots = buildRobots(core, STATION_POS)
+  core.onBeforeRender(ts => { if (core.ambientOn()) robots.animate(ts / 1000) })
   return {
     hits,
-    setStates: s => { STATION_KEYS.forEach(k => { lamps.get(k)!.material = lampMat(s[k]); rings.get(k)!.visible = s[k] === 'approval' }); core.requestRender() },
+    setStates: s => {
+      STATION_KEYS.forEach(k => { lamps.get(k)!.material = lampMat(s[k]); rings.get(k)!.visible = s[k] === 'approval' })
+      robots.setKinds(s); core.setAmbient(robots.needsMotion()); core.requestRender()
+    },
+    freeze: () => { robots.animate(null); core.requestRender() },
     setSelected: k => { place(selRing, k); core.requestRender() },
     setHover: k => { place(hoverRing, k); core.requestRender() },
     worldPos: k => new THREE.Vector3(STATION_POS[k][0], 0, STATION_POS[k][1]),
