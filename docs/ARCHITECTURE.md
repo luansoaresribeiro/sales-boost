@@ -719,6 +719,7 @@ regras do código permitem calcular), 1–2 contagens e, em laranja, o que esper
 
 > **2026-11-07 (C.2):** os 5 cartões do fluxo saíram do hub e foram pra aba **Agentes** (`/dashboard/agentes`, `AgentsPage.tsx`, item do menu logo abaixo do hub),
 > junto da **Fábrica 3D parada** (`marketingAi/factory/`, chunk à parte — ver [DECISIONS.md](DECISIONS.md#2026-11-07--aba-agentes--fábrica-3d-parada-c2)).
+> **2026-11-07 (C.2.1 — mapa da fábrica):** a fábrica agora é uma **cortina** no topo da aba Agentes (`FactorySection.tsx` + `CurtainUi.tsx`): fechada = HTML/CSS, 5 luzes + frase do que precisa do dono, **sem three e sem laço de animação**; aberta = chunk `FactoryScene` (`sceneCore.ts` câmera livre/escada de desempenho, `stations.ts` estações, `robots.ts` 5 robôs, `conveyor.ts`) ou a versão leve 2D (`StationUi.tsx`, mesmo conteúdo do painel 3D). O que cada robô mostra vem de `robotState.ts` (mapa estado → pose, testado em `scripts/test-robot-state.mjs`): só `EXECUTING` (estação 4) vira "Trabalhando"; estados desconhecidos ficam desligados, nunca "Descansando". Ver [DECISIONS.md](DECISIONS.md#2026-11-07--fábrica-c21-cortina-câmera-livre-e-robôs-que-mostram-a-verdade).
 > No hub ficou só a linha "Sua equipe de agentes" (5 luzes 2D + "Ver agentes →"). O item 4 da lista abaixo ("os 5 cards do fluxo") vale hoje para a aba Agentes.
 
 **Hub, de cima pra baixo (Fase 1, 2026-11-03):** (1) cabeçalho; (2) **4 indicadores de decisão** (`DecisionKpis.tsx` + `useDecisionKpis.ts`;

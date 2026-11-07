@@ -4,7 +4,7 @@ import { useCompany } from '../../../../contexts/CompanyContext'
 import type { Lang } from '../../../../contexts/LanguageContext'
 import { useStrategySummary } from '../useStrategySummary'
 import { useFlowSummary } from '../useFlowSummary'
-import { useDecisionKpis } from '../useDecisionKpis'
+import { useDecisionKpis, type DecisionKpis } from '../useDecisionKpis'
 import { cardModels, type CardModel } from '../HubAgentCards'
 import type { DemoAgentStatus } from '../growthDemo'
 import { buildStations, FAILED_WINDOW_DAYS, type ActionsRead, type StationInfo, type StationKey } from './factoryState'
@@ -25,7 +25,7 @@ const STATUS = {
 
 interface Reads { market: { at: string | null } | 'error' | null; actions: ActionsRead | null; at: Date | null }
 
-export function useFactoryState(lang: Lang): { cards: Record<StationKey, CardModel>; stations: Record<StationKey, StationInfo>; loading: boolean } {
+export function useFactoryState(lang: Lang): { cards: Record<StationKey, CardModel>; stations: Record<StationKey, StationInfo>; kpis: DecisionKpis; loading: boolean } {
   const { company } = useCompany()
   const companyId = company?.id
   const { summary, loading: stratLoading, error: stratError } = useStrategySummary(companyId)
@@ -78,6 +78,6 @@ export function useFactoryState(lang: Lang): { cards: Record<StationKey, CardMod
       lang, cards, kpis, flow, actions: reads.actions, marketLastAt: marketAt, strategyUpdatedAt: summary?.updated_at ?? null, hasStrategy: !!summary,
       instagramConnected: !!company?.instagram_user_id, loading, updatedAt: reads.at ?? new Date(), now: (reads.at ?? new Date()).getTime(),
     })
-    return { cards, stations, loading }
+    return { cards, stations, kpis, loading }
   }, [lang, kpis, kpisLoading, flow, summary, stratLoading, stratError, reads, company?.instagram_user_id, loading])
 }
