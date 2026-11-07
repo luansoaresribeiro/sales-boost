@@ -23,6 +23,7 @@ import SettingsPage from './pages/dashboard/SettingsPage.tsx'
 import OpportunitiesPage from './pages/dashboard/OpportunitiesPage.tsx'
 import GrowthOpportunitiesPage from './pages/dashboard/GrowthOpportunitiesPage.tsx'
 import MarketingAiHubPage from './pages/dashboard/MarketingAiHubPage.tsx'
+import AgentsPage from './pages/dashboard/AgentsPage.tsx'
 import CatalogPage from './pages/dashboard/CatalogPage.tsx'
 import BusinessProgressPage from './pages/dashboard/BusinessProgressPage.tsx'
 import TrialSummaryPage from './pages/dashboard/TrialSummaryPage.tsx'
@@ -163,6 +164,8 @@ function RouterRoot() {
         <Route path="posts/*" element={<Navigate to="/dashboard/marketing-ai" replace />} />
         <Route path="agente" element={<Navigate to="/dashboard/marketing-ai" replace />} />
         <Route path="marketing-ai" element={<MarketingAiHubPage />} />
+        {/* Aba Agentes (C.2): fábrica 3D (carregada à parte) + cartões dos 5 agentes. */}
+        <Route path="agentes" element={<AgentsPage />} />
         {/* Catálogo (imóveis/itens): página própria, aberta pelo botão "+" (2026-11-01). */}
         <Route path="catalogo" element={<CatalogPage />} />
         <Route path="marketing-ai/:section" element={<MarketingAiSectionPage />} />

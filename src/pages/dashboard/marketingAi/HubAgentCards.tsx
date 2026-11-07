@@ -62,20 +62,21 @@ export function FlowArrow() {
 }
 
 // Card hero — mesmo tamanho e estilo nos 5, formando o fluxo vertical do Growth OS (pedido do dono, 2026-10-07).
-export function HeroAgentCard({ m, badge, onClick, model, lang }: { m: CardModule; badge: string; onClick: () => void; model: CardModel; lang: Lang }) {
+// Na aba Agentes (C.2) o cartão também fala com a fábrica: `selected` destaca, `onSelect` dispara ao focar (teclado/clique), `id` serve de âncora.
+export function HeroAgentCard({ m, badge, onClick, model, lang, id, selected, onSelect }: { m: CardModule; badge: string; onClick: () => void; model: CardModel; lang: Lang; id?: string; selected?: boolean; onSelect?: () => void }) {
   const [hover, setHover] = useState(false)
   const t = TX[lang]
   const color = model.tone === 'alert' ? ORANGE : model.tone === 'ok' ? '#4ade80' : MUTED
   return (
-    <button onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} title={m.desc}
+    <button id={id} aria-current={selected || undefined} onFocus={onSelect} onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} title={m.desc}
       style={{
         width: '100%', boxSizing: 'border-box', textAlign: 'left', cursor: 'pointer', fontFamily: D,
         display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap',
         background: 'linear-gradient(135deg, rgba(255,109,41,0.12), rgba(255,109,41,0.04))',
-        border: `1px solid ${hover ? 'rgba(255,109,41,0.6)' : 'rgba(255,109,41,0.3)'}`,
+        border: `1px solid ${hover || selected ? 'rgba(255,109,41,0.6)' : 'rgba(255,109,41,0.3)'}`, outline: selected ? '2px solid rgba(255,109,41,0.55)' : 'none', outlineOffset: '2px',
         borderRadius: '18px', padding: '20px 26px', transition: 'border-color 0.18s, box-shadow 0.18s, transform 0.18s',
         transform: hover ? 'translateY(-2px)' : 'none',
-        boxShadow: hover ? '0 12px 34px rgba(255,109,41,0.18)' : '0 4px 18px rgba(255,109,41,0.08)',
+        boxShadow: hover || selected ? '0 12px 34px rgba(255,109,41,0.18)' : '0 4px 18px rgba(255,109,41,0.08)',
       }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '58px', height: '58px', flexShrink: 0, borderRadius: '16px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.25)', fontSize: '30px' }}>{m.icon}</div>
       <div style={{ flex: 1, minWidth: '220px' }}>
