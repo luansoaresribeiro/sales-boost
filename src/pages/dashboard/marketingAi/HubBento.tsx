@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type MouseEvent, type ReactNode, type TouchEvent } from 'react'
+import { useMemo, useState, type CSSProperties, type MouseEvent, type ReactNode, type TouchEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Lang } from '../../../contexts/LanguageContext'
 import { MUTED, D, ORANGE, CARD } from './shared'
@@ -8,6 +8,9 @@ import type { AttentionData, Row } from './useAttention'
 import { TX as ATX, ROUTE } from './AttentionBlock'
 import { TX as KTX, decisionTiles } from './DecisionKpis'
 import { useMarketChanges } from './useMarketChanges'
+import { useCompany } from '../../../contexts/CompanyContext'
+import { IgBars, MarketSparkline, StackBar, C_AMBER, C_GRAPH, C_MAIN, chartText } from './BentoCharts'
+import { demoBento, useIgSeries, useMarketSeries, useOppSeries } from './useBentoSeries'
 import { changesText, demoChanges, describeChanges, ignoredLine } from './marketChanges'
 
 // Bento do topo do Marketing AI (C.1, 2026-11-07): só reorganiza o que já existia — mesmos hooks, mesmos números, nenhuma métrica nova.
@@ -20,6 +23,9 @@ const TX = {
     cSignals: (n: number, a: number | null) => `${n} sinal${n === 1 ? '' : 'is'} de mercado${a ? ` (${a} automático${a === 1 ? '' : 's'})` : ''}`,
     cRun: (d: string) => `última rodada de oportunidades ${d}`, cNoRun: 'ainda sem rodada de oportunidades',
     objective: 'Objetivo',
+    ig: 'Performance do Instagram', igConnect: 'Conecte o Instagram para ver o desempenho', igConnectHint: 'Depois de conectar, o alcance e as interações dos seus posts aparecem aqui.', igConnectCta: 'Ir para Configurações → Conexões', igNone: 'Ainda sem publicações medidas',
+    igNoneHint: 'Quando houver posts com métricas, eles aparecem aqui.', igWin: (n: number) => `últimos ${n} posts medidos, com a média da própria conta`, mkLoading: 'Carregando gráfico…', approvalsWin: 'peças originais, mesma contagem da tela de Aprovações',
+    ready: 'Prontas', review: 'Em revisão', scheduled: 'Agendadas', waiting: 'Aguardando', approved: 'Aprovadas', dismissed: 'Descartadas', detail: 'Ver detalhes',
   },
   en: {
     next: 'Next action', approvals: 'Pending approvals', approvalsHint: 'pieces ready for you to approve', market: 'What changed in the market', opps: 'Opportunities',
@@ -28,6 +34,9 @@ const TX = {
     cSignals: (n: number, a: number | null) => `${n} market signal${n === 1 ? '' : 's'}${a ? ` (${a} automatic)` : ''}`,
     cRun: (d: string) => `last opportunity run ${d}`, cNoRun: 'no opportunity run yet',
     objective: 'Objective',
+    ig: 'Instagram performance', igConnect: 'Connect Instagram to see performance', igConnectHint: 'Once connected, the reach and interactions of your posts show up here.', igConnectCta: 'Go to Settings → Connections', igNone: 'No measured posts yet',
+    igNoneHint: 'When there are posts with metrics, they show up here.', igWin: (n: number) => `last ${n} measured posts, with the account’s own average`, mkLoading: 'Loading chart…', approvalsWin: 'original pieces, same count as the Approvals screen',
+    ready: 'Ready', review: 'In review', scheduled: 'Scheduled', waiting: 'Waiting', approved: 'Approved', dismissed: 'Dismissed', detail: 'See details',
   },
 } as const
 
@@ -101,6 +110,13 @@ export default function HubBento({ lang, companyId, kpis, kpisLoading, demo, att
   const locale = lang === 'en' ? 'en-US' : 'pt-BR'
   const loading = demo ? false : kpisLoading
   const { state: mc } = useMarketChanges(companyId, !demo)
+  const { company } = useCompany()
+  const igConnected = !!company?.instagram_user_id
+  const bc = chartText(lang)
+  const mSeries = useMarketSeries(companyId, !demo)
+  const oSeries = useOppSeries(companyId, !demo)
+  const iSeries = useIgSeries(companyId, !demo && igConnected)
+  const ex = useMemo(() => demoBento(companyId), [companyId])
   const [openColl, setOpenColl] = useState(false)
   const tag = demo && t.demoTag
   const fmt = (d: string) => { const [y, m, dd] = d.split('-').map(Number); return new Date(y, m - 1, dd).toLocaleDateString(locale) }
@@ -139,6 +155,25 @@ export default function HubBento({ lang, companyId, kpis, kpisLoading, demo, att
   const dirText = generic(direction) ?? (direction.state === 'empty' ? (direction.why === 'no_strategy' ? at.noStrat : at.noCentral) : direction.value!.text)
   const stratLine = strategyLoading ? t.loading : strategyError ? t.error : strategyName
 
+  // Instagram (leitura de instagram_content_performance, a mesma tabela que a aba Desempenho preenche)
+  const hasMetric = (p: { reach: number | null; likes: number | null; comments: number | null; shares: number | null; saves: number | null }) => [p.reach, p.likes, p.comments, p.shares, p.saves].some(v => v != null)
+  const igPosts = demo ? ex.ig : iSeries.status === 'ready' ? iSeries.data.filter(hasMetric) : []
+  let igBody: ReactNode
+  if (!demo && !igConnected) igBody = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', padding: '6px 0' }}>
+      <span aria-hidden="true" style={{ width: '44px', height: '44px', borderRadius: '14px', display: 'grid', placeItems: 'center', fontSize: '22px', background: `linear-gradient(135deg, rgba(${RGB},0.35), rgba(251,191,36,0.15))`, border: `1px solid rgba(${RGB},0.4)` }}>📷</span>
+      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+        <div style={{ fontSize: '15px', fontWeight: 800 }}>{t.igConnect}</div>
+        <div style={sub}>{t.igConnectHint}</div>
+      </div>
+      <span style={{ fontSize: '12px', fontWeight: 800, color: ORANGE }}>{t.igConnectCta} →</span>
+    </div>
+  )
+  else if (!demo && iSeries.status === 'loading') igBody = muted(t.loading)
+  else if (!demo && iSeries.status === 'error') igBody = <div style={{ fontSize: '13px', color: '#FBBF24' }}>{t.error}</div>
+  else if (igPosts.length === 0) igBody = <>{muted(t.igNone)}<div style={sub}>{t.igNoneHint}</div></>
+  else igBody = <><IgBars posts={igPosts} lang={lang} /><div style={{ ...sub, fontSize: '11px' }}>{t.igWin(igPosts.length)}</div></>
+
   return (
     <>
       <style>{CSS}</style>
@@ -155,6 +190,15 @@ export default function HubBento({ lang, companyId, kpis, kpisLoading, demo, att
             : <span style={{ fontSize: '14px', fontWeight: 700, color: MUTED, lineHeight: 1.8 }}>{loading ? t.loading : t.noData}</span>}
           {actions.value != null && <div style={sub}>{t.approvalsHint}</div>}
           {actions.sub && <div style={{ fontSize: '12px', color: ORANGE, fontWeight: 700 }}>{actions.sub}</div>}
+          {kpis.actionsReady != null && !loading && (
+            <div style={{ marginTop: 'auto', paddingTop: '8px' }}>
+              <StackBar lang={lang} note={t.approvalsWin} segs={[
+                { label: t.ready, value: kpis.actionsReady, color: C_MAIN },
+                { label: t.review, value: kpis.actionsVault ?? 0, color: C_AMBER },
+                ...(!demo && kpis.actionsScheduled != null ? [{ label: t.scheduled, value: kpis.actionsScheduled, color: C_GRAPH }] : []),
+              ]} />
+            </div>
+          )}
         </Card>
 
         {kpiTiles.map(k => (
@@ -169,6 +213,12 @@ export default function HubBento({ lang, companyId, kpis, kpisLoading, demo, att
 
         <Card cls="hb-s6" label={t.market} tag={tag} to="/dashboard/marketing-ai/dados?sub=mercado">
           {marketBody}
+          <div style={{ marginTop: '6px' }}>
+            {demo ? <MarketSparkline days={ex.market} lang={lang} />
+              : mSeries.status === 'loading' ? muted(t.mkLoading)
+              : mSeries.status === 'error' ? <div style={{ fontSize: '13px', color: '#FBBF24' }}>{t.error}</div>
+              : mSeries.data.length === 0 ? muted(bc.noMarket) : <MarketSparkline days={mSeries.data} lang={lang} />}
+          </div>
           <div style={{ ...sub, marginTop: '4px' }}>{t.lastSignal}: <span style={{ color: 'rgba(255,255,255,0.85)' }}>{signalLine}</span></div>
           <div onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()} style={{ marginTop: 'auto', paddingTop: '6px' }}>
             <button onClick={() => setOpenColl(o => !o)} aria-expanded={openColl}
@@ -188,12 +238,24 @@ export default function HubBento({ lang, companyId, kpis, kpisLoading, demo, att
           <div className="hb-clip" style={{ fontSize: '13px', fontWeight: 700, color: opportunity.state === 'value' ? ORANGE : 'white', lineHeight: 1.4 }}>{oppText}</div>
           {opportunity.value?.title && <div className="hb-clip" style={sub}>{opportunity.value.title}</div>}
           {oppTile.sub && <div style={sub}>{oppTile.sub}</div>}
+          <div style={{ marginTop: 'auto', paddingTop: '8px' }}>
+            {(() => {
+              const o = demo ? ex.opps : oSeries.status === 'ready' ? oSeries.data : null
+              if (!o) return oSeries.status === 'error' ? <div style={{ fontSize: '13px', color: '#FBBF24' }}>{t.error}</div> : muted(t.mkLoading)
+              return <StackBar lang={lang} note={bc.oppsWin} segs={[
+                { label: t.waiting, value: o.suggested, color: C_MAIN }, { label: t.approved, value: o.approved, color: C_AMBER }, { label: t.dismissed, value: o.dismissed, color: C_GRAPH }]} />
+            })()}
+          </div>
         </Card>
 
         <Card cls="hb-s12" label={t.direction} tag={tag} to="/dashboard/marketing-ai/estrategia">
           <div className="hb-clip" style={{ fontSize: '15px', fontWeight: 800, lineHeight: 1.4 }}>{dirText}</div>
           {stratLine && <div className="hb-clip" style={sub}>{stratLine}</div>}
           {strategyObjective && !strategyLoading && !strategyError && <div className="hb-clip" style={sub}>{t.objective}: {strategyObjective}</div>}
+        </Card>
+
+        <Card cls="hb-s12" label={t.ig} tag={tag} to={demo || igConnected ? '/dashboard/marketing-ai/desempenho' : '/dashboard/settings?tab=conexoes'}>
+          {igBody}
         </Card>
 
         <div className="hb-s12" style={{ minWidth: 0 }}>{revenue}</div>

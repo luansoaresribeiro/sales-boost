@@ -11,6 +11,7 @@ export interface DecisionKpis {
   oppsNew7: number | null        // ...criadas nos últimos 7 dias
   strategiesActive: number | null // estratégias principais ativas
   actionsReady: number | null    // peças originais (sem adaptações) em 'vault' menos as já agendadas = o que Aprovações mostra
+  actionsScheduled?: number | null // peças originais (vault/draft) já agendadas (agent_actions QUEUED com scheduled_at) — só alimenta o gráfico do Bento
   actionsVault: number | null    // ...e, à parte, as 'draft' (em revisão, ainda não passaram na nota) — NÃO entram no total
 }
 const EMPTY: DecisionKpis = { signals7: null, oppsSuggested: null, oppsNew7: null, strategiesActive: null, actionsReady: null, actionsVault: null }
@@ -42,7 +43,7 @@ export function useDecisionKpis(companyId?: string): { kpis: DecisionKpis; loadi
       if (cancelled) return
       const n = (i: number) => (r[i].error ? null : r[i].count ?? 0)
       // Qualquer consulta falhou (ou estourou o limite, contagem incerta) = sem dado, nunca número chutado.
-      let actionsReady: number | null = null, actionsVault: number | null = null
+      let actionsReady: number | null = null, actionsVault: number | null = null, actionsScheduled: number | null = null
       const pieces = r[4].data as { id: string; status: string }[] | null
       const queued = r[5].data as { ref_id: string }[] | null
       if (!r[4].error && !r[5].error && pieces && queued && pieces.length < ACTION_LIMIT && queued.length < ACTION_LIMIT) {
@@ -50,8 +51,9 @@ export function useDecisionKpis(companyId?: string): { kpis: DecisionKpis; loadi
         const open = pieces.filter(p => !sched.has(p.id))
         actionsReady = open.filter(p => p.status === 'vault').length   // bate com Aprovações
         actionsVault = open.filter(p => p.status === 'draft').length   // em revisão (campo reaproveitado: ver comentário da interface)
+        actionsScheduled = pieces.length - open.length
       }
-      setState({ kpis: { signals7: n(0), oppsSuggested: n(1), oppsNew7: n(2), strategiesActive: n(3), actionsReady, actionsVault }, loading: false })
+      setState({ kpis: { signals7: n(0), oppsSuggested: n(1), oppsNew7: n(2), strategiesActive: n(3), actionsReady, actionsVault, actionsScheduled }, loading: false })
     }).catch(() => { if (!cancelled) setState({ kpis: EMPTY, loading: false }) })
     return () => { cancelled = true }
   }, [companyId])
