@@ -717,6 +717,10 @@ regras do código permitem calcular), 1–2 contagens e, em laranja, o que esper
 
 ## Mapa de telas dos agentes (atualizado 2026-11-03)
 
+> **2026-11-07 (C.2):** os 5 cartões do fluxo saíram do hub e foram pra aba **Agentes** (`/dashboard/agentes`, `AgentsPage.tsx`, item do menu logo abaixo do hub),
+> junto da **Fábrica 3D parada** (`marketingAi/factory/`, chunk à parte — ver [DECISIONS.md](DECISIONS.md#2026-11-07--aba-agentes--fábrica-3d-parada-c2)).
+> No hub ficou só a linha "Sua equipe de agentes" (5 luzes 2D + "Ver agentes →"). O item 4 da lista abaixo ("os 5 cards do fluxo") vale hoje para a aba Agentes.
+
 **Hub, de cima pra baixo (Fase 1, 2026-11-03):** (1) cabeçalho; (2) **4 indicadores de decisão** (`DecisionKpis.tsx` + `useDecisionKpis.ts`;
 cada tile mostra a regra e leva à tela de origem: Sinais → Inteligência de Mercado `?sub=mercado`, Oportunidades → `/dashboard/opportunities`,
 Direcionamento → Estratégia, Ações prontas → `/dashboard/aprovacoes`) e o bloco recolhido **"Status da coleta"**; (3) painel de

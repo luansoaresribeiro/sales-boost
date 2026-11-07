@@ -1093,3 +1093,11 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
   pergunta 4 das 5 ("qual ação comercial é possível?").
 - Regra: `cleanAction` em `_shared/opportunityOutput.ts` — se a trava cortar QUALQUER frase da ação, usa a ação do código do candidato
   (`fallback.action`, sempre concreta). Não voltar a usar `cleanText` na ação. Teste em `scripts/test-opportunity-engine.mjs`.
+
+## Fábrica 3D: testar com WebGL por software engana, e `mergeGeometries` exige o mesmo tipo (2026-11-07)
+
+- **Sem GPU, o fps não vale.** No navegador automático desta máquina o WebGL roda por software (SwiftShader): a mesma cena dá ~13 fps a 1x e ~9 fps com CPU 4x/6x. Isso **dispara a automedição** da fábrica e ela troca sozinha pra versão simples (é o comportamento certo, mas atrapalha prints e testes). Para prints/medições de tela use `localStorage.sb_factory_view='3d'` e não gire a câmera por muito tempo; para medir a cena crua importe `sceneCore.ts` numa página em branco do dev server. Número de fps de verdade só em aparelho com GPU.
+- **`mergeGeometries` falha em silêncio parcial** ("compatible attributes") se misturar geometria indexada com não indexada (`RoundedBoxGeometry` e `CylinderGeometry` vêm diferentes). O `Kit` converte tudo pra não indexada antes de fundir.
+- **Ordem de rotação:** o `Kit.add` usa `Euler 'YXZ'` (gira em X e depois em Y); com o padrão `XYZ` as setas da esteira apontam pro lado errado.
+- **Desenho sob demanda:** o `OrbitControls` com amortecimento só para de pedir quadro quando `controls.update()` devolve `false`; em aparelho lento isso leva mais tempo em segundos (não é laço contínuo — parado de verdade dá 0 `requestAnimationFrame`).
+- **React:** `border` + `borderColor` no mesmo `style` gera aviso a cada re-render; use uma cor só calculada.

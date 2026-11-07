@@ -15,34 +15,12 @@ import HubBento from './marketingAi/HubBento'
 import { useDecisionKpis } from './marketingAi/useDecisionKpis'
 import { useFlowSummary } from './marketingAi/useFlowSummary'
 import { useAttention } from './marketingAi/useAttention'
-import { HeroAgentCard, FlowArrow, cardModels } from './marketingAi/HubAgentCards'
+import { cardModels } from './marketingAi/HubAgentCards'
+import HubAgentLights from './marketingAi/HubAgentLights'
+import { MODULES, AGENT_ORDER } from './marketingAi/agentModules'
 
 const ORANGE = '#FF6D29'
 const CARD = '#150E08'
-
-interface ModuleDef { section: string; title: string; desc: string; icon: string; soon?: boolean; path?: string }
-
-// O fluxo do Growth OS, de cima pra baixo, nos 5 componentes do produto (decisão do dono 2026-10-30):
-// 1 Inteligência de Mercado (observa) → 2 Motor de Oportunidades (prioriza) → 3 Estratégia (direciona)
-// → 4 Ativação (produz) → 5 Resultados e Aprendizado (mede e volta pra estratégia).
-// As seções continuam as mesmas de antes (dados / estrategia / content / conversao); a 2 abre a tela
-// Oportunidades. O Feedback Loop segue como círculo flutuante (FeedbackWidget.tsx) dentro de cada seção.
-const MODULES = {
-  pt: {
-    data: { section: 'dados', title: 'Inteligência de Mercado', desc: 'Coleta os sinais do mercado sozinho, todo dia: notícias, lançamentos, obras e turismo dos bairros dos seus imóveis e da cidade, sempre com a fonte e a data (aba Insights e evidências). Também: concorrentes e tendências do Instagram, lugares perto e dicas conferidas. Para cadastrar um imóvel: botão + laranja → Adicionar imóvel.', icon: '📊' },
-    opportunities: { section: '', path: '/dashboard/opportunities', title: 'Motor de Oportunidades', desc: 'Cruza o mercado com os seus dados e aponta onde há negócio: imóvel sem divulgação, procura sem resposta, mudança no bairro. Roda sozinho; você aprova ou descarta.', icon: '💡' },
-    strategy: { section: 'estrategia', title: 'Agente de Estratégia', desc: 'Define público, oferta, mensagem e ação comercial: a estratégia da conta e o plano de cada oportunidade aprovada — e direciona a Ativação.', icon: '🧭' },
-    content: { section: 'content', title: 'Ativação', desc: 'Produz o que vai para a rua: calendário da semana (feed e stories) vindo da estratégia, peças das oportunidades, a página do imóvel com link rastreável e as conversas (atendimento e respostas a comentários/DMs). Nada sai sem a sua aprovação.', icon: '✍️' },
-    conversion: { section: 'conversao', title: 'Resultados e Aprendizado', desc: 'Mede e aprende: funil de vendas (leads, visitas e vendas, com a origem e o corretor de cada lead), desempenho dos posts, a memória do que funcionou, experimentos e relatórios. O que funcionou volta para a próxima estratégia.', icon: '🔀' },
-  },
-  en: {
-    data: { section: 'dados', title: 'Market Intelligence', desc: 'Collects market signals on its own, every day: news, launches, works and tourism in your listings\' neighborhoods and the city, always with source and date (Insights and evidence tab). Also: competitors and Instagram trends, nearby places and verified tips. To add a listing: orange + button → Add listing.', icon: '📊' },
-    opportunities: { section: '', path: '/dashboard/opportunities', title: 'Opportunity Engine', desc: 'Crosses the market with your data and points to where the business is: unpromoted listings, unanswered demand, neighborhood changes. Runs on its own; you approve or dismiss.', icon: '💡' },
-    strategy: { section: 'estrategia', title: 'Strategy Agent', desc: 'Sets audience, offer, message and sales action: the account strategy and the plan for each approved opportunity — and guides Activation.', icon: '🧭' },
-    content: { section: 'content', title: 'Activation', desc: 'Produces what goes out: the weekly calendar (feed and stories) from the strategy, opportunity pieces, the listing page with a tracked link and conversations (customer service and comment/DM replies). Nothing goes out without your approval.', icon: '✍️' },
-    conversion: { section: 'conversao', title: 'Results & Learning', desc: 'Measures and learns: sales pipeline (leads, visits and sales, with each lead\'s source and assigned agent), post performance, the memory of what worked, experiments and reports. What worked feeds the next strategy.', icon: '🔀' },
-  },
-} as const satisfies Record<string, Record<string, ModuleDef>>
 
 const TX = {
   pt: {
@@ -60,9 +38,8 @@ const TX = {
     vErrM: 'A consulta ao banco/Meta falhou — veja o erro abaixo pra saber o que corrigir.',
     vEmptyM: 'Receita, ROAS e funil agregados aqui em cima ainda não têm dado real — assim que houver leads, Instagram ou Meta Ads conectados, cada peça some aqui automaticamente. Ligue o Modo demonstração pra ver como fica quando tudo estiver somado.',
     vCta: 'Ver exemplo (modo demonstração)', team: 'Sua equipe de agentes',
-    b1: '1 · Observa', b2: '3 · Direciona', b3: '4 · Ativa', b4: '5 · Mede e aprende', bOpp: '2 · Prioriza',
     noStrat: 'Ainda sem estratégia ativa — clique para criar.',
-    conn: 'Conexões', ctx: 'Contexto do Negócio', inSettings: 'ficam em Configurações.', and: 'e', open: 'Abrir',
+    conn: 'Conexões', ctx: 'Contexto do Negócio', inSettings: 'ficam em Configurações.', and: 'e',
   },
   en: {
     draft: 'Draft', active: 'Active', paused: 'Paused', completed: 'Completed', needs_review: 'Needs review',
@@ -79,9 +56,8 @@ const TX = {
     vErrM: 'The database/Meta query failed — see the error below to know what to fix.',
     vEmptyM: 'Revenue, ROAS and the pipeline aggregated up here have no real data yet — as soon as leads, Instagram or Meta Ads are connected, each piece shows up here automatically. Turn on Demo mode to see how it looks when everything is added up.',
     vCta: 'See an example (demo mode)', team: 'Your team of agents',
-    b1: '1 · Observes', b2: '3 · Directs', b3: '4 · Activates', b4: '5 · Measures & learns', bOpp: '2 · Prioritizes',
     noStrat: 'No active strategy yet — click to create one.',
-    conn: 'Connections', ctx: 'Business Context', inSettings: 'live in Settings.', and: 'and', open: 'Open',
+    conn: 'Connections', ctx: 'Business Context', inSettings: 'live in Settings.', and: 'and',
   },
 } as const
 type Lang = 'pt' | 'en'
@@ -218,7 +194,6 @@ export default function MarketingAiHubPage() {
     return <div style={{ padding: '48px', color: MUTED, fontSize: '14px' }}>{t.loading}</div>
   }
 
-  const open = (m: ModuleDef) => navigate(m.path ?? `/dashboard/marketing-ai/${m.section}`)
   const kpis = decisionDemo ? { ...realKpis, ...decisionDemo } : realKpis
   const stratLabel = strategySummary ? ((t as Record<string, unknown>)[strategySummary.status] as string | undefined) ?? strategySummary.status : ''
   const stratObjective = strategySummary ? [strategySummary.primary_business_objective || strategySummary.name, strategySummary.topGoal ? `${strategySummary.topGoal.name}${strategySummary.topGoal.target_value != null ? `: ${strategySummary.topGoal.current_progress ?? 0}/${strategySummary.topGoal.target_value}` : ''}` : ''].filter(Boolean).join(' · ') : ''
@@ -272,25 +247,9 @@ export default function MarketingAiHubPage() {
         )} />
 
       <div style={{ padding: '10px 32px 32px' }}>
-        <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '14px' }}>
-          {t.team}
-        </div>
-
-        {/* O fluxo do Growth OS: Dados observa → Estratégia direciona →
-            Conteúdo cria → Conversão fecha. As setas indicam a sequência —
-            cada agente entrega pro próximo. O Feedback Loop aparece dentro
-            de cada card (círculo flutuante), não é mais uma etapa separada. */}
-        <div style={{ border: '1px solid rgba(255,109,41,0.18)', borderRadius: '22px', padding: '16px', background: 'rgba(255,109,41,0.035)' }}>
-          <HeroAgentCard lang={lang} m={M.data} badge={t.b1} onClick={() => open(M.data)} model={cards.data} />
-          <FlowArrow />
-          <HeroAgentCard lang={lang} m={M.opportunities} badge={t.bOpp} onClick={() => open(M.opportunities)} model={cards.opportunities} />
-          <FlowArrow />
-          <HeroAgentCard lang={lang} m={M.strategy} badge={t.b2} onClick={() => open(M.strategy)} model={cards.strategy} />
-          <FlowArrow />
-          <HeroAgentCard lang={lang} m={M.content} badge={t.b3} onClick={() => open(M.content)} model={cards.content} />
-          <FlowArrow />
-          <HeroAgentCard lang={lang} m={M.conversion} badge={t.b4} onClick={() => open(M.conversion)} model={cards.conversion} />
-        </div>
+        {/* Os 5 cartões dos agentes e a fábrica 3D moraram aqui até C.2 (2026-11-07); agora ficam na aba Agentes. Aqui só a linha
+            fina com as luzes de estado (mesmos cartões/dados — cardModels) e o link. Este arquivo NÃO importa nada da fábrica 3D. */}
+        <HubAgentLights lang={lang} title={t.team} cards={cards} names={AGENT_ORDER.map(k => M[k].title)} />
 
         <p style={{ fontSize: '11.5px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginTop: '14px', maxWidth: '680px' }}>
           <strong style={{ color: 'rgba(255,255,255,0.6)' }}>{t.conn}</strong> {t.and} <strong style={{ color: 'rgba(255,255,255,0.6)' }}>{t.ctx}</strong> {t.inSettings}
