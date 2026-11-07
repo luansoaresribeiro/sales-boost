@@ -6,6 +6,14 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-07 — Gráficos no Bento
+- **O que mudou:** 4 visuais dentro dos cartões do `HubBento` (SVG/HTML à mão, sem biblioteca; `BentoCharts.tsx` + `useBentoSeries.ts`). Só leitura, 1 consulta por série, filtro por `company_id`, sem realtime novo. Animação de ~600 ms (some com `prefers-reduced-motion`), valor exato ao passar o mouse/tocar. Demo: dados de exemplo com a etiqueta "exemplo" (só vale onde o Modo demonstração é permitido, ou seja, fora do teste grátis).
+- **Mercado:** notícias aceitas (`market_intel_runs.accepted`) × descartadas pelo filtro (`.filtered`), por dia, `phase = 'collect'`, últimos 30 dias, soma por dia local (mesmos campos do texto "Última coleta"). Dia sem coleta fica em branco e a linha só liga dias vizinhos (nunca interpola); com menos de 3 dias aparece "ainda sem histórico suficiente".
+- **Oportunidades:** barra empilhada aguardando/aprovadas/descartadas = `growth_opportunities.status` (`suggested`/`approved`/`dismissed`), **todas** da empresa (sem janela; legenda diz isso). Leitura cortada em 1000 linhas vira "Não foi possível verificar".
+- **Aprovações:** prontas = `actionsReady` e em revisão = `actionsVault` (`useDecisionKpis`, sem mudança); agendadas = peças originais vault/draft com ação `QUEUED` e `scheduled_at` (mesma definição da `ApprovalsPage`), campo novo `actionsScheduled` no mesmo hook (mesmas duas consultas, nenhuma a mais).
+- **Instagram (cartão novo, 12 colunas, entre Direcionamento e Receita):** conectado = `companies.instagram_user_id` preenchido. Barras dos últimos 12 posts de `instagram_content_performance` (alcance ou interações = curtidas + comentários + compartilhamentos + salvamentos; o que não vem da API fica "não disponível") com linha tracejada da **média da própria conta** (nunca meta inventada). Lê a tabela já sincronizada pela aba Desempenho; não chama a Meta. Não conectado: convite para Configurações → Conexões.
+- **Limite conhecido:** o cartão não sabe se o token do Instagram expirou (o token não vai pro navegador); nesse caso mostra o que já foi sincronizado.
+
 ## 2026-11-07 — Bento no topo do Marketing AI (C.1)
 - **O que mudou:** o topo do hub virou uma grade Bento (12 colunas): Próxima ação (8) + Aprovações pendentes (4); 4 indicadores (3 cada); "O que mudou no mercado" (6) + Oportunidades (6); Direcionamento (12); Receita · ROAS · funil (12, ainda em DataVeil). Componente novo: `marketingAi/HubBento.tsx`. Cada cartão leva à tela de origem (nada duplicado).
 - **Nenhuma métrica nova, nenhuma consulta nova:** mesmos hooks de antes (`useAttention`, `useDecisionKpis`, `useMarketChanges`, `useStrategySummary`, `useFlowSummary`). Os 4 indicadores usam `decisionTiles()` (extraída de `DecisionKpis.tsx`), então os números são idênticos. Estados de carregando/erro/vazio mantidos; "Status da coleta" segue recolhível dentro do cartão de mercado.
