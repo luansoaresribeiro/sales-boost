@@ -40,7 +40,9 @@ const plan = (drafts, rows) => planUpserts(drafts, rows, { runId: 'RUN2' })
 {
   const old = row({ confidence: 'high', evidence: [fact('E1'), hyp('H1')] })
   const lowNew = plan([draft({ confidence: 'low', evidence: [fact('E2')] })], [old]).updates[0].patch
-  assert.equal(lowNew.title, undefined); assert.equal(lowNew.confidence, undefined); assert.equal(lowNew.needs_validation, undefined); assert.equal(lowNew.suggested_action, undefined)
+  // decisão do dono (07/11): texto e confiança da leitura nova; evidência antiga sempre mantida
+  assert.equal(lowNew.title, 'Novo título'); assert.equal(lowNew.confidence, 'low'); assert.equal(lowNew.suggested_action, 'Nova ação.')
+  assert.match(plan([draft({ confidence: 'low', evidence: [fact('E2')] })], [old]).updates[0].reason, /confiança menor/)
   assert.deepEqual(lowNew.evidence.map(e => e.text), ['E1', 'E2', 'H1']); assert.equal(lowNew.run_id, 'RUN2'); assert.equal(lowNew.priority_rank, 1)
   const oldLow = row({ confidence: 'low', evidence: [fact('E1')] })
   const hiNew = plan([draft({ confidence: 'high', needs_validation: false })], [oldLow]).updates[0].patch
@@ -48,7 +50,7 @@ const plan = (drafts, rows) => planUpserts(drafts, rows, { runId: 'RUN2' })
   assert.deepEqual(hiNew.evidence.map(e => e.text), ['E1', 'F novo'])
   const eq = plan([draft({ confidence: 'medium' })], [row({ confidence: 'medium' })]).updates[0].patch; assert.equal(eq.title, 'Novo título') // igual leva o novo
   const nv = plan([draft({ confidence: 'medium' })], [row({ confidence: 'needs_validation', needs_validation: true })]).updates[0].patch; assert.equal(nv.needs_validation, false)
-  ok('(f) velha high + nova low → texto/confiança antigos, evidência juntada; velha low + nova high → textos novos, evidência antiga mantida')
+  ok('(f) velha high + nova low → texto/confiança NOVOS, todas as evidências antigas mantidas; velha low + nova high → idem')
 }
 
 // (g) distintos legítimos + linhas protegidas

@@ -67,15 +67,16 @@ export function planUpserts(drafts: OpportunityDraft[], openRows: OpenRow[], opt
       (!dSig || [...signalKeys(r.evidence ?? [])].some(k => dSig.has(k))))
     if (!row) { inserts.push(d); continue }
     used.add(row.id)
-    const stronger = confRank(d.confidence) >= confRank(row.confidence)
+    // Decisão do dono (2026-11-07): o TEXTO e a confiança vêm sempre da leitura nova (que já passou pelas travas atuais —
+    // um texto antigo pode ter frase que hoje seria barrada). As EVIDÊNCIAS antigas nunca saem: são sempre somadas às novas.
+    const weaker = confRank(d.confidence) < confRank(row.confidence)
     const patch: Record<string, unknown> = {
       evidence: mergeEvidence(row.evidence ?? [], d.evidence), run_id: opts.runId, priority_rank: d.priority_rank,
-      ...(stronger ? {
-        title: d.title, description: d.description || null, commercial_problem: d.commercial_problem, audience: d.audience,
-        suggested_action: d.suggested_action, how_to_measure: d.how_to_measure, confidence: d.confidence, needs_validation: d.needs_validation, priority_reasons: d.priority_reasons,
-      } : {}),
+      title: d.title, description: d.description || null, commercial_problem: d.commercial_problem, audience: d.audience,
+      suggested_action: d.suggested_action, how_to_measure: d.how_to_measure, confidence: d.confidence, needs_validation: d.needs_validation, priority_reasons: d.priority_reasons,
     }
-    updates.push({ id: row.id, patch, draft: d, reason: stronger ? (lang === 'en' ? 'same kind and items: updated with the new reading' : 'mesmo tipo e itens: atualizada com a leitura nova') : (lang === 'en' ? 'same kind and items: kept the stronger old text, merged evidence' : 'mesmo tipo e itens: manteve o texto antigo (mais forte), evidência juntada') })
+    const why = lang === 'en' ? 'same kind and items: updated with the new reading; old evidence kept' : 'mesmo tipo e itens: atualizada com a leitura nova; evidências antigas mantidas'
+    updates.push({ id: row.id, patch, draft: d, reason: weaker ? `${why} (${lang === 'en' ? 'new reading has lower confidence' : 'leitura nova com confiança menor'})` : why })
   }
   return { inserts, updates }
 }

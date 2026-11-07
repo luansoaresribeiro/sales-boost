@@ -11,7 +11,7 @@
 - **Regras do dono (valem no código):**
   - Repetida = mesmo tipo + mesmos itens (em qualquer ordem). Para `market_change`, também precisa ter ao menos um sinal externo em comum (mesma URL da fonte). **Nunca** se compara título nem texto da descrição.
   - Só linha `suggested`, sem plano e sem decisão é atualizada. Aprovada, descartada ou com plano nunca é tocada.
-  - Evidência mais forte não se perde: as evidências antigas e novas são unidas (até 12, fatos antes de hipóteses). Se a leitura nova tem confiança MENOR que a antiga, o texto antigo fica; se for igual ou maior, entra o texto novo.
+  - Evidência mais forte não se perde: as evidências antigas e novas são unidas (até 12, fatos antes de hipóteses). O texto e a confiança vêm sempre da leitura nova, que já passou pelas travas atuais (decisão do dono em 07/11: um texto antigo pode ter frase que hoje seria barrada). As evidências antigas nunca saem.
   - Mesma ação para itens diferentes vira UMA tarefa, com todos os itens listados (dá pra acompanhar item por item). Confiança = a mais baixa do grupo; "precisa validar" se qualquer um precisa. Não junta ações diferentes, nem as sem item.
   - Instagram desconectado NÃO é "sem posts": o sistema só pode dizer "não dá pra saber". Frase de presença externa sem dado vira hipótese rotulada (ou cai no texto do código). "Sem post no Sales Boost" continua valendo quando um fato diz isso. `OPP_PROMPT_VERSION` 4 → 5.
 - **Nada é descartado automaticamente:** as oportunidades velhas que já estão na fila continuam lá. Limpeza só com uma 2ª autorização do dono.
