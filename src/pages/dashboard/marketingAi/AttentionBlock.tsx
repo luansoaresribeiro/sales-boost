@@ -5,7 +5,7 @@ import type { AttentionData, NextKind, Row } from './useAttention'
 
 // "O que merece sua atenção" (Pacote A): 4 linhas clicáveis pra tela de origem. Estados: valor real, ausência, carregando,
 // "Não foi possível verificar" (erro). Dado fictício só no demo, com a etiqueta "exemplo" (regra 5).
-const TX = {
+export const TX = {
   pt: {
     title: 'O que merece sua atenção', demoTag: 'exemplo', loading: 'Verificando…', error: 'Não foi possível verificar',
     signal: 'Último sinal válido', noSignal: 'Nenhum sinal válido ainda',
@@ -26,7 +26,7 @@ const TX = {
   },
 } as const
 
-const ROUTE: Record<NextKind, string> = { strategy: '/dashboard/marketing-ai/estrategia', opportunity: '/dashboard/opportunities', approve: '/dashboard/aprovacoes', week: '/dashboard/marketing-ai/content', ok: '/dashboard/marketing-ai/content' }
+export const ROUTE: Record<NextKind, string> = { strategy: '/dashboard/marketing-ai/estrategia', opportunity: '/dashboard/opportunities', approve: '/dashboard/aprovacoes', week: '/dashboard/marketing-ai/content', ok: '/dashboard/marketing-ai/content' }
 
 export default function AttentionBlock({ lang, data }: { lang: Lang; data: AttentionData }) {
   const t = TX[lang]

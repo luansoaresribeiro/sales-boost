@@ -9,7 +9,7 @@ import { changesText, demoChanges, describeChanges, ignoredLine } from './market
 
 // Bloco de decisão do hub (Fase 1 do plano pós-validação, 2026-11-03): 4 indicadores com regra fixa e visível + "Status da coleta"
 // recolhido. Sem dado (carregando ou erro) = "sem dado ainda", nunca 0 fingido. Em modo demonstração os números vêm de buildDecisionDemo.
-const TX = {
+export const TX = {
   pt: {
     title: 'Para decidir agora', window: 'janela de 7 dias', noData: 'sem dado ainda', demoTag: 'exemplo',
     k1: 'Sinais relevantes', r1: 'Sinais com fonte e data dos últimos 7 dias (os automáticos já vêm filtrados e sem repetição da coleta).',
@@ -32,7 +32,20 @@ const TX = {
   },
 } as const
 
-interface Tile { key: string; label: string; value: string | null; sub?: string | null; rule: string; to: string }
+export interface Tile { key: string; label: string; value: string | null; sub?: string | null; rule: string; to: string }
+
+// Os 4 indicadores (mesma regra do hub antigo) — também usados pelo Bento (HubBento.tsx), pra os números serem os mesmos.
+export function decisionTiles(lang: Lang, kpis: Kpis, loading: boolean, strategyName: string | null): Tile[] {
+  const t = TX[lang]
+  const v = (n: number | null) => (loading || n == null ? null : String(n))
+  const stratN = kpis.strategiesActive
+  return [
+    { key: 'signals', label: t.k1, value: v(kpis.signals7), rule: t.r1, to: '/dashboard/marketing-ai/dados?sub=mercado' },
+    { key: 'opps', label: t.k2, value: v(kpis.oppsSuggested), sub: kpis.oppsNew7 != null && !loading ? t.n2(kpis.oppsNew7) : null, rule: t.r2, to: '/dashboard/opportunities' },
+    { key: 'strategy', label: t.k3, value: v(stratN), sub: stratN === 0 && !loading ? t.none3 : strategyName, rule: t.r3, to: '/dashboard/marketing-ai/estrategia' },
+    { key: 'actions', label: t.k4, value: v(kpis.actionsReady), sub: kpis.actionsVault != null && kpis.actionsReady != null && !loading ? t.n4(kpis.actionsVault) : null, rule: t.r4, to: '/dashboard/aprovacoes' },
+  ]
+}
 
 export default function DecisionKpis({ lang, companyId, kpis, loading, demo, strategyName, flow }: {
   lang: Lang; companyId?: string; kpis: Kpis; loading: boolean; demo: boolean; strategyName: string | null; flow: FlowSummary
@@ -42,14 +55,7 @@ export default function DecisionKpis({ lang, companyId, kpis, loading, demo, str
   const [openColl, setOpenColl] = useState(false)
   const { state: mc } = useMarketChanges(companyId, !demo) // Fase 2: "o que mudou" (rodadas registradas); demo usa exemplo com etiqueta
   const ct = changesText(lang)
-  const v = (n: number | null) => (loading || n == null ? null : String(n))
-  const stratN = kpis.strategiesActive
-  const tiles: Tile[] = [
-    { key: 'signals', label: t.k1, value: v(kpis.signals7), rule: t.r1, to: '/dashboard/marketing-ai/dados?sub=mercado' },
-    { key: 'opps', label: t.k2, value: v(kpis.oppsSuggested), sub: kpis.oppsNew7 != null && !loading ? t.n2(kpis.oppsNew7) : null, rule: t.r2, to: '/dashboard/opportunities' },
-    { key: 'strategy', label: t.k3, value: v(stratN), sub: stratN === 0 && !loading ? t.none3 : strategyName, rule: t.r3, to: '/dashboard/marketing-ai/estrategia' },
-    { key: 'actions', label: t.k4, value: v(kpis.actionsReady), sub: kpis.actionsVault != null && kpis.actionsReady != null && !loading ? t.n4(kpis.actionsVault) : null, rule: t.r4, to: '/dashboard/aprovacoes' },
-  ]
+  const tiles = decisionTiles(lang, kpis, loading, strategyName)
   const locale = lang === 'en' ? 'en-US' : 'pt-BR'
   const coll: string[] = []
   if (flow.signals != null) coll.push(t.cSignals(flow.signals, flow.autoSignals))

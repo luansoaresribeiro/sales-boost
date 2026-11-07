@@ -11,10 +11,9 @@ import type { LeadStageKey } from './marketingAi/salesDemo'
 import DataVeil, { veilMode } from './marketingAi/DataVeil'
 import { MUTED, BORDER, D, SUPABASE_URL } from './marketingAi/shared'
 import { useStrategySummary } from './marketingAi/useStrategySummary'
-import DecisionKpis from './marketingAi/DecisionKpis'
+import HubBento from './marketingAi/HubBento'
 import { useDecisionKpis } from './marketingAi/useDecisionKpis'
 import { useFlowSummary } from './marketingAi/useFlowSummary'
-import AttentionBlock from './marketingAi/AttentionBlock'
 import { useAttention } from './marketingAi/useAttention'
 import { HeroAgentCard, FlowArrow, cardModels } from './marketingAi/HubAgentCards'
 
@@ -256,18 +255,13 @@ export default function MarketingAiHubPage() {
         </div>
       </div>
 
-      {/* Pacote A (2026-11-03): o que merece atenção agora — 4 linhas com estado próprio, cada uma leva à tela de origem. */}
-      <AttentionBlock lang={lang} data={attention} />
-
-      {/* Fase 1 (2026-11-03): 4 indicadores de decisão no topo; o painel de receita/ROAS/funil desceu para logo abaixo (nada foi removido). */}
-      <DecisionKpis lang={lang} companyId={company.id} kpis={kpis} loading={demoMode ? false : kpisLoading} demo={demoMode} strategyName={strategySummary?.name ?? (demoMode ? (lang === 'en' ? 'Example strategy' : 'Estratégia de exemplo') : null)} flow={flow} />
-
-      {/* Receita/ROAS/funil agregados: soma o que já é real em cada peça
-          (leads → funil, Instagram → crescimento/engajamento, Meta Ads → ao
-          vivo, insights_reports → recomendações). Sem nenhuma peça real
-          ainda, fica borrado até ligar o demo — nunca mostra 0 fingido. */}
-      <div style={{ margin: '24px 32px 0' }}>
-        {!realLoading && (
+      {/* Bento do topo (C.1, 2026-11-07): próxima ação, aprovações, 4 indicadores, mercado, oportunidades, direcionamento e
+          receita/ROAS/funil — mesmos hooks e números de antes (AttentionBlock/DecisionKpis seguem no código, sem uso aqui). A
+          receita soma o que já é real (leads → funil, Instagram, Meta Ads, insights_reports); sem peça real fica borrada — nunca 0 fingido. */}
+      <HubBento lang={lang} companyId={company.id} kpis={kpis} kpisLoading={kpisLoading} demo={demoMode} attention={attention} flow={flow}
+        strategyName={strategySummary?.name ?? (demoMode ? (lang === 'en' ? 'Example strategy' : 'Estratégia de exemplo') : null)}
+        strategyObjective={stratObjective} strategyLoading={!demoMode && strategyLoading} strategyError={!demoMode && strategyError}
+        revenue={!realLoading && (
           <DataVeil mode={panelMode}
             title={realError ? t.vErrT : t.vEmptyT}
             message={realError ? t.vErrM : t.vEmptyM}
@@ -275,8 +269,7 @@ export default function MarketingAiHubPage() {
             cta={{ label: t.vCta, onClick: () => setDemoMode(true) }}>
             <GrowthCommandCenter data={panelData} />
           </DataVeil>
-        )}
-      </div>
+        )} />
 
       <div style={{ padding: '10px 32px 32px' }}>
         <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '14px' }}>
