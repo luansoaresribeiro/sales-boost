@@ -129,8 +129,10 @@ export function buildStations(i: FactoryInputs): Record<StationKey, StationInfo>
     const doneRecent = actions.lastDoneAt && i.now - new Date(actions.lastDoneAt).getTime() < RECENT_DONE_HOURS * 3600_000
     const last = actions.failed ? t.failedAt(dayTime(actions.failed.at, i.lang)) + (actions.failed.error ? `: ${actions.failed.error}` : '')
       : q ? t.nextAt(dayTime(q.first, i.lang)) : actions.lastDoneAt ? t.doneAt(dayTime(actions.lastDoneAt, i.lang)) : t.none
-    if (actions.failed) content = mk('content', 'failed', facts4, last)
-    else if ((actions.executing ?? 0) > 0) content = mk('content', 'processing', facts4, last)
+    // falha só acende se nenhuma ação terminou com sucesso depois dela; execução em andamento vem primeiro
+    const failedOpen = !!actions.failed && !(actions.lastDoneAt && new Date(actions.lastDoneAt).getTime() > new Date(actions.failed.at).getTime())
+    if ((actions.executing ?? 0) > 0) content = mk('content', 'processing', facts4, last)
+    else if (failedOpen) content = mk('content', 'failed', facts4, last)
     else if (q) content = mk('content', q.kind, facts4, last)
     else if (ready != null && ready > 0) content = mk('content', 'approval', facts4, last, ready)
     else if (doneRecent) content = mk('content', 'recent', facts4, last)

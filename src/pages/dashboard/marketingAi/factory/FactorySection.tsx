@@ -32,7 +32,7 @@ export function deviceIsWeak(): boolean {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return true
     if (nav.connection?.saveData) return true
     if (typeof nav.deviceMemory === 'number' && nav.deviceMemory < 4) return true
-    if (typeof nav.hardwareConcurrency === 'number' && nav.hardwareConcurrency <= 4) return true
+    if (typeof nav.hardwareConcurrency === 'number' && nav.hardwareConcurrency < 4) return true // 4 núcleos (notebook comum) tenta o 3D; a automedição recua se ficar lento
     const c = document.createElement('canvas')
     const gl = (c.getContext('webgl2') || c.getContext('webgl')) as WebGLRenderingContext | null
     if (!gl) return true
