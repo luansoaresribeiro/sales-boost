@@ -6,7 +6,24 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
-## 2026-11-07 — Qualidade e mercado em paralelo (dono)
+## 2026-11-07 — Validação comercial em novembro: plano único em vigor (dono)
+- **Mentalidade:** o objetivo deixa de ser construir funcionalidades. Passa a ser **provar** que o Sales Boost identifica uma oportunidade real, transforma-a em ação comercial e gera valor mensurável para uma imobiliária.
+- **Meta do mês:**
+  - produto operando;
+  - 1 imobiliária pequena real (equipe de 2 a 10 corretores, no Rio) usando o Sales Boost;
+  - 1 oportunidade acompanhada até o resultado.
+- **Como vender:** é uma inteligência comercial que ajuda a imobiliária a encontrar oportunidades no mercado e transformá-las em ações. **Não** é gerador de post nem ferramenta de Instagram. Não se promete venda, lead ou faturamento antes de haver dados.
+- **Ordem do núcleo:** publicar a Correção 3 → validar uma rodada nova (6 comportamentos) → **só então** limpar a fila. A limpeza não substitui a validação.
+- **Fora do curto prazo:** Bento, Fábrica 3D, cadastro, planos e cobrança, novos módulos de IA e outros setores.
+  - **Telegram:** vira canal de aprovação e acompanhamento, não o produto principal.
+- **Ajustes do agente aprovados pelo dono:**
+  - plano único (o roadmap de 06/11 foi substituído);
+  - sem módulo novo de "Learning Agent": o resultado do piloto é registrado à mão;
+  - **plano B:** sem parceiro até a semana 2, continuar prospectando, sem voltar a construir telas.
+- **Filtro de prioridade:** a funcionalidade ajuda a identificar, decidir ou agir? Se não ajuda, não é prioridade.
+- **Nenhuma autorização implícita:** a publicação, a limpeza, a pesquisa de imobiliárias e a revisão semanal são autorizadas uma a uma.
+
+## 2026-11-07 — Qualidade e mercado em paralelo (dono) — incorporada à decisão acima
 - **Mudança de mentalidade:** não esperar o processo completo ficar perfeito para validar comercialmente. Colocar o Sales Boost diante de uma imobiliária real o quanto antes, sem prometer o que ele ainda não entrega.
 - **Frente A (núcleo, agente):**
   - Correção 3 (juntada no #119);

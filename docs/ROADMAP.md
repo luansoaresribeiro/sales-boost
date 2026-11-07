@@ -4,7 +4,62 @@
 > pronto, arquivos envolvidos, riscos, e se envolve ALTERAÇÃO ARRISCADA
 > (ver CLAUDE.md).
 
-## Ordem aprovada (dono, 2026-11-06) — o núcleo funcionando de verdade, depois telas, depois Telegram
+## PLANO EM VIGOR (dono, 2026-11-07) — de projeto de desenvolvimento a validação comercial
+
+> **Único plano em vigor.** A "Ordem aprovada" de 06/11, logo abaixo, está **substituída** e fica só como histórico.
+> O motivo está em [DECISIONS.md](DECISIONS.md) ("Validação comercial em novembro").
+
+**Meta de novembro:**
+- produto operando;
+- **1 imobiliária pequena real** usando o Sales Boost;
+- **pelo menos 1 oportunidade acompanhada até o resultado**, mesmo que o resultado seja "nada".
+
+**Filtro de prioridade:** toda funcionalidade nova precisa ajudar a imobiliária a **identificar** uma oportunidade, **decidir** ou **agir**. Se não ajudar, não é prioridade agora.
+
+**Esforço sugerido:** 40% produto e qualidade, 40% prospecção e primeiro parceiro, 20% acompanhamento e documentação. São proporções, não horas.
+
+### Frente A — Núcleo (agente; cada passo com autorização)
+| # | Etapa | Pronto quando (comprovado) |
+|---|---|---|
+| A.1 | Correção 3 juntada (#119) | ✅ 07/11 |
+| A.2 | Relatório da fila antiga, só leitura ([relatorios/fila-antiga-2026-11-07.md](relatorios/fila-antiga-2026-11-07.md)) | ✅ entregue em 07/11. É uma foto daquele momento, não é definitivo. |
+| A.3 | Publicar a `marketing-ai` com a Correção 3 e rodar as contas de teste | A rodada nova comprova os 6 comportamentos: (1) não inventa período sem post; (2) Instagram desconectado não vira "sem presença"; (3) publicidade não vira sinal; (4) nenhuma ação vazia; (5) não repete oportunidade equivalente; (6) ação igual em vários imóveis vira 1 tarefa. |
+| A.4 | Limpar a fila antiga (2ª autorização), **só depois da A.3** | O estado atual é conferido de novo antes; `dismissed` pelos ids; SQL antes e depois; nada apagado. |
+| A.5 | Demonstração comercial: 1 oportunidade real, da fonte à ação | Pronta para mostrar numa conversa |
+| A.6 | Testes de estratégia, peças e Telegram depois da recarga (nas contas de teste) | 1 execução boa de cada, com prova e custo |
+
+### Frente B — Primeiro parceiro (dono conversa; agente prepara)
+| # | Etapa | Pronto quando |
+|---|---|---|
+| B.1 | Kit do piloto ([PILOTO.md](PILOTO.md)) | Revisado pelo dono |
+| B.2 | 10 imobiliárias pequenas no Rio, pesquisadas só com informação pública: posicionamento, bairros, Instagram (agente, com autorização) | Lista com o motivo de cada uma; 3 escolhidas |
+| B.3 | Pelo menos 3 conversas, cada uma com 1 oportunidade real do mercado daquela imobiliária | 1 parceiro aceita o piloto de 4 semanas |
+| B.4 | Configuração: cadastro normal, imóveis com foto real, Instagram como testador da Meta | 1ª rodada conferida |
+| B.5 | 4 semanas de piloto, com registro semanal à mão em `docs/relatorios/` (sem módulo novo de aprendizado) | 1 oportunidade seguida do início ao fim |
+
+**Semanas (metas de execução, não previsões):**
+1. **Semana 1:** A.3 a A.5, mais a revisão do PR de documentos pelo dono.
+2. **Semana 2:** B.2 e B.3.
+3. **Semana 3:** B.4 e a operação real.
+4. **Semana 4:** medição, entrevista com o parceiro e a decisão sobre uma proposta paga de continuidade.
+
+**Plano B:** sem parceiro até a semana 2, continuar prospectando e **não voltar a construir telas**. No produto, só correção de defeito.
+
+**Revisão semanal:** toda segunda-feira (prospecção, qualidade do produto e avanço do piloto). O agendamento depende de autorização do dono.
+
+**Depois (só com evidência de uso e valor):**
+- Bento, Fábrica 3D, PR B;
+- cadastro, planos e pagamento;
+- Telegram como Central de Comando (hoje ele é só canal de aprovação e acompanhamento);
+- outros setores.
+
+**Fases seguintes:**
+1. Validação: 1 parceiro.
+2. Repetibilidade: 2 ou 3 clientes.
+3. Comercialização: onboarding, assinatura e cobrança.
+4. Escala.
+
+## (SUBSTITUÍDA em 07/11) Ordem aprovada (dono, 2026-11-06) — o núcleo funcionando de verdade, depois telas, depois Telegram
 
 > **Esta seção manda.** As seções abaixo ("Foco atual" de 01/11, P0–P4 etc.) ficam como histórico e contexto.
 > Onde divergirem desta ordem, vale esta. O motivo e o restante estão em [DECISIONS.md](DECISIONS.md).

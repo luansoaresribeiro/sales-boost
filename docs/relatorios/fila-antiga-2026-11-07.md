@@ -1,6 +1,7 @@
 # Relatório da fila antiga de oportunidades — 07/11/2026 (etapa 1.2, só leitura)
 
 > Lido no banco em 07/11/2026, por SQL só de leitura, em `growth_opportunities` com `status = 'suggested'`. As contas são a Teste Zero (`277305ff…`) e a Tespon (`f8f602ee…`).
+> **Esta é uma foto do estado em 07/11, não é definitiva.** A fila ainda cresce até a Correção 3 ser publicada, então antes de qualquer limpeza o estado é lido de novo.
 > **Nada foi marcado, descartado nem apagado.** A limpeza só acontece com a 2ª autorização do dono.
 > Liga dos Sonhos: não foi lida.
 
@@ -10,7 +11,7 @@
 | Teste Zero | 9 | 8 | 0 | 1 |
 | Tespon | 22 | 17 | 1 | 4 |
 
-- **A fila continua crescendo.** Em 07/11, às 00:17 UTC, a rodada automática ainda usou a `marketing-ai` antiga, que é anterior à Correção 3. Ela criou mais 2 linhas na Tespon, e isso se repete até a etapa 1.3 publicar a função nova.
+- **A fila continua crescendo.** Em 07/11, às 00:17 UTC (06/11, às 21:17 em Brasília), a rodada automática ainda usou a `marketing-ai` antiga, que é anterior à Correção 3. Ela criou mais 2 linhas na Tespon, e isso se repete até a etapa 1.3 publicar a função nova.
 - **Critério:**
   - "inválida" quer dizer que fere uma regra criada depois que a oportunidade nasceu (período inventado, ausência sem prova, só sinal fraco, ação vazia, centrada na fila de peças);
   - "só repetida" é válida, mas existe outra igual e mais nova;
@@ -60,7 +61,7 @@ Com a Correção 3 publicada, as 3 tarefas de "adicionar fotos" que ficam (Ipane
 
 O agente recomenda a **(b)**.
 
-**Como a limpeza seria feita, se autorizada:**
+**Como a limpeza seria feita, se autorizada (só DEPOIS de publicar a Correção 3 e validar uma rodada nova):**
 - `status = 'dismissed'`, só pelos ids desta lista e com `company_id` conferido;
 - nada é apagado;
 - conferência por SQL antes e depois.
