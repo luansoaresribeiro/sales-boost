@@ -16,7 +16,7 @@ import { ForgotPasswordPage, ResetPasswordPage } from './pages/auth/PasswordPage
 import GscCallbackPage from './pages/auth/GscCallbackPage.tsx'
 import GbpCallbackPage from './pages/auth/GbpCallbackPage.tsx'
 import DashboardLayout from './pages/dashboard/DashboardLayout.tsx'
-import ActivityPage from './pages/dashboard/ActivityPage.tsx'
+import ReportsPage from './pages/dashboard/ReportsPage.tsx'
 import DiagnosticsPage from './pages/dashboard/DiagnosticsPage.tsx'
 import InsightsPage from './pages/dashboard/InsightsPage.tsx'
 import SettingsPage from './pages/dashboard/SettingsPage.tsx'
@@ -65,11 +65,11 @@ const LoadRetry = ({ onRetry }: { onRetry: () => void }) => {
 }
 
 // Página inicial do dashboard: cai no Marketing AI (agente principal). Se o
-// owner desligou o Marketing AI dessa empresa, cai em Atividades.
+// owner desligou o Marketing AI dessa empresa, cai em Relatórios (que inclui o histórico de atividades).
 function DashboardIndex() {
   const { company, loading } = useCompany()
   if (loading) return <Spinner />
-  return <Navigate to={company?.marketing_ai_enabled === false ? '/dashboard/atividades' : '/dashboard/marketing-ai'} replace />
+  return <Navigate to={company?.marketing_ai_enabled === false ? '/dashboard/relatorios' : '/dashboard/marketing-ai'} replace />
 }
 
 function ClientRoute({ children }: { children: React.ReactNode }) {
@@ -156,7 +156,9 @@ function RouterRoot() {
         }
       >
         <Route index element={<DashboardIndex />} />
-        <Route path="atividades" element={<ActivityPage />} />
+        {/* Relatórios (07/11): relatórios em destaque + histórico de atividades. A rota antiga redireciona. */}
+        <Route path="relatorios" element={<ReportsPage />} />
+        <Route path="atividades" element={<Navigate to="/dashboard/relatorios" replace />} />
         <Route path="diagnostico" element={<DiagnosticsPage />} />
         <Route path="insights" element={<InsightsPage />} />
         <Route path="integrations" element={<Navigate to="/dashboard/marketing-ai/conexoes" replace />} />

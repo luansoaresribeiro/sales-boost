@@ -613,7 +613,7 @@ export default function CompanyDetailPage() {
               <input type="checkbox" checked={marketingAiEnabled} disabled={togglingFeature} onChange={e => toggleFeature('marketing_ai_enabled', e.target.checked)} style={{ width: '16px', height: '16px', accentColor: ORANGE }} />
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: 'white' }}>✨ Marketing AI <span style={{ fontSize: '9.5px', fontWeight: 700, color: ORANGE, border: '1px solid rgba(255,109,41,0.4)', borderRadius: '99px', padding: '1px 7px', marginLeft: '4px' }}>PRINCIPAL</span></div>
-                <div style={{ fontSize: '10.5px', color: MUTED }}>O agente principal (Growth OS). Desligado, o cliente cai em Atividades.</div>
+                <div style={{ fontSize: '10.5px', color: MUTED }}>O agente principal (Growth OS). Desligado, o cliente cai em Relatórios.</div>
               </div>
             </label>
           </div>
