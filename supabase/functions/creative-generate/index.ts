@@ -34,6 +34,8 @@ import { callClaude as callModel, CHEAP_MODEL, checkAndSave, fetchFaqConfig, get
 import { decideTopic, guardDeck, loadGuardCfg, topicBlock, topicNote, type Ask, type TopicDecision } from '../_shared/deckGuard.ts'
 import { captionRewritePrompt, claimCtx, claimPromptRule, claimNotice, cutClaims, cutHashtags, cutSlide, itemFacts, loadClaimCfg, lockDeckClaims, lockText, type ClaimCtx } from '../_shared/claimLock.ts'
 import { allowedValues } from '../_shared/numberGuard.ts'
+import { logAiCost, newCostTracker, type CostTracker } from '../_shared/aiCost.ts'
+import { fallbackCardPlan, hasMarketSource, hasUsableImage, needsImage, pieceTrendIssues, resolveTemplate, trendNotice, trendPromptRule } from '../_shared/pieceGuard.ts'
 import { pickCoverPhoto, pickMiddlePhotos, type CatalogPhoto } from '../_shared/carouselOffer.ts'
 import { blockingThemes, findRepeatedTheme, pickAlternative, recentThemes, themeBlock, themeRetryNote, weekStartOf } from '../_shared/themeDedupe.ts'
 import { fetchThemeCfg, planWeekThemes, recipeBlocked } from '../_shared/weekThemes.ts'
@@ -146,7 +148,7 @@ function defaultConfig(company: Company): Config {
   return { agent_name: 'Agente de Conteúdo', brand_voice: null, tone: null, target_audience: null, content_pillars: ['bastidores', 'novidades', 'depoimentos'], marketing_goals: company.goal ?? null, business_objectives: company.goal ?? null }
 }
 
-async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1400): Promise<string> {
+async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1400, track?: CostTracker): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -154,6 +156,7 @@ async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1400
   })
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
   const data = await res.json()
+  track?.add('claude-sonnet-4-6', data.usage)   // custo real (A.6): tokens da resposta → aiCost.ts
   return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
 }
 
@@ -530,7 +533,23 @@ async function saveLabels(admin: SupaClient, id: string, l?: { familia?: string;
 
 // O núcleo da geração — usado tanto pelo modo interativo (1 empresa, o
 // dono clicou) quanto pelo lote diário (várias empresas, cron).
+// Custo real (A.6): cada peça grava 1 linha em agent_performance (tokens e dólares medidos nas respostas da Anthropic — Director,
+// legenda, refações, trava de afirmação, guarda do carrossel). Falha na gravação nunca derruba a geração. As imagens de IA têm o
+// registro próprio do generate-image (task_key image_generation); score/refação automática, o do content-test (fora desta conta).
 async function generateForCompany(admin: SupaClient, anthropicKey: string, company: Company, kind: string, opts: GenOpts) {
+  const track = newCostTracker(), t0 = Date.now()
+  let pieceId: string | null = null, err: string | null = null
+  try {
+    const r = await generateForCompanyInner(admin, anthropicKey, company, kind, opts, track)
+    pieceId = r.id ?? null
+    return r
+  } catch (e) { err = e instanceof Error ? e.message : String(e); throw e }
+  finally {
+    await logAiCost(admin, { companyId: company.id, role: 'conteudo', taskKey: 'ai_text_content', description: `Peça do calendário/teste (texto da IA)${pieceId ? ` ${pieceId}` : ''}`, tokens: track.tokens(), costUsd: track.costUsd(), latencyMs: Date.now() - t0, success: !err, error: err })
+  }
+}
+
+async function generateForCompanyInner(admin: SupaClient, anthropicKey: string, company: Company, kind: string, opts: GenOpts, track: CostTracker) {
   const startedAt = Date.now()   // tempo de parede da invocação (teto de 150 s): a refação automática só roda se sobrar folga
   // Fluxo antigo fechado (dono, 2026-10-15): se a ficha do setor desligou o
   // card genérico (post_card — imagem de IA/tweet), QUALQUER pedido de post
@@ -663,33 +682,21 @@ ${product ? `Produto real cadastrado disponível: "${product.title}" (só use "t
 ${realReview ? `Avaliação real disponível pra usar no template "review" (NÃO invente outra citação/nome/nota — a que vem aqui é a que vai no card): "${realReview.text}" — ${realReview.author}, ${realReview.stars}★${realReview.source ? ` (${realReview.source})` : ''}.` : ''}
 ${realStat ? `Dado real disponível pra usar no template "market_watch" (NÃO invente outro número — o que vem aqui é o que vai no card): ${realStat.value}, sobre ${realStat.label}.` : ''}
 
-${forcedTemplate ? `\nTEMPLATE JÁ DECIDIDO (não escolha outro — use exatamente "${forcedTemplate}" no seu "template" e monte hook/CTA/oferta pra ele funcionar bem, isso força "format":"foto"): "${forcedTemplate}".\n` : ''}
+${opts.deck && !forcedTemplate ? `\nESTE PEDIDO É UM CARROSSEL DE SLIDES DA MARCA ("format":"carrossel"): o modelo de imagem não se aplica (os slides são desenhados pelo sistema de slides). Use "template":"livre" e NÃO justifique a escolha de modelo em "reasoning".\n` : ''}${forcedTemplate ? `\nTEMPLATE JÁ DECIDIDO (não escolha outro — use exatamente "${forcedTemplate}" no seu "template" e monte hook/CTA/oferta pra ele funcionar bem, isso força "format":"foto"): "${forcedTemplate}".\n` : ''}
 IMPORTANTE: "format" só pode ser um destes (${modLabel} não suporta os outros): ${fmtList}. "template" só pode ser um destes: ${templateList} — só é usado de verdade quando "format" for "foto" (ignore pra carrossel/reel/story). Passe pelas opções de verdade, uma por uma, e escolha a que MELHOR serve essa ideia específica — nenhuma delas (nem "livre") é o padrão pra quando você não souber o que escolher; TODAS exigem motivo real, que você explica em "reasoning" (cite ali por que escolheu esse template e não outro). VARIE de verdade (veja "Últimos posts" acima — não deixe o mesmo template se repetir sem um motivo estratégico real).
 Decida o brief. Retorne APENAS um JSON:
 {"objective":"awareness|engagement|conversion","format":${fmtList},"template":${templateList},"visual_system":"<título exato da biblioteca>","personality":"<título exato da biblioteca>","framework":"<título exato da biblioteca>","hook_angle":"ângulo do gancho em 1 frase","cta":"chamada pra ação","offer":"oferta/valor em 1 frase (ou vazio)","reasoning":"por que essas escolhas (incluindo o template), citando o insight"}`
 
-  const brief = parseObj(await callClaude(anthropicKey, directorPrompt, 900))
+  const brief = parseObj(await callClaude(anthropicKey, directorPrompt, 900, track))
   // Rede de segurança: se a IA ignorar a restrição, força pro formato/
   // template permitido mais próximo em vez de deixar vazar algo não suportado.
   if (!allowedFormats.includes(String(brief.format))) brief.format = allowedFormats[0]
-  if (!templateKeys.includes(String(brief.template))) brief.template = 'livre'
-  if (opts.deck) {
-    brief.format = 'carrossel'
-    brief.template = 'livre'
-  } else if (forcedTemplate) {
-    // Escolha manual do dono (ou "aleatório" já sorteado) — sempre vence.
-    brief.template = forcedTemplate
-    brief.format = 'foto'
-  } else if (String(brief.format) === 'foto') {
-    // Automático: ignora o palpite da IA e gira pro PRÓXIMO template da
-    // lista (round-robin real, não só "pedir educadamente pra variar" —
-    // isso não bastava, a IA repetia/quase-duplicava mesmo assim).
-    const lastTemplate = recent[0]?.brief?.template
-    const lastIdx = lastTemplate && templateKeys.includes(lastTemplate) ? templateKeys.indexOf(lastTemplate) : -1
-    const rotated = templateKeys[(lastIdx + 1) % templateKeys.length]
-    if (rotated !== brief.template) brief.reasoning = `${brief.reasoning ?? ''} (Template ajustado para "${rotated}" pela rotação automática entre todos os formatos.)`.trim()
-    brief.template = rotated
-  }
+  // Modelo final (pieceGuard.resolveTemplate): a escolha do Diretor fica gravada em brief.director_template e qualquer troca
+  // (educativo = slides; rotação automática; botão do dono) é explicada no reasoning — antes o reasoning justificava "faq" e o brief saía "livre".
+  const rt = resolveTemplate({ directorTemplate: brief.template, forced: forcedTemplate, deck: opts.deck === true, format: String(brief.format), templateKeys, lastTemplate: recent[0]?.brief?.template ?? null })
+  brief.template = rt.template; brief.format = rt.format
+  if (rt.directorTemplate) brief.director_template = rt.directorTemplate
+  if (rt.note) brief.reasoning = `${brief.reasoning ?? ''} ${rt.note}`.trim()
   const personality = String(brief.personality ?? 'Copywriter')
 
   // ── Passo 2: a personalidade EXECUTA, consultando a biblioteca ─────────
@@ -709,7 +716,7 @@ Decida o brief. Retorne APENAS um JSON:
   // Ficha: termos de mercado, campos de preço/quartos e capa com foto. Sem market_claims na ficha a trava fica DESLIGADA e o prompt não muda (regra 6).
   const claimLang: 'pt' | 'en' = String(company.language ?? '').toLowerCase().startsWith('en') ? 'en' : 'pt'
   const claimCfg = await loadClaimCfg(admin, company.vertical_key ?? null, claimLang)
-  const ask: Ask = (p, max, cheap) => callModel(anthropicKey, p, max, cheap ? CHEAP_MODEL : undefined)
+  const ask: Ask = (p, max, cheap) => callModel(anthropicKey, p, max, cheap ? CHEAP_MODEL : undefined, (m, u) => track.add(m, u))
   let guardCfg: Awaited<ReturnType<typeof loadGuardCfg>> = null
   let topic: TopicDecision | null = null
   if (opts.deck) {
@@ -718,6 +725,10 @@ Decida o brief. Retorne APENAS um JSON:
       if (guardCfg) topic = await decideTopic({ admin, ...guardCfg, text: topicText({ title: seed?.title, titleIsFormat: seed?.titleIsFormat, hook: seed?.hook, angle: seed?.angle, hookAngle: brief.hook_angle, offer: brief.offer }), forceGeneral: opts.forceGeneral, ask, anthropicKey, company })
     } catch (e) { console.error('creative-generate: classificação do tema falhou (segue como tema leve)', company.id, e); topic = null }
   }
+  // Afirmação de tendência de mercado (A.6): só com sinal real COM fonte ligado à vaga; senão o texto sai como orientação do corretor. Ficha sem market_trends = nada muda.
+  const trendEvidence = opts.intent?.market_context?.evidence ?? []
+  const trendSourced = hasMarketSource(opts.intent) || topic?.mode === 'regulado'   // regulado = só dicas conferidas em fonte oficial (já têm fonte)
+  const trendRule = (bullet = '- ') => trendPromptRule(claimCfg.trends, trendEvidence, bullet)
   const strict = !!topic && topic.mode !== 'leve' // regulado/geral: só dicas ou nenhum fato — intenção e oferta da IA ficam fora do prompt
   const execPrompt = `${preamble(config, company, playbookBlock)}
 
@@ -738,20 +749,20 @@ Boas práticas do formato ${modLabel} (siga-as):\n${moduleKnow}
 ${visualRefs ? `\nReferências visuais da marca (Layouts & Estilos — inspire-se no estilo quando fizer sentido):\n${visualRefs}\n` : ''}${lessonsBlock(await loadLessons(admin, company.id))}
 Escreva o post pronto pra publicar. Regras importantes:
 - "caption" é APENAS a legenda que vai no Instagram (texto pro público). NUNCA coloque nela instruções de imagem, descrição de foto nem "Slide 1/2/3".
-${claimPromptRule(claimCfg.terms)}- Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
-${opts.deck ? deckPromptRules(coverStyle, quero.cta, topic ? { mode: topic.mode, tipCount: topic.tips.length } : undefined, claimPromptRule(claimCfg.terms, '• ')) : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
+${claimPromptRule(claimCfg.terms)}${trendRule()}- Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
+${opts.deck ? deckPromptRules(coverStyle, quero.cta, topic ? { mode: topic.mode, tipCount: topic.tips.length } : undefined, claimPromptRule(claimCfg.terms, '• ') + trendRule('• ')) : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
 - Depois de escrever, avalie o PRÓPRIO post: ele é forte/direto o suficiente pra também valer a pena repostar nos Stories tal como está (sem regerar nada)? Se sim, "story_worthy":true e "story_note": 1 frase curta dizendo por quê. Seja seletivo — nem todo post é bom pra Stories (ex: um card com muito texto lido rápido não funciona lá); só marque true quando fizer sentido de verdade.
 ${CARD_FIELD_INSTRUCTIONS[String(brief.template ?? '')] ?? ''}
 Retorne APENAS um JSON array:
 [{"idea":"resumo curto do post","caption":"só a legenda do Instagram, texto pro público","hashtags":"#tag1 #tag2 #tag3","cta":"chamada pra ação final","format":"${brief.format ?? 'foto'}","video_script":"","slides":${opts.deck ? DECK_SLIDE_JSON : '[{"text":"","image":""}]'},"story_worthy":true|false,"story_note":""${CARD_FIELD_JSON[String(brief.template ?? '')] ?? ''}}]`
 
-  const execRaw = await callClaude(anthropicKey, execPrompt, opts.deck ? 3000 : 2000)
+  const execRaw = await callClaude(anthropicKey, execPrompt, opts.deck ? 3000 : 2000, track)
   let post = extractOne(execRaw)
   // Tema repetido (trava em código, 2026-11-02): janela de N semanas da ficha + nunca 2x na semana. Repetiu → 1 refação com a lista
   // proibida → ainda repetiu → tema alternativo da ficha que não repita → senão avisa o dono. Tudo vai pro reasoning. (Folga de tempo da invocação.)
   const hasTime = () => Date.now() - startedAt < 60_000
   const redo = async (note: string): Promise<Record<string, unknown> | null> => {
-    try { return extractOne(await callClaude(anthropicKey, execPrompt + note, opts.deck ? 3000 : 2000)) } catch (e) { console.error('creative-generate: refação por tema repetido falhou', company.id, e); return null }
+    try { return extractOne(await callClaude(anthropicKey, execPrompt + note, opts.deck ? 3000 : 2000, track)) } catch (e) { console.error('creative-generate: refação por tema repetido falhou', company.id, e); return null }
   }
   const repeats = (p: Record<string, unknown> | null) => (p ? findRepeatedTheme(String(p.idea ?? ''), pastThemes, themeCfg.similarity, themeCfg.places) : null)
   const repeated = repeats(post)
@@ -771,7 +782,7 @@ Retorne APENAS um JSON array:
     const fbRaw = await callClaude(anthropicKey, `${preamble(config, company, playbookBlock)}
 
 Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brief.format ?? 'foto'}). Responda SOMENTE com um JSON array, sem nenhum texto antes ou depois:
-[{"idea":"resumo curto","caption":"legenda completa","hashtags":"#a #b #c","cta":"chamada pra ação","format":"${brief.format ?? 'foto'}"}]`, 1500)
+[{"idea":"resumo curto","caption":"legenda completa","hashtags":"#a #b #c","cta":"chamada pra ação","format":"${brief.format ?? 'foto'}"}]`, 1500, track)
     post = extractOne(fbRaw)
     if (!post) {
       console.error('creative-generate: parse falhou. exec:', execRaw.slice(0, 300), '| fb:', fbRaw.slice(0, 300))
@@ -838,6 +849,15 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
     }
     caption = r.caption; post.hashtags = r.hashtags || null; if (post.cta) post.cta = r.cta || null
   } catch (e) { if (!(e instanceof SkipClaimLock)) console.error('creative-generate: trava de afirmação de mercado falhou (segue sem ela)', company.id, e) }
+
+  // Afirmação de tendência de mercado sem sinal com fonte (A.6): não corta (cortar esvazia o carrossel) — marca "Precisa de fonte:" no reasoning,
+  // o que baixa a nota (claimLock.qualityFlags) e impede o Vault automático. Fica pro dono reescrever como opinião ou descartar.
+  try {
+    const rawSlides = Array.isArray(post.slides) ? (post.slides as { text?: unknown }[]).map(x => String(x?.text ?? '')) : []
+    const texts = [caption ?? '', String(post.cta ?? ''), ...deckSlides.flatMap(d => [d.title, d.text, d.items, d.highlight, d.cta]), ...rawSlides, ...['card_text', 'card_answer', 'card_problem', 'card_reframe', 'card_insight', 'card_items', 'card_headline'].map(k => String(post[k] ?? ''))]
+    const trendNote = trendNotice(pieceTrendIssues(texts, claimCfg.trends, trendSourced))
+    if (trendNote) brief.reasoning = [brief.reasoning, trendNote].filter(Boolean).join(' ')
+  } catch (e) { console.error('creative-generate: checagem de tendência de mercado falhou (segue sem ela)', company.id, e) }
 
   const { data: inserted, error: insErr } = await admin.from('marketing_ai_test_content').insert({
     company_id: company.id, kind, idea, caption,
@@ -910,7 +930,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
         const bad = inventedNumbers(cur, allowed)
         if (r?.overflow || bad.length) {
           try {
-            const raw = parseObj(await callClaude(anthropicKey, rewritePrompt(company.business_name, cur, { tooLong: !!r?.overflow, numbers: bad, extra: strictWhy }), 600))
+            const raw = parseObj(await callClaude(anthropicKey, rewritePrompt(company.business_name, cur, { tooLong: !!r?.overflow, numbers: bad, extra: strictWhy }), 600, track))
             const next = normalizeSlide(raw, cur.layout === 'capa' || cur.layout === 'fecho' ? cur.layout : null, cur.cta)
             next.layout = cur.layout
             Object.assign(next, lockSlide(next, quero))
@@ -1018,11 +1038,29 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   // ficava salvo com image_url null pra sempre (bug real visto pelo dono).
   // Cai pro card de texto (mesmo motor do "photo", fundo sólido da marca
   // em vez de foto) sempre que TODAS as tentativas de imagem falharam.
-  if (!mainImage && fmt !== 'carrossel') {
-    mainImage = await renderGraphicCard(opts, company.id, 'photo', {
-      headline: capWords(String(idea ?? caption ?? company.business_name), 90),
-      cta: capWords(String(post.cta ?? brief.cta ?? ''), 28),
-    }, cardBrand)
+  // A.6: vale também pro CARROSSEL sem nenhum slide desenhado (Teste Zero 3840d8d7: ficou sem imagem e foi pro Vault com nota 82):
+  // vira 1 card (faq se o Diretor escolheu faq e a peça trouxe pergunta/resposta; senão "photo") — texto só via render-format (regra 4).
+  let finalFmt = fmt
+  if (!mainImage && (fmt !== 'carrossel' || !opts.skipImage)) {
+    const plan = fallbackCardPlan({ directorTemplate: typeof brief.director_template === 'string' ? brief.director_template : null, post, idea, caption, brand: company.business_name, cap: capWords })
+    mainImage = await renderGraphicCard(opts, company.id, plan.template, plan.fields, cardBrand)
+    if (!mainImage && plan.template !== 'photo') mainImage = await renderGraphicCard(opts, company.id, 'photo', fallbackCardPlan({ post, idea, caption, brand: company.business_name, cap: capWords }).fields, cardBrand)
+    if (mainImage && fmt === 'carrossel') {
+      finalFmt = 'foto'; slides = null
+      // reasoning atual do banco (o desenho dos slides pode ter acrescentado avisos que `brief.reasoning` local não tem)
+      const cur = ((await admin.from('marketing_ai_test_content').select('reasoning').eq('id', inserted.id).maybeSingle()).data as { reasoning?: string | null } | null)?.reasoning ?? brief.reasoning ?? ''
+      await admin.from('marketing_ai_test_content').update({ format: 'foto', reasoning: `${cur} Atenção: os slides não saíram. Troquei o carrossel por um card único com o tema (modelo "${plan.template}") — confira antes de aprovar.`.trim(), brief }).eq('id', inserted.id)
+    }
+  }
+  // Trava final (A.6): foto/carrossel SEM imagem utilizável NUNCA entra na fila. Apaga a peça quebrada (o dono não vê rascunho sem imagem),
+  // registra a falha com o motivo em agent_performance e faz a chamada falhar com mensagem clara (o calendário/lote registra o erro).
+  // Exceção: skipImage (o dono/ficha desligou imagem de propósito) — peça só de texto, como sempre foi.
+  if (!opts.skipImage && needsImage(finalFmt) && !hasUsableImage({ image_url: mainImage, slides })) {
+    const reason = 'não consegui montar nenhuma imagem para a peça (foto de IA e card de texto falharam)'
+    await admin.from('marketing_ai_test_content').delete().eq('id', inserted.id).eq('company_id', company.id)
+    try { await admin.from('agent_performance').insert({ company_id: company.id, agent_role: 'conteudo', task_key: 'content_no_image', task_description: `Peça descartada sem imagem: ${String(idea ?? '').slice(0, 120)}`, latency_ms: Math.round(Date.now() - startedAt), success: false, error_message: reason }) } catch { /* só registro */ }
+    console.error('creative-generate: peça sem imagem descartada (não entra na fila)', company.id, inserted.id)
+    throw new Error('Não consegui montar a imagem desta peça, então ela não foi para a fila de aprovação. Tente gerar de novo.')
   }
   // Educativo (slides do sistema): `media` com as MESMAS URLs de `slides`, na mesma ordem — a aprovação (agent-actions) publica media[] como carrossel (2–10); sem ele saía só a capa.
   const deckMedia = opts.deck && fmt === 'carrossel' && slides ? slides.filter(x => x.image_url).slice(0, 10).map(x => ({ url: x.image_url as string, type: 'photo' })) : []

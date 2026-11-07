@@ -64,7 +64,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { answerContextBlock } from '../_shared/answerContext.ts'
 import { fetchLearning, learningPromptBlock, learningHighlights } from '../_shared/learning.ts'
-import { fetchContentRules, fetchFormatCatalog, formatCatalogBlock, sanitizeContentPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
+import { logAiCost, anthropicCostUsd } from '../_shared/aiCost.ts'
+import { cleanBudgetText, fetchContentRules, fetchFormatCatalog, formatCatalogBlock, sanitizeContentPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { setupMissing } from '../_shared/setupReady.ts'
 import { parseSSConfig, type SSConfig } from '../_shared/socialSelling.ts'
@@ -78,7 +79,7 @@ type SupaClient = ReturnType<typeof createClient>
 // Vídeo: mínimo da ficha (content_rules.min_videos_per_week — decisão do dono
 // 2026-10-14: "pelo menos uns 3 vídeos na semana, e a estratégia pode jogar
 // pra cima"). O sanitizeContentPlan completa o mínimo se a IA pedir menos.
-const weeklyMixRules = (minVideos: number, ss?: SSContext | null) => `- MIX DA SEMANA: escolha no CATÁLOGO DE FORMATOS quantas peças de cada formato entram por semana pra servir a tese (total entre 7 e 14 — o calendário faz 1-2 por dia). Só formatos que "funcionam hoje"; nada "em breve". ${minVideos > 0 ? `VÍDEO: no MÍNIMO ${minVideos} vídeos por semana (regra do setor) — pode pedir mais se a tese pedir; cada vídeo de 5 s custa ~US$ 0,42 do teto mensal de US$ 40, diga por quê quando passar do mínimo.` : 'Formatos de vídeo custam — use com moderação e diga por quê.'} Cada item diz qual objetivo da tese ele serve.${ss ? ' Todo item DEVE ter "pilar_ss" (uma chave da lista de PILARES de Social Selling); priorize os pilares ausentes/parciais e não deixe nenhum pilar ausente sem peça na semana. O mesmo formato pode repetir com pilares diferentes.' : ''}`
+const weeklyMixRules = (minVideos: number, ss?: SSContext | null) => `- MIX DA SEMANA: escolha no CATÁLOGO DE FORMATOS quantas peças de cada formato entram por semana pra servir a tese (total entre 7 e 14 — o calendário faz 1-2 por dia). Só formatos que "funcionam hoje"; nada "em breve". ${minVideos > 0 ? `VÍDEO: coloque no mix pelo menos ${minVideos} vídeos por semana (diretriz interna do Sales Boost — pode pedir mais se a tese pedir; diga por quê). No texto da estratégia só diga quantos vídeos entram e como servem à tese: NUNCA chame de "mínimo" nem de "regra do setor" e NUNCA cite preço.` : 'Formatos de vídeo custam — use com moderação e diga por quê.'} Cada item diz qual objetivo da tese ele serve.${ss ? ' Todo item DEVE ter "pilar_ss" (uma chave da lista de PILARES de Social Selling); priorize os pilares ausentes/parciais e não deixe nenhum pilar ausente sem peça na semana. O mesmo formato pode repetir com pilares diferentes.' : ''}`
 // Com Social Selling na ficha, cada item aponta o pilar que serve (chave da
 // ficha, validada no sanitizeContentPlan); sem ficha, forma antiga.
 const weeklyMixShape = (ss?: SSContext | null) => ss
@@ -97,6 +98,7 @@ O QUE O SALES BOOST EXECUTA (a estratégia só planeja com isto — é o que o p
 - Conteúdo no Instagram: posts, carrosséis, vídeos curtos (reels) e stories, só nos formatos do CATÁLOGO acima, criados sozinhos pelo calendário semanal que sai desta estratégia. Foto de item sempre real.
 - Conversão no Instagram: "comente PALAVRA" com resposta automática na DM; respostas a comentários e DMs escritas pela IA e aprovadas pelo dono; quem demonstra interesse vira contato no funil de leads do Sales Boost (sem planilha nem registro manual).
 - Aprendizado: lê as métricas reais do Instagram, faz o check-up semanal e a atualização mensal desta estratégia.
+CUSTO INTERNO: o texto da estratégia é lido pelo cliente. NUNCA cite o custo interno do Sales Boost (preço por vídeo ou por imagem, teto mensal, "débito do teto", quanto o Sales Boost gasta). O orçamento fala só do que o dono informou.
 O QUE O SALES BOOST NÃO EXECUTA HOJE: anúncio pago (em breve), WhatsApp, e-mail, site/SEO, Google, TikTok, CRM externo, ligação/videochamada, eventos.
 REGRAS DE ESCOPO:
 - Toda etapa do funil, formato, CTA, destino, meta e linha de orçamento usa só o que o Sales Boost executa. O destino de uma conversa é a DM do Instagram, que vira lead no Sales Boost; daí em diante o dono atende.
@@ -132,12 +134,12 @@ interface Company {
 
 const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, business_stage, main_challenges, website_summary, marketing_monthly_budget, avg_ticket, vertical_key, playbook_answers, telegram_chat_id, notification_prefs'
 
-// Custo estimado por tipo de chamada (mesmo padrao de "estimativa clara" ja
-// usado em generate-image, ESTIMATED_COST_PER_IMAGE_USD) -- Claude Sonnet
-// nao cobra por chamada fixa, isso e so uma media aproximada pro painel
-// Owner ter noção de gasto, ajustavel aqui se a fatura real mostrar outro
-// valor. 'generate' cobre as 2 execucoes (step1+step2) somadas.
-const ESTIMATED_COST_USD: Record<string, number> = { generate: 0.15, reanalyze: 0.02, refresh: 0.08 }
+// Custo (A.6, 2026-11-07): ANTES gravava US$ 0,15 FIXO com tokens_used 0 (estimativa, não custo). AGORA o custo real de cada
+// chamada à Claude (tokens da resposta × preço em _shared/aiCost.ts) vai pra agent_performance em linhas próprias
+// (agent_role 'estrategia_ia', task_key 'ai_text_strategy', uma por chamada — as 3 partes da geração rodam em execuções separadas).
+// A linha 'estrategia' abaixo continua existindo SÓ como marcador da execução (o teto de chamadas automáticas por mês a conta),
+// por isso fica com cost_usd 0 — somar as duas não conta o custo duas vezes.
+interface CostCtx { admin: SupaClient; companyId: string; kind: string }
 
 async function logStrategyCost(admin: SupaClient, companyId: string, kind: 'generate' | 'reanalyze' | 'refresh', success: boolean, errorMessage?: string, latencyMs = 0) {
   try {
@@ -145,7 +147,7 @@ async function logStrategyCost(admin: SupaClient, companyId: string, kind: 'gene
       company_id: companyId, agent_role: 'estrategia', task_key: `strategy_${kind}`,
       task_description: kind === 'generate' ? 'Geração de estratégia (Hermes)' : kind === 'reanalyze' ? 'Check-up semanal (Hermes)' : 'Atualização mensal do plano tático (Hermes)',
       success, error_message: errorMessage ? errorMessage.slice(0, 500) : null,
-      cost_usd: ESTIMATED_COST_USD[kind] ?? 0.05, latency_ms: Math.round(latencyMs),
+      cost_usd: 0, latency_ms: Math.round(latencyMs),   // marcador da execução; custo real: linhas 'estrategia_ia' (aiCost.ts)
     })
   } catch { /* nunca derruba o fluxo por causa do log de custo */ }
 }
@@ -305,13 +307,15 @@ function formatDomains(state: { domains: Array<{ domain: string; summary: string
 
 // callClaude "simples" — só pro reanalyze (900 tokens, nunca chegou perto
 // do limite de tempo, não precisou da divisão em 2 passos).
-async function callClaude(anthropicKey: string, prompt: string, maxTokens = 2400): Promise<string> {
+async function callClaude(anthropicKey: string, prompt: string, maxTokens = 2400, cost?: CostCtx): Promise<string> {
+  const t0 = Date.now()
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST', headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
   })
   if (!res.ok) throw new Error(`Claude: ${await res.text()}`)
   const data = await res.json()
+  if (cost) await recordCost(cost, data.usage, Date.now() - t0)
   return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
 }
 function parseObj(raw: string): Record<string, unknown> {
@@ -330,12 +334,18 @@ function parseObj(raw: string): Record<string, unknown> {
 // pesada) nunca tenta de novo, pra nunca arriscar estourar os 150s da
 // execução dentro da qual está rodando.
 const CALL_TIMEOUT_MS = 130_000
+// Grava o custo REAL de 1 chamada (tokens da resposta da Anthropic). Nunca derruba a geração.
+async function recordCost(c: CostCtx, usage: { input_tokens?: number; output_tokens?: number } | undefined, latencyMs: number): Promise<void> {
+  const MODEL_ID = 'claude-sonnet-4-6'
+  await logAiCost(c.admin, { companyId: c.companyId, role: 'estrategia_ia', taskKey: 'ai_text_strategy', description: `Estratégia · ${c.kind} (texto da IA)`, tokens: (Number(usage?.input_tokens) || 0) + (Number(usage?.output_tokens) || 0), costUsd: anthropicCostUsd(MODEL_ID, usage), latencyMs })
+}
 async function callClaudeStep(
   anthropicKey: string, prompt: string, maxTokens: number,
-  opts: { allowRetry: boolean; bumpedMaxTokens?: number }, label: string,
+  opts: { allowRetry: boolean; bumpedMaxTokens?: number; cost?: CostCtx }, label: string,
 ): Promise<{ ok: true; parsed: Record<string, unknown> } | { ok: false; reason: string }> {
   const attempt = async (tokens: number): Promise<{ text: string; stopReason: string } | null> => {
     try {
+      const t0 = Date.now()
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST', headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: tokens, messages: [{ role: 'user', content: prompt }] }),
@@ -345,6 +355,7 @@ async function callClaudeStep(
       })
       if (!res.ok) { console.error(`callClaudeStep ${label}: Claude respondeu ${res.status}`); return null }
       const data = await res.json()
+      if (opts.cost) await recordCost(opts.cost, data.usage, Date.now() - t0)   // cada tentativa paga conta (inclusive a repetida)
       const text = (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
       const stopReason = String(data.stop_reason ?? '')
       return { text, stopReason }
@@ -500,7 +511,7 @@ Retorne APENAS um JSON:
     // 2200/3200 cortava a resposta depois que a parte 1 passou a trazer os
     // pilares de Social Selling (teste real Tespon 2026-10-21: cortou nas duas
     // tentativas). 3600 cabe com folga; a nova tentativa (4200) só roda se cortar.
-    const r1 = await callClaudeStep(anthropicKey, prompt, 3600, { allowRetry: true, bumpedMaxTokens: 4200 }, 'Parte 1 (tese)')
+    const r1 = await callClaudeStep(anthropicKey, prompt, 3600, { allowRetry: true, bumpedMaxTokens: 4200, cost: { admin, companyId: company.id, kind: 'generate · parte 1' } }, 'Parte 1 (tese)')
     lap(`parte 1 concluída, ok=${r1.ok}`)
     if (!r1.ok) { await markFailed(r1.reason); return }
     const parsed1 = r1.parsed
@@ -640,7 +651,7 @@ Retorne APENAS um JSON:
   "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","pillar":"chave do pilar de Social Selling que esta etapa fortalece (se houver)","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}]
 }`
     lap(`prompt 2 montado, ${prompt.length} chars`)
-    const r2 = await callClaudeStep(anthropicKey, prompt, 3000, { allowRetry: false }, 'Parte 2 (mix e funil)')
+    const r2 = await callClaudeStep(anthropicKey, prompt, 3000, { allowRetry: false, cost: { admin, companyId, kind: 'generate · parte 2' } }, 'Parte 2 (mix e funil)')
     lap(`parte 2 concluída, ok=${r2.ok}`)
     if (!r2.ok) { await markFailed(r2.reason); return }
     const funnel = Array.isArray(r2.parsed.funnel_plan) ? r2.parsed.funnel_plan : []
@@ -718,7 +729,7 @@ Retorne APENAS um JSON:
   "campaign_draft": {"name":"","goal":""}
 }`
     lap(`prompt 3 montado, ${prompt.length} chars`)
-    const r3 = await callClaudeStep(anthropicKey, prompt, 2600, { allowRetry: false }, 'Parte 3 (metas e orçamento)')
+    const r3 = await callClaudeStep(anthropicKey, prompt, 2600, { allowRetry: false, cost: { admin, companyId, kind: 'generate · parte 3' } }, 'Parte 3 (metas e orçamento)')
     lap(`parte 3 concluída, ok=${r3.ok}`)
     if (!r3.ok) { await markFailed(r3.reason); return }
     const parsed3 = r3.parsed
@@ -744,7 +755,7 @@ Retorne APENAS um JSON:
     const prevProv = (row.data_provenance && typeof row.data_provenance === 'object' ? row.data_provenance : {}) as Record<string, unknown>
     const prevProposal = proposalOf(prevProv)
     await admin.from('marketing_ai_strategies').update({
-      budget: parsed3.budget && typeof parsed3.budget === 'object' ? parsed3.budget : {},
+      budget: parsed3.budget && typeof parsed3.budget === 'object' ? cleanBudgetText(parsed3.budget) : {},
       estimates: parsed3.estimates && typeof parsed3.estimates === 'object' ? parsed3.estimates : {},
       data_provenance: {
         ...prevProv,
@@ -823,7 +834,7 @@ Não conclua que a estratégia toda falhou por causa de 1 sinal fraco isolado �
 
 Retorne APENAS um JSON: {"status": "ON_TRACK|NEEDS_ADJUSTMENT|UNDERPERFORMING|AT_RISK|INVALIDATED", "decision": "continue|refine|pivot|terminate", "recommendation": "1-3 frases, o que mudar (vazio se decision=continue)", "reasoning": "por que, citando os sinais reais ou a falta deles"}`
 
-    const raw = await callClaude(anthropicKey, prompt, 900)
+    const raw = await callClaude(anthropicKey, prompt, 900, { admin, companyId: company.id, kind: 'reanalyze' })
     const parsed = parseObj(raw)
     const decision = String(parsed.decision ?? 'continue')
     // Marca sempre que o check-up rodou -- e o que o cron_dispatch usa
@@ -935,7 +946,7 @@ Retorne APENAS um JSON:
   "goals": [{"name":"","goal_type":"","target_value":null,"period":"daily|weekly|monthly|custom","deadline":null,"priority":"high|medium|low","data_source":"","measurement_method":""}]
 }`
 
-    const r = await callClaudeStep(anthropicKey, prompt, 5000, { allowRetry: false }, 'Refresh (atualização mensal)')
+    const r = await callClaudeStep(anthropicKey, prompt, 5000, { allowRetry: false, cost: { admin, companyId: company.id, kind: 'refresh' } }, 'Refresh (atualização mensal)')
     if (!r.ok) { await logStrategyCost(admin, company.id, 'refresh', false, r.reason); return }
     const parsed = r.parsed
     const goals = goalsWithBaselineFrom(parsed.goals, baseline)

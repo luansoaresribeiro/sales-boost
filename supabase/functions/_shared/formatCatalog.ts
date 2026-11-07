@@ -58,7 +58,7 @@ const GENERIC: ContentFormat[] = [
 const PRODUCER_LABEL: Record<FormatProducer, string> = {
   post: 'gerado sozinho no calendário',
   item_package: 'criado sozinho no calendário a partir de um item do catálogo com fotos reais',
-  item_video: 'vídeo curto a partir de 1 foto real de um item (criado sozinho no calendário; custa ~US$ 0,42 do teto mensal)',
+  item_video: 'vídeo curto a partir de 1 foto real de um item (criado sozinho no calendário)',   // sem preço: custo interno do Sales Boost não vai pro texto do cliente (A.6)
   dm: 'resposta automática na DM (dono aprova a mensagem uma vez)',
 }
 const STATUS_LABEL: Record<FormatStatus, string> = { live: 'funciona hoje', needs_material: 'precisa de material/autorização do dono', planned: 'em breve (não planeje ainda)' }
@@ -145,12 +145,28 @@ export function ensureMinVideos(mix: WeeklyMixItem[], formats: ContentFormat[], 
   if (cur) { cur.per_week = Math.min(7, cur.per_week + (min - have)); return out }
   const f = formats.find(x => x.producer === 'item_video' && x.status === 'live')
   if (!f) return out
-  out.push({ format: f.key, name: f.name, producer: 'item_video', per_week: Math.min(7, min - have), pillar: f.pillar, familia: familyOf(f), tema: f.pillar, purpose: 'Mínimo de vídeos por semana (regra do setor): vídeo curto de uma foto real do imóvel.' })
+  out.push({ format: f.key, name: f.name, producer: 'item_video', per_week: Math.min(7, min - have), pillar: f.pillar, familia: familyOf(f), tema: f.pillar, purpose: 'Vídeo curto de uma foto real do imóvel, pra ter vídeo toda semana no calendário.' })
   return out
 }
 
+// Custo interno do Sales Boost (preço por vídeo/imagem, teto mensal, débito) e a diretriz de vídeos NÃO vão pro texto que o cliente lê
+// (A.6, 2026-11-07: a estratégia dizia "cada vídeo custa ~US$ 0,42… debitado do teto mensal contratado" e "mínimo de 3 vídeos por semana").
+// O prompt já proíbe; isto é a trava em código: tira a FRASE inteira que cita isso (nunca troca por outro texto).
+const INTERNAL_COST_RE = /US\$|\bUSD\b|teto\s+(?:mensal|do\s+plano|contratado|de\s+gasto)|d[eé]bit|custo\s+(?:interno|por\s+(?:v[ií]deo|imagem|pe[cç]a)|do\s+sales\s*boost)|sales\s*boost\s+(?:paga|gasta|custeia|arca)|regra\s+do\s+setor|m[ií]nimo\s+de\s+\d+\s+v[ií]deos/i
+export const hasInternalCost = (text: string): boolean => INTERNAL_COST_RE.test(String(text ?? ''))
+export function stripInternalCost(text: string): string {
+  return String(text ?? '').split('\n').map(line => line.split(/(?<=[.!?])\s+/).filter(sent => !INTERNAL_COST_RE.test(sent)).join(' ')).join('\n').trim()
+}
+/** Orçamento da estratégia (allocation[].reason e budget_reasoning) sem custo interno. Outros campos ficam como a IA mandou. */
+export function cleanBudgetText(budget: unknown): Record<string, unknown> {
+  const b = (budget && typeof budget === 'object' ? { ...(budget as Record<string, unknown>) } : {})
+  if (typeof b.budget_reasoning === 'string') b.budget_reasoning = stripInternalCost(b.budget_reasoning)
+  if (Array.isArray(b.allocation)) b.allocation = b.allocation.map(a => (a && typeof a === 'object' && typeof (a as { reason?: unknown }).reason === 'string' ? { ...(a as object), reason: stripInternalCost((a as { reason: string }).reason) } : a))
+  return b
+}
+
 export function formatCatalogBlock(formats: ContentFormat[]): string {
-  const line = (f: ContentFormat) => `- ${f.key} — ${f.name} [pilar: ${f.pillar}; ${STATUS_LABEL[f.status]}; ${PRODUCER_LABEL[f.producer]}${f.cost ? `; custo: ${f.cost}` : ''}]${f.notes ? ` (${f.notes})` : ''}`
+  const line = (f: ContentFormat) => `- ${f.key} — ${f.name} [pilar: ${f.pillar}; ${STATUS_LABEL[f.status]}; ${PRODUCER_LABEL[f.producer]}]${f.notes ? ` (${f.notes})` : ''}`
   return `\n\nCATÁLOGO DE FORMATOS DE CONTEÚDO (tudo o que o Sales Boost sabe produzir pra esta empresa — escolha SÓ por estas chaves):\n${formats.map(line).join('\n')}`
 }
 
@@ -180,13 +196,13 @@ export function sanitizeContentPlan(raw: unknown, formats: ContentFormat[], prev
     const n = Math.max(0, Math.min(7, Math.round(Number(item.per_week) || 0), 14 - total))
     if (!n) continue
     total += n
-    mix.push({ format: f.key, name: f.name, producer: f.producer, per_week: n, pillar: String(item.pillar ?? f.pillar).slice(0, 60), purpose: String(item.purpose ?? '').slice(0, 240), ...(ss ? { pilar_ss: ss } : {}) })
+    mix.push({ format: f.key, name: f.name, producer: f.producer, per_week: n, pillar: String(item.pillar ?? f.pillar).slice(0, 60), purpose: stripInternalCost(String(item.purpose ?? '')).slice(0, 240), ...(ss ? { pilar_ss: ss } : {}) })
   }
   const central = String(r.central_line ?? prev?.central_line ?? '').trim().slice(0, 600)
   if (!central && !mix.length) return null
   const weekly = labelMix(ensureMinVideos(mix.length ? mix : (prev?.weekly_mix ?? []), formats, minVideos), byKey, ssKeys, opts)
   const pillars = Array.isArray(r.pillars) ? cleanPillars(r.pillars) : (prev?.pillars ?? [])
-  return { central_line: central, hero_formats: hero, why: String(r.why ?? prev?.why ?? '').slice(0, 600), weekly_mix: weekly, ...(pillars.length ? { pillars } : {}), updated_at: new Date().toISOString() }
+  return { central_line: central, hero_formats: hero, why: stripInternalCost(String(r.why ?? prev?.why ?? '')).slice(0, 600), weekly_mix: weekly, ...(pillars.length ? { pillars } : {}), updated_at: new Date().toISOString() }
 }
 
 // Rótulos de cada item do mix (decisão A). Roda DEPOIS do ensureMinVideos pra

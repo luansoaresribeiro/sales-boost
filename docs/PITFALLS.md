@@ -5,6 +5,18 @@
 > Ao aprender uma armadilha nova, adicionar aqui no mesmo PR que a corrige
 > (ver [ORCHESTRATION.md](ORCHESTRATION.md)).
 
+## Modelo do Diretor ignorado, peça sem imagem no Vault, trava só de número e custo fixo — 2026-11-07 (A.6)
+
+**Template do Diretor ignorado em silêncio.** No educativo (`opts.deck`) o código força `format: carrossel` e `template: livre` mesmo que o Diretor justifique outro modelo (ex.: "faq") no `reasoning` — e o prompt ainda pedia pra ele escolher. O brief e o texto passavam a se contradizer. Hoje `pieceGuard.resolveTemplate` grava `brief.director_template`, explica a troca no `reasoning` e o prompt avisa. Quem mexer em template: rode `scripts/test-piece-guard.mjs`.
+
+**Peça sem imagem pode ir pro Vault.** O fallback de card só valia pra `fmt !== 'carrossel'`; carrossel sem nenhum slide desenhado seguia pro score (a nota só olha texto) e ia pro Vault (3840d8d7, nota 82). Toda trava de qualidade que olha só o texto deixa passar peça quebrada: a checagem de imagem tem que vir ANTES do score (`creative-generate`, depois do fallback de card). Peça sem imagem utilizável é apagada e registrada (`content_no_image`), exceto com `skipImage`.
+
+**Trava só de número/termo não pega afirmação.** "Locatários com renda mais alta estão escolhendo contratos mais longos" não tem número nem termo de `market_claims`. Tendência de mercado como fato só com sinal real com fonte (`intent.market_context.evidence`) ou dica conferida; senão marca "Precisa de fonte:" e baixa a nota. Os padrões moram na ficha (`opportunity_texts.market_trends`); sem a lista na ficha a trava fica desligada (a migration precisa estar aplicada).
+
+**Custo fixo não é custo.** `strategy-generate` gravava US$ 0,15 com `tokens_used` 0 e `creative-generate` não gravava nada. Use `_shared/aiCost.ts` (tokens da resposta × preço). Cuidado: o teto mensal de chamadas automáticas da estratégia conta linhas `agent_role = 'estrategia'` — por isso o custo real vai em `'estrategia_ia'` (linha extra por chamada não pode inflar a contagem). Texto da IA não entra no teto de US$ 40 (`spendCap` filtra por `task_key`): nunca use `image_generation`/`photo_retouch`/`market_*` para custo de texto.
+
+**Custo interno vazando pro texto do cliente.** Tudo que entra no prompt da estratégia (catálogo de formatos, `weeklyMixRules`, rótulos de produtor, `custo` da ficha) pode ser repetido pela IA no texto que o cliente lê. Preço por vídeo, teto mensal e diretriz de vídeos ficam fora do prompt e `stripInternalCost` limpa a saída.
+
 ## Domínio de confiança passava patrocinado; catálogo contava como "fonte independente" — 2026-11-05
 
 **O que aconteceu.** Na rodada real de 05/11 à noite saíram oportunidades de mercado apoiadas em aviso de serviço do metrô, conteúdo patrocinado do O Globo (`/conteudo-de-marca/`), guia genérico de bairro e uma obra embargada contada como 2 fontes (R7 + O Dia). A tela dizia "3 fontes independentes" mas uma delas era o próprio catálogo.
