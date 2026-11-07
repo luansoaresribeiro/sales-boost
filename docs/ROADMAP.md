@@ -46,12 +46,34 @@
 ### Pedidos do dono registrados em 07/11 (cada um com autorização própria)
 | # | Pedido | Onde entra | Decisões pendentes do dono |
 |---|---|---|---|
-| R.1 | **Painel do dashboard e Fábrica 3D "hoje"** | **Não entra agora.** O plano em vigor tira as telas do curto prazo até haver evidência do piloto. Se o dono quiser trazer para agora, é uma mudança de plano explícita. | — |
-| R.2 | **Botão "Gerar tour virtual" por imóvel, pago (US$ 4 ou R$ 29)**, sem repetir geração no Higgsfield | Proposta, depois da semana 1. É **oferta comercial** (ajuda a agir: tour para divulgar o imóvel) e mexe em gasto e em pagamento. | Preço final por país; forma de cobrar (o pagamento ainda não existe: N2/N4); o que acontece se a geração falhar (refazer sem custo? devolver?); se entra no piloto como cortesia |
+| R.1 | **Painel Bento + Fábrica 3D** | **Mudança de plano pelo dono (07/11): entram AGORA, antes da evidência do piloto**, como **Frente C** (abaixo), para o produto ter um visual bonito. Continua valendo a regra de mostrar só o estado real do sistema. | Ordem dentro da Frente C |
+| R.2 | **Botão "Gerar tour virtual" em CADA imóvel, pago: US$ 15 por tour** (dono, 07/11). Ao clicar, abre um pop-up grande que mostra o carregamento e, no fim, o vídeo com opções de baixar. Reaproveita o tour que já existe (modo caminhada, `video_tours`) e não substitui os "vídeos curtos" do botão 🎬. | Frente C, depois de decididas as pendências | Ver a lista "Decisões pendentes do tour" abaixo |
 | R.3 | **Mapa do imóvel (ordem + quais cômodos se ligam)** antes de gerar, para não pagar duas vezes | Junto com o R.2. Lição de 08/10: entre cômodos que não se tocam, a IA inventa a passagem, então a ordem é decisiva. | — |
 | R.4 | **Demonstração no site:** 2 fotos lado a lado, botão "Gerar tour virtual", carregando, e o vídeo pronto com o título "Fotos de imóvel viram vídeos que vendem" | Pode entrar na semana 1 ou 2 como **material de prospecção** (ajuda a conversa com as imobiliárias). | Quais 2 fotos reais (com permissão) e o vídeo **gerado de verdade** a partir delas |
 | R.5 | **Conferir a integração com o Instagram antes do piloto com Instagram:** leitura de dados da conta, métricas e insights, leitura dos posts, publicação, renovação e guarda dos tokens | Entra como **A.7**, antes da B.4 com Instagram. É só verificação: confirmar com teste real o que já existe, não presumir. | Conta de Instagram de teste ou do parceiro, cadastrada como testadora |
 | R.6 | **Atividade dentro do sino** com uma cor diferente das notificações, discreta | Entra no **PR B** (fila "Depois"). Fica registrado como requisito de tela. | — |
+
+### Frente C — Visual e oferta do tour (dono, 07/11: entra agora, em paralelo às Frentes A e B)
+| # | Etapa | Pronto quando (comprovado) |
+|---|---|---|
+| C.1 | **Painel do Marketing AI em Bento**: só reorganiza dados reais, nenhuma métrica nova | Os números batem com o SQL nas 2 contas; carregando, erro e ausência certos; prints de celular e computador |
+| C.2 | **Fábrica 3D parada, com os estados reais** (critérios em DECISIONS de 04/11) | Estados e selo de maturidade reais; versão 2D sem WebGL; sem desenho contínuo com a cena parada |
+| C.3 | **Fábrica 3D com movimento por evento real** | Cada evento anima 1 vez, inclusive depois de reconexão |
+| C.4 | **Tour virtual por imóvel (US$ 15)**: mapa do imóvel (R.3) + botão + pop-up de carregamento e resultado com download | Depende das decisões pendentes abaixo; QA na Teste Zero sem cobrança real |
+
+**Decisões pendentes do tour (C.4):**
+- cobrança;
+- preço em real;
+- o que acontece em caso de falha;
+- quantas fotos ou segundos;
+- formato;
+- quem pode comprar;
+- quem define a ordem dos cômodos;
+- o teto mensal de gasto no Higgsfield.
+
+O detalhe de cada uma está em [DECISIONS.md](DECISIONS.md), na decisão de 07/11 sobre o tour pago.
+
+> A regra do plano em vigor ("telas só depois da evidência") fica **revogada pelo dono para C.1 a C.3** em 07/11. O plano B continua valendo para as **outras** telas (cadastro, planos e pagamento, e o PR B).
 
 **Plano B:** sem parceiro até a semana 2, continuar prospectando e **não voltar a construir telas**. No produto, só correção de defeito.
 

@@ -6,6 +6,22 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-07 (tarde) — Tour virtual pago por imóvel + Bento e Fábrica 3D antecipados (dono)
+- **Tour virtual pago:** **US$ 15 por tour.** O botão fica em cada imóvel. Ao clicar, abre um pop-up grande que mostra o carregamento e, no fim, o vídeo com opções de baixar.
+  - Reaproveita o tour em modo caminhada que já existe (`video_tours`, Kling via Higgsfield). O custo registrado em 08/10 é de cerca de US$ 3,24 para 6 fotos.
+  - Os "vídeos curtos" do botão 🎬 continuam como estão.
+  - **Para não pagar a geração duas vezes:** antes de gerar, o sistema precisa conhecer a ordem da visita e quais cômodos se ligam (mapa do imóvel). Entre cômodos que não se tocam, a IA inventa a passagem (lição de 08/10).
+- **Mudança de plano:** o **Bento e a Fábrica 3D entram agora** (Frente C), antes da evidência do piloto, para o produto ter um visual bonito. Continua valendo a regra: a tela mostra só o estado real do sistema.
+- **Pendente de decisão do dono (o tour só é construído depois):**
+  1. **Como cobrar:** hoje só existe assinatura no Stripe. Uma compra avulsa de US$ 15 é algo novo, e o caminho de pagamento todo é a frente N2/N4.
+  2. **Preço em real** para o Brasil, ou US$ 15 para todos.
+  3. **Se a geração falhar:** refazer de graça ou devolver o dinheiro.
+  4. **Tamanho:** quantas fotos e quantos segundos (hoje são 6 fotos, cerca de 30 s) e se o preço muda com o tamanho.
+  5. **Formato:** 4:5, como hoje, ou 9:16 para Reels.
+  6. **Quem pode comprar:** só quem assina, ou também contas gratuitas e de vitrine.
+  7. **Quem define a ordem dos cômodos:** o cliente arrasta e marca, ou a IA sugere e o cliente confirma.
+  8. **Teto mensal de gasto no Higgsfield** para os tours pagos (hoje o teto é o geral da conta).
+
 ## 2026-11-07 — Validação comercial em novembro: plano único em vigor (dono)
 - **Mentalidade:** o objetivo deixa de ser construir funcionalidades. Passa a ser **provar** que o Sales Boost identifica uma oportunidade real, transforma-a em ação comercial e gera valor mensurável para uma imobiliária.
 - **Meta do mês:**
