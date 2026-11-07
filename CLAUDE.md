@@ -39,6 +39,8 @@ conteúdo técnico detalhado vive em `docs/`:
   pronto.
 - [pitch/PITCH.md](pitch/PITCH.md) — o pitch em trabalho e a ideia de
   preço (ainda não decidida).
+- [docs/PILOTO.md](docs/PILOTO.md) — kit do piloto com imobiliária parceira
+  (roteiro, o que pedir, plano de 4 semanas, critérios de sucesso).
 - [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) — roteiro do time de
   agentes (`.claude/agents/`: `product`, `engineer`, `qa`).
 
