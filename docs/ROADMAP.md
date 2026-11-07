@@ -4,6 +4,23 @@
 > pronto, arquivos envolvidos, riscos, e se envolve ALTERAÇÃO ARRISCADA
 > (ver CLAUDE.md).
 
+## Plataforma internacional — segurança, depois idioma/país, depois expansão (dono, 2026-11-07)
+
+Decisão completa em [DECISIONS.md](DECISIONS.md#2026-11-07--plataforma-internacional-idioma--país--regras-dono).
+
+| # | Entrega | Prioridade | Pronto quando | Situação |
+|---|---|---|---|---|
+| 0 | Desligar publicação sem aprovação | Imediata | Nenhum caminho publica sem aprovação humana, com trava no servidor e teste | ✅ função antiga desligada (07/11); trava do `agent-actions` em PR, publicar depois do merge |
+| 1 | CRECI (PF/PJ, formato, conferência, inclusão automática, bloqueio só da publicação comercial) + proteção contra discriminação, promessa e informação inventada em legendas, DMs, WhatsApp e respostas automáticas | Alta | Peça sem CRECI válido não publica; filtro em todas as saídas públicas, sem bloquear afirmação comprovável; testes com casos reais | autorizada 07/11 |
+| 2 | País do negócio no cadastro (separado do idioma) + estrutura de regras por país na ficha; contas atuais = Brasil; ficha EUA desligada para venda | Alta | Cadastro pergunta o país; idioma escolhido não é sobrescrito pela ficha; ficha por país lida pelo código genérico | planejamento aprovado |
+| 3 | IA respeitando o idioma (~30 functions, WhatsApp, Telegram, título do imóvel, "QUERO", textos da ficha em pt/en) | Alta | Com idioma EN, nada gerado sai em português | planejamento aprovado |
+| 4 | Moeda, medidas (m²/sq ft), telefone (DDI), fuso, busca de endereço | Média | Formatos vêm do país da empresa | roadmap |
+| 5 | LGPD, CCPA e privacidade: base legal do lead por DM/comentário, apagar lead, prazo de guarda, Política com Telegram e endereço/foro reais, versão EUA | Revisão especializada | Definido com advogado; LGPD e CCPA tratados separadamente | roadmap |
+| 6 | Erros do servidor traduzidos | Acabamento | Erros por código, texto no idioma da tela | roadmap |
+
+- **Ficha EUA:** sem comercialização antes da revisão de advogado nos EUA (Fair Housing no desenho, não só lista de palavras).
+- **A.6** (2 funções do agente de conteúdo) segue separada, só contas de teste.
+
 ## Ordem aprovada (dono, 2026-11-06) — o núcleo funcionando de verdade, depois telas, depois Telegram
 
 > **Esta seção manda.** As seções abaixo ("Foco atual" de 01/11, P0–P4 etc.) ficam como histórico e contexto.

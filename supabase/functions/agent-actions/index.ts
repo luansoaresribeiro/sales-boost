@@ -23,6 +23,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { parseButton, verifyButton, type ButtonKind, type ButtonOp } from '../_shared/telegramButtons.ts'
 import { requirePaidAccess } from '../_shared/access.ts'
+import { publishBlockReason } from '../_shared/publishGuard.ts'
 import { plannedPublishAt, publishWhenLabel } from '../_shared/publishSlot.ts'
 import { revalidate, unverifiableOutcome, UNVERIFIABLE_FAIL_MESSAGE } from '../_shared/itemService.ts'
 
@@ -323,6 +324,9 @@ async function retryAction(admin: Supa, companyId: string, id: string | undefine
 // (FAILED + motivo), nunca fingem sucesso.
 // deno-lint-ignore no-explicit-any
 async function execute(admin: Supa, act: any, fromCron = false): Promise<any> {
+  // Etapa 0 (2026-11-07): ação que publica só roda com aprovação HUMANA (AUTO_APPROVED nunca publica).
+  const blocked = publishBlockReason(act)
+  if (blocked) return await finish(admin, act.id, 'FAILED', { execution_error: blocked })
   // Fase 4: imóvel indisponível (ou impossível de conferir) NUNCA chega a publicar. A conferência vem ANTES de marcar EXECUTING.
   if (act.ref_type === 'marketing_ai_test_content' && act.ref_id) {
     const held = await availabilityGate(admin, act, fromCron)
