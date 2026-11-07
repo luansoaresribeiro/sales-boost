@@ -6,6 +6,18 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-07 — Qualidade e mercado em paralelo (dono)
+- **Mudança de mentalidade:** não esperar o processo completo ficar perfeito para validar comercialmente. Colocar o Sales Boost diante de uma imobiliária real o quanto antes, sem prometer o que ele ainda não entrega.
+- **Frente A (núcleo, agente):**
+  - Correção 3 (juntada no #119);
+  - relatório da fila antiga ([relatorios/fila-antiga-2026-11-07.md](relatorios/fila-antiga-2026-11-07.md));
+  - publicar a função com autorização;
+  - validar uma oportunidade real até a ação comercial.
+- **Frente B (piloto, em paralelo):** uma **imobiliária pequena** no Rio, que o dono conquista e o agente configura e acompanha. Kit em [PILOTO.md](PILOTO.md).
+- **Depois:** Bento, Fábrica 3D, Telegram, cadastro, planos e pagamento.
+- **Primeiro marco comercial:** demonstrar o ciclo **mercado → inteligência → oportunidade → execução → resultado** para uma imobiliária. Não conta ter todas as telas prontas.
+- **Situação em 07/11:** nenhuma imobiliária parceira registrada no projeto. As contas são só de teste (Teste Zero, Tespon) ou vitrine (Ana Souza).
+
 ## 2026-11-06 — Ordem de trabalho: núcleo → telas → Telegram (dono)
 - **Ordem:**
   1. O núcleo funcionando de verdade: Correção 3, relatório da fila, fechar a Fase 2, processo completo nas contas de teste, IA depois da recarga e teste final.

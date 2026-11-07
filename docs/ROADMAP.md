@@ -30,6 +30,16 @@
   - em Configurações da Teste Zero, com as gravações bloqueadas: resposta antiga preservada, salvar, editar e remover.
 - **Banco:** conferido que a Teste Zero não mudou.
 
+### Frente B — Piloto com imobiliária (em paralelo ao bloco 1; dono, 2026-11-07)
+| # | Etapa | Pronto quando (comprovado) | Depende de |
+|---|---|---|---|
+| B.1 | Kit do piloto ([PILOTO.md](PILOTO.md)) | Kit revisado pelo dono | — |
+| B.2 | Imobiliária parceira conquistada | Nome, bairros, imóveis com foto real e quem atende | **dono** |
+| B.3 | Configuração: cadastro normal, imóveis, Instagram como testador da Meta | Conta pronta e 1ª rodada de mercado e oportunidades conferida | B.2 e 1.3 publicada |
+| B.4 | 4 semanas de acompanhamento | **1 oportunidade real seguida do início ao fim** (com resultado registrado, mesmo que "nada") e o registro semanal em `docs/relatorios/` | B.3 |
+
+> 1.2 (relatório da fila antiga): ✅ entregue em 07/11 ([relatorios/fila-antiga-2026-11-07.md](relatorios/fila-antiga-2026-11-07.md)). A limpeza espera a 2ª autorização do dono.
+
 ### 1. Núcleo: fases e testes
 | # | Etapa | Pronto quando (comprovado) | Depende de |
 |---|---|---|---|
