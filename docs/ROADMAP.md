@@ -4,7 +4,66 @@
 > pronto, arquivos envolvidos, riscos, e se envolve ALTERAÇÃO ARRISCADA
 > (ver CLAUDE.md).
 
+## Ordem aprovada (dono, 2026-11-06) — o núcleo funcionando de verdade, depois telas, depois Telegram
+
+> **Esta seção manda.** As seções abaixo ("Foco atual" de 01/11, P0–P4 etc.) ficam como histórico e contexto.
+> Onde divergirem desta ordem, vale esta. O motivo e o restante estão em [DECISIONS.md](DECISIONS.md).
+
+**Regras de trabalho (dono):**
+- Etapas pequenas, cada uma com uma entrega verificável.
+- Antes de cada etapa: objetivo, escopo, riscos e critério de pronto. **Autorização do dono antes de começar.**
+- Não misturar correção necessária com melhoria opcional. Nenhuma frente nova sem mostrar por que é necessária.
+- Preservar os dados e o comportamento atual.
+- Registrar nos docs as decisões, os testes, os custos, as falhas e os resultados.
+- Bloqueio = explicar e propor solução. Nunca contornar uma proteção.
+- **Etapa só conta como concluída com o critério de pronto comprovado.** Código juntado ou publicado não basta.
+- A tela mostra só o estado real do sistema, nunca estado fictício.
+- Nada vai ao público sem o clique do dono, nem em conta de teste.
+- **@getsaleboost não pode ser usado em teste de publicação sem autorização específica do dono.**
+
+### 0. Diagnóstico com mais de uma resposta — ✅ concluído em 06/11
+- **Entrega:** PR #117 juntado; site publicado (automático no merge, ver PITFALLS "Juntar o PR é publicar"); ficha `imoveis_rio` aplicada (`20261106130000_diagnostico_multipla.sql`).
+- **Comprovado no site real** (getsaleboost.com), no celular e no computador:
+  - marcar e desmarcar;
+  - limite de 3, com o aviso;
+  - "E depois disso?" sem a prioridade principal;
+  - em Configurações da Teste Zero, com as gravações bloqueadas: resposta antiga preservada, salvar, editar e remover.
+- **Banco:** conferido que a Teste Zero não mudou.
+
+### 1. Núcleo: fases e testes
+| # | Etapa | Pronto quando (comprovado) | Depende de |
+|---|---|---|---|
+| 1.1 | **Correção 3 do Opportunity Engine** (PR isolado, sem deploy, sem migration, sem dado): oportunidade aberta equivalente é atualizada, nunca duplicada (tipo + imóveis + sinal, **nunca o título**; evidência nova não apaga evidência antiga mais forte); tarefa única para vários imóveis com a mesma ação, acompanhável por imóvel; trava de "sem presença nas redes / invisíveis / parados / sem divulgação" (com Instagram desconectado, nunca afirmar ausência de posts). | Testes dos 6 casos do dono passam, inclusive "duas oportunidades diferentes continuam separadas"; build ok; PR aberto. | — |
+| 1.2 | **Relatório da fila antiga** (só leitura, Teste Zero e Tespon): total, duplicadas, inválidas pelas regras antigas, as que ficam, id e motivo de cada uma. | Relatório entregue. **Limpeza só com a 2ª autorização do dono.** | 1.1 |
+| 1.3 | **Fechar a Fase 2:** publicar a `marketing-ai` com a Correção 3 e rodar as contas de teste. | Todas as oportunidades passam nos 5 critérios (evidência, relevância, conexão, ação, diferenciação); nenhuma duplicada; nenhuma frase sem prova; custo registrado. | 1.1 (1.2 se a fila for limpa) |
+| 1.4 | **Processo completo, do início ao fim, na Teste Zero e na Tespon:** coleta → oportunidade → plano → peças → aprovação → publicação → medição. | Cada passo com prova (ids, prints, logs), custo e falhas registrados. Publicação real **só com conta de Instagram de teste** ligada à Teste Zero e o clique do dono. Se não houver conta de teste: parar, documentar e propor alternativa. | 1.3; conta de IG de teste (dono) |
+| 1.5 | **Serviços de IA depois da recarga:** estratégia, geração de peças e respostas do Telegram, nas contas de teste. | Uma execução bem-sucedida de cada, com prova e custo; falhas registradas. | — (pode andar junto com 1.4) |
+| 1.6 | **Teste final** (`docs/TESTE-FINAL.md`). | Relatório objetivo entregue ao dono. | 1.4, 1.5 |
+
+### 2. Telas (só depois do bloco 1)
+| # | Etapa | Pronto quando (comprovado) | Depende de |
+|---|---|---|---|
+| 2.1 | **PR B — Atividade dentro do sino** (canal único, deduplicação por id, recuperação depois de reconexão, limpeza ao fechar). | QA B com prova: sem duplicadas, 1 canal, canal some ao fechar, evento durante a queda aparece 1 vez. **O PR A já está no ar desde 05/11** (o merge publica). Falta o dono aprovar formalmente o QA A. | Aprovação do QA A |
+| 2.2 | **Painel do Marketing AI em Bento** (só reorganiza dados reais, nenhuma métrica nova). | Números batem com o SQL nas 2 contas; carregando, erro e ausência certos; prints de celular e computador. | 2.1 |
+| 2.3 | **Fábrica 3D:** parada com estados reais (2.3a), depois movimento por evento real (2.3b). Critérios em DECISIONS (seções C a H do plano de 04/11). | 2.3a: estados e selo de maturidade reais, versão 2D, sem desenho contínuo parado. 2.3b: cada evento anima 1 vez, inclusive depois de reconexão. | 2.2 |
+| 2.4 | **Cadastro → Instagram → planos → pagamento.** Começa pelo N1: segurança da conexão do Instagram (`state` assinado e preso ao usuário logado). | N1: teste de ataque com o id de outra empresa recusado. N2 a N5: os 4 casos de QA (sem pagamento, pago, cancelado, chamada direta). | Decisões do dono: preços, contas antigas, tolerância de atraso |
+
+### 3. Telegram (por último: usa as mesmas regras, estados, filas e permissões das telas)
+| # | Etapa | Pronto quando (comprovado) | Depende de |
+|---|---|---|---|
+| 3.1 | **Corrigir as 6 divergências já documentadas** (ARCHITECTURE, Telegram). | Cada divergência corrigida ou registrada com motivo, com teste. | Bloco 2 |
+| 3.2 | **Central de Comando T0:** a matriz de paridade painel × Telegram. | Matriz entregue e aprovada. | 3.1 |
+| 3.3 | **T1 em diante:** consultar e aprovar com botão assinado ("aprova o 2" → cartão → ✅). Texto livre nunca aprova. | Por etapa (ver o plano T0–T6). | 3.2 |
+
+**Pendências do dono que destravam etapas:**
+- conta de Instagram de teste profissional, cadastrada como testadora no app da Meta (1.4);
+- aprovação formal do QA A (2.1);
+- preços e planos, contas antigas e tolerância de atraso (2.4);
+- trocar as senhas da Teste Zero e da Tespon depois dos testes.
+
 ## Foco atual (dono, 2026-11-01) — qualidade antes do 1º cliente
+
+> **Histórico (substituído pela "Ordem aprovada" de 2026-11-06, acima).**
 
 > As prioridades P0–P4 abaixo continuam valendo; este é o trabalho em andamento agora.
 
