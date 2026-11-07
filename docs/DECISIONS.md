@@ -6,6 +6,13 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-07 — Bento no topo do Marketing AI (C.1)
+- **O que mudou:** o topo do hub virou uma grade Bento (12 colunas): Próxima ação (8) + Aprovações pendentes (4); 4 indicadores (3 cada); "O que mudou no mercado" (6) + Oportunidades (6); Direcionamento (12); Receita · ROAS · funil (12, ainda em DataVeil). Componente novo: `marketingAi/HubBento.tsx`. Cada cartão leva à tela de origem (nada duplicado).
+- **Nenhuma métrica nova, nenhuma consulta nova:** mesmos hooks de antes (`useAttention`, `useDecisionKpis`, `useMarketChanges`, `useStrategySummary`, `useFlowSummary`). Os 4 indicadores usam `decisionTiles()` (extraída de `DecisionKpis.tsx`), então os números são idênticos. Estados de carregando/erro/vazio mantidos; "Status da coleta" segue recolhível dentro do cartão de mercado.
+- **Efeito visual:** estrutura do GlowCard da referência TechStackBento (21st.dev): borda acesa + spotlight + grade fraca que seguem o cursor/dedo, em laranja #FF6D29; desligado com `prefers-reduced-motion`.
+- **Celular (< 768px), uma coluna na ordem:** Próxima ação → Aprovações → indicadores (2×2) → Mercado → Oportunidades → Direcionamento → Receita.
+- **Sem uso no hub agora (mantidos no código):** `AttentionBlock` (só seus textos/rotas são reaproveitados) e o corpo visual de `DecisionKpis`.
+
 ## 2026-11-07 — Qualidade e mercado em paralelo (dono)
 - **Mudança de mentalidade:** não esperar o processo completo ficar perfeito para validar comercialmente. Colocar o Sales Boost diante de uma imobiliária real o quanto antes, sem prometer o que ele ainda não entrega.
 - **Frente A (núcleo, agente):**
