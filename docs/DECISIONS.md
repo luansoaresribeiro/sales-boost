@@ -6,6 +6,46 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-07 (noite) — Tour virtual: regras definidas (dono)
+Substitui o "US$ 15 fixo" e as pendências da decisão de baixo.
+
+**Como cobra:**
+1. **Pagamento:** compra avulsa pelo Stripe, um tour por imóvel. O preço aparece **antes** de gerar e cada compra fica registrada no histórico da imobiliária.
+2. **Preço:** **(custo estimado + taxa do pagamento) × 1,75.** Isso é *markup* de 75% sobre o custo total, não margem líquida de 75%.
+   - O custo conta tudo: geração (Higgsfield), APIs, processamento e a taxa do Stripe.
+   - No Brasil, o valor é calculado em dólar e convertido para reais pela cotação do momento da cobrança.
+   - Pelo custo de 08/10 (US$ 3,24 por 6 fotos), dá cerca de US$ 5,67 mais a taxa.
+3. **Refazer quando sai ruim:** o preço é o de 1 geração. Até **2 tentativas extras** ficam por conta do Sales Boost, com uma etapa automática de avaliação da qualidade. Se não ficar bom dentro desse teto, o cliente não recebe vídeo ruim e **não é cobrado**.
+
+**Como funciona:**
+
+4. **Tamanho adaptativo:** o tour usa as cenas que o imóvel pede, não um limite fixo de 6 fotos ou 30 s.
+5. **Formato:** tour completo **16:9** e uma versão **9:16** derivada para Reels, com reenquadramento inteligente (não é só cortar as laterais).
+6. **Quem pode comprar:** **só assinantes.**
+7. **Ordem dos cômodos:** a IA identifica os cômodos e sugere a sequência, e o cliente reorganiza, tira ou acrescenta antes de confirmar.
+   - A sequência aprovada guia a geração.
+   - **Não se promete navegação espacial fiel:** com só fotos, a IA pode inventar uma passagem entre cômodos que não se tocam.
+8. **Teto do Higgsfield:** **US$ 100/mês** no início.
+   - Aviso ao chegar em 70%.
+   - Novas gerações param ao chegar em 100%.
+   - Vídeos já pagos e aprovados nunca são interrompidos.
+   - O sistema acompanha o custo acumulado, o custo por imóvel e o preço cobrado.
+
+**Ainda precisa testar antes de prometer:**
+- a qualidade e o custo do reenquadramento 16:9 → 9:16;
+- a avaliação automática de qualidade;
+- a fonte de cotação.
+
+**Visão (dono):** o tour não é uma funcionalidade isolada. Ele é uma ferramenta de resultado comercial: cadastro → análise do imóvel → materiais (tour, Reels) → aprovação → aprendizado. O Sales Boost não deve virar "mais um gerador de vídeo".
+
+**Também autorizado em 07/11:**
+- a limpeza da fila (A.4);
+- a pesquisa das 10 imobiliárias (só informação pública, Rio, médio-alto e alto padrão; empresa, Instagram, estrutura, posicionamento, marketing, oportunidade e contato público);
+- o começo do Bento (C.1);
+- a revisão semanal toda segunda-feira com 6 perguntas: o que foi desenvolvido, o que funciona de verdade, o que foi validado com cliente, quanto se gastou, que oportunidades comerciais apareceram e qual a prioridade.
+
+**Fica para depois:** o preço da assinatura e as regras das contas antigas.
+
 ## 2026-11-07 (tarde) — Tour virtual pago por imóvel + Bento e Fábrica 3D antecipados (dono)
 - **Tour virtual pago:** **US$ 15 por tour.** O botão fica em cada imóvel. Ao clicar, abre um pop-up grande que mostra o carregamento e, no fim, o vídeo com opções de baixar.
   - Reaproveita o tour em modo caminhada que já existe (`video_tours`, Kling via Higgsfield). O custo registrado em 08/10 é de cerca de US$ 3,24 para 6 fotos.

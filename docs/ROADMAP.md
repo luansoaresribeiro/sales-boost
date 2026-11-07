@@ -59,9 +59,9 @@
 | C.1 | **Painel do Marketing AI em Bento**: só reorganiza dados reais, nenhuma métrica nova | Os números batem com o SQL nas 2 contas; carregando, erro e ausência certos; prints de celular e computador |
 | C.2 | **Fábrica 3D parada, com os estados reais** (critérios em DECISIONS de 04/11) | Estados e selo de maturidade reais; versão 2D sem WebGL; sem desenho contínuo com a cena parada |
 | C.3 | **Fábrica 3D com movimento por evento real** | Cada evento anima 1 vez, inclusive depois de reconexão |
-| C.4 | **Tour virtual por imóvel (US$ 15)**: mapa do imóvel (R.3) + botão + pop-up de carregamento e resultado com download | Depende das decisões pendentes abaixo; QA na Teste Zero sem cobrança real |
+| C.4 | **Tour virtual por imóvel: (custo + taxa) × 1,75, só para assinantes, 16:9 + 9:16, adaptativo, até 2 tentativas extras por nossa conta, teto de US$ 100/mês (regras em DECISIONS, 07/11, noite)**: mapa do imóvel (R.3) + botão + pop-up de carregamento e resultado com download | Depende das decisões pendentes abaixo; QA na Teste Zero sem cobrança real |
 
-**Decisões pendentes do tour (C.4):**
+**Decisões do tour (C.4): ✅ definidas em 07/11 à noite. Antes eram pendentes:**
 - cobrança;
 - preço em real;
 - o que acontece em caso de falha;
