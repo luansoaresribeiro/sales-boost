@@ -6,6 +6,59 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-07 — Plataforma internacional: idioma ≠ país ≠ regras (dono)
+
+**Visão do dono:** "não quero que o SalesBoost seja um software brasileiro traduzido para inglês. Quero que seja uma
+plataforma internacional, capaz de entender o mercado, as regras e a linguagem comercial de cada país."
+
+- **Três coisas separadas, sem depender uma da outra automaticamente:** idioma de uso (em que língua a pessoa lê e as
+  peças são escritas) · país onde a imobiliária opera (escolhido no cadastro, junto da cidade) · regras comerciais e
+  legais daquele país (vivem na ficha do país — regra 6). Ex.: brasileiro com imobiliária em Miami usa em português,
+  com regras e formatos dos EUA; e o contrário.
+- **Ordem:** segurança primeiro, internacionalização depois, expansão comercial por último.
+  | Ordem | Entrega | Situação |
+  |---|---|---|
+  | 0 | Desligar publicação sem aprovação | **feita 07/11** (ver abaixo) |
+  | 1 | CRECI e proteção de conteúdo (Brasil) | autorizada, com os ajustes abaixo |
+  | 2 | País no cadastro e estrutura internacional | planejamento aprovado |
+  | 3 | IA respeitando o idioma | planejamento aprovado |
+  | 4 | Moeda, medidas, telefone e fuso | roadmap, sem execução agora |
+  | 5 | LGPD, CCPA e privacidade | revisão especializada (LGPD e CCPA não são a mesma lei) |
+  | 6 | Tradução dos erros | acabamento |
+- **Ficha imobiliária dos EUA:** sem comercialização antes de revisão de advogado nos EUA. O Fair Housing entra no
+  desenho da ficha desde o início, não só como lista de palavras proibidas. Revisão jurídica dos Termos e da Política
+  também é requisito antes de vender nos EUA.
+- **Etapa 1 — ajustes do dono:**
+  - CRECI da pessoa física ou jurídica, identificado conforme o tipo de registro; incluído automaticamente nas peças
+    publicitárias; publicação bloqueada quando faltar o registro exigido; validação de formato e possibilidade de
+    conferência do registro (o número precisa pertencer ao anunciante certo, não basta "qualquer número"). Base citada
+    pelo dono: Resoluções COFECI 458/95 e 1.065/07 (a confirmar com advogado o texto exato exigido).
+  - A exigência de CRECI bloqueia a **publicação comercial**, não os testes internos de geração e qualidade (A.6).
+  - Proteção contra discriminação de compradores/locatários, promessa de valorização ou retorno garantido, informação
+    falsa sobre o imóvel e características inventadas — em legendas, DMs, WhatsApp, respostas automáticas e peças.
+    Deve distinguir afirmação comercial comprovável de promessa sem fundamento: não bloquear comunicação legítima à toa.
+- **WhatsApp:** consulta da configuração de resposta automática autorizada em todas as contas **exceto a Liga dos
+  Sonhos** (que fica completamente fora: não consultar, não modificar, não enviar, não testar). Desligar só nas contas
+  de teste; qualquer outra conta real é apresentada ao dono antes de mudar. **Resultado (07/11):** nenhuma conta
+  consultada estava com a resposta automática ligada — nada a desligar.
+- **A.6** continua separada (publicação das 2 funções do agente de conteúdo), só em contas de teste, sem Instagram.
+
+## 2026-11-07 — Etapa 0: nenhuma publicação no Instagram sem aprovação humana (dono)
+
+- **Regra:** nenhuma publicação no Instagram sem aprovação humana; nenhuma função antiga pode contornar; o padrão
+  continua "Pedir aprovação"; publicação automática só no futuro, com decisão explícita do dono e controles claros.
+  É proteção **no servidor**, não botão escondido.
+- **Feito:**
+  1. `publish-instagram` (antiga, sem chamadores, aceitava `company_id` sem conferir quem chamava e publicava com
+     legenda/imagem de IA) foi **substituída por uma versão que só responde 410 "Função desativada"** e passou a exigir
+     JWT (v73, publicada em 07/11). Conferido: sem login → 401; com chave pública → 410.
+  2. `agent-actions` → `execute`: trava `_shared/publishGuard.ts`. Ação ligada a uma peça (`marketing_ai_content` /
+     `marketing_ai_test_content`) só executa com `approval_status = 'APPROVED'` **e** `approved_by` preenchido
+     (clique no painel, agendamento do dono, botão assinado do Telegram). `AUTO_APPROVED` nunca publica — vira FAILED
+     com o motivo. Teste: `scripts/test-publish-guard.mjs`.
+- **Rollback:** republicar `agent-actions` a partir do commit anterior a esta entrada. A versão antiga de
+  `publish-instagram` está no git (não recomendado reativar).
+
 ## 2026-11-07 — Qualidade do agente de conteúdo (A.6): 4 correções
 Origem: teste A.6 nas contas de teste (Teste Zero e Tespon; Liga dos Sonhos não tocada). Autorizado pelo dono. Branch `claude/nifty-shannon-ysp818-conteudo-qualidade` (a partir de `db03ea8`).
 - **1. Peça sem imagem não entra na fila.** Causa: `creative-generate` (educativo = `opts.deck`) força `format: carrossel` e `template: livre` e IGNORAVA o modelo do Diretor sem avisar (o `reasoning` justificava "faq"); quando os slides não saíam (`slides` vazio, `image_url` null) o fallback de card só valia para `fmt !== 'carrossel'`, e a peça seguia para a nota e para o Vault (82). Agora: (a) `pieceGuard.resolveTemplate` grava a escolha do Diretor em `brief.director_template`, explica toda troca no `reasoning` e o prompt do Diretor avisa que no carrossel de slides o modelo não se aplica; (b) carrossel sem nenhuma imagem cai num card renderizado pelo `render-format` (faq se o Diretor escolheu faq e a peça trouxe pergunta/resposta; senão card "photo"), o formato vira `foto` e o `reasoning` ganha "Troquei o carrossel por um card único" (baixa a nota); (c) trava final: foto/carrossel sem imagem utilizável **apaga a peça**, registra `agent_performance.task_key = 'content_no_image'` (success false, com o motivo) e a chamada falha com mensagem clara — nunca chega ao score/Vault. Exceção: `skipImage` (imagem desligada de propósito). A rotação automática de modelo em `foto` continua mandando (decisão antiga do dono) e continua explicada no `reasoning`.
