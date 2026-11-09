@@ -7,6 +7,7 @@
 // visitante e nenhum IP é guardado (visitor_hash = SHA-256 com sal). Corretor (Etapa 7): o telefone dele só sai no redirecionamento do clique.
 import { availabilityOf, itemCfgFrom } from './itemService.ts'
 import { hasPaidAccess } from './access.ts'
+import { licenseFooter, licenseRule, licenseStatus } from './compliance.ts'
 import {
   LEAD_SOURCE, LEAD_STAGE_NEW, NOT_FOUND_BODY, appendLinkOnce, clientIp, consentText, generateCode, instagramHandle, instagramUrl, isBot,
   isUuid, isValidCode, leadLimit, leadNotes, linkLine, lng, parsePublicPageConfig, publicFields, publicLink, publicPhotos,
@@ -54,7 +55,7 @@ export async function ensureTrackedLink(admin: Admin, o: { companyId: string; it
 interface Live {
   link: LinkRow; lang: Lang; cfg: PublicPageConfig; title: string
   page: { contact_phone: string | null; contact_ig: string | null }
-  company: { id: string; name: string; logo: string | null }
+  company: { id: string; name: string; logo: string | null; license: string | null }
   fields: ReturnType<typeof publicFields>; photos: string[]
   unavailable: boolean   // Fase 4: imóvel vendido/alugado/removido — a página avisa e esconde contato
 }
@@ -68,7 +69,7 @@ async function loadLive(admin: Admin, code: unknown): Promise<Live | null> {
     if (!page || page.enabled !== true) return null
     const { data: item } = await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('id', link.item_id).eq('company_id', link.company_id).eq('kind', 'product').maybeSingle()
     if (!item) return null
-    const { data: co } = await admin.from('companies').select('id, business_name, language, vertical_key').eq('id', link.company_id).maybeSingle()
+    const { data: co } = await admin.from('companies').select('id, business_name, language, vertical_key, playbook_answers').eq('id', link.company_id).maybeSingle()
     if (!co) return null
     if (!(await hasPaidAccess(admin, co.id))) return null // conta sem plano pago: a página sai do ar
     const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', co.vertical_key ?? '').eq('enabled', true).maybeSingle()
@@ -79,10 +80,14 @@ async function loadLive(admin: Admin, code: unknown): Promise<Live | null> {
     const lang = lng(co.language)
     const { data: dna } = await admin.from('brand_dna').select('logo_url').eq('company_id', co.id).maybeSingle()
     const logo = typeof dna?.logo_url === 'string' && /^https:\/\//i.test(dna.logo_url) ? dna.logo_url : null
+    // Etapa 1: registro profissional (CRECI) visível na página pública — só se a ficha pede e o número é válido.
+    const rule = licenseRule(pb?.config)
+    const lst = rule ? licenseStatus(co.playbook_answers, rule) : null
+    const license = rule && lst?.ok ? licenseFooter(rule, lst.license, lang) : null
     return {
       link: link as LinkRow, lang, cfg, title: String(item.title ?? '').slice(0, 160),
       page: { contact_phone: page.contact_phone ?? null, contact_ig: page.contact_ig ?? null },
-      company: { id: co.id, name: String(co.business_name ?? ''), logo },
+      company: { id: co.id, name: String(co.business_name ?? ''), logo, license },
       fields: publicFields(pb?.config?.catalog_fields, cfg, item.meta?.fields, lang), photos,
       unavailable: availabilityOf(item, itemCfgFrom(pb?.config).availability).blocking,
     }
@@ -150,9 +155,9 @@ export async function handlePublicPage(admin: Admin, action: string, body: Recor
         else if ((mine.count ?? 0) === 0 && (hour.count ?? 0) < LIMITS.viewPerLinkHour) await logEvent(admin, live, 'view', hash)
       }
       const cc = live.cfg.country_code
-      if (live.unavailable) return { status: 200, body: { ok: true, unavailable: true, lang: live.lang, title: live.title, company: { name: live.company.name, logo_url: live.company.logo }, fields: [], photos: [], buttons: { whatsapp: false, dm: false }, consent_text: '' } }
+      if (live.unavailable) return { status: 200, body: { ok: true, unavailable: true, lang: live.lang, title: live.title, company: { name: live.company.name, logo_url: live.company.logo, license: live.company.license }, fields: [], photos: [], buttons: { whatsapp: false, dm: false }, consent_text: '' } }
       return { status: 200, body: {
-        ok: true, lang: live.lang, title: live.title, company: { name: live.company.name, logo_url: live.company.logo },
+        ok: true, lang: live.lang, title: live.title, company: { name: live.company.name, logo_url: live.company.logo, license: live.company.license },
         fields: live.fields, photos: live.photos,
         buttons: { whatsapp: whatsappNumber(live.page.contact_phone, cc) !== null, dm: instagramUrl(live.page.contact_ig) !== null },
         consent_text: consentText(live.lang, live.company.name),

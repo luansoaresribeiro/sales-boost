@@ -6,6 +6,32 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-09 — Etapa 1 · parte A: CRECI obrigatório para publicar (dono, autorizada em 07/11)
+
+A Etapa 1 foi dividida em 2 PRs (decisão do dono em 09/11): **1A CRECI** (este) e **1B proteção de conteúdo**.
+
+- **Onde vive:** a regra fica na ficha (`config.compliance.license`, migration
+  `20261109120000_compliance_creci_ficha.sql`), não no código (regra 6). Sem esse bloco, nada muda.
+- **Onde a resposta fica:** na mesma pergunta que já existia (`playbook_answers.creci`). O tipo fica como sufixo:
+  `12345-F` (pessoa física, corretor) ou `12345-J` (pessoa jurídica, imobiliária). Não criei coluna nem chave nova.
+  - **Divergência do plano:** o plano previa `creci_tipo` à parte. Usei um campo só por dois motivos:
+    o exemplo da própria pergunta já pede esse formato ("Ex.: 12345-F ou 1234-J"), e assim número e tipo nunca ficam desencontrados.
+- **Formato:** aceita "CRECI-RJ 12345-F", "12345-J", "creci/rj nº 12.345-f" e "1234 PJ". Recusa texto solto, outro estado e
+  tipo inexistente.
+- **Conferência junto ao conselho:** o sistema **não consulta o registro sozinho**. O CRECI-RJ não tem uma API
+  pública confirmada. A tela dá o link do site do CRECI-RJ para o dono conferir.
+- **Publicação:** sem CRECI válido (com PF/PJ), o `agent-actions → execute` recusa a ação com o motivo
+  "Para publicar, informe seu CRECI…" e devolve a peça ao Vault.
+  - Se o banco falhar, a publicação também é recusada (falha fechada, porque publicar é irreversível).
+  - **A geração de peças e os testes internos (A.6) não são bloqueados.**
+- **Rodapé:** "CRECI-RJ 12345-F" entra no fim da legenda **na hora de publicar**, uma vez só. Não repete se a legenda já cita o
+  número. Legenda longa é cortada, nunca o rodapé (limite de 2.200 caracteres do Instagram).
+- **Tela:**
+  - **Campo do CRECI (Configurações e cadastro):** botões PF/PJ, aviso de formato, a prévia exata do rodapé e o link do conselho.
+  - **Aprovações:** aviso "Para publicar, informe seu CRECI".
+  - **Página pública do imóvel:** mostra o CRECI quando ele é válido.
+- **Testes:** `scripts/test-compliance.mjs` (17 verificações).
+
 ## 2026-11-07 — Plataforma internacional: idioma ≠ país ≠ regras (dono)
 
 **Visão do dono:** "não quero que o SalesBoost seja um software brasileiro traduzido para inglês. Quero que seja uma
