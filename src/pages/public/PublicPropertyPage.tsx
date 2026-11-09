@@ -14,7 +14,7 @@ const BORDER = 'rgba(255,255,255,0.1)'
 const D = "'Bricolage Grotesque', system-ui, sans-serif"
 
 interface PageData {
-  lang: 'pt' | 'en'; title: string; company: { name: string; logo_url: string | null }
+  lang: 'pt' | 'en'; title: string; company: { name: string; logo_url: string | null; license?: string | null }
   fields: { key: string; label: string; value: string }[]; photos: string[]
   buttons: { whatsapp: boolean; dm: boolean }; consent_text: string; unavailable?: boolean
 }
@@ -148,7 +148,10 @@ export default function PublicPropertyPage() {
     <div style={{ width: '100%', maxWidth: '480px', paddingBottom: '40px' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 16px' }}>
         {data.company.logo_url && <img src={data.company.logo_url} alt="" style={{ height: '32px', maxWidth: '110px', objectFit: 'contain' }} />}
-        <span style={{ fontSize: '14px', fontWeight: 700, color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{data.company.name}</span>
+        <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <span style={{ fontSize: '14px', fontWeight: 700, color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{data.company.name}</span>
+          {data.company.license && <span style={{ fontSize: '11.5px', color: MUTED, opacity: 0.85 }}>{data.company.license}</span>}
+        </span>
       </header>
 
       <div style={{ position: 'relative', background: '#000' }}>

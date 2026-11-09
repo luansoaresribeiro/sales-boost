@@ -23,7 +23,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { parseButton, verifyButton, type ButtonKind, type ButtonOp } from '../_shared/telegramButtons.ts'
 import { requirePaidAccess } from '../_shared/access.ts'
-import { publishBlockReason } from '../_shared/publishGuard.ts'
+import { publishBlockReason, publishes } from '../_shared/publishGuard.ts'
+import { ensureFooter, publishLicense } from '../_shared/compliance.ts'
 import { plannedPublishAt, publishWhenLabel } from '../_shared/publishSlot.ts'
 import { revalidate, unverifiableOutcome, UNVERIFIABLE_FAIL_MESSAGE } from '../_shared/itemService.ts'
 
@@ -327,6 +328,13 @@ async function execute(admin: Supa, act: any, fromCron = false): Promise<any> {
   // Etapa 0 (2026-11-07): ação que publica só roda com aprovação HUMANA (AUTO_APPROVED nunca publica).
   const blocked = publishBlockReason(act)
   if (blocked) return await finish(admin, act.id, 'FAILED', { execution_error: blocked })
+  // Etapa 1 (2026-11-07): ficha que exige registro profissional (CRECI) → sem registro válido não publica; com ele, o rodapé entra na legenda.
+  const lic = publishes(act) ? await publishLicense(admin, act.company_id) : null
+  if (lic?.block) {
+    if (act.ref_type === 'marketing_ai_test_content') await admin.from('marketing_ai_test_content').update({ status: 'vault' }).eq('id', act.ref_id).eq('company_id', act.company_id).eq('status', 'publishing')
+    return await finish(admin, act.id, 'FAILED', { execution_error: lic.block })
+  }
+  const withLicense = (c: string) => (lic?.footer && lic.rule && lic.license ? ensureFooter(c, lic.footer, lic.rule, lic.license) : c)
   // Fase 4: imóvel indisponível (ou impossível de conferir) NUNCA chega a publicar. A conferência vem ANTES de marcar EXECUTING.
   if (act.ref_type === 'marketing_ai_test_content' && act.ref_id) {
     const held = await availabilityGate(admin, act, fromCron)
@@ -345,7 +353,7 @@ async function execute(admin: Supa, act: any, fromCron = false): Promise<any> {
     if (act.ref_type === 'marketing_ai_content' && act.ref_id) {
       const { data: content } = await admin.from('marketing_ai_content').select('caption, hashtags, image_url').eq('id', act.ref_id).eq('company_id', act.company_id).maybeSingle()
       const { data: company } = await admin.from('companies').select('instagram_user_id, instagram_access_token').eq('id', act.company_id).maybeSingle()
-      const caption = [content?.caption, content?.hashtags].map(x => (x ? String(x) : '').trim()).filter(Boolean).join('\n\n')
+      const caption = withLicense([content?.caption, content?.hashtags].map(x => (x ? String(x) : '').trim()).filter(Boolean).join('\n\n'))
 
       let mediaId: string | null = null
       let publishError: string | null = null
@@ -385,7 +393,7 @@ async function execute(admin: Supa, act: any, fromCron = false): Promise<any> {
       const { data: vp } = await admin.from('marketing_ai_test_content').select('recipe, video_url').eq('id', act.ref_id).eq('company_id', act.company_id).maybeSingle()
       if (vp?.recipe === 'video_imovel' && !vp.video_url) return await fail('O vídeo desta peça ainda não está pronto — espere ele aparecer e tente de novo.')
       const p = act.payload ?? {}
-      const caption = [p.caption, p.cta, p.hashtags].map(x => (x ? String(x) : '').trim()).filter(Boolean).join('\n\n')
+      const caption = withLicense([p.caption, p.cta, p.hashtags].map(x => (x ? String(x) : '').trim()).filter(Boolean).join('\n\n'))
       const { data: company } = await admin.from('companies').select('instagram_user_id, instagram_access_token').eq('id', act.company_id).maybeSingle()
 
       // Carrossel real (2-10 fotos) quando a peca tem media[] com mais de 1

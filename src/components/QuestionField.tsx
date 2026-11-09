@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { bi } from '../lib/verticalPlaybook'
 import { REQUIRED_STAR } from '../lib/requiredFields'
+import LicenseHelp from './LicenseHelp'
 import { allowedStates, answerList, excludedOptions, isMeaningful, optionsFor, STATE_LABEL, type AnswerState, type FieldState, type V2Question } from '../lib/onboardingV2'
 
 // Uma pergunta do onboarding v2 (ficha do setor), com "por que perguntamos"
@@ -113,6 +114,7 @@ export default function QuestionField({ q, value, state, onChange, onState, lang
         <input value={String(value ?? '')} onChange={e => { setInvalid(false); onChange(e.target.value); if (state !== 'filled') onState(null) }}
           onBlur={blurText} placeholder={q.placeholder ? bi(q.placeholder, lang) : ''} style={input} />
       )}
+      {q.type === 'text' && q.license && <LicenseHelp rule={q.license} value={value} onChange={setValue} lang={lang} />}
 
       {q.type === 'multi_text' && (
         <div>

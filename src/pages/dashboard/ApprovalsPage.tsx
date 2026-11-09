@@ -13,6 +13,7 @@ import type { TestPost } from './marketingAi/TestingArea'
 import { PieceChips } from './marketingAi/PieceLabels'
 import { useSSNames } from './marketingAi/shared'
 import AgentConfigTab from './marketingAi/AgentConfigTab'
+import LicenseNotice from './LicenseNotice'
 
 const EXEC_LABEL_EN: Record<string, string> = { organico: 'Organic', cliente: 'Reply to customer', campanha: 'Campaign' }
 const RISK_EN: Record<string, string> = { high: 'high', medium: 'medium', low: 'low' }
@@ -352,6 +353,7 @@ export default function ApprovalsPage() {
       </div>
 
       <div style={{ padding: '28px 32px', maxWidth: '820px' }}>
+        {companyId && <LicenseNotice companyId={companyId} lang={lang} />}
         {/* 2026-11-04 (dono): a escolha "Pedir aprovação / Executar automaticamente" mora aqui (saiu de Configurações). */}
         {companyId && (
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px 18px', marginBottom: '28px' }}>

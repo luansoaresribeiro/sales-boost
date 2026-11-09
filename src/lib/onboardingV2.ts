@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { bi, type Bilingual } from './verticalPlaybook'
+import { licenseRule, type LicenseRule } from './license'
 
 // Onboarding v2 (pedido do dono 2026-10-16): diagnóstico curto antes do
 // cadastro + 5 etapas depois. As perguntas, etapas, perfis e textos vêm da
@@ -37,6 +38,7 @@ export interface V2Question {
   allow?: ('unknown' | 'na' | 'later')[] // estados aceitos; [] = obrigatória
   diagnostic?: boolean // também aparece no diagnóstico curto (antes do cadastro)
   needed_for?: string[] // funcionalidades que dependem da resposta (ex.: 'estrategia')
+  license?: LicenseRule // registro profissional (ficha: config.compliance.license) — a tela mostra PF/PJ e confere o formato
   exclude_from?: string // multi_select: opções já escolhidas nessa outra pergunta não aparecem aqui (ex.: prioridade principal × "e depois disso?")
 }
 
@@ -71,7 +73,10 @@ export async function fetchOnboardingV2(verticalKey: string): Promise<Onboarding
   if (!verticalKey || verticalKey === 'generico') return null
   try {
     const { data } = await supabase.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
-    return parseOnboardingV2((data?.config as { onboarding_v2?: unknown } | undefined)?.onboarding_v2)
+    const v2 = parseOnboardingV2((data?.config as { onboarding_v2?: unknown } | undefined)?.onboarding_v2)
+    const rule = licenseRule(data?.config)
+    if (v2 && rule) v2.questions = v2.questions.map(q => (q.key === rule.answer_key && q.type === 'text' ? { ...q, license: rule } : q))
+    return v2
   } catch { return null }
 }
 
