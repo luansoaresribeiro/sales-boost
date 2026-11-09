@@ -29,6 +29,7 @@ import { stripInternalNotes, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '.
 import { ensureNearby, fetchNearbyConfig, fmtDistance, topPlaces } from '../_shared/nearbyPlaces.ts'
 import { buildNearbySlides, buildOfferSlides, pickCoverPhoto, type CoverRooms, type OfferSlide } from '../_shared/carouselOffer.ts'
 import { allowedValues } from '../_shared/numberGuard.ts'
+import { complianceNotice, cutPublicText, publicTextPromptRule, publicTextRules, type PublicTextRules } from '../_shared/compliance.ts'
 import { claimPromptRule, captionRewritePrompt, claimCtx, claimNotice, cutClaims, cutHashtags, itemFacts, lockText } from '../_shared/claimLock.ts'
 
 const cors = {
@@ -41,7 +42,7 @@ type SupaClient = ReturnType<typeof createClient>
 interface Photo { url: string; path: string }
 interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
 interface RecipeGroup { recipes: string[]; fonte_midia: string; descricao: string }
-interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; claimCtx: { terms: string[]; context: string[] } | null }
+interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; claimCtx: { terms: string[]; context: string[] } | null; publicText: PublicTextRules | null; publicTextRule: string }
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -73,6 +74,8 @@ async function fetchFichaConfig(admin: SupaClient, verticalKey: string | null): 
       // Capa pelos cômodos da ficha (tour.room_priority / avoid_rooms), igual ao tour em vídeo — nunca a 1ª foto no escuro.
       coverRooms: (() => { const t = (c.tour ?? {}) as { room_priority?: unknown; avoid_rooms?: unknown }; const a = (v: unknown) => (Array.isArray(v) ? v.filter((y): y is string => typeof y === 'string' && !!y.trim()) : []); return a(t.room_priority).length || a(t.avoid_rooms).length ? { priority: a(t.room_priority), avoid: a(t.avoid_rooms) } : null })(),
       fieldMap: c.opportunity_fields && typeof c.opportunity_fields === 'object' ? c.opportunity_fields as { price?: string; bedrooms?: string; location?: string; money?: string[] } : null,
+      // Etapa 1B: frases que rotulam quem pode comprar/alugar ou prometem resultado (ficha: compliance.public_text).
+      publicText: publicTextRules(c, String(c.default_language ?? 'pt')), publicTextRule: publicTextPromptRule(c, String(c.default_language ?? 'pt')),
       claimCtx: (() => { const x = (c.opportunity_texts as { market_claims_ctx?: { pt?: { terms?: unknown; context?: unknown } } } | undefined)?.market_claims_ctx?.pt; const a = (v: unknown) => (Array.isArray(v) ? v.filter((y): y is string => typeof y === 'string' && !!y.trim()) : []); return x && a(x.terms).length ? { terms: a(x.terms), context: a(x.context) } : null })() }
   } catch { return null }
 }
@@ -296,7 +299,7 @@ Deno.serve(async (req) => {
     // Rede de segurança (2026-10-23): mesmo com o prompt proibindo, a IA às vezes escreve um recado pro corretor
     // dentro da legenda/CTA ("⚠️ Sobre a metragem: os dados que recebi precisam de confirmação…"). Aqui o recado
     // SAI do texto (antes de qualquer coisa ser anexada, ex.: o aviso de mobiliado) e vai pro aviso do dono.
-    let pieceNotes: string[] = [], pieceEmptied = false, pieceClaims: string[] = []
+    let pieceNotes: string[] = [], pieceEmptied = false, pieceClaims: string[] = [], pieceCompliance: ReturnType<typeof cutPublicText>['removed'] = []
     // Trava de afirmação de mercado (claimLock, 2026-11-02): "acima de R$ X", "vale cada centavo", "endereços mais desejados"…
     // só passam se o cadastro DESTE imóvel traz o termo/valor. Reescreve 1x; persistiu, corta só a frase e avisa o dono.
     const facts = itemFacts(String(item.title ?? ''), fields, ficha.fieldMap)
@@ -307,14 +310,17 @@ Deno.serve(async (req) => {
     const claimsNoNums = { ...claims }
     claims.factNums = allowedValues(facts.texts)
     const copy = async (briefing: string) => {
-      const c = await writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`, claimPromptRule(ficha.marketClaims))
+      const c = await writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`, claimPromptRule(ficha.marketClaims) + ficha.publicTextRule)
       const cap = stripInternalNotes(c.caption), cta = stripInternalNotes(c.cta)
       pieceNotes.push(...cap.notes, ...cta.notes)
       if (c.caption.trim() && !cap.text.trim()) pieceEmptied = true
       const locked = await lockText(cap.text, claims, async iss => String(parseObj(await callClaude(anthropicKey, captionRewritePrompt(String(company!.business_name ?? ''), cap.text, iss), 900)).caption ?? '').trim() || null)
       const lc = cutClaims(cta.text, claimsNoNums), lh = cutHashtags(c.hashtags, claimsNoNums)
       pieceClaims.push(...locked.removed, ...lc.removed, ...lh.removed)
-      return { ...c, caption: locked.text, cta: lc.text, hashtags: lh.text }
+      // Etapa 1B: corta só a frase que rotula quem pode comprar/alugar ou promete resultado; a peça continua.
+      const pc = cutPublicText(locked.text, ficha.publicText), pt = cutPublicText(lc.text, ficha.publicText)
+      pieceCompliance.push(...pc.removed, ...pt.removed)
+      return { ...c, caption: pc.text, cta: pt.text, hashtags: lh.text }
     }
 
     const fieldsLine = `Tipo: ${fields.tipo ?? '—'} · Bairro: ${fields.bairro ?? '—'} · ${fields.venda_ou_aluguel ?? '—'} · Preço: R$ ${fields.preco ?? '—'} · Quartos: ${fields.quartos ?? '—'} · Metragem: ${fields.m2 ?? '—'}m²${fields.perto_de ? ` · Perto de: ${fields.perto_de}` : ''}${fields.descricao ? `\nDescrição real escrita pelo corretor (use só o que está aqui, sem acrescentar): ${String(fields.descricao).slice(0, 1500)}` : ''}`
@@ -361,7 +367,7 @@ Deno.serve(async (req) => {
         let caption = '', hashtags = '', cta = ''
         let kind = 'organico'
         let provider = ''
-        pieceNotes = []; pieceEmptied = false; pieceClaims = []
+        pieceNotes = []; pieceEmptied = false; pieceClaims = []; pieceCompliance = []
 
         if (recipe === 'carrossel_tour') {
           // Até 2 fotos mobiliadas virtualmente (escolhidas pelo dono) entram
@@ -460,7 +466,7 @@ Deno.serve(async (req) => {
         caption = lock.caption ?? ''
         if (cta || lock.approved) cta = lock.cta ?? ''
         // Avisos pro dono: o do QUERO vem primeiro (o prefixo dele fica intacto — keepQueroNotice) e depois o recado que saiu.
-        const reasoning = [lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null, claimNotice(pieceClaims)].filter(Boolean).join(' ') || null
+        const reasoning = [lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null, claimNotice(pieceClaims), complianceNotice(pieceCompliance)].filter(Boolean).join(' ') || null
 
         const slot = forcedDate || loose ? { date: forcedDate ?? '', overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
         const { data: row, error } = await admin.from('marketing_ai_test_content').insert({

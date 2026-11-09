@@ -6,6 +6,28 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-09 — Etapa 1 · parte B: proteção do texto que vai ao público (dono, autorizada em 07/11)
+
+- **Onde vive:** na ficha (`config.compliance.public_text`, migration `20261109130000_compliance_texto_publico_ficha.sql`).
+  Sem esse bloco, nada muda.
+- **O que barra** (em pt e en):
+  - **frases discriminatórias**, que rotulam quem pode ou não comprar ou alugar: "ideal para famílias", "perfeito para casal", "não aceitamos crianças", "pertinho da igreja", "gente de bem";
+  - **promessas sem prova:** "valorização garantida", "retorno certo", "vai valorizar", "investimento sem risco", "financiamento aprovado na hora".
+- **O que não barra:**
+  - frases legítimas, mesmo que citem família, criança ou praia: "sala ampla para receber a família", "600 m da praia", "condomínio com playground";
+  - afirmação comercial comprovável: "garantia locatícia", "seguro-fiança", "garantia da construtora".
+- **Por que frases com contexto e não palavras soltas:** palavra solta pega texto bom.
+  - Conferi com as legendas reais da Teste Zero e da Tespon (só leitura) e nenhuma frase legítima foi pega.
+- **Onde age:**
+  - **Legenda gerada** (`creative-generate`, inclusive vídeo, e `catalog-package`): corta só a frase, anota "Ajuste de conformidade: …" e a peça continua.
+  - **Pedido à IA:** a regra também entra no prompt ("descreva o imóvel e o estilo de vida sem dizer para quem ele é ou não é…").
+  - **Ao publicar** (`agent-actions`): se ainda sobrar frase proibida, recusa com motivo claro e devolve a peça ao Vault. Não edita o texto que o dono aprovou.
+  - **Resposta automática do WhatsApp e DM de automação do Instagram:** a mensagem com problema não sai. Vai a resposta neutra da ficha.
+- **Divergências do plano:**
+  - **Listas das oportunidades:** as listas antigas das oportunidades (`PROTECTED_TERMS` em `opportunityOutput.ts`, `PROMISE` em `opportunityPlan.ts`) **não foram movidas**. São palavras soltas, boas para o texto interno das oportunidades, mas largas demais para legendas.
+  - **Número e característica inventados:** continuam com as travas que já existiam (`claimLock`, `pieceGuard`).
+- **Testes:** `scripts/test-compliance.mjs`, agora com 29 verificações (1A + 1B).
+
 ## 2026-11-09 — Etapa 1 · parte A: CRECI obrigatório para publicar (dono, autorizada em 07/11)
 
 A Etapa 1 foi dividida em 2 PRs (decisão do dono em 09/11): **1A CRECI** (este) e **1B proteção de conteúdo**.

@@ -35,6 +35,7 @@ import { decideTopic, guardDeck, loadGuardCfg, topicBlock, topicNote, type Ask, 
 import { captionRewritePrompt, claimCtx, claimPromptRule, claimNotice, cutClaims, cutHashtags, cutSlide, itemFacts, loadClaimCfg, lockDeckClaims, lockText, type ClaimCtx } from '../_shared/claimLock.ts'
 import { allowedValues } from '../_shared/numberGuard.ts'
 import { logAiCost, newCostTracker, type CostTracker } from '../_shared/aiCost.ts'
+import { complianceNotice, cutPublicText, loadPublicTextRules, publicTextPromptRule } from '../_shared/compliance.ts'
 import { fallbackCardPlan, hasMarketSource, hasUsableImage, needsImage, pieceTrendIssues, resolveTemplate, trendNotice, trendPromptRule } from '../_shared/pieceGuard.ts'
 import { pickCoverPhoto, pickMiddlePhotos, type CatalogPhoto } from '../_shared/carouselOffer.ts'
 import { blockingThemes, findRepeatedTheme, pickAlternative, recentThemes, themeBlock, themeRetryNote, weekStartOf } from '../_shared/themeDedupe.ts'
@@ -716,6 +717,9 @@ Decida o brief. Retorne APENAS um JSON:
   // Ficha: termos de mercado, campos de preço/quartos e capa com foto. Sem market_claims na ficha a trava fica DESLIGADA e o prompt não muda (regra 6).
   const claimLang: 'pt' | 'en' = String(company.language ?? '').toLowerCase().startsWith('en') ? 'en' : 'pt'
   const claimCfg = await loadClaimCfg(admin, company.vertical_key ?? null, claimLang)
+  // Etapa 1B: legenda não rotula quem pode comprar/alugar nem promete resultado (ficha: compliance.public_text). Sem bloco, nada muda.
+  const pub = await loadPublicTextRules(admin, company.id)
+  const pubRule = publicTextPromptRule(pub?.config, claimLang)
   const ask: Ask = (p, max, cheap) => callModel(anthropicKey, p, max, cheap ? CHEAP_MODEL : undefined, (m, u) => track.add(m, u))
   let guardCfg: Awaited<ReturnType<typeof loadGuardCfg>> = null
   let topic: TopicDecision | null = null
@@ -749,7 +753,7 @@ Boas práticas do formato ${modLabel} (siga-as):\n${moduleKnow}
 ${visualRefs ? `\nReferências visuais da marca (Layouts & Estilos — inspire-se no estilo quando fizer sentido):\n${visualRefs}\n` : ''}${lessonsBlock(await loadLessons(admin, company.id))}
 Escreva o post pronto pra publicar. Regras importantes:
 - "caption" é APENAS a legenda que vai no Instagram (texto pro público). NUNCA coloque nela instruções de imagem, descrição de foto nem "Slide 1/2/3".
-${claimPromptRule(claimCfg.terms)}${trendRule()}- Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
+${claimPromptRule(claimCfg.terms)}${trendRule()}${pubRule}- Se o formato for CARROSSEL, preencha "slides": um array de 3 a 6 slides QUE CONTAM UMA HISTÓRIA JUNTOS, nunca fotos soltas e desconectadas — o mesmo cenário/produto/personagem evoluindo de slide a slide, com progressão clara (ex: preparação → durante → resultado; problema → solução → chamada). Cada slide: {"text": texto curto que aparece no slide, "image": descrição visual EM INGLÊS da imagem daquele slide, continuando visualmente do slide anterior (sem pessoas, sem texto na imagem)}.
 ${opts.deck ? deckPromptRules(coverStyle, quero.cta, topic ? { mode: topic.mode, tipCount: topic.tips.length } : undefined, claimPromptRule(claimCfg.terms, '• ') + trendRule('• ')) : ''}- Se for vídeo/reel/story, preencha "video_script" (roteiro de como gravar). Caso contrário, deixe vazio.
 - Depois de escrever, avalie o PRÓPRIO post: ele é forte/direto o suficiente pra também valer a pena repostar nos Stories tal como está (sem regerar nada)? Se sim, "story_worthy":true e "story_note": 1 frase curta dizendo por quê. Seja seletivo — nem todo post é bom pra Stories (ex: um card com muito texto lido rápido não funciona lá); só marque true quando fizer sentido de verdade.
 ${CARD_FIELD_INSTRUCTIONS[String(brief.template ?? '')] ?? ''}
@@ -849,6 +853,14 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
     }
     caption = r.caption; post.hashtags = r.hashtags || null; if (post.cta) post.cta = r.cta || null
   } catch (e) { if (!(e instanceof SkipClaimLock)) console.error('creative-generate: trava de afirmação de mercado falhou (segue sem ela)', company.id, e) }
+  // Etapa 1B: corta só a frase problemática da legenda/CTA e anota "Ajuste de conformidade: …" (a peça continua).
+  if (pub?.rules) {
+    const pc = cutPublicText(caption ?? '', pub.rules), pt = cutPublicText(String(post.cta ?? ''), pub.rules)
+    if (pc.removed.length) caption = pc.text
+    if (pt.removed.length) post.cta = pt.text || null
+    const note = complianceNotice([...pc.removed, ...pt.removed])
+    if (note) brief.reasoning = [brief.reasoning, note].filter(Boolean).join(' ')
+  }
 
   // Afirmação de tendência de mercado sem sinal com fonte (A.6): não corta (cortar esvazia o carrossel) — marca "Precisa de fonte:" no reasoning,
   // o que baixa a nota (claimLock.qualityFlags) e impede o Vault automático. Fica pro dono reescrever como opinião ou descartar.
@@ -1557,6 +1569,7 @@ async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Co
   const tcfg = await fetchTourCfg(admin, company.vertical_key ?? null)
   const claimLangV: 'pt' | 'en' = String(company.language ?? '').toLowerCase().startsWith('en') ? 'en' : 'pt'
   const claimCfgV = await loadClaimCfg(admin, company.vertical_key ?? null, claimLangV)
+  const pubV = await loadPublicTextRules(admin, company.id)
   let tour: TourPlan | null = job.tour && job.tour.photos?.length && job.tour.photos.every(u => photos.includes(u)) ? job.tour : null
   if (!tour) { try { tour = await chooseTour(admin, anthropicKey, company.id, item.id, job.format, tcfg) } catch (e) { console.error('runVideoSlot: escolha da foto falhou', company.id, String(e).slice(0, 200)) } }
   if (!tour) tour = { kind: 'room', photos: [photos[0]], rooms: [null], notes: ['não consegui analisar as fotos — usei a primeira do cadastro.'] }
@@ -1578,7 +1591,7 @@ Objetivo da peça na estratégia: ${job.purpose || job.name}${job.intent ? `\nIN
 ${HONESTY_RULE} A legenda é pro público do Instagram — nunca um recado pro corretor.
 ${captionRules(tcfg.forbidden_claims, prev)}
 NÚMEROS: só use número que esteja nos dados acima (em algarismo ou por extenso — "trezentos", "quatro quartos" contam). Sem o dado, não cite número nenhum.
-${claimPromptRule(claimCfgV.terms)}${decision.promptRule}${lessonsBlock(await loadLessons(admin, company.id))}
+${claimPromptRule(claimCfgV.terms)}${publicTextPromptRule(pubV?.config, claimLangV)}${decision.promptRule}${lessonsBlock(await loadLessons(admin, company.id))}
 Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`
   const guardNotes: string[] = []
   const ask = async (extra = ''): Promise<Record<string, unknown>> => {
@@ -1621,6 +1634,12 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`
       else if (lk.text !== orig) guardNotes.push('a legenda foi reescrita para tirar número ou afirmação sem fonte.')
     }
   } catch (e) { console.error('runVideoSlot: trava de número/afirmação falhou (segue sem ela)', company.id, e) }
+  if (pubV?.rules) {
+    const pc = cutPublicText(String(cap.caption ?? ''), pubV.rules), pt = cutPublicText(String(cap.cta ?? ''), pubV.rules)
+    if (pc.removed.length) cap = { ...cap, caption: pc.text }
+    if (pt.removed.length) cap = { ...cap, cta: pt.text }
+    const note = complianceNotice([...pc.removed, ...pt.removed]); if (note) guardNotes.push(note)
+  }
   // Recado da IA pro corretor sai da legenda/CTA antes da trava do QUERO (2026-10-25).
   const sp = stripPieceTexts(cap.caption ? String(cap.caption) : null, cap.cta ? String(cap.cta) : null)
   const safe = sanitizeCaptionCta(sp.caption || null, sp.cta || null, decision)

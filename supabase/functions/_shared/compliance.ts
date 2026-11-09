@@ -122,3 +122,93 @@ export async function publishLicense(admin: any, companyId: string): Promise<{ b
     return { ...none, block: LICENSE_CHECK_FAILED }
   }
 }
+
+// ── Etapa 1 · PR 1B (2026-11-09): texto que vai ao público (legenda, DM, WhatsApp, resposta automática) ─────────────
+// Na ficha: config.compliance.public_text = { pt: { discrimination, promises, allow }, en: {...}, safe_reply: {pt,en} }.
+// Os termos são FRASES COM CONTEXTO ("ideal para famílias", "não aceita crianças", "valorização garantida") — nunca
+// palavras soltas, para não pegar "sala ampla para receber a família" ou "600 m da praia". `allow` libera afirmação
+// comercial comprovável ("garantia locatícia", "seguro fiança"). Sem o bloco na ficha, nada muda.
+
+export type PublicIssue = 'discrimination' | 'promise'
+export interface PublicTextRules { discrimination: RegExp | null; promise: RegExp | null; allow: RegExp | null; safeReply: string }
+
+export const normText = (s: string) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+function phraseRe(list: unknown): RegExp | null {
+  const terms = (Array.isArray(list) ? list : []).filter((t): t is string => typeof t === 'string' && t.trim() !== '')
+    .filter(t => { try { new RegExp(t); return true } catch { return false } })
+  return terms.length ? new RegExp('(?:^|[^a-z0-9])(?:' + terms.join('|') + ')(?:$|[^a-z0-9])') : null
+}
+
+export function publicTextRules(config: any, lang = 'pt'): PublicTextRules | null {
+  const b = config?.compliance?.public_text
+  if (!b || typeof b !== 'object') return null
+  const l = (lang === 'en' && b.en) ? b.en : b.pt
+  if (!l || typeof l !== 'object') return null
+  const r = { discrimination: phraseRe(l.discrimination), promise: phraseRe(l.promises), allow: phraseRe(l.allow), safeReply: bi(isBi(b.safe_reply) ? b.safe_reply : undefined, lang) }
+  return r.discrimination || r.promise ? r : null
+}
+
+export function publicIssues(sentence: string, rules: PublicTextRules): PublicIssue[] {
+  const s = normText(sentence)
+  const out: PublicIssue[] = []
+  if (rules.discrimination?.test(s)) out.push('discrimination')
+  if (rules.promise?.test(s) && !(rules.allow?.test(s))) out.push('promise')
+  return out
+}
+
+const SENTENCES = /(?<=[.!?…])\s+/
+/** Corta só as frases com problema (linha por linha), devolvendo o que saiu. Nunca descarta a peça. */
+export function cutPublicText(text: string, rules: PublicTextRules | null): { text: string; removed: { sentence: string; issues: PublicIssue[] }[] } {
+  const removed: { sentence: string; issues: PublicIssue[] }[] = []
+  if (!rules || !text) return { text: String(text ?? ''), removed }
+  const lines = String(text).split('\n').map(line => line.split(SENTENCES).filter(p => {
+    if (!p.trim()) return false
+    const iss = publicIssues(p, rules)
+    if (iss.length) { removed.push({ sentence: p.trim(), issues: iss }); return false }
+    return true
+  }).join(' '))
+  const kept = lines.filter((l, i) => l || (i > 0 && lines[i - 1] && lines.slice(i + 1).some(Boolean)))
+  return { text: kept.join('\n').trim(), removed }
+}
+
+const ISSUE_PT: Record<PublicIssue, string> = { discrimination: 'rotula quem pode comprar/alugar', promise: 'promete resultado' }
+export function complianceNotice(removed: { sentence: string; issues: PublicIssue[] }[]): string | null {
+  if (!removed.length) return null
+  const shown = removed.slice(0, 3).map(r => `“${r.sentence.length > 90 ? `${r.sentence.slice(0, 89).trimEnd()}…` : r.sentence}” (${r.issues.map(i => ISSUE_PT[i]).join(', ')})`).join('; ')
+  return `Ajuste de conformidade: tirei ${shown}${removed.length > 3 ? ` (+${removed.length - 3})` : ''}.`
+}
+
+/** Ao publicar: sobrou frase proibida? Então recusa com motivo claro (não edita o texto que o dono aprovou). */
+export function publishTextBlock(caption: string, rules: PublicTextRules | null): string | null {
+  const { removed } = cutPublicText(caption, rules)
+  if (!removed.length) return null
+  const r = removed[0]
+  return `A legenda tem um trecho que não pode ir ao público (${r.issues.map(i => ISSUE_PT[i]).join(', ')}): “${r.sentence.slice(0, 120)}”. Edite a legenda e aprove de novo. Nada foi publicado.`
+}
+
+/** Resposta automática (WhatsApp, DM): se tiver problema, troca pela resposta neutra da ficha. Sem regra, devolve igual. */
+export function safeAutoReply(reply: string, rules: PublicTextRules | null): { text: string; replaced: boolean } {
+  if (!rules) return { text: reply, replaced: false }
+  const { text, removed } = cutPublicText(reply, rules)
+  if (!removed.length) return { text: reply, replaced: false }
+  return { text: rules.safeReply || text, replaced: true }
+}
+
+/** Regra para o prompt da legenda (vem da ficha; vazio sem bloco). */
+export function publicTextPromptRule(config: any, lang = 'pt'): string {
+  const p = config?.compliance?.public_text?.prompt_rule
+  return isBi(p) ? `- ${bi(p, lang)}\n` : ''
+}
+
+/** Carrega as regras da empresa (ficha do setor). Erro → null (quem chama decide; a publicação tem a trava do registro). */
+export async function loadPublicTextRules(admin: any, companyId: string): Promise<{ rules: PublicTextRules | null; config: any } | null> {
+  try {
+    const { data: c } = await admin.from('companies').select('vertical_key').eq('id', companyId).maybeSingle()
+    const key = (c?.vertical_key as string | null) ?? 'generico'
+    if (key === 'generico') return { rules: null, config: {} }
+    const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', key).eq('enabled', true).maybeSingle()
+    const config = pb?.config ?? {}
+    return { rules: publicTextRules(config, String(config.default_language ?? 'pt')), config }
+  } catch (e) { console.error('[compliance] regras de texto público não carregadas', String(e)); return null }
+}
