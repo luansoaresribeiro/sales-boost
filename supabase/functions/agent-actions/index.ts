@@ -24,7 +24,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { parseButton, verifyButton, type ButtonKind, type ButtonOp } from '../_shared/telegramButtons.ts'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { publishBlockReason, publishes } from '../_shared/publishGuard.ts'
-import { ensureFooter, publishLicense } from '../_shared/compliance.ts'
+import { ensureFooter, loadPublicTextRules, publishLicense, publishTextBlock } from '../_shared/compliance.ts'
 import { plannedPublishAt, publishWhenLabel } from '../_shared/publishSlot.ts'
 import { revalidate, unverifiableOutcome, UNVERIFIABLE_FAIL_MESSAGE } from '../_shared/itemService.ts'
 
@@ -334,6 +334,9 @@ async function execute(admin: Supa, act: any, fromCron = false): Promise<any> {
     if (act.ref_type === 'marketing_ai_test_content') await admin.from('marketing_ai_test_content').update({ status: 'vault' }).eq('id', act.ref_id).eq('company_id', act.company_id).eq('status', 'publishing')
     return await finish(admin, act.id, 'FAILED', { execution_error: lic.block })
   }
+  // Etapa 1B: legenda com frase que rotula quem pode comprar/alugar ou promete resultado não é publicada (recusa com motivo).
+  const pub = publishes(act) ? await loadPublicTextRules(admin, act.company_id) : null
+  const textBlock = (c: string) => publishTextBlock(c, pub?.rules ?? null)
   const withLicense = (c: string) => (lic?.footer && lic.rule && lic.license ? ensureFooter(c, lic.footer, lic.rule, lic.license) : c)
   // Fase 4: imóvel indisponível (ou impossível de conferir) NUNCA chega a publicar. A conferência vem ANTES de marcar EXECUTING.
   if (act.ref_type === 'marketing_ai_test_content' && act.ref_id) {
@@ -354,6 +357,8 @@ async function execute(admin: Supa, act: any, fromCron = false): Promise<any> {
       const { data: content } = await admin.from('marketing_ai_content').select('caption, hashtags, image_url').eq('id', act.ref_id).eq('company_id', act.company_id).maybeSingle()
       const { data: company } = await admin.from('companies').select('instagram_user_id, instagram_access_token').eq('id', act.company_id).maybeSingle()
       const caption = withLicense([content?.caption, content?.hashtags].map(x => (x ? String(x) : '').trim()).filter(Boolean).join('\n\n'))
+      const tb = textBlock(caption)
+      if (tb) return await fail(tb)
 
       let mediaId: string | null = null
       let publishError: string | null = null
@@ -394,6 +399,11 @@ async function execute(admin: Supa, act: any, fromCron = false): Promise<any> {
       if (vp?.recipe === 'video_imovel' && !vp.video_url) return await fail('O vídeo desta peça ainda não está pronto — espere ele aparecer e tente de novo.')
       const p = act.payload ?? {}
       const caption = withLicense([p.caption, p.cta, p.hashtags].map(x => (x ? String(x) : '').trim()).filter(Boolean).join('\n\n'))
+      const tb = textBlock(caption)
+      if (tb) {
+        await admin.from('marketing_ai_test_content').update({ status: 'vault' }).eq('id', act.ref_id).eq('company_id', act.company_id).eq('status', 'publishing')
+        return await fail(tb)
+      }
       const { data: company } = await admin.from('companies').select('instagram_user_id, instagram_access_token').eq('id', act.company_id).maybeSingle()
 
       // Carrossel real (2-10 fotos) quando a peca tem media[] com mais de 1

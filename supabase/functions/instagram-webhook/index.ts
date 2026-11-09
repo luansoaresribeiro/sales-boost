@@ -10,6 +10,7 @@
  * POST — evento de comentário. Idempotente por comment id.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { loadPublicTextRules, safeAutoReply } from '../_shared/compliance.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 const FB = 'https://graph.facebook.com/v21.0'
@@ -268,7 +269,12 @@ async function executeAction(admin: Any, company: Any, act: Any, eventId?: strin
     let dmOk = true, leadOk = true, err = ''
     // 1) DM (resposta privada ao comentário).
     if ((p.action_type === 'send_dm' || p.action_type === 'answer_question') && p.message) {
-      if (!company.instagram_access_token) { dmOk = false; err = 'Instagram não conectado — não foi possível enviar o DM.' }
+      // Etapa 1B: mensagem com frase que rotula quem pode comprar/alugar ou promete resultado não sai — vai a resposta neutra da ficha.
+      const pub = await loadPublicTextRules(admin, company.id)
+      const safe = safeAutoReply(String(p.message), pub?.rules ?? null)
+      if (safe.replaced) { console.warn('instagram-webhook: DM trocada pela neutra (conformidade)', company.id); p.message = safe.text }
+      if (!String(p.message ?? '').trim()) { dmOk = false; err = 'A mensagem automática tinha um trecho que não pode ir ao público e não há resposta neutra configurada — nada foi enviado.' }
+      else if (!company.instagram_access_token) { dmOk = false; err = 'Instagram não conectado — não foi possível enviar o DM.' }
       else {
         const r = await fetch(`${FB}/${company.instagram_user_id ?? 'me'}/messages`, {
           method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${company.instagram_access_token}` },

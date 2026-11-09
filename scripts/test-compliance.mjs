@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 // Roda: node --experimental-strip-types scripts/test-compliance.mjs
 // Etapa 1 · PR 1A (2026-11-09): CRECI obrigatório para publicar + rodapé automático. Usa a ficha da própria migration.
-import { licenseRule, parseLicense, licenseStatus, licenseFooter, ensureFooter, licenseBlockMessage, publishLicense, LICENSE_CHECK_FAILED } from '../supabase/functions/_shared/compliance.ts'
+import { publicTextRules, publicIssues, cutPublicText, complianceNotice, publishTextBlock, safeAutoReply, publicTextPromptRule, licenseRule, parseLicense, licenseStatus, licenseFooter, ensureFooter, licenseBlockMessage, publishLicense, LICENSE_CHECK_FAILED } from '../supabase/functions/_shared/compliance.ts'
 import { parseLicense as parseFront, licenseRule as ruleFront, licenseFooter as footerFront } from '../src/lib/license.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
@@ -60,4 +60,34 @@ assert.equal(r.block, LICENSE_CHECK_FAILED); ok('erro de banco recusa (falha fec
 for (const f of ['creative-generate', 'catalog-package', 'strategy-generate']) assert.ok(!readFileSync(new URL(`../supabase/functions/${f}/index.ts`, import.meta.url), 'utf8').includes('publishLicense'), f)
 const aa = readFileSync(new URL('../supabase/functions/agent-actions/index.ts', import.meta.url), 'utf8')
 assert.equal((aa.match(/withLicense\(/g) ?? []).length, 2); ok('geração não é bloqueada; as 2 legendas que publicam passam pelo rodapé')
+
+// ── PR 1B: proteção do texto público (usa a ficha da migration 20261109130000) ──────────────────────────────────
+const sql2 = readFileSync(new URL('../supabase/migrations/20261109130000_compliance_texto_publico_ficha.sql', import.meta.url), 'utf8')
+const pubCfg = { compliance: { public_text: JSON.parse(sql2.match(/\$json\$([\s\S]*?)\$json\$/)[1]) } }
+const pr = publicTextRules(pubCfg, 'pt'), pe = publicTextRules(pubCfg, 'en')
+assert.ok(pr && pr.discrimination && pr.promise && pr.safeReply && pe); assert.equal(publicTextRules({}), null); ok('ficha 1B lê sem erro; sem bloco = sem regra')
+const disc = ['Apartamento ideal para famílias no Leblon.', 'Perfeito para casal sem filhos.', 'Não aceitamos crianças.', 'Fica pertinho da igreja.', 'Exclusivo para executivos solteiros.', 'Somente adultos.', 'Bairro de gente de bem.', 'Ótimo para a terceira idade.', 'Não alugamos para estrangeiros.']
+for (const t of disc) assert.deepEqual(publicIssues(t, pr), ['discrimination'], t)
+ok(`frases discriminatórias pegas (${disc.length})`)
+const legit = ['Sala ampla para receber a família e os amigos.', 'A 600 m da praia de Ipanema.', '3 quartos, sendo 1 suíte.', 'Perto do metrô e de escolas.', 'Aceita pets.', 'Condomínio com playground e piscina infantil.', 'Rua tranquila, arborizada.', 'Fale comigo para agendar uma visita.']
+for (const t of legit) assert.deepEqual(publicIssues(t, pr), [], t)
+ok(`frases legítimas não pegas (${legit.length})`)
+const prom = ['Valorização garantida em 2 anos.', 'Retorno certo para investidor.', 'Esse imóvel vai valorizar muito.', 'Investimento sem risco.', 'Nunca desvaloriza.', 'Financiamento aprovado na hora.', 'O melhor investimento do Rio.']
+for (const t of prom) assert.deepEqual(publicIssues(t, pr), ['promise'], t)
+ok(`promessas pegas (${prom.length})`)
+for (const t of ['Aceita garantia locatícia ou seguro-fiança.', 'Garantia da construtora de 5 anos.', 'Valor do condomínio: R$ 900.']) assert.deepEqual(publicIssues(t, pr), [], t)
+ok('afirmação comercial comprovável não é pega (garantia locatícia, seguro-fiança, garantia da construtora)')
+const cap = 'Apartamento de 3 quartos no Leblon. Ideal para famílias!\nSala ampla para receber a família. Valorização garantida.\n\nAgende sua visita.'
+const cut = cutPublicText(cap, pr)
+assert.equal(cut.text, 'Apartamento de 3 quartos no Leblon.\nSala ampla para receber a família.\n\nAgende sua visita.'); assert.equal(cut.removed.length, 2)
+assert.match(complianceNotice(cut.removed), /^Ajuste de conformidade: tirei “Ideal para famílias!” \(rotula/); ok('legenda: corta só a frase, mantém o resto e anota "Ajuste de conformidade"')
+assert.equal(cutPublicText(cap, null).text, cap); ok('sem regra na ficha, legenda não muda')
+assert.match(publishTextBlock('Lindo. Não aceitamos crianças.', pr), /não pode ir ao público.*Nada foi publicado/); assert.equal(publishTextBlock('Lindo apartamento.', pr), null); ok('na publicação: sobrou frase proibida → recusa com motivo')
+const sr = safeAutoReply('Oi! Esse apê é perfeito para casal. Quer visitar?', pr)
+assert.equal(sr.replaced, true); assert.equal(sr.text, pr.safeReply)
+assert.deepEqual(safeAutoReply('Oi! Quer agendar uma visita?', pr), { text: 'Oi! Quer agendar uma visita?', replaced: false }); ok('WhatsApp/DM: resposta com problema vira a resposta neutra; resposta boa sai igual')
+assert.deepEqual(publicIssues('Perfect for families with kids.', pe), ['discrimination']); assert.deepEqual(publicIssues('Guaranteed appreciation.', pe), ['promise']); assert.deepEqual(publicIssues('Spacious living room for family gatherings.', pe), []); ok('inglês também')
+assert.match(publicTextPromptRule(pubCfg, 'pt'), /sem dizer para quem ele é ou não é/); assert.equal(publicTextPromptRule({}), ''); ok('regra do prompt vem da ficha')
+for (const f of ['catalog-package', 'creative-generate', 'whatsapp-webhook', 'instagram-webhook', 'agent-actions']) assert.ok(readFileSync(new URL(`../supabase/functions/${f}/index.ts`, import.meta.url), 'utf8').match(/cutPublicText|safeAutoReply|publishTextBlock/), f)
+ok('a proteção está ligada nas 5 saídas públicas')
 console.log(`\n${n} verificações ok`)
