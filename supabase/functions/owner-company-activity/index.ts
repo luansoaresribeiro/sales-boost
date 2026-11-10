@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { NEW_FLOW_FROM } from '../_shared/access.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -89,10 +90,13 @@ Deno.serve(async (req) => {
         await admin.from('access_audit_log').insert({ company_id, event: 'access_blocked', actor: 'owner', actor_email: user.email, detail: reason ?? 'Bloqueado manualmente pelo Owner.' })
       } else {
         const { data: co } = await admin.from('companies')
-          .select('subscription_status, trial_expires_at, trial_cancelled_at')
+          .select('subscription_status, trial_expires_at, trial_cancelled_at, created_at')
           .eq('id', company_id).maybeSingle()
         const hasPaid = !!co && ['active', 'trialing'].includes(co.subscription_status ?? '')
-        const hasTrial = !!co && !co.trial_cancelled_at && !!co.trial_expires_at && new Date(co.trial_expires_at) > new Date()
+        // Conta nova (vitrine, desde 2026-10-10): trial NÃO libera os robôs (_shared/access.ts) — então, pra ela,
+        // "Liberar" tem que marcar manual_access mesmo com trial válido (2026-11-10, caso A3 Imóveis).
+        const isNew = !!co?.created_at && new Date(co.created_at).getTime() >= new Date(NEW_FLOW_FROM).getTime()
+        const hasTrial = !isNew && !!co && !co.trial_cancelled_at && !!co.trial_expires_at && new Date(co.trial_expires_at) > new Date()
         const patch: Record<string, unknown> = { access_blocked_at: null, access_blocked_by: null, access_blocked_reason: null }
         if (!hasPaid && !hasTrial) {
           patch.manual_access = true

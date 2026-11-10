@@ -1124,3 +1124,14 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - **Celular + câmera livre:** `touch-action: none` no canvas impede o dedo de rolar a página. Limite de ~70% da altura e o alinhamento automático ao abrir deixam uma faixa rolável; não aumente a altura sem rever isso.
 - **Cartão com botão dentro de botão:** o cartão do agente na aba Agentes virou `div` com dois botões (mostrar na fábrica / "Abrir"); botão aninhado é HTML inválido e quebra o foco do teclado.
 - **Teste com a fábrica aberta sem GPU:** a escada dispara sozinha (WebGL por software); para prints use a janela dos primeiros ~3 s ou o harness em página em branco (`reduceMotion` + `startLow` na criação do núcleo).
+
+## Vitrine × trial: "Liberar acesso" sumia na ficha do Owner (2026-11-10, caso A3 Imóveis)
+
+- Conta nova (criada a partir de `NEW_FLOW_FROM`) com o trial de 7 dias que o `claim-diagnostic` ainda grava: o banco
+  (`company_access_status`) responde `granted: true, source: 'trial'`, mas `_shared/access.ts` (`hasPaidAccess`) **não**
+  aceita trial pra conta nova — nenhum robô roda (estratégia, calendário de domingo, oportunidades, sinais). A tela do
+  cliente/Owner mostra "Trial" e o selo "Vitrine" ao mesmo tempo.
+- A ficha do Owner (`CompanyDetailPage`) decidia o botão por `access.granted` → mostrava só "Bloquear acesso" e escondia
+  "Liberar acesso". E o `owner-company-activity` (`grant_access`) também pulava `manual_access=true` quando havia trial
+  válido. Corrigido nos dois: em vitrine aparece "Liberar acesso", e o `grant_access` ignora o trial pra conta nova.
+- **Ainda aberto:** o rótulo "Trial" em Access & Subscription continua aparecendo pra conta nova, embora não libere nada.
