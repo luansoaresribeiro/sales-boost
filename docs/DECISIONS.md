@@ -6,6 +6,13 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-10 — Aba Agentes só com os robôs (sem cortina, sem cartões) e site mais leve com o logo nos carregamentos (dono)
+Pedido do dono: "todo o fluxo deve ser leve, responsivo e a logo deve aparecer em momentos de carregar" + "na tab de agentes não devem existir mais os cards, só os robozinhos sem cortina".
+- **Aba Agentes:** a cortina (C.2.1, 07/11) e os 5 cartões saíram. A cena 3D abre direto ao entrar na aba (`FactorySection.tsx`), ocupa a tela abaixo do título (`OPEN_H = clamp(340px, calc(100svh - 230px), 820px)` — nunca maior que a tela, porque no celular o dedo na cena gira a câmera) e tocar num robô abre o painel da estação, cujo "Abrir" leva à aba do agente (as mesmas de antes). Continuam: checagem do aparelho → versão leve 2D com "tentar o 3D mesmo assim", escada de desempenho, "Visão inicial". Enquanto o 3D baixa aparece a prévia estática + o logo. Substitui os itens "Cortina" e "Cartões dos agentes" da decisão de 07/11 abaixo (o texto antigo ficou como histórico).
+- **Leveza:** cada página do site virou um pedaço à parte (`src/lib/lazyPage.ts` + `main.tsx`). O JS baixado ao abrir caiu de ~2,4 MB (707 kB comprimido) para ~0,7 MB (215 kB). Com o painel aberto, as outras páginas do painel são pré-baixadas quando o navegador fica ocioso (não com economia de dados), então trocar de aba continua instantâneo. Pedaço antigo sumido depois de deploy → a página recarrega uma vez sozinha (ver PITFALLS).
+- **Logo nos carregamentos:** `src/components/BrandLoader.tsx` (logo pulsando + barrinha, só CSS, parado com movimento reduzido). Usado na tela cheia (entrar, checar login/conta) e na área de conteúdo do painel ao trocar de página (o menu lateral fica). Os textos "Carregando…" de dentro das páginas (~45 arquivos) ainda não foram trocados.
+- **Rollback:** reverter o commit (não há banco nem function envolvidos).
+
 ## 2026-11-10 — Central do dono e "Aprovar a semana"
 
 **Pedido do dono.** Aprovações e Relatórios ficam num menu só, e dá para aprovar no domingo os posts da semana

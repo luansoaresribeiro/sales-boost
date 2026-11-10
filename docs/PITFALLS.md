@@ -1135,3 +1135,13 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
   "Liberar acesso". E o `owner-company-activity` (`grant_access`) também pulava `manual_access=true` quando havia trial
   válido. Corrigido nos dois: em vitrine aparece "Liberar acesso", e o `grant_access` ignora o trial pra conta nova.
 - **Ainda aberto:** o rótulo "Trial" em Access & Subscription continua aparecendo pra conta nova, embora não libere nada.
+
+## Páginas em pedaços (lazy) × deploy (2026-11-10)
+
+- Cada página é um arquivo JS à parte com nome que muda a cada build. Quem está com o site aberto durante um deploy pede um nome
+  que não existe mais → erro ao trocar de página. `src/lib/lazyPage.ts` recarrega a página UMA vez (marca `sb_chunk_reload_at` na
+  sessão, 30 s); falhou de novo → ErrorBoundary. Página nova: registre em `main.tsx` com `lazyPage(...)`, nunca `import` direto
+  (volta a pesar no primeiro carregamento). Página do painel leva o grupo `'dashboard'` (pré-baixada com o painel aberto).
+- O pré-download usa o carregador cru de propósito: falha em segundo plano não pode recarregar a página do nada.
+- **Prints/QA da fábrica:** desde 2026-11-10 não há mais cortina — o 3D abre ao entrar na aba. As notas acima sobre "cortina
+  fechada/aberta" e "faixa de cartões embaixo" são histórico.
