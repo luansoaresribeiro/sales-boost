@@ -399,7 +399,9 @@ export default function CompanyDetailPage() {
           )}
 
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {access?.granted ? (
+            {/* Vitrine (conta nova em trial, sem pagar/liberar) conta como "granted" no banco, mas os robôs não
+                trabalham — então o botão de liberar aparece também nesse caso (2026-11-10, caso A3 Imóveis). */}
+            {access?.granted && !isShowcaseMode({ created_at: detail.created_at, manual_access: detail.manual_access }, access) ? (
               <button onClick={() => setAccessState('block_access')} disabled={accessBusy}
                 style={{ padding: '10px 20px', background: 'rgba(248,113,113,0.14)', border: '1px solid rgba(248,113,113,0.4)', borderRadius: '9px', color: '#f87171', fontWeight: 700, fontSize: '13px', cursor: accessBusy ? 'default' : 'pointer' }}>
                 {accessBusy ? '...' : '🔒 Bloquear acesso'}
