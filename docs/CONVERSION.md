@@ -172,6 +172,13 @@ tela nem na cobrança futura.
   5. **Funcionalidades da Fase 4:** catálogo da imobiliária e agendamento de visita com horário.
   6. **Conferir:** se `tracked_links.content_id` é preenchido quando a peça é publicada.
 
+**Requisito do dono (10/11): Telegram avisa cada visita agendada pelo link.** Toda visita marcada pelo link rastreável gera um
+aviso no Telegram da imobiliária, com o imóvel, o horário, o nome do interessado e de onde ele veio. Entra junto com o
+agendamento de visita da Fase 4, que ainda não existe; até lá, nada a fazer no código.
+
+**Observação.** O aviso de "novo lead" que existe hoje (`hermes-lead-alert`) passa pelo Hermes, que roda no VPS e é instável. O aviso de
+visita deve sair direto do Supabase, pelo mesmo caminho dos avisos do `telegram-buddy`, sem depender do Hermes.
+
 **Portões antes de qualquer código da Fase 4** (dono, 10/11):
 1. **Custos medidos:** auditoria v1 em 17/11 e simulador atualizado.
 2. **Demanda:**

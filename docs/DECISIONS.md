@@ -6,6 +6,21 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-10 — Slogan "gerando mais visitas" e aviso de visita no Telegram (dono)
+
+**Slogan.**
+- O novo slogan é **"Sales Boost — gerando mais visitas para o seu imóvel"**, em inglês "more viewings for your property".
+- **Onde aparece:**
+  - no topo do site: selo, título "Você cuida dos imóveis. Nós geramos mais visitas.", texto de apoio e rodapé;
+  - em `CLAUDE.md`;
+  - em `PRODUCT.md`.
+- **Regra que continua valendo:** não prometer visita garantida.
+- **O texto de apoio diz só o que existe hoje:** leitura do mercado, estratégia, conteúdo e a página de cada imóvel. **O agendamento ainda não é citado**, porque ainda não existe.
+
+**Telegram avisa cada visita agendada pelo link.**
+- **O que é:** um requisito do agendamento de visita da Fase 4, registrado em [CONVERSION.md](CONVERSION.md).
+- **Quando entra:** junto com o agendamento. Até lá, nenhum código.
+
 ## 2026-11-10 — Novo modelo: cenários de tour, lead sem preço e portões da Fase 4 (dono)
 
 **Tours.**

@@ -5,6 +5,7 @@ cliente com dados reais, monta a estratégia, cria e publica conteúdo, e
 aprende com o resultado — sempre com o dono aprovando antes de qualquer
 coisa ir ao público. Setor piloto hoje: imóveis, Rio de Janeiro, via
 Instagram.
+Slogan (dono, 2026-11-10): **"Sales Boost — gerando mais visitas para o seu imóvel"**.
 
 ## Índice da documentação
 
