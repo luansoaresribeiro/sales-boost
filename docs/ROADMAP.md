@@ -17,10 +17,12 @@
 | 4 | Conversão: catálogo, agendamento, origem, lead qualificado e contestação | **preparada, não implementada** ([CONVERSION.md](CONVERSION.md)); só começa com os 3 portões abaixo |
 | 5 | Piloto real medindo leads, visitas, custo e receita | [PILOTO.md](PILOTO.md) (seção 2.1) |
 
+**Até 17/11 (dono, 10/11):** só validação comercial: conversas com imobiliárias, ficha em [PILOTO.md](PILOTO.md) 2.2. Sem implementação e sem escopo novo.
+
 **Portões da Fase 4:**
 1. custos medidos;
 2. demanda validada (1 piloto ou 3 conversas);
-3. critérios de lead qualificado aprovados pelo dono, incluindo a decisão de privacidade sobre ligar visitas de dias diferentes.
+3. critérios de lead qualificado aprovados pelo dono, com os prazos de 30 e 7 dias validados com imobiliárias. A 1ª versão não guarda marca no celular do visitante (já decidido).
 
 ## Plataforma internacional — segurança, depois idioma/país, depois expansão (dono, 2026-11-07)
 
