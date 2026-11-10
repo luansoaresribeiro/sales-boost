@@ -28,6 +28,24 @@
 4. **Pedir o que está na seção 3** e combinar uma conversa curta por semana.
 5. **Combinar o preço do piloto. É decisão do dono:** o preço ainda não foi decidido, então não citar valor que não exista.
 
+### 2.1 Perguntas de demanda (novo modelo, dono 10/11)
+Servem para validar as hipóteses, não para vender. Anotar a resposta como foi dita, sem arredondar.
+**Tour virtual (US$ 15 por imóvel):**
+- Quantos imóveis novos entram por mês?
+- Em quantos vocês pagariam um tour?
+- O que faria vocês pagarem, ou não pagarem?
+
+A hipótese-base do dono é 3 tours por imobiliária por mês, com cenários de 1 e 5. **Ainda não é demanda comprovada.**
+
+**Lead:**
+- Hoje, de onde vêm os interessados?
+- Quantos chegam por mês?
+- Quantos viram visita?
+- **O que é um "lead bom" para vocês?** Comparar a resposta com a definição proposta em [CONVERSION.md](CONVERSION.md).
+- Pagariam por lead entregue? Em que condição?
+
+**Não citar preço de lead:** ainda não existe.
+
 ## 3. O que pedir à imobiliária
 | Item | Para quê | Obrigatório |
 |---|---|---|

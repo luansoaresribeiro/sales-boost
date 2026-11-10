@@ -126,3 +126,55 @@ vez de duplicar no CLAUDE.md.
   `link_events.broker_id` é **indicativo, não exato**: é o corretor do lead mais recente, não necessariamente quem "atende" aquele visitante.
 - **Funil e resultados:** mover o lead para Qualificado/Proposta/Venda carimba visita/proposta/fechado e oferece valor opcional
   (ver [LEARNING.md](LEARNING.md)). Lead de DM/comentário continua sem corretor (rodízio só na página pública).
+
+## 2026-11-10 — Preparação da Fase 4 (novo modelo): lead qualificado e acompanhamento até a visita
+
+> **Só preparação, sem código.** O dono decidiu (10/11) que nada da Fase 4 é implementado antes de três portões (ver o
+> fim desta seção). O preço do lead **não** está definido: primeiro a definição objetiva e a medição, depois o preço.
+> O modelo de negócio e o simulador estão em [AUDITORIA-CUSTOS.md](AUDITORIA-CUSTOS.md) e [DECISIONS.md](DECISIONS.md).
+
+**Proposta de definição de lead qualificado** (para o dono aprovar; os números entre colchetes são propostas, não decisões):
+
+| # | Critério | Como o sistema confere | Hoje |
+|---|---|---|---|
+| 1 | Contato válido | Telefone com DDD ou e-mail em formato válido | Formato já é validado no formulário (`validateLead`) |
+| 2 | Consentimento registrado | Data e texto do consentimento LGPD | Já existe (`consent_at`, `consent_text`) |
+| 3 | Interesse num imóvel específico e disponível | Imóvel ligado ao lead e disponível naquele momento | Já existe para o lead da página (`item_id`); lead de DM/comentário não tem |
+| 4 | Origem rastreável | Link, conteúdo e canal (e, se aprovado, primeiro e último contato) | Parcial: `link_id` → `tracked_links` (imóvel, oportunidade, canal, `content_id`) |
+| 5 | Não duplicado | Mesmo contato + mesma imobiliária em [30] dias | Hoje: mesmo contato + mesmo imóvel em 24 h |
+| 6 | Entregue à imobiliária | Data em que o lead chegou para ela | Não existe |
+| 7 | Contestação | A imobiliária contesta em [7] dias com motivo fechado: contato inválido · duplicado · não é comprador/locatário · spam | Não existe |
+
+**Estágios** (cada um com data e quem marcou):
+`recebido → qualificado (automático, critérios 1–6) → em conversa → visita agendada → visita realizada → proposta → fechado`,
+com **contestado** como saída.
+
+**Cuidado com um nome que já existe.** O Funil de hoje tem a etapa **"Qualificado"**, que é a opinião manual do dono ou
+do corretor. A qualificação objetiva acima é outra coisa e precisa de um campo próprio, para os dois não se misturarem nem na
+tela nem na cobrança futura.
+
+**Acompanhamento da origem até a visita** (lido no código e no banco em 10/11):
+
+- **Já existe:**
+  - `tracked_links`: imóvel, oportunidade, conteúdo e canal;
+  - `link_events`: visualização, clique no WhatsApp ou na DM, lead;
+  - `leads`: imóvel, oportunidade, link, consentimento, `visit_at`, `proposal_at`, `closed_at`, corretor;
+  - limites contra spam e lead repetido em 24 h.
+- **Falta:**
+  1. **Datas e estado da qualificação:** recebido, qualificado + motivo, entregue, contestado + motivo, em conversa.
+  2. **"Em conversa":** o clique no WhatsApp leva a pessoa direto ao corretor, mas não vira lead nem conversa registrada. Duas saídas possíveis:
+     - a imobiliária marca o primeiro contato no lead;
+     - a resposta pelo WhatsApp da própria conta, quando estiver conectado, registra a conversa.
+  3. **Primeiro e último contato com o conteúdo:** a marca do visitante (`visitor_hash`) muda todo dia, porque é calculada com a data. Por isso hoje não dá para ligar a visita de segunda ao contato de quinta.
+     - Ligar exigiria um identificador guardado no navegador do visitante. **Isso é decisão do dono (privacidade/LGPD).**
+     - Sem esse identificador, vale só o último contato.
+  4. **Lead do Instagram (DM, comentário):** entra em `leads` sem imóvel e sem origem. Os mesmos critérios precisam valer nos dois caminhos.
+  5. **Funcionalidades da Fase 4:** catálogo da imobiliária e agendamento de visita com horário.
+  6. **Conferir:** se `tracked_links.content_id` é preenchido quando a peça é publicada.
+
+**Portões antes de qualquer código da Fase 4** (dono, 10/11):
+1. **Custos medidos:** auditoria v1 em 17/11 e simulador atualizado.
+2. **Demanda:**
+   - perguntas de tour e lead no roteiro do piloto ([PILOTO.md](PILOTO.md), seção 2.1);
+   - resultado de pelo menos 1 piloto ou 3 conversas.
+3. **Critérios aprovados:** a definição acima aprovada pelo dono, incluindo a decisão de privacidade do item 3 de "Falta".
