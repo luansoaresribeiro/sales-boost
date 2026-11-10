@@ -127,6 +127,17 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente ·
    decisão humana explícita (`decide()`, grava `approved_by`); o fluxo de
    `posts` (`rascunho→aprovado→publicado`) segue a mesma trava. Sólido em
    toda a base.
+   **Aprovar a semana (2026-11-10):**
+   - o dono vê os posts planejados de hoje até +7 dias e aprova todos com 1 clique (bloco "Sua semana" em
+     Central do dono → Aprovações, `src/pages/dashboard/WeekApproval.tsx`);
+   - no servidor, `agent-actions` `approve_week` cria uma ação por peça, pelo mesmo caminho do "Agendar":
+     `APPROVED` + `approved_by` + `scheduled_at` no dia, às 18h de Brasília;
+   - o cron de 5 em 5 min publica, com as travas de sempre na hora de sair;
+   - `unschedule_week` cancela em lote;
+   - regras puras em `_shared/weekApproval.ts` (cópia da tela em `src/lib/weekApproval.ts`);
+   - teste em `scripts/test-week-approval.mjs`.
+
+   **Domingo:** o plano semanal avisa "Sua semana está pronta" (`log-bot-event`, `AGENT_ACTION` / `week_ready`).
 
 8. **Distribuição Instagram** — ✅ existe (imagem única e carrossel).
    `agent-actions` → `publishToInstagram` (foto única) e

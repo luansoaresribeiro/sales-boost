@@ -4,7 +4,7 @@ export const d = {
       subtitle: 'Painel de inteligência',
       planFree: 'Plano Free',
       signOut: 'Sair da conta',
-      sections: { meetings: 'Reuniões', sales: 'Vendas', marketing: 'Agente Geral', competitors: 'Concorrentes', marketingAi: 'Marketing AI', progress: 'Progresso' },
+      sections: { meetings: 'Reuniões', sales: 'Vendas', marketing: 'Agente Geral', competitors: 'Concorrentes', marketingAi: 'Marketing AI', progress: 'Progresso', owner: 'Central do dono' },
       nav: { overview: 'Visão Geral', reports: 'Relatórios', catalog: 'Catálogo', sales: 'Vendas', posts: 'Agente Geral', competitors: 'Concorrentes', integrations: 'Integrações', settings: 'Configurações', approvals: 'Aprovações', opportunities: 'Oportunidades', marketingAi: 'Marketing AI', agents: 'Agentes', progress: 'Business Progress' },
     },
     common: {
@@ -267,7 +267,7 @@ export const d = {
       subtitle: 'Intelligence Panel',
       planFree: 'Free Plan',
       signOut: 'Sign out',
-      sections: { meetings: 'Meetings', sales: 'Sales', marketing: 'General Agent', competitors: 'Competitors', marketingAi: 'Marketing AI', progress: 'Progress' },
+      sections: { meetings: 'Meetings', sales: 'Sales', marketing: 'General Agent', competitors: 'Competitors', marketingAi: 'Marketing AI', progress: 'Progress', owner: 'Owner hub' },
       nav: { overview: 'Overview', reports: 'Reports', catalog: 'Catalog', sales: 'Sales', posts: 'General Agent', competitors: 'Competitors', integrations: 'Integrations', settings: 'Settings', approvals: 'Approvals', opportunities: 'Opportunities', marketingAi: 'Marketing AI', agents: 'Agents', progress: 'Business Progress' },
     },
     common: {

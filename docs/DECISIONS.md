@@ -6,6 +6,28 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-10 — Central do dono e "Aprovar a semana"
+
+**Pedido do dono.** Aprovações e Relatórios ficam num menu só, e dá para aprovar no domingo os posts da semana
+inteira, para que saiam sozinhos sem um clique por post.
+
+1. **Menu "Central do dono"** (nome escolhido pelo dono) com **Aprovações** e **Relatórios**.
+   - "Relatórios" saiu do topo do menu.
+   - "Business Progress" continua na seção Progresso.
+   - Nenhum endereço de página mudou.
+2. **Aprovar a semana = ver e aprovar** (o dono escolheu isso, e não "liberar sem ver").
+   - O dono vê os posts planejados de hoje até +7 dias, tira os que não quiser e aprova todos com 1 clique.
+   - Cada post fica **aprovado por ele** e **agendado para o seu dia, às 18h**.
+   - Na hora de sair valem as travas de sempre: imóvel disponível, CRECI e texto público.
+   - Dá para cancelar um ou a semana inteira até a hora de sair.
+   - A regra nº 1 continua: nada vai ao ar sem o dono ver.
+   - Post de hoje só entra se ainda faltarem 15 min para as 18h.
+   - Vídeo ainda sem arquivo fica de fora.
+3. **Aviso de domingo.** O plano semanal passa a avisar "Sua semana está pronta", com o link para a Central do dono.
+   Antes o aviso dizia "Aprove em Posts".
+4. **Exceção ao foco até 17/11.** Até 17/11 a regra é trabalhar só na validação comercial. Esta implementação é
+   uma exceção, porque o dono pediu diretamente. O resto do foco não muda.
+
 ## 2026-11-10 — Fase 4: direcionamentos do dono (preparação aprovada, implementação não)
 
 A preparação documental (#135) foi aprovada. **A Fase 4 não é implementada agora.**

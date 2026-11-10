@@ -1797,7 +1797,7 @@ Deno.serve(async (req) => {
           companies++; planned += r.planned
           if (r.planned > 0) {
             notifyMarketing(company.telegram_chat_id, company.id, 'AGENT_ACTION', {
-              action: 'posts_created', count: r.planned, reason: 'Calendário da semana planejado',
+              action: 'week_ready', count: r.planned, reason: 'Calendário da semana planejado',
             })
           }
         } catch (e) { failed++; console.error('creative-generate weekly plan falhou pra', cfg.company_id, e) }
