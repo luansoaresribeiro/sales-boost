@@ -91,8 +91,22 @@ Deno.serve(async (req) => {
       client_secret: appSecret,
       access_token: shortToken,
     }))
-    const llJson = llRes.ok ? await llRes.json() as { access_token?: string; expires_in?: number } : {}
-    const longToken = llJson.access_token ?? shortToken
+    const llText = await llRes.text()
+    let llJson: { access_token?: string; expires_in?: number } = {}
+    try { llJson = JSON.parse(llText) } catch { /* resposta não-JSON: tratada abaixo como falha */ }
+    // Troca falhou → NÃO salva o token curto (~1 h) fingindo 60 dias. Bug real (A3 Imóveis, 2026-11-06): a tela
+    // mostrava "conectado", mas o token morria em 1 h — logo, métricas e publicação paravam em silêncio.
+    if (!llRes.ok || !llJson.access_token) {
+      const detail = `HTTP ${llRes.status}: ${llText.slice(0, 300)}`
+      console.error(`instagram-oauth-callback: troca por token de 60 dias falhou (empresa ${companyId}) — ${detail}`)
+      try {
+        await createClient(supabaseUrl, serviceKey).from('client_activity').insert({
+          company_id: companyId, event: 'instagram_connect_failed', label: 'Conexão do Instagram falhou (token de 60 dias)', meta: { step: 'ig_exchange_token', detail },
+        })
+      } catch { /* registro é só diagnóstico */ }
+      return htmlRedirect(`/dashboard/settings?tab=conexoes&error=${encodeURIComponent('Não consegui concluir a conexão com o Instagram. Tente conectar de novo em alguns minutos.')}`)
+    }
+    const longToken = llJson.access_token
     const expiresIn = llJson.expires_in ?? 5184000 // 60 dias padrão
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString()
 
