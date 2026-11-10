@@ -64,7 +64,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { answerContextBlock } from '../_shared/answerContext.ts'
 import { fetchLearning, learningPromptBlock, learningHighlights } from '../_shared/learning.ts'
-import { logAiCost, anthropicCostUsd } from '../_shared/aiCost.ts'
+import { logAiCost, anthropicCostUsd, breakdownOf, totalTokens, type Usage } from '../_shared/aiCost.ts'
 import { cleanBudgetText, fetchContentRules, fetchFormatCatalog, formatCatalogBlock, sanitizeContentPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { setupMissing } from '../_shared/setupReady.ts'
@@ -335,9 +335,9 @@ function parseObj(raw: string): Record<string, unknown> {
 // execução dentro da qual está rodando.
 const CALL_TIMEOUT_MS = 130_000
 // Grava o custo REAL de 1 chamada (tokens da resposta da Anthropic). Nunca derruba a geração.
-async function recordCost(c: CostCtx, usage: { input_tokens?: number; output_tokens?: number } | undefined, latencyMs: number): Promise<void> {
+async function recordCost(c: CostCtx, usage: Usage | undefined, latencyMs: number): Promise<void> {
   const MODEL_ID = 'claude-sonnet-4-6'
-  await logAiCost(c.admin, { companyId: c.companyId, role: 'estrategia_ia', taskKey: 'ai_text_strategy', description: `Estratégia · ${c.kind} (texto da IA)`, tokens: (Number(usage?.input_tokens) || 0) + (Number(usage?.output_tokens) || 0), costUsd: anthropicCostUsd(MODEL_ID, usage), latencyMs })
+  await logAiCost(c.admin, { companyId: c.companyId, role: 'estrategia_ia', taskKey: 'ai_text_strategy', description: `Estratégia · ${c.kind} (texto da IA)`, tokens: totalTokens(breakdownOf(usage)), costUsd: anthropicCostUsd(MODEL_ID, usage), latencyMs, breakdown: breakdownOf(usage) })
 }
 async function callClaudeStep(
   anthropicKey: string, prompt: string, maxTokens: number,

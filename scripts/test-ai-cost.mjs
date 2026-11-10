@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 // Roda: node --experimental-strip-types scripts/test-ai-cost.mjs
 // A.6 (2026-11-07): (3) estratégia sem custo interno do Sales Boost no texto do cliente; (4) custo real a partir de tokens.
-import { anthropicCostUsd, logAiCost, newCostTracker, priceFor } from '../supabase/functions/_shared/aiCost.ts'
+import { anthropicCostUsd, logAiCost, newCostTracker, priceFor, breakdownOf, insertPerf } from '../supabase/functions/_shared/aiCost.ts'
+import { answerCost } from '../supabase/functions/_shared/opportunityRun.ts'
 import { cleanBudgetText, formatCatalogBlock, hasInternalCost, sanitizeContentPlan, stripInternalCost, ensureMinVideos } from '../supabase/functions/_shared/formatCatalog.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
@@ -85,4 +86,32 @@ const plan = sanitizeContentPlan({ central_line: 'Linha', why: 'Vídeo ajuda. Cu
 assert.equal(plan.why, 'Vídeo ajuda.'); assert.equal(plan.weekly_mix[0].purpose, 'Mostrar o imóvel.')
 ok('mix semanal: texto do vídeo de mínimo neutro; "why" e "purpose" da IA sem custo interno (a política de 3 vídeos/semana NÃO mudou: per_week = 3)')
 
+
+// ── Medição 10/11: reaproveitamento de prompt (cache) e origem da chamada ─────────────────────────────────────────
+// Sonnet: entrada 3/milhão. Escrita no cache 5 min = 1,25× (3,75), 1 h = 2× (6), leitura = 0,1× (0,30).
+assert.equal(anthropicCostUsd('claude-sonnet-4-6', { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 1_000_000 }), 3.75)
+assert.equal(anthropicCostUsd('claude-sonnet-4-6', { cache_creation_input_tokens: 1_000_000, cache_creation: { ephemeral_1h_input_tokens: 1_000_000 } }), 6)
+assert.equal(anthropicCostUsd('claude-sonnet-4-6', { cache_read_input_tokens: 1_000_000 }), 0.3)
+assert.equal(anthropicCostUsd('claude-sonnet-4-6', { input_tokens: 10_000, output_tokens: 3_000 }), 0.075)   // sem cache: igual a antes
+ok('custo com cache: escrita 1,25× (5 min) / 2× (1 h), leitura 0,1×; sem cache, valor igual ao de antes')
+const tc = newCostTracker()
+tc.add('claude-sonnet-4-6', { input_tokens: 500, output_tokens: 300, cache_creation_input_tokens: 2000 })
+tc.add('claude-sonnet-4-6', { input_tokens: 500, output_tokens: 300, cache_read_input_tokens: 2000 })
+assert.deepEqual(tc.breakdown(), { input: 1000, output: 600, cacheWrite: 2000, cacheRead: 2000 }); assert.equal(tc.tokens(), 5600)
+ok('acumulador separa entrada, saída, cache escrito e cache lido')
+const rows2 = []
+const adm2 = { from: () => ({ insert: async (row) => { rows2.push(row); return { error: null } } }) }
+await logAiCost(adm2, { companyId: 'c1', role: 'conteudo', taskKey: 'ai_text_content', description: 'x', tokens: 5600, costUsd: 0.01, breakdown: tc.breakdown(), trigger: 'cron' })
+assert.deepEqual([rows2[0].input_tokens, rows2[0].output_tokens, rows2[0].cache_write_tokens, rows2[0].cache_read_tokens, rows2[0].call_origin], [1000, 600, 2000, 2000, 'cron'])
+ok('grava as colunas novas (tokens separados e origem cron/manual)')
+const rows3 = []
+const adm3 = { from: () => ({ insert: async (row) => { rows3.push(row); return 'call_origin' in row ? { error: { message: 'column "call_origin" does not exist' } } : { error: null } } }) }
+await insertPerf(adm3, { company_id: 'c1', task_key: 'k', tokens_used: 1 }, { breakdown: breakdownOf({ input_tokens: 1 }), trigger: 'manual' })
+assert.equal(rows3.length, 2); assert.equal('call_origin' in rows3[1], false); assert.equal(rows3[1].tokens_used, 1)
+ok('migration pendente: grava de novo sem as colunas novas (a medição antiga nunca se perde)')
+assert.deepEqual(answerCost(0), { tokens: 0, costUsd: null, breakdown: null })
+assert.deepEqual(answerCost({ text: '', tokens: 13000 }), { tokens: 13000, costUsd: null, breakdown: null })
+const ac = answerCost({ text: '', tokens: 13000, model: 'claude-sonnet-4-6', usage: { input_tokens: 10_000, output_tokens: 3_000 } })
+assert.equal(ac.costUsd, 0.075); assert.equal(ac.breakdown.input, 10000)
+ok('oportunidades: dólares medidos quando a IA devolve usage; sem usage, custo fica vazio (não inventa)')
 console.log(`\n${n} verificações ok`)

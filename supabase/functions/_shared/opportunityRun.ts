@@ -15,9 +15,19 @@ import { MAX_CANDIDATES_TO_LLM, OPP_PROMPT_VERSION, buildPrompt, compareScored, 
 import { planUpserts, type OpenRow } from './opportunityMerge.ts'
 import { parseQuality } from './marketIntel.ts'
 import { interpretFingerprint, recordRun, type RunInput } from './marketIntelRuns.ts'
+import { anthropicCostUsd, breakdownOf, insertPerf, type Trigger, type Usage } from './aiCost.ts'
 
 type Admin = { from: (t: string) => any; rpc?: any } // eslint-disable-line @typescript-eslint/no-explicit-any
-export type Llm = (prompt: string, maxTokens: number) => Promise<{ text: string; tokens: number }>
+/** Resposta da IA. `usage`/`model` (quando vêm) viram dólares e a separação do cache em agent_performance (medição 10/11). */
+export interface LlmAnswer { text: string; tokens: number; usage?: Usage; model?: string }
+export type Llm = (prompt: string, maxTokens: number) => Promise<LlmAnswer>
+export interface RunOpts { trigger?: Trigger }
+
+/** Colunas de custo de uma resposta: dólares medidos (sem usage = null, como antes — nunca inventa) e a separação do cache. */
+export function answerCost(a: number | LlmAnswer | null | undefined): { tokens: number; costUsd: number | null; breakdown: ReturnType<typeof breakdownOf> | null } {
+  if (a == null || typeof a === 'number') return { tokens: Number(a) || 0, costUsd: null, breakdown: null }
+  return a.usage ? { tokens: a.tokens, costUsd: anthropicCostUsd(String(a.model ?? ''), a.usage), breakdown: breakdownOf(a.usage) } : { tokens: a.tokens, costUsd: null, breakdown: null }
+}
 
 export const WINDOW_DAYS = 60
 const REUSE_WINDOW_MS = 90_000 // duplo clique: devolve a rodada que acabou de sair em vez de gastar IA de novo
@@ -33,7 +43,7 @@ async function rows<T>(q: PromiseLike<{ data: unknown; error: { message: string 
   return (data ?? []) as T[]
 }
 
-export async function runOpportunities(admin: Admin, companyId: string, llm: Llm): Promise<RunResult> {
+export async function runOpportunities(admin: Admin, companyId: string, llm: Llm, opts: RunOpts = {}): Promise<RunResult> {
   const started = Date.now()
   const { data: co } = await admin.from('companies').select('id, business_name, language, vertical_key, instagram_user_id').eq('id', companyId).maybeSingle()
   if (!co) return { ok: false, status: 404, error: 'Empresa não encontrada.', generated: 0, considered: 0 }
@@ -95,7 +105,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
   }
   const photoCounts = Object.fromEntries(catalog.map(i => [i.id, i.photoCount]))
   const { facts, candidates } = buildCandidates(input)
-  if (candidates.length === 0) { await logCost(admin, companyId, started, 0, true, 'sem candidatos'); return { ok: true, status: 200, run_id: null, generated: 0, considered: 0 } } // marca a rodada (o cron semanal e a tela usam)
+  if (candidates.length === 0) { await logCost(admin, companyId, opts.trigger, started, 0, true, 'sem candidatos'); return { ok: true, status: 200, run_id: null, generated: 0, considered: 0 } } // marca a rodada (o cron semanal e a tela usam)
 
   // Os melhores candidatos (mesma ordem da prioridade final) vão pra IA redigir; ela nunca vê os demais.
   const top = candidates.map(c => score(c, facts)).sort(compareScored).slice(0, MAX_CANDIDATES_TO_LLM).map(s => s.c)
@@ -110,23 +120,23 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
   const runBase = { interpreted: top.length, details: { used_signal_ids: sentSignalIds, facts: sentFacts.length, prompt_version: OPP_PROMPT_VERSION } }
   const prev = await lastInterpretation(admin, companyId)
   if (prev?.fingerprint === fingerprint) {
-    await logCost(admin, companyId, started, 0, true, `sem mudança desde ${prev.at.slice(0, 10)} (${top.length} candidato(s) iguais aos da última análise)`)
+    await logCost(admin, companyId, opts.trigger, started, 0, true, `sem mudança desde ${prev.at.slice(0, 10)} (${top.length} candidato(s) iguais aos da última análise)`)
     await recordRun(admin, companyId, 'interpret', { ...runBase, accepted: 0, discarded: 0, unchanged: true, fingerprint, tokens: 0 })
     return { ok: true, status: 200, run_id: null, generated: 0, considered: top.length, unchanged: true }
   }
 
-  let answer: { text: string; tokens: number }
+  let answer: LlmAnswer
   try {
     answer = await llm(prompt, 2500)
   } catch (e) {
-    await logCost(admin, companyId, started, 0, false, String(e))
+    await logCost(admin, companyId, opts.trigger, started, 0, false, String(e))
     await recordRun(admin, companyId, 'interpret', fail(runBase, 'ai_no_answer', 0))
     return { ok: false, status: 502, generated: 0, considered: top.length, error: lang === 'en' ? 'The AI did not answer. Try again in a minute.' : 'A IA não respondeu. Tente de novo em um minuto.' }
   }
   const { text, tokens } = answer
   const parsed = parseLlm(text)
   if (!parsed) {
-    await logCost(admin, companyId, started, tokens, false, 'resposta da IA ilegível')
+    await logCost(admin, companyId, opts.trigger, started, answer, false, 'resposta da IA ilegível')
     await recordRun(admin, companyId, 'interpret', fail(runBase, 'ai_unreadable', tokens))
     return { ok: false, status: 502, generated: 0, considered: top.length, error: lang === 'en' ? 'The AI answer could not be read. Try again.' : 'Não consegui ler a resposta da IA. Tente de novo.' }
   }
@@ -158,7 +168,7 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
       priority_rank: d.priority_rank, priority_reasons: d.priority_reasons, run_id: runId,
     })))
     if (error) {
-      await logCost(admin, companyId, started, tokens, false, error.message)
+      await logCost(admin, companyId, opts.trigger, started, answer, false, error.message)
       await recordRun(admin, companyId, 'interpret', fail(runBase, 'save_failed', tokens))
       return { ok: false, status: 500, generated: 0, considered: top.length, error: `growth_opportunities: ${error.message}` }
     }
@@ -168,18 +178,19 @@ export async function runOpportunities(admin: Admin, companyId: string, llm: Llm
   if (notValidated.length) console.warn(`[opportunities] ${companyId} não validadas:`, JSON.stringify(notValidated))
   const inserted = toInsert.length
   const generated = inserted + updated
-  await logCost(admin, companyId, started, tokens, true, `${generated} oportunidade(s) de ${top.length} candidato(s) (${inserted} nova(s), ${updated} atualizada(s))${notValidated.length ? `; ${notValidated.length} não validada(s)` : ''}`)
+  await logCost(admin, companyId, opts.trigger, started, answer, true, `${generated} oportunidade(s) de ${top.length} candidato(s) (${inserted} nova(s), ${updated} atualizada(s))${notValidated.length ? `; ${notValidated.length} não validada(s)` : ''}`)
   await recordRun(admin, companyId, 'interpret', { ...runBase, details: { ...runBase.details, updated, ...(mergedInto.length ? { merged_into: mergedInto } : {}), ...(notValidated.length ? { not_validated: notValidated } : {}) }, accepted: generated, discarded: Math.max(0, top.length - generated), unchanged: false, fingerprint, tokens })
   return { ok: true, status: 200, run_id: inserted > 0 ? runId : null, generated, updated, considered: top.length, ...(notValidated.length ? { not_validated: notValidated } : {}) }
 }
 
 // Custo da IA registrado como as outras actions (agent_performance); nunca derruba o fluxo.
-async function logCost(admin: Admin, companyId: string, started: number, tokens: number, success: boolean, note: string) {
+async function logCost(admin: Admin, companyId: string, trigger: Trigger | undefined, started: number, answer: number | LlmAnswer, success: boolean, note: string) {
   try {
-    await admin.from('agent_performance').insert({
+    const c = answerCost(answer)
+    await insertPerf(admin, {
       company_id: companyId, agent_role: 'cmo', task_key: 'run_opportunities', task_description: note.slice(0, 200),
-      latency_ms: Date.now() - started, tokens_used: tokens, success, ...(success ? {} : { error_message: note.slice(0, 500) }),
-    })
+      latency_ms: Date.now() - started, tokens_used: c.tokens, ...(c.costUsd != null ? { cost_usd: c.costUsd } : {}), success, ...(success ? {} : { error_message: note.slice(0, 500) }),
+    }, { breakdown: c.breakdown, trigger: trigger ?? null })
   } catch { /* não-fatal */ }
 }
 
