@@ -63,7 +63,8 @@ const fmts = [
   { key: 'post_card', name: 'Post card', pillar: 'qualquer', producer: 'post', status: 'live', cost: 'centavos' },
 ]
 const block = formatCatalogBlock(fmts)
-assert.doesNotMatch(block, /US\$|teto|custo:|centavos/i); assert.match(block, /reel_item/)
+assert.doesNotMatch(block, /US\$|teto|custo:|centavos/i); assert.match(block, /post_card/)
+assert.doesNotMatch(block, /reel_item/)   // tour virtual saiu do plano da semana (dono, 2026-11-10): tem menu próprio
 ok('catálogo de formatos no prompt: sem custo da ficha e sem "custa ~US$ … do teto mensal"')
 
 // Prompts montados em strategy-generate (constantes lidas do código-fonte): nenhum preço/teto ensinado à IA como dado a citar.
@@ -80,11 +81,11 @@ assert.match(strat, /budget: parsed3\.budget && typeof parsed3\.budget === 'obje
 ok('prompt da estratégia: sem preço/teto, com proibição explícita; orçamento passa por cleanBudgetText antes de gravar')
 
 // Mix: vídeo de mínimo entra com texto neutro; purpose/why vindos da IA também passam pelo filtro.
-const mix = ensureMinVideos([], fmts, 3)
-assert.equal(mix.length, 1); assert.equal(mix[0].per_week, 3); assert.doesNotMatch(mix[0].purpose, /m[ií]nimo|regra do setor|US\$/i)
-const plan = sanitizeContentPlan({ central_line: 'Linha', why: 'Vídeo ajuda. Custa US$ 0,42 do teto mensal.', weekly_mix: [{ format: 'reel_item', per_week: 3, purpose: 'Mostrar o imóvel. Debitado do teto mensal.' }] }, fmts, null, 0)
-assert.equal(plan.why, 'Vídeo ajuda.'); assert.equal(plan.weekly_mix[0].purpose, 'Mostrar o imóvel.')
-ok('mix semanal: texto do vídeo de mínimo neutro; "why" e "purpose" da IA sem custo interno (a política de 3 vídeos/semana NÃO mudou: per_week = 3)')
+// Tour virtual saiu do plano da semana (dono, 2026-11-10): o mínimo de vídeo não põe tour de volta e plano antigo com tour perde o tour.
+assert.deepEqual(ensureMinVideos([], fmts, 3), [])
+const plan = sanitizeContentPlan({ central_line: 'Linha', why: 'Vídeo ajuda. Custa US$ 0,42 do teto mensal.', weekly_mix: [{ format: 'reel_item', per_week: 3, purpose: 'Mostrar o imóvel.' }, { format: 'post_card', per_week: 4, purpose: 'Mostrar o imóvel. Debitado do teto mensal.' }] }, fmts, null, 3)
+assert.equal(plan.why, 'Vídeo ajuda.'); assert.equal(plan.weekly_mix.length, 1); assert.equal(plan.weekly_mix[0].format, 'post_card'); assert.equal(plan.weekly_mix[0].purpose, 'Mostrar o imóvel.')
+ok('mix semanal: sem tour (menu próprio desde 10/11); "why" e "purpose" da IA sem custo interno')
 
 
 // ── Medição 10/11: reaproveitamento de prompt (cache) e origem da chamada ─────────────────────────────────────────

@@ -25,6 +25,7 @@ import GrowthOpportunitiesPage from './pages/dashboard/GrowthOpportunitiesPage.t
 import MarketingAiHubPage from './pages/dashboard/MarketingAiHubPage.tsx'
 import AgentsPage from './pages/dashboard/AgentsPage.tsx'
 import CatalogPage from './pages/dashboard/CatalogPage.tsx'
+import TourVirtualPage from './pages/dashboard/TourVirtualPage.tsx'
 import BusinessProgressPage from './pages/dashboard/BusinessProgressPage.tsx'
 import TrialSummaryPage from './pages/dashboard/TrialSummaryPage.tsx'
 import AccessBlockedPage from './pages/dashboard/AccessBlockedPage.tsx'
@@ -170,6 +171,7 @@ function RouterRoot() {
         <Route path="agentes" element={<AgentsPage />} />
         {/* Catálogo (imóveis/itens): página própria, aberta pelo botão "+" (2026-11-01). */}
         <Route path="catalogo" element={<CatalogPage />} />
+        <Route path="tour-virtual" element={<TourVirtualPage />} />
         <Route path="marketing-ai/:section" element={<MarketingAiSectionPage />} />
         <Route path="meta-ads" element={<Navigate to="/dashboard/marketing-ai/content?tab=campanha" replace />} />
         <Route path="progresso" element={<BusinessProgressPage />} />

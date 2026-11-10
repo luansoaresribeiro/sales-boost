@@ -6,6 +6,37 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-10 — Tour virtual com menu próprio (Etapa 1): tour completo e plano da semana sem tour
+
+**Pedido do dono.** O tour vira um menu próprio, "Tour virtual". O dono escolhe o imóvel e gera um tour completo, com a
+câmera vindo de fora e passando pelos cômodos na ordem certa. A geração da semana para de fazer tour e fica com os
+outros formatos. Depois vêm, cada um num PR: mobiliar cômodo vazio (Etapa 2), abertura aérea melhorada (Etapa 3) e a
+moeda Boosts (Etapa 4).
+
+1. **Tour fora do plano da semana.**
+   - Vale para a estratégia, o calendário de domingo, o "resto da semana" e a tela do calendário.
+   - É uma regra de produto em código (`OUT_OF_WEEKLY_PLAN = ['item_video']` em `_shared/formatCatalog.ts`, com
+     cópia em `src/lib/weekSlots.ts`). Não depende de setor.
+   - **Substitui a decisão de 14/10** ("mínimo de 3 vídeos por semana"). O mínimo passa a valer 0, e plano antigo
+     com tour perde o tour na hora de planejar.
+   - Os vídeos curtos no card do imóvel continuam. As peças de vídeo já planejadas também.
+2. **Volta o tour completo** (estava suspenso desde 09/10, quando o vídeo virou "isca").
+   - A IA de visão já dá o cômodo de cada foto (`photoScore`).
+   - A ordem segue a ficha: `config.tour.walk_order`, até `tour_per_room` fotos por cômodo e `tour_max_photos` por
+     tour (padrões 2 e 10).
+   - O dono confere e pode mudar a ordem antes de gerar.
+   - O tour pronto vira um post **sem dia** em Aprovações. Nada sai sem o dono.
+3. **Caminhada só entre cômodos vizinhos** (pela ficha, `adjacent_rooms`). Entre os outros, o vídeo faz **corte**: se a
+   câmera "andasse" entre cômodos que não se ligam, a IA inventaria o corredor (regra 4).
+   - Duas fotos do **mesmo tipo** (ex.: 2 quartos) também levam corte, porque podem ser cômodos diferentes.
+4. **De fora só com foto real.** A abertura existe só com foto real de fachada ou vista. Sem ela, o tour começa
+   dentro e a tela explica o porquê. A IA nunca cria o prédio nem a vista (dono, 10/11: "sim").
+5. **Custo:** até a Etapa 4, o tour conta no teto atual de US$ 40 por mês por cliente. O teste da Etapa 1 tem
+   teto de US$ 5, só na Teste Zero (autorizado pelo dono).
+6. **Achado, para a Etapa 2:** o "Mobiliar virtualmente" que já existe (`VirtualStaging`, "usar no imóvel") troca a
+   foto do imóvel **sem** o aviso "Imagem ilustrativa – mobiliado virtualmente". As regras do projeto
+   ([MEDIA-ENGINE.md](MEDIA-ENGINE.md#regras)) exigem esse aviso. A correção entra na Etapa 2.
+
 ## 2026-11-10 — Central do dono e "Aprovar a semana"
 
 **Pedido do dono.** Aprovações e Relatórios ficam num menu só, e dá para aprovar no domingo os posts da semana

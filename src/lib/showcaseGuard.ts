@@ -29,7 +29,7 @@ const PAID_FUNCTIONS: Record<string, Rule> = {
   'generate-posts': null,
   'content-image': { actions: ['generate', 'variations'] },
   'generate-video': null,
-  'item-videos': { actions: ['create'] },
+  'item-videos': { actions: ['create', 'plan_tour'] },
   'brand-compose': null,
   // desenhar o card não custa nada (o kit grátis usa); só o fundo gerado por IA
   'render-format': { bodyFlag: 'generate_bg' },
@@ -37,7 +37,7 @@ const PAID_FUNCTIONS: Record<string, Rule> = {
   'content-test': { actions: ['generate', 'score', 'regenerate'] },
   'catalog-package': null,
   'marketing-ai': null,
-  'agent-actions': { actions: ['propose', 'approve', 'retry'] },
+  'agent-actions': { actions: ['propose', 'approve', 'retry', 'approve_week'] },
   'publish-instagram': null,
   'send-message': null,
   'draft-reply': null,

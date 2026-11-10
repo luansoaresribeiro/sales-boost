@@ -45,7 +45,8 @@ import { currentWeekBRT } from '../_shared/publishSlot.ts'
 import { buildOpportunityJob } from '../_shared/opportunityPieceJob.ts'
 import { buildPickReason, cleanItemPick, fetchItemCfg, getItem, listPickableItems, ownerBlockMessage, rankItems, saveItemPick, usageLastDays, type ItemPick } from '../_shared/itemService.ts'
 import { checkCaption, promptRules as captionRules, rewriteRequest, stripForbidden, findForbidden } from '../_shared/captionGuard.ts'
-import { formatPrice, tourNotice, WAITING_STUDIO_PRE } from '../_shared/tourPick.ts'
+import { formatPrice, PAIR_NOTICE, tourCfgFrom, tourNotice, WAITING_STUDIO_PRE } from '../_shared/tourPick.ts'
+import { roomOf, tourOrderCfgFrom, tourSegments } from '../_shared/tourOrder.ts'
 import { studioReady } from '../_shared/tourEngine.ts'
 import { chooseTour, fetchTourCfg, planTours, previousCaptions, type TourPlan } from '../_shared/tourSlot.ts'
 
@@ -1563,10 +1564,13 @@ async function fetchFichaCtas(admin: SupaClient, verticalKey: string | null): Pr
 // a foto de capa; o item-videos manda a foto pra Higgsfield (confere o teto) e
 // liga o vídeo à peça (plan.piece_id). Se não der pra fazer o vídeo, a peça
 // diz o motivo — nada é cobrado.
-async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Company, job: SlotJob, cronSecret: string): Promise<void> {
+// `full` (menu Tour virtual, 2026-11-10): tour COMPLETO na ordem que o dono confirmou — vários trechos (abertura de fora,
+// caminhadas entre cômodos vizinhos, cortes entre os outros) num vídeo só. A peça nasce sem dia e vai pra Aprovações.
+export interface FullTour { photos: string[]; rooms: (string | null)[]; notes: string[] }
+async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Company, job: SlotJob, cronSecret: string, full?: FullTour): Promise<{ pieceId?: string; error?: string }> {
   const { data: item } = await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('id', job.item_id).eq('company_id', company.id).eq('kind', 'product').maybeSingle()
   const photos = ((item?.meta?.photos ?? []) as { url: string }[]).map(p => p.url).filter(Boolean)
-  if (!item || !photos.length) { console.error('runVideoSlot: item sem fotos', company.id, job.item_id); return }
+  if (!item || !photos.length) { console.error('runVideoSlot: item sem fotos', company.id, job.item_id); return { error: 'Imóvel sem fotos.' } }
   // Foto(s) e tipo: vêm decididos do planejamento da semana (sem corrida entre vagas); peça avulsa escolhe aqui.
   // Nota de qualidade + cômodo (IA de visão) e a ficha (config.tour) mandam; sem nota, a foto é último recurso (nunca sorteio às cegas).
   const tcfg = await fetchTourCfg(admin, company.vertical_key ?? null)
@@ -1574,6 +1578,10 @@ async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Co
   const claimCfgV = await loadClaimCfg(admin, company.vertical_key ?? null, claimLangV)
   const pubV = await loadPublicTextRules(admin, company.id)
   let tour: TourPlan | null = job.tour && job.tour.photos?.length && job.tour.photos.every(u => photos.includes(u)) ? job.tour : null
+  if (full) {
+    if (!full.photos.length || !full.photos.every(u => photos.includes(u))) return { error: 'As fotos do imóvel mudaram. Monte a ordem de novo.' }
+    tour = { kind: 'room', photos: full.photos, rooms: full.rooms, notes: full.notes }
+  }
   if (!tour) { try { tour = await chooseTour(admin, anthropicKey, company.id, item.id, job.format, tcfg) } catch (e) { console.error('runVideoSlot: escolha da foto falhou', company.id, String(e).slice(0, 200)) } }
   if (!tour) tour = { kind: 'room', photos: [photos[0]], rooms: [null], notes: ['não consegui analisar as fotos — usei a primeira do cadastro.'] }
   const photo = tour.photos[0]
@@ -1585,7 +1593,7 @@ async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Co
   const decision = decideVideoCta(auto as { active?: boolean; message?: string; keywords?: string[] } | null, await fetchFichaCtas(admin, company.vertical_key))
   // Legenda: o vídeo é uma ANIMAÇÃO por IA de foto real (nunca "filmado"); sem duração; sem repetir a abertura das últimas legendas do imóvel.
   const prev = await previousCaptions(admin, company.id, item.id, VIDEO_RECIPE)
-  const scene = tour.kind === 'pair' ? '2 ambientes vizinhos deste imóvel real, numa passagem suave de um para o outro' : tour.kind === 'opening' ? 'o exterior/a vista deste imóvel real, em abertura de câmera suave' : '1 ambiente deste imóvel real, em movimento de câmera suave'
+  const scene = full ? `um tour por este imóvel real${full.rooms[0] && tcfg.opening_rooms.includes(full.rooms[0]) ? ', começando de fora' : ''}, passando pelos ambientes em sequência (${full.photos.length} fotos reais animadas)` : tour.kind === 'pair' ? '2 ambientes vizinhos deste imóvel real, numa passagem suave de um para o outro' : tour.kind === 'opening' ? 'o exterior/a vista deste imóvel real, em abertura de câmera suave' : '1 ambiente deste imóvel real, em movimento de câmera suave'
   const basePrompt = `Você escreve a legenda de um Reels de "${company.business_name}" mostrando ${scene}.
 Dados reais do imóvel (use só isto):
 ${facts || '(sem dados além do título)'}
@@ -1658,12 +1666,12 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`
   const notice = [tourNotice([...tour.notes, ...guardNotes]), decision.approved ? '' : queroNotice(decision.cta), internalNotesNotice(sp.notes) ?? '', sp.emptied ? EMPTY_CAPTION_NOTICE : ''].filter(Boolean).join(' ')
   const withNotice = (msg: string) => notice ? `${msg} ${notice}` : msg
   const { data: piece, error } = await admin.from('marketing_ai_test_content').insert({
-    company_id: company.id, kind: 'organico', format: 'reel', idea: `${item.title} — vídeo`,
+    company_id: company.id, kind: 'organico', format: 'reel', idea: `${item.title} — ${full ? 'tour virtual' : 'vídeo'}`,
     caption: safe.caption, hashtags: cap.hashtags ? String(cap.hashtags) : null, cta: safe.cta,
     image_url: photo, media: [{ url: photo, type: 'photo' }], item_id: item.id, pillar: job.tema ?? job.pillar, recipe: VIDEO_RECIPE, provider: 'higgsfield',
-    planned_for: job.date || null, reasoning: withNotice(`Vídeo sendo feito na Higgsfield a partir de ${tour.photos.length > 1 ? 'fotos reais' : 'uma foto real'} — aparece aqui em alguns minutos.`),
+    planned_for: full ? null : (job.date || null), reasoning: withNotice(`${full ? 'Tour virtual' : 'Vídeo'} sendo feito na Higgsfield a partir de ${tour.photos.length > 1 ? 'fotos reais' : 'uma foto real'} — aparece aqui em alguns minutos.`),
   }).select('id').single()
-  if (error || !piece) { console.error('runVideoSlot: peça não gravada', company.id, error?.message); return }
+  if (error || !piece) { console.error('runVideoSlot: peça não gravada', company.id, error?.message); return { error: 'Não consegui criar a peça.' } }
   await saveLabels(admin, piece.id, job, job.intent)
   await saveItemPick(admin, piece.id, job.item_pick)
   if (!card) {
@@ -1671,29 +1679,40 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`
     console.error('runVideoSlot: encerramento falhou', company.id, piece.id)
     await admin.from('marketing_ai_test_content').update({ reasoning: withNotice('O vídeo não foi feito: não consegui desenhar o encerramento da marca. Nada foi cobrado.') }).eq('id', piece.id)
     try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runVideoSlot: nota falhou', e) }
-    return
+    return { pieceId: piece.id, error: 'Não consegui desenhar o encerramento da marca. Nada foi cobrado.' }
   }
   // Estúdio fora do ar: NÃO gasta. A peça fica "aguardando estúdio" e o tick do item-videos retoma (só então paga os trechos).
   let ready = false
   try { ready = await studioReady(admin) } catch (e) { console.error('runVideoSlot: conferir estúdio falhou', String(e).slice(0, 200)) }
+  if (!ready && full) {
+    // Tour completo não entra na fila de espera (o pedido tem vários trechos): avisa e o dono tenta de novo. Nada gasto.
+    await admin.from('marketing_ai_test_content').update({ reasoning: withNotice('O tour não foi feito: o servidor de vídeo está fora do ar. Nada foi cobrado — tente de novo pelo menu Tour virtual.') }).eq('id', piece.id)
+    return { pieceId: piece.id, error: 'O servidor de vídeo está fora do ar agora. Nada foi cobrado — tente de novo em alguns minutos.' }
+  }
   if (!ready) {
     const pending = { item_id: item.id, kind: tour.kind, photos: tour.photos, endcard_url: card.url, endcard_seconds: tcfg.endcard_seconds, since: new Date().toISOString() }
     await admin.from('marketing_ai_test_content').update({ reasoning: withNotice(WAITING_STUDIO_PRE), concept: { tour_pending: pending } }).eq('id', piece.id)
     try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runVideoSlot: nota falhou', e) }
-    return
+    return { pieceId: piece.id }
   }
+  let failure: string | undefined
   try {
     const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/item-videos`, {
       method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create', cron_secret: cronSecret, company_id: company.id, item_id: item.id, kind: tour.kind, photos: tour.photos, label: 'Calendário', piece_id: piece.id, endcard_url: card.url, endcard_seconds: tcfg.endcard_seconds }),
+      body: JSON.stringify({ action: 'create', cron_secret: cronSecret, company_id: company.id, item_id: item.id, kind: full ? 'tour' : tour.kind, photos: tour.photos, label: full ? 'Tour virtual' : 'Calendário', piece_id: piece.id, endcard_url: card.url, endcard_seconds: tcfg.endcard_seconds }),
     })
     const r = await res.json().catch(() => ({})) as { error?: string }
-    if (!res.ok) await admin.from('marketing_ai_test_content').update({ reasoning: withNotice(`O vídeo não foi feito: ${r.error ?? `erro ${res.status}`}. Nada foi cobrado.`) }).eq('id', piece.id)
+    if (!res.ok) {
+      failure = `${r.error ?? `erro ${res.status}`}. Nada foi cobrado.`
+      await admin.from('marketing_ai_test_content').update({ reasoning: withNotice(`O vídeo não foi feito: ${failure}`) }).eq('id', piece.id)
+    }
   } catch (e) {
+    failure = 'Falha de conexão. Nada foi cobrado.'
     await admin.from('marketing_ai_test_content').update({ reasoning: withNotice('O vídeo não foi feito (falha de conexão). Nada foi cobrado.') }).eq('id', piece.id)
     console.error('runVideoSlot: item-videos falhou', company.id, e)
   }
   try { await scoreTestContent(company.id, piece.id) } catch (e) { console.error('runVideoSlot: nota falhou', e) }
+  return { pieceId: piece.id, ...(failure ? { error: failure } : {}) }
 }
 
 const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, language, telegram_chat_id, vertical_key, playbook_answers, instagram_username'
@@ -1843,6 +1862,39 @@ Deno.serve(async (req) => {
     // lógica do cron de domingo, só que na hora, pro dono testar/adiantar.
     // Memória do Agente de Conteúdo: a tela chama depois que o dono exclui
     // uma peça com motivo ou edita a legenda. Devolve as lições atuais.
+    // Menu Tour virtual (2026-11-10): o dono confirmou a ORDEM das fotos (item-videos plan_tour sugere) e pede o tour
+    // completo. Aqui: confere fotos/imóvel/estúdio ANTES de gastar, faz a legenda com as travas (runVideoSlot) e manda os
+    // trechos pro item-videos (que confere o teto e paga). A peça nasce sem dia e vai pra Aprovações — nada sai sem o dono.
+    if (body.action === 'tour_piece') {
+      if (!cronSecretEnv) return json({ error: 'Configuração do servidor incompleta.' }, 503)
+      const item = typeof body.item_id === 'string' ? await getItem(admin, company.id, body.item_id) : null
+      if (!item) return json({ error: 'Imóvel não encontrado.' }, 404)
+      const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', company.vertical_key ?? 'generico').eq('enabled', true).maybeSingle()
+      const tcfg = tourCfgFrom(pb?.config), ocfg = tourOrderCfgFrom(pb?.config, tcfg)
+      const blockMsg = ownerBlockMessage(item, { ...(await fetchItemCfg(admin, company.vertical_key ?? null)), minPhotos: 0 })
+      if (blockMsg) return json({ error: blockMsg, code: 'item_unavailable' }, 400)
+      const meta = ((item.meta?.photos ?? []) as { url: string; room?: string | null; room_conf?: number | null }[])
+      const byUrl = new Map(meta.map(p => [p.url, p]))
+      const order = Array.isArray(body.photos) ? (body.photos as unknown[]).map(String) : []
+      if (order.length < 2 || order.length > ocfg.tour_max_photos || new Set(order).size !== order.length || order.some(u => !byUrl.has(u))) {
+        return json({ error: `Escolha de 2 a ${ocfg.tour_max_photos} fotos diferentes deste imóvel.` }, 400)
+      }
+      let ready = false
+      try { ready = await studioReady(admin) } catch { /* trata como fora do ar */ }
+      if (!ready) return json({ error: 'O servidor de vídeo está fora do ar agora. Nada foi cobrado — tente de novo em alguns minutos.' }, 503)
+      // Cômodo de cada foto pela nota já gravada (nunca o que a tela mandou) e as passagens pela ficha.
+      const rooms = order.map(u => roomOf(byUrl.get(u) as never, tcfg))
+      const { passages } = tourSegments(rooms, tcfg.adjacent_rooms, tcfg.opening_rooms)
+      const notes: string[] = []
+      if (passages.includes('walk')) notes.push(PAIR_NOTICE)
+      const cuts = passages.filter((p, i) => i > 0 && p === 'cut').length
+      if (cuts) notes.push(`${cuts} passagem(ns) em corte (ambientes que não se ligam pela ficha) — a câmera não inventa o caminho entre eles.`)
+      const job: SlotJob = { date: '', producer: 'item_video', name: 'Tour virtual', pillar: 'tour', purpose: 'Tour virtual completo pedido pelo dono', item_id: item.id, recipe: VIDEO_RECIPE, familia: 'tour', tema: 'tour' }
+      const r = await runVideoSlot(admin, anthropicKey, company, job, cronSecretEnv, { photos: order, rooms, notes })
+      if (!r.pieceId) return json({ error: r.error ?? 'Não consegui criar o tour.' }, 500)
+      return json({ ok: !r.error, piece_id: r.pieceId, ...(r.error ? { error: r.error } : {}) }, r.error ? 502 : 200)
+    }
+
     if (body.action === 'relearn') {
       const r = await relearn(admin, anthropicKey, company.id)
       return json({ ok: true, ...r })
