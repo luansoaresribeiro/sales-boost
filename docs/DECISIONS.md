@@ -6,6 +6,20 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-10 — Pesquisa de mercado compartilhada por bairro (passo 2 da economia de custos; dono)
+
+**Ponto de partida.** As buscas de notícias (Tavily) são montadas só com tema × bairro × cidade da ficha, sem nada de uma imobiliária específica. Duas imobiliárias com imóveis no Leblon faziam a mesma busca duas vezes.
+
+**O que muda.**
+- **Reaproveitamento no mesmo dia.** O resultado de cada busca fica guardado por dia em `market_search_cache`, sem `company_id` (é notícia pública). A 2ª imobiliária que fizer a mesma busca no mesmo dia reaproveita o resultado: não gasta crédito e grava custo 0, marcado "reaproveitada" em `agent_performance`.
+- **Cada imobiliária continua com o seu.** O filtro de qualidade, a deduplicação e os próprios sinais (`market_signals`) continuam por empresa. Nada de uma imobiliária passa para outra.
+- **Falha do cache = busca normal.** Se o cache der erro, a busca acontece como antes: nunca fica sem notícia.
+- **No dia seguinte busca de novo**, para trazer notícia nova.
+
+**Arquivos.**
+- Código: `_shared/marketNewsRun.ts` (`searchCacheKey`, `dbSearchCache`).
+- Migration: `20261110130000_pesquisa_mercado_compartilhada.sql` (tabela nova, RLS ligado e só o servidor acessa).
+
 ## 2026-11-10 — Medição completa do custo da IA (passo 1 da economia de custos; dono)
 
 **Contexto.** O dono aprovou os passos 1 a 3 da auditoria de custos (`docs/AUDITORIA-CUSTOS.md`):
