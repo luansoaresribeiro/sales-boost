@@ -83,14 +83,14 @@ export async function cronOpportunities(admin: Admin, llm: Llm, started = Date.n
       ])
       let did = false
       if (shouldRunOpportunities(ms(lastRun?.created_at), ms(lastSignal?.created_at), Date.now(), ms(lastFail?.created_at))) {
-        const r = await runOpportunities(admin, c.id, llm)
+        const r = await runOpportunities(admin, c.id, llm, { trigger: 'cron' })
         if (!r.ok) console.error(`[cron_opportunities] ${c.id} run: ${r.status} ${r.error}`)
         else sum.ran++
         did = true
       }
       for (const o of (pending ?? []) as { id: string }[]) {
         if (!aiWindowOpen()) break
-        const r = await createOpportunityPlan(admin, c.id, o.id, llm)
+        const r = await createOpportunityPlan(admin, c.id, o.id, llm, { trigger: 'cron' })
         if (r.code !== 'failures' && r.code !== 'daily_limit') did = true // pular por falhas/limite não ocupa vaga das 3
         if (r.ok && !r.reused) sum.plans++
         if (r.code === 'daily_limit') break // limite do dia desta empresa: o resto fica pra amanhã

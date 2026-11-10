@@ -10,7 +10,8 @@
 import type { FieldMap, Lang } from './opportunityEngine.ts'
 import { MAX_PLANS_PER_DAY, buildPlanPrompt, describePlanItem, finalizePlan, parsePlan, type OpportunityPlan, type PlanItem, type PlanOpp } from './opportunityPlan.ts'
 import { availabilityOf, itemCfgFrom } from './itemService.ts'
-import type { Llm } from './opportunityRun.ts'
+import { answerCost, type Llm, type LlmAnswer, type RunOpts } from './opportunityRun.ts'
+import { insertPerf, type Trigger } from './aiCost.ts'
 
 type Admin = { from: (t: string) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
 export const TASK_KEY = 'create_opportunity_plan'
@@ -28,7 +29,7 @@ const tr = (lang: Lang, pt: string, en: string) => (lang === 'en' ? en : pt)
 const isUuid = (s: unknown): s is string => typeof s === 'string' && /^[0-9a-f-]{36}$/i.test(s)
 
 /** Usado só pelo caminho automático (aprovação da oportunidade / cron). Respeita 5 planos por empresa por dia. */
-export async function createOpportunityPlan(admin: Admin, companyId: string, opportunityId: unknown, llm: Llm): Promise<PlanRunResult> {
+export async function createOpportunityPlan(admin: Admin, companyId: string, opportunityId: unknown, llm: Llm, opts: RunOpts = {}): Promise<PlanRunResult> {
   const started = Date.now()
   const { data: co } = await admin.from('companies').select('id, business_name, language, vertical_key').eq('id', companyId).maybeSingle()
   if (!co) return { ok: false, status: 404, error: 'Empresa não encontrada.' }
@@ -94,22 +95,22 @@ export async function createOpportunityPlan(admin: Admin, companyId: string, opp
   }
   try { await admin.from('agent_performance').insert({ company_id: companyId, agent_role: 'cmo', task_key: START_KEY, task_description: `opp:${row.id} começou`, latency_ms: 0, success: true, tokens_used: 0 }) } catch { /* não-fatal */ }
 
-  let answer: { text: string; tokens: number }
+  let answer: LlmAnswer
   try {
     answer = await llm(prompt, 2000)
   } catch (e) {
-    await logCost(admin, companyId, row.id, started, 0, false, String(e))
+    await logCost(admin, companyId, opts.trigger, row.id, started, 0, false, String(e))
     return { ok: false, status: 502, error: tr(lang, 'A IA não respondeu. Tente de novo em um minuto.', 'The AI did not answer. Try again in a minute.') }
   }
   const parsed = parsePlan(answer.text)
   if (!parsed) {
-    await logCost(admin, companyId, row.id, started, answer.tokens, false, 'resposta da IA ilegível')
+    await logCost(admin, companyId, opts.trigger, row.id, started, answer, false, 'resposta da IA ilegível')
     return { ok: false, status: 502, error: tr(lang, 'Não consegui ler a resposta da IA. Tente de novo.', 'The AI answer could not be read. Try again.') }
   }
   const marketClaims = cfg.opportunity_texts?.market_claims?.[lang]?.filter(x => typeof x === 'string' && x.trim())
   const res = finalizePlan({ lang, opp, items, fieldMap, labels, llm: parsed, ctas, marketClaims })
   if (!res.ok) {
-    await logCost(admin, companyId, row.id, started, answer.tokens, false, res.reason)
+    await logCost(admin, companyId, opts.trigger, row.id, started, answer, false, res.reason)
     return { ok: false, status: 502, error: `${res.reason} ${tr(lang, 'Tente de novo.', 'Try again.')}` }
   }
 
@@ -118,14 +119,14 @@ export async function createOpportunityPlan(admin: Admin, companyId: string, opp
   // Só grava se a oportunidade AINDA está aprovada (pode ter sido descartada enquanto a IA trabalhava).
   const { data: saved, error } = await admin.from('growth_opportunities').update({ plan: res.plan, plan_generated_at: now, plan_approved_at: null }).eq('id', row.id).eq('company_id', companyId).eq('status', 'approved').select('id')
   if (error) {
-    await logCost(admin, companyId, row.id, started, answer.tokens, false, error.message)
+    await logCost(admin, companyId, opts.trigger, row.id, started, answer, false, error.message)
     return { ok: false, status: 500, error: `growth_opportunities: ${error.message}` }
   }
   if (!saved || saved.length === 0) {
-    await logCost(admin, companyId, row.id, started, answer.tokens, false, 'oportunidade deixou de estar aprovada')
+    await logCost(admin, companyId, opts.trigger, row.id, started, answer, false, 'oportunidade deixou de estar aprovada')
     return { ok: false, status: 409, error: tr(lang, 'A oportunidade deixou de estar aprovada; o plano não foi salvo.', 'The opportunity is no longer approved; the plan was not saved.') }
   }
-  await logCost(admin, companyId, row.id, started, answer.tokens, true, 'plano criado')
+  await logCost(admin, companyId, opts.trigger, row.id, started, answer, true, 'plano criado')
   return { ok: true, status: 200, plan: res.plan, plan_generated_at: now, plan_approved_at: null, plans_left_today: Math.max(0, MAX_PLANS_PER_DAY - used - 1) }
 }
 
@@ -146,12 +147,13 @@ export async function approveOpportunityPlan(admin: Admin, companyId: string, op
 
 // Custo da IA registrado como as outras actions (agent_performance); nunca derruba o fluxo. O id da oportunidade
 // vai no começo de task_description (é por ele que o duplo clique é reconhecido).
-async function logCost(admin: Admin, companyId: string, oppId: string, started: number, tokens: number, success: boolean, note: string) {
+async function logCost(admin: Admin, companyId: string, trigger: Trigger | undefined, oppId: string, started: number, answer: number | LlmAnswer, success: boolean, note: string) {
   try {
-    await admin.from('agent_performance').insert({
+    const c = answerCost(answer)
+    await insertPerf(admin, {
       company_id: companyId, agent_role: 'cmo', task_key: TASK_KEY, task_description: `opp:${oppId} ${note}`.slice(0, 200),
-      latency_ms: Date.now() - started, tokens_used: tokens, success, ...(success ? {} : { error_message: note.slice(0, 500) }),
-    })
+      latency_ms: Date.now() - started, tokens_used: c.tokens, ...(c.costUsd != null ? { cost_usd: c.costUsd } : {}), success, ...(success ? {} : { error_message: note.slice(0, 500) }),
+    }, { breakdown: c.breakdown, trigger: trigger ?? null })
   } catch { /* não-fatal */ }
 }
 
@@ -170,7 +172,7 @@ export async function decideOpportunity(admin: Admin, companyId: string, userId:
   if (error) return { ok: false, status: 500, error: `growth_opportunities: ${error.message}` }
   if (!row) return { ok: false, status: 404, error: tr(lang, 'Oportunidade não encontrada.', 'Opportunity not found.') }
   if (status === 'approved' && !row.plan) {
-    defer(createOpportunityPlan(admin, companyId, row.id, llm).then(r => { if (!r.ok) console.error(`[opportunity-plan] ${row.id}: ${r.status} ${r.error}`) }).catch(e => console.error('[opportunity-plan]', String(e))))
+    defer(createOpportunityPlan(admin, companyId, row.id, llm, { trigger: 'manual' }).then(r => { if (!r.ok) console.error(`[opportunity-plan] ${row.id}: ${r.status} ${r.error}`) }).catch(e => console.error('[opportunity-plan]', String(e))))
   }
   return { ok: true, status: 200, opportunity: row }
 }

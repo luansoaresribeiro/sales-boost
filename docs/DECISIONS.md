@@ -6,6 +6,23 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-10 — Medição completa do custo da IA (passo 1 da economia de custos; dono)
+
+**Contexto.** O dono aprovou os passos 1 a 3 da auditoria de custos (`docs/AUDITORIA-CUSTOS.md`):
+1. medição completa;
+2. pesquisa de mercado compartilhada por bairro;
+3. reaproveitamento de prompt (prompt caching).
+
+**O que este passo grava em `agent_performance`:**
+- **Tokens separados:** `input_tokens`, `output_tokens`, `cache_write_tokens`, `cache_read_tokens`.
+- **Origem da chamada:** `call_origin` = `cron` (agendamento) ou `manual` (clique de uma pessoa). Serve para separar operação de teste e uso manual.
+  - Vale para as oportunidades, os planos de oportunidade e as peças.
+  - Na estratégia fica vazio, porque as etapas 2 e 3 são encadeadas pelo próprio sistema e não carregam essa informação.
+- **Dólares das oportunidades e dos planos:** antes só gravavam tokens.
+- **Preço do cache** (`_shared/aiCost.ts`): escrita a 1,25× a entrada (5 min) ou 2× (1 h); leitura a 0,1×. Sem cache, o valor é igual ao de antes.
+
+**Migration** `20261110120000_agent_performance_custo_detalhado.sql`: só acrescenta colunas. Se ainda não estiver aplicada, o código grava sem as colunas novas (`insertPerf`).
+
 ## 2026-11-09 — Etapa 1 · parte B: proteção do texto que vai ao público (dono, autorizada em 07/11)
 
 - **Onde vive:** na ficha (`config.compliance.public_text`, migration `20261109130000_compliance_texto_publico_ficha.sql`).

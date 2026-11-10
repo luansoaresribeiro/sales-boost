@@ -546,7 +546,7 @@ async function generateForCompany(admin: SupaClient, anthropicKey: string, compa
     return r
   } catch (e) { err = e instanceof Error ? e.message : String(e); throw e }
   finally {
-    await logAiCost(admin, { companyId: company.id, role: 'conteudo', taskKey: 'ai_text_content', description: `Peça do calendário/teste (texto da IA)${pieceId ? ` ${pieceId}` : ''}`, tokens: track.tokens(), costUsd: track.costUsd(), latencyMs: Date.now() - t0, success: !err, error: err })
+    await logAiCost(admin, { companyId: company.id, role: 'conteudo', taskKey: 'ai_text_content', description: `Peça do calendário/teste (texto da IA)${pieceId ? ` ${pieceId}` : ''}`, tokens: track.tokens(), costUsd: track.costUsd(), latencyMs: Date.now() - t0, success: !err, error: err, breakdown: track.breakdown(), trigger: opts.isCron ? 'cron' : 'manual' })
   }
 }
 
