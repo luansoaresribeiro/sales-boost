@@ -6,6 +6,33 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-10 — Fase 4: direcionamentos do dono (preparação aprovada, implementação não)
+
+A preparação documental (#135) foi aprovada. **A Fase 4 não é implementada agora.**
+
+1. **Lead qualificado.**
+   - Os 7 critérios ficam como **proposta**.
+   - Os prazos de **30 dias** (duplicidade) e **7 dias** (contestação) são **hipóteses a validar com imobiliárias**.
+2. **Estados separados:**
+   - **lead válido** (contato + consentimento, sem spam);
+   - **lead qualificado** (critérios objetivos, a única base de cobrança futura);
+   - **em conversa**;
+   - **visita realizada**, além de visita agendada e contestado.
+
+   A etapa manual **"Qualificado" do Funil nunca conta para cobrança** e não pode ser confundida com a qualificação objetiva.
+3. **Sem rastreamento persistente no celular na 1ª versão.** Vale:
+   - a origem rastreável (link, conteúdo e canal);
+   - o identificador do lead;
+   - o imóvel, quando houver;
+   - o acompanhamento do estado.
+4. **Sem preço de lead** antes dos dados reais do piloto.
+5. **Tours e leads continuam como receitas separadas** no simulador.
+
+**Até 17/11:** foco na **validação comercial**.
+- Conversar com imobiliárias sobre volume de imóveis, frequência de compra de tours e o que é um bom lead (ficha em [PILOTO.md](PILOTO.md), seção 2.2).
+- Sem implementação e sem escopo novo.
+- Depois da medição de custos e das conversas, voltam os 3 portões da Fase 4.
+
 ## 2026-11-10 — Novo modelo: cenários de tour, lead sem preço e portões da Fase 4 (dono)
 
 **Tours.**

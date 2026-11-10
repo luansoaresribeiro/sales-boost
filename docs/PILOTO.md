@@ -46,6 +46,31 @@ A hipótese-base do dono é 3 tours por imobiliária por mês, com cenários de 
 
 **Não citar preço de lead:** ainda não existe.
 
+### 2.2 Ficha de cada conversa (validação comercial até 17/11)
+O dono preenche uma ficha por conversa. O agente consolida tudo no relatório semanal (`docs/relatorios/`), sem inventar nem arredondar número.
+Campo sem resposta fica **"não informado"**.
+
+| Campo | Resposta |
+|---|---|
+| Imobiliária, bairros e data da conversa | |
+| Corretores (quantos) | |
+| Imóveis ativos na carteira | |
+| Imóveis novos por mês | |
+| **Tours que comprariam por mês** (hipótese-base do dono: 3; cenários 1 e 5) | |
+| Preço do tour (US$ 15): o que acharam e as objeções | |
+| De onde vêm os interessados hoje e quantos por mês | |
+| Quantos interessados viram visita | |
+| **O que é um "lead bom" para eles** (comparar com os 7 critérios de [CONVERSION.md](CONVERSION.md)) | |
+| **Prazo para considerar o mesmo contato como repetido** (hipótese: 30 dias) | |
+| **Prazo para contestar um lead** (hipótese: 7 dias) | |
+| Pagariam por lead? Em que condição? (não citar preço) | |
+| Topariam um piloto de 4 semanas? | |
+
+**Consolidação em 17/11.** Junto com a auditoria de custos v1, fecha a revisão dos 3 portões da Fase 4:
+- **A demanda de tours** confirma ou não a base de 3 por mês.
+- **Os prazos de 30 e 7 dias** se mantêm ou mudam.
+- **A definição de "lead bom"** bate ou não com os 7 critérios.
+
 ## 3. O que pedir à imobiliária
 | Item | Para quê | Obrigatório |
 |---|---|---|
