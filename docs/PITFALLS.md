@@ -1145,3 +1145,14 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - O pré-download usa o carregador cru de propósito: falha em segundo plano não pode recarregar a página do nada.
 - **Prints/QA da fábrica:** desde 2026-11-10 não há mais cortina — o 3D abre ao entrar na aba. As notas acima sobre "cortina
   fechada/aberta" e "faixa de cartões embaixo" são histórico.
+
+## Build sem `.env.local` publica o site em branco (2026-11-10)
+
+- Num container novo (sessão na nuvem) não existe `.env.local`. `npm run build` passa sem erro, mas o site sai sem
+  `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` e no ar fica **tela em branco** ("supabaseUrl is required"). Aconteceu em 10/11
+  (das 21:01 às 21:20 e por ~3 min às 21:50); voltado com `npx wrangler rollback <versão>`.
+- Antes de `npx wrangler deploy`: crie o `.env.local` (URL e chave **anon** públicas, as mesmas do site no ar — pegar pelo painel
+  do Supabase ou `get_publishable_keys`) e confira `grep -l "<ref>.supabase.co" dist/assets/index-*.js`. Depois do deploy, abra
+  `/` e `/login` no navegador e veja se aparece texto. Hoje o site no ar só usa essas duas; PostHog/Facebook/Google ficam vazios.
+- Outra sessão publicando ao mesmo tempo: compare o `index-*.js` do site no ar com um build do `main` antes de publicar — se
+  forem diferentes, há trabalho de outra sessão no ar que ainda não está no `main` e o seu deploy apagaria.
