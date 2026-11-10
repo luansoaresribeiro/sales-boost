@@ -61,6 +61,12 @@ resultados e se adapta.
 > histórico (a base — dados reais, aprovação do dono — continua valendo). Ver
 > [DECISIONS.md](DECISIONS.md#2026-10-28--inteligência-comercial-para-imobiliárias-opportunity-engine).
 
+> **Divergência (2026-11-10, dono):** o slogan passa a ser **"Sales Boost — gerando mais visitas para o seu imóvel"**.
+> Ele acompanha o novo modelo: plataforma grátis, tour pago e lead qualificado. A métrica principal deixa de ser "conteúdo produzido" e passa a ser
+> **visitas aos imóveis**. Na tela, o topo do site diz "Você cuida dos imóveis. Nós geramos mais visitas." Os textos acima ficam como
+> histórico. **Cuidado:** prometer visita garantida continua proibido; o que o Sales Boost entrega é a estrutura que gera, rastreia e
+> converte interesse em visitas. Ver [DECISIONS.md](DECISIONS.md).
+
 A estratégia vem de **dados reais** (Data Agent — ver [ARCHITECTURE.md](ARCHITECTURE.md)),
 não só da URL que o cliente colou no diagnóstico gratuito.
 
