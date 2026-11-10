@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 // Roda: node --experimental-strip-types scripts/test-ai-cost.mjs
 // A.6 (2026-11-07): (3) estratégia sem custo interno do Sales Boost no texto do cliente; (4) custo real a partir de tokens.
-import { anthropicCostUsd, logAiCost, newCostTracker, priceFor, breakdownOf, insertPerf } from '../supabase/functions/_shared/aiCost.ts'
+import { anthropicCostUsd, logAiCost, newCostTracker, priceFor, breakdownOf, insertPerf, cachedContent, MIN_CACHE_CHARS } from '../supabase/functions/_shared/aiCost.ts'
 import { answerCost } from '../supabase/functions/_shared/opportunityRun.ts'
 import { cleanBudgetText, formatCatalogBlock, hasInternalCost, sanitizeContentPlan, stripInternalCost, ensureMinVideos } from '../supabase/functions/_shared/formatCatalog.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
@@ -114,4 +114,16 @@ assert.deepEqual(answerCost({ text: '', tokens: 13000 }), { tokens: 13000, costU
 const ac = answerCost({ text: '', tokens: 13000, model: 'claude-sonnet-4-6', usage: { input_tokens: 10_000, output_tokens: 3_000 } })
 assert.equal(ac.costUsd, 0.075); assert.equal(ac.breakdown.input, 10000)
 ok('oportunidades: dólares medidos quando a IA devolve usage; sem usage, custo fica vazio (não inventa)')
+
+// ── Passo 3 (10/11): reaproveitamento de prompt SEM mudar o texto ──────────────────────────────────────────────────
+const big = 'Você é o agente de marketing da Imobiliária X. '.repeat(80)   // > 3.000 caracteres
+const prompt = big + '\n\nAgora escreva a legenda do imóvel.'
+const parts = cachedContent(prompt, big)
+assert.ok(Array.isArray(parts) && parts.length === 2 && parts[0].cache_control?.type === 'ephemeral' && !parts[1].cache_control)
+assert.equal(parts.map(x => x.text).join(''), prompt); ok('o texto enviado é IDÊNTICO ao prompt (começo marcado + resto)')
+assert.equal(cachedContent(prompt, big.slice(0, MIN_CACHE_CHARS - 1)), prompt); ok('começo curto demais: manda como antes (texto único)')
+assert.equal(cachedContent(prompt, 'outro começo'.repeat(400)), prompt); ok('começo que não bate com o prompt: manda como antes')
+assert.equal(cachedContent(big + '   \n', big), big + '   \n'); assert.equal(cachedContent(prompt, null), prompt); ok('sem resto ou sem começo: manda como antes')
+for (const f of ['creative-generate', 'strategy-generate']) assert.match(readFileSync(new URL(`../supabase/functions/${f}/index.ts`, import.meta.url), 'utf8'), /cachedContent\(prompt, /, f)
+ok('peças e estratégia (partes 2 e 3) usam o reaproveitamento')
 console.log(`\n${n} verificações ok`)

@@ -97,3 +97,18 @@ export async function logAiCost(admin: Admin, row: { companyId: string; role: st
     }, { breakdown: row.breakdown ?? null, trigger: row.trigger ?? null })
   } catch (e) { console.error('aiCost: custo não gravado (segue)', e) }
 }
+
+// ── Reaproveitamento de prompt (prompt caching, passo 3 — dono, 10/11) ────────────────────────────────────────────────
+// SEM mudar o texto: o prompt continua exatamente o mesmo, só é enviado em 2 pedaços — o começo que se repete (ex.: a
+// apresentação da empresa + ficha em todas as chamadas de uma peça; o contexto da estratégia nas partes 2 e 3) marcado
+// para reaproveitar, e o resto. A Anthropic guarda o começo por 5 min: a chamada seguinte com o mesmo começo paga 0,1× por
+// ele (a 1ª paga 1,25×). Começo curto demais (< ~1.024 tokens no Sonnet) a Anthropic simplesmente ignora, sem custo extra.
+export const MIN_CACHE_CHARS = 3000 // ≈ 1.024 tokens em português; abaixo disso nem marca
+export type PromptContent = string | { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }[]
+/** O texto final é IDÊNTICO ao prompt (prefixo + resto). Qualquer condição fora do esperado devolve o prompt inteiro, como antes. */
+export function cachedContent(prompt: string, prefix?: string | null): PromptContent {
+  if (!prefix || prefix.length < MIN_CACHE_CHARS || !prompt.startsWith(prefix)) return prompt
+  const rest = prompt.slice(prefix.length)
+  if (!rest.trim()) return prompt
+  return [{ type: 'text', text: prefix, cache_control: { type: 'ephemeral' } }, { type: 'text', text: rest }]
+}

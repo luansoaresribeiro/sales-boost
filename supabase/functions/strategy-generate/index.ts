@@ -64,7 +64,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { answerContextBlock } from '../_shared/answerContext.ts'
 import { fetchLearning, learningPromptBlock, learningHighlights } from '../_shared/learning.ts'
-import { logAiCost, anthropicCostUsd, breakdownOf, totalTokens, type Usage } from '../_shared/aiCost.ts'
+import { logAiCost, anthropicCostUsd, breakdownOf, cachedContent, totalTokens, type Usage } from '../_shared/aiCost.ts'
 import { cleanBudgetText, fetchContentRules, fetchFormatCatalog, formatCatalogBlock, sanitizeContentPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { setupMissing } from '../_shared/setupReady.ts'
@@ -341,14 +341,14 @@ async function recordCost(c: CostCtx, usage: Usage | undefined, latencyMs: numbe
 }
 async function callClaudeStep(
   anthropicKey: string, prompt: string, maxTokens: number,
-  opts: { allowRetry: boolean; bumpedMaxTokens?: number; cost?: CostCtx }, label: string,
+  opts: { allowRetry: boolean; bumpedMaxTokens?: number; cost?: CostCtx; cachePrefix?: string }, label: string,
 ): Promise<{ ok: true; parsed: Record<string, unknown> } | { ok: false; reason: string }> {
   const attempt = async (tokens: number): Promise<{ text: string; stopReason: string } | null> => {
     try {
       const t0 = Date.now()
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST', headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: tokens, messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: tokens, messages: [{ role: 'user', content: cachedContent(prompt, opts.cachePrefix) }] }),
         // Teto por chamada abaixo dos 150s da execução (2026-11-03): antes, uma resposta lenta deixava a execução
         // morrer calada e a estratégia presa em 'generating' (Teste Zero). Agora vira 'failed' com motivo claro.
         signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
@@ -583,7 +583,7 @@ Retorne APENAS um JSON:
 // estimativas + campanha numa chamada só de 5000 tokens — cortou por tamanho num dia e no outro passou dos 150s e
 // morreu calada (estratégia presa em 'generating'). Agora: passo 2 = mix + funil; passo 3 ('continue', step=3) =
 // metas + orçamento + estimativas + campanha, cada um com o seu relógio. Sem retry (allowRetry:false).
-type StepCtx = { company: Company; baseline: Awaited<ReturnType<typeof fetchRealBaseline>>; formats: Awaited<ReturnType<typeof fetchFormatCatalog>>; ss: SSContext | null; rules: Awaited<ReturnType<typeof fetchContentRules>>; header: string }
+type StepCtx = { company: Company; baseline: Awaited<ReturnType<typeof fetchRealBaseline>>; formats: Awaited<ReturnType<typeof fetchFormatCatalog>>; ss: SSContext | null; rules: Awaited<ReturnType<typeof fetchContentRules>>; header: string; stable: string }
 async function tacticalCtx(admin: SupaClient, supabaseUrl: string, cronSecret: string, row: Record<string, unknown>): Promise<StepCtx | null> {
   const companyId = String(row.company_id)
   const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', companyId).maybeSingle()
@@ -598,7 +598,9 @@ async function tacticalCtx(admin: SupaClient, supabaseUrl: string, cronSecret: s
   ])
   const rules = await fetchContentRules(admin, company.vertical_key ?? 'generico')
   const prevPlan = (row.content_plan ?? null) as Partial<ContentPlan> | null
-  const header = `Você é Hermes, continuando o plano tático de uma estratégia cuja tese já foi decidida (parte 1, já gravada) — não questione a tese, só desdobre em plano tático.
+  // `stable` = começo que se repete igual nas partes 2 e 3 (passo 3 da economia de custos: reaproveitado pela Anthropic).
+  // header = stable + o resto, exatamente o mesmo texto de antes.
+  const stable = `Você é Hermes, continuando o plano tático de uma estratégia cuja tese já foi decidida (parte 1, já gravada) — não questione a tese, só desdobre em plano tático.
 
 ${businessPreamble(company, {})}${playbookBlock}${formatCatalogBlock(formats)}${SCOPE_BLOCK}${ss?.block ?? ''}
 
@@ -611,12 +613,13 @@ Objetivo: ${row.primary_business_objective ?? row.primary_marketing_objective ??
 Foco estratégico: ${row.strategic_focus ?? '—'}
 Componentes ativos: ${Array.isArray(row.active_components) ? (row.active_components as string[]).join(', ') : '—'}
 Horizonte: ${row.horizon ?? '—'}
-Linha central de conteúdo: ${prevPlan?.central_line || '—'}${prevPlan?.hero_formats?.length ? ` (formatos-âncora: ${prevPlan.hero_formats.map(h => h.key).join(', ')})` : ''}${pillarsLine(prevPlan)}
+`
+  const header = `${stable}Linha central de conteúdo: ${prevPlan?.central_line || '—'}${prevPlan?.hero_formats?.length ? ` (formatos-âncora: ${prevPlan.hero_formats.map(h => h.key).join(', ')})` : ''}${pillarsLine(prevPlan)}
 
 ESTADO ATUAL DOS 9 DOMÍNIOS (Data Agent):
 ${formatDomains(dataAgentState)}
 ${baseline ? `\nDADO REAL de performance atual (NÃO invente outro número — use exatamente este quando relevante): ${baseline.label}.` : '\nAinda não há dado real de performance coletado — trate qualquer número de baseline como DESCONHECIDO, nunca assuma 0 nem invente um valor.'}`
-  return { company, baseline, formats, ss, rules, header }
+  return { company, baseline, formats, ss, rules, header, stable }
 }
 
 async function runStep2(admin: SupaClient, supabaseUrl: string, cronSecret: string, anthropicKey: string, row: Record<string, unknown>): Promise<void> {
@@ -651,7 +654,7 @@ Retorne APENAS um JSON:
   "funnel_plan": [{"stage":"awareness|consideration|conversion|retention","pillar":"chave do pilar de Social Selling que esta etapa fortalece (se houver)","objective":"","audience":"","message":"","format":"","cta":"","destination":"","metric":"","dependencies":"","horizon":""}]
 }`
     lap(`prompt 2 montado, ${prompt.length} chars`)
-    const r2 = await callClaudeStep(anthropicKey, prompt, 3000, { allowRetry: false, cost: { admin, companyId, kind: 'generate · parte 2' } }, 'Parte 2 (mix e funil)')
+    const r2 = await callClaudeStep(anthropicKey, prompt, 3000, { allowRetry: false, cost: { admin, companyId, kind: 'generate · parte 2' }, cachePrefix: ctx.stable }, 'Parte 2 (mix e funil)')
     lap(`parte 2 concluída, ok=${r2.ok}`)
     if (!r2.ok) { await markFailed(r2.reason); return }
     const funnel = Array.isArray(r2.parsed.funnel_plan) ? r2.parsed.funnel_plan : []
@@ -729,7 +732,7 @@ Retorne APENAS um JSON:
   "campaign_draft": {"name":"","goal":""}
 }`
     lap(`prompt 3 montado, ${prompt.length} chars`)
-    const r3 = await callClaudeStep(anthropicKey, prompt, 2600, { allowRetry: false, cost: { admin, companyId, kind: 'generate · parte 3' } }, 'Parte 3 (metas e orçamento)')
+    const r3 = await callClaudeStep(anthropicKey, prompt, 2600, { allowRetry: false, cost: { admin, companyId, kind: 'generate · parte 3' }, cachePrefix: ctx.stable }, 'Parte 3 (metas e orçamento)')
     lap(`parte 3 concluída, ok=${r3.ok}`)
     if (!r3.ok) { await markFailed(r3.reason); return }
     const parsed3 = r3.parsed

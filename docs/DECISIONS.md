@@ -6,6 +6,28 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-10 — Reaproveitamento de prompt sem mudar o texto (passo 3 da economia de custos; dono)
+
+**Regra.** O texto enviado à IA continua **idêntico, palavra por palavra**. Só passa a ser enviado em 2 pedaços:
+1. o começo que se repete entre chamadas, marcado para a Anthropic reaproveitar por 5 minutos;
+2. o resto.
+
+Como o texto não muda, a qualidade não muda por construção. Por isso **não houve reorganização de prompt**: as oportunidades, cujo texto começa por dados variáveis, ficaram como estavam.
+
+**Onde se aplica.**
+- **Peças** (`creative-generate`): a apresentação da empresa + ficha (`preamble`) é o mesmo começo do Diretor, da execução, da refação e do plano B de cada peça, e das peças seguintes da mesma conta.
+- **Estratégia, partes 2 e 3** (`strategy-generate`): o contexto da empresa + a tese (`tacticalCtx.stable`).
+
+**Regras de uso** (`_shared/aiCost.ts` → `cachedContent`).
+- **Começo curto:** abaixo de cerca de 3.000 caracteres (aproximadamente o mínimo de 1.024 tokens do Sonnet), nada é marcado.
+- **Começo que não bate:** se o começo não for igual ao início do prompt, o pedido vai como antes.
+
+**Custo do reaproveitamento.**
+- **1ª chamada:** paga 1,25× pelo começo.
+- **Chamadas seguintes, dentro de 5 minutos:** pagam 0,1× por ele.
+
+**Como conferir.** Depois de publicar, as colunas `cache_read_tokens` / `cache_write_tokens` (passo 1) mostram se o reaproveitamento aconteceu.
+
 ## 2026-11-10 — Pesquisa de mercado compartilhada por bairro (passo 2 da economia de custos; dono)
 
 **Ponto de partida.** As buscas de notícias (Tavily) são montadas só com tema × bairro × cidade da ficha, sem nada de uma imobiliária específica. Duas imobiliárias com imóveis no Leblon faziam a mesma busca duas vezes.
