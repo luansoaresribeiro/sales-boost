@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { filterHits, filterHitsReport, classifySignalQuality, signalStrength, hasTerm, pickRegions, buildQuery, sanitizeText } from '../supabase/functions/_shared/marketNews.ts'
 import { parseIntelConfig, parseQuality } from '../supabase/functions/_shared/marketIntel.ts'
-import { collectMarketNews } from '../supabase/functions/_shared/marketNewsRun.ts'
+import { collectMarketNews, searchCacheKey } from '../supabase/functions/_shared/marketNewsRun.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
 const NOW = Date.parse('2026-11-10T12:00:00Z') // dia 10: restam 21 dias no mês
@@ -334,6 +334,34 @@ assert.equal(classifySignalQuality({ kind: 'launch', title: 'Lançamento em Ipan
   assert.equal(rep.signals.length, 2); assert.equal(Object.keys(rep.rejected).length, 0)
   assert.deepEqual([rep.signals[0].meta.strength, rep.signals[0].meta.weak_reason, rep.signals[1].meta.strength, rep.signals[1].meta.weak_reason], ['weak', 'weak_title', 'strong', undefined]); assert.equal(rep.flagged.weak_title, 1)
   const off = filterHitsReport([hit()], { region: 'Ipanema', kind: 'infrastructure', days: 30, excludeDomains: [], nowMs: NOW }); assert.equal(off.signals[0].meta.strength, undefined); ok('coleta: meta.strength/weak_reason gravados, fraco não reprova e é contado; modo off não muda a meta')
+}
+
+
+{ // Pesquisa compartilhada por bairro (passo 2 da economia de custos, 10/11)
+  const store = new Map()
+  const memCache = { get: async (k, d) => store.get(`${k}|${d}`) ?? null, put: async (k, d, _q, hits) => { store.set(`${k}|${d}`, hits) } }
+  let calls = 0
+  const counted = async (k, q) => { calls++; return goodSearch(k, q) }
+  // Duas imobiliárias com os mesmos bairros, no mesmo dia, mesmo banco falso (sinais por empresa).
+  const a = fakeAdmin()
+  const r1 = await collectMarketNews(a, mk({ companyId: 'c1', search: counted, cache: memCache }))
+  const firstCalls = calls
+  assert.ok(r1.searched > 0 && firstCalls === r1.searched && !r1.reused && r1.spent_usd > 0)
+  const r2 = await collectMarketNews(a, mk({ companyId: 'c2', search: counted, cache: memCache }))
+  assert.equal(calls, firstCalls, 'a 2ª imobiliária não chama a Tavily'); assert.equal(r2.reused, r2.searched); assert.equal(r2.spent_usd, 0)
+  assert.ok(r2.added > 0 && a.db.signals.filter(x => x.company_id === 'c2').length === r2.added)
+  const c2rows = a.db.perf.filter(x => x.company_id === 'c2'); assert.ok(c2rows.every(x => x.cost_usd === 0 && /reaproveitada/.test(x.task_description)))
+  ok('mesma busca no mesmo dia: a 2ª imobiliária reaproveita (sem crédito, custo 0, marcada), e ganha os próprios sinais')
+  const r3 = await collectMarketNews(fakeAdmin(), mk({ companyId: 'c3', search: counted, cache: memCache, nowMs: NOW + 86400_000 }))
+  assert.ok(r3.searched > 0 && !r3.reused && calls > firstCalls); ok('no dia seguinte busca de novo (notícia nova)')
+  const broken = { get: async () => { throw new Error('x') }, put: async () => { throw new Error('y') } }
+  const before = calls
+  const r4 = await collectMarketNews(fakeAdmin(), mk({ companyId: 'c4', search: counted, cache: broken }))
+  assert.ok(r4.searched > 0 && calls - before === r4.searched); ok('cache com erro: busca normal (nunca fica sem notícia)')
+  const k1 = await searchCacheKey('Leblon imóveis', { days: 7, max_results: 5, exclude_domains: ['b.com', 'a.com'] })
+  assert.equal(k1, await searchCacheKey(' leblon IMÓVEIS ', { days: 7, max_results: 5, exclude_domains: ['A.com', 'b.com'] }))
+  assert.notEqual(k1, await searchCacheKey('Leblon imóveis', { days: 30, max_results: 5, exclude_domains: ['a.com', 'b.com'] }))
+  ok('chave da busca: mesma busca = mesma chave; janela de dias diferente = outra chave')
 }
 
 console.log(`\n${n} verificações ok`)
