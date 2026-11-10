@@ -34,7 +34,7 @@ import { callClaude as callModel, CHEAP_MODEL, checkAndSave, fetchFaqConfig, get
 import { decideTopic, guardDeck, loadGuardCfg, topicBlock, topicNote, type Ask, type TopicDecision } from '../_shared/deckGuard.ts'
 import { captionRewritePrompt, claimCtx, claimPromptRule, claimNotice, cutClaims, cutHashtags, cutSlide, itemFacts, loadClaimCfg, lockDeckClaims, lockText, type ClaimCtx } from '../_shared/claimLock.ts'
 import { allowedValues } from '../_shared/numberGuard.ts'
-import { logAiCost, newCostTracker, type CostTracker } from '../_shared/aiCost.ts'
+import { cachedContent, logAiCost, newCostTracker, type CostTracker } from '../_shared/aiCost.ts'
 import { complianceNotice, cutPublicText, loadPublicTextRules, publicTextPromptRule } from '../_shared/compliance.ts'
 import { fallbackCardPlan, hasMarketSource, hasUsableImage, needsImage, pieceTrendIssues, resolveTemplate, trendNotice, trendPromptRule } from '../_shared/pieceGuard.ts'
 import { pickCoverPhoto, pickMiddlePhotos, type CatalogPhoto } from '../_shared/carouselOffer.ts'
@@ -149,11 +149,12 @@ function defaultConfig(company: Company): Config {
   return { agent_name: 'Agente de Conteúdo', brand_voice: null, tone: null, target_audience: null, content_pillars: ['bastidores', 'novidades', 'depoimentos'], marketing_goals: company.goal ?? null, business_objectives: company.goal ?? null }
 }
 
-async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1400, track?: CostTracker): Promise<string> {
+// cachePrefix: começo do prompt que se repete entre chamadas (passo 3 da economia de custos) — o texto enviado não muda.
+async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1400, track?: CostTracker, cachePrefix?: string): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: cachedContent(prompt, cachePrefix) }] }),
   })
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
   const data = await res.json()
@@ -664,7 +665,9 @@ async function generateForCompanyInner(admin: SupaClient, anthropicKey: string, 
     ? templateKeys[Math.floor(Math.random() * templateKeys.length)]
     : (templateChoiceInput && templateKeys.includes(templateChoiceInput) ? templateChoiceInput : null)
 
-  const directorPrompt = `${preamble(config, company, playbookBlock)}
+  // Mesmo começo em todas as chamadas desta peça (Diretor, execução, refação, plano B): reaproveitado (passo 3).
+  const pre = preamble(config, company, playbookBlock)
+  const directorPrompt = `${pre}
 
 Você é o DIRETOR CRIATIVO de uma agência. Vai criar um conteúdo do tipo "${modLabel}". Decida o brief usando os insights reais e as boas práticas ESPECÍFICAS desse formato (não use regra genérica).
 ${seedBlock}${intentTxt}${insights.length ? `\nInsights abertos:\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
@@ -688,7 +691,7 @@ IMPORTANTE: "format" só pode ser um destes (${modLabel} não suporta os outros)
 Decida o brief. Retorne APENAS um JSON:
 {"objective":"awareness|engagement|conversion","format":${fmtList},"template":${templateList},"visual_system":"<título exato da biblioteca>","personality":"<título exato da biblioteca>","framework":"<título exato da biblioteca>","hook_angle":"ângulo do gancho em 1 frase","cta":"chamada pra ação","offer":"oferta/valor em 1 frase (ou vazio)","reasoning":"por que essas escolhas (incluindo o template), citando o insight"}`
 
-  const brief = parseObj(await callClaude(anthropicKey, directorPrompt, 900, track))
+  const brief = parseObj(await callClaude(anthropicKey, directorPrompt, 900, track, pre))
   // Rede de segurança: se a IA ignorar a restrição, força pro formato/
   // template permitido mais próximo em vez de deixar vazar algo não suportado.
   if (!allowedFormats.includes(String(brief.format))) brief.format = allowedFormats[0]
@@ -734,7 +737,7 @@ Decida o brief. Retorne APENAS um JSON:
   const trendSourced = hasMarketSource(opts.intent) || topic?.mode === 'regulado'   // regulado = só dicas conferidas em fonte oficial (já têm fonte)
   const trendRule = (bullet = '- ') => trendPromptRule(claimCfg.trends, trendEvidence, bullet)
   const strict = !!topic && topic.mode !== 'leve' // regulado/geral: só dicas ou nenhum fato — intenção e oferta da IA ficam fora do prompt
-  const execPrompt = `${preamble(config, company, playbookBlock)}
+  const execPrompt = `${pre}
 
 Você agora EXECUTA como esta personalidade: ${personaContent}
 
@@ -760,13 +763,13 @@ ${CARD_FIELD_INSTRUCTIONS[String(brief.template ?? '')] ?? ''}
 Retorne APENAS um JSON array:
 [{"idea":"resumo curto do post","caption":"só a legenda do Instagram, texto pro público","hashtags":"#tag1 #tag2 #tag3","cta":"chamada pra ação final","format":"${brief.format ?? 'foto'}","video_script":"","slides":${opts.deck ? DECK_SLIDE_JSON : '[{"text":"","image":""}]'},"story_worthy":true|false,"story_note":""${CARD_FIELD_JSON[String(brief.template ?? '')] ?? ''}}]`
 
-  const execRaw = await callClaude(anthropicKey, execPrompt, opts.deck ? 3000 : 2000, track)
+  const execRaw = await callClaude(anthropicKey, execPrompt, opts.deck ? 3000 : 2000, track, pre)
   let post = extractOne(execRaw)
   // Tema repetido (trava em código, 2026-11-02): janela de N semanas da ficha + nunca 2x na semana. Repetiu → 1 refação com a lista
   // proibida → ainda repetiu → tema alternativo da ficha que não repita → senão avisa o dono. Tudo vai pro reasoning. (Folga de tempo da invocação.)
   const hasTime = () => Date.now() - startedAt < 60_000
   const redo = async (note: string): Promise<Record<string, unknown> | null> => {
-    try { return extractOne(await callClaude(anthropicKey, execPrompt + note, opts.deck ? 3000 : 2000, track)) } catch (e) { console.error('creative-generate: refação por tema repetido falhou', company.id, e); return null }
+    try { return extractOne(await callClaude(anthropicKey, execPrompt + note, opts.deck ? 3000 : 2000, track, pre)) } catch (e) { console.error('creative-generate: refação por tema repetido falhou', company.id, e); return null }
   }
   const repeats = (p: Record<string, unknown> | null) => (p ? findRepeatedTheme(String(p.idea ?? ''), pastThemes, themeCfg.similarity, themeCfg.places) : null)
   const repeated = repeats(post)
@@ -783,10 +786,10 @@ Retorne APENAS um JSON array:
   if (opts.themeNote) brief.reasoning = `${brief.reasoning ?? ''} ${opts.themeNote}`.trim()
   if (!post) {
     // Fallback: uma tentativa direta e simples, garante que o dono sempre recebe um post.
-    const fbRaw = await callClaude(anthropicKey, `${preamble(config, company, playbookBlock)}
+    const fbRaw = await callClaude(anthropicKey, `${pre}
 
 Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brief.format ?? 'foto'}). Responda SOMENTE com um JSON array, sem nenhum texto antes ou depois:
-[{"idea":"resumo curto","caption":"legenda completa","hashtags":"#a #b #c","cta":"chamada pra ação","format":"${brief.format ?? 'foto'}"}]`, 1500, track)
+[{"idea":"resumo curto","caption":"legenda completa","hashtags":"#a #b #c","cta":"chamada pra ação","format":"${brief.format ?? 'foto'}"}]`, 1500, track, pre)
     post = extractOne(fbRaw)
     if (!post) {
       console.error('creative-generate: parse falhou. exec:', execRaw.slice(0, 300), '| fb:', fbRaw.slice(0, 300))
