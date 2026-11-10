@@ -32,14 +32,6 @@ type NavSection = { section?: string; accent?: boolean; items: NavItem[] }
 
 function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: boolean; marketingAi: boolean }, businessName: string | null, approvalsCount = 0, catalogLabel: string | null = null): NavSection[] {
   return [
-    {
-      items: [
-        {
-          to: '/dashboard/relatorios', label: T.layout.nav.reports,
-          icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></svg>,
-        },
-      ],
-    },
     // O nome cadastrado da empresa aparece aqui no lugar de "Marketing AI" —
     // é a porta de entrada do Growth OS dessa empresa.
     ...(flags.marketingAi ? [{
@@ -57,6 +49,7 @@ function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: bool
         icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M21 8.5 12 4 3 8.5v7L12 20l9-4.5v-7Z" /><path d="m3 8.5 9 4.5 9-4.5M12 13v7" /></svg>,
       }] : [])],
     }] : []),
+    // Oportunidades saiu do menu (2026-11-01, pedido do dono): já é o card 2 do fluxo do Marketing AI.
     {
       section: T.layout.sections.progress, accent: true,
       items: [{
@@ -64,11 +57,15 @@ function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: bool
         icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>,
       }],
     },
-    // Oportunidades saiu do menu (2026-11-01, pedido do dono): já é o card 2 do fluxo do Marketing AI.
+    // Central do dono (2026-11-10, pedido do dono): Aprovações + Relatórios juntos num menu só (Relatórios saiu do topo).
     {
+      section: T.layout.sections.owner, accent: true,
       items: [{
         to: '/dashboard/aprovacoes', label: T.layout.nav.approvals, badge: approvalsCount,
         icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>,
+      }, {
+        to: '/dashboard/relatorios', label: T.layout.nav.reports,
+        icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></svg>,
       }],
     },
   ]

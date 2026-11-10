@@ -7,7 +7,8 @@
  * (auto ou manual) → executor roda.
  *
  * Body: { action, company_id, ... }
- *   action = 'list' | 'propose' | 'approve' | 'reject' | 'edit' | 'cancel' | 'retry' | 'run_scheduled'
+ *   action = 'list' | 'propose' | 'approve' | 'reject' | 'edit' | 'cancel' | 'retry' | 'unschedule'
+ *          | 'approve_week' | 'unschedule_week' | 'run_scheduled'
  *
  * 'run_scheduled' é a única exceção ao JWT do dono — roda via cron_secret
  * (o cron de 5 em 5 min que executa agendamentos vencidos, ver migration
@@ -26,6 +27,7 @@ import { requirePaidAccess } from '../_shared/access.ts'
 import { publishBlockReason, publishes } from '../_shared/publishGuard.ts'
 import { ensureFooter, loadPublicTextRules, publishLicense, publishTextBlock } from '../_shared/compliance.ts'
 import { plannedPublishAt, publishWhenLabel } from '../_shared/publishSlot.ts'
+import { parseWeekIds, planWeek, SKIP_LABEL, WEEK_MAX, type SkipReason } from '../_shared/weekApproval.ts'
 import { revalidate, unverifiableOutcome, UNVERIFIABLE_FAIL_MESSAGE } from '../_shared/itemService.ts'
 
 const cors = {
@@ -70,7 +72,7 @@ Deno.serve(async (req) => {
 
     // Rede de segurança de pagamento: só as ações que criam/aprovam/reexecutam
     // (publicar/enviar). list/reject/cancel/edit/unschedule seguem livres.
-    if (action === 'propose' || action === 'approve' || action === 'retry') {
+    if (action === 'propose' || action === 'approve' || action === 'retry' || action === 'approve_week') {
       const noPlan = await requirePaidAccess(admin, company_id)
       if (noPlan) return noPlan
     }
@@ -84,6 +86,8 @@ Deno.serve(async (req) => {
       case 'edit': return await editAction(admin, company_id, body)
       case 'retry': return await retryAction(admin, company_id, body.id as string | undefined)
       case 'unschedule': return await unscheduleAction(admin, company_id, body.id as string | undefined)
+      case 'approve_week': return await approveWeek(admin, company_id, body.ids, user.id)
+      case 'unschedule_week': return await unscheduleWeek(admin, company_id, body.ids)
       default: return json({ error: `ação inválida: ${action}` }, 400)
     }
   } catch (err) {
@@ -202,6 +206,64 @@ async function unscheduleAction(admin: Supa, companyId: string, id: string | und
   }).eq('id', id).eq('company_id', companyId).eq('execution_status', 'QUEUED').select('*').single()
   if (error) return json({ error: error.message }, 500)
   return json({ action: data })
+}
+
+// Aprovar a semana (2026-11-10, pedido do dono): o dono VIU os posts da semana na tela e aprova todos com 1
+// clique. Cada peça vira uma ação APROVADA por ele (approved_by = quem clicou), AGENDADA pro dia planejado —
+// o mesmo caminho do "Agendar" de uma peça só (proposeAction com scheduled_at). O cron publica no dia, com as
+// travas de sempre na hora de sair. Peça que não dá pra agendar fica de fora com o motivo; as outras seguem.
+async function approveWeek(admin: Supa, companyId: string, rawIds: unknown, userId: string) {
+  const ids = parseWeekIds(rawIds)
+  if (!ids) return json({ error: `Envie de 1 a ${WEEK_MAX} peças.` }, 400)
+  const [{ data: rows, error: e1 }, { data: queued, error: e2 }] = await Promise.all([
+    admin.from('marketing_ai_test_content').select('id, status, planned_for, recipe, video_url, idea, caption, hashtags, cta, image_url, media, item_id, quality_score')
+      .eq('company_id', companyId).in('id', ids),
+    admin.from('agent_actions').select('ref_id').eq('company_id', companyId).eq('ref_type', 'marketing_ai_test_content')
+      .in('ref_id', ids).eq('execution_status', 'QUEUED').not('scheduled_at', 'is', null),
+  ])
+  if (e1 || e2) return json({ error: (e1 ?? e2)!.message }, 500)
+  // deno-lint-ignore no-explicit-any
+  const plan = planWeek(ids, (rows ?? []) as any[], new Set(((queued ?? []) as { ref_id: string }[]).map(r => r.ref_id)))
+  const scheduled: { id: string; action_id: string; when: string }[] = []
+  const skipped: { id: string; reason: SkipReason; label: string }[] = plan.skipped.map(s => ({ ...s, label: SKIP_LABEL[s.reason] }))
+  for (const { piece: p, slot } of plan.toSchedule) {
+    try {
+      // Confere de novo logo antes (2 cliques seguidos / outra aba): já agendada não agenda 2x.
+      const { data: dup } = await admin.from('agent_actions').select('id').eq('company_id', companyId).eq('ref_type', 'marketing_ai_test_content')
+        .eq('ref_id', p.id).eq('execution_status', 'QUEUED').not('scheduled_at', 'is', null).limit(1).maybeSingle()
+      if (dup) { skipped.push({ id: p.id, reason: 'already_scheduled', label: SKIP_LABEL.already_scheduled }); continue }
+      const res = await proposeAction(admin, companyId, {
+        agent_key: 'content', agent_name: 'Semana', action_type: 'create_content', channel: 'instagram', source: 'week',
+        ref_type: 'marketing_ai_test_content', ref_id: p.id, title: p.idea ?? 'Post da semana',
+        agent_interpretation: `Aprovado pelo dono na aprovação da semana (nota ${p.quality_score ?? '—'}), agendado pro ${publishWhenLabel(slot)}.`,
+        payload: { idea: p.idea, caption: p.caption, hashtags: p.hashtags, cta: p.cta, image_url: p.image_url, media: p.media, item_id: p.item_id ?? null },
+        scheduled_at: slot.iso,
+      }, false, false, userId)
+      const out = await res.json().catch(() => ({})) as { action?: { id: string }; error?: string; code?: string }
+      if (out.action) scheduled.push({ id: p.id, action_id: out.action.id, when: slot.iso })
+      else {
+        const reason: SkipReason = out.code === 'item_unavailable' ? 'item_unavailable' : 'error'
+        skipped.push({ id: p.id, reason, label: SKIP_LABEL[reason] })
+      }
+    } catch (e) {
+      console.error('agent-actions approve_week: peça falhou', p.id, String(e).slice(0, 200))
+      skipped.push({ id: p.id, reason: 'error', label: SKIP_LABEL.error })
+    }
+  }
+  return json({ scheduled, skipped })
+}
+
+// Cancela de uma vez os agendamentos que a tela mostrou (ids de agent_actions). Igual ao "Cancelar" de um:
+// volta a "aprovada, sem execução automática". Só mexe em ação agendada (QUEUED) de peça desta empresa.
+async function unscheduleWeek(admin: Supa, companyId: string, rawIds: unknown) {
+  const ids = parseWeekIds(rawIds)
+  if (!ids) return json({ error: `Envie de 1 a ${WEEK_MAX} agendamentos.` }, 400)
+  const { data, error } = await admin.from('agent_actions').update({
+    scheduled_at: null, execution_status: 'NOT_READY', updated_at: new Date().toISOString(),
+  }).in('id', ids).eq('company_id', companyId).eq('ref_type', 'marketing_ai_test_content').eq('execution_status', 'QUEUED')
+    .not('scheduled_at', 'is', null).select('id')
+  if (error) return json({ error: error.message }, 500)
+  return json({ cancelled: (data ?? []).length })
 }
 
 async function listActions(admin: Supa, companyId: string, status?: string) {

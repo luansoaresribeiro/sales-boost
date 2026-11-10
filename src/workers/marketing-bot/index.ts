@@ -38,6 +38,9 @@ function buildNotificationText(payload: {
         const preview = sample ? `\n\nExemplo: "${sample.slice(0, 140)}${sample.length > 140 ? '…' : ''}"` : '';
         return `📝 O agente criou ${count} post(s) novo(s)\nMotivo: ${reason}${preview}\n\nAprove em Posts.`;
       }
+      if (action === 'week_ready') {
+        return `🗓️ Sua semana está pronta: ${count} post(s) planejado(s).\n\nVeja e aprove a semana inteira de uma vez em Central do dono → Aprovações. Cada post sai sozinho no seu dia, e dá pra tirar ou cancelar qualquer um antes.\n\nhttps://getsaleboost.com/dashboard/aprovacoes`;
+      }
       if (action === 'replies_drafted') {
         return `💬 O agente rascunhou ${count} resposta(s) de avaliação\nMotivo: ${reason}\n\nAprove em Oportunidades.`;
       }

@@ -99,6 +99,19 @@ export const retryAgentAction = (token: string, company_id: string, id: string) 
 export const unscheduleAgentAction = (token: string, company_id: string, id: string) =>
   call(token, { action: 'unschedule', company_id, id }).then(r => r.action!)
 
+// Aprovar a semana (2026-11-10): o dono viu os posts da semana e aprova todos de uma vez — cada um fica
+// aprovado e agendado pro seu dia. Peça que não dá pra agendar volta em `skipped`, com o motivo.
+export interface WeekApprovalResult {
+  scheduled: { id: string; action_id: string; when: string }[]
+  skipped: { id: string; reason: string; label: string }[]
+}
+export const approveWeek = (token: string, company_id: string, ids: string[]) =>
+  call(token, { action: 'approve_week', company_id, ids }) as unknown as Promise<WeekApprovalResult>
+
+// Cancela vários agendamentos de uma vez (ids de agent_actions).
+export const unscheduleWeek = (token: string, company_id: string, ids: string[]) =>
+  (call(token, { action: 'unschedule_week', company_id, ids }) as unknown as Promise<{ cancelled: number }>)
+
 export const editAgentAction = (token: string, company_id: string, id: string, patch: Partial<Pick<AgentAction, 'title' | 'description' | 'payload' | 'reason' | 'expected_outcome' | 'agent_interpretation' | 'priority' | 'risk_level'>>) =>
   call(token, { action: 'edit', company_id, id, ...patch }).then(r => r.action!)
 
