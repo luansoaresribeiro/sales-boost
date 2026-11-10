@@ -1,98 +1,117 @@
-# Auditoria de custos (Fase 1 do novo modelo) — v0, 10/11/2026
+# Auditoria de custos (Fase 1 do novo modelo) — v0.1, 10/11/2026
 
-> **Por que existe:** o dono propôs uma plataforma grátis, com tour virtual pago (US$ 15) e cobrança por lead
-> qualificado. Antes de decidir, precisamos saber **quanto custa manter uma imobiliária ativa**.
-> **Escopo (decisão do dono, 10/11):** só **Claude (Anthropic)** e **Tavily** importam agora. Os outros custos
-> (Supabase, Cloudflare, Vercel, Meta) ficaram de fora a pedido dele. O Higgsfield entra só no tour, que é pago
-> pelo cliente antes.
-> **Regra:** todo número tem fonte (medido, estimado ou painel do dono). A Liga dos Sonhos não foi consultada.
-> **Versão v0:** feita no dia em que as funções novas (#127) entraram no ar. Refazer em 7 dias (17/11) com custo
-> medido de verdade.
+> **Por que existe.** O dono propôs uma plataforma grátis, com tour virtual pago (US$ 15) e cobrança por lead qualificado.
+> Antes de decidir, precisamos saber quanto custa manter uma imobiliária ativa e, principalmente, **quanto custa
+> cada resultado comercial** (oportunidade, estratégia, post, tour, lead).
+>
+> **Escopo (dono, 10/11).** Só **Claude (Anthropic)** e **Tavily**. O Higgsfield entra só no tour, que o cliente paga antes.
+>
+> **Regras.**
+> - Todo número diz de onde veio: **[painel]** do dono, **[medido]** no banco ou **[estimado]**.
+> - Nenhum número aqui é **comprovado** como custo por imobiliária.
+> - A Liga dos Sonhos não foi consultada.
+>
+> **v0.1** corrige a v0 (revisão do dono, 10/11). A **v1 sai em 17/11**, com custo **medido** por função (as funções do #127, que gravam o custo real, entraram no ar em 10/11).
 
-## 1. O que o dono mostrou (painéis, 09/11 à noite)
+## 1. Dados de partida
 
-| Serviço | Dado | Fonte |
+| Dado | Valor | Fonte |
 |---|---|---|
-| Anthropic | Gasto em novembro (01 a 09/11): **US$ 3,92**, da organização inteira, todas as contas | painel do dono |
-| Anthropic | Tokens nos últimos 7 dias: **626,2 mil** | painel do dono |
-| Anthropic | Saldo: **US$ 8,29**, recarga automática **desligada** | painel do dono |
-| Anthropic | Reaproveitamento de prompt (prompt caching): **desligado** | painel do dono |
-| Tavily | Plano gratuito (1.000 créditos por mês): **122 usados** | painel do dono |
-| Tavily | Cobrança por uso acima do limite: **desligada** | painel do dono |
+| Anthropic: gasto em novembro (01 a 09/11), organização inteira, **desenvolvimento + operação + todas as contas** | US$ 3,92 | [painel] |
+| Anthropic: tokens nos últimos 7 dias | 626,2 mil | [painel] |
+| Anthropic: saldo / recarga automática | US$ 8,29 / desligada | [painel] |
+| Anthropic: reaproveitamento de prompt (prompt caching) | não usado | [painel] |
+| Tavily: plano gratuito, 1.000 créditos por mês | 122 usados, cobrança por uso desligada | [painel] |
+| Contas ativas (fora a Liga dos Sonhos) | 5: 4 de imóveis + 1 genérica | [medido] |
 
-## 2. O que o sistema registrou (01 a 09/11, contas de teste)
+## 2. Desenvolvimento × operação (o que dá para separar hoje)
 
-Medido no banco (`agent_performance` e `market_intel_runs`). São só as contas de teste Teste Zero e Tespon.
+**O que o painel não separa.** Os US$ 3,92 da Anthropic misturam três coisas:
+- os testes manuais (por exemplo, o teste do agente de conteúdo em 07/11);
+- o uso automático das contas;
+- a conta da Liga.
 
-| O que roda | Quantas vezes | Custo registrado | Observação |
+O painel não separa isso, e a v0 errou ao dividir esse total por 2 contas. **Esse cálculo saiu do relatório.**
+
+**O que o banco registra por tarefa** (contas de teste, 01 a 09/11):
+
+| Tarefa | Tipo | Execuções | Consumo | Custo | Fonte |
+|---|---|---|---|---|---|
+| Busca de notícias (Tavily) | operação (1 vez por dia) | 104 buscas | 104 créditos | US$ 0 no plano grátis (US$ 0,83 a preço de tabela) | [medido] |
+| Leitura do mercado → oportunidades (Claude) | operação | 13 leituras com IA (04 a 09/11), 1 "nada mudou" (sem IA), 2 falhas sem custo | 52,0 mil tokens | não gravado pelo sistema antigo | [medido] tokens (`market_intel_runs`) |
+| Estratégia (Claude) | operação + testes | 12 chamadas | — | US$ 1,07 era um valor **fixo**, não medido | [estimado pelo sistema antigo] |
+| Peças de conteúdo (Claude) | operação + testes | — | não registrado antes de 10/11 | — | — |
+
+**A partir de 10/11:**
+- cada chamada de estratégia e de peça grava tokens e dólares reais (`agent_performance`);
+- a v1 vai separar tarefa automática de teste manual (pela origem da chamada: agendamento × clique).
+
+## 3. Custo por resultado comercial (o indicador principal)
+
+| Resultado | Custo hoje | Fonte | Quando fecha |
 |---|---|---|---|
-| Busca de notícias de mercado (Tavily) | 104 buscas | US$ 0,83 | Preço de tabela de US$ 0,008 por crédito. **Hoje sai de graça**, porque está dentro dos 1.000 créditos do plano. |
-| Coleta diária de mercado | 1 por dia por conta: Teste Zero 4 buscas, Tespon 8 buscas | — | Desde 05/11 |
-| Oportunidades (IA) | 21 rodadas, 71,9 mil tokens | não gravado | Cerca de 3,4 mil tokens por rodada. A rodada automática é a cada 6 h. |
-| Estratégia (IA) | 12 chamadas | US$ 1,07 | **Estimativa fixa** gravada pelo sistema antigo (tokens = 0). Com o #127, passa a ser medido. |
+| **1 oportunidade identificada** | ≈ 2,7 mil tokens (52,0 mil ÷ 19 oportunidades aceitas nas mesmas leituras). Isso dá **US$ 0,008 a 0,041**: o menor valor supõe tudo como entrada (US$ 3 por milhão), o maior supõe tudo como saída (US$ 15 por milhão). | [medido] tokens · [estimado] dólares | 17/11, com dólares medidos |
+| **1 estratégia** | não medido (o valor antigo era fixo) | — | 17/11 |
+| **1 post ou carrossel** | não medido | — | 17/11 |
+| **1 tour virtual** | não medido (créditos do Higgsfield por vídeo) | — | quando houver o 1º tour pago |
+| **1 lead qualificado** | **não existe ainda**: não há leads nem rastreio completo | — | depois da camada de aquisição (Fase 4) |
+| **Pesquisa de mercado por região** | 1 crédito Tavily por busca (US$ 0 até 1.000 por mês; depois US$ 0,005 a 0,008) | [medido] + [preços Tavily](https://docs.tavily.com/documentation/api-credits.md) | — |
 
-## 3. Quem chama Claude e Tavily (lido no código, 10/11)
+## 4. Como o sistema já roda (lido no código, 10/11)
 
-- **Tavily (3 lugares):**
-  - coleta de notícias de mercado (`_shared/marketNewsRun.ts`): 1 crédito por busca;
-  - conferência de dicas com fonte oficial (`_shared/faqCheck.ts`): 2 créditos por busca;
-  - `insights-collect`: 1 crédito por busca.
-- **Claude:** 32 funções chamam a IA, mais 5 módulos compartilhados.
-- **Agendamentos que podem gastar IA para cada conta:**
+Isto corrige uma hipótese da revisão: **duas das economias pedidas já existem.**
 
-  | Agendamento | Frequência |
-  |---|---|
-  | estratégia | todo dia, 09:00 UTC |
-  | oportunidades | **a cada 6 h (4 vezes por dia)** |
-  | `marketing-ai` | todo dia, 15:00 UTC |
-  | teste diário de peças | 13:00 UTC |
-  | `detect-opportunities` | todo dia |
-  | `generate-tab-insight` | todo dia |
-  | `hermes-daily-scan` | todo dia |
-  | `monitor-web-mentions` | todo dia |
-  | `find-sales-leads` | toda noite |
-  | plano semanal | domingo |
-  | `creative-ideas`, `brand-kit-suggest` | semanal |
-  | `map-competitors`, `monitor-competitor-social` | semanal |
-  | relatórios | semanal e mensal |
+- **Pesquisa de mercado (Tavily) já roda 1 vez por dia por conta** (09:43 UTC). Teste Zero faz 4 buscas por dia e Tespon faz 8.
+- **Oportunidades:** o agendamento de 6 em 6 h **só confere**, não chama a IA. A IA só roda quando:
+  - chegou notícia nova depois da última leitura; e
+  - passaram 24 h desde a última leitura.
 
-  Muitos desses pulam contas sem configuração. Quanto cada um gasta por conta é o que a medição de 17/11 vai mostrar.
+  Se os dados forem iguais aos da leitura anterior, a IA também não é chamada (o sistema marca "nada mudou").
+  - Arquivos: `_shared/opportunityCron.ts` (`shouldRunOpportunities`) e `_shared/opportunityRun.ts` (`fingerprint`).
+  - Na prática: no máximo 1 leitura de IA por dia por conta.
+- **Estratégia:** o agendamento diário só despacha. Os gastos reais acontecem no check-up semanal, na atualização mensal e no clique do dono, com teto mensal de chamadas automáticas.
 
-## 4. Custo por imobiliária por mês (estimativa v0)
+**Consequência:** passar de "4 vezes por dia" para "1 vez por dia" **não economiza crédito Tavily**, porque a pesquisa já é diária.
 
-| Item | Valor | Como chegou |
-|---|---|---|
-| Claude, **teto** por conta testada intensamente | **≤ US$ 6,50 por mês** | US$ 3,92 ÷ 9 dias × 30 ÷ 2 contas. Supõe que todo o gasto da organização veio das 2 contas de teste, o que exagera para cima. Inclui testes manuais (A.6). |
-| Tavily por conta | **120 a 240 créditos por mês** | 4 a 8 buscas por dia × 30 |
-| Tavily, em dinheiro | **US$ 0 até cerca de 4 a 8 contas**. Acima disso, **US$ 0,96 a 1,92 por conta por mês** | Plano gratuito de 1.000 créditos. Depois, US$ 0,008 por crédito ([preços da Tavily](https://docs.tavily.com/documentation/api-credits.md); planos mensais de US$ 0,0075 a 0,005 por crédito). |
-| **Total por conta (teto)** | **≤ cerca de US$ 8,50 por mês** | Claude + Tavily acima do plano gratuito |
-| Custo de adicionar mais uma conta | ≈ o mesmo valor | Sem custo fixo nos 2 serviços: tudo é por uso |
+**A economia real de Tavily** está em **compartilhar a pesquisa entre imobiliárias da mesma região.** As buscas são montadas por tema × bairro × cidade, a partir da ficha, sem nada de uma imobiliária específica. Duas imobiliárias com imóveis no Leblon fazem hoje a mesma busca 2 vezes.
 
-**O que esse número ainda não diz:**
-- quanto custa uma conta **parada**: os agendamentos rodam mesmo sem ninguém usar;
-- a diferença entre uso normal e uso intenso.
+## 5. Estrutura da simulação (Fase 2; preencher com a v1)
 
-Os dois saem da medição de 17/11.
+`custo mensal = N × custo de uma conta (por perfil) + créditos Tavily acima do plano × preço por crédito`
 
-## 5. Riscos encontrados
+**Créditos Tavily:**
+- **sem compartilhar:** N × buscas por conta × 30;
+- **compartilhando:** número de regiões distintas × temas × 30.
 
-1. **A IA pode parar por falta de saldo.** São US$ 8,29 com recarga automática desligada: no ritmo atual, dura cerca de 2 a 3 semanas. Isso já aconteceu em 04/11.
-   - **Ação do dono:** ligar a recarga automática com um teto mensal no painel da Anthropic.
-2. **O plano gratuito da Tavily trava** quando passar de 1.000 créditos no mês, porque a cobrança por uso está desligada. As buscas param e a inteligência de mercado fica sem notícia nova.
-   - Com 4 a 8 contas ativas o limite é atingido.
+| Perfil (hipótese a validar) | O que mais pesa no custo |
+|---|---|
+| Pequena: 2 corretores, poucos imóveis, pouco uso | agendamentos diários (custo de conta "parada") |
+| Média: 5 a 10 corretores, uso regular | peças e estratégia |
+| Grande: 20+ corretores, uso intenso | peças, regiões de pesquisa e leads |
 
-## 6. Onde dá para economizar, sem tirar inteligência
+O número de corretores não pesa direto. O que pesa é **quantos imóveis, quantas regiões e quantas peças** a imobiliária tem.
 
-| Corte | Economia esperada | Esforço |
-|---|---|---|
-| Ligar o reaproveitamento de prompt (prompt caching) nas chamadas grandes (estratégia, oportunidades, legendas) | Parte das instruções fixas de cada chamada deixa de ser cobrada inteira | Médio: código |
-| Oportunidades: de 4 vezes por dia para 1 vez por dia, ou só quando houver notícia nova (a coleta já sabe quando nada mudou: `unchanged` e `fingerprint`) | Até 3/4 das chamadas de oportunidade | Pequeno |
-| Conta sem uso há X dias não roda os agendamentos diários de IA | Custo de conta parada perto de zero | Pequeno |
-| Usar o modelo mais barato (Haiku) em tarefas simples (classificação, resumo curto) | Muitas vezes mais barato por chamada | Médio, com teste de qualidade |
+| Imobiliárias | Claude | Tavily (sem / com compartilhamento) | Total |
+|---|---|---|---|
+| 10 | v1 | v1 | v1 |
+| 50 | v1 | v1 | v1 |
+| 100 | v1 | v1 | v1 |
+| 500 | v1 | v1 | v1 |
 
-Cada corte é uma mudança de produto e precisa de aprovação.
+**Referência (não usar como custo real):** a v0 chegou a um teto de US$ 8,50 por conta por mês. Esse valor foi calculado do jeito errado (seção 2) e fica só como ordem de grandeza até a v1.
 
-## 7. Próximos passos
+## 6. Riscos
 
-1. **17/11:** refazer com custo medido por função e por conta (`ai_text_*` em `agent_performance`, do #127), separando conta parada e conta em uso.
-2. **Fase 2:** simular 10, 50, 100 e 500 imobiliárias com os números de 17/11, mais as hipóteses de receita do dono (tour e lead).
+1. **A IA pode parar por falta de saldo.** São US$ 8,29, com recarga automática desligada (cerca de 19 dias no ritmo atual). Já aconteceu em 04/11.
+   - **Decisão do dono (10/11):** não ligar recarga automática sem antes ter **limite de gasto e alerta**.
+2. **A Tavily trava ao passar de 1.000 créditos no mês** (cobrança por uso desligada). Com o ritmo atual, isso acontece entre 4 e 8 contas. O compartilhamento por região adia esse limite.
+
+## 7. Otimizações (aprovadas pelo dono em 10/11, com comparação de qualidade antes e depois)
+
+1. **Reaproveitamento de prompt** nas partes fixas das instruções.
+   - O Claude só reaproveita um trecho de pelo menos 1.024 tokens (Sonnet 4.6) e por até 5 minutos.
+   - Por isso, vale onde o mesmo trecho se repete em sequência: as 3 etapas da estratégia, as peças da semana de uma conta, e várias contas na mesma rodada.
+2. **Pesquisa de mercado compartilhada por região e dia**, só com notícia pública. Nada de uma imobiliária passa para outra.
+3. **Medição:** gravar separados os tokens normais, os reaproveitados e os de criação do reaproveitamento, e o custo em dólar também das oportunidades (hoje grava só os tokens).
+
+O que já existe (seção 4) não muda. As 5 perguntas de validação das oportunidades e as regras de aprovação ficam iguais.
