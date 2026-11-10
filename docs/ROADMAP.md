@@ -4,6 +4,26 @@
 > pronto, arquivos envolvidos, riscos, e se envolve ALTERAÇÃO ARRISCADA
 > (ver CLAUDE.md).
 
+## Novo modelo de negócio — validar antes de construir (dono, 2026-11-10)
+
+**O modelo:** plataforma grátis; tour virtual pago (US$ 15); lead qualificado pago, com preço a definir depois de medir.
+**A pergunta que decide:** o Sales Boost gera demanda comercial consistente, e as imobiliárias pagam por esse resultado?
+
+| Fase | Entrega | Situação |
+|---|---|---|
+| 1 | Auditoria de custos (Claude + Tavily) | v0.1 feita (10/11); **v1 medida em 17/11** · economias de custo no ar (#132–#134) |
+| 2 | Simulador (10/50/100/500; tours 1/3/5; leads separados, sem preço) | v2 feito (10/11); atualizar com a v1 |
+| 3 | Decisão do modelo | depende das fases 1 e 2 e da validação de demanda |
+| 4 | Conversão: catálogo, agendamento, origem, lead qualificado e contestação | **preparada, não implementada** ([CONVERSION.md](CONVERSION.md)); só começa com os 3 portões abaixo |
+| 5 | Piloto real medindo leads, visitas, custo e receita | [PILOTO.md](PILOTO.md) (seção 2.1) |
+
+**Até 17/11 (dono, 10/11):** só validação comercial: conversas com imobiliárias, ficha em [PILOTO.md](PILOTO.md) 2.2. Sem implementação e sem escopo novo.
+
+**Portões da Fase 4:**
+1. custos medidos;
+2. demanda validada (1 piloto ou 3 conversas);
+3. critérios de lead qualificado aprovados pelo dono, com os prazos de 30 e 7 dias validados com imobiliárias. A 1ª versão não guarda marca no celular do visitante (já decidido).
+
 ## Plataforma internacional — segurança, depois idioma/país, depois expansão (dono, 2026-11-07)
 
 Decisão completa em [DECISIONS.md](DECISIONS.md#2026-11-07--plataforma-internacional-idioma--país--regras-dono).

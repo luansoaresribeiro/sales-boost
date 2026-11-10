@@ -28,6 +28,49 @@
 4. **Pedir o que está na seção 3** e combinar uma conversa curta por semana.
 5. **Combinar o preço do piloto. É decisão do dono:** o preço ainda não foi decidido, então não citar valor que não exista.
 
+### 2.1 Perguntas de demanda (novo modelo, dono 10/11)
+Servem para validar as hipóteses, não para vender. Anotar a resposta como foi dita, sem arredondar.
+**Tour virtual (US$ 15 por imóvel):**
+- Quantos imóveis novos entram por mês?
+- Em quantos vocês pagariam um tour?
+- O que faria vocês pagarem, ou não pagarem?
+
+A hipótese-base do dono é 3 tours por imobiliária por mês, com cenários de 1 e 5. **Ainda não é demanda comprovada.**
+
+**Lead:**
+- Hoje, de onde vêm os interessados?
+- Quantos chegam por mês?
+- Quantos viram visita?
+- **O que é um "lead bom" para vocês?** Comparar a resposta com a definição proposta em [CONVERSION.md](CONVERSION.md).
+- Pagariam por lead entregue? Em que condição?
+
+**Não citar preço de lead:** ainda não existe.
+
+### 2.2 Ficha de cada conversa (validação comercial até 17/11)
+O dono preenche uma ficha por conversa. O agente consolida tudo no relatório semanal (`docs/relatorios/`), sem inventar nem arredondar número.
+Campo sem resposta fica **"não informado"**.
+
+| Campo | Resposta |
+|---|---|
+| Imobiliária, bairros e data da conversa | |
+| Corretores (quantos) | |
+| Imóveis ativos na carteira | |
+| Imóveis novos por mês | |
+| **Tours que comprariam por mês** (hipótese-base do dono: 3; cenários 1 e 5) | |
+| Preço do tour (US$ 15): o que acharam e as objeções | |
+| De onde vêm os interessados hoje e quantos por mês | |
+| Quantos interessados viram visita | |
+| **O que é um "lead bom" para eles** (comparar com os 7 critérios de [CONVERSION.md](CONVERSION.md)) | |
+| **Prazo para considerar o mesmo contato como repetido** (hipótese: 30 dias) | |
+| **Prazo para contestar um lead** (hipótese: 7 dias) | |
+| Pagariam por lead? Em que condição? (não citar preço) | |
+| Topariam um piloto de 4 semanas? | |
+
+**Consolidação em 17/11.** Junto com a auditoria de custos v1, fecha a revisão dos 3 portões da Fase 4:
+- **A demanda de tours** confirma ou não a base de 3 por mês.
+- **Os prazos de 30 e 7 dias** se mantêm ou mudam.
+- **A definição de "lead bom"** bate ou não com os 7 critérios.
+
 ## 3. O que pedir à imobiliária
 | Item | Para quê | Obrigatório |
 |---|---|---|

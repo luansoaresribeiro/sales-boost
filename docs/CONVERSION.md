@@ -126,3 +126,74 @@ vez de duplicar no CLAUDE.md.
   `link_events.broker_id` é **indicativo, não exato**: é o corretor do lead mais recente, não necessariamente quem "atende" aquele visitante.
 - **Funil e resultados:** mover o lead para Qualificado/Proposta/Venda carimba visita/proposta/fechado e oferece valor opcional
   (ver [LEARNING.md](LEARNING.md)). Lead de DM/comentário continua sem corretor (rodízio só na página pública).
+
+## 2026-11-10 — Preparação da Fase 4 (novo modelo): lead qualificado e acompanhamento até a visita
+
+> **Só preparação, sem código.** O dono decidiu (10/11) que nada da Fase 4 é implementado antes de três portões (ver o
+> fim desta seção). O preço do lead **não** está definido: primeiro a definição objetiva e a medição, depois o preço.
+> O modelo de negócio e o simulador estão em [AUDITORIA-CUSTOS.md](AUDITORIA-CUSTOS.md) e [DECISIONS.md](DECISIONS.md).
+
+**Proposta de definição de lead qualificado.** O dono manteve os 7 critérios como **proposta** em 10/11. Os prazos entre colchetes (30 e 7 dias) são **hipóteses a validar com imobiliárias**, não decisões.
+
+| # | Critério | Como o sistema confere | Hoje |
+|---|---|---|---|
+| 1 | Contato válido | Telefone com DDD ou e-mail em formato válido | Formato já é validado no formulário (`validateLead`) |
+| 2 | Consentimento registrado | Data e texto do consentimento LGPD | Já existe (`consent_at`, `consent_text`) |
+| 3 | Interesse num imóvel específico e disponível | Imóvel ligado ao lead e disponível naquele momento | Já existe para o lead da página (`item_id`); lead de DM/comentário não tem |
+| 4 | Origem rastreável | Link, conteúdo e canal do contato que gerou o lead (na 1ª versão, sem marca guardada no celular) | Parcial: `link_id` → `tracked_links` (imóvel, oportunidade, canal, `content_id`) |
+| 5 | Não duplicado | Mesmo contato + mesma imobiliária em [30] dias | Hoje: mesmo contato + mesmo imóvel em 24 h |
+| 6 | Entregue à imobiliária | Data em que o lead chegou para ela | Não existe |
+| 7 | Contestação | A imobiliária contesta em [7] dias com motivo fechado: contato inválido · duplicado · não é comprador/locatário · spam | Não existe |
+
+**Estados separados** (dono, 10/11). Cada um tem data e quem marcou, e nenhum substitui o outro:
+
+| Estado | O que significa | Quem marca |
+|---|---|---|
+| **Lead válido** | Contato válido + consentimento, sem ser spam (critérios 1 e 2) | Sistema |
+| **Lead qualificado** | Cumpre os critérios 1 a 6. **É a única base possível para cobrança futura** | Sistema |
+| **Em conversa** | A imobiliária falou com a pessoa | Imobiliária, ou a resposta pelo WhatsApp conectado |
+| **Visita agendada** | Data e hora marcadas | Interessado (agendamento da Fase 4) ou imobiliária |
+| **Visita realizada** | A visita aconteceu | Imobiliária |
+| **Contestado** | A imobiliária recusou o lead, com motivo fechado | Imobiliária |
+
+Depois vêm proposta e fechado, que já existem no Funil.
+
+**Regra (dono, 10/11): o "Qualificado" do Funil não é o lead qualificado.** O Funil de hoje tem a etapa **"Qualificado"**, que é a opinião manual do dono ou do corretor.
+- **Ela nunca conta para cobrança.**
+- A qualificação objetiva fica em campo próprio.
+- Na tela, os dois precisam de nomes diferentes. Proposta: renomear a etapa manual para algo como "Com potencial". Isso fica para quando a Fase 4 for aprovada.
+
+**Acompanhamento da origem até a visita** (lido no código e no banco em 10/11):
+
+- **Já existe:**
+  - `tracked_links`: imóvel, oportunidade, conteúdo e canal;
+  - `link_events`: visualização, clique no WhatsApp ou na DM, lead;
+  - `leads`: imóvel, oportunidade, link, consentimento, `visit_at`, `proposal_at`, `closed_at`, corretor;
+  - limites contra spam e lead repetido em 24 h.
+- **Falta:**
+  1. **Datas e estado da qualificação:** recebido, qualificado + motivo, entregue, contestado + motivo, em conversa.
+  2. **"Em conversa":** o clique no WhatsApp leva a pessoa direto ao corretor, mas não vira lead nem conversa registrada. Duas saídas possíveis:
+     - a imobiliária marca o primeiro contato no lead;
+     - a resposta pelo WhatsApp da própria conta, quando estiver conectado, registra a conversa.
+  3. **Primeiro e último contato com o conteúdo:** a marca do visitante (`visitor_hash`) muda todo dia, porque é calculada com a data. Por isso hoje não dá para ligar a visita de segunda ao contato de quinta.
+     - **Decisão do dono (10/11): na 1ª versão, nada de marca guardada no celular do visitante.**
+     - Vale o contato que gerou o lead, com:
+       - a origem rastreável (link, conteúdo e canal);
+       - o identificador do lead;
+       - o imóvel, quando houver;
+       - o acompanhamento do estado.
+     - Ligar visitas de dias diferentes fica para depois, se os dados do piloto mostrarem que faz falta.
+  4. **Lead do Instagram (DM, comentário):** entra em `leads` sem imóvel e sem origem. Os mesmos critérios precisam valer nos dois caminhos.
+  5. **Funcionalidades da Fase 4:** catálogo da imobiliária e agendamento de visita com horário.
+  6. **Conferir:** se `tracked_links.content_id` é preenchido quando a peça é publicada.
+
+**Portões antes de qualquer código da Fase 4** (dono, 10/11):
+1. **Custos medidos:** auditoria v1 em 17/11 e simulador atualizado.
+2. **Demanda:**
+   - perguntas de tour e lead no roteiro do piloto ([PILOTO.md](PILOTO.md), seção 2.1);
+   - resultado de pelo menos 1 piloto ou 3 conversas.
+3. **Critérios aprovados:** a definição acima aprovada pelo dono, com os prazos de duplicidade e contestação já conversados com imobiliárias. (A decisão de privacidade já foi tomada: sem marca no celular na 1ª versão.)
+
+**Preço do lead:** nenhum antes dos dados reais do piloto (dono, 10/11).
+
+**Até 17/11 (dono):** trabalho concentrado na **validação comercial**. Nada de implementação nem de escopo novo. O roteiro e a ficha de registro das conversas estão em [PILOTO.md](PILOTO.md) (seções 2.1 e 2.2).

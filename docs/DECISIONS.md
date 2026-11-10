@@ -6,6 +6,68 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-10 — Fase 4: direcionamentos do dono (preparação aprovada, implementação não)
+
+A preparação documental (#135) foi aprovada. **A Fase 4 não é implementada agora.**
+
+1. **Lead qualificado.**
+   - Os 7 critérios ficam como **proposta**.
+   - Os prazos de **30 dias** (duplicidade) e **7 dias** (contestação) são **hipóteses a validar com imobiliárias**.
+2. **Estados separados:**
+   - **lead válido** (contato + consentimento, sem spam);
+   - **lead qualificado** (critérios objetivos, a única base de cobrança futura);
+   - **em conversa**;
+   - **visita realizada**, além de visita agendada e contestado.
+
+   A etapa manual **"Qualificado" do Funil nunca conta para cobrança** e não pode ser confundida com a qualificação objetiva.
+3. **Sem rastreamento persistente no celular na 1ª versão.** Vale:
+   - a origem rastreável (link, conteúdo e canal);
+   - o identificador do lead;
+   - o imóvel, quando houver;
+   - o acompanhamento do estado.
+4. **Sem preço de lead** antes dos dados reais do piloto.
+5. **Tours e leads continuam como receitas separadas** no simulador.
+
+**Até 17/11:** foco na **validação comercial**.
+- Conversar com imobiliárias sobre volume de imóveis, frequência de compra de tours e o que é um bom lead (ficha em [PILOTO.md](PILOTO.md), seção 2.2).
+- Sem implementação e sem escopo novo.
+- Depois da medição de custos e das conversas, voltam os 3 portões da Fase 4.
+
+## 2026-11-10 — Novo modelo: cenários de tour, lead sem preço e portões da Fase 4 (dono)
+
+**Tours.**
+- São 3 cenários: **1, 3 e 5** tours por imobiliária por mês.
+- A **hipótese-base é 3**, mas ela é **hipótese a validar** com conversas e pilotos, não demanda comprovada.
+
+**Leads.**
+- **Sem preço por enquanto.**
+- **Ordem:**
+  1. a definição objetiva de lead qualificado;
+  2. o acompanhamento da origem até a conversa e a visita;
+  3. o preço, com os dados medidos.
+- A proposta da definição e o que falta medir estão em [CONVERSION.md](CONVERSION.md).
+
+**Simulador.**
+- Tours e leads são **duas linhas de receita separadas**. O resultado do mês considera só os tours até haver preço de lead.
+- Fica em um artifact privado do dono ("Simulador Sales Boost").
+
+**Conferência pedida pelo dono (10 imobiliárias, 1 tour).**
+- O resultado de **US$ 49,60** está certo com os custos informados:
+  - custos: 65 + 19,20 − 8,00 (créditos grátis da Tavily) + 20 = **96,20**;
+  - margem dos tours: 150 − 4,20 = **145,80**.
+- **De onde vem a diferença.** O cartão "custo por imobiliária" (US$ 8,42) não desconta os créditos grátis; a tabela desconta. Daí os US$ 8,00 de diferença para quem multiplica 10 × 8,42.
+- **Correção no simulador v2:** o desconto aparece numa linha própria e o cartão diz que não o inclui.
+- **Ressalva:** os créditos grátis são da conta inteira (todas as imobiliárias dividem), então quase somem em escala.
+
+**Fase 4.**
+- **Preparada, não implementada.**
+- Só começa depois de **3 portões**:
+  1. custos medidos (17/11);
+  2. demanda validada (perguntas no [PILOTO.md](PILOTO.md); 1 piloto ou 3 conversas);
+  3. critérios de qualificação aprovados.
+
+**Objetivo (dono).** Descobrir se o Sales Boost gera demanda comercial de forma consistente e se as imobiliárias pagam por esse resultado.
+
 ## 2026-11-10 — Reaproveitamento de prompt sem mudar o texto (passo 3 da economia de custos; dono)
 
 **Regra.** O texto enviado à IA continua **idêntico, palavra por palavra**. Só passa a ser enviado em 2 pedaços:
