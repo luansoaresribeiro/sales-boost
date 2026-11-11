@@ -6,6 +6,18 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-11 (noite, 5) — Funções publicadas sozinhas depois do merge
+
+Dono: "tá chato eu ter que rodar isso toda vez". O workflow `.github/workflows/deploy-functions.yml` publica no Supabase,
+depois de cada merge no main, só as funções afetadas:
+- o próprio `index.ts` mudou, ou algum `_shared` que ela importa (`scripts/affected-functions.py`);
+- cada função mantém o `verify_jwt` que já tem em produção (lido da API antes);
+- função nova nasce com o `verify_jwt` ligado.
+
+Precisa do secret `SUPABASE_ACCESS_TOKEN` no GitHub, colocado uma vez pelo dono. Também roda à mão (Actions → Deploy
+functions). Os comandos `npx supabase functions deploy …` continuam valendo como plano B. O site (`wrangler deploy`)
+fica de fora por enquanto.
+
 ## 2026-11-11 (noite, 4) — Ordem de trabalho e direção do produto
 
 **Ordem:**
