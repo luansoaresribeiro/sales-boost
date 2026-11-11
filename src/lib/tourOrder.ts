@@ -46,4 +46,11 @@ export function tourSegments(rooms: (string | null)[], adjacent: [string, string
   return { segments, passages }
 }
 
+/** Cópia de `withOutsideFirst` do servidor: o dono escolheu abrir de fora com a 1ª foto (só cômodos de `opening_candidates`). */
+export function withOutsideFirst(rooms: (string | null)[], openingRooms: string[], candidates: string[], outsideFirst: boolean): (string | null)[] {
+  const r0 = rooms[0]
+  if (!outsideFirst || !r0 || !openingRooms.length || openingRooms.includes(r0) || !candidates.includes(r0)) return rooms
+  return [openingRooms[openingRooms.length - 1], ...rooms.slice(1)]
+}
+
 export const tourSeconds = (segments: Segment[], seconds: Record<SegKind, number>) => segments.reduce((s, g) => s + seconds[g.kind], 0)

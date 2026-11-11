@@ -23,6 +23,12 @@ foto seguinte (vista → hall). A IA teria que inventar o caminho de fora até a
   `20261111160000_tour_abertura_aerea.sql` (rollback comentado).
 - **Por dentro,** continua a caminhada contínua.
 - **Sem foto de fora,** a tela continua dizendo que o tour começa dentro. A IA nunca cria o prédio nem a vista.
+- **O dono escolhe a foto de abertura** (achado no teste da Tespon, 11/11): a IA chamou de "varanda" a foto real da
+  piscina da cobertura com a Pedra da Gávea. Agora:
+  - se a 1ª foto for de um ambiente da lista `tour.opening_candidates` da ficha (hoje só `varanda`), a tela
+    oferece "🏙️ Abrir de fora com a 1ª foto";
+  - o servidor confere de novo (`withOutsideFirst`) e nunca aceita um quarto ou outro ambiente fora da lista;
+  - migration `20261111170000_tour_opening_candidates.sql`.
 
 ## 2026-11-11 — Tour virtual em caminhada CONTÍNUA (dono: "a câmera fez movimentos contínuos… cinematográfico")
 
