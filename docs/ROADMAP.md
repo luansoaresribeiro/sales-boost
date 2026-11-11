@@ -9,7 +9,7 @@
 | Prioridade | Trabalho | Situação |
 |---|---|---|
 | 1 | Finalizar o Tour virtual | conferência de ligação v3 juntada (#149), falta publicar e retestar |
-| 2 | Validar tecnicamente o Tour (gate técnico) | depende da 1 |
+| 2 | Validar tecnicamente o Tour (gate técnico) | 11/11: conferência v4 7/7 ✅; caminhada de fora para dentro sem corte ✅; o par certo (terraço → sala de baixo) falhou 2x no fornecedor — **gate ainda não fechado**, refazer esse trecho quando o Higgsfield voltar (≤ US$ 0,50, dentro da verba) |
 | 3 | Painel novo (funil comercial) | depende só de 2 decisões do dono, abaixo |
 | 4 | Revisar abas e fluxos | depois da 3 |
 | 5 | Telegram com dado real e aprovações | depois da 4 |

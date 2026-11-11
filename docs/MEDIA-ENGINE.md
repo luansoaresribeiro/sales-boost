@@ -321,6 +321,18 @@ aparecendo. **v3 nas mesmas fotos:** acertou as 5 passagens boas e o terraço �
 jogos → sala de baixo (a IA disse "mesmo andar"; a escada só aparece na foto de destino) e ficou "incerto" na
 piscina → salão. **v4:** escada só na foto de destino bloqueia ("falta foto da escada"); de fora para dentro com porta
 "incerta" também bloqueia; os fatos que a IA respondeu ficam guardados junto (`facts`) para conferir erros.
+**v4 nas mesmas fotos:** 7 de 7 iguais ao vídeo real — bloqueia piscina → salão ("falta porta") e jogos → sala de
+baixo ("falta escada"), libera as 5 boas e o terraço → salão.
+
+**Reteste pago (11/11, Tespon):**
+| Trecho | Resultado | Custo |
+|---|---|---|
+| terraço (de fora, porta de vidro) → salão | ⚠️ sem corte e a câmera entra pela porta de vidro, mas pelo vidro aparece a sala de baixo (poltrona branca) que "vira" o salão no fim — a porta do terraço dá para a sala de baixo, não para o salão | US$ 0,504 |
+| terraço → sala de baixo (o par certo) | ❌ falhou no Higgsfield 2 vezes (sem cobrança); a mesma foto tinha funcionado no tour de 8 fotos — provável problema do fornecedor | US$ 0 |
+
+**Aprendizado:** a conferência sabe se a PORTA aparece, mas não sabe PARA QUAL cômodo ela dá. Quando o dono escolhe a
+ordem, um par "porta visível" ainda pode ligar ao cômodo errado. Próximo passo: na tela, junto do ✅, mostrar "confira:
+essa porta dá para o próximo cômodo?" (só texto, sem custo).
 
 **Instrução de câmera:** "drone" orienta só o movimento. A IA não pode inventar geometria, arquitetura, cômodos, móveis
 nem paisagem que as duas fotos não sustentem.
