@@ -6,6 +6,28 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-11 — Tour virtual em caminhada CONTÍNUA (dono: "a câmera fez movimentos contínuos… cinematográfico")
+
+**Por que mudou.** O 1º tour completo (Teste Zero, 11/11) saiu com cortes e movimentos estranhos. As causas:
+- corte entre cômodos não vizinhos e entre 2 fotos do mesmo tipo;
+- trecho de foto sozinha no começo.
+
+O tour antigo de que o dono gostou era em caminhada: cada trecho começa numa foto e termina na seguinte.
+
+**Agora:**
+- **Padrão:** caminhada contínua da foto 1 até a última, sem corte (`tourSegments` em `_shared/tourOrder.ts` e
+  cópia em `src/lib/tourOrder.ts`). Substitui a regra de 10/11 de "corte entre cômodos não vizinhos", que fica
+  como histórico acima.
+- **Passagem que a ficha não confirma** (cômodos não vizinhos em `adjacent_rooms`, ou o mesmo tipo de cômodo) =
+  `walk_unconfirmed`:
+  - a tela pinta de amarelo;
+  - o post avisa quantas são, para conferir no vídeo se a câmera não mostrou um espaço que não existe;
+  - o dono assiste antes de aprovar.
+- **Corte só quando o dono pede** (✂️ na passagem). Foto que fica sozinha vira trecho próprio: abertura se for
+  fachada ou vista, senão cômodo.
+- **A ordem continua vindo da ficha** (`walk_order`), com cômodos vizinhos em sequência, o que reduz as
+  passagens não confirmadas.
+- **Custo:** N fotos = N−1 caminhadas de 6 s (5 fotos ≈ US$ 2,02).
 ## 2026-11-11 — N1: segurança das conexões (Instagram, WhatsApp, Anúncios da Meta e Google) — dono: "sim"
 
 **O buraco:**

@@ -4,18 +4,19 @@
 //
 // Nada de setor aqui (regra 6): a ordem dos cômodos, quais são vizinhos e quais abrem "de fora" vêm da ficha
 // (vertical_playbooks.config.tour: walk_order, adjacent_rooms, opening_rooms, min_quality, min_room_conf,
-// tour_max_photos, tour_per_room). Sem ficha = ordem das fotos do cadastro, tudo em corte.
+// tour_max_photos, tour_per_room). Sem ficha = ordem das fotos do cadastro, tudo em caminhada não confirmada.
 //
-// Regra de segurança (regra 4, foto sempre real): a câmera só CAMINHA de uma foto até a outra quando os dois
-// cômodos são vizinhos pela ficha. Entre cômodos que não se ligam o vídeo faz CORTE — se a IA
-// andasse de um para o outro, ela inventaria o corredor no meio. A abertura "de fora" só existe com foto real
-// de fachada/vista; o movimento fica dentro do que a foto mostra (instrução de câmera da ficha).
+// Caminhada CONTÍNUA (dono, 2026-11-11 — substitui a regra de 10/11 de "corte entre cômodos não vizinhos", que
+// deixou o tour picotado): a câmera vai de uma foto até a seguinte, sem parar. Onde a ficha não confirma que os
+// cômodos são vizinhos, a passagem é marcada 'walk_unconfirmed' — a tela pinta de amarelo e o post avisa pra
+// conferir no vídeo (o dono assiste antes de aprovar). O dono pode pedir corte numa passagem. A abertura "de fora"
+// só existe com foto real de fachada/vista (regra 4).
 
 import type { TourCfg, TourPhoto } from './tourPick.ts'
 
 export type SegKind = 'opening' | 'pair' | 'room'
 export interface Segment { kind: SegKind; from: number; to?: number }
-export type Passage = 'start' | 'walk' | 'cut'
+export type Passage = 'start' | 'walk' | 'walk_unconfirmed' | 'cut'
 export interface TourOrderCfg { walk_order: string[]; tour_max_photos: number; tour_per_room: number }
 export type ExcludeReason = 'low_quality' | 'repeat_room' | 'over_limit'
 export interface TourOrder {
@@ -52,25 +53,28 @@ export function linked(a: string | null, b: string | null, adjacent: [string, st
 }
 
 /**
- * Trechos do vídeo na ordem dada. Abre de fora se a 1ª foto for de fachada/vista; depois, caminhada entre fotos
- * ligadas (encadeadas: a foto de fim de um trecho é a de começo do próximo) e corte entre fotos não ligadas.
+ * Trechos do vídeo na ordem dada (caminhada CONTÍNUA, pedido do dono 2026-11-11): cada trecho vai de uma foto até
+ * a seguinte, então a câmera nunca para nem corta. `cuts` = índices i em que o dono pediu corte ANTES da foto i.
+ * Passagem entre cômodos que a ficha não diz serem vizinhos (ou 2 fotos do mesmo tipo) = 'walk_unconfirmed': a tela
+ * e o post avisam pra conferir no vídeo. Foto sozinha (depois de corte, ou tour de 1 foto) vira 1 trecho próprio —
+ * 'opening' se for fachada/vista, senão 'room'.
  */
-export function tourSegments(rooms: (string | null)[], adjacent: [string, string][], openingRooms: string[]): { segments: Segment[]; passages: Passage[] } {
+export function tourSegments(rooms: (string | null)[], adjacent: [string, string][], openingRooms: string[], cuts: number[] = []): { segments: Segment[]; passages: Passage[] } {
   const n = rooms.length
   const segments: Segment[] = []
   const passages: Passage[] = rooms.map(() => 'cut')
   if (!n) return { segments, passages }
   passages[0] = 'start'
-  let i = 0
-  if (rooms[0] && openingRooms.includes(rooms[0])) { segments.push({ kind: 'opening', from: 0 }); i = 1 }
-  let covered = i === 1 ? 0 : -1   // última foto que já aparece num trecho
-  for (; i < n; i++) {
-    if (i + 1 < n && linked(rooms[i], rooms[i + 1], adjacent)) {
+  const cut = new Set(cuts.filter(i => Number.isInteger(i) && i > 0 && i < n))
+  let covered = -1   // última foto que já aparece num trecho
+  for (let i = 0; i < n; i++) {
+    if (i + 1 < n && !cut.has(i + 1)) {
       segments.push({ kind: 'pair', from: i, to: i + 1 })
-      passages[i + 1] = 'walk'
+      passages[i + 1] = linked(rooms[i], rooms[i + 1], adjacent) ? 'walk' : 'walk_unconfirmed'
       covered = i + 1
     } else if (covered < i) {
-      segments.push({ kind: 'room', from: i })
+      const r = rooms[i]
+      segments.push({ kind: r && openingRooms.includes(r) ? 'opening' : 'room', from: i })
       covered = i
     }
   }

@@ -259,15 +259,16 @@ curtos do card do imóvel continuam como estavam. Decisão em [DECISIONS.md](DEC
 6. O estúdio da VPS junta todos os trechos + encerramento num Reels 9:16. O vídeo entra na peça, que aparece em
    Aprovações.
 
-**Trechos:**
+**Trechos** (caminhada contínua desde 2026-11-11; a tabela de 10/11, com corte entre não vizinhos, foi
+substituída, ver DECISIONS):
 
 | Tipo | Quando | Duração |
 |---|---|---|
-| `opening` | foto de fachada ou vista, só se for a primeira | 5 s |
-| `pair` | caminhada da foto i até a i+1, se os cômodos forem vizinhos pela ficha (o mesmo tipo de cômodo não conta) | 6 s |
-| `room` | corte, foto sozinha | 5 s |
+| `pair` | padrão: caminhada da foto i até a i+1. Se a ficha não confirma que são vizinhos, fica marcada `walk_unconfirmed` (aviso na tela e no post) | 6 s |
+| `opening` | foto de fachada ou vista que ficou sozinha (o dono pediu corte depois dela) | 5 s |
+| `room` | qualquer outra foto que ficou sozinha por corte pedido pelo dono | 5 s |
 
-Caminhadas seguidas se encadeiam: a foto de fim de uma é a de começo da próxima.
+As caminhadas se encadeiam: a foto de fim de uma é a de começo da próxima.
 
 **Fila de espera:** o tour completo não entra na fila "aguardando estúdio". Se a VPS estiver fora do ar, a tela avisa
 e nada é cobrado.

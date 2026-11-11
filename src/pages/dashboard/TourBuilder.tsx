@@ -1,7 +1,8 @@
 // Tour completo de 1 imóvel (menu Tour virtual, 2026-11-10). O servidor sugere a ordem (item-videos plan_tour: cômodo
 // de cada foto pela IA de visão + ordem da ficha); o dono confere, sobe/desce/tira/inclui e manda gerar
-// (creative-generate tour_piece → legenda com as travas + item-videos, que confere o teto e paga). Caminhada só entre
-// cômodos vizinhos pela ficha; entre os outros, corte (a IA não inventa o caminho). O servidor recalcula tudo.
+// (creative-generate tour_piece → legenda com as travas + item-videos, que confere o teto e paga). Caminhada contínua
+// de uma foto até a outra (dono, 2026-11-11); passagem que a ficha não confirma fica em amarelo; corte só onde o
+// dono pedir (✂️). O servidor recalcula tudo.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
@@ -22,8 +23,9 @@ interface Video { id: string; status: string; kind: string; created_at: string; 
 const TX = {
   pt: {
     build: 'Montar a ordem do tour', building: 'Analisando as fotos (cômodo e qualidade)…',
-    order: 'Ordem do tour', help: 'Confira a ordem. Use ↑ ↓ para mudar, ✕ para tirar. A câmera caminha entre cômodos vizinhos e faz corte entre os que não se ligam.',
-    start: 'começo', walk: '🚶 caminha até aqui', cut: '✂️ corte', opening: '🏙️ abertura de fora',
+    order: 'Ordem do tour', help: 'Confira a ordem. Use ↑ ↓ para mudar, ✕ para tirar. A câmera caminha sem parar de uma foto até a outra. Em amarelo: passagem entre cômodos que a ficha não confirma serem vizinhos — confira no vídeo. Use ✂️ se quiser um corte ali.',
+    start: 'começo', walk: '🚶 caminha até aqui', unconfirmed: '🚶 caminha até aqui · passagem não confirmada', cut: '✂️ corte (você pediu)', opening: '🏙️ abertura de fora',
+    cutOn: 'Cortar antes desta foto', cutOff: 'Voltar a caminhar até esta foto',
     noOpening: 'Para começar de fora, o imóvel precisa de uma foto real da fachada ou da vista. Sem ela, o tour começa dentro — a IA nunca cria o prédio nem a vista.',
     unknown: 'cômodo não identificado',
     left: 'Fotos fora do tour', add: '+ incluir', full: (n: number) => `Máximo de ${n} fotos por tour.`,
@@ -37,8 +39,9 @@ const TX = {
   },
   en: {
     build: 'Build the tour order', building: 'Analyzing the photos (room and quality)…',
-    order: 'Tour order', help: 'Check the order. Use ↑ ↓ to move, ✕ to remove. The camera walks between neighboring rooms and cuts between rooms that don\'t connect.',
-    start: 'start', walk: '🚶 walks here', cut: '✂️ cut', opening: '🏙️ opening from outside',
+    order: 'Tour order', help: 'Check the order. Use ↑ ↓ to move, ✕ to remove. The camera walks non-stop from one photo to the next. In yellow: a passage between rooms the profile doesn\'t confirm are next to each other — check it in the video. Use ✂️ for a cut there.',
+    start: 'start', walk: '🚶 walks here', unconfirmed: '🚶 walks here · passage not confirmed', cut: '✂️ cut (you asked)', opening: '🏙️ opening from outside',
+    cutOn: 'Cut before this photo', cutOff: 'Walk to this photo again',
     noOpening: 'To start outside, the property needs a real photo of the facade or the view. Without it, the tour starts inside — the AI never creates the building or the view.',
     unknown: 'room not identified',
     left: 'Photos left out', add: '+ add', full: (n: number) => `At most ${n} photos per tour.`,
@@ -71,6 +74,8 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
   const tx = TX[lang]
   const [plan, setPlan] = useState<Plan | null>(null)
   const [order, setOrder] = useState<string[]>([])
+  // Corte pedido pelo dono, guardado pela foto que vem DEPOIS do corte (sobrevive a ↑ ↓).
+  const [cutBefore, setCutBefore] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [videos, setVideos] = useState<Video[]>([])
@@ -103,7 +108,9 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
 
   const roomOf = useMemo(() => new Map((plan?.all ?? []).map(p => [p.url, p.room])), [plan])
   const rooms = useMemo(() => order.map(u => roomOf.get(u) ?? null), [order, roomOf])
-  const { segments, passages } = useMemo(() => tourSegments(rooms, plan?.adjacent_rooms ?? [], plan?.opening_rooms ?? []), [rooms, plan])
+  const cuts = useMemo(() => order.map((u, i) => (i > 0 && cutBefore.has(u) ? i : -1)).filter(i => i > 0), [order, cutBefore])
+  const { segments, passages } = useMemo(() => tourSegments(rooms, plan?.adjacent_rooms ?? [], plan?.opening_rooms ?? [], cuts), [rooms, plan, cuts])
+  const toggleCut = (u: string) => setCutBefore(prev => { const n = new Set(prev); if (n.has(u)) n.delete(u); else n.add(u); return n })
   const secs = plan ? tourSeconds(segments, plan.seconds) : 0
   const usd = plan ? secs * plan.cost_per_second_usd : 0
   const hasOpeningPhoto = !!plan?.all.some(p => p.room && plan.opening_rooms.includes(p.room))
@@ -118,7 +125,7 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
   const generate = async () => {
     if (order.length < 2) { setMsg({ ok: false, text: tx.min }); return }
     setBusy(true); setMsg({ ok: true, text: tx.genning })
-    const r = await call('creative-generate', { action: 'tour_piece', item_id: itemId, photos: order })
+    const r = await call('creative-generate', { action: 'tour_piece', item_id: itemId, photos: order, cuts })
     setBusy(false)
     if (r.status === 200) { setMsg({ ok: true, text: tx.started }); void loadVideos() }
     else setMsg({ ok: false, text: String(r.data.error ?? tx.err) })
@@ -137,15 +144,16 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
           <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {order.map((u, i) => {
               const isOpening = i === 0 && segments[0]?.kind === 'opening'
-              const pass = isOpening ? tx.opening : passages[i] === 'walk' ? tx.walk : passages[i] === 'cut' ? tx.cut : tx.start
+              const pass = isOpening ? tx.opening : passages[i] === 'walk' ? tx.walk : passages[i] === 'walk_unconfirmed' ? tx.unconfirmed : passages[i] === 'cut' ? tx.cut : tx.start
               return (
                 <li key={u} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px', borderRadius: '10px', border: `1px solid ${BORDER}` }}>
                   <span style={{ width: 22, textAlign: 'center', fontSize: '12px', fontWeight: 800, color: ORANGE }}>{i + 1}</span>
                   <img src={u} alt="" style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label(rooms[i])}</div>
-                    <div style={{ fontSize: '11px', color: passages[i] === 'cut' && i > 0 ? ORANGE : MUTED }}>{pass}</div>
+                    <div style={{ fontSize: '11px', color: passages[i] === 'walk_unconfirmed' ? '#FBBF24' : MUTED }}>{pass}</div>
                   </div>
+                  {i > 0 && <button aria-label={cutBefore.has(u) ? tx.cutOff : tx.cutOn} title={cutBefore.has(u) ? tx.cutOff : tx.cutOn} onClick={() => toggleCut(u)} style={{ ...mini, ...(cutBefore.has(u) ? { color: ORANGE, borderColor: ORANGE } : { color: MUTED }) }}>✂️</button>}
                   <button aria-label="↑" disabled={i === 0} onClick={() => move(i, -1)} style={mini}>↑</button>
                   <button aria-label="↓" disabled={i === order.length - 1} onClick={() => move(i, 1)} style={mini}>↓</button>
                   <button aria-label="✕" onClick={() => remove(u)} style={{ ...mini, color: MUTED }}>✕</button>
