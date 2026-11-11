@@ -6,6 +6,39 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-11 — Tour virtual, Etapa 1: teste real comprovado (Teste Zero)
+
+- **Imóvel:** "Cobertura em Leblon", 5 fotos reais, nenhuma de fora (então sem abertura de fora, como manda a
+  regra).
+- **Ordem da ficha:** hall → quarto → quarto → banheiro → banheiro.
+- **Trechos:** 4, sendo 1 caminhada (quarto → banheiro) e 3 cortes. Nenhuma nova tentativa.
+- **Vídeo:** 21,7 s, 1080×1920, com encerramento da marca (bairro + preço do cadastro + "Me chama no direct").
+- **Quadros conferidos:** nenhum cômodo inventado. O corte entre os 2 quartos e entre os 2 banheiros funcionou.
+- **Custo medido:** US$ 1,764 (`video_tours.cost_usd`), dentro do limite de teste de US$ 5. É o 1º custo real
+  de um tour completo e alimenta a Etapa 4 (Boosts).
+- **Post:** criado em Aprovações, sem dia, com a legenda pelas travas (tirou 1 hashtag sem base) e os avisos do
+  tour. Nada foi publicado (a Teste Zero não tem Instagram).
+
+## 2026-11-11 — Tour virtual, Etapa 2: mobiliar cômodo vazio no menu + aviso garantido ao publicar
+
+**O que já existia** (conferido no código em 11/11):
+- `virtual-staging` + `VirtualStaging.tsx` mobiliam a foto real com IA. A instrução proíbe mexer em parede,
+  janela, piso e vista.
+- A foto mobiliada fica separada (`meta.staged_photos`).
+- O carrossel de oferta usa até 2 fotos mobiliadas, junto das reais e com o aviso da ficha.
+
+**O que mudou:**
+1. **No menu Tour virtual,** "Mobiliar cômodo vazio" abre a mesma ferramenta, já na escolha da foto
+   (`startOpen`). A tela explica as regras.
+2. **Aviso garantido na hora de publicar** (`agent-actions` → `execute`, `_shared/stagingDisclosure.ts`).
+   - Se alguma mídia do post é foto mobiliada do imóvel, o aviso da ficha entra na legenda uma vez só, mesmo
+     que a legenda tenha sido editada.
+   - Se o texto passar do limite, corta o texto da legenda e nunca o aviso.
+   - É o mesmo padrão do rodapé do CRECI.
+   - **Falha fechada:** erro ao conferir, ou ficha sem aviso, recusa a publicação.
+3. **Não muda:** custo, teto mensal (10 fotos e o limite de US$ 40) e a regra de que foto mobiliada nunca entra
+   no tour nem na página pública.
+
 ## 2026-11-10 — Tour virtual com menu próprio (Etapa 1): tour completo e plano da semana sem tour
 
 **Pedido do dono.** O tour vira um menu próprio, "Tour virtual". O dono escolhe o imóvel e gera um tour completo, com a
@@ -36,6 +69,12 @@ moeda Boosts (Etapa 4).
 6. **Achado, para a Etapa 2:** o "Mobiliar virtualmente" que já existe (`VirtualStaging`, "usar no imóvel") troca a
    foto do imóvel **sem** o aviso "Imagem ilustrativa – mobiliado virtualmente". As regras do projeto
    ([MEDIA-ENGINE.md](MEDIA-ENGINE.md#regras)) exigem esse aviso. A correção entra na Etapa 2.
+   - **Correção (11/11):** esse achado estava **errado**.
+     - "Usar no imóvel" grava a foto em `meta.staged_photos` e **nunca** troca `meta.photos`.
+     - O carrossel de oferta (`catalog-package`) já põe a foto mobiliada junto das reais e acrescenta o aviso da
+       ficha (`virtual_staging.disclosure`) na legenda.
+     - A página pública e o tour nunca usam foto mobiliada.
+     - O que faltava de verdade está na entrada de 11/11 abaixo.
 ## 2026-11-10 — Aba Agentes só com os robôs (sem cortina, sem cartões) e site mais leve com o logo nos carregamentos (dono)
 Pedido do dono: "todo o fluxo deve ser leve, responsivo e a logo deve aparecer em momentos de carregar" + "na tab de agentes não devem existir mais os cards, só os robozinhos sem cortina".
 - **Aba Agentes:** a cortina (C.2.1, 07/11) e os 5 cartões saíram. A cena 3D abre direto ao entrar na aba (`FactorySection.tsx`), ocupa a tela abaixo do título (`OPEN_H = clamp(340px, calc(100svh - 230px), 820px)` — nunca maior que a tela, porque no celular o dedo na cena gira a câmera) e tocar num robô abre o painel da estação, cujo "Abrir" leva à aba do agente (as mesmas de antes). Continuam: checagem do aparelho → versão leve 2D com "tentar o 3D mesmo assim", escada de desempenho, "Visão inicial". Enquanto o 3D baixa aparece a prévia estática + o logo. Substitui os itens "Cortina" e "Cartões dos agentes" da decisão de 07/11 abaixo (o texto antigo ficou como histórico).
