@@ -6,6 +6,18 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-11 (noite, 3) — Sai o formato "Quanto você pagaria?"
+
+Dono: "não existe postarmos uma foto perguntando quanto você pagaria nesse imóvel. Isso é um formato que não deveríamos
+estar tendo mais." O formato `stories_enquete_pagaria` vai para `content_rules.disabled_formats` da ficha imoveis_rio
+(migration `20261111220000_sem_enquete_pagaria.sql`). Também sai:
+- do pacote do imóvel;
+- da receita de "mercado";
+- da peça "story" de oportunidade, que passa a usar o formato de texto.
+
+As estratégias ativas da A3, da Teste Zero e da Tespon tiram a linha da enquete do mix da semana. A enquete da A3
+gerada em 11/11 foi arquivada. Divergência com a entrada abaixo, que só tirava o bairro da frase.
+
 ## 2026-11-11 (noite, 2) — Eu junto os PRs; conferência de ligação v2; enquete sem bairro na frase
 
 **Merge pelo agente** (dono: "a partir de agora você trabalha num PR e quando estiver pronto e garanta que esteja
