@@ -178,6 +178,17 @@ t('fotos de ligação: resposta da IA lida com segurança; só "não" bloqueia; 
   // v2: descrição antes do JSON — vale o último objeto com "linked"
   assert.deepEqual(pc.parsePassageCheck('FOTO 1: sala {piso madeira}. FOTO 2: jogos.\n{"linked":"no","missing":"escada"}'), { linked: 'no', missing: 'escada' })
   // cache de versão antiga é refeito
+  // v3: a regra decide a partir dos fatos (casos do vídeo real da Tespon)
+  const F = (o1, o2, same, st, door) => ({ outside1: o1, outside2: o2, sameFloor: same, stairsInPhoto1: st, doorBetweenVisible: door })
+  assert.deepEqual(pc.decidePassage(F('yes', 'no', 'yes', 'no', 'no')), { linked: 'no', missing: 'porta' })      // piscina → salão sem porta
+  assert.deepEqual(pc.decidePassage(F('yes', 'no', 'yes', 'no', 'yes')), { linked: 'yes', missing: null })      // terraço com porta de vidro → salão
+  assert.deepEqual(pc.decidePassage(F('no', 'no', 'no', 'no', 'unsure')), { linked: 'no', missing: 'escada' })  // jogos → sala de baixo
+  assert.deepEqual(pc.decidePassage(F('no', 'no', 'no', 'yes', 'unsure')), { linked: 'yes', missing: null })    // escada na foto de saída
+  assert.deepEqual(pc.decidePassage(F('no', 'no', 'yes', 'no', 'unsure')), { linked: 'yes', missing: null })    // hall → quarto
+  assert.equal(pc.decidePassage(F('yes', 'yes', 'yes', 'no', 'unsure')).linked, 'unsure')                      // fora → fora
+  assert.equal(pc.decidePassage(F('no', 'no', 'unsure', 'no', 'unsure')).linked, 'unsure')
+  assert.deepEqual(pc.parseFacts('Foto 1: sala. {x}\n{"photo1_outside":"no","photo2_outside":"no","same_floor":"no","stairs_in_photo1":"no","door_between_visible":"unsure"}'), F('no', 'no', 'no', 'no', 'unsure'))
+  assert.equal(pc.parseFacts('sem json'), null)
   assert.ok(!pc.isCurrent({ linked: 'yes', missing: null })); assert.ok(pc.isCurrent({ linked: 'yes', missing: null, v: pc.CHECK_VERSION }))
   assert.ok(pc.blocks({ linked: 'no', missing: 'escada' })); assert.ok(!pc.blocks({ linked: 'unsure', missing: null })); assert.ok(!pc.blocks(null))
   assert.equal(pc.pairKey('https://x/a/1.jpg?v=2', 'https://x/b/2.jpg'), '1.jpg>2.jpg'); assert.notEqual(pc.pairKey('a/1.jpg', 'b/2.jpg'), pc.pairKey('b/2.jpg', 'a/1.jpg'))

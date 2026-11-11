@@ -312,7 +312,12 @@ mesmas 8 fotos e comparada com o vídeo acima:
 O erro do caso 3 é o perigoso (deixa gerar um trecho que inventa o caminho). Por isso a **v2** (`CHECK_VERSION = 2`,
 Sonnet 5.5, ~US$ 0,01 por par): descreve as duas fotos antes de decidir; no mesmo andar aceita a abertura visível em
 qualquer uma das fotos; troca de andar só com a escada visível na FOTO 1. Resultado da v1 guardado no imóvel é refeito.
-Conferir a v2 nas mesmas fotos antes do reteste pago.
+**v2 nas mesmas fotos (21:22):** bloqueou o caso 3 (jogos → sala de baixo) ✅, mas bloqueou por engano hall → quarto e
+quarto → banheiro (✅ no vídeo), ficou "incerto" no terraço com porta de vidro e nunca disse "ligação visível". Rígida
+demais para uso. **v3** (`CHECK_VERSION = 3`): a IA só relata fatos (foto de fora?, mesmo andar?, escada na foto de
+saída?, porta entre fora e dentro visível?) e a regra `decidePassage` decide, seguindo o que o vídeo real mostrou:
+dentro de casa no mesmo andar passa; troca de andar só com escada na foto de saída; de fora para dentro só com a porta
+aparecendo. Conferir a v3 nas mesmas fotos antes do reteste pago.
 
 **Instrução de câmera:** "drone" orienta só o movimento. A IA não pode inventar geometria, arquitetura, cômodos, móveis
 nem paisagem que as duas fotos não sustentem.
