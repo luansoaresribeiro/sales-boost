@@ -28,7 +28,9 @@ export const DEFAULT_PROMPTS = {
   pair: 'Smooth first-person walkthrough of a real place, steady gimbal at eye level, walking pace. ' +
     'The camera moves forward from the first room into the next room through the natural opening between them and ends exactly on the final frame. ' +
     'Keep both rooms exactly as in the photos — do not add, remove or change any furniture, wall, window or object. No people, no text, no logos.',
-  opening: 'Cinematic establishing shot from outside, slow smooth camera movement that reveals the view and the surroundings, golden natural light. ' +
+  // Abertura de fora (Etapa 3, 2026-11-11): movimento de drone, mas SÓ dentro do quadro da foto real (regra 4).
+  opening: 'Cinematic aerial drone shot of this exact real place: stabilized, a slow gentle rise with a slow push-in, golden natural light, premium real-estate film look. ' +
+    'Stay strictly inside what the photo already shows — never reveal anything beyond the edges of the frame. ' +
     'Keep the building, the landscape and the view exactly as in the photo — do not add, remove or change anything. No people, no text, no logos.',
   // Kit grátis (presente do diagnóstico): câmera "drone" que passeia pelo cômodo.
   drone: 'Smooth cinematic drone-style camera glide through this exact room, stabilized, slow and steady, revealing the whole space and ending on its best angle. ' +

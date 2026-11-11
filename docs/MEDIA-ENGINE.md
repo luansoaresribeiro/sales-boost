@@ -265,10 +265,14 @@ substituída, ver DECISIONS):
 | Tipo | Quando | Duração |
 |---|---|---|
 | `pair` | padrão: caminhada da foto i até a i+1. Se a ficha não confirma que são vizinhos, fica marcada `walk_unconfirmed` (aviso na tela e no post) | 6 s |
-| `opening` | foto de fachada ou vista que ficou sozinha (o dono pediu corte depois dela) | 5 s |
+| `opening` | foto de fachada ou vista: sempre trecho próprio, com movimento de drone só dentro do quadro da foto (desde 2026-11-11, Etapa 3; antes só quando o dono cortava depois dela). A passagem seguinte é um corte automático `enter`, que o dono não desliga | 5 s |
 | `room` | qualquer outra foto que ficou sozinha por corte pedido pelo dono | 5 s |
 
 As caminhadas se encadeiam: a foto de fim de uma é a de começo da próxima.
+
+**Divergência corrigida (2026-11-11):** com a caminhada contínua (#142), a foto de fora passava a caminhar até a
+foto seguinte (ex.: vista → hall). Isso obrigava a IA a inventar o caminho de fora até a porta (regra 4). Agora toda
+foto de fora tem abertura própria e corte automático para dentro.
 
 **Fila de espera:** o tour completo não entra na fila "aguardando estúdio". Se a VPS estiver fora do ar, a tela avisa
 e nada é cobrado.
