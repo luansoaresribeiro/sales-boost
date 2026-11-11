@@ -26,6 +26,7 @@ import { parseButton, verifyButton, type ButtonKind, type ButtonOp } from '../_s
 import { requirePaidAccess } from '../_shared/access.ts'
 import { publishBlockReason, publishes } from '../_shared/publishGuard.ts'
 import { ensureFooter, loadPublicTextRules, publishLicense, publishTextBlock } from '../_shared/compliance.ts'
+import { ensureDisclosure, stagingCheck } from '../_shared/stagingDisclosure.ts'
 import { plannedPublishAt, publishWhenLabel } from '../_shared/publishSlot.ts'
 import { parseWeekIds, planWeek, SKIP_LABEL, WEEK_MAX, type SkipReason } from '../_shared/weekApproval.ts'
 import { revalidate, unverifiableOutcome, UNVERIFIABLE_FAIL_MESSAGE } from '../_shared/itemService.ts'
@@ -460,19 +461,23 @@ async function execute(admin: Supa, act: any, fromCron = false): Promise<any> {
       const { data: vp } = await admin.from('marketing_ai_test_content').select('recipe, video_url').eq('id', act.ref_id).eq('company_id', act.company_id).maybeSingle()
       if (vp?.recipe === 'video_imovel' && !vp.video_url) return await fail('O vídeo desta peça ainda não está pronto — espere ele aparecer e tente de novo.')
       const p = act.payload ?? {}
-      const caption = withLicense([p.caption, p.cta, p.hashtags].map(x => (x ? String(x) : '').trim()).filter(Boolean).join('\n\n'))
-      const tb = textBlock(caption)
-      if (tb) {
-        await admin.from('marketing_ai_test_content').update({ status: 'vault' }).eq('id', act.ref_id).eq('company_id', act.company_id).eq('status', 'publishing')
-        return await fail(tb)
-      }
-      const { data: company } = await admin.from('companies').select('instagram_user_id, instagram_access_token').eq('id', act.company_id).maybeSingle()
-
       // Carrossel real (2-10 fotos) quando a peca tem media[] com mais de 1
       // item (ex: recipe 'carrossel_tour' do catalog-package) -- 1 item
       // continua publicando como foto unica, igual sempre foi.
       const mediaItems = Array.isArray(p.media) ? (p.media as { url?: string }[]).map(m => String(m?.url ?? '')).filter(Boolean) : []
       const coverUrl = mediaItems[0] ?? (p.image_url ? String(p.image_url) : '')
+      // Foto mobiliada virtualmente (Etapa 2, 2026-11-11): o aviso da ficha sai SEMPRE, mesmo se a legenda foi editada.
+      const stg = await stagingCheck(admin, act.company_id, p.item_id, coverUrl && !mediaItems.length ? [coverUrl] : mediaItems)
+      const back = () => admin.from('marketing_ai_test_content').update({ status: 'vault' }).eq('id', act.ref_id).eq('company_id', act.company_id).eq('status', 'publishing')
+      if (stg.block) { await back(); return await fail(stg.block) }
+      const base = [p.caption, p.cta, p.hashtags].map(x => (x ? String(x) : '').trim()).filter(Boolean).join('\n\n')
+      const caption = withLicense(stg.disclosure ? ensureDisclosure(base, stg.disclosure) : base)
+      const tb = textBlock(caption)
+      if (tb) {
+        await back()
+        return await fail(tb)
+      }
+      const { data: company } = await admin.from('companies').select('instagram_user_id, instagram_access_token').eq('id', act.company_id).maybeSingle()
 
       let mediaId: string | null = null
       let publishError: string | null = null

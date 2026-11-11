@@ -1,14 +1,16 @@
 // Menu "Tour virtual" (decisão do dono, 2026-11-10): escolher o imóvel e gerar o TOUR COMPLETO — a câmera começa de
 // fora (só com foto real de fachada/vista) e passa pelos cômodos na ordem certa. O tour pronto vira um post em
-// Aprovações (nada sai sem o dono). Mobiliar cômodo vazio chega na próxima etapa. O plano da semana não faz mais tour.
+// Aprovações (nada sai sem o dono). Mobiliar cômodo vazio (Etapa 2, 11/11) reaproveita o VirtualStaging. O plano da semana não faz mais tour.
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLang } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
 import TourBuilder from './TourBuilder'
+import VirtualStaging from './marketingAi/VirtualStaging'
 import { CARD, MUTED, BORDER, ORANGE, D } from './marketingAi/shared'
 
-interface Item { id: string; title: string; cover: string | null; photos: number }
+interface Photo { url: string; path: string; from?: string }
+interface Item { id: string; title: string; cover: string | null; photos: number; real: Photo[]; staged: Photo[] }
 type Mode = 'tour' | 'staging'
 
 const TX = {
@@ -17,7 +19,8 @@ const TX = {
     sub: 'Escolha o imóvel e gere um tour completo: a câmera começa de fora e passa pelos cômodos na ordem certa. Tudo a partir das fotos reais do imóvel. O tour pronto vai pra Aprovações — nada sai sem você.',
     pick: '1. Escolha o imóvel', none: 'Nenhum imóvel com fotos ainda. Cadastre em Meus imóveis.', photos: (n: number) => `${n} foto${n === 1 ? '' : 's'}`,
     mode: '2. O que você quer gerar?', tour: '🎬 Tour completo', staging: '🛋️ Mobiliar cômodo vazio',
-    stagingSoon: 'Mobiliar cômodo vazio chega na próxima etapa — com o aviso "Imagem ilustrativa – mobiliado virtualmente" e a foto original junto, como manda a regra.',
+    stagingHelp: 'Escolha a foto real de um cômodo vazio e o estilo. A IA só coloca móveis — paredes, janelas, piso e vista ficam como na foto. A foto real nunca é trocada.',
+    stagingRule: 'A foto mobiliada entra nos carrosséis deste imóvel junto das fotos reais e sempre com o aviso "Imagem mobiliada virtualmente — os móveis são ilustrativos". Esse aviso é conferido de novo na hora de publicar, mesmo se a legenda for editada. Ela nunca entra no tour.',
     loading: 'Carregando…',
   },
   en: {
@@ -25,7 +28,8 @@ const TX = {
     sub: 'Pick the property and generate a full tour: the camera starts outside and goes through the rooms in the right order. All from the property\'s real photos. The finished tour goes to Approvals — nothing goes out without you.',
     pick: '1. Pick the property', none: 'No property with photos yet. Add one in My properties.', photos: (n: number) => `${n} photo${n === 1 ? '' : 's'}`,
     mode: '2. What do you want to generate?', tour: '🎬 Full tour', staging: '🛋️ Furnish an empty room',
-    stagingSoon: 'Furnishing an empty room comes in the next step — with the notice "Illustrative image – virtually furnished" and the original photo alongside, as the rule requires.',
+    stagingHelp: 'Pick the real photo of an empty room and the style. The AI only adds furniture — walls, windows, floor and view stay as in the photo. The real photo is never replaced.',
+    stagingRule: 'The furnished photo goes into this property\'s carousels next to the real photos and always with the "virtually furnished — furniture is illustrative" notice. That notice is checked again at publishing time, even if the caption was edited. It never goes into the tour.',
     loading: 'Loading…',
   },
 } as const
@@ -37,21 +41,25 @@ export default function TourVirtualPage() {
   const [items, setItems] = useState<Item[] | null>(null)
   const [itemId, setItemId] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>('tour')
+  const [company, setCompany] = useState<{ id: string; vertical_key: string | null } | null>(null)
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     if (!user) return
     let off = false
     void (async () => {
-      const { data: company } = await supabase.from('companies').select('id').eq('user_id', user.id).maybeSingle()
-      if (!company) { if (!off) setItems([]); return }
-      const { data } = await supabase.from('marketing_ai_knowledge').select('id, title, meta').eq('company_id', company.id).eq('kind', 'product').order('created_at', { ascending: false }).limit(100)
-      const list = ((data ?? []) as { id: string; title: string | null; meta: { photos?: { url: string }[] } | null }[])
-        .map(r => ({ id: r.id, title: r.title || 'Imóvel', cover: r.meta?.photos?.[0]?.url ?? null, photos: r.meta?.photos?.length ?? 0 }))
+      const { data: co } = await supabase.from('companies').select('id, vertical_key').eq('user_id', user.id).maybeSingle()
+      if (!co) { if (!off) setItems([]); return }
+      if (!off) setCompany(co as { id: string; vertical_key: string | null })
+      const { data } = await supabase.from('marketing_ai_knowledge').select('id, title, meta').eq('company_id', co.id).eq('kind', 'product').order('created_at', { ascending: false }).limit(100)
+      const list = ((data ?? []) as { id: string; title: string | null; meta: { photos?: Photo[]; staged_photos?: Photo[] } | null }[])
+        .map(r => ({ id: r.id, title: r.title || 'Imóvel', cover: r.meta?.photos?.[0]?.url ?? null, photos: r.meta?.photos?.length ?? 0, real: r.meta?.photos ?? [], staged: r.meta?.staged_photos ?? [] }))
         .filter(r => r.photos >= 2)
       if (!off) setItems(list)
     })()
     return () => { off = true }
-  }, [user])
+  }, [user, reload])
+  const current = items?.find(i => i.id === itemId) ?? null
 
   const chip = (on: boolean) => ({
     minHeight: 40, padding: '9px 16px', borderRadius: '99px', fontSize: '13px', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
@@ -96,7 +104,14 @@ export default function TourVirtualPage() {
             </div>
             {mode === 'tour'
               ? <TourBuilder key={itemId} itemId={itemId} />
-              : <div style={{ fontSize: '12.5px', color: MUTED, lineHeight: 1.55, padding: '14px', border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>{tx.stagingSoon}</div>}
+              : current && company && (
+                <section style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px', maxWidth: 520 }}>
+                  <div style={{ fontSize: '12.5px', color: 'white', lineHeight: 1.55, marginBottom: '8px' }}>{tx.stagingHelp}</div>
+                  <VirtualStaging key={current.id} itemId={current.id} companyId={company.id} verticalKey={company.vertical_key ?? 'generico'}
+                    photos={current.real} staged={current.staged} onChanged={() => setReload(n => n + 1)} startOpen />
+                  <div style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.55, marginTop: '10px' }}>{tx.stagingRule}</div>
+                </section>
+              )}
           </>
         )}
       </div>
