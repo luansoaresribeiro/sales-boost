@@ -298,6 +298,22 @@ conferido sozinho, e um trecho ruim não é escondido pelo resto:
 Nenhum corte: o maior salto entre quadros vizinhos foi 0,25, abaixo do nível de corte. A próxima melhoria (fotos de
 ligação) está no ROADMAP.
 
+**Conferência de ligação, 1º uso real (Tespon, 11/11, depois do #147):** a v1 (Haiku 4.5, pergunta direta) foi rodada nas
+mesmas 8 fotos e comparada com o vídeo acima:
+
+| # | Passagem | Vídeo | v1 disse | Certo? |
+|---|---|---|---|---|
+| 1 | piscina → salão | ⚠️ | falta porta | ✅ |
+| 2 | salão → jogos | ✅ | falta passagem | rígido demais |
+| 3 | jogos → sala de baixo | ⚠️ | ligação visível | ❌ (a escada só aparece na foto de destino) |
+| 5 | jantar → hall | ✅ | falta passagem | rígido demais |
+| — | terraço (porta de vidro) → salão | — | falta porta | ❌ (a porta de vidro aparece) |
+
+O erro do caso 3 é o perigoso (deixa gerar um trecho que inventa o caminho). Por isso a **v2** (`CHECK_VERSION = 2`,
+Sonnet 5.5, ~US$ 0,01 por par): descreve as duas fotos antes de decidir; no mesmo andar aceita a abertura visível em
+qualquer uma das fotos; troca de andar só com a escada visível na FOTO 1. Resultado da v1 guardado no imóvel é refeito.
+Conferir a v2 nas mesmas fotos antes do reteste pago.
+
 **Instrução de câmera:** "drone" orienta só o movimento. A IA não pode inventar geometria, arquitetura, cômodos, móveis
 nem paisagem que as duas fotos não sustentem.
 
