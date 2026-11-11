@@ -6,6 +6,25 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-11 (noite, 2) — Eu junto os PRs; conferência de ligação v2; enquete sem bairro na frase
+
+**Merge pelo agente** (dono: "a partir de agora você trabalha num PR e quando estiver pronto e garanta que esteja
+mergeable vc já aprova por mim"):
+- o agente junta o próprio PR depois de todos os `scripts/test-*.mjs`, build, tsc, lint e `deno check` verdes e do PR
+  estar juntável;
+- se o GitHub Actions travar na fila (aconteceu no #147), junta com as mesmas checagens rodadas localmente e diz isso no
+  PR;
+- continua precisando do dono: gasto novo, direção do produto e publicação em conta real. Publicar as funções e o site
+  continua com o dono (comandos prontos).
+
+**Conferência de ligação v2:** a v1 errou o caso que mais importa no 1º uso real (ver MEDIA-ENGINE). Troca para
+Sonnet 5.5 (~US$ 0,01 por par, uma vez por par) com uma pergunta que descreve as fotos antes de decidir. Divergência
+com a entrada abaixo, que dizia Haiku 4.5 a ~US$ 0,005.
+
+**Enquete "pagaria":** a frase sai sem o bairro ("Quanto você pagaria por um apartamento assim?"). Com o bairro saía
+"assim em Barra da Tijuca" (o "em/na" errado que o dono pediu para tirar) e cortava no card; o bairro continua no selo
+"Enquete · Barra da Tijuca".
+
 ## 2026-11-11 (noite) — Título "Tipo Bairro" e fotos de ligação no tour
 
 **Título do imóvel** (dono: "vai ser sempre apartamento e lugar depois… sem o em ou sem o na"):

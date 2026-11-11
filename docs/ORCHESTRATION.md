@@ -52,6 +52,10 @@ atualizar o doc correspondente no mesmo PR — nunca deixar pra depois.
 6. APROVADO → abrir PR com o resumo do QA em português simples, prints e
    link de prévia (quando existir); marcar o item em
    [ROADMAP.md](ROADMAP.md) como "aguardando aprovação do dono".
+   **Desde 2026-11-11** o agente junta o próprio PR quando tudo está verde
+   e o PR está juntável (ver [DECISIONS.md](DECISIONS.md)); a regra antiga
+   acima fica como histórico para o que ainda precisa do dono (gasto novo,
+   direção do produto, publicação em conta real).
 7. **Teto por rodada:** no máximo 2 tarefas, respeitando o limite de
    custo de IA combinado com o dono.
 8. Relatório final pro dono: o que foi feito, o que espera aprovação, o

@@ -451,7 +451,9 @@ Deno.serve(async (req) => {
           // Artigo pelo gênero da palavra (Teste Zero 2026-11-03: "por um cobertura"). Terminada em "a" → "uma" (casa, cobertura, sala, loja).
           const tipoTxt = String(fields.tipo ?? 'imóvel').toLowerCase().trim() || 'imóvel'
           const art = /a$/.test(tipoTxt.split(/\s+/)[0]) ? 'uma' : 'um'
-          const cardText = `Quanto você pagaria por ${art} ${tipoTxt} assim em ${fields.bairro ?? 'um bairro como esse'}?`
+          // Sem o bairro na frase (dono, 2026-11-11): "assim em Barra da Tijuca" é o "em/na" errado e cortava no card. O bairro
+          // já aparece no selo de cima ("Enquete · Barra da Tijuca").
+          const cardText = `Quanto você pagaria por ${art} ${tipoTxt} assim?`
           const url = await renderPollCard(supabaseUrl, internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }, (pickCoverPhoto(photos, ficha.coverRooms) ?? photos[0]).url, { eyebrow: fields.bairro ? `Enquete · ${fields.bairro}` : 'Enquete', headline: cardText, cta: 'Vote na enquete' }, await getBrand())
           if (!url) { skipped.push({ recipe, reason: 'Falha ao gerar o card — tente de novo depois.' }); continue }
           media = [{ url, type: 'photo' }]
