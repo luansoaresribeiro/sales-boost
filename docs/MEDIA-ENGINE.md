@@ -259,14 +259,38 @@ curtos do card do imóvel continuam como estavam. Decisão em [DECISIONS.md](DEC
 6. O estúdio da VPS junta todos os trechos + encerramento num Reels 9:16. O vídeo entra na peça, que aparece em
    Aprovações.
 
-**Trechos** (caminhada contínua desde 2026-11-11; a tabela de 10/11, com corte entre não vizinhos, foi
-substituída, ver DECISIONS):
+**Trechos** (imóvel inteiro, zero cortes desde 2026-11-11 à tarde; as regras anteriores ficam como histórico, ver DECISIONS):
 
 | Tipo | Quando | Duração |
 |---|---|---|
-| `pair` | padrão: caminhada da foto i até a i+1. Se a ficha não confirma que são vizinhos, fica marcada `walk_unconfirmed` (aviso na tela e no post) | 6 s |
-| `opening` | foto de fachada ou vista: sempre trecho próprio, com movimento de drone só dentro do quadro da foto (desde 2026-11-11, Etapa 3; antes só quando o dono cortava depois dela). A passagem seguinte é um corte automático `enter`, que o dono não desliga | 5 s |
-| `room` | qualquer outra foto que ficou sozinha por corte pedido pelo dono | 5 s |
+| `pair` | **com 2 fotos ou mais, todo trecho** (imóvel inteiro, zero cortes — dono, 2026-11-11 à tarde): caminhada da foto i até a i+1. Passagem que a ficha não confirma = `walk_unconfirmed` (amarelo na tela, aviso no post) | 6 s |
+| `pair` com `entry` | a foto i é DE FORA (fachada/vista, ou varanda escolhida pelo dono): a câmera entra no imóvel pela abertura visível, com a instrução `pair_in` (passagem `walk_in`, amarela) | 6 s |
+| `opening` / `room` | só num tour de 1 foto | 5 s |
+
+> **Histórico (registrado, não apagado):** de manhã em 11/11 a foto de fora virava abertura própria com corte automático
+> `enter` (#144), e o dono podia pedir ✂️ (#142). Os dois foram substituídos pela regra acima, a pedido do dono.
+
+**Critérios de aceite do tour (gate técnico, dono, 11/11).** "Zero cortes" quer dizer continuidade **visual**: uma
+única trajetória de câmera, sem salto de posição, mudança brusca de perspectiva ou "teletransporte". Cada trecho é
+conferido sozinho, e um trecho ruim não é escondido pelo resto:
+
+| Critério | Esperado |
+|---|---|
+| Fidelidade à foto inicial | sem elemento inventado |
+| Fidelidade à foto final | chega no ambiente certo |
+| Continuidade na junção | último quadro do trecho i ≈ 1º quadro do trecho i+1, sem salto |
+| Arquitetura | sem parede, porta, corredor ou cômodo inventado |
+| Movimento | suave e estabilizado |
+| Transição | coerente com as fotos reais |
+
+**Instrução de câmera:** "drone" orienta só o movimento. A IA não pode inventar geometria, arquitetura, cômodos, móveis
+nem paisagem que as duas fotos não sustentem.
+
+**Orçamento:**
+- o tour completo não refaz trecho sozinho (`max_attempts: 1`);
+- só reenvia pedido que nunca foi aceito, porque esse não é cobrado;
+- se o tour falhar, `cost_usd` = soma dos trechos que ficaram prontos.
+- **Próximo passo, ainda não feito:** reaproveitar trechos já pagos quando o dono refaz o tour.
 
 As caminhadas se encadeiam: a foto de fim de uma é a de começo da próxima.
 

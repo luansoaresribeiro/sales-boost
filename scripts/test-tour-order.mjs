@@ -1,5 +1,5 @@
 // Roda: node --experimental-strip-types scripts/test-tour-order.mjs
-// Tour virtual completo (menu próprio, dono 2026-11-10): ordem dos cômodos, caminhada × corte, cópia da tela,
+// Tour virtual completo (menu próprio, dono 2026-11-10): ordem dos cômodos, imóvel inteiro em caminhada contínua sem cortes (11/11), cópia da tela,
 // tour fora do plano da semana e as travas do servidor.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -22,83 +22,86 @@ const config = { tour: {
 const cfg = tourCfgFrom(config), ocfg = tourOrderCfgFrom(config, cfg)
 const P = (i, room, quality = 80, conf = 0.9) => ({ url: `https://x/${i}.jpg`, room, room_conf: conf, quality })
 
-t('config: walk_order da ficha, máximo 10 e 2 por cômodo por padrão; sem walk_order usa room_priority', () => {
-  assert.equal(ocfg.tour_max_photos, 10); assert.equal(ocfg.tour_per_room, 2); assert.equal(ocfg.walk_order[2], 'hall')
+t('config: walk_order da ficha, até 15 fotos e 2 por cômodo por padrão (imóvel inteiro); sem walk_order usa room_priority', () => {
+  assert.equal(ocfg.tour_max_photos, 15); assert.equal(ocfg.tour_per_room, 2); assert.equal(ocfg.walk_order[2], 'hall')
   assert.deepEqual(tourOrderCfgFrom({ tour: { room_priority: ['sala'] } }, { room_priority: ['sala'] }).walk_order, ['sala'])
-  assert.equal(tourOrderCfgFrom({ tour: { tour_max_photos: 99 } }, cfg).tour_max_photos, 10)   // fora da faixa = padrão
+  assert.equal(tourOrderCfgFrom({ tour: { tour_max_photos: 99 } }, cfg).tour_max_photos, 15)   // fora da faixa = padrão
+  assert.equal(tourOrderCfgFrom({ tour: { tour_max_photos: 16 } }, cfg).tour_max_photos, 16)
 })
-t('ordem: abre de fora com a melhor fachada/vista e segue a ordem da ficha', () => {
+t('ordem: começa de fora com a MELHOR foto de fora (só uma) e segue a ordem da ficha', () => {
   const o = orderTour([P(1, 'quarto'), P(2, 'cozinha'), P(3, 'fachada', 70), P(4, 'sala'), P(5, 'vista', 90), P(6, 'banheiro')], cfg, ocfg)
-  assert.deepEqual(o.rooms, ['vista', 'fachada', 'sala', 'cozinha', 'quarto', 'banheiro'])
-  assert.deepEqual(o.segments.slice(0, 3), [{ kind: 'opening', from: 0 }, { kind: 'opening', from: 1 }, { kind: 'pair', from: 2, to: 3 }])   // Etapa 3: de fora = abertura própria; por dentro, caminhada contínua
+  assert.deepEqual(o.rooms, ['vista', 'sala', 'cozinha', 'quarto', 'banheiro'])
+  assert.deepEqual(o.excluded.map(e => e.reason), ['repeat_room'])   // a 2ª foto de fora fica disponível pra incluir
 })
-t('no máximo 2 fotos por cômodo (as melhores); foto ruim e excesso ficam de fora com motivo', () => {
-  const o = orderTour([P(1, 'sala', 60), P(2, 'sala', 95), P(3, 'sala', 80), P(4, 'cozinha', 30)], cfg, ocfg)
-  assert.deepEqual(o.photos, ['https://x/2.jpg', 'https://x/3.jpg'])
-  assert.deepEqual(o.excluded.map(e => e.reason).sort(), ['low_quality', 'repeat_room'])
+t('IMÓVEL INTEIRO: 1 foto de CADA cômodo antes de qualquer 2ª foto; limite avisa o cômodo que faltou', () => {
+  const photos = [P(1, 'sala', 95), P(2, 'sala', 90), P(3, 'sala', 85), P(4, 'cozinha'), P(5, 'quarto'), P(6, 'banheiro'), P(7, 'varanda'), P(8, 'hall')]
+  const o = orderTour(photos, cfg, ocfg)
+  assert.deepEqual([...new Set(o.rooms)].sort(), ['banheiro', 'cozinha', 'hall', 'quarto', 'sala', 'varanda'])
+  assert.equal(o.rooms.filter(r => r === 'sala').length, 2)   // 2ª foto da sala entra (cabe no limite); a 3ª não
+  assert.deepEqual(o.missing_rooms, [])
+  const small = tourOrderCfgFrom({ tour: { ...config.tour, tour_max_photos: 3 } }, cfg)
+  const s = orderTour(photos, cfg, small)
+  assert.equal(s.photos.length, 3); assert.ok(!s.rooms.includes('sala') || s.rooms.filter(r => r === 'sala').length === 1)   // nunca 2ª foto antes de cobrir os cômodos
+  assert.equal(s.missing_rooms.length, 3)
 })
-t('foto sem nota ou com cômodo incerto vai pro fim, na ordem do cadastro', () => {
-  const o = orderTour([{ url: 'https://x/a.jpg' }, P(1, 'sala'), P(2, 'quarto', 80, 0.3)], cfg, ocfg)
+t('foto ruim fica de fora com motivo; sem nota vai pro fim', () => {
+  const o = orderTour([{ url: 'https://x/a.jpg' }, P(1, 'sala'), P(2, 'quarto', 80, 0.3), P(4, 'cozinha', 30)], cfg, ocfg)
   assert.deepEqual(o.photos, ['https://x/1.jpg', 'https://x/a.jpg', 'https://x/2.jpg'])
+  assert.deepEqual(o.excluded.map(e => e.reason), ['low_quality'])
   assert.equal(roomOf(P(2, 'quarto', 80, 0.3), cfg), null)
 })
 t('limite de fotos por tour', () => {
-  const many = Array.from({ length: 14 }, (_, i) => ({ url: `https://x/u${i}.jpg` }))
+  const many = Array.from({ length: 20 }, (_, i) => ({ url: `https://x/u${i}.jpg` }))
   const o = orderTour(many, cfg, ocfg)
-  assert.equal(o.photos.length, 10); assert.equal(o.excluded.filter(e => e.reason === 'over_limit').length, 4)
+  assert.equal(o.photos.length, 15); assert.equal(o.excluded.filter(e => e.reason === 'over_limit').length, 5)
 })
 t('url inválida ou repetida não entra', () => {
   const o = orderTour([P(1, 'sala'), P(1, 'sala'), { url: 'http://inseguro/x.jpg', room: 'sala', room_conf: 1, quality: 90 }], cfg, ocfg)
   assert.deepEqual(o.photos, ['https://x/1.jpg'])
 })
-t('caminhada CONTÍNUA (dono, 11/11): uma foto até a seguinte, sem corte; passagem não confirmada marcada', () => {
-  const adj = cfg.adjacent_rooms
-  assert.ok(linked('sala', 'varanda', adj)); assert.ok(linked('varanda', 'sala', adj)); assert.ok(!linked('quarto', 'quarto', adj))
-  assert.ok(!linked('cozinha', 'quarto', adj)); assert.ok(!linked(null, 'sala', adj))
-  const r = tourSegments(['sala', 'varanda', 'quarto', 'banheiro', 'cozinha'], adj, cfg.opening_rooms)
-  assert.deepEqual(r.segments, [0, 1, 2, 3].map(i => ({ kind: 'pair', from: i, to: i + 1 })))
-  assert.deepEqual(r.passages, ['start', 'walk', 'walk_unconfirmed', 'walk', 'walk_unconfirmed'])   // varanda→quarto não é vizinho na ficha do teste
-  assert.ok(!r.segments.some(s => s.kind === 'room'))
+t('ZERO CORTES (dono, 11/11): com 2+ fotos, todo trecho é caminhada até a foto seguinte — em qualquer ordem', () => {
+  const cases = [['sala', 'varanda', 'quarto', 'banheiro', 'cozinha'], ['quarto', 'quarto'], ['sala', null, 'sala'], ['fachada', 'vista', 'hall', 'sala'], ['sala', 'vista', 'quarto'], ['vista', 'sala']]
+  for (const rooms of cases) {
+    const { segments, passages } = tourSegments(rooms, cfg.adjacent_rooms, cfg.opening_rooms, [1, 2])   // cuts de tela antiga: ignorados
+    assert.equal(segments.length, rooms.length - 1, JSON.stringify(rooms))
+    assert.ok(segments.every((s, i) => s.kind === 'pair' && s.from === i && s.to === i + 1), JSON.stringify(rooms))
+    assert.ok(!passages.some(p => p === 'cut' || p === 'enter'))
+  }
+  const r = tourSegments(['sala', 'varanda', 'quarto', 'banheiro'], cfg.adjacent_rooms, cfg.opening_rooms)
+  assert.deepEqual(r.passages, ['start', 'walk', 'walk_unconfirmed', 'walk'])
+  assert.deepEqual(tourSegments(['quarto', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms).passages, ['start', 'walk_unconfirmed'])
 })
-t('2 fotos do mesmo tipo (ex.: 2 quartos): caminha, mas marcada como não confirmada', () => {
-  const r = tourSegments(['quarto', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms)
-  assert.deepEqual(r.passages, ['start', 'walk_unconfirmed'])
+t('foto DE FORA: a câmera entra caminhando (walk_in, com instrução própria), sem corte', () => {
+  const r = tourSegments(['vista', 'sala', 'sala_jantar', 'cozinha', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms)
+  assert.deepEqual(r.segments[0], { kind: 'pair', from: 0, to: 1, entry: true })
+  assert.ok(r.segments.slice(1).every(s => !s.entry))
+  assert.deepEqual(r.passages, ['start', 'walk_in', 'walk', 'walk', 'walk_unconfirmed'])
+  const iv = readFileSync(new URL('../supabase/functions/item-videos/index.ts', import.meta.url), 'utf8')
+  assert.match(iv, /prompt: g\.entry \? prompts\.pair_in : prompts\[g\.kind\]/)
 })
-t('corte só onde o dono pediu; foto sozinha vira trecho próprio (abertura se for de fora)', () => {
-  const r = tourSegments(['hall', 'sala', 'varanda', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms, [1, 3])
-  assert.deepEqual(r.segments, [{ kind: 'room', from: 0 }, { kind: 'pair', from: 1, to: 2 }, { kind: 'room', from: 3 }])
-  assert.deepEqual(r.passages, ['start', 'cut', 'walk', 'cut'])
-  assert.deepEqual(tourSegments(['sala', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms, [0, 2, 9, 1.5]).segments, [{ kind: 'pair', from: 0, to: 1 }])  // cortes inválidos ignorados
-})
-t('1 foto só: um trecho (abertura de fora só com foto de fachada/vista)', () => {
+t('1 foto só: um trecho solto (abertura de fora só com foto de fachada/vista)', () => {
   assert.deepEqual(tourSegments(['vista'], cfg.adjacent_rooms, cfg.opening_rooms).segments, [{ kind: 'opening', from: 0 }])
   assert.deepEqual(tourSegments(['sala'], cfg.adjacent_rooms, cfg.opening_rooms).segments, [{ kind: 'room', from: 0 }])
 })
-t('toda foto aparece em algum trecho', () => {
-  for (const [rooms, cuts] of [[['sala'], []], [['fachada'], []], [['fachada', 'vista', 'sala'], [1]], [['sala', 'quarto', 'sala', 'varanda', null, 'cozinha'], [2, 4, 5]]]) {
-    const { segments } = tourSegments(rooms, cfg.adjacent_rooms, cfg.opening_rooms, cuts)
-    const seen = new Set(segments.flatMap(s => (s.to !== undefined ? [s.from, s.to] : [s.from])))
-    assert.equal(seen.size, rooms.length, JSON.stringify(rooms))
-  }
-})
-t('duração = soma dos trechos', () => {
+t('duração = soma dos trechos (N fotos = N−1 caminhadas)', () => {
   const { segments } = tourSegments(['fachada', 'sala', 'varanda'], cfg.adjacent_rooms, cfg.opening_rooms)
-  assert.equal(tourSeconds(segments, { opening: 5, pair: 6, room: 5 }), 11)   // abertura 5 s + caminhada sala→varanda 6 s
+  assert.equal(tourSeconds(segments, { opening: 5, pair: 6, room: 5 }), 12)
 })
-t('Etapa 3: foto de FORA nunca caminha — abertura própria + corte automático para dentro', () => {
-  const r = tourSegments(['vista', 'sala', 'varanda'], cfg.adjacent_rooms, cfg.opening_rooms)
-  assert.deepEqual(r.segments, [{ kind: 'opening', from: 0 }, { kind: 'pair', from: 1, to: 2 }])
-  assert.deepEqual(r.passages, ['start', 'enter', 'walk'])
-  // fachada + vista: cada uma vira abertura própria (a IA não inventa o caminho entre elas)
-  const two = tourSegments(['fachada', 'vista', 'hall', 'sala'], cfg.adjacent_rooms, cfg.opening_rooms)
-  assert.deepEqual(two.segments, [{ kind: 'opening', from: 0 }, { kind: 'opening', from: 1 }, { kind: 'pair', from: 2, to: 3 }])
-  assert.deepEqual(two.passages, ['start', 'enter', 'enter', 'walk'])
-  // o dono não consegue "desligar" o corte de fora pra dentro, nem com ✂️ marcado no mesmo lugar
-  assert.deepEqual(tourSegments(['vista', 'sala'], cfg.adjacent_rooms, cfg.opening_rooms, [1]).passages, ['start', 'enter'])
-  // foto de fora no meio (dono mudou a ordem): corta antes e depois
-  const mid = tourSegments(['sala', 'vista', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms)
-  assert.deepEqual(mid.segments, [{ kind: 'room', from: 0 }, { kind: 'opening', from: 1 }, { kind: 'room', from: 2 }])
-  assert.ok(!mid.segments.some(s => s.kind === 'pair'))
+t('instrução de câmera: drone só no MOVIMENTO, nunca inventar arquitetura; entrada de fora com instrução própria', () => {
+  const eng = readFileSync(new URL('../supabase/functions/_shared/tourEngine.ts', import.meta.url), 'utf8')
+  const rule = /must not invent geometry, architecture, rooms, furniture or landscape that is not supported by the two photos/
+  const pair = eng.slice(eng.indexOf('  pair:'), eng.indexOf('  pair_in:')), pairIn = eng.slice(eng.indexOf('  pair_in:'), eng.indexOf('  opening:'))
+  assert.match(pair, rule); assert.match(pairIn, rule); assert.match(pair, /no cut and no jump/); assert.match(pairIn, /visible in the photos/)
+  assert.match(eng, /pair_in: WALK_SECONDS/)
+})
+t('orçamento: tour completo não refaz trecho sozinho; falha cobra só os trechos prontos', () => {
+  const iv = readFileSync(new URL('../supabase/functions/item-videos/index.ts', import.meta.url), 'utf8')
+  const eng = readFileSync(new URL('../supabase/functions/_shared/tourEngine.ts', import.meta.url), 'utf8')
+  assert.match(iv.slice(iv.indexOf('async function createTourVideo')), /max_attempts: 1/)
+  assert.match(eng, /const max = notAccepted \? MAX_ATTEMPTS : \(c\.max_attempts \?\? MAX_ATTEMPTS\)/)
+  assert.match(iv, /const paid = full \? paidClips\.reduce/)
+  const mig = readFileSync(new URL('../supabase/migrations/20261111180000_tour_imovel_inteiro.sql', import.meta.url), 'utf8')
+  assert.match(mig, /tour_max_photos\}', '15'/)
 })
 t('dono escolhe abrir de fora com a 1ª foto: só ambientes da ficha (varanda sim, quarto nunca)', () => {
   const op = cfg.opening_rooms, cand = ['varanda']
@@ -108,7 +111,7 @@ t('dono escolhe abrir de fora com a 1ª foto: só ambientes da ficha (varanda si
   assert.deepEqual(withOutsideFirst([null, 'sala'], op, cand, true), [null, 'sala'])
   assert.deepEqual(withOutsideFirst(['vista', 'sala'], op, cand, true), ['vista', 'sala'])
   const r = tourSegments(withOutsideFirst(['varanda', 'sala', 'sala_jantar'], op, cand, true), cfg.adjacent_rooms, op)
-  assert.deepEqual(r.segments[0], { kind: 'opening', from: 0 }); assert.equal(r.passages[1], 'enter')
+  assert.deepEqual(r.segments[0], { kind: 'pair', from: 0, to: 1, entry: true }); assert.equal(r.passages[1], 'walk_in')   // escolheu abrir de fora: entra caminhando
   for (const c of [['varanda', 'sala'], ['quarto'], [], ['vista', 'varanda']]) for (const f of [true, false]) assert.deepEqual(front.withOutsideFirst(c, op, cand, f), withOutsideFirst(c, op, cand, f))
   const ficha = readFileSync(new URL('../supabase/migrations/20261111170000_tour_opening_candidates.sql', import.meta.url), 'utf8')
   assert.match(ficha, /opening_candidates\}', '\["varanda"\]'/)
@@ -125,7 +128,10 @@ t('prompt de abertura: drone, mas só dentro da foto (código e ficha)', () => {
 })
 t('a cópia da tela dá as mesmas passagens que o servidor', () => {
   const cases = [['fachada', 'sala', 'varanda', 'quarto', 'banheiro', 'cozinha'], ['sala', null, 'sala'], ['vista'], [], ['quarto', 'banheiro', 'quarto'], ['fachada', 'vista', 'hall'], ['sala', 'vista', 'quarto']]
-  for (const c of cases) for (const cuts of [[], [1], [1, 2], [2, 4]]) assert.deepEqual(front.tourSegments(c, cfg.adjacent_rooms, cfg.opening_rooms, cuts), tourSegments(c, cfg.adjacent_rooms, cfg.opening_rooms, cuts), JSON.stringify([c, cuts]))
+  for (const c of cases) assert.deepEqual(front.tourSegments(c, cfg.adjacent_rooms, cfg.opening_rooms), tourSegments(c, cfg.adjacent_rooms, cfg.opening_rooms), JSON.stringify(c))
+  const tb = readFileSync(new URL('../src/pages/dashboard/TourBuilder.tsx', import.meta.url), 'utf8')
+  assert.ok(!/✂️|toggleCut|cutBefore/.test(tb))   // tela sem botão de corte
+  assert.match(tb, /missingRooms/)
 })
 t('plano da semana sem tour: estratégia, calendário e "pra fazer" (servidor e tela)', () => {
   const fmts = [{ key: 'reel', name: 'Vídeo', pillar: 'x', producer: 'item_video', status: 'live' }, { key: 'card', name: 'Card', pillar: 'x', producer: 'post', status: 'live' }]
@@ -143,7 +149,7 @@ t('servidor: tour só pelo caminho com peça e encerramento; passagens recalcula
   const create = iv.slice(iv.indexOf("body.action === 'create' && body.kind === 'tour'"), iv.indexOf("if (body.action === 'create') {"))
   assert.match(create, /if \(!isCron\) return json/)
   assert.match(create, /requirePaidAccess/); assert.match(create, /ownerBlockMessage/); assert.match(create, /validEndcardUrl/)
-  assert.match(create, /tourSegments\(rooms, tcfg\.adjacent_rooms, tcfg\.opening_rooms, cuts\)/)
+  assert.match(create, /tourSegments\(rooms, tcfg\.adjacent_rooms, tcfg\.opening_rooms\)/)
   assert.match(iv.slice(iv.indexOf('async function createTourVideo')), /fitsCap\(admin, company\.id, estimate\)/)
   const cg = readFileSync(new URL('../supabase/functions/creative-generate/index.ts', import.meta.url), 'utf8')
   const tp = cg.slice(cg.indexOf("body.action === 'tour_piece'"), cg.indexOf("body.action === 'relearn'"))
