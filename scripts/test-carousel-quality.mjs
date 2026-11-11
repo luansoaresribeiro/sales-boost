@@ -63,7 +63,7 @@ assert.deepEqual(dataLines({ quartos: 'null', bairro: 'undefined', vagas: '—',
 const photos = Array.from({ length: 9 }, (_, i) => P(`f${i}`))
 const full = buildOfferSlides({ photos, fields: { tipo: 'Apartamento', bairro: 'Ipanema', quartos: '3', m2: '120', vagas: '1', preco: '1500000' }, cta: 'Me chama no direct' })
 assert.equal(full.length, 7); assert.deepEqual(full.map(s => s.kind), ['capa', 'foto', 'foto', 'foto', 'foto', 'dados', 'fecho']); ok('oferta: no máximo 7 slides (capa + 4 fotos + dados + fecho)')
-assert.equal(full[0].fields.title, 'Apartamento em Ipanema'); assert.equal(full[0].fields.text, '3 quartos · R$ 1.500.000'); assert.equal(full.at(-1).fields.cta, 'Me chama no direct'); ok('capa com tipo, bairro, quartos e preço; fecho com o CTA seguro')
+assert.equal(full[0].fields.title, 'Apartamento Ipanema')   // "Tipo Bairro", sem "em" (dono, 2026-11-11); assert.equal(full[0].fields.text, '3 quartos · R$ 1.500.000'); assert.equal(full.at(-1).fields.cta, 'Me chama no direct'); ok('capa com tipo, bairro, quartos e preço; fecho com o CTA seguro')
 assert.equal(full[0].photo, 'https://x/f0.jpg'); ok('capa sem nota: photos[0]')
 assert.equal(buildOfferSlides({ photos: [P('a', 2), P('b', 9), P('c', 4), P('d', 5), P('e', 1), P('f', 3)], fields: { bairro: 'Leblon' }, cta: 'x' })[0].photo, 'https://x/b.jpg'); ok('capa com nota: a melhor')
 const semPreco = buildOfferSlides({ photos, fields: { tipo: 'Casa', bairro: 'Barra', quartos: '1', preco: '' }, cta: 'x' })

@@ -5,7 +5,6 @@ import { processImageTo4x5 } from '../../../lib/imageProcessing'
 import { catalogMinPhotos, MAX_PHOTOS_PER_ITEM } from '../../../lib/setupRules'
 import { bi, sanitizeCatalogValues, titleFromFields, type CatalogSchema } from '../../../lib/verticalPlaybook'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
-import ItemVideos from './ItemVideos'
 import PublicPageButton from './PublicPageButton'
 import ItemActivity from './ItemActivity'
 import ItemAvailability from './ItemAvailability'
@@ -387,7 +386,12 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                   )}
                   {!setupMode && <PublicPageButton itemId={item.id} />}
                   {!setupMode && <ItemActivity itemId={item.id} companyId={companyId} />}
-                  {!setupMode && <ItemVideos itemId={item.id} photos={(item.meta?.photos ?? []).map(p => p.url)} />}
+                  {/* Agente de conteúdo só com FOTO (dono, 2026-11-11): vídeo do imóvel agora vive no menu Tour virtual. */}
+                  {!setupMode && (
+                    <a href="/dashboard/tour-virtual" style={{ display: 'inline-block', marginTop: '10px', fontSize: '12px', color: '#FF6D29', textDecoration: 'none', fontWeight: 700 }}>
+                      {lang === 'en' ? '🎬 Video of this property → Virtual tour' : '🎬 Vídeo deste imóvel → Tour virtual'}
+                    </a>
+                  )}
                   {!setupMode && <VirtualStaging itemId={item.id} companyId={companyId} verticalKey={verticalKey} photos={item.meta?.photos ?? []} staged={item.meta?.staged_photos ?? []} onChanged={load} />}
                   {!setupMode && <ItemCreationTools itemId={item.id} companyId={companyId} verticalKey={verticalKey} itemLabel={schema.itemLabel} onGenerate={generatePackage} busy={packageBusyId} />}
                 </div>

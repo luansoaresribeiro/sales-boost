@@ -24,6 +24,10 @@ const TX = {
     build: 'Montar a ordem do tour', building: 'Analisando as fotos (cômodo e qualidade)…',
     order: 'Ordem do tour', help: 'Um vídeo só, sem cortes: a câmera passa por todos os cômodos, de uma foto até a seguinte, como um drone dentro da casa. Use ↑ ↓ para mudar a ordem e ✕ para tirar. Com foto de fora, a câmera começa lá e entra no imóvel. Em amarelo: passagem que precisa da sua conferência no vídeo antes de aprovar (a IA não pode inventar parede, porta ou cômodo).',
     start: 'começo', walk: '🚶 caminha até aqui', unconfirmed: '🚶 caminha até aqui · passagem não confirmada', walkIn: '🚁 a câmera entra no imóvel · confira no vídeo', opening: '🏙️ começa de fora',
+    linkYes: '✅ ligação visível nas fotos', linkUnsure: '· ligação não confirmada — confira no vídeo', linkChecking: 'conferindo a ligação…',
+    missStairs: 'falta foto da escada', missDoor: 'falta foto da porta de entrada', missOpening: 'falta foto da passagem entre os dois ambientes',
+    unlinked: (n: number) => `${n} passagem(ns) sem foto de ligação: a IA teria que inventar o caminho (parede, porta ou escada). Inclua a foto que falta (+ incluir, abaixo) e coloque entre as duas.`,
+    confirmUnlinked: 'Gerar mesmo assim (a IA pode inventar o caminho)',
     missing: (rooms: string) => `Cômodos fora do tour: ${rooms}. Inclua uma foto de cada para o tour mostrar o imóvel inteiro.`,
     hintOutside: 'Para começar de fora, suba (↑) para 1º lugar uma foto real da área externa ou da vista (ex.: varanda) e marque "Abrir de fora". A IA nunca cria o prédio nem a vista.',
     outsideFirst: '🏙️ Abrir de fora com a 1ª foto (movimento de drone, só o que a foto mostra) — use se ela mostrar a área externa ou a vista.',
@@ -42,6 +46,10 @@ const TX = {
     build: 'Build the tour order', building: 'Analyzing the photos (room and quality)…',
     order: 'Tour order', help: 'One video, no cuts: the camera moves through every room, from one photo to the next, like a drone inside the home. Use ↑ ↓ to reorder and ✕ to remove. With an outside photo, the camera starts there and flies in. In yellow: a passage to check in the video before approving (the AI may not invent walls, doors or rooms).',
     start: 'start', walk: '🚶 walks here', unconfirmed: '🚶 walks here · passage not confirmed', walkIn: '🚁 the camera flies into the home · check it in the video', opening: '🏙️ starts outside',
+    linkYes: '✅ connection visible in the photos', linkUnsure: '· connection not confirmed — check it in the video', linkChecking: 'checking the connection…',
+    missStairs: 'missing a photo of the stairs', missDoor: 'missing a photo of the entrance door', missOpening: 'missing a photo of the passage between the two spaces',
+    unlinked: (n: number) => `${n} passage(s) without a connecting photo: the AI would have to invent the way (wall, door or stairs). Add the missing photo (+ add, below) and place it between the two.`,
+    confirmUnlinked: 'Generate anyway (the AI may invent the way)',
     missing: (rooms: string) => `Rooms left out of the tour: ${rooms}. Add one photo of each so the tour shows the whole property.`,
     hintOutside: 'To start outside, move (↑) a real photo of the outdoor area or the view (e.g. balcony) to 1st place and tick "Open from outside". The AI never creates the building or the view.',
     outsideFirst: '🏙️ Open from outside with the 1st photo (drone-style move, only what the photo shows) — use it if it shows the outdoor area or the view.',
@@ -79,6 +87,10 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
   const [order, setOrder] = useState<string[]>([])
   // Corte pedido pelo dono, guardado pela foto que vem DEPOIS do corte (sobrevive a ↑ ↓).
   const [outsideFirst, setOutsideFirst] = useState(false)
+  // Fotos de ligação (dono, 2026-11-11): o servidor diz, par a par, se a ligação entre as fotos aparece.
+  const [links, setLinks] = useState<Record<string, { linked: 'yes' | 'no' | 'unsure'; missing: string | null }>>({})
+  const [checking, setChecking] = useState(false)
+  const [confirmUnlinked, setConfirmUnlinked] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [videos, setVideos] = useState<Video[]>([])
@@ -135,10 +147,28 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
   const remove = (u: string) => setOrder(o => o.filter(x => x !== u))
   const add = (u: string) => setOrder(o => (plan && o.length < plan.max_photos ? [...o, u] : o))
 
+  // Confere as ligações da ordem atual (só os pares que mudaram vão à IA; o servidor guarda o resto).
+  const linkKey = (a: string, b: string) => `${a}>${b}`
+  useEffect(() => {
+    if (!plan || order.length < 2) return
+    if (order.slice(0, -1).every((u, i) => links[linkKey(u, order[i + 1])])) return
+    const t = setTimeout(async () => {
+      setChecking(true)
+      const r = await call('item-videos', { action: 'check_passages', item_id: itemId, photos: order })
+      setChecking(false)
+      const list = (r.data.passages ?? []) as { from: number; to: number; linked: 'yes' | 'no' | 'unsure'; missing: string | null }[]
+      if (r.status === 200) setLinks(prev => ({ ...prev, ...Object.fromEntries(list.map(p => [linkKey(order[p.from], order[p.to]), { linked: p.linked, missing: p.missing }])) }))
+    }, 700)
+    return () => clearTimeout(t)
+  }, [plan, order, links, itemId])
+  const linkOf = (i: number) => (i > 0 ? links[linkKey(order[i - 1], order[i])] : undefined)
+  const unlinkedCount = order.slice(1).filter((_, k) => linkOf(k + 1)?.linked === 'no').length
+  const missingLabel = (m: string | null) => (m === 'escada' ? tx.missStairs : m === 'porta' ? tx.missDoor : tx.missOpening)
+
   const generate = async () => {
     if (order.length < 2) { setMsg({ ok: false, text: tx.min }); return }
     setBusy(true); setMsg({ ok: true, text: tx.genning })
-    const r = await call('creative-generate', { action: 'tour_piece', item_id: itemId, photos: order, outside_first: canOutside && outsideFirst })
+    const r = await call('creative-generate', { action: 'tour_piece', item_id: itemId, photos: order, outside_first: canOutside && outsideFirst, confirm_unlinked: confirmUnlinked })
     setBusy(false)
     if (r.status === 200) { setMsg({ ok: true, text: tx.started }); void loadVideos() }
     else setMsg({ ok: false, text: String(r.data.error ?? tx.err) })
@@ -172,6 +202,11 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label(rooms[i])}</div>
                     <div style={{ fontSize: '11px', color: passages[i] === 'walk_unconfirmed' || passages[i] === 'walk_in' ? '#FBBF24' : MUTED }}>{pass}</div>
+                    {i > 0 && (() => { const l = linkOf(i); return (
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: !l ? MUTED : l.linked === 'yes' ? '#4ade80' : l.linked === 'no' ? RED : '#FBBF24' }}>
+                        {!l ? (checking ? tx.linkChecking : '') : l.linked === 'yes' ? tx.linkYes : l.linked === 'no' ? `⚠️ ${missingLabel(l.missing)}` : tx.linkUnsure}
+                      </div>
+                    ) })()}
                   </div>
                   <button aria-label="↑" disabled={i === 0} onClick={() => move(i, -1)} style={mini}>↑</button>
                   <button aria-label="↓" disabled={i === order.length - 1} onClick={() => move(i, 1)} style={mini}>↓</button>
@@ -197,7 +232,15 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
           <div style={{ marginTop: '14px', fontSize: '12px', color: 'white' }}>{tx.cost(usd, secs)}</div>
           <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '12px' }}>{tx.month(plan.month_spent_usd, plan.month_cap_usd)}</div>
           {!plan.studio_ready && <div style={{ fontSize: '12px', color: ORANGE, marginBottom: '10px' }}>{tx.studioOff}</div>}
-          <button disabled={busy || order.length < 2 || !!plan.blocked} onClick={() => void generate()} style={{ ...btn(ORANGE, '#000'), width: '100%', opacity: busy || order.length < 2 || plan.blocked ? 0.6 : 1 }}>{tx.gen}</button>
+          {unlinkedCount > 0 && (
+            <div style={{ fontSize: '12px', color: RED, lineHeight: 1.55, marginBottom: '10px' }}>
+              {tx.unlinked(unlinkedCount)}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'white', marginTop: '6px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={confirmUnlinked} onChange={e => setConfirmUnlinked(e.target.checked)} />{tx.confirmUnlinked}
+              </label>
+            </div>
+          )}
+          <button disabled={busy || order.length < 2 || !!plan.blocked || (unlinkedCount > 0 && !confirmUnlinked)} onClick={() => void generate()} style={{ ...btn(ORANGE, '#000'), width: '100%', opacity: busy || order.length < 2 || plan.blocked || (unlinkedCount > 0 && !confirmUnlinked) ? 0.6 : 1 }}>{tx.gen}</button>
         </section>
       )}
 

@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { advanceTour, clipPrompt, COST_PER_SECOND, estimateUsd, hfHeaders, SECONDS, studioReady, submitAll, VIDEO_BUCKET, type ClipKind, type TourRow } from '../_shared/tourEngine.ts'
 import { tourCfgFrom, type TourPhoto } from '../_shared/tourPick.ts'
+import { checkPassages, MAX_PAIRS_PER_CALL } from '../_shared/passageCheck.ts'
 import { orderTour, roomOf, tourOrderCfgFrom, tourSeconds, tourSegments, withOutsideFirst, type Segment, type SegKind } from '../_shared/tourOrder.ts'
 import { ensurePhotoScores } from '../_shared/photoScore.ts'
 import { validEndcardUrl } from '../_shared/tourPick.ts'
@@ -309,6 +310,20 @@ Deno.serve(async (req) => {
         month_spent_usd: spent.total_usd, month_cap_usd: spent.cap_usd,
         cost_usd: Object.fromEntries(KINDS.map(k => [k, estimateUsd(k)])),
       })
+    }
+
+    // Fotos de ligação (dono, 2026-11-11): a IA de visão diz, par a par, se a ligação entre as fotos aparece (porta,
+    // abertura, escada). Guardado no imóvel; cada par só é conferido uma vez (~US$ 0,005).
+    if (body.action === 'check_passages') {
+      const noPlan = await requirePaidAccess(admin, company.id)
+      if (noPlan) return noPlan
+      const item = await loadItem(body.item_id)
+      if (!item) return json({ error: 'Imóvel não encontrado.' }, 404)
+      const own = new Set(((item.meta?.photos ?? []) as { url: string }[]).map(p => p.url))
+      const photos = Array.isArray(body.photos) ? body.photos.map(String) : []
+      if (photos.length < 2 || photos.length > MAX_PAIRS_PER_CALL + 1 || photos.some(u => !own.has(u))) return json({ error: 'Fotos inválidas para este imóvel.' }, 400)
+      const checks = await checkPassages(admin, Deno.env.get('ANTHROPIC_API_KEY') ?? '', company.id, item.id, photos)
+      return json({ passages: checks.map((c, i) => ({ from: i, to: i + 1, linked: c.linked, missing: c.missing })) })
     }
 
     if (body.action === 'plan_tour') {
