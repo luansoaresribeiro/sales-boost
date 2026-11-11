@@ -131,11 +131,11 @@ export async function fetchSetupConfig(verticalKey: string): Promise<SetupConfig
 }
 
 // Título do card do item a partir dos campos (usado no cadastro manual e na
-// importação do portal).
+// importação do portal). Formato "Tipo Bairro", sem "em/na" (dono, 2026-11-11): "Apartamento Barra da Tijuca".
 export function titleFromFields(fields: Record<string, unknown>, fallback: string): string {
   const tipo = fields.tipo ? String(fields.tipo) : ''
   const bairro = fields.bairro ? String(fields.bairro) : ''
-  if (tipo && bairro) return `${tipo} em ${bairro}`
+  if (tipo && bairro) return `${tipo} ${bairro}`
   return tipo || bairro || fallback
 }
 

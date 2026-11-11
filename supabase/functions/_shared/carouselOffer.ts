@@ -108,10 +108,10 @@ export function dataLines(f: Record<string, unknown>): string[] {
   return out
 }
 
-/** Título da capa/fecho: "Apartamento em Ipanema" / só o tipo / só o bairro; vazio se o cadastro não tem nenhum dos dois. */
+/** Título da capa/fecho: "Apartamento Ipanema" (sem "em/na" — dono, 2026-11-11) / só o tipo / só o bairro; vazio se o cadastro não tem nenhum dos dois. */
 export function offerHeadline(f: Record<string, unknown>): string {
   const tipo = str(f.tipo), bairro = str(f.bairro)
-  return tipo && bairro ? `${tipo} em ${bairro}` : tipo || bairro
+  return tipo && bairro ? `${tipo} ${bairro}` : tipo || bairro
 }
 
 export interface OfferIn {

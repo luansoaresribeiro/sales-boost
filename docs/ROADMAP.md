@@ -35,7 +35,7 @@ Critérios por trecho em [MEDIA-ENGINE.md](MEDIA-ENGINE.md).
 - 2 com problema: a piscina → salão dissolveu, porque a foto não mostra porta; e a sala de jogos → sala de baixo inventou o caminho entre andares, porque faltava a foto da escada.
 - **Aprendizado:** a caminhada só fica fiel quando as duas fotos mostram uma ligação real (porta, abertura, escada).
 
-**Próxima melhoria do tour (guardada pelo dono para o futuro — não começar sem ele liberar):**
+**Próxima melhoria do tour — EM ANDAMENTO (dono, 11/11 noite: "vamos sim trabalhar nisso agora"). Parte 1 feita no #147: checagem das fotos de ligação (`_shared/passageCheck.ts`, ação `item-videos check_passages`, tela com ✅/⚠️ e "gerar mesmo assim"); falta o reteste:**
 1. **Fotos de ligação.** A tela avisa quando uma passagem não tem conexão visível ("falta foto da escada", "falta foto da porta de entrada") e pede essa foto, em vez de deixar a IA inventar.
    - **Pronto quando:** a passagem sem ligação não é gerada sem o dono confirmar, e a tela indica qual foto falta.
 2. **Reteste só das 2 passagens que falharam,** com a foto da piscina mostrando as portas do salão e a foto da escada. Custa cerca de US$ 1,00 dos US$ 1,47 que sobraram da verba de teste, só com a liberação do dono.

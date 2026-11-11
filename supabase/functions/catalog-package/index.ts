@@ -143,7 +143,8 @@ function pickSlot(dates: string[], occ: Occupancy, pillar: string, pillarWeightP
 async function writeCopy(anthropicKey: string, briefing: string, extra = '', claimRule = ''): Promise<{ caption: string; hashtags: string; cta: string }> {
   const prompt = `Você é o Content Agent do Sales Boost, especializado em corretores de imóveis no Rio de Janeiro.
 ${briefing}
-${extra}Regras inegociáveis: nunca invente preço, m², condomínio ou qualquer dado de mercado além do que foi passado; nunca invente cliente, depoimento, venda fechada nem distância; a legenda é SEMPRE pro público do Instagram — nunca um recado, aviso, alerta ou ressalva pro corretor, nem pedido de dado (nada de "⚠️", "os dados que recebi", "precisam de confirmação", "antes de publicar"). Se um dado parecer estranho ou faltar, simplesmente não o cite; nunca prometa valorização; tom próximo e carioca, direto nos números reais, sem "oportunidade imperdível".
+${extra}Ao nomear o imóvel, escreva tipo + bairro sem "em/na/no" (ex.: "Apartamento Barra da Tijuca", "Casa Ipanema"); no resto do texto, português normal ("morar na Barra").
+Regras inegociáveis: nunca invente preço, m², condomínio ou qualquer dado de mercado além do que foi passado; nunca invente cliente, depoimento, venda fechada nem distância; a legenda é SEMPRE pro público do Instagram — nunca um recado, aviso, alerta ou ressalva pro corretor, nem pedido de dado (nada de "⚠️", "os dados que recebi", "precisam de confirmação", "antes de publicar"). Se um dado parecer estranho ou faltar, simplesmente não o cite; nunca prometa valorização; tom próximo e carioca, direto nos números reais, sem "oportunidade imperdível".
 ${claimRule}Responda SÓ em JSON: {"caption":"...","hashtags":"...","cta":"..."}`
   const obj = parseObj(await callClaude(anthropicKey, prompt, 700))
   return { caption: String(obj.caption ?? '').trim(), hashtags: String(obj.hashtags ?? '').trim(), cta: String(obj.cta ?? '').trim() }

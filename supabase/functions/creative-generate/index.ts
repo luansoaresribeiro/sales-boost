@@ -47,6 +47,7 @@ import { buildPickReason, cleanItemPick, fetchItemCfg, getItem, listPickableItem
 import { checkCaption, promptRules as captionRules, rewriteRequest, stripForbidden, findForbidden } from '../_shared/captionGuard.ts'
 import { formatPrice, PAIR_NOTICE, tourCfgFrom, tourNotice, WAITING_STUDIO_PRE } from '../_shared/tourPick.ts'
 import { roomOf, tourOrderCfgFrom, tourSegments, withOutsideFirst } from '../_shared/tourOrder.ts'
+import { blocks, checkPassages } from '../_shared/passageCheck.ts'
 import { studioReady } from '../_shared/tourEngine.ts'
 import { chooseTour, fetchTourCfg, planTours, previousCaptions, type TourPlan } from '../_shared/tourSlot.ts'
 
@@ -143,7 +144,8 @@ Público-alvo: ${config.target_audience ?? company.ideal_customer ?? 'não defin
 Pilares: ${config.content_pillars.join(', ') || 'não definidos'}.
 Objetivos: ${config.marketing_goals ?? config.business_objectives ?? 'crescer e engajar'}.
 ${company.language === 'en' ? 'IMPORTANTE: escreva TODO o conteúdo (legenda, hook, CTA, hashtags) em inglês — este negócio atende clientes que falam inglês.' : ''}
-${HONESTY_RULE}${playbookBlock}`
+${HONESTY_RULE}
+Ao citar um item do catálogo, use o nome exatamente como está no cadastro (ex.: "Apartamento Barra da Tijuca" — sem acrescentar "em/na/no").${playbookBlock}`
 }
 
 function defaultConfig(company: Company): Config {
@@ -1889,10 +1891,18 @@ Deno.serve(async (req) => {
       const rooms = withOutsideFirst(order.map(u => roomOf(byUrl.get(u) as never, tcfg)), tcfg.opening_rooms, ocfg.opening_candidates, outsideFirst)
       // Imóvel inteiro, ZERO cortes (dono, 2026-11-11): todo trecho é uma caminhada até a foto seguinte. `cuts` é ignorado.
       const { passages } = tourSegments(rooms, tcfg.adjacent_rooms, tcfg.opening_rooms)
+      // Fotos de ligação (dono, 2026-11-11): passagem em que a ligação NÃO aparece nas fotos só é gerada com o
+      // "gerar mesmo assim" do dono — senão a IA de vídeo inventaria o caminho (regra 4).
+      const links = await checkPassages(admin, anthropicKey, company.id, String(item.id), order)
+      const unlinked = links.map((c, i) => ({ to: i + 1, missing: c.missing, block: blocks(c) })).filter(x => x.block)
+      if (unlinked.length && body.confirm_unlinked !== true) {
+        return json({ error: 'Falta foto de ligação em ' + unlinked.length + ' passagem(ns). Inclua a foto que falta ou confirme "gerar mesmo assim".', code: 'unlinked', unlinked: unlinked.map(u => ({ to: u.to, missing: u.missing })) }, 409)
+      }
       const notes: string[] = []
       if (passages.some(p => p === 'walk' || p === 'walk_unconfirmed' || p === 'walk_in')) notes.push(PAIR_NOTICE)
       const unconfirmed = passages.filter(p => p === 'walk_unconfirmed').length
       if (unconfirmed) notes.push(`${unconfirmed} passagem(ns) entre ambientes que a ficha não confirma serem vizinhos — confira no vídeo se a câmera não mostrou parede, porta ou cômodo que não existe.`)
+      if (unlinked.length) notes.push(`${unlinked.length} passagem(ns) sem foto de ligação — você pediu para gerar mesmo assim; confira no vídeo se a câmera não inventou parede, porta ou escada.`)
       if (passages.includes('walk_in')) notes.push('A câmera começa na foto real de fora e entra no imóvel pela abertura visível — confira no vídeo se nada foi inventado no caminho.')
       const job: SlotJob = { date: '', producer: 'item_video', name: 'Tour virtual', pillar: 'tour', purpose: 'Tour virtual completo pedido pelo dono', item_id: item.id, recipe: VIDEO_RECIPE, familia: 'tour', tema: 'tour' }
       const r = await runVideoSlot(admin, anthropicKey, company, job, cronSecretEnv, { photos: order, rooms, notes, outsideFirst })
