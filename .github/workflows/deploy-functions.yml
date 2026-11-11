@@ -68,5 +68,5 @@ jobs:
             flag=""
             if [ "$code" = "200" ] && [ "$(jq -r '.verify_jwt' fn.json)" = "false" ]; then flag="--no-verify-jwt"; fi
             echo "→ $f (verify_jwt atual: $( [ -n "$flag" ] && echo false || echo true ), resposta $code)"
-            supabase functions deploy "$f" --project-ref "$PROJECT_REF" --use-api $flag
+            supabase functions deploy "$f" --project-ref "$PROJECT_REF" --use-api --yes $flag
           done
