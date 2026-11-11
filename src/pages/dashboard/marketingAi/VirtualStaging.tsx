@@ -32,14 +32,16 @@ const TX = {
 // "Mobiliar virtualmente" (virtual-staging). Só aparece se a ficha do setor
 // tem config.virtual_staging. O resultado só entra no item quando o dono
 // clica "Usar no imóvel" — e vai pra meta.staged_photos, nunca meta.photos.
-export default function VirtualStaging({ itemId, companyId, verticalKey, photos, staged, onChanged }: {
+export default function VirtualStaging({ itemId, companyId, verticalKey, photos, staged, onChanged, startOpen = false }: {
   itemId: string; companyId: string; verticalKey: string; photos: Photo[]; staged: Photo[]; onChanged: () => void
+  /** Menu Tour virtual (2026-11-11): já abre na escolha da foto, sem o botão "Mobiliar cômodo vazio". */
+  startOpen?: boolean
 }) {
   const { lang } = useLang(); const tx = TX[lang]
   const { session } = useAuth()
   const token = session?.access_token ?? ''
   const [styles, setStyles] = useState<Style[]>([])
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(startOpen)
   const [photo, setPhoto] = useState<string | null>(null)
   const [style, setStyle] = useState('')
   const [jobId, setJobId] = useState<string | null>(null)
