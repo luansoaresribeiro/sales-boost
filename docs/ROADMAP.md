@@ -95,7 +95,7 @@ Decisão completa em [DECISIONS.md](DECISIONS.md#2026-11-07--plataforma-internac
 | 2.3 | **Fábrica 3D:** parada com estados reais (2.3a — ✅ implementada na C.2, 07/11; C.2.1 (cortina, câmera livre, robôs que mostram a verdade) implementada em 07/11, aguardando QA/merge), depois movimento por evento real (2.3b). Critérios em DECISIONS (seções C a H do plano de 04/11). | 2.3a: estados e selo de maturidade reais, versão 2D, sem desenho contínuo parado. 2.3b: cada evento anima 1 vez, inclusive depois de reconexão. | 2.2 |
 | 2.3c | **C.3 da Fábrica: pacotes na esteira por evento real + releitura/tempo real** (conforme a entrada C.2.1 do DECISIONS). | **A FAZER — depois que o dono testar e aprovar a C.2.1 no notebook e no Galaxy A54 (pendente).** | 2.3 |
 | 2.3d | **Menu lateral: abas "Imóveis" e "Relatórios" (07/11)** — a aba do catálogo (rótulo vem da ficha: `vocabulary.catalog`, fallback "Catálogo"/"Catalog") abre a mesma página do "+" → Adicionar item (`/dashboard/catalogo`); "Relatórios" (`/dashboard/relatorios`) substitui "Atividades" (relatórios semanal/mensal/anual em destaque + histórico de atividades); `/dashboard/atividades` redireciona. | Implementado em 07/11, aguardando QA/merge. Prints de computador e celular nas contas de teste. | — |
-| 2.4 | **Cadastro → Instagram → planos → pagamento.** Começa pelo N1: segurança da conexão do Instagram (`state` assinado e preso ao usuário logado). | N1: teste de ataque com o id de outra empresa recusado. N2 a N5: os 4 casos de QA (sem pagamento, pago, cancelado, chamada direta). | Decisões do dono: preços, contas antigas, tolerância de atraso |
+| 2.4 | **Cadastro → Instagram → planos → pagamento.** Começa pelo N1: segurança da conexão do Instagram (`state` assinado e preso ao usuário logado). | N1: teste de ataque com o id de outra empresa recusado. N2 a N5: os 4 casos de QA (sem pagamento, pago, cancelado, chamada direta). **N1 em PR (11/11)**: Instagram, WhatsApp, Anúncios da Meta e Google; falta o teste de ataque no ar depois de publicar. | Decisões do dono: preços, contas antigas, tolerância de atraso |
 
 ### 3. Telegram (por último: usa as mesmas regras, estados, filas e permissões das telas)
 | # | Etapa | Pronto quando (comprovado) | Depende de |
@@ -103,6 +103,16 @@ Decisão completa em [DECISIONS.md](DECISIONS.md#2026-11-07--plataforma-internac
 | 3.1 | **Corrigir as 6 divergências já documentadas** (ARCHITECTURE, Telegram). | Cada divergência corrigida ou registrada com motivo, com teste. | Bloco 2 |
 | 3.2 | **Central de Comando T0:** a matriz de paridade painel × Telegram. | Matriz entregue e aprovada. | 3.1 |
 | 3.3 | **T1 em diante:** consultar e aprovar com botão assinado ("aprova o 2" → cartão → ✅). Texto livre nunca aprova. | Por etapa (ver o plano T0–T6). | 3.2 |
+
+### 4. Pedidos do dono para DEPOIS do plano atual (11/11, "não comece ainda")
+Ordem do plano atual: Tour virtual (etapas 1–3) → N1 → Boosts. Só depois:
+
+| # | Pedido | Pronto quando |
+|---|---|---|
+| 4.1 | **Painel principal igual ao print de referência** que o dono vai mandar | Tela igual ao print, só com dado real; prints de celular e computador |
+| 4.2 | **Revisão de todas as abas e menus:** cada um ligado ao dado real e ao próximo passo; relatório do fluxo e do que melhorar | Mapa aba → dado → próximo passo, com as divergências corrigidas ou registradas |
+| 4.3 | **Telegram ligado de verdade ao painel:** perguntar "como está tudo" e receber só dado real (nada inventado); aprovar posts por lá | Respostas conferidas contra o painel nas contas de teste; aprovação só por botão assinado (texto nunca aprova — regra do plano T0–T6) |
+| 4.4 | **Tirar do painel principal o bloco "Painel-resumo ainda sem dado real"** (receita, ROAS e funil, com cadeado e "Ver exemplo") | Bloco fora do Marketing AI; nada mais quebra; prints |
 
 **Pendências do dono que destravam etapas:**
 - conta de Instagram de teste profissional, cadastrada como testadora no app da Meta (1.4);

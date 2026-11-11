@@ -30,6 +30,10 @@ Deno.serve(async (req) => {
     const { code, company_id } = await req.json()
     if (!code || !company_id) return json({ error: 'code and company_id required' }, 400)
 
+    // N1 (2026-11-11): só grava a conexão do Google na empresa de QUEM está logado.
+    const { data: owned } = await createClient(supabaseUrl, supabaseServiceKey).from('companies').select('id').eq('id', company_id).eq('user_id', user.id).maybeSingle()
+    if (!owned) return json({ error: 'Esta empresa não é da sua conta. Nada foi conectado.' }, 403)
+
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

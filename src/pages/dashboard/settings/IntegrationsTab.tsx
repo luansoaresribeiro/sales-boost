@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useLang } from '../../../contexts/LanguageContext'
 import { TX } from './IntegrationsTab.i18n'
 import { launchWhatsAppSignup, isWhatsAppSignupConfigured } from '../../../lib/facebookSdk'
+import { startOAuth, type OAuthStartFn } from '../../../lib/oauthStart'
 
 // Google fora do produto por enquanto (decisão do dono, 2026-10-09: foco no
 // digital/Instagram; projeto Google Cloud com faturamento vencido). Os cartões
@@ -63,6 +64,12 @@ function buildGscAuthUrl(companyId: string): string {
 
 export default function IntegrationsTab() {
   const { user, session } = useAuth()
+  // N1 (2026-11-11): o botão pede ao servidor o link assinado (com o login) e só então abre a Meta.
+  const connectOAuth = (fn: OAuthStartFn) => (e: { preventDefault: () => void }) => {
+    e.preventDefault()
+    if (!companyId) return
+    void startOAuth(fn, companyId).catch(err => window.alert(err instanceof Error ? err.message : String(err)))
+  }
   const { lang } = useLang()
   const X = TX[lang]
   const [searchParams] = useSearchParams()
@@ -332,7 +339,7 @@ export default function IntegrationsTab() {
           </div>
           {companyId && (
             <div style={{ display: 'flex', gap: '8px' }}>
-              <a href={`${SUPABASE_URL}/functions/v1/meta-business-oauth-start?company_id=${companyId}`}
+              <a href="#" onClick={connectOAuth('meta-business-oauth-start')}
                 style={{ padding: '8px 18px', background: metaBusinessConnectedAt ? 'rgba(255,255,255,0.04)' : ORANGE, color: metaBusinessConnectedAt ? MUTED : '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: metaBusinessConnectedAt ? `1px solid ${BORDER}` : 'none', textDecoration: 'none', display: 'inline-block', cursor: 'pointer' }}>
                 {metaBusinessConnectedAt ? X.reconnect : X.mbConnectBtn}
               </a>
@@ -502,7 +509,7 @@ export default function IntegrationsTab() {
           </div>
           {companyId && !igConnected && (
             <a
-              href={`${SUPABASE_URL}/functions/v1/instagram-oauth-start?company_id=${companyId}`}
+              href="#" onClick={connectOAuth('instagram-oauth-start')}
               style={{ padding: '8px 18px', background: ORANGE, color: '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: 'none', textDecoration: 'none', display: 'inline-block', cursor: 'pointer' }}>
               {X.igConnectBtn}
             </a>
@@ -535,7 +542,7 @@ export default function IntegrationsTab() {
             </div>
             {companyId && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12 }}>
-                <a href={`${SUPABASE_URL}/functions/v1/instagram-oauth-start?company_id=${companyId}`}
+                <a href="#" onClick={connectOAuth('instagram-oauth-start')}
                   style={{ fontSize: '11px', color: 'rgba(255,109,41,0.5)', textDecoration: 'none' }}>
                   {X.igReconnect}
                 </a>
@@ -701,7 +708,7 @@ export default function IntegrationsTab() {
           </div>
           {companyId && (
             <div style={{ display: 'flex', gap: '8px' }}>
-              <a href={`${SUPABASE_URL}/functions/v1/meta-ads-oauth-start?company_id=${companyId}`}
+              <a href="#" onClick={connectOAuth('meta-ads-oauth-start')}
                 style={{ padding: '8px 16px', background: metaAdsAccount ? 'rgba(255,255,255,0.04)' : ORANGE, color: metaAdsAccount ? MUTED : '#000', fontWeight: 700, fontSize: '12px', borderRadius: '8px', border: metaAdsAccount ? `1px solid ${BORDER}` : 'none', textDecoration: 'none', display: 'inline-block', cursor: 'pointer' }}>
                 {metaAdsAccount ? X.reconnect : X.connect}
               </a>

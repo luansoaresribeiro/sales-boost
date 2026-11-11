@@ -3,6 +3,7 @@
  * lista as contas de anuncios e salva a principal na empresa.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { STATE_ERROR, stateSecret, stillOwner, verifyState } from '../_shared/oauthState.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -21,8 +22,13 @@ Deno.serve(async (req) => {
   if (errorMsg) return htmlRedirect(`/dashboard/settings?tab=conexoes&error=${encodeURIComponent(errorMsg)}`)
   if (!code || !state) return htmlRedirect('/dashboard/settings?tab=conexoes&error=missing_params')
 
-  let companyId
-  try { companyId = JSON.parse(atob(state)).company_id } catch { return htmlRedirect('/dashboard/settings?tab=conexoes&error=invalid_state') }
+  // N1 (2026-11-11): state assinado pelo servidor, preso à empresa + ao dono + ao provedor, válido por 15 min.
+  const check = await verifyState(stateSecret(), state, 'meta_ads')
+  if (!check.ok) return htmlRedirect(`/dashboard/settings?tab=conexoes&error=${encodeURIComponent(STATE_ERROR[check.reason])}`)
+  if (!(await stillOwner(createClient(Deno.env.get('SUPABASE_URL')!, stateSecret()), check.payload))) {
+    return htmlRedirect(`/dashboard/settings?tab=conexoes&error=${encodeURIComponent(STATE_ERROR.not_owner)}`)
+  }
+  const companyId: string = check.payload.c
 
   const appId = Deno.env.get('META_APP_ID')
   const appSecret = Deno.env.get('META_APP_SECRET')
