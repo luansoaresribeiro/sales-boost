@@ -317,7 +317,10 @@ quarto → banheiro (✅ no vídeo), ficou "incerto" no terraço com porta de vi
 demais para uso. **v3** (`CHECK_VERSION = 3`): a IA só relata fatos (foto de fora?, mesmo andar?, escada na foto de
 saída?, porta entre fora e dentro visível?) e a regra `decidePassage` decide, seguindo o que o vídeo real mostrou:
 dentro de casa no mesmo andar passa; troca de andar só com escada na foto de saída; de fora para dentro só com a porta
-aparecendo. Conferir a v3 nas mesmas fotos antes do reteste pago.
+aparecendo. **v3 nas mesmas fotos:** acertou as 5 passagens boas e o terraço → salão, mas deixou passar
+jogos → sala de baixo (a IA disse "mesmo andar"; a escada só aparece na foto de destino) e ficou "incerto" na
+piscina → salão. **v4:** escada só na foto de destino bloqueia ("falta foto da escada"); de fora para dentro com porta
+"incerta" também bloqueia; os fatos que a IA respondeu ficam guardados junto (`facts`) para conferir erros.
 
 **Instrução de câmera:** "drone" orienta só o movimento. A IA não pode inventar geometria, arquitetura, cômodos, móveis
 nem paisagem que as duas fotos não sustentem.
