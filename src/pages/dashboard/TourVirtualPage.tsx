@@ -19,6 +19,7 @@ const TX = {
     sub: 'Escolha o imóvel e gere um tour completo: a câmera começa de fora e passa pelos cômodos na ordem certa. Tudo a partir das fotos reais do imóvel. O tour pronto vai pra Aprovações — nada sai sem você.',
     pick: '1. Escolha o imóvel', none: 'Nenhum imóvel com fotos ainda. Cadastre em Meus imóveis.', photos: (n: number) => `${n} foto${n === 1 ? '' : 's'}`,
     mode: '2. O que você quer gerar?', tour: '🎬 Tour completo', staging: '🛋️ Mobiliar cômodo vazio',
+    avatar: '🧑 Avatar apresentando · EM BREVE', avatarHelp: 'Em breve: com algumas fotos e um vídeo curto seu, o Sales Boost vai criar vídeos com você apresentando cada imóvel — sem precisar gravar toda vez. Você aprova antes de qualquer vídeo ir ao ar.',
     stagingHelp: 'Escolha a foto real de um cômodo vazio e o estilo. A IA só coloca móveis — paredes, janelas, piso e vista ficam como na foto. A foto real nunca é trocada.',
     stagingRule: 'A foto mobiliada entra nos carrosséis deste imóvel junto das fotos reais e sempre com o aviso "Imagem mobiliada virtualmente — os móveis são ilustrativos". Esse aviso é conferido de novo na hora de publicar, mesmo se a legenda for editada. Ela nunca entra no tour.',
     loading: 'Carregando…',
@@ -28,6 +29,7 @@ const TX = {
     sub: 'Pick the property and generate a full tour: the camera starts outside and goes through the rooms in the right order. All from the property\'s real photos. The finished tour goes to Approvals — nothing goes out without you.',
     pick: '1. Pick the property', none: 'No property with photos yet. Add one in My properties.', photos: (n: number) => `${n} photo${n === 1 ? '' : 's'}`,
     mode: '2. What do you want to generate?', tour: '🎬 Full tour', staging: '🛋️ Furnish an empty room',
+    avatar: '🧑 Avatar presenting · COMING SOON', avatarHelp: 'Coming soon: with a few photos and a short video of you, Sales Boost will create videos of you presenting each property — no need to record every time. You approve before any video goes live.',
     stagingHelp: 'Pick the real photo of an empty room and the style. The AI only adds furniture — walls, windows, floor and view stay as in the photo. The real photo is never replaced.',
     stagingRule: 'The furnished photo goes into this property\'s carousels next to the real photos and always with the "virtually furnished — furniture is illustrative" notice. That notice is checked again at publishing time, even if the caption was edited. It never goes into the tour.',
     loading: 'Loading…',
@@ -101,6 +103,8 @@ export default function TourVirtualPage() {
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '18px' }}>
               <button onClick={() => setMode('tour')} aria-pressed={mode === 'tour'} style={chip(mode === 'tour')}>{tx.tour}</button>
               <button onClick={() => setMode('staging')} aria-pressed={mode === 'staging'} style={chip(mode === 'staging')}>{tx.staging}</button>
+              {/* Avatar (dono, 2026-11-11): só "em breve" — nada é gerado nem cobrado. */}
+              <button disabled title={tx.avatarHelp} aria-disabled="true" style={{ ...chip(false), cursor: 'not-allowed', opacity: 0.55 }}>{tx.avatar}</button>
             </div>
             {mode === 'tour'
               ? <TourBuilder key={itemId} itemId={itemId} />

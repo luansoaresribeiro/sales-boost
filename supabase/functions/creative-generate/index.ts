@@ -20,7 +20,7 @@
  *     Testes liga isso, e auto_daily_test_image decide se gera imagem junto.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchFormatAliases, fetchContentRules, ensureMinVideos, labelMix, familyOf, type ContentPlan } from '../_shared/formatCatalog.ts'
+import { weeklyMixPlan, weekSlots, fetchFormatCatalog, fetchFormatAliases, fetchContentRules, ensureMinVideos, labelMix, familyOf, inWeeklyPlan, type ContentPlan } from '../_shared/formatCatalog.ts'
 import { fetchMarketItems, buildMarketContext, cleanMarketContext, type MarketContext } from '../_shared/marketContext.ts'
 import { applyQueroLock, buildSlotIntent, cleanIntent, withMarketContext, cleanLabels, dropUnknownPilar, fetchSSPillars, intentBlock, type SlotIntent } from '../_shared/slotIntent.ts'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
@@ -1437,6 +1437,7 @@ async function makeNowJob(admin: SupaClient, company: Company, formatKey: string
   formatKey = resolveAlias(formatKey, await fetchFormatAliases(admin, company.vertical_key ?? 'generico'))
   const f = formats.find(x => x.key === formatKey && x.status === 'live' && x.producer !== 'dm')
   if (!f) return 'Esse tipo de criativo não está disponível agora.'
+  if (!inWeeklyPlan(f.producer)) return 'Vídeo do imóvel agora é feito no menu Tour virtual.'
   const job: SlotJob = { date: '', producer: f.producer as SlotJob['producer'], name: f.name, pillar: f.pillar, purpose: 'Peça avulsa pedida pelo dono', format: f.key, familia: familyOf(f), tema: f.pillar }
   if (f.producer === 'post') return job
   const recipe = f.producer === 'item_video' ? VIDEO_RECIPE : f.recipe
@@ -1912,7 +1913,8 @@ Deno.serve(async (req) => {
       ])
       // Fase 4: mesma regra do servidor (fotos mínimas da ficha + disponível) — o que a tela oferece é o que o make_now aceita.
       const items = (await listPickableItems(admin, company.id, itemCfg, { newestFirst: true })).items.map(r => ({ id: r.id, title: r.title || 'Imóvel' }))
-      const canMake = (f: typeof formats[number]) => f.status === 'live' && f.producer !== 'dm' && (f.producer === 'post' || f.producer === 'item_video' || !!f.recipe)
+      // Agente de conteúdo só com FOTO (dono, 2026-11-11): vídeo do imóvel só pelo menu Tour virtual.
+      const canMake = (f: typeof formats[number]) => f.status === 'live' && f.producer !== 'dm' && inWeeklyPlan(f.producer) && (f.producer === 'post' || !!f.recipe)
       const view = (f: typeof formats[number]) => ({ key: f.key, name: f.name, producer: f.producer, status: f.status, can_make: canMake(f), media: f.media ?? null, surface: f.surface ?? (f.producer === 'item_video' ? 'reels' : f.producer === 'dm' ? 'dm' : 'feed') })
       // formats = o que dá pra gerar agora; all = a lista inteira da ficha
       // (aba Formatos do Padrão visual mostra tudo, com o status de cada um).

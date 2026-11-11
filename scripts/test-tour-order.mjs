@@ -158,4 +158,13 @@ t('servidor: tour só pelo caminho com peça e encerramento; passagens recalcula
   const guard = readFileSync(new URL('../src/lib/showcaseGuard.ts', import.meta.url), 'utf8')
   assert.match(guard, /'item-videos': \{ actions: \['create', 'plan_tour'\] \}/)
 })
+t('agente de conteúdo só com FOTO: "Gerar agora" não oferece nem aceita vídeo; card do imóvel aponta pro Tour virtual; avatar "em breve"', () => {
+  const cg = readFileSync(new URL('../supabase/functions/creative-generate/index.ts', import.meta.url), 'utf8')
+  assert.match(cg, /const canMake = \(f: typeof formats\[number\]\) => f\.status === 'live' && f\.producer !== 'dm' && inWeeklyPlan\(f\.producer\) && \(f\.producer === 'post' \|\| !!f\.recipe\)/)
+  assert.match(cg, /if \(!inWeeklyPlan\(f\.producer\)\) return 'Vídeo do imóvel agora é feito no menu Tour virtual\.'/)
+  const cat = readFileSync(new URL('../src/pages/dashboard/marketingAi/CatalogItems.tsx', import.meta.url), 'utf8')
+  assert.ok(!/<ItemVideos/.test(cat)); assert.match(cat, /\/dashboard\/tour-virtual/)
+  const tv = readFileSync(new URL('../src/pages/dashboard/TourVirtualPage.tsx', import.meta.url), 'utf8')
+  assert.match(tv, /EM BREVE/); assert.match(tv, /<button disabled title=\{tx\.avatarHelp\}/)
+})
 console.log(`\n${n} verificações ok`)

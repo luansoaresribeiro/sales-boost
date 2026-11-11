@@ -29,6 +29,18 @@
 
 Critérios por trecho em [MEDIA-ENGINE.md](MEDIA-ENGINE.md).
 
+**Situação do gate técnico — NÃO passou (5/7), teste de 11/11 na Tespon:**
+- 8 fotos, 7 caminhadas, nenhum corte, US$ 3,53;
+- 5 passagens fiéis;
+- 2 com problema: a piscina → salão dissolveu, porque a foto não mostra porta; e a sala de jogos → sala de baixo inventou o caminho entre andares, porque faltava a foto da escada.
+- **Aprendizado:** a caminhada só fica fiel quando as duas fotos mostram uma ligação real (porta, abertura, escada).
+
+**Próxima melhoria do tour (guardada pelo dono para o futuro — não começar sem ele liberar):**
+1. **Fotos de ligação.** A tela avisa quando uma passagem não tem conexão visível ("falta foto da escada", "falta foto da porta de entrada") e pede essa foto, em vez de deixar a IA inventar.
+   - **Pronto quando:** a passagem sem ligação não é gerada sem o dono confirmar, e a tela indica qual foto falta.
+2. **Reteste só das 2 passagens que falharam,** com a foto da piscina mostrando as portas do salão e a foto da escada. Custa cerca de US$ 1,00 dos US$ 1,47 que sobraram da verba de teste, só com a liberação do dono.
+   - **Pronto quando:** as 7 passagens passam nos critérios do MEDIA-ENGINE.
+
 **Gate comercial (antes de qualquer código de Boosts ou cobrança por tour):**
 - pelo menos 3 imobiliárias ouvidas, ou 1 piloto real ([PILOTO.md](PILOTO.md));
 - quantos tours por mês usariam;

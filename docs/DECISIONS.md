@@ -6,6 +6,19 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-11 (noite) — Agente de conteúdo só com FOTO; vídeo do imóvel só no Tour virtual; avatar "em breve"
+
+**Pedido do dono:** "o agente de tour virtual está sincronizado com o de conteúdo, não deve ter vídeo no agente de
+conteúdo, somente foto… o avatar entra na tab do tour virtual como em breve".
+
+**Agora:**
+- **"Gerar agora"** (`creative-generate` `make_now_options`/`make_now`) não oferece nem aceita vídeo do imóvel.
+- **O card do imóvel** (Catálogo) não tem mais a caixa de vídeos curtos. Ela deu lugar a um link para o menu Tour virtual.
+- **O plano da semana** já não tinha vídeo desde o #140.
+- **O Tour virtual** ganhou o botão desligado "🧑 Avatar apresentando · EM BREVE". Nada é gerado nem cobrado.
+- **Divergência registrada:** em 10/11 eu tinha mantido de propósito os vídeos curtos do card (entrada do #140). Essa regra foi substituída por esta.
+- **Peças de vídeo já criadas** continuam em Aprovações e no calendário; nada foi apagado.
+
 ## 2026-11-11 (tarde) — Tour do IMÓVEL INTEIRO, zero cortes, câmera entrando de fora + gates antes dos Boosts
 
 **Pedido do dono (depois do teste da Tespon):** "o tour precisa ser feito do imóvel inteiro e não pode ter cortes…

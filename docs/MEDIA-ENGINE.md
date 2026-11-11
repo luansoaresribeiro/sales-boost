@@ -283,6 +283,21 @@ conferido sozinho, e um trecho ruim não é escondido pelo resto:
 | Movimento | suave e estabilizado |
 | Transição | coerente com as fotos reais |
 
+**Teste real (Tespon, 11/11, 8 fotos, US$ 3,53):**
+
+| # | Passagem | Resultado |
+|---|---|---|
+| 1 | piscina (de fora) → salão | ⚠️ dissolveu: a foto não mostra porta de entrada |
+| 2 | salão → sala de jogos | ✅ |
+| 3 | sala de jogos → sala de baixo | ⚠️ caminho inventado entre andares: faltava a foto da escada |
+| 4 | sala → jantar | ✅ |
+| 5 | jantar → hall | ✅ |
+| 6 | hall → quarto | ✅ |
+| 7 | quarto → banheiro | ✅ |
+
+Nenhum corte: o maior salto entre quadros vizinhos foi 0,25, abaixo do nível de corte. A próxima melhoria (fotos de
+ligação) está no ROADMAP.
+
 **Instrução de câmera:** "drone" orienta só o movimento. A IA não pode inventar geometria, arquitetura, cômodos, móveis
 nem paisagem que as duas fotos não sustentem.
 

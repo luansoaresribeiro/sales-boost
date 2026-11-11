@@ -35,6 +35,18 @@ em 06/11, token morto em horas, `instagram_username` nulo, logo automático
 com erro claro e grava o motivo em `client_activity`
 (`event='instagram_connect_failed'`, `meta.detail`) e no log da function.
 A causa da falha da A3 ainda é desconhecida — aparece na próxima tentativa.
+
+**Causa encontrada (11/11):** nas tentativas de 11/11 às 17h01 e 17h02, o `ig_exchange_token` respondeu
+`HTTP 400 "Unsupported request - method type: get"` (IGApiException, código 100). No painel da Meta, o @a3.imoveis
+estava como **Instagram Tester "Pending"**, ou seja, o convite não tinha sido aceito.
+
+**Como resolver:** no instagram.com, logado no @a3.imoveis, ir em Configurações → Apps e sites → Convites de
+testador → Aceitar. Depois conectar numa janela anônima.
+
+**Tentativa das 17h03:** foi feita com o @getsaleboost logado no navegador e recusada pela trava de 1 Instagram por
+empresa, como esperado.
+
+A solução definitiva, para qualquer imobiliária conectar sem convite, é o App Review da Meta.
 Sinal de conexão "falsa": `instagram_username` nulo com token salvo.
 
 ## Proteção contra conta em 2 empresas (2026-10-01)
