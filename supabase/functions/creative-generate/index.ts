@@ -1566,7 +1566,7 @@ async function fetchFichaCtas(admin: SupaClient, verticalKey: string | null): Pr
 // diz o motivo — nada é cobrado.
 // `full` (menu Tour virtual, 2026-11-10): tour COMPLETO na ordem que o dono confirmou — vários trechos (abertura de fora,
 // caminhadas entre cômodos vizinhos, cortes entre os outros) num vídeo só. A peça nasce sem dia e vai pra Aprovações.
-export interface FullTour { photos: string[]; rooms: (string | null)[]; notes: string[] }
+export interface FullTour { photos: string[]; rooms: (string | null)[]; notes: string[]; cuts?: number[] }
 async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Company, job: SlotJob, cronSecret: string, full?: FullTour): Promise<{ pieceId?: string; error?: string }> {
   const { data: item } = await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('id', job.item_id).eq('company_id', company.id).eq('kind', 'product').maybeSingle()
   const photos = ((item?.meta?.photos ?? []) as { url: string }[]).map(p => p.url).filter(Boolean)
@@ -1699,7 +1699,7 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`
   try {
     const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/item-videos`, {
       method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create', cron_secret: cronSecret, company_id: company.id, item_id: item.id, kind: full ? 'tour' : tour.kind, photos: tour.photos, label: full ? 'Tour virtual' : 'Calendário', piece_id: piece.id, endcard_url: card.url, endcard_seconds: tcfg.endcard_seconds }),
+      body: JSON.stringify({ action: 'create', cron_secret: cronSecret, company_id: company.id, item_id: item.id, kind: full ? 'tour' : tour.kind, photos: tour.photos, ...(full ? { cuts: full.cuts ?? [] } : {}), label: full ? 'Tour virtual' : 'Calendário', piece_id: piece.id, endcard_url: card.url, endcard_seconds: tcfg.endcard_seconds }),
     })
     const r = await res.json().catch(() => ({})) as { error?: string }
     if (!res.ok) {
@@ -1884,13 +1884,15 @@ Deno.serve(async (req) => {
       if (!ready) return json({ error: 'O servidor de vídeo está fora do ar agora. Nada foi cobrado — tente de novo em alguns minutos.' }, 503)
       // Cômodo de cada foto pela nota já gravada (nunca o que a tela mandou) e as passagens pela ficha.
       const rooms = order.map(u => roomOf(byUrl.get(u) as never, tcfg))
-      const { passages } = tourSegments(rooms, tcfg.adjacent_rooms, tcfg.opening_rooms)
+      // Caminhada contínua (dono, 2026-11-11); corte só onde o dono pediu.
+      const cuts = Array.isArray(body.cuts) ? (body.cuts as unknown[]).map(Number).filter(i => Number.isInteger(i) && i > 0 && i < order.length) : []
+      const { passages } = tourSegments(rooms, tcfg.adjacent_rooms, tcfg.opening_rooms, cuts)
       const notes: string[] = []
-      if (passages.includes('walk')) notes.push(PAIR_NOTICE)
-      const cuts = passages.filter((p, i) => i > 0 && p === 'cut').length
-      if (cuts) notes.push(`${cuts} passagem(ns) em corte (ambientes que não se ligam pela ficha) — a câmera não inventa o caminho entre eles.`)
+      if (passages.some(p => p === 'walk' || p === 'walk_unconfirmed')) notes.push(PAIR_NOTICE)
+      const unconfirmed = passages.filter(p => p === 'walk_unconfirmed').length
+      if (unconfirmed) notes.push(`${unconfirmed} passagem(ns) entre ambientes que a ficha não confirma serem vizinhos — confira no vídeo se a câmera não mostrou um espaço que não existe.`)
       const job: SlotJob = { date: '', producer: 'item_video', name: 'Tour virtual', pillar: 'tour', purpose: 'Tour virtual completo pedido pelo dono', item_id: item.id, recipe: VIDEO_RECIPE, familia: 'tour', tema: 'tour' }
-      const r = await runVideoSlot(admin, anthropicKey, company, job, cronSecretEnv, { photos: order, rooms, notes })
+      const r = await runVideoSlot(admin, anthropicKey, company, job, cronSecretEnv, { photos: order, rooms, notes, cuts })
       if (!r.pieceId) return json({ error: r.error ?? 'Não consegui criar o tour.' }, 500)
       return json({ ok: !r.error, piece_id: r.pieceId, ...(r.error ? { error: r.error } : {}) }, r.error ? 502 : 200)
     }

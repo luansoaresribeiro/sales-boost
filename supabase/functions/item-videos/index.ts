@@ -217,7 +217,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const admin = createClient(supabaseUrl, serviceKey)
-    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number }
+    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number; cuts?: unknown }
     const cronSecret = Deno.env.get('CRON_SECRET')
     const isCron = !!cronSecret && body.cron_secret === cronSecret
 
@@ -352,7 +352,9 @@ Deno.serve(async (req) => {
         const { data: piece } = await admin.from('marketing_ai_test_content').select('id').eq('id', body.piece_id).eq('company_id', company.id).maybeSingle()
         pieceId = piece?.id
       }
-      const { segments } = tourSegments(photos.map(u => roomOf(meta.get(u) as never, tcfg)), tcfg.adjacent_rooms, tcfg.opening_rooms)
+      // Cortes pedidos pelo dono (índice da foto que começa depois do corte); o resto é caminhada contínua.
+      const cuts = Array.isArray(body.cuts) ? (body.cuts as unknown[]).map(Number).filter(i => Number.isInteger(i) && i > 0 && i < photos.length) : []
+      const { segments } = tourSegments(photos.map(u => roomOf(meta.get(u) as never, tcfg)), tcfg.adjacent_rooms, tcfg.opening_rooms, cuts)
       const r = await createTourVideo(admin, company, item.id, photos, segments, pieceId, endcard)
       if (!r.ok) return json({ error: r.error, ...(r.cap ? { status: 'cap_reached' } : {}) }, r.status)
       return json({ status: 'processing', video_id: r.video_id })

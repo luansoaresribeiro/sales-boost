@@ -3,7 +3,7 @@
 // gastar (nunca confia na tela). scripts/test-tour-order.mjs falha se as duas divergirem.
 export type SegKind = 'opening' | 'pair' | 'room'
 export interface Segment { kind: SegKind; from: number; to?: number }
-export type Passage = 'start' | 'walk' | 'cut'
+export type Passage = 'start' | 'walk' | 'walk_unconfirmed' | 'cut'
 
 export function linked(a: string | null, b: string | null, adjacent: [string, string][]): boolean {
   if (!a || !b) return false
@@ -12,22 +12,29 @@ export function linked(a: string | null, b: string | null, adjacent: [string, st
   return adjacent.some(([x, y]) => (x === a && y === b) || (x === b && y === a))
 }
 
-export function tourSegments(rooms: (string | null)[], adjacent: [string, string][], openingRooms: string[]): { segments: Segment[]; passages: Passage[] } {
+/**
+ * Trechos do vídeo na ordem dada (caminhada CONTÍNUA, pedido do dono 2026-11-11): cada trecho vai de uma foto até
+ * a seguinte, então a câmera nunca para nem corta. `cuts` = índices i em que o dono pediu corte ANTES da foto i.
+ * Passagem entre cômodos que a ficha não diz serem vizinhos (ou 2 fotos do mesmo tipo) = 'walk_unconfirmed': a tela
+ * e o post avisam pra conferir no vídeo. Foto sozinha (depois de corte, ou tour de 1 foto) vira 1 trecho próprio —
+ * 'opening' se for fachada/vista, senão 'room'.
+ */
+export function tourSegments(rooms: (string | null)[], adjacent: [string, string][], openingRooms: string[], cuts: number[] = []): { segments: Segment[]; passages: Passage[] } {
   const n = rooms.length
   const segments: Segment[] = []
   const passages: Passage[] = rooms.map(() => 'cut')
   if (!n) return { segments, passages }
   passages[0] = 'start'
-  let i = 0
-  if (rooms[0] && openingRooms.includes(rooms[0])) { segments.push({ kind: 'opening', from: 0 }); i = 1 }
-  let covered = i === 1 ? 0 : -1
-  for (; i < n; i++) {
-    if (i + 1 < n && linked(rooms[i], rooms[i + 1], adjacent)) {
+  const cut = new Set(cuts.filter(i => Number.isInteger(i) && i > 0 && i < n))
+  let covered = -1   // última foto que já aparece num trecho
+  for (let i = 0; i < n; i++) {
+    if (i + 1 < n && !cut.has(i + 1)) {
       segments.push({ kind: 'pair', from: i, to: i + 1 })
-      passages[i + 1] = 'walk'
+      passages[i + 1] = linked(rooms[i], rooms[i + 1], adjacent) ? 'walk' : 'walk_unconfirmed'
       covered = i + 1
     } else if (covered < i) {
-      segments.push({ kind: 'room', from: i })
+      const r = rooms[i]
+      segments.push({ kind: r && openingRooms.includes(r) ? 'opening' : 'room', from: i })
       covered = i
     }
   }

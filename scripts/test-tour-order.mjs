@@ -29,7 +29,7 @@ t('config: walk_order da ficha, máximo 10 e 2 por cômodo por padrão; sem walk
 t('ordem: abre de fora com a melhor fachada/vista e segue a ordem da ficha', () => {
   const o = orderTour([P(1, 'quarto'), P(2, 'cozinha'), P(3, 'fachada', 70), P(4, 'sala'), P(5, 'vista', 90), P(6, 'banheiro')], cfg, ocfg)
   assert.deepEqual(o.rooms, ['vista', 'fachada', 'sala', 'cozinha', 'quarto', 'banheiro'])
-  assert.equal(o.segments[0].kind, 'opening')
+  assert.deepEqual(o.segments[0], { kind: 'pair', from: 0, to: 1 })   // caminhada contínua: sai de fora andando até a próxima foto
 })
 t('no máximo 2 fotos por cômodo (as melhores); foto ruim e excesso ficam de fora com motivo', () => {
   const o = orderTour([P(1, 'sala', 60), P(2, 'sala', 95), P(3, 'sala', 80), P(4, 'cozinha', 30)], cfg, ocfg)
@@ -50,39 +50,43 @@ t('url inválida ou repetida não entra', () => {
   const o = orderTour([P(1, 'sala'), P(1, 'sala'), { url: 'http://inseguro/x.jpg', room: 'sala', room_conf: 1, quality: 90 }], cfg, ocfg)
   assert.deepEqual(o.photos, ['https://x/1.jpg'])
 })
-t('caminhada só entre cômodos vizinhos; corte entre os outros e entre 2 fotos do mesmo tipo (podem ser cômodos diferentes)', () => {
+t('caminhada CONTÍNUA (dono, 11/11): uma foto até a seguinte, sem corte; passagem não confirmada marcada', () => {
   const adj = cfg.adjacent_rooms
   assert.ok(linked('sala', 'varanda', adj)); assert.ok(linked('varanda', 'sala', adj)); assert.ok(!linked('quarto', 'quarto', adj))
   assert.ok(!linked('cozinha', 'quarto', adj)); assert.ok(!linked(null, 'sala', adj))
   const r = tourSegments(['fachada', 'sala', 'varanda', 'quarto', 'banheiro', 'cozinha'], adj, cfg.opening_rooms)
-  assert.deepEqual(r.segments, [
-    { kind: 'opening', from: 0 }, { kind: 'pair', from: 1, to: 2 }, { kind: 'pair', from: 3, to: 4 }, { kind: 'room', from: 5 },
-  ])
-  assert.deepEqual(r.passages, ['start', 'cut', 'walk', 'cut', 'walk', 'cut'])
+  assert.deepEqual(r.segments, [0, 1, 2, 3, 4].map(i => ({ kind: 'pair', from: i, to: i + 1 })))
+  assert.deepEqual(r.passages, ['start', 'walk_unconfirmed', 'walk', 'walk_unconfirmed', 'walk', 'walk_unconfirmed'])   // varanda→quarto não é vizinho na ficha do teste
+  assert.ok(!r.segments.some(s => s.kind === 'room'))
 })
-t('caminhadas encadeadas: o fim de um trecho é o começo do próximo (sem repetir foto)', () => {
-  const r = tourSegments(['hall', 'sala', 'cozinha', 'sala_jantar'], cfg.adjacent_rooms, cfg.opening_rooms)
-  assert.deepEqual(r.segments, [{ kind: 'pair', from: 0, to: 1 }, { kind: 'pair', from: 1, to: 2 }, { kind: 'pair', from: 2, to: 3 }])
+t('2 fotos do mesmo tipo (ex.: 2 quartos): caminha, mas marcada como não confirmada', () => {
+  const r = tourSegments(['quarto', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms)
+  assert.deepEqual(r.passages, ['start', 'walk_unconfirmed'])
 })
-t('sem foto de fora: não existe abertura (nunca inventa o prédio nem a vista)', () => {
-  const r = tourSegments(['sala', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms)
-  assert.ok(!r.segments.some(s => s.kind === 'opening'))
-  assert.deepEqual(r.segments, [{ kind: 'room', from: 0 }, { kind: 'room', from: 1 }])
+t('corte só onde o dono pediu; foto sozinha vira trecho próprio (abertura se for de fora)', () => {
+  const r = tourSegments(['fachada', 'sala', 'varanda', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms, [1, 3])
+  assert.deepEqual(r.segments, [{ kind: 'opening', from: 0 }, { kind: 'pair', from: 1, to: 2 }, { kind: 'room', from: 3 }])
+  assert.deepEqual(r.passages, ['start', 'cut', 'walk', 'cut'])
+  assert.deepEqual(tourSegments(['sala', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms, [0, 2, 9, 1.5]).segments, [{ kind: 'pair', from: 0, to: 1 }])  // cortes inválidos ignorados
+})
+t('1 foto só: um trecho (abertura de fora só com foto de fachada/vista)', () => {
+  assert.deepEqual(tourSegments(['vista'], cfg.adjacent_rooms, cfg.opening_rooms).segments, [{ kind: 'opening', from: 0 }])
+  assert.deepEqual(tourSegments(['sala'], cfg.adjacent_rooms, cfg.opening_rooms).segments, [{ kind: 'room', from: 0 }])
 })
 t('toda foto aparece em algum trecho', () => {
-  for (const rooms of [['sala'], ['fachada'], ['fachada', 'vista', 'sala'], ['sala', 'quarto', 'sala', 'varanda', null, 'cozinha']]) {
-    const { segments } = tourSegments(rooms, cfg.adjacent_rooms, cfg.opening_rooms)
+  for (const [rooms, cuts] of [[['sala'], []], [['fachada'], []], [['fachada', 'vista', 'sala'], [1]], [['sala', 'quarto', 'sala', 'varanda', null, 'cozinha'], [2, 4, 5]]]) {
+    const { segments } = tourSegments(rooms, cfg.adjacent_rooms, cfg.opening_rooms, cuts)
     const seen = new Set(segments.flatMap(s => (s.to !== undefined ? [s.from, s.to] : [s.from])))
     assert.equal(seen.size, rooms.length, JSON.stringify(rooms))
   }
 })
 t('duração = soma dos trechos', () => {
   const { segments } = tourSegments(['fachada', 'sala', 'varanda'], cfg.adjacent_rooms, cfg.opening_rooms)
-  assert.equal(tourSeconds(segments, { opening: 5, pair: 6, room: 5 }), 11)
+  assert.equal(tourSeconds(segments, { opening: 5, pair: 6, room: 5 }), 12)
 })
 t('a cópia da tela dá as mesmas passagens que o servidor', () => {
   const cases = [['fachada', 'sala', 'varanda', 'quarto', 'banheiro', 'cozinha'], ['sala', null, 'sala'], ['vista'], [], ['quarto', 'banheiro', 'quarto']]
-  for (const c of cases) assert.deepEqual(front.tourSegments(c, cfg.adjacent_rooms, cfg.opening_rooms), tourSegments(c, cfg.adjacent_rooms, cfg.opening_rooms), JSON.stringify(c))
+  for (const c of cases) for (const cuts of [[], [1], [1, 2], [2, 4]]) assert.deepEqual(front.tourSegments(c, cfg.adjacent_rooms, cfg.opening_rooms, cuts), tourSegments(c, cfg.adjacent_rooms, cfg.opening_rooms, cuts), JSON.stringify([c, cuts]))
 })
 t('plano da semana sem tour: estratégia, calendário e "pra fazer" (servidor e tela)', () => {
   const fmts = [{ key: 'reel', name: 'Vídeo', pillar: 'x', producer: 'item_video', status: 'live' }, { key: 'card', name: 'Card', pillar: 'x', producer: 'post', status: 'live' }]
@@ -100,7 +104,7 @@ t('servidor: tour só pelo caminho com peça e encerramento; passagens recalcula
   const create = iv.slice(iv.indexOf("body.action === 'create' && body.kind === 'tour'"), iv.indexOf("if (body.action === 'create') {"))
   assert.match(create, /if \(!isCron\) return json/)
   assert.match(create, /requirePaidAccess/); assert.match(create, /ownerBlockMessage/); assert.match(create, /validEndcardUrl/)
-  assert.match(create, /tourSegments\(photos\.map\(u => roomOf\(meta\.get\(u\)/)
+  assert.match(create, /tourSegments\(photos\.map\(u => roomOf\(meta\.get\(u\) as never, tcfg\)\), tcfg\.adjacent_rooms, tcfg\.opening_rooms, cuts\)/)
   assert.match(iv.slice(iv.indexOf('async function createTourVideo')), /fitsCap\(admin, company\.id, estimate\)/)
   const cg = readFileSync(new URL('../supabase/functions/creative-generate/index.ts', import.meta.url), 'utf8')
   const tp = cg.slice(cg.indexOf("body.action === 'tour_piece'"), cg.indexOf("body.action === 'relearn'"))
