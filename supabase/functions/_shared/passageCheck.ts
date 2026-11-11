@@ -14,11 +14,11 @@
 
 export type Linked = 'yes' | 'no' | 'unsure'
 export type Missing = 'escada' | 'porta' | 'abertura' | null
-export interface PassageCheck { linked: Linked; missing: Missing; checked_at?: string; v?: number }
+export interface PassageCheck { linked: Linked; missing: Missing; checked_at?: string; v?: number; facts?: PassageFacts }
 
 const MODEL = 'claude-sonnet-5-5'
 /** Versão da pergunta. Resultado guardado com outra versão (ou sem) é perguntado de novo. */
-export const CHECK_VERSION = 3
+export const CHECK_VERSION = 4
 export const isCurrent = (c: PassageCheck | null | undefined): c is PassageCheck => !!c && c.v === CHECK_VERSION
 export const MAX_PAIRS_PER_CALL = 15
 
@@ -59,7 +59,7 @@ export const MISSING_LABEL: Record<NonNullable<Missing>, string> = {
 // andar sem a escada na foto de saída, e de fora para dentro sem a porta aparecer. Dentro de casa, no mesmo andar, a
 // caminhada saiu fiel em 5 de 5 — então essa passa.
 export type Tri = 'yes' | 'no' | 'unsure'
-export interface PassageFacts { outside1: Tri; outside2: Tri; sameFloor: Tri; stairsInPhoto1: Tri; doorBetweenVisible: Tri }
+export interface PassageFacts { outside1: Tri; outside2: Tri; sameFloor: Tri; stairsInPhoto1: Tri; doorBetweenVisible: Tri; stairsInPhoto2?: Tri }
 
 const tri = (v: unknown): Tri => { const s = String(v ?? '').toLowerCase(); return s === 'yes' || s === 'sim' || s === 'true' ? 'yes' : s === 'no' || s === 'nao' || s === 'não' || s === 'false' ? 'no' : 'unsure' }
 
@@ -69,7 +69,7 @@ export function parseFacts(raw: string): PassageFacts | null {
   if (!m) return null
   try {
     const o = JSON.parse(m) as Record<string, unknown>
-    return { outside1: tri(o.photo1_outside), outside2: tri(o.photo2_outside), sameFloor: tri(o.same_floor), stairsInPhoto1: tri(o.stairs_in_photo1), doorBetweenVisible: tri(o.door_between_visible) }
+    return { outside1: tri(o.photo1_outside), outside2: tri(o.photo2_outside), sameFloor: tri(o.same_floor), stairsInPhoto1: tri(o.stairs_in_photo1), doorBetweenVisible: tri(o.door_between_visible), stairsInPhoto2: tri(o.stairs_in_photo2) }
   } catch { return null }
 }
 
@@ -78,8 +78,12 @@ export function decidePassage(f: PassageFacts): Omit<PassageCheck, 'checked_at' 
   const out1 = f.outside1 === 'yes', out2 = f.outside2 === 'yes'
   // De fora para dentro (ou o contrário): a porta/vão entre os dois precisa aparecer numa das fotos.
   if (out1 !== out2 && (f.outside1 !== 'unsure' && f.outside2 !== 'unsure')) {
-    return f.doorBetweenVisible === 'yes' ? { linked: 'yes', missing: null } : f.doorBetweenVisible === 'no' ? { linked: 'no', missing: 'porta' } : { linked: 'unsure', missing: 'porta' }
+    // v4: "incerto" também bloqueia — a piscina → salão (sem porta à vista) dissolveu no vídeo real.
+    return f.doorBetweenVisible === 'yes' ? { linked: 'yes', missing: null } : { linked: 'no', missing: 'porta' }
   }
+  // v4: escada só na foto de DESTINO = a câmera teria que inventar o caminho até ela (jogos → sala de baixo no vídeo
+  // real: a IA de visão disse "mesmo andar", mas a escada da sala de baixo denunciava a troca de andar).
+  if (f.stairsInPhoto2 === 'yes' && f.stairsInPhoto1 !== 'yes') return { linked: 'no', missing: 'escada' }
   // Troca de andar: só com a escada visível na foto de onde a câmera sai.
   if (f.sameFloor === 'no') return f.stairsInPhoto1 === 'yes' ? { linked: 'yes', missing: null } : { linked: 'no', missing: 'escada' }
   if (f.sameFloor === 'unsure') return { linked: 'unsure', missing: f.stairsInPhoto1 === 'yes' ? null : 'escada' }
@@ -94,8 +98,9 @@ Depois responda:
 - photo1_outside / photo2_outside: a foto é de fora?
 - same_floor: os dois ambientes estão no mesmo andar? Piso de material diferente NÃO basta para dizer "no" (casas misturam piso). Diga "no" só com sinal claro: uma escada que sobe ou desce entre eles, vista de outra altura, ou um ambiente claramente de outro andar. Sem sinal claro, "yes".
 - stairs_in_photo1: a FOTO 1 mostra uma escada?
-- door_between_visible: quando uma foto é de fora e a outra de dentro, alguma das duas mostra a porta, porta de vidro ou vão que liga os dois? (senão, "unsure")
-Termine com UMA linha só com o JSON: {"photo1_outside":"yes|no","photo2_outside":"yes|no","same_floor":"yes|no|unsure","stairs_in_photo1":"yes|no","door_between_visible":"yes|no|unsure"}`
+- stairs_in_photo2: a FOTO 2 mostra uma escada?
+- door_between_visible: quando uma foto é de fora e a outra de dentro, alguma das duas mostra a porta, porta de vidro ou vão que liga os dois? Se não aparece, "no". (Se as duas são de dentro ou as duas de fora, "unsure".)
+Termine com UMA linha só com o JSON: {"photo1_outside":"yes|no","photo2_outside":"yes|no","same_floor":"yes|no|unsure","stairs_in_photo1":"yes|no","stairs_in_photo2":"yes|no","door_between_visible":"yes|no|unsure"}`
 
 // deno-lint-ignore no-explicit-any
 type Admin = any
@@ -118,7 +123,7 @@ async function askPair(anthropicKey: string, a: string, b: string): Promise<Pass
     // Com o raciocínio ligado, o 1º bloco pode ser de "thinking": junta só os blocos de texto.
     const text = (Array.isArray(data.content) ? data.content : []).filter((b: { type?: string }) => b?.type === 'text').map((b: { text?: string }) => b.text ?? '').join('\n')
     const facts = parseFacts(text)
-    return facts ? decidePassage(facts) : parsePassageCheck(text)
+    return facts ? { ...decidePassage(facts), facts } : parsePassageCheck(text)
   } catch (e) { console.error('passageCheck: falhou', String(e).slice(0, 200)); return null }
 }
 
