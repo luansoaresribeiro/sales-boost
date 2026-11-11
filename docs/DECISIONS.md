@@ -6,6 +6,28 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-11 (tarde) — Tour do IMÓVEL INTEIRO, zero cortes, câmera entrando de fora + gates antes dos Boosts
+
+**Pedido do dono (depois do teste da Tespon):** "o tour precisa ser feito do imóvel inteiro e não pode ter cortes…
+como se fosse um vídeo de um drone passando dentro da casa… se tivermos uma foto do exterior, o drone vem de fora e
+entra no cômodo."
+
+**Agora:**
+- **Zero cortes:** com 2 fotos ou mais, todo trecho é caminhada da foto i até a i+1 (`tourSegments`).
+  - Saem o corte automático `enter` (#144, entrada abaixo) e o ✂️ do dono (#142).
+  - As duas regras ficam registradas como histórico.
+- **Foto de fora → 1º cômodo:** a câmera entra pela abertura visível, com a instrução `pair_in`. A passagem é `walk_in`, amarela, e o dono confere no vídeo antes de aprovar.
+- **Imóvel inteiro:** a ordem sugerida põe 1 foto de cada cômodo antes de qualquer 2ª foto, com até 15 fotos (era 10). A tela avisa o cômodo que ficou de fora.
+- **Instrução de câmera:** "drone" orienta só o movimento. A IA não pode inventar geometria, arquitetura, cômodos, móveis nem paisagem que as fotos não sustentem (regra 4).
+- **Orçamento:**
+  - o tour completo não refaz trecho sozinho;
+  - se falhar, `cost_usd` = soma dos trechos prontos;
+  - teste real com verba nova aprovada pelo dono: até +US$ 5, além dos US$ 4,62 já gastos.
+- **Revisão do dono incorporada** ([ROADMAP.md](ROADMAP.md#foco-e-gates-do-tour-virtual-e-dos-boosts-dono-2026-11-11)):
+  - gate técnico + gate comercial antes de qualquer Boost ou cobrança;
+  - markup ≠ margem;
+  - no máximo 1 frente de produto com código por vez.
+
 ## 2026-11-11 — Tour virtual, Etapa 3: abertura aérea de fora, só a partir de foto real
 
 **Pedido do dono (10/11):** a câmera vem de fora, em imagem de drone cinematográfica. **Regra:** aérea só a

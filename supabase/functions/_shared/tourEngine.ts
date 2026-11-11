@@ -25,9 +25,17 @@ export const VIDEO_BUCKET = 'videos'
 export const DEFAULT_PROMPTS = {
   room: 'Slow, smooth cinematic camera movement inside this room, steady gimbal, natural light, calm and premium feeling. ' +
     'Keep every object, wall, window and piece of furniture exactly as in the photo — do not add, remove or change anything. No people, no text, no logos.',
-  pair: 'Smooth first-person walkthrough of a real place, steady gimbal at eye level, walking pace. ' +
-    'The camera moves forward from the first room into the next room through the natural opening between them and ends exactly on the final frame. ' +
-    'Keep both rooms exactly as in the photos — do not add, remove or change any furniture, wall, window or object. No people, no text, no logos.',
+  // Tour do imóvel inteiro (dono, 2026-11-11): UMA trajetória contínua, estilo voo suave de drone dentro da casa.
+  // "Drone" orienta só o MOVIMENTO, nunca a reconstrução do imóvel (regra 4).
+  pair: 'Smooth, continuous, stabilized camera glide through a real home, like a slow indoor drone flight at a calm pace. ' +
+    'Start exactly on the first frame, move through the visible opening between the two spaces and end exactly on the final frame, with no cut and no jump. ' +
+    'The camera may interpolate its movement, but must not invent geometry, architecture, rooms, furniture or landscape that is not supported by the two photos. ' +
+    'Keep both spaces exactly as in the photos — do not add, remove or change any furniture, wall, door, window or object. No people, no text, no logos.',
+  // A 1ª foto é DE FORA: a câmera vem da área externa e entra pela abertura visível (porta, vidro, varanda).
+  pair_in: 'Smooth, continuous, stabilized aerial-style camera glide that starts outside exactly on the first frame and flies gently into the home ' +
+    'through the opening that is visible in the photos (door, glass door or balcony), ending exactly on the final frame inside, with no cut and no jump. ' +
+    'The camera may interpolate its movement, but must not invent geometry, architecture, rooms, furniture or landscape that is not supported by the two photos. ' +
+    'Keep the outside and the inside exactly as in the photos — do not add, remove or change anything. No people, no text, no logos.',
   // Abertura de fora (Etapa 3, 2026-11-11): movimento de drone, mas SÓ dentro do quadro da foto real (regra 4).
   opening: 'Cinematic aerial drone shot of this exact real place: stabilized, a slow gentle rise with a slow push-in, golden natural light, premium real-estate film look. ' +
     'Stay strictly inside what the photo already shows — never reveal anything beyond the edges of the frame. ' +
@@ -38,7 +46,7 @@ export const DEFAULT_PROMPTS = {
 }
 export type ClipKind = keyof typeof DEFAULT_PROMPTS
 // Segundos por trecho: 2 cômodos precisam de um pouco mais pra caminhada.
-export const SECONDS: Record<ClipKind, number> = { room: 5, pair: WALK_SECONDS, opening: 5, drone: 5 }
+export const SECONDS: Record<ClipKind, number> = { room: 5, pair: WALK_SECONDS, pair_in: WALK_SECONDS, opening: 5, drone: 5 }
 export const estimateUsd = (kind: ClipKind) => SECONDS[kind] * COST_PER_SECOND
 
 // Instrução de câmera da ficha do setor (regra 6), com o padrão acima.
@@ -53,7 +61,8 @@ export async function clipPrompt(admin: any, verticalKey: string | null, kind: C
 // from/to: índices das fotos de começo e fim (to ausente = trecho de uma foto só).
 // prompt/seconds por trecho: só o tour completo usa (abertura de fora + caminhadas + cortes no mesmo vídeo);
 // sem eles, vale a instrução e a duração do vídeo inteiro, como sempre.
-export interface Clip { job_ref: string | null; status: string; attempts: number; from: number; to?: number; prompt?: string; seconds?: number }
+// max_attempts: o tour completo usa 1 (dono, 2026-11-11: um trecho que falhou não é refeito sozinho — o dono decide).
+export interface Clip { job_ref: string | null; status: string; attempts: number; from: number; to?: number; prompt?: string; seconds?: number; max_attempts?: number }
 
 export function hfHeaders(): Record<string, string> | null {
   const cred = (Deno.env.get('HF_CREDENTIALS') ?? '').trim()
@@ -84,7 +93,7 @@ async function clipStatus(headers: Record<string, string>, jobRef: string): Prom
 }
 
 // Manda todos os trechos; o que não subir fica sem job_ref e tenta de novo na consulta.
-export async function submitAll(headers: Record<string, string>, prompt: string, photos: string[], plan: Pick<Clip, 'from' | 'to' | 'prompt' | 'seconds'>[], seconds?: number): Promise<Clip[]> {
+export async function submitAll(headers: Record<string, string>, prompt: string, photos: string[], plan: Pick<Clip, 'from' | 'to' | 'prompt' | 'seconds' | 'max_attempts'>[], seconds?: number): Promise<Clip[]> {
   const refs = await Promise.all(plan.map(c => submitClip(headers, c.prompt ?? prompt, photos[c.from], c.to !== undefined ? photos[c.to] : undefined, c.seconds ?? seconds)))
   return refs.map((r, i) => ({ job_ref: r, status: 'processing', attempts: 1, ...plan[i] }))
 }
@@ -95,13 +104,16 @@ export async function pollClips(headers: Record<string, string>, prompt: string,
   Promise<{ done: number; failed: boolean; urls: (string | null)[] }> {
   const urls: (string | null)[] = clips.map(() => null)
   await Promise.all(clips.map(async (c, i) => {
-    const resubmit = async () => {
-      if (c.attempts >= MAX_ATTEMPTS) { c.status = 'failed'; return }
+    // notAccepted: o pedido nunca foi aceito pela Higgsfield (nada cobrado) — pode reenviar até MAX_ATTEMPTS. Um trecho
+    // que FOI gerado e falhou só é refeito até `max_attempts` (tour completo: 1 = nunca refaz sozinho).
+    const resubmit = async (notAccepted = false) => {
+      const max = notAccepted ? MAX_ATTEMPTS : (c.max_attempts ?? MAX_ATTEMPTS)
+      if (c.attempts >= max) { c.status = 'failed'; return }
       c.attempts += 1
       c.job_ref = await submitClip(headers, c.prompt ?? prompt, photos[c.from ?? i], c.to !== undefined ? photos[c.to] : undefined, c.seconds ?? seconds)
-      c.status = c.job_ref ? 'processing' : (c.attempts >= MAX_ATTEMPTS ? 'failed' : 'processing')
+      c.status = c.job_ref ? 'processing' : (c.attempts >= max ? 'failed' : 'processing')
     }
-    if (!c.job_ref) { if (c.status !== 'failed') await resubmit(); return }
+    if (!c.job_ref) { if (c.status !== 'failed') await resubmit(true); return }   // nunca subiu = nada cobrado; tenta enviar de novo
     const st = await clipStatus(headers, c.job_ref)
     if (!st) return
     if (st.status === 'completed' && st.url) { c.status = 'completed'; urls[i] = st.url; return }

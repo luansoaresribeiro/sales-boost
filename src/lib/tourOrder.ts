@@ -2,8 +2,8 @@
 // das fotos, a tela recalcula na hora onde a câmera caminha e onde corta. O servidor recalcula de novo antes de
 // gastar (nunca confia na tela). scripts/test-tour-order.mjs falha se as duas divergirem.
 export type SegKind = 'opening' | 'pair' | 'room'
-export interface Segment { kind: SegKind; from: number; to?: number }
-export type Passage = 'start' | 'walk' | 'walk_unconfirmed' | 'cut' | 'enter'
+export interface Segment { kind: SegKind; from: number; to?: number; entry?: boolean }
+export type Passage = 'start' | 'walk' | 'walk_unconfirmed' | 'walk_in'
 
 export function linked(a: string | null, b: string | null, adjacent: [string, string][]): boolean {
   if (!a || !b) return false
@@ -13,35 +13,25 @@ export function linked(a: string | null, b: string | null, adjacent: [string, st
 }
 
 /**
- * Trechos do vídeo na ordem dada (caminhada CONTÍNUA, pedido do dono 2026-11-11): cada trecho vai de uma foto até
- * a seguinte, então a câmera nunca para nem corta. `cuts` = índices i em que o dono pediu corte ANTES da foto i.
- * Passagem entre cômodos que a ficha não diz serem vizinhos (ou 2 fotos do mesmo tipo) = 'walk_unconfirmed': a tela
- * e o post avisam pra conferir no vídeo. Foto sozinha (depois de corte, ou tour de 1 foto) vira 1 trecho próprio —
- * 'opening' se for fachada/vista, senão 'room'.
- * Foto DE FORA (fachada/vista, Etapa 3 — 2026-11-11): nunca caminha até outra foto nem vem de outra — a IA teria que
- * inventar o caminho de fora pra dentro (regra 4). Ela vira a abertura própria (movimento de drone dentro do que a foto
- * mostra) e a passagem seguinte é um corte AUTOMÁTICO ('enter'), que o dono não desliga.
+ * Trechos do vídeo na ordem dada. IMÓVEL INTEIRO, ZERO CORTES (dono, 2026-11-11 — substitui o corte automático de
+ * fora pra dentro do #144 e o ✂️ do #142): com 2 fotos ou mais, TODO trecho é uma caminhada da foto i até a i+1, então
+ * o vídeo é uma única trajetória de câmera (pedido de corte de tela antiga é ignorado).
+ * Passagens que precisam de revisão (o dono assiste antes de aprovar, regra 4):
+ *  - 'walk_in': de uma foto DE FORA (fachada/vista) para a seguinte — a câmera entra no imóvel pela abertura visível;
+ *  - 'walk_unconfirmed': cômodos que a ficha não diz serem vizinhos (ou 2 fotos do mesmo tipo).
+ * Só um tour de 1 foto vira trecho solto ('opening' se for de fora, senão 'room').
  */
-export function tourSegments(rooms: (string | null)[], adjacent: [string, string][], openingRooms: string[], cuts: number[] = []): { segments: Segment[]; passages: Passage[] } {
+export function tourSegments(rooms: (string | null)[], adjacent: [string, string][], openingRooms: string[]): { segments: Segment[]; passages: Passage[] } {
   const n = rooms.length
   const segments: Segment[] = []
-  const passages: Passage[] = rooms.map(() => 'cut')
+  const passages: Passage[] = rooms.map(() => 'start')
   if (!n) return { segments, passages }
-  passages[0] = 'start'
-  const cut = new Set(cuts.filter(i => Number.isInteger(i) && i > 0 && i < n))
   const outside = (r: string | null) => !!r && openingRooms.includes(r)
-  for (let i = 1; i < n; i++) if (outside(rooms[i - 1]) || outside(rooms[i])) { cut.add(i); passages[i] = 'enter' }
-  let covered = -1   // última foto que já aparece num trecho
-  for (let i = 0; i < n; i++) {
-    if (i + 1 < n && !cut.has(i + 1)) {
-      segments.push({ kind: 'pair', from: i, to: i + 1 })
-      passages[i + 1] = linked(rooms[i], rooms[i + 1], adjacent) ? 'walk' : 'walk_unconfirmed'
-      covered = i + 1
-    } else if (covered < i) {
-      const r = rooms[i]
-      segments.push({ kind: r && openingRooms.includes(r) ? 'opening' : 'room', from: i })
-      covered = i
-    }
+  if (n === 1) return { segments: [{ kind: outside(rooms[0]) ? 'opening' : 'room', from: 0 }], passages }
+  for (let i = 0; i + 1 < n; i++) {
+    const entry = outside(rooms[i])
+    segments.push(entry ? { kind: 'pair', from: i, to: i + 1, entry: true } : { kind: 'pair', from: i, to: i + 1 })
+    passages[i + 1] = entry ? 'walk_in' : linked(rooms[i], rooms[i + 1], adjacent) ? 'walk' : 'walk_unconfirmed'
   }
   return { segments, passages }
 }

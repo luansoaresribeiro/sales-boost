@@ -15,16 +15,18 @@
 import type { TourCfg, TourPhoto } from './tourPick.ts'
 
 export type SegKind = 'opening' | 'pair' | 'room'
-export interface Segment { kind: SegKind; from: number; to?: number }
-export type Passage = 'start' | 'walk' | 'walk_unconfirmed' | 'cut' | 'enter'
+export interface Segment { kind: SegKind; from: number; to?: number; entry?: boolean }
+export type Passage = 'start' | 'walk' | 'walk_unconfirmed' | 'walk_in'
 export interface TourOrderCfg { walk_order: string[]; tour_max_photos: number; tour_per_room: number; opening_candidates: string[] }
 export type ExcludeReason = 'low_quality' | 'repeat_room' | 'over_limit'
 export interface TourOrder {
   photos: string[]; rooms: (string | null)[]; segments: Segment[]; passages: Passage[]
   excluded: { url: string; room: string | null; reason: ExcludeReason }[]
+  /** Cômodos que têm foto no imóvel mas ficaram fora do tour pelo limite de fotos (a tela avisa). */
+  missing_rooms: string[]
 }
 
-export const TOUR_MAX_HARD = 12
+export const TOUR_MAX_HARD = 16   // imóvel inteiro (dono, 2026-11-11): 1 foto por cômodo + extras
 const slug = (s: unknown) => String(s ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
 const num = (v: unknown, def: number, lo: number, hi: number) => { const n = Number(v); return Number.isFinite(n) && n >= lo && n <= hi ? Math.round(n) : def }
 
@@ -34,7 +36,7 @@ export function tourOrderCfgFrom(config: unknown, base: Pick<TourCfg, 'room_prio
   const walk = (Array.isArray(t.walk_order) ? t.walk_order : []).map(slug).filter(Boolean).slice(0, 40)
   return {
     walk_order: walk.length ? walk : base.room_priority,
-    tour_max_photos: num(t.tour_max_photos, 10, 2, TOUR_MAX_HARD),
+    tour_max_photos: num(t.tour_max_photos, 15, 2, TOUR_MAX_HARD),
     tour_per_room: num(t.tour_per_room, 2, 1, 4),
     // Ambientes que o DONO pode escolher pra abrir de fora (ex.: varanda com vista), além de fachada/vista. Ficha, regra 6.
     opening_candidates: (Array.isArray(t.opening_candidates) ? t.opening_candidates : []).map(slug).filter(Boolean).slice(0, 10),
@@ -66,35 +68,25 @@ export function linked(a: string | null, b: string | null, adjacent: [string, st
 }
 
 /**
- * Trechos do vídeo na ordem dada (caminhada CONTÍNUA, pedido do dono 2026-11-11): cada trecho vai de uma foto até
- * a seguinte, então a câmera nunca para nem corta. `cuts` = índices i em que o dono pediu corte ANTES da foto i.
- * Passagem entre cômodos que a ficha não diz serem vizinhos (ou 2 fotos do mesmo tipo) = 'walk_unconfirmed': a tela
- * e o post avisam pra conferir no vídeo. Foto sozinha (depois de corte, ou tour de 1 foto) vira 1 trecho próprio —
- * 'opening' se for fachada/vista, senão 'room'.
- * Foto DE FORA (fachada/vista, Etapa 3 — 2026-11-11): nunca caminha até outra foto nem vem de outra — a IA teria que
- * inventar o caminho de fora pra dentro (regra 4). Ela vira a abertura própria (movimento de drone dentro do que a foto
- * mostra) e a passagem seguinte é um corte AUTOMÁTICO ('enter'), que o dono não desliga.
+ * Trechos do vídeo na ordem dada. IMÓVEL INTEIRO, ZERO CORTES (dono, 2026-11-11 — substitui o corte automático de
+ * fora pra dentro do #144 e o ✂️ do #142): com 2 fotos ou mais, TODO trecho é uma caminhada da foto i até a i+1, então
+ * o vídeo é uma única trajetória de câmera (pedido de corte de tela antiga é ignorado).
+ * Passagens que precisam de revisão (o dono assiste antes de aprovar, regra 4):
+ *  - 'walk_in': de uma foto DE FORA (fachada/vista) para a seguinte — a câmera entra no imóvel pela abertura visível;
+ *  - 'walk_unconfirmed': cômodos que a ficha não diz serem vizinhos (ou 2 fotos do mesmo tipo).
+ * Só um tour de 1 foto vira trecho solto ('opening' se for de fora, senão 'room').
  */
-export function tourSegments(rooms: (string | null)[], adjacent: [string, string][], openingRooms: string[], cuts: number[] = []): { segments: Segment[]; passages: Passage[] } {
+export function tourSegments(rooms: (string | null)[], adjacent: [string, string][], openingRooms: string[]): { segments: Segment[]; passages: Passage[] } {
   const n = rooms.length
   const segments: Segment[] = []
-  const passages: Passage[] = rooms.map(() => 'cut')
+  const passages: Passage[] = rooms.map(() => 'start')
   if (!n) return { segments, passages }
-  passages[0] = 'start'
-  const cut = new Set(cuts.filter(i => Number.isInteger(i) && i > 0 && i < n))
   const outside = (r: string | null) => !!r && openingRooms.includes(r)
-  for (let i = 1; i < n; i++) if (outside(rooms[i - 1]) || outside(rooms[i])) { cut.add(i); passages[i] = 'enter' }
-  let covered = -1   // última foto que já aparece num trecho
-  for (let i = 0; i < n; i++) {
-    if (i + 1 < n && !cut.has(i + 1)) {
-      segments.push({ kind: 'pair', from: i, to: i + 1 })
-      passages[i + 1] = linked(rooms[i], rooms[i + 1], adjacent) ? 'walk' : 'walk_unconfirmed'
-      covered = i + 1
-    } else if (covered < i) {
-      const r = rooms[i]
-      segments.push({ kind: r && openingRooms.includes(r) ? 'opening' : 'room', from: i })
-      covered = i
-    }
+  if (n === 1) return { segments: [{ kind: outside(rooms[0]) ? 'opening' : 'room', from: 0 }], passages }
+  for (let i = 0; i + 1 < n; i++) {
+    const entry = outside(rooms[i])
+    segments.push(entry ? { kind: 'pair', from: i, to: i + 1, entry: true } : { kind: 'pair', from: i, to: i + 1 })
+    passages[i + 1] = entry ? 'walk_in' : linked(rooms[i], rooms[i + 1], adjacent) ? 'walk' : 'walk_unconfirmed'
   }
   return { segments, passages }
 }
@@ -111,29 +103,42 @@ export function orderTour(photos: TourPhoto[], cfg: TourCfg, ocfg: TourOrderCfg)
   }
   const q = (p: TourPhoto) => (typeof p.quality === 'number' ? p.quality : -1)
   const byQuality = (a: TourPhoto, b: TourPhoto) => q(b) - q(a)
-  const picked: TourPhoto[] = []
-  const take = (p: TourPhoto) => { picked.push(p); usable.splice(usable.indexOf(p), 1) }
-  // 1) Abertura de fora: melhor foto real de fachada/vista.
-  const opening = usable.filter(p => { const r = roomOf(p, cfg); return !!r && cfg.opening_rooms.includes(r) }).sort(byQuality)[0]
-  if (opening) take(opening)
-  // 2) Cômodos na ordem da ficha, até N fotos por cômodo (as melhores).
-  const perRoom = new Map<string, number>()
-  if (opening) perRoom.set(roomOf(opening, cfg)!, 1)
+  // IMÓVEL INTEIRO (dono, 2026-11-11): primeiro 1 foto (a melhor) de CADA cômodo, depois as 2ªs fotos, depois as sem
+  // cômodo — sempre até o limite. A ordem final segue a ficha: de fora primeiro, depois `walk_order`.
   const order = [...ocfg.walk_order, ...cfg.rooms.map(r => r.key).filter(k => !ocfg.walk_order.includes(k))]
-  for (const room of order) {
-    for (const p of usable.filter(x => roomOf(x, cfg) === room).sort(byQuality)) {
-      const c = perRoom.get(room) ?? 0
-      if (c >= ocfg.tour_per_room) { excluded.push({ url: p.url, room, reason: 'repeat_room' }); usable.splice(usable.indexOf(p), 1); continue }
-      perRoom.set(room, c + 1); take(p)
-    }
+  const rank = (r: string | null) => (r && cfg.opening_rooms.includes(r) ? -1 : r && order.includes(r) ? order.indexOf(r) : r ? order.length : order.length + 1)
+  const byRoom = new Map<string, TourPhoto[]>()
+  const unknown: TourPhoto[] = []
+  for (const p of usable) { const r = roomOf(p, cfg); if (r) byRoom.set(r, [...(byRoom.get(r) ?? []), p]); else unknown.push(p) }
+  const rooms = [...byRoom.keys()].sort((a, b) => rank(a) - rank(b))
+  for (const r of rooms) byRoom.get(r)!.sort(byQuality)
+  // Fora: só a melhor foto de fachada/vista (a câmera entra uma vez).
+  const outsideRooms = rooms.filter(r => cfg.opening_rooms.includes(r))
+  const bestOutside = outsideRooms.flatMap(r => byRoom.get(r)!).sort(byQuality)[0]
+  const picked = new Set<TourPhoto>()
+  const max = ocfg.tour_max_photos
+  if (bestOutside) picked.add(bestOutside)
+  const inside = rooms.filter(r => !cfg.opening_rooms.includes(r))
+  for (let round = 0; round < ocfg.tour_per_room; round++) {
+    for (const r of inside) { const p = byRoom.get(r)![round]; if (p && picked.size < max) picked.add(p) }
   }
-  // 3) Sem cômodo identificado: no fim, na ordem do cadastro (nunca sorteio).
-  for (const p of [...usable]) take(p)
-  const kept = picked.slice(0, ocfg.tour_max_photos)
-  for (const p of picked.slice(ocfg.tour_max_photos)) excluded.push({ url: p.url, room: roomOf(p, cfg), reason: 'over_limit' })
-  const rooms = kept.map(p => roomOf(p, cfg))
-  const { segments, passages } = tourSegments(rooms, cfg.adjacent_rooms, cfg.opening_rooms)
-  return { photos: kept.map(p => p.url), rooms, segments, passages, excluded }
+  for (const p of unknown) if (picked.size < max) picked.add(p)
+  const missing_rooms = inside.filter(r => !byRoom.get(r)!.some(p => picked.has(p)))
+  for (const p of usable) {
+    if (picked.has(p)) continue
+    const r = roomOf(p, cfg)
+    const roomCovered = !!r && ([...picked].some(x => roomOf(x, cfg) === r) || (cfg.opening_rooms.includes(r) && !!bestOutside))
+    excluded.push({ url: p.url, room: r, reason: roomCovered ? 'repeat_room' : 'over_limit' })
+  }
+  // Ordem final: de fora → cômodos na ordem da ficha (fotos do mesmo cômodo juntas, melhor primeiro) → sem cômodo, na ordem do cadastro.
+  const kept = usable.filter(p => picked.has(p)).sort((a, b) => {
+    const ra = roomOf(a, cfg), rb = roomOf(b, cfg)
+    if (rank(ra) !== rank(rb)) return rank(ra) - rank(rb)
+    return ra ? byQuality(a, b) : 0
+  })
+  const keptRooms = kept.map(p => roomOf(p, cfg))
+  const { segments, passages } = tourSegments(keptRooms, cfg.adjacent_rooms, cfg.opening_rooms)
+  return { photos: kept.map(p => p.url), rooms: keptRooms, segments, passages, excluded, missing_rooms }
 }
 
 /** Segundos de cada trecho (mesma tabela do motor: caminhada um pouco mais longa). */

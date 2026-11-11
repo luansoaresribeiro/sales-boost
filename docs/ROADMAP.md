@@ -4,6 +4,60 @@
 > pronto, arquivos envolvidos, riscos, e se envolve ALTERAÇÃO ARRISCADA
 > (ver CLAUDE.md).
 
+## Foco e gates do Tour virtual e dos Boosts (dono, 2026-11-11)
+
+**Regra de foco:** no máximo **1 frente de produto com código em execução por vez**.
+- **Frente atual:** o tour do imóvel inteiro, sem cortes.
+- **As outras frentes** (Bento/fábrica 3D, Telegram, dashboard igual ao print, assinatura, Boosts) avançam só em documento, pesquisa e validação comercial, sem código nem produção sem autorização específica.
+- **A fábrica 3D** continua sendo só uma camada visual.
+
+**Ordem:**
+1. validar o tour contínuo;
+2. medir o custo real;
+3. conversar com imobiliárias;
+4. definir o modelo de Boosts;
+5. experiência visual;
+6. Telegram e outras expansões.
+
+**Gate técnico (o tour):**
+- tour completo e visualmente contínuo;
+- fiel às fotos reais;
+- todos os cômodos escolhidos aparecem;
+- nenhuma arquitetura inventada;
+- custo real registrado por tour e por trecho;
+- limite de gasto respeitado.
+
+Critérios por trecho em [MEDIA-ENGINE.md](MEDIA-ENGINE.md).
+
+**Gate comercial (antes de qualquer código de Boosts ou cobrança por tour):**
+- pelo menos 3 imobiliárias ouvidas, ou 1 piloto real ([PILOTO.md](PILOTO.md));
+- quantos tours por mês usariam;
+- quem paga: imobiliária ou corretor;
+- disposição de pagar por tour avulso, e quanto;
+- objeções;
+- "disse que usaria" separado de "pagou".
+
+**Decisão depois dos dois gates:**
+
+| Gate técnico | Gate comercial | O que fazer |
+|---|---|---|
+| passa | passa | proposta final de monetização ao dono |
+| passa | não passa | revisar oferta e preço, sem infraestrutura nova |
+| não passa | — | corrigir o tour antes de expandir |
+
+Nenhuma implementação de Boosts nem cobrança começa sem aprovação do dono depois dos dois gates.
+
+**Conta dos Boosts (só documento).** Usa o custo real **médio** dos tours concluídos, com falhas e montagem, nunca o
+custo teórico de 1 trecho. Separa markup de margem:
+
+| Base (custo US$ 5) | Preço |
+|---|---|
+| +50% de markup | US$ 7,50 |
+| 50% de margem bruta | US$ 10,00 |
+
+A tabela de custos traz, item a item: geração, VPS/estúdio, Stripe, câmbio/IOF, falhas, preço em R$/US$ e margem
+líquida.
+
 ## Novo modelo de negócio — validar antes de construir (dono, 2026-11-10)
 
 **O modelo:** plataforma grátis; tour virtual pago (US$ 15); lead qualificado pago, com preço a definir depois de medir.

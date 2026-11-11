@@ -87,7 +87,10 @@ async function advanceVideo(admin: Admin, supabaseUrl: string, serviceKey: strin
     const studio = r.reason === 'studio'
     // Não cobra no teto o que não foi entregue (a Higgsfield devolve crédito de trecho que falha).
     // Falha do estúdio é diferente: os trechos já foram gerados e pagos — o custo fica.
-    if (!studio) await admin.from('video_tours').update({ cost_usd: 0 }).eq('id', v.id)
+    // Tour completo: os trechos que FICARAM PRONTOS foram pagos mesmo que outro falhe — o custo é a soma deles.
+    const paidClips = ((v.clips ?? []) as { status?: string; seconds?: number }[]).filter(c => c.status === 'completed')
+    const paid = full ? paidClips.reduce((s, c) => s + (Number(c.seconds) || 0) * COST_PER_SECOND, 0) : 0
+    if (!studio) await admin.from('video_tours').update({ cost_usd: paid }).eq('id', v.id)
     if (pieceId) {
       const { data: cur } = await admin.from('marketing_ai_test_content').select('reasoning').eq('id', pieceId).eq('company_id', v.company_id).maybeSingle()
       const notice = keepQueroNotice(cur?.reasoning as string | null)
@@ -138,12 +141,14 @@ async function createTourVideo(admin: Admin, company: { id: string; vertical_key
   if (!cap.ok) return { ok: false, status: 429, error: capMessage(cap.spend.cap_usd), cap: true }
   const headers = hfHeaders()
   if (!headers) return { ok: false, status: 503, error: 'Geração de vídeo indisponível no momento.' }
-  const prompts: Record<SegKind, string> = {
+  const prompts: Record<SegKind | 'pair_in', string> = {
     opening: await clipPrompt(admin, company.vertical_key, 'opening'),
     pair: await clipPrompt(admin, company.vertical_key, 'pair'),
+    pair_in: await clipPrompt(admin, company.vertical_key, 'pair_in'),
     room: await clipPrompt(admin, company.vertical_key, 'room'),
   }
-  const plan = segments.map(g => ({ from: g.from, ...(g.to !== undefined ? { to: g.to } : {}), prompt: prompts[g.kind], seconds: SEG_SECONDS[g.kind] }))
+  // max_attempts 1: um trecho que falhou não é refeito sozinho (dono, 2026-11-11). Entrada de fora usa a instrução própria.
+  const plan = segments.map(g => ({ from: g.from, ...(g.to !== undefined ? { to: g.to } : {}), prompt: g.entry ? prompts.pair_in : prompts[g.kind], seconds: SEG_SECONDS[g.kind], max_attempts: 1 }))
   const clips = await submitAll(headers, prompts.room, photos, plan)
   // Nenhum trecho subiu = nada foi aceito (nada cobrado). Algum subiu: segue, e a consulta reenvia os que faltam.
   if (!clips.some(c => c.job_ref)) return { ok: false, status: 502, error: 'Não consegui iniciar o tour agora. Tente de novo em alguns minutos.' }
@@ -352,11 +357,10 @@ Deno.serve(async (req) => {
         const { data: piece } = await admin.from('marketing_ai_test_content').select('id').eq('id', body.piece_id).eq('company_id', company.id).maybeSingle()
         pieceId = piece?.id
       }
-      // Cortes pedidos pelo dono (índice da foto que começa depois do corte); o resto é caminhada contínua.
-      const cuts = Array.isArray(body.cuts) ? (body.cuts as unknown[]).map(Number).filter(i => Number.isInteger(i) && i > 0 && i < photos.length) : []
       // Abrir de fora com a 1ª foto, se o dono escolheu (só cômodos que a ficha permite).
       const rooms = withOutsideFirst(photos.map(u => roomOf(meta.get(u) as never, tcfg)), tcfg.opening_rooms, ocfg.opening_candidates, body.outside_first === true)
-      const { segments } = tourSegments(rooms, tcfg.adjacent_rooms, tcfg.opening_rooms, cuts)
+      // Zero cortes (dono, 2026-11-11): `cuts` de tela antiga é ignorado.
+      const { segments } = tourSegments(rooms, tcfg.adjacent_rooms, tcfg.opening_rooms)
       const r = await createTourVideo(admin, company, item.id, photos, segments, pieceId, endcard)
       if (!r.ok) return json({ error: r.error, ...(r.cap ? { status: 'cap_reached' } : {}) }, r.status)
       return json({ status: 'processing', video_id: r.video_id })
