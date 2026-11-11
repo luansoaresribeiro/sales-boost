@@ -28,6 +28,37 @@ O tour antigo de que o dono gostou era em caminhada: cada trecho começa numa fo
 - **A ordem continua vindo da ficha** (`walk_order`), com cômodos vizinhos em sequência, o que reduz as
   passagens não confirmadas.
 - **Custo:** N fotos = N−1 caminhadas de 6 s (5 fotos ≈ US$ 2,02).
+## 2026-11-11 — N1: segurança das conexões (Instagram, WhatsApp, Anúncios da Meta e Google) — dono: "sim"
+
+**O buraco:**
+- **Meta (Instagram, WhatsApp/Business, Anúncios):** o "Conectar" era um link sem login
+  (`*-oauth-start?company_id=`), e o `state` era só `btoa({company_id, ts})`, sem assinatura, dono nem validade.
+  Quem soubesse o id de uma empresa ligava o **próprio** Instagram, WhatsApp ou conta de anúncios nela.
+- **Google (Meu Negócio, Search Console):** exigia login, mas não conferia se a empresa era de quem estava logado.
+- Não há sinal de uso indevido: o id é longo e aleatório.
+
+**O que mudou** (`_shared/oauthState.ts` + `src/lib/oauthStart.ts`):
+1. **Início da conexão Meta:** a tela faz `POST { company_id }` com o login. O servidor confere que a empresa é do
+   usuário e devolve o link da Meta com um `state` assinado pelo servidor (HMAC-SHA256). O `state` fica preso à
+   empresa, ao usuário e ao provedor, tem um número único e **vale 15 minutos**. O link antigo (GET) responde
+   "atualize a página".
+2. **Volta da Meta:** confere assinatura, provedor, prazo e se a empresa ainda é do mesmo usuário. Qualquer falha
+   = não conecta e explica na tela.
+3. **Google:** só grava na empresa de quem está logado (403 se não for).
+4. **Instagram:** início e volta usam o mesmo endereço de retorno (`INSTAGRAM_REDIRECT_URI`, com o endereço padrão
+   da função como reserva).
+
+**Não muda:** o painel da Meta, os segredos, o `verify_jwt` das funções e as contas já conectadas.
+
+**Teste:** `scripts/test-oauth-state.mjs` (13 verificações, com os ataques: trocar a empresa no `state`, `state`
+antigo sem assinatura, outro segredo, outro provedor, vencido).
+
+**Depois de publicar:**
+- link para a própria empresa ✅;
+- id de outra empresa → 403;
+- link antigo → 400;
+- `state` adulterado → erro na tela.
+
 ## 2026-11-11 — Tour virtual, Etapa 1: teste real comprovado (Teste Zero)
 
 - **Imóvel:** "Cobertura em Leblon", 5 fotos reais, nenhuma de fora (então sem abertura de fora, como manda a

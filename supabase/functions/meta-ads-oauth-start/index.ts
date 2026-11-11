@@ -2,6 +2,9 @@
  * meta-ads-oauth-start — conecta a conta de anuncios da Meta (Marketing API).
  * Usa Facebook Login com META_APP_ID. Pede leitura de anuncios.
  */
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { ownerOfCompany, signState, stateSecret } from '../_shared/oauthState.ts'
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -12,15 +15,18 @@ const SCOPES = ['ads_read', 'business_management']
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
 
-  const url = new URL(req.url)
-  const companyId = url.searchParams.get('company_id')
-  if (!companyId) return json({ error: 'company_id is required' }, 400)
+  // N1 (2026-11-11): o início exige o login do dono e confere que a empresa é dele. O link antigo
+  // (GET ?company_id=, sem login) não funciona mais — a tela agora pede o link por aqui (POST) e só então abre.
+  if (req.method !== 'POST') return json({ error: 'Atualize a página e clique em Conectar de novo.' }, 400)
+  const body = await req.json().catch(() => ({})) as { company_id?: unknown }
+  const owner = await ownerOfCompany(req, createClient, body.company_id)
+  if ('error' in owner) return json({ error: owner.error }, owner.status)
 
   const appId = Deno.env.get('META_APP_ID')
   if (!appId) return json({ error: 'META_APP_ID not configured' }, 500)
 
   const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/meta-ads-oauth-callback`
-  const state = btoa(JSON.stringify({ company_id: companyId, ts: Date.now() }))
+  const state = await signState(stateSecret(), { companyId: owner.companyId, userId: owner.userId, provider: 'meta_ads' })
 
   const authUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth')
   authUrl.searchParams.set('client_id', appId)
@@ -29,7 +35,7 @@ Deno.serve(async (req) => {
   authUrl.searchParams.set('scope', SCOPES.join(','))
   authUrl.searchParams.set('state', state)
 
-  return Response.redirect(authUrl.toString(), 302)
+  return json({ url: authUrl.toString() })
 })
 
 function json(data, status = 200) {
