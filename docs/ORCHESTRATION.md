@@ -33,6 +33,14 @@ Todos lêem SEMPRE, além do que é listado pra cada um: `CLAUDE.md` +
   regra inviolável, testa a tela (inclusive celular) com prints. Saída:
   APROVADO/REPROVADO + resumo em português simples pro dono.
 
+- **`conselheiro`** (`.claude/agents/conselheiro.md`, 2026-11-11, pedido do
+  dono) — Fora do roteiro abaixo: é chamado quando o **dono** pede uma
+  análise ("analise o projeto", "olhe as peças", "isso encaixa?", "me dê o
+  prompt"). Confere `origin/main`, produção (só SELECT) e as peças reais
+  das empresas de teste com a régua de qualidade, e devolve diagnóstico em
+  português simples + prompt pronto. Nunca escreve código nem muda o
+  sistema. O prompt que ele entrega é a entrada do roteiro (passo 2).
+
 **Regra comum:** ao aprender algo novo (armadilha nova, decisão nova),
 atualizar o doc correspondente no mesmo PR — nunca deixar pra depois.
 

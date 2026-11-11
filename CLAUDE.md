@@ -43,7 +43,8 @@ conteúdo técnico detalhado vive em `docs/`:
 - [docs/PILOTO.md](docs/PILOTO.md) — kit do piloto com imobiliária parceira
   (roteiro, o que pedir, plano de 4 semanas, critérios de sucesso).
 - [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) — roteiro do time de
-  agentes (`.claude/agents/`: `product`, `engineer`, `qa`).
+  agentes (`.claude/agents/`: `product`, `engineer`, `qa`; e o
+  `conselheiro`, que o dono chama para análise + prompt pronto).
 
 Onde o código real divergir de um doc, **registre a divergência no doc em
 vez de apagar o que estava escrito** — isso é o que mantém a documentação
