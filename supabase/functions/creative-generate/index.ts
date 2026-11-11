@@ -1891,6 +1891,7 @@ Deno.serve(async (req) => {
       if (passages.some(p => p === 'walk' || p === 'walk_unconfirmed')) notes.push(PAIR_NOTICE)
       const unconfirmed = passages.filter(p => p === 'walk_unconfirmed').length
       if (unconfirmed) notes.push(`${unconfirmed} passagem(ns) entre ambientes que a ficha não confirma serem vizinhos — confira no vídeo se a câmera não mostrou um espaço que não existe.`)
+      if (passages.includes('enter')) notes.push('Abertura de fora a partir da foto real (movimento de drone só dentro do que a foto mostra) e corte automático para dentro do imóvel — a IA não inventa o caminho até a porta.')
       const job: SlotJob = { date: '', producer: 'item_video', name: 'Tour virtual', pillar: 'tour', purpose: 'Tour virtual completo pedido pelo dono', item_id: item.id, recipe: VIDEO_RECIPE, familia: 'tour', tema: 'tour' }
       const r = await runVideoSlot(admin, anthropicKey, company, job, cronSecretEnv, { photos: order, rooms, notes, cuts })
       if (!r.pieceId) return json({ error: r.error ?? 'Não consegui criar o tour.' }, 500)

@@ -6,6 +6,24 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-11 — Tour virtual, Etapa 3: abertura aérea de fora, só a partir de foto real
+
+**Pedido do dono (10/11):** a câmera vem de fora, em imagem de drone cinematográfica. **Regra:** aérea só a
+partir de foto real (regra 4).
+
+**Achado ao começar:** com a caminhada contínua (entrada abaixo), a foto de fachada ou vista caminhava até a
+foto seguinte (vista → hall). A IA teria que inventar o caminho de fora até a porta.
+
+**Agora:**
+- **Foto de fora** (`opening_rooms` da ficha: fachada, vista) é sempre um trecho próprio de 5 s (`opening`). A
+  passagem seguinte é um corte automático (`enter`), que o dono não desliga com ✂️ (`tourSegments`, servidor e
+  tela).
+- **Instrução de câmera da abertura** (`clip_prompts.opening` na ficha + padrão no código): drone estabilizado,
+  subida lenta com aproximação lenta, sem nunca mostrar nada além da borda da foto. Migration
+  `20261111160000_tour_abertura_aerea.sql` (rollback comentado).
+- **Por dentro,** continua a caminhada contínua.
+- **Sem foto de fora,** a tela continua dizendo que o tour começa dentro. A IA nunca cria o prédio nem a vista.
+
 ## 2026-11-11 — Tour virtual em caminhada CONTÍNUA (dono: "a câmera fez movimentos contínuos… cinematográfico")
 
 **Por que mudou.** O 1º tour completo (Teste Zero, 11/11) saiu com cortes e movimentos estranhos. As causas:

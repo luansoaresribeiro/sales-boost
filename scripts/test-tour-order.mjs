@@ -29,7 +29,7 @@ t('config: walk_order da ficha, máximo 10 e 2 por cômodo por padrão; sem walk
 t('ordem: abre de fora com a melhor fachada/vista e segue a ordem da ficha', () => {
   const o = orderTour([P(1, 'quarto'), P(2, 'cozinha'), P(3, 'fachada', 70), P(4, 'sala'), P(5, 'vista', 90), P(6, 'banheiro')], cfg, ocfg)
   assert.deepEqual(o.rooms, ['vista', 'fachada', 'sala', 'cozinha', 'quarto', 'banheiro'])
-  assert.deepEqual(o.segments[0], { kind: 'pair', from: 0, to: 1 })   // caminhada contínua: sai de fora andando até a próxima foto
+  assert.deepEqual(o.segments.slice(0, 3), [{ kind: 'opening', from: 0 }, { kind: 'opening', from: 1 }, { kind: 'pair', from: 2, to: 3 }])   // Etapa 3: de fora = abertura própria; por dentro, caminhada contínua
 })
 t('no máximo 2 fotos por cômodo (as melhores); foto ruim e excesso ficam de fora com motivo', () => {
   const o = orderTour([P(1, 'sala', 60), P(2, 'sala', 95), P(3, 'sala', 80), P(4, 'cozinha', 30)], cfg, ocfg)
@@ -54,9 +54,9 @@ t('caminhada CONTÍNUA (dono, 11/11): uma foto até a seguinte, sem corte; passa
   const adj = cfg.adjacent_rooms
   assert.ok(linked('sala', 'varanda', adj)); assert.ok(linked('varanda', 'sala', adj)); assert.ok(!linked('quarto', 'quarto', adj))
   assert.ok(!linked('cozinha', 'quarto', adj)); assert.ok(!linked(null, 'sala', adj))
-  const r = tourSegments(['fachada', 'sala', 'varanda', 'quarto', 'banheiro', 'cozinha'], adj, cfg.opening_rooms)
-  assert.deepEqual(r.segments, [0, 1, 2, 3, 4].map(i => ({ kind: 'pair', from: i, to: i + 1 })))
-  assert.deepEqual(r.passages, ['start', 'walk_unconfirmed', 'walk', 'walk_unconfirmed', 'walk', 'walk_unconfirmed'])   // varanda→quarto não é vizinho na ficha do teste
+  const r = tourSegments(['sala', 'varanda', 'quarto', 'banheiro', 'cozinha'], adj, cfg.opening_rooms)
+  assert.deepEqual(r.segments, [0, 1, 2, 3].map(i => ({ kind: 'pair', from: i, to: i + 1 })))
+  assert.deepEqual(r.passages, ['start', 'walk', 'walk_unconfirmed', 'walk', 'walk_unconfirmed'])   // varanda→quarto não é vizinho na ficha do teste
   assert.ok(!r.segments.some(s => s.kind === 'room'))
 })
 t('2 fotos do mesmo tipo (ex.: 2 quartos): caminha, mas marcada como não confirmada', () => {
@@ -64,8 +64,8 @@ t('2 fotos do mesmo tipo (ex.: 2 quartos): caminha, mas marcada como não confir
   assert.deepEqual(r.passages, ['start', 'walk_unconfirmed'])
 })
 t('corte só onde o dono pediu; foto sozinha vira trecho próprio (abertura se for de fora)', () => {
-  const r = tourSegments(['fachada', 'sala', 'varanda', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms, [1, 3])
-  assert.deepEqual(r.segments, [{ kind: 'opening', from: 0 }, { kind: 'pair', from: 1, to: 2 }, { kind: 'room', from: 3 }])
+  const r = tourSegments(['hall', 'sala', 'varanda', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms, [1, 3])
+  assert.deepEqual(r.segments, [{ kind: 'room', from: 0 }, { kind: 'pair', from: 1, to: 2 }, { kind: 'room', from: 3 }])
   assert.deepEqual(r.passages, ['start', 'cut', 'walk', 'cut'])
   assert.deepEqual(tourSegments(['sala', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms, [0, 2, 9, 1.5]).segments, [{ kind: 'pair', from: 0, to: 1 }])  // cortes inválidos ignorados
 })
@@ -82,10 +82,30 @@ t('toda foto aparece em algum trecho', () => {
 })
 t('duração = soma dos trechos', () => {
   const { segments } = tourSegments(['fachada', 'sala', 'varanda'], cfg.adjacent_rooms, cfg.opening_rooms)
-  assert.equal(tourSeconds(segments, { opening: 5, pair: 6, room: 5 }), 12)
+  assert.equal(tourSeconds(segments, { opening: 5, pair: 6, room: 5 }), 11)   // abertura 5 s + caminhada sala→varanda 6 s
+})
+t('Etapa 3: foto de FORA nunca caminha — abertura própria + corte automático para dentro', () => {
+  const r = tourSegments(['vista', 'sala', 'varanda'], cfg.adjacent_rooms, cfg.opening_rooms)
+  assert.deepEqual(r.segments, [{ kind: 'opening', from: 0 }, { kind: 'pair', from: 1, to: 2 }])
+  assert.deepEqual(r.passages, ['start', 'enter', 'walk'])
+  // fachada + vista: cada uma vira abertura própria (a IA não inventa o caminho entre elas)
+  const two = tourSegments(['fachada', 'vista', 'hall', 'sala'], cfg.adjacent_rooms, cfg.opening_rooms)
+  assert.deepEqual(two.segments, [{ kind: 'opening', from: 0 }, { kind: 'opening', from: 1 }, { kind: 'pair', from: 2, to: 3 }])
+  assert.deepEqual(two.passages, ['start', 'enter', 'enter', 'walk'])
+  // o dono não consegue "desligar" o corte de fora pra dentro, nem com ✂️ marcado no mesmo lugar
+  assert.deepEqual(tourSegments(['vista', 'sala'], cfg.adjacent_rooms, cfg.opening_rooms, [1]).passages, ['start', 'enter'])
+  // foto de fora no meio (dono mudou a ordem): corta antes e depois
+  const mid = tourSegments(['sala', 'vista', 'quarto'], cfg.adjacent_rooms, cfg.opening_rooms)
+  assert.deepEqual(mid.segments, [{ kind: 'room', from: 0 }, { kind: 'opening', from: 1 }, { kind: 'room', from: 2 }])
+  assert.ok(!mid.segments.some(s => s.kind === 'pair'))
+})
+t('prompt de abertura: drone, mas só dentro da foto (código e ficha)', () => {
+  const eng = readFileSync(new URL('../supabase/functions/_shared/tourEngine.ts', import.meta.url), 'utf8')
+  const mig = readFileSync(new URL('../supabase/migrations/20261111160000_tour_abertura_aerea.sql', import.meta.url), 'utf8')
+  for (const src of [eng, mig]) { assert.match(src, /aerial drone shot/); assert.match(src, /never reveal anything beyond the edges of the frame/) }
 })
 t('a cópia da tela dá as mesmas passagens que o servidor', () => {
-  const cases = [['fachada', 'sala', 'varanda', 'quarto', 'banheiro', 'cozinha'], ['sala', null, 'sala'], ['vista'], [], ['quarto', 'banheiro', 'quarto']]
+  const cases = [['fachada', 'sala', 'varanda', 'quarto', 'banheiro', 'cozinha'], ['sala', null, 'sala'], ['vista'], [], ['quarto', 'banheiro', 'quarto'], ['fachada', 'vista', 'hall'], ['sala', 'vista', 'quarto']]
   for (const c of cases) for (const cuts of [[], [1], [1, 2], [2, 4]]) assert.deepEqual(front.tourSegments(c, cfg.adjacent_rooms, cfg.opening_rooms, cuts), tourSegments(c, cfg.adjacent_rooms, cfg.opening_rooms, cuts), JSON.stringify([c, cuts]))
 })
 t('plano da semana sem tour: estratégia, calendário e "pra fazer" (servidor e tela)', () => {
