@@ -143,3 +143,17 @@ próximo que já existe, mas não é esse relatório semanal específico.
   = "sem dado" (≠ 0). Lead de comentário/DM segue sem atribuição (texto fixo na tela). Datas (`visit_at`/`proposal_at`/`closed_at`)
   são carimbadas quando o dono move o lead no Funil; valores são digitados por ele (opcionais) — a soma ignora o que não foi informado.
 - **Ainda não existe:** receita/CAC/ROAS continuam desconhecidos (o gap acima segue valendo); isto só mede o que o dono registra.
+
+## 2026-11-04 — Fase 5: resultados lado a lado (Marketing × Comercial)
+
+- **O que existe:** telas que mostram, separados, **Marketing** (posts publicados, alcance, salvamentos, compartilhamentos, curtidas, comentários — de
+  `instagram_content_performance` via `posts.instagram_media_id = media_id`) e **Comercial** (conversas, leads, visitas, propostas, vendas, valor
+  informado — de `leads` e `engagement_events.media_ref`). Lógica pura em `src/pages/dashboard/marketingAi/resultsModel.ts`; leitura em
+  `resultsData.ts` (login do dono, sem function nova). Onde: Catálogo → Ver atividade ("Resultado do imóvel"), card da oportunidade e Resultados.
+- **Regras:** valor desconhecido é `null` ("sem medição"/"sem dado"), nunca 0; consulta que falha vira "Não foi possível verificar"; sem soma entre
+  blocos e sem nota única; "N leads sem origem registrada" e "N posts sem imóvel registrado" sempre aparecem.
+- **Ligação comercial é por imóvel/oportunidade, não por peça** (ver [DECISIONS.md](DECISIONS.md), 2026-11-04). Conversa por peça é o único vínculo
+  por peça: comentário com intenção (`intent_detected`), uma por pessoa por post. DMs seguem sem fonte.
+- **80/20 (`learning.ts`) não mudou** e continua sendo "aprendizado" (decide o que repetir), separado dos blocos de resultado (mostram o que aconteceu).
+- **Divergência registrada:** o gap "não fecha pra receita" continua valendo — o "valor informado" é só a soma do que o dono digitou nas vendas;
+  não há receita/CAC/ROAS. A branch antiga `results-flow` não foi usada.

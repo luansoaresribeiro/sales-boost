@@ -7,10 +7,13 @@ import { bi, sanitizeCatalogValues, titleFromFields, type CatalogSchema } from '
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 import ItemVideos from './ItemVideos'
 import PublicPageButton from './PublicPageButton'
+import ItemActivity from './ItemActivity'
+import ItemAvailability from './ItemAvailability'
 import CatalogImport from './CatalogImport'
 import CatalogItemEditor, { FieldInput } from './CatalogItemEditor'
 import VirtualStaging from './VirtualStaging'
 import { useLang } from '../../../contexts/LanguageContext'
+import { useItemUsage, dayLabel } from './useItemUsage'
 
 const TX = {
   pt: {
@@ -23,6 +26,7 @@ const TX = {
     pieces: (n: number) => `${n} peça${n === 1 ? '' : 's'} em rascunho, esperando aprovação:`,
     maxPhotos: (n: number, item: string) => `Máximo de ${n} fotos por ${item}. As fotos a mais não foram enviadas.`,
     full: (n: number) => `Limite de ${n} fotos`,
+    lastPiece: 'Última peça', nextPiece: 'Próxima', n30: (n: number) => `${n} peça${n === 1 ? '' : 's'} em 30 dias`, notUsed: 'ainda não usado',
   },
   en: {
     edit: '✏️ See photos and edit', confirmRemove: (t: string) => `Delete "${t}"? Its photos are deleted and this can't be undone. (Posts already in the calendar stay there.)`, whatToCreate: 'What to create with this ', create: 'Create', notifyDone: '✓ We will notify you at launch', soonNotify: 'Coming soon — notify me',
@@ -34,13 +38,14 @@ const TX = {
     pieces: (n: number) => `${n} draft piece${n === 1 ? '' : 's'}, waiting for approval:`,
     maxPhotos: (n: number, item: string) => `Up to ${n} photos per ${item}. The extra photos were not uploaded.`,
     full: (n: number) => `${n}-photo limit`,
+    lastPiece: 'Last piece', nextPiece: 'Next', n30: (n: number) => `${n} piece${n === 1 ? '' : 's'} in 30 days`, notUsed: 'not used yet',
   },
 } as const
 
 const ORANGE = '#FF6D29'
 
 interface Photo { url: string; path: string }
-interface ItemMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
+interface ItemMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown>; availability?: { status?: unknown; source?: unknown; checked_at?: unknown } | null }
 interface CatalogItem { id: string; title: string; image_url: string | null; meta: ItemMeta | null; created_at: string }
 
 
@@ -106,12 +111,15 @@ function ItemCreationTools({ itemId, companyId, verticalKey, itemLabel, onGenera
 
 // `setupMode` (tela /setup): só cadastrar/adicionar fotos — sem gerar pacote nem
 // ferramentas de criação. `onChanged` avisa quem estiver de olho no status.
-export default function CatalogItems({ companyId, schema, verticalKey, focusItemId, setupMode, onChanged }: { companyId: string; schema: CatalogSchema; verticalKey: string; focusItemId?: string | null; setupMode?: boolean; onChanged?: () => void }) {
+export default function CatalogItems({ companyId, schema, verticalKey, focusItemId, setupMode, onChanged, openCreate, onCreateOpened }: { companyId: string; schema: CatalogSchema; verticalKey: string; focusItemId?: string | null; setupMode?: boolean; onChanged?: () => void; openCreate?: boolean; onCreateOpened?: () => void }) {
   const { session } = useAuth()
   const { lang } = useLang()
   const tx = TX[lang]
+  const { data: usageData, refresh: refreshUsage } = useItemUsage(companyId)
   const [packageBusyId, setPackageBusyId] = useState<string | null>(null)
   const [packageResult, setPackageResult] = useState<{ itemId: string; result: PackageResult | { error: string } } | null>(null)
+  // Pacote gerado = peças novas no calendário: relê o uso dos imóveis.
+  useEffect(() => { if (packageResult) refreshUsage() }, [packageResult]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const generatePackage = async (itemId: string, onlyRecipe?: string) => {
     if (!session) return
@@ -161,6 +169,10 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
 
   // Veio do sino de pendências: rola até o item e destaca com borda laranja.
   useEffect(() => { setHighlightId(focusItemId ?? null) }, [focusItemId])
+  // "+" → Adicionar item (?add=1): abre o formulário de criação e avisa a página pra tirar o parâmetro da URL.
+  const onCreateOpenedRef = useRef(onCreateOpened)
+  onCreateOpenedRef.current = onCreateOpened
+  useEffect(() => { if (openCreate) { setCreating(true); onCreateOpenedRef.current?.() } }, [openCreate])
   useEffect(() => {
     if (!highlightId || loading) return
     const t = setTimeout(() => document.getElementById(`catalog-item-${highlightId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100)
@@ -328,6 +340,16 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                   <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '8px' }}>
                     <span style={{ color: photoCount < minPhotos ? '#f87171' : MUTED, fontWeight: photoCount < minPhotos ? 700 : 400 }}>{photoCount}/{minPhotos} {tx.photosN}</span>{f.preco ? ` · R$ ${f.preco}` : ''}{f.quartos ? ` · ${f.quartos}${tx.bedrooms}` : ''}
                   </div>
+                  {!setupMode && <ItemAvailability itemId={item.id} companyId={companyId} verticalKey={verticalKey} meta={item.meta as never} onChanged={load} />}
+                  {!setupMode && usageData.ok && (() => {
+                    const u = usageData.usage[item.id]
+                    const used = u && (u.last || u.next || u.n30 > 0)
+                    return (
+                      <div style={{ fontSize: '10.5px', color: MUTED, marginBottom: '8px', lineHeight: 1.45 }}>
+                        {used ? `${tx.lastPiece} ${u.last ? dayLabel(u.last) : '—'} · ${tx.nextPiece} ${u.next ? dayLabel(u.next) : '—'} · ${tx.n30(u.n30)}` : tx.notUsed}
+                      </div>
+                    )
+                  })()}
                   <button onClick={() => setEditing(item)}
                     style={{ width: '100%', padding: '7px 10px', marginBottom: '6px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '7px', color: 'white', fontWeight: 700, fontSize: '11px', cursor: 'pointer', fontFamily: D }}>
                     {tx.edit}
@@ -364,6 +386,7 @@ export default function CatalogItems({ companyId, schema, verticalKey, focusItem
                     </div>
                   )}
                   {!setupMode && <PublicPageButton itemId={item.id} />}
+                  {!setupMode && <ItemActivity itemId={item.id} companyId={companyId} />}
                   {!setupMode && <ItemVideos itemId={item.id} photos={(item.meta?.photos ?? []).map(p => p.url)} />}
                   {!setupMode && <VirtualStaging itemId={item.id} companyId={companyId} verticalKey={verticalKey} photos={item.meta?.photos ?? []} staged={item.meta?.staged_photos ?? []} onChanged={load} />}
                   {!setupMode && <ItemCreationTools itemId={item.id} companyId={companyId} verticalKey={verticalKey} itemLabel={schema.itemLabel} onGenerate={generatePackage} busy={packageBusyId} />}

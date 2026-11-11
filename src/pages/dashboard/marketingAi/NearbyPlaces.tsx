@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
+import { Link } from 'react-router-dom'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
+import { useItemUsage } from './useItemUsage'
 
 // Agente de Dados → "Lugares perto" (etapa 1, pedido do dono 2026-10-14).
 // O que tem em volta de cada imóvel, buscado de graça no OpenStreetMap pelo
@@ -13,7 +15,7 @@ import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
 const TX = {
   pt: {
     intro: 'O que tem perto de cada imóvel — praia, metrô, escola, mercado. Os posts "3 coisas perto" usam só os lugares daqui, com o nome e a distância de verdade.',
-    pick: 'Imóvel', none: 'Cadastre um imóvel com bairro primeiro (aba ao lado).', loading: 'Buscando no mapa...',
+    pick: 'Imóvel', none: 'Ainda não há imóvel cadastrado.', addItem: 'Cadastrar imóvel no Catálogo', usedIn: (n: number) => `usado em ${n} peça${n === 1 ? '' : 's'}`, loading: 'Buscando no mapa...',
     again: '🔄 Buscar de novo', hide: 'Esconder', show: 'Mostrar', hidden: 'escondido',
     precise: (r: string) => `Distância em linha reta a partir do endereço do imóvel (até ${r}).`,
     area: 'Sem endereço: busquei a partir do centro do bairro, então os posts não citam distância. Preencha "Endereço" no imóvel (botão Ver fotos e editar) pra ficar exato — o endereço nunca aparece nos posts.',
@@ -22,7 +24,7 @@ const TX = {
   },
   en: {
     intro: 'What is near each property — beach, subway, school, grocery. "3 things nearby" posts only use the places here, with real names and distances.',
-    pick: 'Property', none: 'Add a property with a neighborhood first (tab beside).', loading: 'Searching the map...',
+    pick: 'Property', none: 'No property added yet.', addItem: 'Add a property in the Catalog', usedIn: (n: number) => `used in ${n} piece${n === 1 ? '' : 's'}`, loading: 'Searching the map...',
     again: '🔄 Search again', hide: 'Hide', show: 'Show', hidden: 'hidden',
     precise: (r: string) => `Straight-line distance from the property address (up to ${r}).`,
     area: 'No address: searched from the neighborhood center, so posts do not mention distance. Fill in "Address" on the property (See photos and edit) for exact results — the address never shows in posts.',
@@ -40,10 +42,11 @@ function fmt(m: number): string {
   return m < 1000 ? `${Math.max(50, Math.round(m / 50) * 50)} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`
 }
 
-export default function NearbyPlaces({ companyId }: { companyId: string }) {
+export default function NearbyPlaces({ companyId, focusItemId }: { companyId: string; focusItemId?: string | null }) {
   const { lang } = useLang()
   const tx = TX[lang]
   const { session } = useAuth()
+  const usage = useItemUsage(companyId)
   const [items, setItems] = useState<Item[] | null>(null)
   const [itemId, setItemId] = useState('')
   const [data, setData] = useState<{ nearby: Nearby; categories: Category[]; radius_m: number } | null>(null)
@@ -52,8 +55,8 @@ export default function NearbyPlaces({ companyId }: { companyId: string }) {
 
   useEffect(() => {
     supabase.from('marketing_ai_knowledge').select('id, title').eq('company_id', companyId).eq('kind', 'product').order('created_at', { ascending: false })
-      .then(({ data: rows }) => { const list = (rows ?? []) as Item[]; setItems(list); if (list[0]) setItemId(id => id || list[0].id) })
-  }, [companyId])
+      .then(({ data: rows }) => { const list = (rows ?? []) as Item[]; setItems(list); if (list[0]) setItemId(id => id || (focusItemId && list.some(i => i.id === focusItemId) ? focusItemId : list[0].id)) })
+  }, [companyId, focusItemId])
 
   const load = useCallback(async (refresh = false) => {
     if (!session || !itemId) return
@@ -83,7 +86,11 @@ export default function NearbyPlaces({ companyId }: { companyId: string }) {
   }
 
   if (items === null) return null
-  if (!items.length) return <div style={{ fontSize: '13px', color: MUTED }}>{tx.none}</div>
+  if (!items.length) return (
+    <div style={{ fontSize: '13px', color: MUTED }}>
+      {tx.none} <Link to="/dashboard/catalogo" style={{ color: '#FF6D29', fontWeight: 700 }}>{tx.addItem}</Link>
+    </div>
+  )
   const nb = data?.nearby
   const precise = nb?.precision === 'endereco'
   return (
@@ -94,6 +101,7 @@ export default function NearbyPlaces({ companyId }: { companyId: string }) {
         <select value={itemId} onChange={e => setItemId(e.target.value)} style={{ flex: '1 1 220px', minWidth: 0, background: CARD, color: '#fff', border: `1px solid ${BORDER}`, borderRadius: '8px', padding: '8px 10px', fontSize: '13px' }}>
           {items.map(i => <option key={i.id} value={i.id}>{i.title}</option>)}
         </select>
+        {usage.data.ok && itemId && usage.data.usage[itemId] && <span style={{ fontSize: '11.5px', color: MUTED }}>{tx.usedIn(usage.data.usage[itemId].total)}</span>}
         <button onClick={() => load(true)} disabled={busy} style={{ background: 'transparent', color: '#fff', border: `1px solid ${BORDER}`, borderRadius: '8px', padding: '8px 12px', fontSize: '12px', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1 }}>{tx.again}</button>
       </div>
       {busy && <div style={{ fontSize: '13px', color: MUTED }}>{tx.loading}</div>}

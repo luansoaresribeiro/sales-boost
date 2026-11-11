@@ -95,7 +95,8 @@ export function isDue(meta: FaqMeta | null | undefined, now = Date.now()): boole
 }
 
 export const CHEAP_MODEL = 'claude-haiku-4-5-20251001'
-export async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1200, model = MODEL): Promise<string> {
+// `onUsage` (opcional, A.6): recebe model + usage da resposta pra quem quiser medir o custo real (aiCost.ts). Sem ele, igual a antes.
+export async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1200, model = MODEL, onUsage?: (model: string, usage: { input_tokens?: number; output_tokens?: number } | undefined) => void): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -103,6 +104,7 @@ export async function callClaude(anthropicKey: string, prompt: string, maxTokens
   })
   if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`)
   const data = await res.json()
+  try { onUsage?.(model, data.usage) } catch { /* medir custo nunca derruba a chamada */ }
   return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
 }
 export function parseJson<T>(raw: string, fallback: T): T {

@@ -399,7 +399,9 @@ export default function CompanyDetailPage() {
           )}
 
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {access?.granted ? (
+            {/* Vitrine (conta nova em trial, sem pagar/liberar) conta como "granted" no banco, mas os robôs não
+                trabalham — então o botão de liberar aparece também nesse caso (2026-11-10, caso A3 Imóveis). */}
+            {access?.granted && !isShowcaseMode({ created_at: detail.created_at, manual_access: detail.manual_access }, access) ? (
               <button onClick={() => setAccessState('block_access')} disabled={accessBusy}
                 style={{ padding: '10px 20px', background: 'rgba(248,113,113,0.14)', border: '1px solid rgba(248,113,113,0.4)', borderRadius: '9px', color: '#f87171', fontWeight: 700, fontSize: '13px', cursor: accessBusy ? 'default' : 'pointer' }}>
                 {accessBusy ? '...' : '🔒 Bloquear acesso'}
@@ -613,7 +615,7 @@ export default function CompanyDetailPage() {
               <input type="checkbox" checked={marketingAiEnabled} disabled={togglingFeature} onChange={e => toggleFeature('marketing_ai_enabled', e.target.checked)} style={{ width: '16px', height: '16px', accentColor: ORANGE }} />
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: 'white' }}>✨ Marketing AI <span style={{ fontSize: '9.5px', fontWeight: 700, color: ORANGE, border: '1px solid rgba(255,109,41,0.4)', borderRadius: '99px', padding: '1px 7px', marginLeft: '4px' }}>PRINCIPAL</span></div>
-                <div style={{ fontSize: '10.5px', color: MUTED }}>O agente principal (Growth OS). Desligado, o cliente cai em Atividades.</div>
+                <div style={{ fontSize: '10.5px', color: MUTED }}>O agente principal (Growth OS). Desligado, o cliente cai em Relatórios.</div>
               </div>
             </label>
           </div>

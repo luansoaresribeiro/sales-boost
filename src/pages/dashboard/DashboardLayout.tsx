@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
@@ -15,7 +15,11 @@ import { usePendencias } from '../../lib/usePendencias'
 import { importDiagnosisAnswers } from '../../lib/onboardingV2'
 import { useSetupStatus } from '../../lib/useSetupStatus'
 import { supabase } from '../../lib/supabase'
+import { fetchCatalogSchema } from '../../lib/verticalPlaybook'
+import { CATALOG_PATH } from './plusOptions'
 import logo from '../../assets/logo.png'
+import BrandLoader from '../../components/BrandLoader'
+import { prefetchGroup } from '../../lib/lazyPage'
 
 const ORANGE = '#FF6D29'
 const SIDEBAR_BG = '#0D0A07'
@@ -28,16 +32,8 @@ const iconStroke = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, str
 type NavItem = { to: string; label: string; icon: React.ReactNode; end?: boolean; badge?: number }
 type NavSection = { section?: string; accent?: boolean; items: NavItem[] }
 
-function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: boolean; marketingAi: boolean }, businessName: string | null, approvalsCount = 0): NavSection[] {
+function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: boolean; marketingAi: boolean }, businessName: string | null, approvalsCount = 0, catalogLabel: string | null = null): NavSection[] {
   return [
-    {
-      items: [
-        {
-          to: '/dashboard/atividades', label: T.layout.nav.activities,
-          icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M2.25 12c0-1.146.294-2.257.85-3.24a.75.75 0 0 1 1.32.72A5.98 5.98 0 0 0 3.75 12a5.98 5.98 0 0 0 .67 2.52.75.75 0 0 1-1.32.72A7.48 7.48 0 0 1 2.25 12ZM8.03 5.47a.75.75 0 0 1 0 1.06 5.98 5.98 0 0 0-1.75 4.22 5.98 5.98 0 0 0 1.75 4.22.75.75 0 1 1-1.06 1.06A7.48 7.48 0 0 1 4.78 10.75c0-2.07.84-3.95 2.19-5.3a.75.75 0 0 1 1.06.02Z" /><path d="M9.75 10.75a2.25 2.25 0 1 1 4.5 0 2.25 2.25 0 0 1-4.5 0Z" /><path d="M15.97 5.45a.75.75 0 0 1 1.06-.02 7.48 7.48 0 0 1 2.19 5.3 7.48 7.48 0 0 1-2.19 5.3.75.75 0 1 1-1.06-1.06 5.98 5.98 0 0 0 1.75-4.22 5.98 5.98 0 0 0-1.75-4.22.75.75 0 0 1 0-1.06ZM19.58 9.48a.75.75 0 0 1 1.32-.72c.556.983.85 2.094.85 3.24a7.48 7.48 0 0 1-.85 3.24.75.75 0 1 1-1.32-.72A5.98 5.98 0 0 0 20.25 12a5.98 5.98 0 0 0-.67-2.52Z" /></svg>,
-        },
-      ],
-    },
     // O nome cadastrado da empresa aparece aqui no lugar de "Marketing AI" —
     // é a porta de entrada do Growth OS dessa empresa.
     ...(flags.marketingAi ? [{
@@ -45,8 +41,21 @@ function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: bool
       items: [{
         to: '/dashboard/marketing-ai', label: businessName ?? T.layout.nav.marketingAi,
         icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" /></svg>,
-      }],
+      }, {
+        // Aba Agentes (C.2, 2026-11-07): fábrica 3D + os 5 cartões dos agentes.
+        to: '/dashboard/agentes', label: T.layout.nav.agents,
+        icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><circle cx="6" cy="7" r="2.2" /><circle cx="18" cy="7" r="2.2" /><circle cx="12" cy="18" r="2.2" /><path d="M8.2 7h7.6M7.2 9l3.8 7M16.8 9 13 16" /></svg>,
+      }, {
+        // Tour virtual (2026-11-10, pedido do dono): tour completo do imóvel, fora do plano da semana.
+        to: '/dashboard/tour-virtual', label: T.layout.nav.tour,
+        icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>,
+      }, ...(catalogLabel ? [{
+        // Aba do catálogo (07/11): mesma página do "+" → Adicionar item. Rótulo vem da ficha do setor (vocabulary.catalog).
+        to: CATALOG_PATH, label: catalogLabel,
+        icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M21 8.5 12 4 3 8.5v7L12 20l9-4.5v-7Z" /><path d="m3 8.5 9 4.5 9-4.5M12 13v7" /></svg>,
+      }] : [])],
     }] : []),
+    // Oportunidades saiu do menu (2026-11-01, pedido do dono): já é o card 2 do fluxo do Marketing AI.
     {
       section: T.layout.sections.progress, accent: true,
       items: [{
@@ -54,11 +63,15 @@ function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: bool
         icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>,
       }],
     },
-    // Oportunidades saiu do menu (2026-11-01, pedido do dono): já é o card 2 do fluxo do Marketing AI.
+    // Central do dono (2026-11-10, pedido do dono): Aprovações + Relatórios juntos num menu só (Relatórios saiu do topo).
     {
+      section: T.layout.sections.owner, accent: true,
       items: [{
         to: '/dashboard/aprovacoes', label: T.layout.nav.approvals, badge: approvalsCount,
         icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>,
+      }, {
+        to: '/dashboard/relatorios', label: T.layout.nav.reports,
+        icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></svg>,
       }],
     },
   ]
@@ -131,7 +144,16 @@ function SidebarInner({ isMobile, open, onNavigate, onClose, approvalsCount }: {
   const { company } = useCompany()
   const flags = { agentesMenu: company?.agent_enabled ?? false, marketingAi: company?.marketing_ai_enabled ?? true }
 
-  const navSections = makeNavSections(T, flags, company?.business_name ?? null, approvalsCount)
+  // Rótulo da aba do catálogo: vem da ficha do setor (vocabulary.catalog); ficha sem catálogo = "Catálogo"/"Catalog" genérico.
+  // Só aparece depois de resolvido (evita piscar o nome errado).
+  const [catalogLabel, setCatalogLabel] = useState<string | null>(null)
+  const cVertical = company?.vertical_key ?? 'generico'
+  useEffect(() => {
+    let alive = true
+    void fetchCatalogSchema(cVertical).then(sc => { if (alive) setCatalogLabel(sc?.catalogLabel ?? T.layout.nav.catalog) })
+    return () => { alive = false }
+  }, [cVertical, T.layout.nav.catalog])
+  const navSections = makeNavSections(T, flags, company?.business_name ?? null, approvalsCount, catalogLabel)
   const bottomItems = makeBottomItems(T)
 
   const handleSignOut = async () => { await signOut(); navigate('/') }
@@ -251,6 +273,8 @@ function DashboardShell() {
   useFirstStrategy(paid ? company?.id ?? null : null, readOnly)
   const [mobileOpen, setMobileOpen] = useState(false)
   useEffect(() => { if (!isMobile) setMobileOpen(false) }, [isMobile])
+  // Painel aberto → baixa as outras páginas em segundo plano (navegador ocioso): trocar de aba fica instantâneo.
+  useEffect(() => prefetchGroup('dashboard'), [])
   // Respostas do diagnóstico → empresa (antes era o /setup; saiu em 2026-10-19).
   const companyId = company?.id ?? null, verticalKey = company?.vertical_key ?? 'generico'
   useEffect(() => { if (companyId) void importDiagnosisAnswers(companyId, verticalKey) }, [companyId, verticalKey])
@@ -282,7 +306,8 @@ function DashboardShell() {
             </div>
           )}
           {!readOnly && <TrialStatusWidget />}
-          <Outlet />
+          {/* Trocar de página: o menu fica, só o conteúdo mostra o logo enquanto a página baixa. */}
+          <Suspense fallback={<BrandLoader />}><Outlet /></Suspense>
         </main>
       </div>
       {!readOnly && <TrialStartModal />}

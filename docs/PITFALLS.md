@@ -5,6 +5,72 @@
 > Ao aprender uma armadilha nova, adicionar aqui no mesmo PR que a corrige
 > (ver [ORCHESTRATION.md](ORCHESTRATION.md)).
 
+## Modelo do Diretor ignorado, peça sem imagem no Vault, trava só de número e custo fixo — 2026-11-07 (A.6)
+
+**Template do Diretor ignorado em silêncio.** No educativo (`opts.deck`) o código força `format: carrossel` e `template: livre` mesmo que o Diretor justifique outro modelo (ex.: "faq") no `reasoning` — e o prompt ainda pedia pra ele escolher. O brief e o texto passavam a se contradizer. Hoje `pieceGuard.resolveTemplate` grava `brief.director_template`, explica a troca no `reasoning` e o prompt avisa. Quem mexer em template: rode `scripts/test-piece-guard.mjs`.
+
+**Peça sem imagem pode ir pro Vault.** O fallback de card só valia pra `fmt !== 'carrossel'`; carrossel sem nenhum slide desenhado seguia pro score (a nota só olha texto) e ia pro Vault (3840d8d7, nota 82). Toda trava de qualidade que olha só o texto deixa passar peça quebrada: a checagem de imagem tem que vir ANTES do score (`creative-generate`, depois do fallback de card). Peça sem imagem utilizável é apagada e registrada (`content_no_image`), exceto com `skipImage`.
+
+**Trava só de número/termo não pega afirmação.** "Locatários com renda mais alta estão escolhendo contratos mais longos" não tem número nem termo de `market_claims`. Tendência de mercado como fato só com sinal real com fonte (`intent.market_context.evidence`) ou dica conferida; senão marca "Precisa de fonte:" e baixa a nota. Os padrões moram na ficha (`opportunity_texts.market_trends`); sem a lista na ficha a trava fica desligada (a migration precisa estar aplicada).
+
+**Custo fixo não é custo.** `strategy-generate` gravava US$ 0,15 com `tokens_used` 0 e `creative-generate` não gravava nada. Use `_shared/aiCost.ts` (tokens da resposta × preço). Cuidado: o teto mensal de chamadas automáticas da estratégia conta linhas `agent_role = 'estrategia'` — por isso o custo real vai em `'estrategia_ia'` (linha extra por chamada não pode inflar a contagem). Texto da IA não entra no teto de US$ 40 (`spendCap` filtra por `task_key`): nunca use `image_generation`/`photo_retouch`/`market_*` para custo de texto.
+
+**Custo interno vazando pro texto do cliente.** Tudo que entra no prompt da estratégia (catálogo de formatos, `weeklyMixRules`, rótulos de produtor, `custo` da ficha) pode ser repetido pela IA no texto que o cliente lê. Preço por vídeo, teto mensal e diretriz de vídeos ficam fora do prompt e `stripInternalCost` limpa a saída.
+
+## Domínio de confiança passava patrocinado; catálogo contava como "fonte independente" — 2026-11-05
+
+**O que aconteceu.** Na rodada real de 05/11 à noite saíram oportunidades de mercado apoiadas em aviso de serviço do metrô, conteúdo patrocinado do O Globo (`/conteudo-de-marca/`), guia genérico de bairro e uma obra embargada contada como 2 fontes (R7 + O Dia). A tela dizia "3 fontes independentes" mas uma delas era o próprio catálogo.
+
+**Causa.** (1) `trusted_domains` pulava TODAS as regras em `classifySignalQuality`, então patrocinado de portal bom passava. (2) `score` contava origens distintas, e o fato do catálogo (e das peças/posts) era uma origem. (3) A mesma notícia em dois sites era dois fatos, duas origens. (4) Descrição não passava pela trava de "peças prontas".
+
+**Solução.** `signalStrength` (regras `weak_*`/`impact_terms` da ficha) vale até para domínio de confiança e só MARCA (nunca reprova). O motor recalcula a força com a ficha atual e só cria `market_change` com >= 1 evento forte; eventos iguais são agrupados (`groupEvents`); a independência do `market_change` conta só eventos externos fortes. Antes de mexer em `trusted_domains` ou `score`, rode `scripts/test-market-news.mjs` e `scripts/test-opportunity-engine.mjs`.
+
+## Fila de oportunidades acumulou repetidas entre rodadas — 2026-11-06
+
+**O que aconteceu.** Na Tespon havia 19 oportunidades abertas (`suggested`), muitas com o mesmo tipo e os mesmos itens, e 3 com a mesma ação ("adicionar fotos reais") em itens diferentes.
+
+**Causa.** Cada rodada só fazia `insert`; nada olhava o que já estava aberto. A consolidação antiga só juntava dentro da MESMA rodada e exigia mesmos itens.
+
+**Correção.** `opportunityMerge.ts` (puro): `planUpserts` atualiza a linha aberta equivalente (tipo + itens [+ sinal externo no `market_change`]; nunca título) e `consolidateByAction` junta a mesma ação em itens diferentes. Update falho ou linha que já saiu de `suggested` volta como insert (nada se perde). As antigas NÃO são apagadas sozinhas.
+
+**Regra.** Texto que afirma o que está fora do Sales Boost (redes, "invisível", "parado") só vale com Instagram conectado e fato do Instagram dizendo a ausência (`violatesExternal`). Mexeu nisso? Suba `OPP_PROMPT_VERSION` e rode `scripts/test-opportunity-merge.mjs` + `scripts/test-opportunity-engine.mjs`.
+
+## Opportunity Engine inventou período (60 dias) — 2026-11-05
+
+**O que aconteceu.** Na Teste Zero saiu "Dois imóveis no Leblon sem posts nos últimos 60 dias" ("no catálogo há mais de 60 dias sem nenhum post"). Os dois itens tinham 3 dias e havia 7 peças prontas em `marketing_ai_test_content`.
+
+**Causa.**
+- `content_gap` usava a janela fixa de 60 dias no texto do fato, sem olhar a idade do item (o loader nem lia `created_at`).
+- O "60" do fato entrava em `allowedNumbers` (unidade dia), então a IA podia escrever "há mais de 60 dias".
+- O loader só lia `posts`; peças preparadas (qualquer status) ficavam invisíveis, daí o "nenhum post registrado".
+
+**Correção (código, não só prompt).**
+- Período vem dos dados: item novo diz "cadastrado há N dias"; item com menos de 7 dias ou com peça preparada não gera `content_gap`.
+- `evidenceGuard` / `violatesEvidence` (`opportunityOutput.ts`): duração ("há N dias", "mais de", "desde", "há meses") e "nenhum post" só passam se um fato do MESMO candidato diz igual; fato de peças preparadas bloqueia "nenhum post".
+- Frase barrada cai no texto do código (`fallback`). Se nem o texto final se sustenta, ou o candidato não tem fato com fonte, vira NOT_VALIDATED: não entra em `growth_opportunities` (o CHECK de `status` só tem suggested/approved/dismissed e não há coluna `meta`; sem migration). O motivo fica em `market_intel_runs.details.not_validated`, no `console.warn` e no retorno (`not_validated`).
+- Frase especulativa ("pode ser", "talvez") fora do campo de hipóteses vira evidência `hypothesis`.
+- `OPP_PROMPT_VERSION` 1 → 2 (nova interpretação na próxima rodada).
+
+**Regra.** Texto novo no motor que cite período ou ausência precisa nascer de um fato com a mesma expressão.
+
+## Modo automático (`agent_automatic_mode`) não tem trava de publicação dentro da function (2026-11-04)
+
+**O que a chave faz.** Só o `agent-actions` → `proposeAction` lê a chave:
+- `auto = approve_now || (agent_automatic_mode && automation_enabled !== false)`;
+- com `auto`, a ação nasce `AUTO_APPROVED` e **executa na hora**.
+
+**O que ela executa sozinha hoje.** Só a recomendação da aba Desempenho (`PerformanceTab.tsx`, `create_content` sem peça), que vira **rascunho** em `marketing_ai_content`.
+
+**O que ela não faz:**
+- **não publica:** todo ponto que publica no Instagram passa `approve_now` ou `scheduled_at`, que é o clique do dono (`CalendarPostModal` e `ApprovalsPage`);
+- **não comanda as respostas a comentário e DM:** quem decide é cada automação (`instagram-webhook`: `execution_mode = 'automatic'` + `allowed_auto_actions`).
+
+**A armadilha.** Não existe trava independente dentro da Edge Function. Se um código novo propuser uma ação de publicação (ex.: `ref_type = 'marketing_ai_content'`) **sem** `approve_now` e com o modo automático ligado, ela é aprovada e publicada sem o clique do dono.
+
+**Regra até existir a trava:**
+- todo ponto que propõe ação de publicação precisa passar o clique explícito do dono;
+- a trava no servidor ("modo automático nunca executa publicação") fica como candidata a um PR próprio, porque é mudança de Edge Function.
+
 ## `verify_jwt` × chamada de cron
 
 Toda edge function chamada por `net.http_post` do pg_cron autentica via
@@ -147,6 +213,11 @@ dono. Consequências:
   (Workers Builds), não nos secrets do GitHub.
 - Em branch de PR a Cloudflare comenta "Deployment successful", mas é só
   versão de prévia — o domínio só muda com push no `main`.
+- **Juntar o PR é publicar (2026-11-06).** O plano "publicar PR A e PR B juntos, uma vez só" não funcionou:
+  - o PR A (#113) foi ao ar sozinho no merge de 05/11;
+  - o diagnóstico multi-resposta (#117) também, antes do `npx wrangler deploy` do dono, que falhou porque a pasta `dist` não existia no computador dele.
+  - **Para segurar uma tela, não junte o PR** (ou junte os dois PRs em sequência).
+  - **Para conferir se subiu,** baixe o bundle de getsaleboost.com e procure um texto novo da tela.
 
 ## Popup de boas-vindas mostra números inventados
 
@@ -916,3 +987,172 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - Sem `deno` no ambiente do agente: a verificação das edge functions foi só pelos testes em node (`--experimental-strip-types`).
 - A cidade da ficha (`news.city`) precisa aparecer no texto da notícia (filtro "região no texto"); notícia que só diz "Rio" é descartada.
 
+## Carrosséis: trava de mercado, foto de fundo, concorrência (2026-11-02)
+
+- **A lista `market_claims` da ficha SUBSTITUI a genérica** (`claimGuard`: ficha com itens → só ela vale). Migration que
+  mexe nela precisa **mesclar** o array (a de 02/11 faz, sem duplicar e sem apagar ajuste do dono); `jsonb_set ... is null` não serve.
+  Deploy antes da migration não quebra: a lista antiga segue valendo (só não pega "mais desejados"/"vale cada centavo").
+- **A trava de número (`inventedNumbers`) não pega "acima de R$ 1,5 mi"**: ela libera qualquer número que apareça em
+  `dataText` (ficha + insights). A faixa de preço agora é checada à parte (`claimLock.claimIssues`: sinal de faixa + valor em
+  moeda, valor+unidade têm que estar no cadastro do imóvel).
+- **Foto de fundo no `render-format` baixa e embute a foto inteira** (`toDataUri`): renderizar 5–10 slides com foto em paralelo
+  pode estourar `WORKER_RESOURCE_LIMIT`. O `catalog-package` renderiza em lotes de 2. O bucket `post-images` aceita 5 MB.
+- **`slides` ≠ `media`:** a prévia lê `slides[].image_url` (senão `media`, senão `image_url`); a publicação (`agent-actions`) lê só
+  `media[]`/`image_url`. Peça que grava só um dos dois mostra uma coisa e publica outra — o educativo gravava só `slides` (corrigido em 2026-11-02: agora grava `media` igual a `slides`; peças antigas continuam sem).
+- **As vagas da semana são geradas em paralelo** (cada `plan_slot` é uma invocação): a lista de "temas recentes" só enxerga o
+  que já foi gravado, então a repetição dentro da mesma semana é reduzida, não eliminada.
+- Sem `deno` nem Postgres no ambiente do agente: edge functions conferidas por testes em Node + `tsc` nos arquivos `_shared`;
+  a migration de 02/11 foi só lida, **não executada** — rodar 2x num banco de teste antes de confiar.
+- **Termo solto na lista de mercado vira falso positivo** ("o melhor", "único", "exclusivo", "em alta" cortavam "o melhor caminho", "sala única", "temporada em alta"). Use frases específicas; a trava corta a frase inteira. Preço do cadastro pode vir como "1,5 mi"/"850 mil": `formatPrice` lê o multiplicador e, se ambíguo ("12.5", "1,500"), não mostra.
+- **`renderGraphicCardFull`:** o 6º parâmetro está reservado (`_size`, do PR A); a foto de fundo é o 7º.
+
+## Tour virtual: encerramento e espera pelo estúdio (2026-11-02, PR A)
+
+- **Ordem de publicação:** `vps-worker` (hash novo + `caps`) → esperar a VPS atualizar (até 1 h, ou `install.sh ... update`) →
+  `render-format` → `item-videos` → `creative-generate`. O tour com encerramento só é entregue a um servidor que informe
+  `info.caps` com `endcard`; trabalhador antigo nunca recebe, então o tour fica "Aguardando estúdio" (não quebra, só espera).
+- **Tour com `endcard` NUNCA cai na colagem antiga** (`mp4stream`, 4:5, sem encerramento): `assembly.mode='wait_studio'` já
+  nasce no momento em que trava a montagem. Não mexa nesse ramo sem manter isso. Passou de 48 h esperando, ou o estúdio recusou
+  3 vezes: falha (o custo **fica**, os trechos já foram pagos — o `cost_usd` só zera na falha da Higgsfield).
+- **Tour em espera precisa mexer no `updated_at`** a cada consulta, senão fica sempre na frente da fila do `tick` (limite 10) e
+  trava os outros.
+- O `selftest` do `worker.mjs` agora também monta com encerramento; rode `node worker.mjs selftest` numa cópia fora do repo
+  (ele cria e apaga a pasta `tmp` ao lado do arquivo). Mudou o worker → recalcule `WORKER_SHA256` (regra acima).
+- **Foto do catálogo ganha campos extras** (`room`, `room_conf`, `quality`, `scored_at`, `model`) em `meta.photos[i]`. As telas que
+  regravam `meta.photos` (CatalogItems) precisam copiar o objeto inteiro, não só `{url,path}`, senão a nota se perde (e é paga de novo).
+- `ensurePhotoScores` relê a linha antes de gravar e só preenche foto sem nota; mesmo assim duas vagas pontuando o mesmo imóvel
+  ao mesmo tempo podem pagar a nota 2x (centavos) — por isso o planejamento da semana pontua uma vez por imóvel.
+- Legenda do tour: a trava de palavras é por texto; variação nova de "filmado" passa até entrar em `config.tour.forbidden_claims`.
+- Sem `config.tour` na ficha o código só faz `room` (nunca pair/opening) — de propósito (regra 6).
+- **Correções do QA (2026-11-02):** (1) `item-videos` valida `endcard_url` (só `post-images/renders/` do nosso Storage) **antes** de qualquer
+  gasto e o caminho do cron o exige (400 sem ele); (2) estúdio fora do ar na hora de criar = **não gasta**: a peça guarda `concept.tour_pending`
+  e o `tick` do `item-videos` (`resumePending`) retoma em até 48 h — não use `concept` de peça de vídeo pra outra coisa; (3) `startJob` troca
+  `wait_studio→vps` com update condicional (`assembly->>mode`) e só então cria o `media_job` (com `id` gerado antes); (4) estourar 20 min no
+  estúdio conta como recusa (3 = falha); (5) foto que a IA não conseguiu pontuar grava `score_failed_at` e só é tentada de novo depois de 7 dias.
+- **Retomada do tour em espera (`resumePending`):** mais antiga primeiro; o pedido é **reservado antes de pagar** (update condicional que
+  zera `concept.tour_pending`) — só quem pegou paga. Falha sem vídeo devolve o pedido (`attempts`, 3 e vira "não feita"); vídeo pago cujo
+  registro falhou **não volta** pra fila (registra o erro na peça). Peça que saiu de idea/draft/vault não é paga.
+- **Peça de vídeo sem vídeo não aprova nem publica:** o modal (`CalendarPostModal`) esconde publicar/agendar, o Telegram recusa antes de
+  reservar e o executor do `agent-actions` falha com motivo — senão só a foto de capa iria pro Instagram. (Precisa publicar `agent-actions`.)
+- **Preço no encerramento** passa por `formatPrice` (milhar + moeda da ficha); o valor guardado no cadastro não muda.
+- A migration do tour **não sobrescreve** `config.tour`/`clip_prompts.opening` já existentes (o que está lá vence).
+
+
+- **Trava só no prompt não segura** (Tespon 2/11): o mesmo tema saiu 2x na mesma semana porque cada vaga do calendário roda em
+  invocação própria, em paralelo, e só enxergava o banco — e o banco só recebe a peça no fim. Reserva de tema tem que ser feita no
+  planejamento da semana inteira, antes de disparar (`weekThemes.planWeekThemes`). Número "por extenso" (`trezentos`) também escapava da
+  trava de algarismos: use `numberGuard` (extenso → número) em texto que fala do cadastro do imóvel. Janela e limiar de tema vivem na ficha.
+- **Pacote B2 (2026-11-04) — ordem de publicação.** (1) Migration `20261104100000_trends_ignore.sql` ANTES do merge/site: `useFlowStripData`
+  consulta `marketing_ai_trends` com `.neq('status','ignored')` no servidor e, sem a coluna `status`, essas contagens dão erro (a faixa mostra "não
+  foi possível verificar"). (2) `creative-ideas`, `data-agent` e as functions que usam `_shared/opportunityRun.ts`/`opportunityCron.ts` só depois da
+  migration: o `.neq('status', …)` numa coluna que não existe faz a consulta falhar e a varredura apaga as tendências sem recriar. O resto da tela
+  (useMarketingAiData) filtra no cliente de propósito e não quebra sem a coluna. **Divergência (QA B2, commit b130a27):** o CreativeAgent passou a
+  filtrar no servidor (`.neq`/`.eq('status', …)`, consultas separadas de ativas e ignoradas) e depende da migration — já aplicada em produção em 2026-11-04.
+- **Filtro de "sinal não ignorado" precisa ser `.or('meta->>ignored.is.null,meta->>ignored.neq.true')`** (`NOT_IGNORED_OR`). `.neq('meta->>ignored','true')`
+  sozinho descarta as linhas em que a chave NÃO existe (NULL ≠ 'true' dá NULL) e esconderia todos os sinais normais. Dois `.or()` na mesma consulta
+  funcionam (postgrest-js acrescenta um parâmetro `or` por chamada; o PostgREST combina com AND) — confira numa consulta de leitura ao mexer. E
+  "ignorar" sempre MESCLA a `meta` (ela guarda `provider` etc.): um update com `{ ignored }` sozinho apagaria as outras chaves.
+- **`marketScan.feedCompany` ainda recria as tendências `diagnostico`** (apaga e insere de novo, sem olhar `status`), então uma tendência desse tipo
+  ignorada pode voltar se o diagnóstico grátis rodar de novo para a mesma empresa. `creative-ideas` já respeita as ignoradas (`instagram_scan`).
+- **Uso do imóvel não se soma entre `marketing_ai_test_content` e `posts` (2026-11-03).** Peça aprovada vira linha em `posts` com o mesmo
+  `item_id` (agent-actions); somar as duas fontes conta 2x. `useItemUsage` usa o maior das duas e ignora adaptações (`source_id` não nulo).
+  Também: `?item=` na Inteligência de Mercado redireciona ao Catálogo — para abrir "Lugares perto" num imóvel use `?sub=lugares&imovel=<id>`.
+  E o `reasoning` da peça fala de formato/tema, não do porquê do imóvel: não o mostre como "motivo do imóvel".
+- **Fase 2 de mercado (2026-11-04) — armadilhas.** (1) Termo da ficha casa por **borda de palavra só nas letras** (`hasTerm`): `"a venda"` não casa "cada venda"; `"m²"` casa
+  "435m²"; já os termos de `kind_terms` casam só o **começo** da palavra (`hotel` casa "hoteleira"). Termo curto demais bloqueia notícia boa — por isso `audit` primeiro. (2) `audit`
+  não escreve no sinal: a reclassificação reavalia os mesmos até 150 a cada dia (só leitura); `enforce` carimba `quality_v`. (3) Mexeu em `buildPrompt`/`finalize`/validação de
+  oportunidade? Suba `OPP_PROMPT_VERSION` (`opportunityOutput.ts`), senão a impressão digital não muda e a análise "não vê mudança". (4) A impressão digital NÃO inclui datas nem ids
+  F1/C1; se um dia entrar dado novo no prompt, ponha-o em `fingerprintPayload` (`marketIntelRuns.ts`). (5) `market_intel_runs` ausente: `recordRun` loga e segue, a análise não pula
+  (lê erro como "sem registro anterior") e a tela mostra "Não foi possível verificar" — aplicar a migration ANTES de esperar economia de IA. (6) `owner_restored:true` na `meta` é o que
+  impede o sistema de ignorar de novo; não remova ao mexer em `signalMeta.ts`/`signalIgnore.ts`.
+
+
+## Trava de aprovação da estratégia (Fase 3, 2026-11-04)
+
+- **Status `archived` NÃO existe no CHECK de `marketing_ai_strategies.status`** (`draft, active, paused, completed, needs_review, generating, failed`).
+  Proposta descartada / estratégia antiga = `paused`; o que distingue "descartada" é `data_provenance.proposal.discarded_at` (a tabela não tem coluna `meta`;
+  `data_provenance` é o jsonb livre). Não escreva `archived` sem migration.
+- **`data_provenance` é gravado no passo 3** da geração: o passo 3 agora faz *merge* (`...prevProv`) — voltar a sobrescrever apaga `proposal` e a proposta vira
+  uma estratégia "normal" sem aviso.
+- **`needs_review` só nasce com `data_provenance.proposal`**; `isPendingProposal` exige os dois. Linha `needs_review` sem `proposal` (legado) não aparece na tela.
+- O `update_strategy` (JWT do dono) ainda aceita `status` e `thesis` no patch — é decisão do dono, não automação; a trava vale para o código AUTOMÁTICO (refresh/pivô).
+- `quality_version` do sinal vem de `meta.quality_v` (não `quality_version`); sinal antigo sem carimbo entra como `null`.
+- Sem `deno` no ambiente do agente: `strategy-generate/index.ts` e `creative-generate/index.ts` não foram checados por tipo; a lógica nova está em `_shared` (puro,
+  checado por `tsc` + `scripts/test-fase3-direcionamento.mjs`, que também confere por texto os pontos de ligação).
+
+- **Disponibilidade do imóvel (Fase 4, 2026-11-04):** (1) a trava mora em `agent-actions` `execute()` e roda ANTES do `EXECUTING` — qualquer caminho novo que publique uma peça de imóvel precisa passar por ali (o teste `scripts/test-item-service.mjs` confere a ordem por texto). (2) "Não deu pra conferir" NUNCA vira "disponível": a ação fica `QUEUED` com `scheduled_at` = início da janela de 2 h; depois disso vira FAILED. Não trocar por "publica mesmo assim". (3) XML do portal sem nenhum `ListingID` conta como falha de leitura, nunca como "todos removidos". (4) `item_pick` e `meta.availability` são gravados em UPDATE à parte e tolerante (sem a migration a peça nasce sem motivo). (5) Ficha sem `config.availability` = nada bloqueado; status guardado que a ficha não conhece mais BLOQUEIA (na dúvida, não publica). (6) A trava aprovar/agendar (`earlyBlock`) só barra o claramente indisponível; o resto segue e a trava do executor segura.
+- Sem `deno` no ambiente: `agent-actions`, `creative-generate`, `catalog-package`, `item-videos`, `publicPageRun` e demais `_shared` tocados não foram checados por tipo; a lógica nova está em `itemService.ts` (testada) e a ligação conferida por texto.
+- **Fase 4 — ajustes do QA (2026-11-04):** (1) `_shared/safeUrl.ts` (`isSafeUrl`) é o filtro anti-SSRF ÚNICO, usado pelo `portal-import` e pelo `itemService`, no endereço inicial e em cada redirecionamento — não recriar cópia. (2) `revalidate` usa `fetchItemCfgStrict`/`getItemChecked`: erro de leitura (ficha, empresa, imóvel, integração) = não verificável, nunca "ok" nem "imóvel sumiu"; só ficha SEM a chave = ok e linha realmente ausente = bloqueado. (3) O `item_id` é copiado pro payload da ação na proposta; ação ANTIGA (criada antes da Fase 4) cuja peça já foi apagada não tem como ser conferida e segue sem trava — limite conhecido. (4) `fetchItemCfg` (listas/rotação) continua tolerante a erro de leitura (lista sem filtro); quem protege é a trava de publicação. (5) O link do portal é baixado 1x por minuto por endereço dentro da mesma execução (`memoFeed`), inclusive a falha.
+
+## Resultados lado a lado (Fase 5, 2026-11-04)
+
+- **Nunca ligar lead a peça.** `tracked_links` é único por imóvel+oportunidade+canal e `content_id` guarda só a primeira peça; a ligação comercial é por
+  imóvel/oportunidade. Só a conversa (comentário com intenção) liga a uma peça, via `engagement_events.media_ref` = `posts.instagram_media_id`.
+- **`null` ≠ 0:** `resultsModel.ts` devolve `null` para "sem medição/sem dado" e a tela mostra o texto; 0 só quando a consulta deu certo e o dado existe.
+  Consulta que falha (inclusive coluna/migration ausente — `engagement_events` e `leads` não têm migration de criação, ver "Deriva de migrations") vira
+  "Não foi possível verificar", nunca "sem resultado".
+- **Post sem `item_id`** (feito fora do catálogo) não entra no "Resultado do imóvel": a tela diz quantos ficaram de fora. Leads de DM/comentário sem
+  `item_id`/`opportunity_id`/`link_id` entram em "N leads sem origem registrada".
+- A lista de ids vai na URL da consulta: `resultsData.ts` consulta em blocos de 100 e, se um bloco falha, o conjunto todo vira "não foi possível verificar".
+- **Limite de leitura = falha, não soma:** `resultsData.ts` lê até 500 posts/leads e 5000 eventos por lote de 100 ids; se a leitura bate no limite, o bloco vira "Não foi possível verificar" (soma cortada nunca aparece como número real).
+- **Contadores da empresa toda** ("Na empresa toda: N leads sem origem…") são buscados uma vez (cache de 60 s) e rotulados como da empresa, não do imóvel. Lead só com `opportunity_id` aparece no card da oportunidade, não no imóvel.
+- **Dívida:** cada card de oportunidade aprovada faz 2 consultas de Marketing (posts + métricas); com muitos cards são muitas consultas. Agrupar em 1+1 fica para depois.
+- **RLS conferida em produção (dono, 2026-11-04):** `leads` ("company leads access") e `engagement_events` ("owner read engagement_events") deixam o dono da empresa ler — as telas de resultado dependem disso.
+
+## Ação sugerida da oportunidade não pode sobrar vazia (2026-11-04)
+- A trava de texto (`cleanText`: número sem fonte, termo protegido, promessa sem evidência) corta **frases**. Na ação sugerida, cortar a frase
+  principal deixava só sobra sem ação comercial (caso real, Teste Zero 04/11: ficou só "Registre no Sales Boost após aprovação."), o que reprova a
+  pergunta 4 das 5 ("qual ação comercial é possível?").
+- Regra: `cleanAction` em `_shared/opportunityOutput.ts` — se a trava cortar QUALQUER frase da ação, usa a ação do código do candidato
+  (`fallback.action`, sempre concreta). Não voltar a usar `cleanText` na ação. Teste em `scripts/test-opportunity-engine.mjs`.
+
+## Fábrica 3D: testar com WebGL por software engana, e `mergeGeometries` exige o mesmo tipo (2026-11-07)
+
+- **Sem GPU, o fps não vale.** No navegador automático desta máquina o WebGL roda por software (SwiftShader): a mesma cena dá ~13 fps a 1x e ~9 fps com CPU 4x/6x. Isso **dispara a automedição** da fábrica e ela troca sozinha pra versão simples (é o comportamento certo, mas atrapalha prints e testes). Para prints/medições de tela use `localStorage.sb_factory_view='3d'` e não gire a câmera por muito tempo; para medir a cena crua importe `sceneCore.ts` numa página em branco do dev server. Número de fps de verdade só em aparelho com GPU.
+- **`mergeGeometries` falha em silêncio parcial** ("compatible attributes") se misturar geometria indexada com não indexada (`RoundedBoxGeometry` e `CylinderGeometry` vêm diferentes). O `Kit` converte tudo pra não indexada antes de fundir.
+- **Ordem de rotação:** o `Kit.add` usa `Euler 'YXZ'` (gira em X e depois em Y); com o padrão `XYZ` as setas da esteira apontam pro lado errado.
+- **Desenho sob demanda:** o `OrbitControls` com amortecimento só para de pedir quadro quando `controls.update()` devolve `false`; em aparelho lento isso leva mais tempo em segundos (não é laço contínuo — parado de verdade dá 0 `requestAnimationFrame`).
+- **React:** `border` + `borderColor` no mesmo `style` gera aviso a cada re-render; use uma cor só calculada.
+
+## Fábrica 3D (C.2.1): laço de animação, escada de desempenho e rAF de terceiros (2026-11-07)
+
+- **O dashboard já tem `requestAnimationFrame` de fora da fábrica:** `gsap/ScrollTrigger` (`_rafBugFix`) chama rAF ~60×/s em qualquer página, mesmo com a cortina fechada. Pra provar "zero rAF da fábrica" filtre pela pilha de chamada (sem `gsap`/`ScrollTrigger`), senão o número nunca é 0.
+- **Movimento ambiente tem que ter medida própria:** o teto de ~30 fps de propósito faria qualquer janela de fps parecer "ruim" na escada. Por isso há dois tipos de janela (interação <40/<30 fps; ambiente <20 fps) em `sceneCore.sample`. Se mexer nos limites, rode o teste de CPU 20x (cada degrau aparece em ~2-5 s).
+- **Depois do degrau "robôs congelados" não há mais quadros sozinhos:** o último degrau (versão leve) só dispara se a pessoa interagir (girar) e continuar lento — é de propósito (parado não gasta nada).
+- **`controls.update()` do OrbitControls reescreve a posição da câmera:** em teste/harness não dê `camera.position.set(...)` direto; use `core.flyTo(..., true)`/`core.home(true)`.
+- **Alvo preso na área:** o clamp precisa mover a câmera junto com o alvo (translação), senão a câmera "pula" ao encostar no limite (`clampTarget` em `sceneCore.ts`).
+- **Celular + câmera livre:** `touch-action: none` no canvas impede o dedo de rolar a página. Limite de ~70% da altura e o alinhamento automático ao abrir deixam uma faixa rolável; não aumente a altura sem rever isso.
+- **Cartão com botão dentro de botão:** o cartão do agente na aba Agentes virou `div` com dois botões (mostrar na fábrica / "Abrir"); botão aninhado é HTML inválido e quebra o foco do teclado.
+- **Teste com a fábrica aberta sem GPU:** a escada dispara sozinha (WebGL por software); para prints use a janela dos primeiros ~3 s ou o harness em página em branco (`reduceMotion` + `startLow` na criação do núcleo).
+
+## Vitrine × trial: "Liberar acesso" sumia na ficha do Owner (2026-11-10, caso A3 Imóveis)
+
+- Conta nova (criada a partir de `NEW_FLOW_FROM`) com o trial de 7 dias que o `claim-diagnostic` ainda grava: o banco
+  (`company_access_status`) responde `granted: true, source: 'trial'`, mas `_shared/access.ts` (`hasPaidAccess`) **não**
+  aceita trial pra conta nova — nenhum robô roda (estratégia, calendário de domingo, oportunidades, sinais). A tela do
+  cliente/Owner mostra "Trial" e o selo "Vitrine" ao mesmo tempo.
+- A ficha do Owner (`CompanyDetailPage`) decidia o botão por `access.granted` → mostrava só "Bloquear acesso" e escondia
+  "Liberar acesso". E o `owner-company-activity` (`grant_access`) também pulava `manual_access=true` quando havia trial
+  válido. Corrigido nos dois: em vitrine aparece "Liberar acesso", e o `grant_access` ignora o trial pra conta nova.
+- **Ainda aberto:** o rótulo "Trial" em Access & Subscription continua aparecendo pra conta nova, embora não libere nada.
+
+## Páginas em pedaços (lazy) × deploy (2026-11-10)
+
+- Cada página é um arquivo JS à parte com nome que muda a cada build. Quem está com o site aberto durante um deploy pede um nome
+  que não existe mais → erro ao trocar de página. `src/lib/lazyPage.ts` recarrega a página UMA vez (marca `sb_chunk_reload_at` na
+  sessão, 30 s); falhou de novo → ErrorBoundary. Página nova: registre em `main.tsx` com `lazyPage(...)`, nunca `import` direto
+  (volta a pesar no primeiro carregamento). Página do painel leva o grupo `'dashboard'` (pré-baixada com o painel aberto).
+- O pré-download usa o carregador cru de propósito: falha em segundo plano não pode recarregar a página do nada.
+- **Prints/QA da fábrica:** desde 2026-11-10 não há mais cortina — o 3D abre ao entrar na aba. As notas acima sobre "cortina
+  fechada/aberta" e "faixa de cartões embaixo" são histórico.
+
+## Build sem `.env.local` publica o site em branco (2026-11-10)
+
+- Num container novo (sessão na nuvem) não existe `.env.local`. `npm run build` passa sem erro, mas o site sai sem
+  `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` e no ar fica **tela em branco** ("supabaseUrl is required"). Aconteceu em 10/11
+  (das 21:01 às 21:20 e por ~3 min às 21:50); voltado com `npx wrangler rollback <versão>`.
+- Antes de `npx wrangler deploy`: crie o `.env.local` (URL e chave **anon** públicas, as mesmas do site no ar — pegar pelo painel
+  do Supabase ou `get_publishable_keys`) e confira `grep -l "<ref>.supabase.co" dist/assets/index-*.js`. Depois do deploy, abra
+  `/` e `/login` no navegador e veja se aparece texto. Hoje o site no ar só usa essas duas; PostHog/Facebook/Google ficam vazios.
+- Outra sessão publicando ao mesmo tempo: compare o `index-*.js` do site no ar com um build do `main` antes de publicar — se
+  forem diferentes, há trabalho de outra sessão no ar que ainda não está no `main` e o seu deploy apagaria.

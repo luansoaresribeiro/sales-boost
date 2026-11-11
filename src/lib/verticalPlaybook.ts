@@ -76,6 +76,9 @@ export interface CatalogSchema {
   faqCategories: { key: string; label: string }[] | null
   // Ficha com config.market_intel → sub-aba "Mercado" (coleta automática de notícias, 2026-11-01).
   marketIntel: boolean
+  // Ficha com config.opportunity_fields.location → o motor de oportunidades existe pro setor e dá pra adicionar sinal
+  // manual (botão "+", Pacote B2). Sem a chave, o menu não oferece "Adicionar sinal".
+  signals: boolean
 }
 export interface CatalogImportMap {
   source: string
@@ -90,7 +93,7 @@ export async function fetchCatalogSchema(verticalKey: string): Promise<CatalogSc
   if (verticalKey === 'generico') return null
   try {
     const { data } = await supabase.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
-    const config = (data?.config ?? {}) as { catalog_fields?: { required?: CatalogField[]; optional?: CatalogField[] }; vocabulary?: { item?: string; catalog?: string }; catalog_import?: CatalogImportMap; nearby_places?: { categories?: unknown[] }; faq?: { categories?: { key: string; label: string }[]; official_domains?: unknown[] }; market_intel?: unknown }
+    const config = (data?.config ?? {}) as { catalog_fields?: { required?: CatalogField[]; optional?: CatalogField[] }; vocabulary?: { item?: string; catalog?: string }; catalog_import?: CatalogImportMap; nearby_places?: { categories?: unknown[] }; faq?: { categories?: { key: string; label: string }[]; official_domains?: unknown[] }; market_intel?: unknown; opportunity_fields?: { location?: unknown } }
     const required = config.catalog_fields?.required ?? []
     const optional = config.catalog_fields?.optional ?? []
     if (required.length === 0 && optional.length === 0) return null
@@ -101,6 +104,7 @@ export async function fetchCatalogSchema(verticalKey: string): Promise<CatalogSc
       importMap: config.catalog_import?.fields ? config.catalog_import : undefined,
       nearby: Array.isArray(config.nearby_places?.categories) && config.nearby_places.categories.length > 0,
       marketIntel: !!config.market_intel && typeof config.market_intel === 'object',
+      signals: !!config.opportunity_fields?.location,
       faqCategories: Array.isArray(config.faq?.official_domains) && config.faq.official_domains.length > 0
         ? (config.faq.categories ?? []).filter(c => c && typeof c.key === 'string').map(c => ({ key: c.key, label: String(c.label ?? c.key) }))
         : null,

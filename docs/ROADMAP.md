@@ -4,6 +4,132 @@
 > pronto, arquivos envolvidos, riscos, e se envolve ALTERAÇÃO ARRISCADA
 > (ver CLAUDE.md).
 
+## Novo modelo de negócio — validar antes de construir (dono, 2026-11-10)
+
+**O modelo:** plataforma grátis; tour virtual pago (US$ 15); lead qualificado pago, com preço a definir depois de medir.
+**A pergunta que decide:** o Sales Boost gera demanda comercial consistente, e as imobiliárias pagam por esse resultado?
+
+| Fase | Entrega | Situação |
+|---|---|---|
+| 1 | Auditoria de custos (Claude + Tavily) | v0.1 feita (10/11); **v1 medida em 17/11** · economias de custo no ar (#132–#134) |
+| 2 | Simulador (10/50/100/500; tours 1/3/5; leads separados, sem preço) | v2 feito (10/11); atualizar com a v1 |
+| 3 | Decisão do modelo | depende das fases 1 e 2 e da validação de demanda |
+| 4 | Conversão: catálogo, agendamento, origem, lead qualificado e contestação | **preparada, não implementada** ([CONVERSION.md](CONVERSION.md)); só começa com os 3 portões abaixo |
+| 5 | Piloto real medindo leads, visitas, custo e receita | [PILOTO.md](PILOTO.md) (seção 2.1) |
+
+**Até 17/11 (dono, 10/11):** só validação comercial: conversas com imobiliárias, ficha em [PILOTO.md](PILOTO.md) 2.2. Sem implementação e sem escopo novo.
+
+**Portões da Fase 4:**
+1. custos medidos;
+2. demanda validada (1 piloto ou 3 conversas);
+3. critérios de lead qualificado aprovados pelo dono, com os prazos de 30 e 7 dias validados com imobiliárias. A 1ª versão não guarda marca no celular do visitante (já decidido).
+
+## Plataforma internacional — segurança, depois idioma/país, depois expansão (dono, 2026-11-07)
+
+Decisão completa em [DECISIONS.md](DECISIONS.md#2026-11-07--plataforma-internacional-idioma--país--regras-dono).
+
+| # | Entrega | Prioridade | Pronto quando | Situação |
+|---|---|---|---|---|
+| 0 | Desligar publicação sem aprovação | Imediata | Nenhum caminho publica sem aprovação humana, com trava no servidor e teste | ✅ função antiga desligada (07/11); trava do `agent-actions` em PR, publicar depois do merge |
+| 1 | CRECI (PF/PJ, formato, conferência, inclusão automática, bloqueio só da publicação comercial) + proteção contra discriminação, promessa e informação inventada em legendas, DMs, WhatsApp e respostas automáticas | Alta | Peça sem CRECI válido não publica; filtro em todas as saídas públicas, sem bloquear afirmação comprovável; testes com casos reais | autorizada 07/11 · **1A (CRECI) e 1B (proteção) em PR (09/11)** |
+| 2 | País do negócio no cadastro (separado do idioma) + estrutura de regras por país na ficha; contas atuais = Brasil; ficha EUA desligada para venda | Alta | Cadastro pergunta o país; idioma escolhido não é sobrescrito pela ficha; ficha por país lida pelo código genérico | planejamento aprovado |
+| 3 | IA respeitando o idioma (~30 functions, WhatsApp, Telegram, título do imóvel, "QUERO", textos da ficha em pt/en) | Alta | Com idioma EN, nada gerado sai em português | planejamento aprovado |
+| 4 | Moeda, medidas (m²/sq ft), telefone (DDI), fuso, busca de endereço | Média | Formatos vêm do país da empresa | roadmap |
+| 5 | LGPD, CCPA e privacidade: base legal do lead por DM/comentário, apagar lead, prazo de guarda, Política com Telegram e endereço/foro reais, versão EUA | Revisão especializada | Definido com advogado; LGPD e CCPA tratados separadamente | roadmap |
+| 6 | Erros do servidor traduzidos | Acabamento | Erros por código, texto no idioma da tela | roadmap |
+
+- **Ficha EUA:** sem comercialização antes da revisão de advogado nos EUA (Fair Housing no desenho, não só lista de palavras).
+- **A.6** (2 funções do agente de conteúdo) segue separada, só contas de teste.
+
+## Ordem aprovada (dono, 2026-11-06) — o núcleo funcionando de verdade, depois telas, depois Telegram
+
+> **Esta seção manda.** As seções abaixo ("Foco atual" de 01/11, P0–P4 etc.) ficam como histórico e contexto.
+> Onde divergirem desta ordem, vale esta. O motivo e o restante estão em [DECISIONS.md](DECISIONS.md).
+
+**Regras de trabalho (dono):**
+- Etapas pequenas, cada uma com uma entrega verificável.
+- Antes de cada etapa: objetivo, escopo, riscos e critério de pronto. **Autorização do dono antes de começar.**
+- Não misturar correção necessária com melhoria opcional. Nenhuma frente nova sem mostrar por que é necessária.
+- Preservar os dados e o comportamento atual.
+- Registrar nos docs as decisões, os testes, os custos, as falhas e os resultados.
+- Bloqueio = explicar e propor solução. Nunca contornar uma proteção.
+- **Etapa só conta como concluída com o critério de pronto comprovado.** Código juntado ou publicado não basta.
+- A tela mostra só o estado real do sistema, nunca estado fictício.
+- Nada vai ao público sem o clique do dono, nem em conta de teste.
+- **@getsaleboost não pode ser usado em teste de publicação sem autorização específica do dono.**
+
+### 0. Diagnóstico com mais de uma resposta — ✅ concluído em 06/11
+- **Entrega:** PR #117 juntado; site publicado (automático no merge, ver PITFALLS "Juntar o PR é publicar"); ficha `imoveis_rio` aplicada (`20261106130000_diagnostico_multipla.sql`).
+- **Comprovado no site real** (getsaleboost.com), no celular e no computador:
+  - marcar e desmarcar;
+  - limite de 3, com o aviso;
+  - "E depois disso?" sem a prioridade principal;
+  - em Configurações da Teste Zero, com as gravações bloqueadas: resposta antiga preservada, salvar, editar e remover.
+- **Banco:** conferido que a Teste Zero não mudou.
+
+### Frente B — Piloto com imobiliária (em paralelo ao bloco 1; dono, 2026-11-07)
+| # | Etapa | Pronto quando (comprovado) | Depende de |
+|---|---|---|---|
+| B.1 | Kit do piloto ([PILOTO.md](PILOTO.md)) | Kit revisado pelo dono | — |
+| B.2 | Imobiliária parceira conquistada | Nome, bairros, imóveis com foto real e quem atende | **dono** |
+| B.3 | Configuração: cadastro normal, imóveis, Instagram como testador da Meta | Conta pronta e 1ª rodada de mercado e oportunidades conferida | B.2 e 1.3 publicada |
+| B.4 | 4 semanas de acompanhamento | **1 oportunidade real seguida do início ao fim** (com resultado registrado, mesmo que "nada") e o registro semanal em `docs/relatorios/` | B.3 |
+
+> 1.2 (relatório da fila antiga): ✅ entregue em 07/11 ([relatorios/fila-antiga-2026-11-07.md](relatorios/fila-antiga-2026-11-07.md)). A limpeza espera a 2ª autorização do dono.
+
+### 1. Núcleo: fases e testes
+| # | Etapa | Pronto quando (comprovado) | Depende de |
+|---|---|---|---|
+| 1.1 | **Correção 3 do Opportunity Engine** (PR isolado, sem deploy, sem migration, sem dado): oportunidade aberta equivalente é atualizada, nunca duplicada (tipo + imóveis + sinal, **nunca o título**; evidência nova não apaga evidência antiga mais forte); tarefa única para vários imóveis com a mesma ação, acompanhável por imóvel; trava de "sem presença nas redes / invisíveis / parados / sem divulgação" (com Instagram desconectado, nunca afirmar ausência de posts). | Testes dos 6 casos do dono passam, inclusive "duas oportunidades diferentes continuam separadas"; build ok; PR aberto. | — |
+| 1.2 | **Relatório da fila antiga** (só leitura, Teste Zero e Tespon): total, duplicadas, inválidas pelas regras antigas, as que ficam, id e motivo de cada uma. | Relatório entregue. **Limpeza só com a 2ª autorização do dono.** | 1.1 |
+| 1.3 | **Fechar a Fase 2:** publicar a `marketing-ai` com a Correção 3 e rodar as contas de teste. | Todas as oportunidades passam nos 5 critérios (evidência, relevância, conexão, ação, diferenciação); nenhuma duplicada; nenhuma frase sem prova; custo registrado. | 1.1 (1.2 se a fila for limpa) |
+| 1.4 | **Processo completo, do início ao fim, na Teste Zero e na Tespon:** coleta → oportunidade → plano → peças → aprovação → publicação → medição. | Cada passo com prova (ids, prints, logs), custo e falhas registrados. Publicação real **só com conta de Instagram de teste** ligada à Teste Zero e o clique do dono. Se não houver conta de teste: parar, documentar e propor alternativa. | 1.3; conta de IG de teste (dono) |
+| 1.5 | **Serviços de IA depois da recarga:** estratégia, geração de peças e respostas do Telegram, nas contas de teste. | Uma execução bem-sucedida de cada, com prova e custo; falhas registradas. | — (pode andar junto com 1.4) |
+| 1.6 | **Teste final** (`docs/TESTE-FINAL.md`). | Relatório objetivo entregue ao dono. | 1.4, 1.5 |
+
+### 2. Telas (só depois do bloco 1)
+| # | Etapa | Pronto quando (comprovado) | Depende de |
+|---|---|---|---|
+| 2.1 | **PR B — Atividade dentro do sino** (canal único, deduplicação por id, recuperação depois de reconexão, limpeza ao fechar). | QA B com prova: sem duplicadas, 1 canal, canal some ao fechar, evento durante a queda aparece 1 vez. **O PR A já está no ar desde 05/11** (o merge publica). Falta o dono aprovar formalmente o QA A. | Aprovação do QA A |
+| 2.2 | **Painel do Marketing AI em Bento** (só reorganiza dados reais, nenhuma métrica nova). | Números batem com o SQL nas 2 contas; carregando, erro e ausência certos; prints de celular e computador. | 2.1 |
+| 2.3 | **Fábrica 3D:** parada com estados reais (2.3a — ✅ implementada na C.2, 07/11; C.2.1 (cortina, câmera livre, robôs que mostram a verdade) implementada em 07/11, aguardando QA/merge), depois movimento por evento real (2.3b). Critérios em DECISIONS (seções C a H do plano de 04/11). | 2.3a: estados e selo de maturidade reais, versão 2D, sem desenho contínuo parado. 2.3b: cada evento anima 1 vez, inclusive depois de reconexão. | 2.2 |
+| 2.3c | **C.3 da Fábrica: pacotes na esteira por evento real + releitura/tempo real** (conforme a entrada C.2.1 do DECISIONS). | **A FAZER — depois que o dono testar e aprovar a C.2.1 no notebook e no Galaxy A54 (pendente).** | 2.3 |
+| 2.3d | **Menu lateral: abas "Imóveis" e "Relatórios" (07/11)** — a aba do catálogo (rótulo vem da ficha: `vocabulary.catalog`, fallback "Catálogo"/"Catalog") abre a mesma página do "+" → Adicionar item (`/dashboard/catalogo`); "Relatórios" (`/dashboard/relatorios`) substitui "Atividades" (relatórios semanal/mensal/anual em destaque + histórico de atividades); `/dashboard/atividades` redireciona. | Implementado em 07/11, aguardando QA/merge. Prints de computador e celular nas contas de teste. | — |
+| 2.4 | **Cadastro → Instagram → planos → pagamento.** Começa pelo N1: segurança da conexão do Instagram (`state` assinado e preso ao usuário logado). | N1: teste de ataque com o id de outra empresa recusado. N2 a N5: os 4 casos de QA (sem pagamento, pago, cancelado, chamada direta). | Decisões do dono: preços, contas antigas, tolerância de atraso |
+
+### 3. Telegram (por último: usa as mesmas regras, estados, filas e permissões das telas)
+| # | Etapa | Pronto quando (comprovado) | Depende de |
+|---|---|---|---|
+| 3.1 | **Corrigir as 6 divergências já documentadas** (ARCHITECTURE, Telegram). | Cada divergência corrigida ou registrada com motivo, com teste. | Bloco 2 |
+| 3.2 | **Central de Comando T0:** a matriz de paridade painel × Telegram. | Matriz entregue e aprovada. | 3.1 |
+| 3.3 | **T1 em diante:** consultar e aprovar com botão assinado ("aprova o 2" → cartão → ✅). Texto livre nunca aprova. | Por etapa (ver o plano T0–T6). | 3.2 |
+
+**Pendências do dono que destravam etapas:**
+- conta de Instagram de teste profissional, cadastrada como testadora no app da Meta (1.4);
+- aprovação formal do QA A (2.1);
+- preços e planos, contas antigas e tolerância de atraso (2.4);
+- trocar as senhas da Teste Zero e da Tespon depois dos testes.
+
+## Foco atual (dono, 2026-11-01) — qualidade antes do 1º cliente
+
+> **Histórico (substituído pela "Ordem aprovada" de 2026-11-06, acima).**
+
+> As prioridades P0–P4 abaixo continuam valendo; este é o trabalho em andamento agora.
+
+- [ ] **PR A — tour virtual:** foto por nota (não sorteio), tipos 1 cômodo / 2 cômodos / abertura, 9:16 com
+  encerramento de marca por código, legenda que diz que é animação de foto real, 1 tour por imóvel por semana.
+  Em teste/correção (2026-11-02).
+- [ ] **PR B — carrosséis:** trava de afirmação de mercado em toda peça do calendário, capa-gancho (nunca índice),
+  oferta com capa de foto + faixa de dados (até 7 slides), "3 coisas perto" no sistema de slides, sem tema repetido.
+  Em teste (2026-11-02).
+- [ ] **PR C — validação do zero:** conta "Teste Zero Imóveis" criada pelo cadastro normal (2 imóveis do Leblon,
+  5 fotos cada, sem logo). Depois do deploy de A e B: gerar a 1ª semana, dar nota 1–5 a cada peça com prints.
+  *Pronto quando:* todas as peças 4+.
+- [ ] **Primeira impressão do cliente novo** — achados do cadastro do zero (ver o item no fim deste arquivo).
+- [ ] **Preço e pitch** — ideia de 3 planos em dólar, não decidida ([pitch/PITCH.md](../pitch/PITCH.md)).
+- **Adiado pelo dono:** fechar o ciclo publicar → medir → aprender; juntar estratégia com notícias/oportunidades;
+  fluxo de Resultados (código parado na branch `results-flow`, sem QA).
+
 ## P0 — Instagram certo conectado
 
 - **Objetivo:** o @ certo conectado, sem duplicidade entre empresas, e um
@@ -535,3 +661,176 @@ hipótese, fonte + data, "precisa validar", nunca número inventado, nada public
   (código pronto; falta aplicar a migration `20261101200000_company_flow_status.sql` e publicar o site). **Faltam 3 agentes, no mesmo
   formato** (`FlowStrip` + um hook + `flowStripSteps`): Estratégia, Ativação, Resultados e Aprendizado. *Pronto quando:* cada agente mostra
   os passos reais com status/última vez/contagens vindos de dado real, conferidos contra o código da área.
+- [ ] **Primeira impressão do cliente novo (achados do cadastro do zero, 2026-11-02)** — conta "Teste Zero Imóveis"
+  (`luan26ribeiro+teste3`, Instagram não conectado). ✅ Idioma do conteúdo pelo setor (ver DECISIONS 2026-11-02). **Falta:**
+  1. Telas de cadastro sempre em inglês, sem seletor PT/EN (só a home tem); aviso de cookies em inglês; mockup da home com "UNITED STATES".
+  2. Palavras em inglês nas telas em PT: "Growth Potential", "Growth Ready", "Social Selling", "GROWTH OS", "Business Progress",
+     "Trial de Crescimento", "SDR".
+  3. "Hermes" aparece sem explicação (onboarding passo 3, painel, sino, Telegram).
+  4. Status do plano contraditório: "Plano Free" + "modo demonstração" + "Trial dia 1 de 7" + "Gratuito — 5 posts/mês" + pop-up de cupom.
+  5. **Diagnóstico inventa número** ("ficou 30 dias no mercado e saiu pelo valor pedido") — quebra a regra 5; e "concorrentes fortes"
+     com 13/40 seguidores, "7.4%" ao lado de "1.380", "em Rio de Janeiro", tempo estimado diferente em cada tela.
+  6. Cadastro de imóvel: sem campo de título; "em Leblon" (deveria "no Leblon"); preço sem separador ("R$ 3000000"); a 1ª foto vira
+     capa sem perguntar (a cobertura ficou com a pia do banheiro); campos estreitos cortam o texto.
+  7. Respostas do onboarding não aparecem em Configurações (e-mail, objetivo); opções genéricas que não servem pra imóveis ("ticket médio").
+  8. Sino: contador 2 com 3 itens; pisca "Tudo em dia"; CRECI "preencher depois" conta como pendente; frequência lida do Instagram some
+     com um toque. Perguntas: "(até 3) (até 3)"; caixa de bairros salva texto não adicionado.
+  Prints: pasta do teste (sessão de 2026-11-02). *Pronto quando:* um cadastro novo de corretor do Rio passa pelo fluxo todo em português,
+  sem número inventado e sem informação contraditória sobre o plano.
+
+## Pós-validação — Marketing AI da informação à decisão (plano de 2026-11-03)
+
+> Só começa **depois** da validação (teste final com a Tespon / "Teste Zero") — **exceção aprovada pelo dono em 2026-11-03: a Fase 1
+> (só tela, custo zero) foi adiantada**. O plano transforma a Marketing AI de "mostra informação"
+> em "ajuda a decidir". Só a Fase 1 foi implementada (PR #93, no ar em 2026-11-03); a PR de telas #92 só mostra o que já existe (ver
+> [DECISIONS.md](DECISIONS.md)).
+>
+> **Ordem atual (revisão do dono de 2026-11-03):** **validação → Pacote A → Pacote B1 → Pacote B2 → Fase 2 → Fase 3 → Fase 4 → Fase 5.**
+> A validação (Tespon + "Teste Zero") é gate do dono: o Pacote A só começa depois dela. A Fase 2 só começa com A, B1 e B2 concluídos.
+> Os pacotes **não são fases novas**: são uma camada de conexão/usabilidade sobre o que já existe, sem IA e sem criar fonte de verdade nova
+> (as 4 regras estão em [DECISIONS.md](DECISIONS.md), 2026-11-03 "Pacotes A e B").
+>
+> **Status 2026-11-04:** A, B1, B2 concluídos e no ar (PRs #98, #99, #100). Fase 2 juntada (PR #101), site no ar, `marketing-ai` v43
+> publicada. **Gate medido** (67 sinais, 0 notícia boa barrada): filtro passou para `enforce` com a ficha v2. Oportunidades ainda reprovam nas
+> 5 perguntas, e o custo da coleta passa a ser medido a partir de 05/11: a Fase 2 segue aberta (detalhe em DECISIONS, "Gate da Fase 2").
+> **Reconciliação (dono, 04/11):** a Fase 3 (PR #104) foi implementada antes do gate completo da Fase 2; a saída das Fases 2 e 3
+> NÃO está aprovada. Trabalho antecipado nas Fases 4 e 5 não amplia escopo nem fecha fase (DECISIONS, "Reconciliação dos gates"). **Princípio orientador e critérios formais de aceite:** [DECISIONS.md](DECISIONS.md), 2026-11-04 "Critérios de decisão".
+
+### Gate e critérios de saída (dono, 2026-11-04 — detalhe em DECISIONS)
+- **Não abrir novas frentes** antes de provar valor comercial. Ordem: publicar `marketing-ai` → conferir bundle e versão → analisar dados reais
+  (Tespon + Teste Zero) → medir a qualidade da classificação → decidir audit → enforce → só então Fase 3.
+- **Gate audit → enforce:** precisão dos sinais comercialmente relevantes, falsos positivos, duplicados/sem mudança, custo por rodada e acumulado,
+  oportunidades que merecem atenção. Não basta a coleta funcionar tecnicamente.
+- **Saída por fase:** Fase 2 = informação relevante com custo e qualidade controlados · Fase 3 = a inteligência influencia o direcionamento sem mudar o
+  posicionamento sozinha (e o plano semanal funciona sem oportunidade) · Fase 4 = estratégia ligada a imóvel real, sem divulgar indisponível ·
+  Fase 5 = ação de marketing ligada a resultado comercial verificável.
+
+### Pacotes de conexão (antes da Fase 2)
+**Pacote A — orientação (só tela, sem IA).** **Status (2026-11-03): implementado no branch `claude/nifty-shannon-ysp818-pacote-a`; aguardando aprovação do dono (QA + PR + publicação do site ainda por fazer).** Regra do Tipo de ativação, do Objetivo e a medição em SQL: [DECISIONS.md](DECISIONS.md), 2026-11-03 "Pacote A". Divergências do texto abaixo: o Tipo ganhou "Tipo não identificado" para tour/oferta/bairro sem imóvel e "Não foi possível verificar"; o "motivo" da peça segue sem campo (o modal avisa que não é registrado).
+1. Hub, bloco **"O que merece sua atenção"** com 4 linhas separadas:
+   - **Último sinal**: o mais recente com fonte e data, não ignorado e completo (não o sinal bruto).
+   - **Oportunidade**: só as que estão de fato aguardando avaliação.
+   - **Direcionamento**: o tema central da estratégia ativa. Sem tema, não inventa.
+   - **Próxima ação**, por regra fixa nesta ordem: sem estratégia → oportunidade esperando → peça para aprovar → semana sem peças → "Tudo em dia".
+     - Se uma consulta necessária falhar ou não carregar, aparece **"Não foi possível verificar"**. Nunca "não existe" nem "tudo em dia" nesse caso.
+     - "Tudo em dia" só aparece quando todas as verificações foram concluídas e não há nada pendente.
+   - Os 5 cards de agente ficam menores: estado, uma informação útil e a próxima ação.
+2. Estratégia, no topo, **3 blocos que não se misturam**:
+   - **Direcionamento ativo**: o que a estratégia define (objetivo, público, temas).
+   - **Plano da semana**: como isso foi distribuído (`weekly_mix`).
+   - **Próxima ação**: a próxima vaga do calendário, ou "Nenhuma peça planejada".
+   - "Por que essa direção" só cita oportunidade quando ela está ligada de verdade.
+3. Calendário (célula e modal):
+   - **Objetivo**: `intent.funnel.objective`, ou "Sem objetivo registrado".
+   - **Tipo de ativação** por regra explícita (conferir a semântica dos campos no banco antes de fechar):
+
+     | Condição | Tipo |
+     |---|---|
+     | Sem imóvel e sem oportunidade | Educativo sem imóvel |
+     | Com imóvel, família educativo | Educativo com imóvel |
+     | Com imóvel, família tour/oferta | Apresentação de imóvel |
+     | Oportunidade válida | Oportunidade |
+     | Dado incompleto ou contraditório | "Tipo não identificado" |
+
+   - O modal mostra objetivo, tipo, imóvel e oportunidade (se houver). O motivo da escolha só aparece quando estiver registrado.
+
+**Pacote B1 — relações que já existem no banco (só mostrar).** — **Estado (2026-11-04): implementado na branch `claude/nifty-shannon-ysp818-pacote-b1`, aguardando aprovação do dono** (ver [DECISIONS.md](DECISIONS.md#2026-11-04--pacote-b1-relações-existentes-só-tela-atividade-do-imóvel-origem-do-lead-tela-de-oportunidades)).
+4. Catálogo, **"Atividade do imóvel"**: dados e página pública; peças planejadas e publicadas, com o estado de cada uma; oportunidades
+   ligadas (`item_ids`); leads (`leads.item_id`). Bloco vazio diz que está vazio, e isso não é erro.
+5. Funil, **origem do lead**:
+   - Conteúdo de origem só quando o `link_id` leva a uma única peça, sem ambiguidade (conferir antes o que `tracked_links` guarda).
+     **Divergência (2026-11-04):** conferido — `tracked_links` NÃO leva a uma peça (único por imóvel+oportunidade+canal; `content_id` = só a 1ª peça). Logo o funil mostra imóvel + canal da página pública e a oportunidade, e **não** a peça de origem.
+   - Oportunidade quando `opportunity_id` estiver gravado.
+   - Senão, "Origem não registrada".
+6. Oportunidades: formulário de sinal manual recolhido; corrigir o texto que manda clicar num botão que não existe; "O que falta pra
+   achar mais" fica discreto.
+
+**Pacote B2 — ações novas.** — **Estado (2026-11-04): implementado na branch `claude/nifty-shannon-ysp818-pacote-b2`, aguardando aprovação do dono** (ver [DECISIONS.md](DECISIONS.md#2026-11-04--pacote-b2-ações-novas-menu-do--ignorar-sinal-ignorar-tendência-ver-evidência)). Migration `20261104100000_trends_ignore.sql` vem antes do merge; deploy de `creative-ideas`, `data-agent`, `marketing-ai` (e quem usa `_shared/opportunityRun.ts`/`opportunityCron.ts`) e o site só depois dela.
+7. Botão **"+" vira menu**: Adicionar imóvel · Gerar peça agora · Adicionar sinal de mercado. Cada opção só entra se funcionar de ponta a ponta.
+8. **Ignorar sinal**: `market_signals.meta.ignored` + `meta.ignored_at`, sem migration. A evidência fica preservada.
+9. **Ignorar tendência**: migration mínima com `status` (`active`/`ignored`, respeitando estados que já existam) e a data, se couber.
+   Sai das sugestões ativas sem apagar nada.
+10. **"Ver evidência"** no card de tendência; "Fazer carrossel" vira ação secundária.
+
+**Critérios de aceite (QA de cada pacote).**
+
+| Caso | Esperado |
+|---|---|
+| Imóvel sem peças | "Nenhuma peça relacionada" |
+| Imóvel com peça planejada ou publicada | Mostra a peça e o estado |
+| Imóvel sem oportunidade | Mostra a ausência, não erro |
+| Lead sem origem | "Origem não registrada" |
+| Oportunidade ou tendência ignorada | Sai das sugestões ativas |
+| Sinal ignorado | Evidência preservada |
+| Estratégia sem tema central | Não inventa direcionamento |
+| Peça sem objetivo | "Sem objetivo registrado" |
+| Consulta com erro | Nunca "Tudo em dia" |
+| Demo | Etiqueta visível |
+
+- As contagens batem com a tela de destino (3 peças para aprovar levam a 3 peças reais, sem duplicata).
+- Conferência por SQL de leitura na Tespon e na "Teste Zero".
+- Depois do merge, "Site publicado em getsaleboost.com ✅".
+
+**Fora dos pacotes, de propósito:**
+- "Relacionar imóvel" (Fase 4) e "Adicionar ao direcionamento" (Fase 3) não entram como botão vazio.
+- Demonstração nas outras telas fica segurada, para não espalhar dado fictício.
+- Campanha continua "em breve".
+
+### As 5 fases
+1. **Tela de decisão (hub).** ✅ *Feita e no ar (PR #93, 2026-11-03; ver [DECISIONS.md](DECISIONS.md)).* 4 indicadores de decisão numa **janela de 7 dias**, com regras fixas e visíveis (cada indicador diz de
+   onde vem e como é calculado; sem dado = "sem dado ainda", nunca 0 fingido).
+2. **Inteligência.** 🟡 **Código pronto (2026-11-04), aguardando aprovação do dono** — branch `claude/nifty-shannon-ysp818-fase2`: filtro de qualidade na ficha (começa em `audit`), registro por rodada (`market_intel_runs`), análise que não repete quando nada mudou e bloco "O que mudou" (ver [DECISIONS.md](DECISIONS.md#2026-11-04--fase-2-inteligência-de-mercado-qualidade-registro-por-rodada-e-sem-reinterpretar)). **Falta:** 2 migrations, deploy de `marketing-ai`, site, e depois trocar a ficha de `audit` para `enforce`. Fica de fora desta entrega: "semana vs. semana anterior" com "cresceu" só com evidência dos dois lados (a tela mostra o que mudou desde a última rodada, não a comparação semanal). Interpretação de sinais **só dos novos, deduplicados**, com **limite de chamadas de IA e custo registrado**
+   (livro-caixa). "O que mudou" compara **semana vs. semana anterior** e só diz "cresceu" quando há evidência (número real dos dois lados).
+3. **Direcionamento da estratégia.** 🟡 **Código pronto (2026-11-04), aguardando aprovação do dono** — branch `claude/nifty-shannon-ysp818-fase3`: trava de aprovação (refresh só mexe no plano de conteúdo/metas; pivô vira *proposta* que o dono aprova ou descarta) e contexto de mercado nos temas da semana (`intent.market_context`). Ver [DECISIONS.md](DECISIONS.md) 2026-11-04 — Fase 3. Os sinais influenciam os **temas da semana**, mas **nunca** a tese, o público ou o posicionamento
+   sem aprovação do dono. Mudança de estratégia nunca é automática.
+4. **Property matching.** Escolher o imóvel por **tema, região, características e disponibilidade**, com **mínimo de fotos por
+   formato** e o **motivo gravado** na peça (hoje é só o rodízio do `pickItem`, e o motivo não é gravado). Integração com CRM (VRSync):
+   **id externo, última sincronização, status, preço, removidos e falhas**, e **revalidar a disponibilidade antes de publicar**.
+5. **Resultados.** Resultados **comerciais** (CRM/leads: visita, proposta, venda) **separados** do engajamento (Instagram: curtida,
+   comentário) — nunca misturar os dois numa nota só.
+
+### Os 7 ajustes do dono (incorporados nas fases acima)
+1. Hub com 4 indicadores de decisão, janela de 7 dias, regras fixas (Fase 1).
+2. Interpretar só sinais novos, sem repetir, com limite de chamadas e custo registrado (Fase 2).
+3. "O que mudou": semana vs. anterior, só "cresceu" com evidência (Fase 2).
+4. Sinais influenciam temas da semana, nunca tese/público/posicionamento sem aprovação (Fase 3).
+5. Property matching com mínimo de fotos por formato e motivo gravado (Fase 4).
+6. CRM VRSync com id externo, última sync, status, preço, removidos, falhas; revalidar antes de publicar (Fase 4).
+7. Resultado comercial (CRM/leads) separado de engajamento (Instagram) (Fase 5).
+
+### Ajustes do dono para as Fases 2–5 (revisão de 2026-11-03)
+- **Fase 2:**
+  - Controlar o **volume**, não só o gasto. Registrar por rodada: sinais coletados, que passaram no filtro, interpretados e
+    descartados, custo da rodada e custo acumulado.
+  - Não reinterpretar sinal que não mudou.
+  - Entrega um resumo "o que mudou" com evidência, interpretação e possível impacto, sem dashboard novo.
+  - Plano com teto de custo é mostrado ao dono antes de começar.
+- **Fase 3:** o sinal sugere um tema → o tema entra como contexto → o plano da semana pode usar. Posicionamento, público e objetivo
+  principal só mudam com aprovação.
+- **Fase 4:**
+  - O motivo da escolha do imóvel precisa ser **verificável**: os atributos que de fato decidiram (região, perfil, característica,
+    disponibilidade), não uma justificativa genérica.
+  - Revalidar o imóvel antes de publicar, e criar o serviço comum de imóveis.
+  - Critério de aceite: imóvel indisponível não publica.
+  - **Status (2026-11-04): implementado na branch `claude/nifty-shannon-ysp818-fase4`, aguardando aprovação/merge do dono** (migrations + deploy pela sessão principal). Relacionar imóvel por tema/região ficou fora (decisão do dono).
+- **Fase 5:**
+  - Separar marketing (alcance, engajamento, salvamentos, cliques) de comercial (conversas, leads, visitas, conversões).
+  - A branch `results-flow` é dependência própria.
+  - **Status 2026-11-04: implementada no branch `claude/nifty-shannon-ysp818-fase5` (só front, sem migration/function; aguardando QA e PR).** Feita do zero
+    sobre a `main`; `results-flow` ficou de fora (decisão do dono) e a "ideia vencedora" não entrou. Detalhe e regra de ligação (por imóvel/oportunidade,
+    não por peça): [DECISIONS.md](DECISIONS.md), 2026-11-04 "Fase 5". Divergência: "visitas" = leads com `visit_at` (convenção Qualificado) e
+    "conversas" = comentários com intenção; DMs continuam sem fonte.
+  - Não conta como concluída só com métricas do Instagram. O que não existe aparece como ausente, nunca estimado.
+
+### Rastreabilidade ponta a ponta
+Cada passo guarda **ids**, para dar pra perguntar "de onde veio isto?" e "deu resultado?":
+`sinal (market_signals.id) → insight → tema da semana → peça + imóvel (marketing_ai_test_content.id + item_id) → resultado`
+(`posts`/`tracked_links`/`leads` para o resultado comercial; snapshots do Instagram para engajamento). Hoje já existem `item_id`,
+`opportunity_id` e `tracked_links`; faltam os elos sinal→insight→tema e o motivo da escolha do imóvel.
+
+### Não fazer agora
+Mais agentes sem função clara · mais dashboards · fontes de dados sem critério · fontes pagas sem validar o valor antes · automação de
+WhatsApp · embeddings · mudança automática de estratégia.
+
+### Conectores (ordem)
+CRM (VRSync) → Google News RSS → Google Trends (**só com aprovação de custo do dono**) → WhatsApp e Ads por último.

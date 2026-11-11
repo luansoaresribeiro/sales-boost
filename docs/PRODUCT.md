@@ -4,6 +4,26 @@
 > de produto, conteúdo ou posicionamento. Decisões com data ficam em
 > [DECISIONS.md](DECISIONS.md); aqui fica o estado atual, não o histórico.
 
+## Estado atual em uma tela (atualizado 2026-11-02)
+
+> Resumo do que vale HOJE. As seções abaixo guardam o histórico com as divergências marcadas.
+
+- **Pitch em trabalho:** [pitch/PITCH.md](../pitch/PITCH.md) — "conteúdo com intenção no ritmo do mercado,
+  ativação nos melhores conteúdos e um painel que ensina como a empresa se relaciona com o mercado".
+- **O produto são 5 componentes em sequência** (decisão de 2026-10-31/11-01, ver DECISIONS):
+  Inteligência de Mercado (notícias diárias, teto US$ 5/mês) → Motor de Oportunidades → Estratégia →
+  Ativação (Conteúdo, Campanha, Conversas) → Resultados e Aprendizado. Catálogo saiu da Inteligência de Mercado
+  e virou página própria (botão "+").
+- **Foco agora (2026-11-01):** qualidade do tour virtual e dos carrosséis **antes do 1º cliente criar conta**,
+  validada numa conta nova criada do zero. Critério pra liberar o 1º cliente: toda peça da 1ª semana com nota 4+/5.
+- **Idioma:** inglês é o padrão geral (2026-10-27), mas o **setor define o idioma** (2026-11-02): `imoveis_rio`
+  nasce em português.
+- **Preço:** em revisão. Ideia do dono (2026-11-02, **não decidida**): 3 planos em dólar — US$ 19 / 29 / 59 com
+  5 / 15 / 30 posts; o mais caro com avatar, Meta Ads e leitura comercial avançada. O que está no código hoje
+  continua sendo o da seção "Modelo de cobrança" abaixo até o dono decidir.
+- **Ainda não existe (não prometer como pronto):** impulsionar/criar anúncio pelo Sales Boost (hoje só leitura do
+  Meta Ads), avatar, coleta de métricas do Instagram fechando o ciclo de aprendizado.
+
 ## Quem somos (texto do dono, 2026-10-12)
 
 > **Sales Boost is an AI growth partner that continuously understands a
@@ -40,6 +60,12 @@ resultados e se adapta.
 > ajudamos seus corretores a transformar isso em ações para gerar demanda."** O texto acima fica como
 > histórico (a base — dados reais, aprovação do dono — continua valendo). Ver
 > [DECISIONS.md](DECISIONS.md#2026-10-28--inteligência-comercial-para-imobiliárias-opportunity-engine).
+
+> **Divergência (2026-11-10, dono):** o slogan passa a ser **"Sales Boost — gerando mais visitas para o seu imóvel"**.
+> Ele acompanha o novo modelo: plataforma grátis, tour pago e lead qualificado. A métrica principal deixa de ser "conteúdo produzido" e passa a ser
+> **visitas aos imóveis**. Na tela, o topo do site diz "Você cuida dos imóveis. Nós geramos mais visitas." Os textos acima ficam como
+> histórico. **Cuidado:** prometer visita garantida continua proibido; o que o Sales Boost entrega é a estrutura que gera, rastreia e
+> converte interesse em visitas. Ver [DECISIONS.md](DECISIONS.md).
 
 A estratégia vem de **dados reais** (Data Agent — ver [ARCHITECTURE.md](ARCHITECTURE.md)),
 não só da URL que o cliente colou no diagnóstico gratuito.
@@ -184,6 +210,10 @@ precisar virar especialista em marketing.
   que executa + voz em PT-BR.
 
 ## Modelo de cobrança — DECIDIDO (2026-10-02)
+
+> **Divergência (2026-11-02):** o dono está repensando o preço — 3 planos em dólar (US$ 19 / 29 / 59; 5 / 15 / 30
+> posts por mês; o Pro com avatar, Meta Ads e leitura comercial avançada). **Ainda não decidido** — ver
+> [pitch/PITCH.md](../pitch/PITCH.md). O código continua com o modelo abaixo até a decisão.
 
 > **Divergência (2026-10-13):** conta nova não tem mais teste de 7 dias com o
 > painel inteiro nem fica presa no "modo grátis": entra em **modo vitrine** (vê

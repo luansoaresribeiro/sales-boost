@@ -372,10 +372,49 @@ function svgReview(f: F, b: Brand): { svg: string; w: number; h: number } {
   return { svg, w: W, h: H }
 }
 
+// Encerramento do vídeo do tour (decisão do dono 2026-11-02): 1080×1920, fundo escuro da marca, logo + bairro + CTA sempre;
+// preço SÓ se cadastrado e exatamente como veio (sem formatar nem somar). Montado aqui por código e emendado no vídeo
+// pelo estúdio (VPS) — a IA de vídeo nunca escreve texto (regra 4). Conteúdo fica no miolo (longe da barra do Reels).
+function svgTourEndcard(f: F, b: Brand, logo: string | null, lc: LogoCtx): { svg: string; w: number; h: number } {
+  const W = 1080, H = 1920
+  const luma = hexLuma(b.bg || '#0E0B0A')
+  const bg = luma !== null && luma < 0.3 ? (b.bg as string) : '#0E0B0A'
+  const text = '#ffffff'
+  const parts: string[] = []
+  let y = 560
+  if (logo) {
+    const asp = lc.aspect && lc.aspect > 0 ? lc.aspect : 1
+    const lw = Math.round(Math.min(560, 340 * asp)), lh = Math.round(lw / asp)
+    const pillFill = lc.prepared ? logoBackdrop({ lo: lc.lo, hi: lc.hi, mean: lc.luma }, hexLuma(bg)) : null
+    if (pillFill) parts.push(`<rect x="${Math.round(W / 2 - lw / 2 - 28)}" y="${y - 28}" width="${lw + 56}" height="${lh + 56}" rx="28" fill="${pillFill}" fill-opacity="0.92"/>`)
+    parts.push(`<image href="${logo}" x="${Math.round(W / 2 - lw / 2)}" y="${y}" width="${lw}" height="${lh}" preserveAspectRatio="xMidYMid meet"/>`)
+    y += lh + 110
+  } else if (b.name && b.name.toLowerCase() !== 'marca') {
+    const nl = limitLines(wrap(b.name, 72, 860), 2)
+    parts.push(block(nl, W / 2, y + 60, 72, text, 700, 86, 'middle')); y += 60 + nl.length * 86 + 60
+  } else y += 120
+  parts.push(`<rect x="${W / 2 - 60}" y="${y}" width="120" height="6" rx="3" fill="${b.primary}"/>`); y += 100
+  if (f.bairro) {
+    const bl = limitLines(wrap(f.bairro, 68, 860), 2)
+    parts.push(block(bl, W / 2, y, 68, text, 700, 82, 'middle')); y += (bl.length - 1) * 82 + 120
+  }
+  if (f.preco) {
+    const pl = limitLines(wrap(f.preco, 76, 880), 2)
+    parts.push(block(pl, W / 2, y, 76, b.primary, 800, 90, 'middle')); y += (pl.length - 1) * 90 + 130
+  }
+  if (f.cta) {
+    const cs = f.cta.length > 22 ? 40 : 48
+    const cl = limitLines(wrap(f.cta, cs, 760), 2), ch = 60 + cl.length * Math.round(cs * 1.2), cw = 880
+    parts.push(`<rect x="${(W - cw) / 2}" y="${y}" width="${cw}" height="${ch}" rx="${Math.round(ch / 2)}" fill="#ffffff"/>`)
+    parts.push(block(cl, W / 2, y + 30 + Math.round(cs * 1.0), cs, '#000000', 700, Math.round(cs * 1.2), 'middle'))
+  }
+  return { svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${parts.join('')}</svg>`, w: W, h: H }
+}
+
 // 'tweet'/'product'/'photo'/'problem'/'faq'/'trend'/'market_watch'/'review'
 // são os únicos templates válidos hoje (ver a regra em formatTemplates.tsx —
 // TEMPLATES precisa espelhar exatamente isso). Sem match, cai em 'photo' —
-// é o mais genérico/flexível. 'slide' é interno (carrossel de slides do
+// é o mais genérico/flexível. 'slide' e 'tour_endcard' são internos (carrossel de slides / encerramento do vídeo do tour, do
 // creative-generate), não aparece na escolha de template do dono.
 interface LogoCtx { prepared: boolean; luma: number | null; lo: number | null; hi: number | null; aspect: number | null; showName: boolean }
 const NO_LOGO_CTX: LogoCtx = { prepared: false, luma: null, lo: null, hi: null, aspect: null, showName: false }
@@ -390,13 +429,15 @@ function buildSvg(template: string, f: F, b: Brand, bg: string | null, logo: str
   }
   switch (template) {
     case 'tweet': return svgTweet(f, b, logo, pill(hexLuma((f.theme || 'dark') === 'dark' ? '#15202b' : '#ffffff')), lc.aspect)
-    case 'slide': { const r = svgSlideSystem(f, b, logo, measureFn, { backdrop: pill(hexLuma(b.bg || '#0E0B0A')), aspect: lc.aspect }); return { svg: r.svg, w: r.w, h: r.h, overflow: r.overflow } }
+    // `bg` (foto real em data URI) só entra no slide quando o chamador manda `background`: texto branco sobre degradê escuro; a pílula do logo é calculada contra o escuro.
+    case 'slide': { const r = svgSlideSystem(f, b, logo, measureFn, { backdrop: pill(bg ? 0.02 : hexLuma(b.bg || '#0E0B0A')), aspect: lc.aspect, bgImage: bg }); return { svg: r.svg, w: r.w, h: r.h, overflow: r.overflow } }
     case 'product': return svgProduct(f, b, productImg)
     case 'problem': return svgProblem(f, b)
     case 'faq': return svgFaq(f, b)
     case 'trend': return svgTrend(f, b)
     case 'market_watch': return svgMarketWatch(f, b)
     case 'review': return svgReview(f, b)
+    case 'tour_endcard': return svgTourEndcard(f, b, logo, lc)
     case 'photo': return svgPhoto(f, b, bg, logo, sticker, W, H, safe, { backdrop: photoPill(), aspect: lc.aspect, showName: lc.showName })
     default: return svgPhoto(f, b, bg, logo, sticker, W, H, safe, { backdrop: photoPill(), aspect: lc.aspect, showName: lc.showName })
   }
@@ -413,7 +454,7 @@ Deno.serve(async (req) => {
       const brand = { primary: '#FF6D29', name: 'Test' }
       const safe = { top: 60, right: 80, bottom: 90, left: 80 }
       const sizes: Record<string, number> = {}
-      for (const t of ['tweet', 'slide', 'product', 'photo', 'problem', 'faq', 'trend', 'market_watch', 'review']) {
+      for (const t of ['tweet', 'slide', 'product', 'photo', 'problem', 'faq', 'trend', 'market_watch', 'review', 'tour_endcard']) {
         const { svg, w } = buildSvg(t, { value: '42%', stars: '4', items: 'Um\nDois\nTrês', text: 'selftest', name: 'Test', handle: 'test' }, brand, null, null, null, null, 1080, 1080, safe)
         sizes[t] = renderPng(svg, w).length
       }
@@ -474,7 +515,7 @@ Deno.serve(async (req) => {
     const bgData = bgUrl ? await toDataUri(bgUrl) : null
     // Avatar do Tweet Print = logo real da empresa (mesmo asset do Kit da
     // Marca em Estilos e Visuais) — sem logo, cai pras iniciais na svgTweet.
-    const wantsLogo = template === 'photo' || template === 'tweet' || template === 'slide'
+    const wantsLogo = template === 'photo' || template === 'tweet' || template === 'slide' || template === 'tour_endcard'
     const rl: ResolvedLogo = wantsLogo ? await resolveLogo(admin, companyId, brand) : { url: null, foto: false, prepared: false, luma: null, lo: null, hi: null, aspect: null }
     let logoData = rl.url ? await toDataUri(rl.url) : null
     let prepared = rl.prepared

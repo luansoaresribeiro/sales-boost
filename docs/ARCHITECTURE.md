@@ -46,9 +46,14 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente ·
    `claim-diagnostic` dispara a 1ª estratégia sozinha logo após o cadastro;
    um despachante (`action:'cron_dispatch'`, pg_cron diário) reavalia
    semanalmente (`reanalyze`) e atualiza o plano tático mensalmente OU
-   quando o check-up pede ajuste (`action:'refresh'` — mantém a tese, só
-   refaz funil/metas/orçamento, silencioso). Estratégia NOVA (`generate`)
-   só quando o check-up decide PIVOT/TERMINATE, **ou pelo botão do dono
+   quando o check-up pede ajuste (`action:'refresh'` — **desde a Fase 3,
+   2026-11-04:** só refaz plano de conteúdo (mix/pilares/linha central) e metas;
+   tese, foco, os 2 objetivos, orçamento e o público/objetivo de cada etapa do funil
+   ficam como estão — `_shared/strategyLock.ts`; silencioso). Estratégia NOVA
+   (`generate`) a partir do check-up (PIVOT/TERMINATE) agora nasce como **proposta**
+   (`status:'needs_review'`, metadados em `data_provenance.proposal`) e a ativa continua
+   rodando; o dono aprova/descarta na tela (`approve_proposal` / `discard_proposal`,
+   só JWT do dono). Estratégia nova imediata só **pelo botão do dono
    "Pedir nova estratégia"** (`StrategySection.tsx` — pede confirmação + o
    "por quê", usa o mesmo caminho de código do pivô automático) — só nesses
    casos avisa o dono (Telegram + Atividades).
@@ -122,6 +127,17 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente ·
    decisão humana explícita (`decide()`, grava `approved_by`); o fluxo de
    `posts` (`rascunho→aprovado→publicado`) segue a mesma trava. Sólido em
    toda a base.
+   **Aprovar a semana (2026-11-10):**
+   - o dono vê os posts planejados de hoje até +7 dias e aprova todos com 1 clique (bloco "Sua semana" em
+     Central do dono → Aprovações, `src/pages/dashboard/WeekApproval.tsx`);
+   - no servidor, `agent-actions` `approve_week` cria uma ação por peça, pelo mesmo caminho do "Agendar":
+     `APPROVED` + `approved_by` + `scheduled_at` no dia, às 18h de Brasília;
+   - o cron de 5 em 5 min publica, com as travas de sempre na hora de sair;
+   - `unschedule_week` cancela em lote;
+   - regras puras em `_shared/weekApproval.ts` (cópia da tela em `src/lib/weekApproval.ts`);
+   - teste em `scripts/test-week-approval.mjs`.
+
+   **Domingo:** o plano semanal avisa "Sua semana está pronta" (`log-bot-event`, `AGENT_ACTION` / `week_ready`).
 
 8. **Distribuição Instagram** — ✅ existe (imagem única e carrossel).
    `agent-actions` → `publishToInstagram` (foto única) e
@@ -152,7 +168,10 @@ Legenda: ✅ existe e funciona como descrito · 🟡 existe parcialmente ·
     `performance`/`history` leem de volta), `strategy-generate` (lê via
     `fetchDataAgentState` a cada rodada). O loop é real pra
     engajamento/alcance/leads. **Não fecha pra receita** — ver gap em
-    [LEARNING.md](LEARNING.md).
+    [LEARNING.md](LEARNING.md). **Fase 5 (2026-11-04):** as telas já mostram
+    Marketing e Comercial lado a lado, por imóvel e por oportunidade (nunca
+    por peça), com "sem dado"/"Não foi possível verificar" em vez de 0 —
+    ver [LEARNING.md](LEARNING.md) e [DECISIONS.md](DECISIONS.md).
 
 ### Hermes do produto ≠ agentes de desenvolvimento
 
@@ -287,6 +306,18 @@ Telegram (`notifyMarketing()` → Cloudflare Worker `marketing-bot` →
   `hermes-lead-alert` só deixa o aviso de lead pro buddy quando ele vai
   avisar agora (`buddyDeliversNow`); senão avisa ele mesmo e marca o lead
   como avisado em `telegram_buddy_sent` (nem some, nem duplica).
+- **Auditoria do fluxo do Telegram (2026-11-04, só leitura).** Feita a partir do código e do `cron.job` de produção. Divergências registradas, **não corrigidas** (escopo separado):
+  - Os avisos `OPPORTUNITY_DETECTED` e `REPORT_READY` mandam "Use /relatorio", mas `/relatorio`, `/diagnostico` e `/concorrentes` respondem só "acesse o dashboard" (`telegram-webhook`, cerca da linha 245).
+  - `telegram-webhook` grava `start`, `conectar_ok` e `chat_response` em `bot_notifications` **sem `company_id`**. Por isso as conversas nunca aparecem na Atividade da empresa.
+  - `enzo-daily-report` (`DAILY_REPORT`) e `daily-briefing` **não têm agendamento em produção**, mas o rótulo "Relatório diário" existe na tela de Atividade.
+  - O `monthly-report` avulso também não tem agendamento. O mensal que roda é o `periodic-report` (dia 1, 10:00 UTC).
+  - `hermes-lead-alert` e `hermes-daily-scan` mandam direto para a API do Telegram e **não gravam** em `bot_notifications`. O Telegram amigo grava.
+  - Não há como o dono desligar:
+    - os `AGENT_ACTION` do `creative-generate` (plano semanal e post de teste diário);
+    - `hermes-daily-scan`;
+    - `REPORT_READY`.
+  - O pivô manual de estratégia (`strategy-generate`, cerca da linha 1171) chega com o texto genérico "Nova atualização do Sales Boost.", porque falta template e mensagem.
+  - `bot_notifications` está no tempo real do banco, mas a tela de Atividade só lia uma vez. A correção, só de tela, entra no PR B (Atividade no sino).
 - **`vendas-bot`** (Cloudflare Worker) ainda não migrado — mesmo ponto
   cego de logs que `marketing-bot` tinha antes.
 - **`group-manager`** (Cloudflare Worker) cria grupos/convida bots — usa
@@ -397,6 +428,17 @@ market_signals (id, company_id, kind, region, title, summary, source_name,
   source_url, observed_at, collected_by, meta, created_at)
   -- 2026-10-28 (migration 20261028120000): sinal de mercado com fonte e data.
   -- Etapa 1: vazia; a Etapa 2 deixa o cliente colar à mão (RLS de escrita já existe).
+  -- Pacote B2 (2026-11-04): "Ignorar sinal" grava meta.ignored=true + meta.ignored_at (MESCLA a meta; restaurar = ignored:false e
+  -- tira ignored_at). Sem migration. Quem NÃO conta sinal ignorado: motor de oportunidades (_shared/opportunityRun.ts), gatilho do cron
+  -- (_shared/opportunityCron.ts), contagens da tela (useFlowSummary, useFlowStripData, useDecisionKpis, GrowthOpportunitiesPage).
+  -- Filtro padrão: marketingAi/signalIgnore.ts → NOT_IGNORED_OR ('meta->>ignored.is.null,meta->>ignored.neq.true').
+  -- A lista (marketSignals.tsx, MarketFeed.tsx) mostra os ignorados num bloco recolhível "Ignorados (N)" com a evidência completa.
+marketing_ai_trends (... source: instagram_scan | diagnostico | null) -- 2026-11-04 (migration 20261104100000): + status text
+  -- ('active'|'ignored', default 'active', CHECK) + ignored_at timestamptz. O dono só atualiza essas 2 colunas (grant por coluna + policy
+  -- de UPDATE por empresa). Ignorada sai das sugestões ativas e a linha/evidência fica. Quem filtra: creative-ideas (não apaga a ignorada
+  -- e não recria título igual — _shared/trendIgnore.ts), data-agent, _shared/opportunityRun.ts, CreativeAgent (no servidor desde b130a27 — exige a migration), useMarketingAiData
+  -- (no cliente), useFlowStripData (.neq no servidor — exige a migration). NÃO filtram ainda: marketScan.feedCompany (recria as 'diagnostico'
+  -- sem olhar status — só roda no diagnóstico grátis) e marketing-ai (insere tendências 'sugeridas pela IA' sem checar título repetido).
 growth_opportunities (id, company_id, kind, title, description,
   commercial_problem, evidence jsonb [{type: fact|data|hypothesis, text,
   source, date}], item_ids uuid[], audience, suggested_action,
@@ -555,6 +597,27 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     - **Tela (estágio 3):** aba "🌐 Mercado" em Dados (`marketingAi/MarketFeed.tsx`): feed de `market_signals` com filtros por
       bairro e tipo, selo "Automático", fonte (domínio com link) e data da fonte, apagar; "Última coleta: dd/mm — próxima:
       amanhã" lido de `agent_performance` (se o RLS impedir a leitura, a linha some). Sem botão de gerar.
+  - **Fase 2 — Inteligência de mercado (2026-11-04 — 🟡 código pronto no branch `claude/nifty-shannon-ysp818-fase2`; falta aplicar 2 migrations,
+    deploy de `marketing-ai` e publicar o site; sem PR ainda).** Decisão e medição: [DECISIONS.md](DECISIONS.md#2026-11-04--fase-2-inteligência-de-mercado-qualidade-registro-por-rodada-e-sem-reinterpretar).
+    - **Filtro de qualidade na ficha** (`config.market_intel.news.quality`, migration `20261104120000_market_intel_quality.sql`): `mode` off | audit | enforce,
+      `version`, `block_url_patterns`, `block_title_terms`, `block_title_all` (grupos "E"; sem regex), `min_summary_chars`, `kind_terms` (por tipo, casa o começo da
+      palavra), `max_per_host_per_run`, `trusted_domains` (passam pelas regras), `min_score` (nota da Tavily; `null` = não filtra). Código genérico:
+      `parseQuality` (`marketIntel.ts`), `classifySignalQuality` e `filterHitsReport` (`marketNews.ts`; o `filterHits` antigo é só um invólucro). Novos sinais gravam
+      `meta.score`, `meta.quality_v`, `meta.quality_ok`; só `collected_by='system'`. `exclude_domains` continua valendo desde já (a Tavily nem devolve).
+    - **Reclassificação** dos sinais já gravados (`reclassifySignals`, `_shared/marketIntelRuns.ts`), chamada dentro do `cronMarketIntel` ANTES dos limites de
+      orçamento: até 150 por empresa por chamada, guarda de 40 s. Sem `quality_v` (ou versão menor) e reprovado → mescla `ignored:true, ignored_at, ignored_by:'system',
+      ignored_reason, quality_v` (nunca apaga; `owner_restored:true` nunca é ignorado). `audit` só conta e registra (não escreve no sinal). A tela mostra
+      "Ignorado pelo sistema: <motivo>" x "Ignorado por você"; restaurar limpa `ignored_by/ignored_reason` e grava `owner_restored:true`.
+    - **Registro por rodada** — tabela `market_intel_runs` (migration `20261104110000_market_intel_runs.sql`; RLS: dono da empresa lê, ninguém de fora escreve): uma
+      linha por `collect` (pesquisado/coletado/filtrado/aceito, custo da rodada e acumulado do mês), `reclassify` e `interpret` (candidatos, oportunidades, tokens,
+      `fingerprint`, `unchanged`). `recordRun` nunca derruba a coleta/análise. Campo nulo = "não medido".
+    - **Não reinterpretar sem mudança** (`runOpportunities`): SHA-256 do conteúdo enviado à IA (texto/fonte/tipo dos fatos, tipo/região/itens dos candidatos, idioma,
+      `OPP_PROMPT_VERSION`; sem datas nem ids F1/C1). Igual ao da última análise bem-sucedida → não chama a IA, grava `unchanged=true, tokens=0` e a linha
+      `run_opportunities` ("sem mudança", sucesso) que zera o relógio de 7 dias. Gatilhos de 24 h/7 dias inalterados. **Suba `OPP_PROMPT_VERSION` ao mexer em
+      `buildPrompt`/`finalize`.** `buildCandidates` agora devolve `usedSignalIds`.
+    - **Tela "O que mudou"** (sem tela nova): bloco no topo do feed de Mercado (`MarketChanges.tsx`) e linhas no "Status da coleta" do hub (`DecisionKpis.tsx`), via
+      `useMarketChanges.ts` + `marketChanges.ts` (puro). Estados: carregando / "Não foi possível verificar" (erro ou tabela ausente) / "Ainda não há rodada registrada" /
+      contador nulo = "não medido" / demo com a etiqueta "exemplo". Testes: `scripts/test-market-news.mjs` (amostras reais) e `scripts/test-market-runs.mjs`.
   - **Tela:** sem botões de gerar; mostra "Próxima análise automática: semanal (e quando você cadastra um sinal novo)"
     e a data da última análise; oportunidade aprovada sem plano mostra "Montando o plano…" (recarrega a cada 10 s por 2
     min, depois "o plano sai na próxima rodada automática"); botões "Aprovar plano"/"Desfazer aprovação".
@@ -591,6 +654,11 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     dado nos fatos (lista: ficha `opportunity_texts.market_claims`, senão `DEFAULT_MARKET_CLAIMS`); `photoCounts` entra no
     prompt do `run_opportunities` e do plano, e `actionForPhotos` troca a ação por "adicionar fotos reais" quando o item
     não tem foto.
+    **Atualização 2026-11-02 (PR B):** a mesma trava agora também vale nas peças do **calendário** (carrossel, legenda,
+    CTA e hashtags) — `_shared/claimLock.ts`, chamada por `creative-generate` e `catalog-package`. Termo da ficha só passa
+    se o cadastro do imóvel citado (ou, no modo regulado, a dica conferida) traz a palavra; faixa de preço ("acima de
+    R$ X") só passa se o valor com unidade está no cadastro. Disparou: reescreve 1x → corta só a frase → `reasoning`
+    "Tirei afirmação sem fonte: …". Detalhes em [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md#pr-b--qualidade-dos-carrosséis-2026-11-02).
   - **Divergências/atenção:** (a) o vínculo `opportunity_id` é gravado num UPDATE à parte (migration pendente não derruba
     a peça), mas `generateOpportunityPieces` **não gera** se a coluna não existe (sem idempotência não há segurança);
     (b) o cliente pode ter UPDATE direto em `marketing_ai_test_content`: a Etapa 6 deve juntar `opportunity_id` **sempre
@@ -608,6 +676,7 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     `click_dm`/`lead`, `visitor_hash`, nunca IP), e `leads` ganha `item_id`, `opportunity_id`, `link_id`, `consent_at`, `consent_text`.
     RLS: dono/owner só leem; escrita só service role. Variável opcional `PUBLIC_PAGE_SALT` (sal do hash do visitante; sem ela usa `CRON_SECRET`). Ficha `imoveis_rio.config.public_page` = `fields` (lista branca), `min_photos`,
     `country_code`, `caption_line`.
+  - **Limitação (2026-11-04, Pacote B1):** o link rastreável **não identifica uma peça** — é único por (imóvel, oportunidade, canal) e `content_id` guarda só a primeira peça que o criou, mas várias peças podem usar o mesmo link. O funil (`leadOrigin.ts`) mostra imóvel + canal (+ oportunidade se `opportunity_id`), nunca peça de origem, e não se infere peça por `content_id`. Para ter peça de origem seria preciso um vínculo confiável (ex.: link por peça).
   - **Ações do `marketing-ai`:** públicas (sem login, antes de auth/cron): `public_page_get`, `public_page_event`,
     `public_page_lead`. Com login + plano pago: `get_public_page` (prévia/estado) e `set_public_page {item_id, enabled}` (aprovação).
   - **Onde o link entra:** `opportunityCron.ts` → `attachTrackedLinks` (rascunhos de oportunidade, canal `caption`, uma vez só,
@@ -626,6 +695,15 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
   `scripts/test-results-brokers.mjs` (+ casos de corretor em `test-public-page.mjs`). As telas caem no comportamento antigo se a migration
   ainda não foi aplicada (consulta de leads sem as colunas novas; sem bloco de resultados).
   - **Reverter:** bloco "Como reverter" na migration; functions e site voltam pelo commit anterior.
+
+## Botão "+" (Pacote B2, 2026-11-04)
+`BusinessContextButton.tsx` abre `PlusMenu.tsx` (menu acima do botão). Regra "só aparece se funciona" em `plusOptions.ts` (função pura, testada
+por `scripts/test-plus-options.mjs`; o hook `usePlusOptions.ts` busca os dados só quando o menu abre, cache de ~60 s): **Adicionar `<item>`**
+(rótulo da ficha; vai a `/dashboard/catalogo?add=1`, que abre o formulário e limpa o parâmetro) · **Gerar peça agora** (só sem vitrine e com
+`make_now_options` 200 trazendo ≥ 1 formato usável: `post` ou imóvel com ≥ 5 fotos; 402/zero formatos some; falha mostra "Não foi possível
+verificar"; abre `MakeNowPicker` num modal e depois oferece "Ver em Peças avulsas" → `/dashboard/marketing-ai/content`) · **Adicionar sinal**
+(só sem vitrine e com `opportunity_fields.location` na ficha → `CatalogSchema.signals`; vai a `/dashboard/opportunities?add=signal`, que abre o
+formulário recolhido, rola e foca). O atalho `sb:open-add` do sino/estratégia continua indo direto ao Catálogo.
 
 ## Faixa de fluxo dos agentes (2026-11-01)
 
@@ -647,6 +725,35 @@ regras do código permitem calcular), 1–2 contagens e, em laranja, o que esper
 - **Limites honestos:** o cron não é consultado do navegador (texto fixo: `market-intel-daily` 09:43 UTC = 06:43 do Rio; `opportunities-auto`
   a cada 6 h); o teto mensal mostrado vem da ficha (o secret `MARKET_INTEL_CAP_USD`, se existir, não é visível ao banco); coleta do
   Instagram (estágio 4) aparece como 🚧 em construção.
+
+## Mapa de telas dos agentes (atualizado 2026-11-03)
+
+> **2026-11-07 (C.2):** os 5 cartões do fluxo saíram do hub e foram pra aba **Agentes** (`/dashboard/agentes`, `AgentsPage.tsx`, item do menu logo abaixo do hub),
+> junto da **Fábrica 3D parada** (`marketingAi/factory/`, chunk à parte — ver [DECISIONS.md](DECISIONS.md#2026-11-07--aba-agentes--fábrica-3d-parada-c2)).
+> **2026-11-10:** cortina e cartões **saíram** da aba Agentes — o 3D abre direto e é a aba inteira (ver [DECISIONS.md](DECISIONS.md)). O parágrafo abaixo fica como histórico.
+>
+> **2026-11-07 (C.2.1 — mapa da fábrica):** a fábrica agora é uma **cortina** no topo da aba Agentes (`FactorySection.tsx` + `CurtainUi.tsx`): fechada = HTML/CSS, 5 luzes + frase do que precisa do dono, **sem three e sem laço de animação**; aberta = chunk `FactoryScene` (`sceneCore.ts` câmera livre/escada de desempenho, `stations.ts` estações, `robots.ts` 5 robôs, `conveyor.ts`) ou a versão leve 2D (`StationUi.tsx`, mesmo conteúdo do painel 3D). O que cada robô mostra vem de `robotState.ts` (mapa estado → pose, testado em `scripts/test-robot-state.mjs`): só `EXECUTING` (estação 4) vira "Trabalhando"; estados desconhecidos ficam desligados, nunca "Descansando". Ver [DECISIONS.md](DECISIONS.md#2026-11-07--fábrica-c21-cortina-câmera-livre-e-robôs-que-mostram-a-verdade).
+> No hub ficou só a linha "Sua equipe de agentes" (5 luzes 2D + "Ver agentes →"). O item 4 da lista abaixo ("os 5 cards do fluxo") vale hoje para a aba Agentes.
+
+**Hub, de cima pra baixo (Fase 1, 2026-11-03):** (1) cabeçalho; (2) **4 indicadores de decisão** (`DecisionKpis.tsx` + `useDecisionKpis.ts`;
+cada tile mostra a regra e leva à tela de origem: Sinais → Inteligência de Mercado `?sub=mercado`, Oportunidades → `/dashboard/opportunities`,
+Direcionamento → Estratégia, Ações prontas → `/dashboard/aprovacoes`) e o bloco recolhido **"Status da coleta"**; (3) painel de
+receita/ROAS/funil (`DataVeil` + `GrowthCommandCenter`, desceu); (4) os 5 cards do fluxo. Modo demonstração: indicadores com números de
+exemplo (`buildDecisionDemo`, rotulados "exemplo"). Abas da Inteligência de Mercado (`?sub=`): `mercado` = "Insights e evidências",
+`ideias` = "Direcionamento e ideias", `lugares` = "Inteligência de localização", `faq` = "Base de conhecimento".
+Hub `/dashboard/marketing-ai` (selos = 5 agentes, mesmos ícones dos cards) → cada agente tem a barra "← Voltar" (volta ao hub) e o 🔁
+`FeedbackWidget` ("O que a IA está aprendendo"):
+- 📊 Inteligência de Mercado `/dashboard/marketing-ai/dados` (`?sub=mercado|ideias|lugares|faq` — rótulos novos acima; `?imovel=<id>` escolhe o imóvel de
+  "Lugares perto"; `?item=<id>` redireciona ao Catálogo) — 🔁 `dados`.
+- 💡 Motor de Oportunidades `/dashboard/opportunities` — 🔁 `opportunities` (pilares `competitor`+`tracking`). "Imóveis ligados" linka ao Catálogo.
+- 🧭 Estratégia `/dashboard/marketing-ai/estrategia` — 🔁 `estrategia`.
+- ✍️ Ativação `/dashboard/marketing-ai/content` — 🔁 `content`. O calendário mostra o imóvel de cada peça; o modal tem "Imóvel desta
+  peça" + "Por que este imóvel".
+- 🔀 Resultados e Aprendizado `/dashboard/marketing-ai/conversao` — 🔁 `conversao` (pilar `tracking`).
+- 📸 Catálogo `/dashboard/catalogo` (`?item=<id>` destaca) — 🔁 `catalogo` (pilar `content` + lições). Cada imóvel mostra a linha de uso.
+- **Uso dos imóveis:** `marketingAi/useItemUsage.ts` (uma consulta por empresa; `marketing_ai_test_content` por `item_id` + `posts`;
+  cache 30 s; falha = `ok:false` e as telas escondem a linha). Fontes e limites em [DECISIONS.md](DECISIONS.md) (2026-11-03).
+- `/dashboard/oportunidades` (tela antiga, tabela `opportunities`) NÃO é `/dashboard/opportunities`; o Resumo do teste agora aponta para a segunda.
 
 ## Estado atual do código
 
@@ -752,3 +859,17 @@ Antes: 3 dias fixos, estados `trial_day_1/2/3`. Agora: o total vem do par
 últimas 6h). `claim-diagnostic` ainda grava 3 dias até ser deployada.
 O painel do trial (`TrialSummaryPage`) mostra só contagens reais das
 tabelas existentes; sem dado, "Hermes ainda está analisando".
+
+## Divergência registrada (Pacote A, 2026-11-03): onde peça, imóvel e oportunidade são gravados
+
+- `marketing_ai_test_content.item_id` **não é gravado em peça de texto** (carrossel/post educativo): só os produtores com imóvel
+  (`catalog-package`, `item_video`) gravam. Por isso "educativo" nunca tem imóvel na medição e o Tipo de ativação usa `item_id`
+  como sinal de "tem imóvel" (ver [DECISIONS.md](DECISIONS.md), 2026-11-03 "Pacote A").
+- `opportunity_id` e `intent` são gravados por `saveLabels` (`creative-generate`) num UPDATE separado e tolerante; `intent.funnel.objective`
+  vem da etapa do funil e `intent.opportunity.objective` do plano da oportunidade. Peça antiga pode não ter `intent`.
+- O motivo da escolha do imóvel **não é gravado por peça** (o rodízio, o "Gerar agora" e o pacote do catálogo não deixam marca).
+- A regra de "vaga aberta" do calendário vive em `src/pages/dashboard/marketingAi/calendarSlots.ts` e é usada também pelo topo da Estratégia.
+
+
+## Imóveis e disponibilidade (Fase 4, 2026-11-04)
+`supabase/functions/_shared/itemService.ts` é o serviço único: `listPickableItems` (fotos mínimas da ficha + disponível), `availabilityOf`, `revalidate` (status manual + link do portal, prazo de 8 s, cache de 1 h em `meta.availability.checked_at`), `rankItems` (rotação "menos usado em 21 dias") e `buildPickReason`/`saveItemPick` (motivo em `item_pick`). Ficha: `vertical_playbooks.config.availability {statuses, blocking, default, removed, labels}`. Trava de publicação em `agent-actions` `execute()`. Decisões em [DECISIONS.md](DECISIONS.md#2026-11-04--fase-4-imóveis-e-ativação-imóvel-indisponível-não-publica). Diverge do texto antigo "O motivo da escolha não é gravado": agora é, quando a peça é nova (peças antigas seguem "motivo não registrado").

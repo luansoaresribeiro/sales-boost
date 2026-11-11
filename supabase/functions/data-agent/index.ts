@@ -406,7 +406,7 @@ async function gatherCustomer(admin: SupaClient, company: CompanyRow): Promise<D
 // MARKET — "O que está acontecendo no ambiente externo?"
 async function gatherMarket(admin: SupaClient, company: CompanyRow): Promise<DomainState> {
   const { data: trendRows } = await admin.from('marketing_ai_trends')
-    .select('id, title, category, relevance, detected_at').eq('company_id', company.id)
+    .select('id, title, category, relevance, detected_at').eq('company_id', company.id).neq('status', 'ignored')
     .order('detected_at', { ascending: false }).limit(50)
   const trends = trendRows ?? []
   const signals: SignalRecord[] = []

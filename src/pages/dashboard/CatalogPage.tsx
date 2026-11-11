@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useCompany } from '../../contexts/CompanyContext'
 import { useLang } from '../../contexts/LanguageContext'
 import { MUTED, BORDER, D } from './marketingAi/shared'
+import FeedbackWidget from './marketingAi/FeedbackWidget'
 import CatalogItems from './marketingAi/CatalogItems'
 import ProductPhotos from './marketingAi/ProductPhotos'
 import { AvatarSoon } from './BusinessContextButton'
@@ -11,8 +12,9 @@ import { fetchCatalogSchema, type CatalogSchema } from '../../lib/verticalPlaybo
 const ORANGE = '#FF6D29'
 
 // Catálogo (os imóveis/itens com fotos reais) — página própria desde 2026-11-01 (pedido do dono): saiu de
-// dentro da Inteligência de Mercado, que ficou só com inteligência de mercado. Acesso pelo botão "+" laranja do
-// painel (BusinessContextButton) e pelos atalhos do sino/pendências (?item=<id> destaca o item).
+// dentro da Inteligência de Mercado, que ficou só com inteligência de mercado. Acesso pelo menu do botão "+"
+// laranja (BusinessContextButton → "Adicionar <item>" abre com ?add=1 e o formulário de criação já aberto) e pelos
+// atalhos do sino/pendências (?item=<id> destaca o item).
 const TX = {
   pt: { back: '← Voltar', products: 'Produtos', loading: 'Carregando...', avatar: 'Meu avatar (em breve)', sub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.' },
   en: { back: '← Back', products: 'Products', loading: 'Loading...', avatar: 'My avatar (coming soon)', sub: 'Upload real photos of each item. They become carousels and videos — never made-up images.' },
@@ -22,7 +24,7 @@ export default function CatalogPage() {
   const t = TX[useLang().lang]
   const { company } = useCompany()
   const navigate = useNavigate()
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const verticalKey = company?.vertical_key ?? 'generico'
   const [schema, setSchema] = useState<CatalogSchema | null | undefined>(undefined)
   useEffect(() => {
@@ -48,7 +50,9 @@ export default function CatalogPage() {
         {schema === undefined ? null : schema ? (
           <>
             <div style={{ fontSize: '12px', color: MUTED, marginBottom: '14px', maxWidth: '760px', lineHeight: 1.55 }}>{t.sub}</div>
-            <CatalogItems companyId={company.id} schema={schema} verticalKey={verticalKey} focusItemId={params.get('item')} />
+            <CatalogItems companyId={company.id} schema={schema} verticalKey={verticalKey} focusItemId={params.get('item')}
+              openCreate={params.get('add') === '1'}
+              onCreateOpened={() => setParams(p => { const n = new URLSearchParams(p); n.delete('add'); return n }, { replace: true })} />
             {/* Avatar mora dentro dos itens (pedido do dono 2026-10-14). */}
             <div style={{ marginTop: '22px', maxWidth: '760px' }}>
               <div style={{ fontSize: '11px', fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>{t.avatar}</div>
@@ -57,6 +61,7 @@ export default function CatalogPage() {
           </>
         ) : <ProductPhotos companyId={company.id} />}
       </div>
+      <FeedbackWidget companyId={company.id} section="catalogo" />
     </div>
   )
 }

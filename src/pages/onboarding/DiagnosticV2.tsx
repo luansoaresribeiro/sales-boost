@@ -41,7 +41,7 @@ export function V2QuestionList({ questions, answers, status, onAnswer, onState, 
   return (
     <>
       {questions.map(q => (
-        <QuestionField key={q.key} q={q} value={answers[q.key]} state={fieldState(q, answers, status)}
+        <QuestionField key={q.key} q={q} value={answers[q.key]} answers={answers} state={fieldState(q, answers, status)}
           onChange={v => onAnswer(q.key, v)} onState={s => onState(q.key, s)} lang={lang} businessType={businessType} />
       ))}
     </>

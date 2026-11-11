@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { markProfileSaved } from '../../lib/profileConfirm'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useCompany } from '../../contexts/CompanyContext'
 import { useLang } from '../../contexts/LanguageContext'
 import { d } from '../../i18n-dash'
@@ -10,7 +10,7 @@ import NotificationsCard from './settings/NotificationsCard'
 import BusinessUnderstandingCard from './settings/BusinessUnderstandingCard'
 import CompanyLanguageCard from './settings/CompanyLanguageCard'
 import BrokersCard from './settings/BrokersCard'
-import AgentConfigTab from './marketingAi/AgentConfigTab'
+import AccountTab from './settings/AccountTab'
 import ConnectionsTab from './marketingAi/ConnectionsTab'
 import { buildGrowthDemo } from './marketingAi/growthDemo'
 import { fetchBusinessTypes, businessTypeLabel, OTHER_BUSINESS_TYPE } from '../../lib/businessTypes'
@@ -38,11 +38,11 @@ const TX = {
   pt: {
     goalLabels: {} as Record<string, string>,
     select: 'Selecione...', bizType: 'Tipo de estabelecimento', otherSpecify: 'Outro (especifique)', typeYourBiz: 'Digite o tipo do seu negócio',
-    tabs: { info: 'Informações da empresa', agentes: 'Agentes', conexoes: 'Conexões', integrations: 'Notificações' },
+    tabs: { info: 'Informações da empresa', agentes: 'Aprovações', conexoes: 'Conexões', integrations: 'Notificações', conta: 'Sua conta' },
     cancelConfirm: 'Cancelar o trial? Você perde o acesso ao dashboard, mas nada do que já foi feito (progresso, descobertas, conquistas) é apagado — pode voltar quando quiser.',
     nameRequired: 'Nome do negócio é obrigatório.',
     welcomeBold: 'Bem-vindo!', welcomeRest: ' Preencha as informações abaixo para configurar seu painel. Depois de salvar, o dashboard mostrará seus dados.',
-    createFirst1: 'Crie o perfil do seu negócio primeiro (aba ', createFirst2: ') pra ', configAgents: 'configurar os agentes.', connectChannels: 'conectar seus canais.',
+    createFirst1: 'Crie o perfil do seu negócio primeiro (aba ', createFirst2: ') pra ', configAgents: 'escolher como as aprovações funcionam.', connectChannels: 'conectar seus canais.',
     aboutBiz: 'Sobre o negócio', bizName: 'Nome do negócio', bizNamePh: 'Ex: Studio Beleza Carioca', cityLabel: 'Cidade / UF', cityPh: 'Ex: Rio de Janeiro, RJ',
     phoneLabel: 'Telefone / WhatsApp', emailLabel: 'E-mail de contato', mainGoal: 'Principal objetivo', goalHint: 'Guia a IA para gerar conteúdo e plano de ação relevantes',
     ticket: 'Ticket médio (R$)', ticketPh: 'Ex: 80', ticketHint: 'Valor médio que um cliente gasta numa compra/visita. Usamos isso para calcular a receita recuperável real de cada oportunidade — sem preencher, esse valor não aparece.',
@@ -67,11 +67,11 @@ const TX = {
       'Outro': 'Other',
     } as Record<string, string>,
     select: 'Select...', bizType: 'Business type', otherSpecify: 'Other (specify)', typeYourBiz: 'Type your business type',
-    tabs: { info: 'Company info', agentes: 'Agents', conexoes: 'Connections', integrations: 'Notifications' },
+    tabs: { info: 'Company info', agentes: 'Approvals', conexoes: 'Connections', integrations: 'Notifications', conta: 'Your account' },
     cancelConfirm: 'Cancel the trial? You lose access to the dashboard, but nothing already done (progress, findings, achievements) is deleted — you can come back anytime.',
     nameRequired: 'Business name is required.',
     welcomeBold: 'Welcome!', welcomeRest: ' Fill in the information below to set up your dashboard. After saving, the dashboard will show your data.',
-    createFirst1: 'Create your business profile first (', createFirst2: ' tab) to ', configAgents: 'set up the agents.', connectChannels: 'connect your channels.',
+    createFirst1: 'Create your business profile first (', createFirst2: ' tab) to ', configAgents: 'choose how approvals work.', connectChannels: 'connect your channels.',
     aboutBiz: 'About the business', bizName: 'Business name', bizNamePh: 'e.g. Carioca Beauty Studio', cityLabel: 'City / State', cityPh: 'e.g. Rio de Janeiro, RJ',
     phoneLabel: 'Phone / WhatsApp', emailLabel: 'Contact email', mainGoal: 'Main goal', goalHint: 'Guides the AI to generate relevant content and action plans',
     ticket: 'Average ticket (R$)', ticketPh: 'e.g. 80', ticketHint: 'Average amount a customer spends per purchase/visit. We use it to calculate the real recoverable revenue of each opportunity — if left blank, this value does not appear.',
@@ -194,14 +194,19 @@ export default function SettingsPage() {
   const T = d[lang].settings
   const X = TX[lang]
 
-  const tabFromParam = (p: string | null): 'info' | 'integrations' | 'agentes' | 'conexoes' =>
-    p === 'integracoes' ? 'integrations' : p === 'agentes' ? 'agentes' : p === 'conexoes' ? 'conexoes' : 'info'
-  const [tab, setTab] = useState<'info' | 'integrations' | 'agentes' | 'conexoes'>(tabFromParam(searchParams.get('tab')))
+  // 2026-11-04 (dono): a escolha "Pedir aprovação / Executar automaticamente" saiu daqui e foi para a página Aprovações
+  // do menu. Links antigos (?tab=agentes / ?tab=aprovacoes) levam para lá. 'conta' = "Sua conta".
+  type SettingsTab = 'info' | 'integrations' | 'conexoes' | 'conta'
+  const tabFromParam = (p: string | null): SettingsTab =>
+    p === 'integracoes' ? 'integrations' : p === 'conexoes' ? 'conexoes' : p === 'conta' ? 'conta' : 'info'
+  const [tab, setTab] = useState<SettingsTab>(tabFromParam(searchParams.get('tab')))
+  const navigate = useNavigate()
 
   useEffect(() => {
     const p = searchParams.get('tab')
+    if (p === 'agentes' || p === 'aprovacoes') { navigate('/dashboard/aprovacoes', { replace: true }); return }
     if (p === 'integracoes') setTab('integrations')
-    if (p === 'agentes') setTab('agentes')
+    if (p === 'conta') setTab('conta')
     if (p === 'conexoes') setTab('conexoes')
     const section = searchParams.get('section')
     if (!section) return
@@ -214,7 +219,7 @@ export default function SettingsPage() {
       else if (++tries >= 25) clearInterval(timer)
     }, 200)
     return () => clearInterval(timer)
-  }, [searchParams])
+  }, [searchParams, navigate])
 
   // Tipos de estabelecimento (geridos pelo dono no painel owner).
   useEffect(() => { fetchBusinessTypes().then(setBusinessTypes) }, [])
@@ -418,7 +423,7 @@ export default function SettingsPage() {
 
         {/* Tab switcher */}
         <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '5px', marginBottom: '24px', width: 'fit-content', flexWrap: 'wrap' }}>
-          {(['info', 'agentes', 'conexoes', 'integrations'] as const).map(key => [key, X.tabs[key]] as const).map(([key, label]) => (
+          {(['info', 'conexoes', 'integrations', 'conta'] as const).map(key => [key, X.tabs[key]] as const).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
               style={{ padding: '9px 18px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, background: tab === key ? ORANGE : 'transparent', color: tab === key ? '#000' : MUTED, transition: 'all 0.15s' }}>
               {label}
@@ -432,17 +437,9 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {tab === 'agentes' && (
-          companyId ? (
-            <AgentConfigTab company={{ id: companyId }} />
-          ) : (
-            <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '22px', fontSize: '13px', color: MUTED, lineHeight: 1.6 }}>
-              {X.createFirst1}<strong style={{ color: 'white' }}>{X.tabs.info}</strong>{X.createFirst2}{X.configAgents}
-            </div>
-          )
-        )}
-
         {tab === 'integrations' && <NotificationsCard />}
+
+        {tab === 'conta' && <AccountTab />}
 
         {tab === 'conexoes' && (
           company ? (

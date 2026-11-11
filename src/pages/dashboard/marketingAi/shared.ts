@@ -183,6 +183,14 @@ export const IMPACT_LABEL: Record<string, string> = { high: 'Alto impacto', medi
 export const IMPACT_LABEL_EN: Record<string, string> = { high: 'High impact', medium: 'Medium impact', low: 'Low impact' }
 export const PILLAR_LABEL: Record<string, string> = { tracking: 'Tracking', content: 'Conteúdo', competitor: 'Concorrentes', strategy: 'Estratégia' }
 export const PILLAR_ICON: Record<string, string> = { tracking: '📈', content: '✍️', competitor: '🔍', strategy: '🧭' }
+// Estado de uma peça em teste/calendário (marketing_ai_test_content). Fonte única: calendário e "Atividade do imóvel" (Pacote B1).
+export const STATUS_META: Record<string, { label: string; color: string }> = {
+  draft: { label: 'Avaliando', color: MUTED },
+  review: { label: 'Nota baixa — revisar', color: '#FBBF24' },
+  vault: { label: 'Pronta pra aprovar', color: '#A78BFA' },
+  scheduled: { label: 'Agendado', color: '#4ade80' },
+  adapt: { label: 'Adaptando', color: MUTED },
+}
 export const STATUS_LABEL: Record<string, string> = { idea: 'Ideia', draft: 'Rascunho', approved: 'Aprovado', scheduled: 'Agendado', published: 'Publicado' }
 
 export async function callMarketingAi(accessToken: string, action: string, extra: Record<string, unknown> = {}) {

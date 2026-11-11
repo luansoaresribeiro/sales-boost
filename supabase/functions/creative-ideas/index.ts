@@ -14,6 +14,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
+import { dropIgnoredTitles } from '../_shared/trendIgnore.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -86,11 +87,13 @@ Com base SOMENTE nessas legendas (não invente nada fora do que está nelas), id
   const trends = parseArr(raw).slice(0, 3)
   if (trends.length === 0) return 0
 
-  await admin.from('marketing_ai_trends').delete().eq('company_id', companyId).eq('source', 'instagram_scan')
-  const rows = trends.map(t => ({
+  // Tendência que o dono ignorou fica (evidência preservada) e não é recriada com o mesmo título.
+  await admin.from('marketing_ai_trends').delete().eq('company_id', companyId).eq('source', 'instagram_scan').neq('status', 'ignored')
+  const { data: ign } = await admin.from('marketing_ai_trends').select('title').eq('company_id', companyId).eq('status', 'ignored')
+  const rows = dropIgnoredTitles(trends.map(t => ({
     company_id: companyId, title: String(t.title ?? '').slice(0, 160), description: t.description ? String(t.description) : null,
     category: t.category ? String(t.category) : null, relevance: t.relevance ? String(t.relevance) : null, source: 'instagram_scan',
-  })).filter(r => r.title)
+  })).filter(r => r.title), ((ign ?? []) as { title: string }[]).map(r => r.title))
   if (rows.length === 0) return 0
   const { error } = await admin.from('marketing_ai_trends').insert(rows)
   return error ? 0 : rows.length

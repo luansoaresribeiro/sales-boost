@@ -98,6 +98,12 @@ export interface TestPost {
   familia?: string | null
   pilar_ss?: string | null
   pillar?: string | null
+  // Pacote A: intenção da estratégia gravada na peça + ligações (imóvel, oportunidade, receita) usadas pelo calendário.
+  intent?: unknown
+  item_id?: string | null
+  opportunity_id?: string | null
+  recipe?: string | null
+  item_pick?: unknown   // Fase 4: motivo real da escolha do imóvel (itemService.buildPickReason)
 }
 
 // Recomendação de como GRAVAR o vídeo (roteiro), quando o formato é vídeo/reel/story.
@@ -256,8 +262,11 @@ export function ScoreBreakdown({ post }: { post: TestPost }) {
   if (post.quality_score == null || !post.scores?.coherence) return null
   const coherence = post.scores.coherence
   const visual = post.scores.visual_coherence
+  // Motivo da nota reduzida por código (afirmação sem fonte / capa fraca): vem no reasoning como "Nota reduzida: …".
+  const lowered = /Nota reduzida:\s*([^]*?\.)(?:\s|$)/.exec(post.reasoning ?? '')?.[1]
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      {lowered && <div style={{ fontSize: '11px', color: '#fbbf24', lineHeight: 1.4 }}>⚠ {lang === 'en' ? 'Score lowered' : 'Nota reduzida'}: {lowered}</div>}
       <CoherenceRow label={t.coherence} score={coherence.score} bad={coherenceIsBad(post)}
         comment={coherence.comment || (coherenceIsBad(post) ? t.incoherent : t.coherent)} />
       {visual && (

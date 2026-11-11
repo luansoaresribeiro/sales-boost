@@ -131,8 +131,8 @@ export function buildMarketDemo(company: Pick<CompanyData, 'id' | 'business_name
   ]
 
   const opportunities: MarketOpportunity[] = [
-    { id: 'o1', title: L(`Nenhum concorrente em ${city} usa depoimento em vídeo`, `No competitor in ${city} uses video testimonials`), description: L('Espaço aberto pra você dominar esse formato antes deles — o que mais converte hoje.', 'Open space for you to own this format before they do — what converts the most today.'), impact: 'high' },
-    { id: 'o2', title: L('Concorrente subiu preço', 'Competitor raised prices'), description: L(`${COMP_NAMES[0]} ficou mais caro. Momento bom pra comunicar seu custo-benefício e capturar quem está pesquisando.`, `${COMP_NAMES[0]} got more expensive. Good time to communicate your value for money and capture people who are researching.`), impact: 'medium' },
+    { id: 'o1', title: L(`Pouca gente em ${city} usa depoimento em vídeo`, `Few accounts in ${city} use video testimonials`), description: L('Espaço aberto pra você dominar esse formato antes dos outros — o que mais converte hoje.', 'Open space for you to own this format before others do — what converts the most today.'), impact: 'high' },
+    { id: 'o2', title: L('Preço anunciado subiu na região', 'Listed prices rose in the area'), description: L('Anunciantes da região ficaram mais caros (exemplo). Momento bom pra comunicar seu custo-benefício e capturar quem está pesquisando.', 'Advertisers in the area got more expensive (example). Good time to communicate your value for money and capture people who are researching.'), impact: 'medium' },
     { id: 'o3', title: L('Frequência de postagem abaixo do nicho', 'Posting frequency below the niche'), description: L('Os líderes postam 5-6x/semana. Aumentar sua frequência já melhora alcance sem gastar em anúncio.', 'The leaders post 5-6x/week. Increasing your frequency already improves reach without spending on ads.'), impact: 'medium' },
   ]
 

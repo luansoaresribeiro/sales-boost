@@ -15,6 +15,7 @@
  * dado que não esteja no contexto real da empresa.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { loadPublicTextRules, safeAutoReply } from '../_shared/compliance.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -131,7 +132,13 @@ Deno.serve(async (req) => {
           await admin.from('whatsapp_conversation_messages').insert({ conversation_id: conv.id, role: 'user', content: messageText })
 
           try {
-            const reply = await generateReply(admin, company as Company, conv.id, fromNumber, messageText, anthropicKey)
+            const raw = await generateReply(admin, company as Company, conv.id, fromNumber, messageText, anthropicKey)
+            // Etapa 1B: resposta que rotula quem pode comprar/alugar ou promete resultado não é enviada — vai a resposta neutra da ficha.
+            const pub = await loadPublicTextRules(admin, company.id)
+            const safe = safeAutoReply(raw, pub?.rules ?? null)
+            if (safe.replaced) console.warn('whatsapp-webhook: resposta trocada pela neutra (conformidade)', company.id)
+            const reply = safe.text
+            if (!reply.trim()) continue
             await admin.from('whatsapp_conversation_messages').insert({ conversation_id: conv.id, role: 'assistant', content: reply })
             await sendWhatsAppMessage(phoneNumberId, company.whatsapp_access_token, fromNumber, reply)
           } catch (e) {

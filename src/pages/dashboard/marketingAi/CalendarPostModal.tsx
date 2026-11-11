@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { CARD, MUTED, BORDER, D, SUPABASE_URL, useSSNames } from './shared'
@@ -6,6 +7,12 @@ import { ScoreBreakdown, BriefBlock, PostMedia, VideoScript, templateLabel, type
 import { useLang, type Lang } from '../../../contexts/LanguageContext'
 import AdaptModal, { type VaultPost } from './AdaptModal'
 import { PieceChips } from './PieceLabels'
+import PieceIntent from './PieceIntent'
+import { marketEvidence, type OppMap } from './activationType'
+import { useItemUsage, dayLabel } from './useItemUsage'
+import { useAvailabilityCfg } from './useAvailabilityCfg'
+import { useCompany } from '../../../contexts/CompanyContext'
+import { availabilityOf, parseItemPick, pickReasonText, statusLabel } from '../../../lib/itemAvailability'
 import { proposeAgentAction, unscheduleAgentAction } from '../../../lib/agentActions'
 import { PUBLISH_HOUR_BRT, plannedPublishAt, publishWhenLabel } from '../../../lib/publishSlot'
 
@@ -27,6 +34,11 @@ const TX = {
     adaptContent: '✨ Adaptar Conteúdo', adaptations: 'Adaptações', approvePub: 'Aprovar/Publicar',
     why: 'Por que excluir? O agente aprende com isso pra não repetir.', notePh: 'Quer explicar? (opcional)', delNoReason: 'Excluir sem motivo', cancel: 'Cancelar',
     reasons: { repetido: 'Repetido', texto: 'Texto ruim', foto: 'Foto ruim', errado: 'Informação errada', tom: 'Não tem a cara da marca', outro: 'Outro' } as Record<string, string>,
+    inspired: 'Tema inspirado em',
+    itemTitle: 'Imóvel desta peça', itemWhy: 'Por que este imóvel', itemOpen: 'Abrir no Catálogo', itemNearby: 'Inteligência de localização',
+    whyOpp: 'Peça de uma oportunidade aprovada — o imóvel vem dela.',
+    holdAvail: 'Não consegui conferir se o imóvel ainda está disponível. Vou tentar de novo a cada 5 minutos por até 2 horas; se não conseguir, não publico.',
+    whyNone: 'Motivo da escolha do imóvel não registrado (peça criada antes do registro do motivo).', gone: (st: string) => `Imóvel indisponível (${st}) — esta peça não será publicada. Mude o status no Catálogo se ele voltou a estar disponível.`, usedN: (n: number) => `usado em ${n} peça${n === 1 ? '' : 's'} nos últimos 30 dias`, lastPiece: 'Última peça',
     editCap: '✏️ Editar legenda', saveCap: 'Salvar legenda', capSaved: 'Legenda salva — o agente vai aprender com a sua mudança ✓',
   },
   en: {
@@ -43,6 +55,11 @@ const TX = {
     adaptContent: '✨ Adapt Content', adaptations: 'Adaptations', approvePub: 'Approve/Publish',
     why: 'Why delete it? The agent learns from this so it does not repeat it.', notePh: 'Want to explain? (optional)', delNoReason: 'Delete without a reason', cancel: 'Cancel',
     reasons: { repetido: 'Repetitive', texto: 'Bad text', foto: 'Bad photo', errado: 'Wrong information', tom: 'Not our brand style', outro: 'Other' } as Record<string, string>,
+    inspired: 'Theme inspired by',
+    itemTitle: 'Property in this piece', itemWhy: 'Why this property', itemOpen: 'Open in Catalog', itemNearby: 'Location intelligence',
+    whyOpp: 'Piece from an approved opportunity — the property comes from it.',
+    holdAvail: 'I could not check whether the property is still available. I will retry every 5 minutes for up to 2 hours; if I cannot, I will not publish.',
+    whyNone: 'Reason for choosing this property not recorded (piece made before reasons were stored).', gone: (st: string) => `Property unavailable (${st}) — this piece will not be published. Change its status in the Catalog if it is available again.`, usedN: (n: number) => `used in ${n} piece${n === 1 ? '' : 's'} in the last 30 days`, lastPiece: 'Last piece',
     editCap: '✏️ Edit caption', saveCap: 'Save caption', capSaved: 'Caption saved — the agent will learn from your change ✓',
   },
 } as const
@@ -55,7 +72,7 @@ const brtLocalInput = (day: string): string => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
-type Post = TestPost & { kind?: string; planned_for?: string | null; recipe?: string | null }
+type Post = TestPost & { kind?: string; planned_for?: string | null }
 
 // Peça do calendário aberta (substitui a antiga aba Vault — decisão do dono
 // 2026-10-14: "pra ver o post clico em cima na grade do calendário"). Mostra a
@@ -64,13 +81,18 @@ type Post = TestPost & { kind?: string; planned_for?: string | null; recipe?: st
 // botões de aprovar: publicar agora ou agendar. Peça que não passou fica em
 // revisão (status 'draft'): mostra o porquê e o dono decide (liberar mesmo
 // assim ou excluir). Nada vai ao público sem o clique do dono (regra 1).
-export default function CalendarPostModal({ post, companyId, onClose, onChanged }: { post: Post; companyId: string; onClose: () => void; onChanged: () => void }) {
+// `oppById`: oportunidades já consultadas em lote pelo calendário; sem ele (Aprovações, outras telas) a peça consulta a sua.
+export default function CalendarPostModal({ post, companyId, onClose, onChanged, oppById }: { post: Post; companyId: string; onClose: () => void; onChanged: () => void; oppById?: OppMap }) {
   const { session } = useAuth()
   const { lang } = useLang(); const tx = TX[lang]
   const token = session?.access_token ?? ''
   const ssNames = useSSNames(companyId)
+  const usage = useItemUsage(companyId)
+  const { company } = useCompany()
+  const availCfg = useAvailabilityCfg(company?.vertical_key)
   const [item, setItem] = useState<Post>(post)
   const [adapts, setAdapts] = useState<TestPost[]>([])
+  const [ownOpps, setOwnOpps] = useState<OppMap | undefined>(undefined) // undefined = ainda consultando
   const [adaptOpen, setAdaptOpen] = useState(false)
   const [showAdapts, setShowAdapts] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -93,6 +115,16 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
   }, [post.id, companyId])
   useEffect(() => { load() }, [load])
 
+  const oppId = item.opportunity_id
+  useEffect(() => {
+    if (oppById !== undefined || !oppId) return
+    let off = false
+    void supabase.from('growth_opportunities').select('id, title, status').eq('company_id', companyId).eq('id', oppId).maybeSingle()
+      .then(({ data, error }) => { if (!off) setOwnOpps(error ? null : data ? { [oppId]: data as { id: string; title: string; status: string } } : {}) })
+    return () => { off = true }
+  }, [oppById, oppId, companyId])
+  const opps: OppMap | undefined = oppById !== undefined ? oppById : oppId ? ownOpps : {}
+
   const done = async () => { await load(); onChanged() }
 
   // Propõe já aprovado (approve_now) — o clique em "Publicar" É a decisão do
@@ -105,11 +137,12 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
         action_type: 'create_content', channel: 'instagram', source: 'vault',
         ref_type: 'marketing_ai_test_content', ref_id: p.id, title: p.idea ?? (lang === 'en' ? 'Calendar post' : 'Post do calendário'),
         agent_interpretation: lang === 'en' ? `Approved by the owner in the calendar (score ${p.quality_score ?? '—'}).` : `Aprovado pelo dono no calendário (nota ${p.quality_score ?? '—'}).`,
-        payload: { idea: p.idea, caption: p.caption, hashtags: p.hashtags, cta: p.cta, image_url: p.image_url, media: p.media },
+        payload: { idea: p.idea, caption: p.caption, hashtags: p.hashtags, cta: p.cta, image_url: p.image_url, media: p.media, item_id: (p as Post).item_id ?? null },
         approve_now: true,
       })
       if (action.execution_status === 'EXECUTED' && (action.execution_result as { published_to_instagram?: boolean } | null)?.published_to_instagram) setOkMsg(tx.published)
       else if (action.execution_status === 'FAILED') setError(action.execution_error ?? tx.pubFail)
+      else if ((action.execution_result as { waiting?: string } | null)?.waiting === 'availability_unverifiable') setError(tx.holdAvail)
       else setOkMsg(tx.approvedPosts)
       await done()
     } catch (e) { setError(e instanceof Error ? e.message : tx.pubErr) }
@@ -127,7 +160,7 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
         action_type: 'create_content', channel: 'instagram', source: 'vault',
         ref_type: 'marketing_ai_test_content', ref_id: item.id, title: item.idea ?? (lang === 'en' ? 'Calendar post' : 'Post do calendário'),
         agent_interpretation: lang === 'en' ? `Approved by the owner in the calendar (score ${item.quality_score ?? '—'}), scheduled.` : `Aprovado pelo dono no calendário (nota ${item.quality_score ?? '—'}), agendado.`,
-        payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags, cta: item.cta, image_url: item.image_url, media: item.media },
+        payload: { idea: item.idea, caption: item.caption, hashtags: item.hashtags, cta: item.cta, image_url: item.image_url, media: item.media, item_id: item.item_id ?? null },
         scheduled_at: iso,
       })
       setOkMsg(`${tx.scheduledFor} ${fmtScheduled(iso, lang)} ✓`)
@@ -228,6 +261,46 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
           {item.recipe === 'video_imovel' && !item.video_url && item.reasoning && (
             <div style={{ fontSize: '11.5px', color: '#60a5fa', background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: '9px', padding: '9px 12px', lineHeight: 1.5 }}>🎬 {item.reasoning}</div>
           )}
+          {item.item_id && usage.data.items[item.item_id] && (() => {
+            const info = usage.data.items[item.item_id as string]
+            const u = usage.data.usage[item.item_id as string]
+            // O motivo da escolha não é gravado por peça: só afirmamos o que o código garante (oportunidade → vem dela).
+            // Peça com dia no calendário pode vir do rodízio, do "Gerar agora" com imóvel escolhido ou do pacote do
+            // catálogo — sem marcador, não dá pra dizer qual (regra 5). O "reasoning" é sobre formato/tema, não o imóvel.
+            // Fase 4: o motivo vem do que o sistema gravou na hora da escolha (item_pick). Sem ele, só afirmamos o que o código garante.
+            const pick = parseItemPick(item.item_pick)
+            const why = pick ? pickReasonText(pick, lang, availCfg ?? null) : item.opportunity_id ? tx.whyOpp : tx.whyNone
+            const av = availCfg ? availabilityOf({ meta: { availability: info.availability } }, availCfg) : null
+            return (
+              <div style={{ padding: '10px 12px', border: `1px solid ${BORDER}`, borderRadius: '10px', background: 'rgba(255,255,255,0.02)', display: 'flex', gap: '10px' }}>
+                {info.cover && <img src={info.cover} alt="" style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }} />}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: '9.5px', fontWeight: 800, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em' }}>🏠 {tx.itemTitle}</div>
+                  <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>{info.title}</div>
+                  {info.bairro && <div style={{ fontSize: '11px', color: MUTED }}>{info.bairro}</div>}
+                  {usage.data.ok && u && <div style={{ fontSize: '10.5px', color: MUTED }}>{tx.usedN(u.n30)}{u.last ? ` · ${tx.lastPiece} ${dayLabel(u.last)}` : ''}</div>}
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.45, marginTop: '4px' }}><strong>{tx.itemWhy}:</strong> {why}</div>
+                  {av?.blocking && <div role="alert" style={{ fontSize: '11.5px', color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: '8px', padding: '7px 10px', marginTop: '6px', lineHeight: 1.45 }}>⚠️ {tx.gone(statusLabel(availCfg ?? null, av.status, lang).toLowerCase())}</div>}
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '5px', flexWrap: 'wrap' }}>
+                    <Link to={`/dashboard/catalogo?item=${encodeURIComponent(info.id)}`} style={{ fontSize: '11px', fontWeight: 700, color: ORANGE }}>{tx.itemOpen}</Link>
+                    <Link to={`/dashboard/marketing-ai/dados?sub=lugares&imovel=${encodeURIComponent(info.id)}`} style={{ fontSize: '11px', fontWeight: 700, color: ORANGE }}>{tx.itemNearby}</Link>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+          {opps !== undefined && <PieceIntent mode="full" piece={item} intent={item.intent} oppById={opps} itemTitle={item.item_id ? usage.data.items[item.item_id]?.title : null} />}
+          {marketEvidence(item.intent).length > 0 && (
+            <div style={{ fontSize: '11px', color: MUTED, lineHeight: 1.5 }}>
+              <strong style={{ color: 'rgba(255,255,255,0.75)' }}>{tx.inspired}:</strong>{' '}
+              {marketEvidence(item.intent).map((e, i) => (
+                <span key={e.id}>{i > 0 ? ' · ' : ''}
+                  {e.source_url ? <a href={e.source_url} target="_blank" rel="noopener noreferrer" style={{ color: ORANGE, fontWeight: 700 }}>{e.title}</a> : e.title}
+                  {e.source_name ? ` · ${e.source_name}` : ''}{e.observed_at ? ` · ${dayLabel(e.observed_at.slice(0, 10))}` : ''}
+                </span>
+              ))}
+            </div>
+          )}
           <PieceChips familia={item.familia} pilarSs={item.pilar_ss} tema={item.pillar} ssNames={ssNames} />
           {item.idea && <div style={{ fontSize: '13.5px', fontWeight: 700, color: 'white' }}>{item.idea}</div>}
           {editing ? (
@@ -260,6 +333,14 @@ export default function CalendarPostModal({ post, companyId, onClose, onChanged 
                 {tx.scheduledAt} {fmtScheduled(scheduled.at, lang)}
               </div>
               <button onClick={cancelSchedule} disabled={isBusy} title={tx.cancelSched} style={ghost}>✕ {tx.cancelSched}</button>
+            </div>
+          ) : ready && item.recipe === 'video_imovel' && !item.video_url ? (
+            // Vídeo ainda não pronto (sendo feito ou aguardando o estúdio): sem publicar nem agendar — só a foto de capa sairia.
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, padding: '9px', background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: '9px', color: '#60a5fa', fontSize: '11.5px', fontWeight: 700, textAlign: 'center' }}>
+                {lang === 'en' ? '🎬 Video not ready yet — approving unlocks when it appears here' : '🎬 Vídeo ainda não pronto — a aprovação libera quando ele aparecer aqui'}
+              </div>
+              <button onClick={() => setAsking(true)} disabled={isBusy} title={tx.del} style={ghost}>🗑</button>
             </div>
           ) : ready ? (
             <>

@@ -76,21 +76,21 @@ export async function cronOpportunities(admin: Admin, llm: Llm, started = Date.n
       const [{ data: lastRun }, { data: lastFail }, { data: lastSignal }, { data: pending }, { data: needPieces }] = await Promise.all([
         admin.from('agent_performance').select('created_at').eq('company_id', c.id).eq('task_key', 'run_opportunities').eq('success', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         admin.from('agent_performance').select('created_at').eq('company_id', c.id).eq('task_key', 'run_opportunities').eq('success', false).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        admin.from('market_signals').select('created_at').eq('company_id', c.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        admin.from('market_signals').select('created_at').eq('company_id', c.id).or('meta->>ignored.is.null,meta->>ignored.neq.true').order('created_at', { ascending: false }).limit(1).maybeSingle(),
         admin.from('growth_opportunities').select('id').eq('company_id', c.id).eq('status', 'approved').is('plan', null).order('decided_at', { ascending: true }).limit(MAX_PLANS_PER_DAY),
         // Etapa 4B: plano aprovado pelo dono e ainda sem peças (nunca despachado, ou despachado há > 30 min). Quem confere de verdade é generateOpportunityPieces.
         admin.from('growth_opportunities').select('id').eq('company_id', c.id).eq('status', 'approved').not('plan', 'is', null).not('plan_approved_at', 'is', null).or(`pieces_generated_at.is.null,pieces_generated_at.lt.${staleBefore}`).order('plan_approved_at', { ascending: true }).limit(3),
       ])
       let did = false
       if (shouldRunOpportunities(ms(lastRun?.created_at), ms(lastSignal?.created_at), Date.now(), ms(lastFail?.created_at))) {
-        const r = await runOpportunities(admin, c.id, llm)
+        const r = await runOpportunities(admin, c.id, llm, { trigger: 'cron' })
         if (!r.ok) console.error(`[cron_opportunities] ${c.id} run: ${r.status} ${r.error}`)
         else sum.ran++
         did = true
       }
       for (const o of (pending ?? []) as { id: string }[]) {
         if (!aiWindowOpen()) break
-        const r = await createOpportunityPlan(admin, c.id, o.id, llm)
+        const r = await createOpportunityPlan(admin, c.id, o.id, llm, { trigger: 'cron' })
         if (r.code !== 'failures' && r.code !== 'daily_limit') did = true // pular por falhas/limite não ocupa vaga das 3
         if (r.ok && !r.reused) sum.plans++
         if (r.code === 'daily_limit') break // limite do dia desta empresa: o resto fica pra amanhã

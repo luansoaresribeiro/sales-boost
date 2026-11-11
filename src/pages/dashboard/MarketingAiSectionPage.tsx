@@ -53,7 +53,7 @@ const TX = {
     notActiveDesc: 'A ativação é feita pela equipe Sales Boost, configurando a marca, o público e os concorrentes. Fale com a gente pra ativar.',
     back: '← Voltar', followers: 'Seguidores', pendingApproval: 'Conteúdo esperando aprovação', newRecs: 'Recomendações novas', competitors: 'Concorrentes monitorados',
     openInsights: 'Insights em aberto', noInsights: 'Nenhum insight aberto agora.', recent: 'Atividade recente', noActivity: 'Nenhuma atividade ainda.',
-    products: 'Produtos', market: 'Mercado', avatar: 'Meu avatar (em breve)', ideas: 'Ideias e trends', nearby: 'Lugares perto', faq: 'Dicas e FAQ', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
+    products: 'Produtos', market: 'Insights e evidências', avatar: 'Meu avatar (em breve)', ideas: 'Direcionamento e ideias', nearby: 'Inteligência de localização', faq: 'Base de conhecimento', catalogSub: 'Suba as fotos reais de cada item. São elas que viram carrosséis e vídeos — nunca imagem inventada.',
     funnel: 'Funil de vendas', perf: 'Desempenho dos posts', learn: 'Aprendizado', exper: 'Experimentos', reps: 'Relatórios',
   },
   en: {
@@ -61,7 +61,7 @@ const TX = {
     notActiveDesc: 'Activation is done by the Sales Boost team, setting up the brand, audience and competitors. Contact us to activate it.',
     back: '← Back', followers: 'Followers', pendingApproval: 'Content awaiting approval', newRecs: 'New recommendations', competitors: 'Competitors monitored',
     openInsights: 'Open insights', noInsights: 'No open insights right now.', recent: 'Recent activity', noActivity: 'No activity yet.',
-    products: 'Products', market: 'Market', avatar: 'My avatar (coming soon)', ideas: 'Ideas & trends', nearby: 'Nearby places', faq: 'Tips & FAQ', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
+    products: 'Products', market: 'Insights & evidence', avatar: 'My avatar (coming soon)', ideas: 'Direction & ideas', nearby: 'Location intelligence', faq: 'Knowledge base', catalogSub: 'Upload real photos of each item. They become carousels and videos — never made-up images.',
     funnel: 'Sales pipeline', perf: 'Post performance', learn: 'Learning', exper: 'Experiments', reps: 'Reports',
   },
 } as const
@@ -118,7 +118,7 @@ export default function MarketingAiSectionPage() {
   // A configuração dos agentes (autonomia/objetivo) foi consolidada em
   // Configurações → Agentes, o lar único de config do cliente. Deep links
   // antigos pra cá redirecionam pra lá.
-  if (section === 'configuracao') return <Navigate to="/dashboard/settings?tab=agentes" replace />
+  if (section === 'configuracao') return <Navigate to="/dashboard/aprovacoes" replace />
   // Conexões e Contexto do Negócio foram consolidados em Configurações.
   if (section === 'conexoes') return <Navigate to="/dashboard/settings?tab=conexoes" replace />
   if (section === 'context') return <Navigate to="/dashboard/settings?tab=contexto" replace />
@@ -294,7 +294,11 @@ function DadosSection({ company }: { company: CompanyData }) {
   const [params] = useSearchParams()
   const focusItemId = params.get('item')
   const verticalKey = company.vertical_key ?? 'generico'
-  const [picked, setSub] = useState<'mercado' | 'ideias' | 'lugares' | 'faq' | null>(null)
+  type DadosSub = 'mercado' | 'ideias' | 'lugares' | 'faq'
+  // ?sub= abre a sub-aba direto (ex.: Resumo do teste → Ideias; Catálogo/calendário → Lugares perto, com ?imovel=<id>).
+  // Não dá pra usar ?item= aqui: ele redireciona para o Catálogo (links antigos do sino).
+  const subParam = params.get('sub')
+  const [picked, setSub] = useState<DadosSub | null>(subParam === 'mercado' || subParam === 'ideias' || subParam === 'lugares' || subParam === 'faq' ? subParam : null)
   const [schema, setSchema] = useState<CatalogSchema | null | undefined>(undefined)
   useEffect(() => {
     let alive = true
@@ -319,7 +323,7 @@ function DadosSection({ company }: { company: CompanyData }) {
         {schema?.faqCategories && <SubTabButton active={sub === 'faq'} onClick={() => setSub('faq')} icon="❓" label={t.faq} />}
       </div>
       {sub === 'mercado' && schema?.marketIntel ? <MarketFeed lang={lang} companyId={company.id} />
-        : sub === 'lugares' && schema?.nearby ? <NearbyPlaces companyId={company.id} />
+        : sub === 'lugares' && schema?.nearby ? <NearbyPlaces companyId={company.id} focusItemId={params.get('imovel')} />
         : sub === 'faq' && schema?.faqCategories ? <FaqTips companyId={company.id} categories={schema.faqCategories} />
         : <CreativeAgent companyId={company.id} />}
     </div>

@@ -1,6 +1,8 @@
+import { Link } from 'react-router-dom'
 import { useLang } from '../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, ORANGE } from './marketingAi/shared'
 import OpportunityResults from './opportunityResults'
+import OpportunityMarketing from './opportunityMarketing'
 import type { OppResultRow } from './resultsBrokers'
 import OpportunityPlan, { type PieceStats, type PlanData, type PlanPatch } from './opportunityPlan'
 
@@ -56,14 +58,14 @@ function Block({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export default function OpportunityCard({ o, itemNames, pieces, results, linkCodes, busy, onDecide, onPlan }: {
-  o: Opportunity; itemNames: Record<string, string>; pieces?: PieceStats; results?: OppResultRow; linkCodes?: string[]; busy: boolean; onDecide: (status: Opportunity['status']) => void; onPlan: (patch: Partial<PlanPatch>) => void
+export default function OpportunityCard({ o, itemNames, pieces, results, companyId, linkCodes, busy, onDecide, onPlan }: {
+  o: Opportunity; itemNames: Record<string, string>; pieces?: PieceStats; results?: OppResultRow; companyId?: string; linkCodes?: string[]; busy: boolean; onDecide: (status: Opportunity['status']) => void; onPlan: (patch: Partial<PlanPatch>) => void
 }) {
   const { lang } = useLang()
   const t = TX[lang]
   const color = CONF_COLOR[o.confidence]
   const evidence = o.evidence ?? []
-  const names = (o.item_ids ?? []).map(id => itemNames[id]).filter(Boolean)
+  const linked = (o.item_ids ?? []).filter(id => itemNames[id])
   const btn = (bg: string, fg: string, border?: string) => ({ padding: '9px 18px', background: bg, color: fg, fontWeight: 700, fontSize: '12.5px', border: border ?? 'none', borderRadius: '9px', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1, fontFamily: D } as const)
   return (
     <div style={{ background: CARD, border: `1px solid ${o.status === 'approved' ? 'rgba(74,222,128,0.35)' : BORDER}`, borderRadius: '13px', padding: '16px 16px 14px' }}>
@@ -97,7 +99,13 @@ export default function OpportunityCard({ o, itemNames, pieces, results, linkCod
         </Block>
       )}
 
-      {names.length > 0 && <Block label={t.items}>{names.join(' · ')}</Block>}
+      {linked.length > 0 && (
+        <Block label={t.items}>
+          {linked.map((id, i) => (
+            <span key={id}>{i > 0 && ' · '}<Link to={`/dashboard/catalogo?item=${encodeURIComponent(id)}`} style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.3)' }}>{itemNames[id]}</Link></span>
+          ))}
+        </Block>
+      )}
       {o.audience && <Block label={t.audience}>{o.audience}</Block>}
       {o.suggested_action && <Block label={t.action}>{o.suggested_action}</Block>}
       {o.how_to_measure && <Block label={t.measure}>{o.how_to_measure}</Block>}
@@ -115,6 +123,7 @@ export default function OpportunityCard({ o, itemNames, pieces, results, linkCod
       </div>
       {o.status === 'suggested' && <div style={{ fontSize: '10.5px', color: MUTED, marginTop: '8px' }}>{t.approveHint}</div>}
       {o.status === 'approved' && <OpportunityPlan opportunityId={o.id} plan={o.plan ?? null} approvedAt={o.plan_approved_at ?? null} itemNames={itemNames} decidedAt={o.decided_at ?? null} piecesGeneratedAt={o.pieces_generated_at ?? null} pieces={pieces} onChange={onPlan} />}
+      {o.status === 'approved' && companyId && <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: `1px solid ${BORDER}` }}><OpportunityMarketing companyId={companyId} oppId={o.id} /></div>}
       {o.status === 'approved' && results && <OpportunityResults row={results} codes={linkCodes ?? []} />}
     </div>
   )

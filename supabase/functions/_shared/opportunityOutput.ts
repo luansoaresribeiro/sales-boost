@@ -9,10 +9,13 @@
 //  - termo de classe protegida (Fair Housing / antidiscriminação) → a frase sai; no público, vira vazio;
 //  - confiança e prioridade são calculadas aqui, a IA não opina.
 import { brNumber } from './faqCheck.ts'
+import { consolidateByAction, normAction } from './opportunityMerge.ts'
 import { norm, type Candidate, type Evidence, type Fact, type Lang, type OppKind, type OppTexts } from './opportunityEngine.ts'
 
 export const MAX_OPPORTUNITIES = 3
 export const MAX_CANDIDATES_TO_LLM = 5
+/** Versão do prompt/validação. Suba quando mexer em buildPrompt/finalize: muda a impressão digital e força uma nova interpretação (marketIntelRuns.ts). */
+export const OPP_PROMPT_VERSION = 5
 export type Confidence = 'high' | 'medium' | 'low' | 'needs_validation'
 
 export interface OpportunityDraft {
@@ -119,35 +122,116 @@ export const DEFAULT_MARKET_CLAIMS: Record<Lang, string[]> = {
   pt: ['disputado', 'disputada', 'disputados', 'disputadas', 'concorrido', 'concorrida', 'valorizado', 'valorizada', 'valorizados', 'valorizadas', 'valorizacao', 'alto padrao', 'nobre', 'nobres', 'em alta', 'badalado', 'badalada', 'cobicado', 'cobicada', 'ticket elevado', 'ticket alto', 'muito procurado', 'muito procurada', 'bairro quente', 'mercado aquecido', 'alta demanda', 'luxo', 'sofisticado', 'sofisticada'],
   en: ['competitive', 'in demand', 'high demand', 'hot market', 'hot neighborhood', 'upscale', 'high-end', 'high end', 'prime location', 'sought-after', 'sought after', 'booming', 'appreciating', 'appreciation', 'luxury', 'high ticket', 'premium', 'coveted'],
 }
-export interface ClaimGuard { terms: string[]; factsNorm: string }
-const claimRe = (t: string) => new RegExp('(?:^|[^a-z])' + norm(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[^a-z])')
+export interface ClaimGuard { terms: string[]; factsNorm: string; ev?: EvidenceGuard }
+export const claimRe = (t: string) => new RegExp('(?:^|[^a-z])' + norm(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[^a-z])')
 /** Monta a trava: termos (ficha ou genéricos) + o texto dos fatos em que eles podem aparecer. */
 export function claimGuard(lang: Lang, factTexts: string[], fichaTerms?: string[] | null): ClaimGuard {
   const terms = (fichaTerms?.length ? fichaTerms : DEFAULT_MARKET_CLAIMS[lang]).filter(t => typeof t === 'string' && t.trim())
   return { terms, factsNorm: norm(factTexts.join(' \n ')) }
 }
+
+// ── Porta de evidência (2026-11-05): período/duração e "nenhum post" só valem se um FATO diz o mesmo ─────────────────
+// A IA escreveu "há mais de 60 dias no catálogo" quando o item tinha 3 dias, e "nenhum post" com 7 peças prontas. O número
+// "60" passava (estava no fato da janela). Agora a duração tem que bater em número + unidade + qualificador ("mais de",
+// "desde"…) com algum fato do candidato, e a ausência de post só vale se um fato a afirma e nenhum fato de peças a contradiz.
+export interface EvidenceGuard { factsNorm: string; timeKeys: Set<string>; absence: boolean; pieces: boolean; ig?: boolean; igAbsence?: boolean }
+// Correção 3 (2026-11-06): "sem presença nas redes"/"invisíveis"/"itens parados" afirmam o que está FORA do Sales Boost. Com o Instagram
+// desconectado isso é desconhecido (não é "sem post"). Só vale com Instagram conectado E um fato do Instagram que diga a ausência.
+const EXTERNAL_PRESENCE = /(?:^|[^a-z])(?:sem presenca (?:nas redes|digital|online|no instagram)|invisive(?:l|is)|fora das redes|nao aparece(?:m)? (?:nas redes|no instagram|para (?:os )?compradores)|sem divulgacao|sem visibilidade|nenhum post no instagram|sem posts? no instagram|(?:imoveis?|itens?|anuncios?|listings?|items?)(?: \w+){0,2} parad[oa]s?|fica(?:m|r)? parad[oa]s?|no online presence|no presence on (?:social|instagram)|not promoted|sitting idle|not visible)(?![a-z])/
+const MENTIONS_IG = /(?:^|[^a-z])(?:instagram|redes sociais|nas redes|social media|social networks)(?![a-z])/
+const UNIT_KEY: Record<string, string> = { dia: 'd', dias: 'd', day: 'd', days: 'd', semana: 'w', semanas: 'w', week: 'w', weeks: 'w', mes: 'm', meses: 'm', month: 'm', months: 'm', ano: 'y', anos: 'y', year: 'y', years: 'y' }
+const NUMWORD = 'um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|quinze|vinte|trinta|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen|twenty|thirty'
+const TIME_RE = new RegExp('(?:^|[^a-z0-9])(\\d+(?:[.,]\\d+)?|' + NUMWORD + ')\\s+(dias?|semanas?|meses|mes|anos?|days?|weeks?|months?|years?)(?![a-z])', 'g')
+const QUALIFIERS = ['mais de', 'menos de', 'mais que', 'pelo menos', 'no minimo', 'quase', 'cerca de', 'more than', 'less than', 'at least', 'almost', 'nearly', 'over']
+const VAGUE = /(?:^|[^a-z])(ha muito tempo|ha muito|faz tempo|faz muito tempo|ha meses|ha semanas|ha anos|ha bastante tempo|for a long time|for months|for weeks|for years|desde|since)(?![a-z])/g
+const ABSENCE = /(?:^|[^a-z])(?:(?:nenhum|nenhuma|zero|nunca)\s+(?:\w+\s+)?(?:post|posts|publicac\w+|peca|pecas|conteudo)|sem\s+(?:nenhum\s+|nenhuma\s+)?(?:post|posts|publicac\w+)|nao ha (?:post|posts|publicac\w+)|no posts?|never (?:posted|published)|without (?:any )?posts?|nothing (?:was )?(?:posted|published)|nada (?:foi )?publicad\w+)(?![a-z])/
+const timeKey = (num: string, unit: string) => `${num.replace(',', '.')}|${UNIT_KEY[unit] ?? unit}`
+const timeTokens = (n: string): string[] => [...n.matchAll(TIME_RE)].map(m => timeKey(m[1], m[2]))
+export function evidenceGuard(facts: Pick<Fact, 'text' | 'origin'>[], opts?: { instagramConnected?: boolean }): EvidenceGuard {
+  const factsNorm = norm(facts.map(f => f.text).join(' \n '))
+  const igAbsence = facts.some(f => /^(?:instagram|posts)/.test(f.origin) && ABSENCE.test(norm(f.text)) && MENTIONS_IG.test(norm(f.text)))
+  return { factsNorm, timeKeys: new Set(timeTokens(factsNorm)), absence: ABSENCE.test(factsNorm), pieces: facts.some(f => f.origin === 'pieces'), ig: !!opts?.instagramConnected, igAbsence }
+}
+/** Afirma presença/ausência FORA do Sales Boost (redes, Instagram, "itens parados") sem dado? Frase rotulada como hipótese ("pode ser…") é liberada. */
+export function violatesExternal(sentence: string, g: EvidenceGuard): boolean {
+  const n = norm(sentence)
+  if (SPECULATION.test(n)) return false
+  const ext = EXTERNAL_PRESENCE.test(n) || (ABSENCE.test(n) && MENTIONS_IG.test(n))
+  return ext && !(g.ig && g.igAbsence)
+}
+/** A frase afirma período/duração ou ausência de post que nenhum fato do candidato sustenta (ou presença externa sem dado)? */
+export function violatesEvidence(sentence: string, g: EvidenceGuard): boolean { return violatesExternal(sentence, g) || violatesCore(sentence, g) }
+export function violatesCore(sentence: string, g: EvidenceGuard): boolean {
+  const n = norm(sentence)
+  const toks = timeTokens(n)
+  if (toks.some(t => !g.timeKeys.has(t))) return true
+  if (toks.length && QUALIFIERS.some(q => claimRe(q).test(n) && !claimRe(q).test(g.factsNorm))) return true
+  for (const m of n.matchAll(VAGUE)) if (!claimRe(m[1]).test(g.factsNorm)) return true
+  if (ABSENCE.test(n) && (!g.absence || g.pieces)) return true
+  return false
+}
 /** A frase afirma algo de mercado que não está nos fatos? */
 export function hasUnsupportedClaim(sentence: string, guard: ClaimGuard): boolean {
   const n = norm(sentence)
+  if (guard.ev && violatesEvidence(sentence, guard.ev)) return true
   return guard.terms.some(t => { const re = claimRe(t); return re.test(n) && !re.test(guard.factsNorm) })
 }
 
 // Tira da frase o que não passa (número inventado / classe protegida / afirmação de mercado sem dado). Frase = até . ! ? ou quebra de linha.
+const sentences = (s: string): string[] => s.replace(/[ \t]+/g, ' ').trim().split(/(?<=[.!?])\s+|\n+/).filter(p => p.trim())
+const sentenceOk = (p: string, allowed: AllowedNumbers, guard?: ClaimGuard | null): boolean =>
+  numbersAllowed(p, allowed) && !hasProtectedTerm(p) && !(guard && hasUnsupportedClaim(p, guard))
+
 export function cleanText(s: unknown, allowed: AllowedNumbers, max: number, guard?: ClaimGuard | null): string {
   if (typeof s !== 'string') return ''
-  const parts = s.replace(/[ \t]+/g, ' ').trim().split(/(?<=[.!?])\s+|\n+/)
-  return parts.filter(p => p.trim() && numbersAllowed(p, allowed) && !hasProtectedTerm(p) && !(guard && hasUnsupportedClaim(p, guard))).join(' ').trim().slice(0, max)
+  return sentences(s).filter(p => sentenceOk(p, allowed, guard)).join(' ').trim().slice(0, max)
+}
+
+/** Ação sugerida (2026-11-04): se a trava cortar QUALQUER frase da ação da IA, a ação inteira vira a do código (`fallback`).
+ *  Motivo: cortar frase deixava sobras sem ação comercial (ex.: só "Registre no Sales Boost após aprovação."), reprovando a pergunta 4
+ *  ("qual ação comercial é possível?"). A ação do código é sempre uma ação concreta e verificável. */
+export function cleanAction(s: unknown, allowed: AllowedNumbers, guard: ClaimGuard | null | undefined, fallback: string): string {
+  if (typeof s !== 'string' || !s.trim()) return fallback
+  const parts = sentences(s)
+  const kept = parts.filter(p => sentenceOk(p, allowed, guard))
+  if (!kept.length || kept.length < parts.length) return fallback
+  return kept.join(' ').trim().slice(0, 400) || fallback
+}
+
+/** Oportunidade de mercado (2026-11-05, dono): o centro tem que ser o sinal de mercado, não a fila interna de peças.
+ *  Frase que gira em torno de "peças prontas/preparadas" + aprovar/publicar/revisar (ou "esperando publicação") é lembrete
+ *  da fila de Aprovações — no market_change ela cai no texto do código (fallback), que parte da fonte de mercado. */
+const BACKLOG_PIECES = /(?:^|[^a-z])(?:pecas?|posts?|conteudos?|pieces?)\s+(?:ja\s+|already\s+)?(?:prontas?|preparad[ao]s?|ready|prepared|parad[ao]s?|represad[ao]s?|pendentes?)/
+const BACKLOG_VERB = /(?:^|[^a-z])(?:aprov\w*|public\w*|revis\w*|approv\w*|publish\w*|review\w*)/
+const WAITING_PUB = /esperando\s+(?:a\s+)?publicac|aguardando\s+(?:a\s+)?publicac|waiting\s+(?:to\s+be\s+|for\s+)?publish/
+/** Ação: "aprovar/publicar/revisar" + "peças prontas" (ou "esperando publicação"). */
+export function isBacklogCentric(text: string): boolean {
+  const t = norm(text ?? '')
+  return WAITING_PUB.test(t) || (BACKLOG_PIECES.test(t) && BACKLOG_VERB.test(t))
+}
+/** Título/problema: basta girar em torno das peças prontas — o problema comercial do market_change é o sinal, não a fila. */
+export function mentionsBacklog(text: string): boolean {
+  const t = norm(text ?? '')
+  return WAITING_PUB.test(t) || BACKLOG_PIECES.test(t)
 }
 
 export interface LlmOpportunity {
   candidate_id?: unknown; title?: unknown; description?: unknown; commercial_problem?: unknown; audience?: unknown
   suggested_action?: unknown; how_to_measure?: unknown; cited_fact_ids?: unknown; hypotheses?: unknown
+  answers?: unknown // as 5 perguntas (o que mudou, por que importa, quem é afetado, o que fazer, qual evidência) — obrigatórias no market_change; não vão pro banco
+}
+export const ANSWER_KEYS = ['what_changed', 'why_it_matters', 'who_is_affected', 'what_to_do', 'evidence'] as const
+/** As 5 respostas existem e nenhuma está vazia? (texto de pergunta não respondida = candidato não validado) */
+export function hasAllAnswers(a: unknown): boolean {
+  if (!a || typeof a !== 'object' || Array.isArray(a)) return false
+  const o = a as Record<string, unknown>
+  return ANSWER_KEYS.every(k => typeof o[k] === 'string' && (o[k] as string).trim().length > 0)
 }
 export function parseLlm(raw: string): LlmOpportunity[] | null {
   const tryParse = (t: string): unknown => { try { return JSON.parse(t) } catch { return undefined } }
   const m = raw.match(/\{[\s\S]*\}/)
   const obj = (tryParse(raw) ?? (m ? tryParse(m[0]) : undefined)) as { opportunities?: unknown } | undefined
-  return obj && Array.isArray(obj.opportunities) ? obj.opportunities as LlmOpportunity[] : null
+  return obj && Array.isArray(obj.opportunities) ? (obj.opportunities as unknown[]).filter((o): o is LlmOpportunity => !!o && typeof o === 'object') : null
 }
 
 // Texto vindo do banco (título de imóvel, nota de concorrente, sinal de mercado…) vai pro prompt como DADO:
@@ -159,7 +243,7 @@ export const promptSafe = (v: unknown, max = 200): string => {
 
 export function buildPrompt(opts: { lang: Lang; businessName: string; itemLabel: string; facts: Fact[]; candidates: Candidate[]; windowDays: number; texts?: OppTexts; photoCounts?: Record<string, number> }): string {
   const { lang, facts, candidates } = opts
-  const factLines = facts.map(f => `${f.id} [${f.type === 'fact' ? 'FATO' : 'DADO'}] ${promptSafe(f.text)} (fonte: ${promptSafe(f.source, 120)}${f.date ? `; data: ${f.date}` : ''})`).join('\n')
+  const factLines = facts.map(f => `${f.id} [${f.type === 'fact' ? 'FATO' : 'DADO'}]${f.weak ? ' [fraca]' : ''} ${promptSafe(f.text)} (fonte: ${promptSafe(f.source, 120)}${f.date ? `; data: ${f.date}` : ''})`).join('\n')
   const candLines = candidates.map(c => `${c.id} · tipo=${c.kind} · fatos=${c.fact_ids.join(',')}${photoNote(c.item_ids, opts.photoCounts)}${c.forceHypothesis ? ' · A CAUSA É SÓ HIPÓTESE (use o tom "pode ser…", nunca afirme a causa)' : ''}${c.validationReasons.length ? ` · ATENÇÃO: ${promptSafe(c.validationReasons.join(' '), 300)}` : ''}`).join('\n')
   const caveat = opts.texts?.caveat ?? 'Valor anunciado não é valor fechado; interesse de busca não é cliente.'
   const hint = opts.texts?.audienceHint ?? '"quem busca perto do trabalho", "quem quer trocar por algo maior"'
@@ -176,7 +260,7 @@ ${candLines}
 </dados>
 
 REGRAS INEGOCIÁVEIS:
-1. Use APENAS os fatos acima. Não invente fato, número, data, valor, métrica, notícia, localização, empresa ou nome. Não escreva NENHUM dígito que não esteja nos fatos (para contagens, use palavras). Não escreva datas.
+1. Use APENAS os fatos acima. Não invente fato, número, data, valor, métrica, notícia, localização, empresa ou nome. Não escreva NENHUM dígito que não esteja nos fatos (para contagens, use palavras). Não escreva datas. Não escreva períodos ou durações ("há N dias", "nos últimos…", "há mais de…", "desde…", "há meses") nem "nenhum post"/"sem nenhum post" a menos que um fato diga exatamente isso; o código remove essas frases.
 2. O que não está nos fatos é HIPÓTESE: coloque em "hypotheses" (frases curtas começando por "Pode ser…"/"May be…"), nunca nos outros campos como se fosse certo.
 3. Nada de promessa: nunca "+X% de vendas", "vai vender", "garantido", "dobra". ${caveat}
 4. Público ("audience"): NUNCA segmente por raça, cor, religião, sexo/gênero, deficiência, situação familiar (ter ou não filhos/crianças, famílias, estado civil), idade ou origem/nacionalidade (Fair Housing / antidiscriminação). Descreva o público por NECESSIDADE, momento de compra ou de uso, localização ou categoria do item (ex.: ${hint}). Se não houver base, deixe "audience" vazio.
@@ -184,10 +268,14 @@ REGRAS INEGOCIÁVEIS:
 6. "how_to_measure": diga o que olhar (comentários, mensagens, pedidos de contato), sem meta numérica.
 7. Adjetivo ou opinião de mercado ("disputado", "valorizado", "alto padrão", "nobre", "em alta", "ticket elevado", "procurado"…) só pode aparecer se a MESMA ideia estiver escrita nos fatos. Sem fato que diga isso, descreva só o que os fatos dizem, sem qualificar o local, o valor ou a demanda.
 8. Fotos: cada candidato com item ligado diz quantas fotos reais o item tem. Se for ZERO, "suggested_action" NÃO pode mandar publicar/postar/criar peça com fotos: a primeira ação é adicionar fotos reais ao item. Nunca invente que o item tem fotos.
-9. Idioma de TODOS os textos: ${lang === 'en' ? 'English' : 'português do Brasil'}.
+9. Candidato tipo=market_change: a oportunidade é o SINAL DE MERCADO. Título, problema e "suggested_action" precisam partir do sinal (ex.: criar uma peça ligando a notícia aos itens da região). Peças já preparadas são só contexto — elas já aparecem na fila de Aprovações; NÃO faça da oportunidade "aprovar/publicar as peças prontas".
+10. Fato marcado [fraca] (serviço, patrocinado, guia genérico ou sem impacto no mercado) NUNCA pode ser a base de uma oportunidade: é só contexto. Não cite como prova nem faça dele o título ou a ação.
+11. Para CADA oportunidade preencha "answers" com 5 respostas curtas, só com base nos fatos: "what_changed" (o que mudou), "why_it_matters" (por que importa ao comercial), "who_is_affected" (quem é afetado), "what_to_do" (o que fazer), "evidence" (qual fato prova, citando o id). Sem resposta para alguma, não devolva a oportunidade.
+12. Nunca afirme ausência de posts nem de presença no Instagram ou nas redes sociais ("sem presença nas redes", "invisível", "parado"). Ausência "no Sales Boost" só se um fato disser isso. Com o Instagram desconectado, o que está fora do Sales Boost é DESCONHECIDO: diga que não dá pra saber.
+13. Idioma de TODOS os textos: ${lang === 'en' ? 'English' : 'português do Brasil'}.
 
 Responda APENAS com JSON, sem markdown:
-{"opportunities":[{"candidate_id":"C1","title":"até 90 caracteres","description":"2-3 frases","commercial_problem":"1-2 frases: o que isso custa ao comercial","audience":"","suggested_action":"","how_to_measure":"","cited_fact_ids":["F1"],"hypotheses":["Pode ser…"]}]}
+{"opportunities":[{"candidate_id":"C1","title":"até 90 caracteres","description":"2-3 frases","commercial_problem":"1-2 frases: o que isso custa ao comercial","audience":"","suggested_action":"","how_to_measure":"","cited_fact_ids":["F1"],"hypotheses":["Pode ser…"],"answers":{"what_changed":"","why_it_matters":"","who_is_affected":"","what_to_do":"","evidence":"F1"}}]}
 Se nenhum candidato tiver base suficiente, responda {"opportunities":[]}.`
 }
 
@@ -211,10 +299,14 @@ export interface Scored { c: Candidate; evCount: number; independent: number; ne
 
 export function score(c: Candidate, facts: Fact[]): Scored {
   const fs = c.fact_ids.map(id => facts.find(f => f.id === id)).filter((f): f is Fact => !!f)
-  const evCount = fs.length
-  const independent = new Set(fs.map(f => f.origin)).size
+  // Evidência fraca é só contexto: não conta como evidência nem como fonte.
+  const evCount = fs.filter(f => !f.weak).length
+  // Fonte independente (2026-11-05): no market_change só contam EVENTOS externos fortes (mesma notícia em 2 portais = 1; item do catálogo,
+  // peças e posts da própria empresa nunca contam). Nos demais tipos a contagem antiga de origens continua (a base deles é dado da própria empresa).
+  const own = new Set(['catalog', 'posts', 'pieces', 'events'])
+  const independent = c.kind === 'market_change' ? new Set(fs.filter(f => !f.weak && !own.has(f.origin)).map(f => f.origin)).size : new Set(fs.map(f => f.origin)).size
   const needs = c.forceHypothesis || evCount < 2 || c.validationReasons.length > 0
-  const confidence: Confidence = needs ? 'needs_validation' : evCount >= 4 && independent >= 3 ? 'high' : evCount >= 2 && independent >= 2 ? 'medium' : 'low'
+  const confidence: Confidence = needs ? 'needs_validation' : c.kind === 'market_change' ? (evCount >= 4 && independent >= 2 ? 'high' : independent >= 2 ? 'medium' : 'low') : evCount >= 4 && independent >= 3 ? 'high' : evCount >= 2 && independent >= 2 ? 'medium' : 'low'
   return { c, evCount, independent, needs, confidence }
 }
 // (1) evidências com fonte, (2) itens ligados, (3) fontes independentes; (4) "precisa validar" sempre por último.
@@ -238,45 +330,126 @@ export function priorityReasons(s: Scored, next: Scored | null, lang: Lang): str
   return out
 }
 
+// Frase que especula ("pode ser", "talvez"…) não pode ficar como afirmação: vira hipótese rotulada (evidence type 'hypothesis').
+const SPECULATION = /(?:^|[^a-z])(?:pode ser|podem ser|talvez|provavelmente|possivelmente|deve estar|devem estar|parece que|pode estar|podem estar|may be|might|probably|perhaps|possibly|could be|may not)(?![a-z])/
+export function splitSpeculation(text: string): { facts: string; hyps: string[] } {
+  const parts = sentences(text)
+  return { facts: parts.filter(p => !SPECULATION.test(norm(p))).join(' ').trim(), hyps: parts.filter(p => SPECULATION.test(norm(p))) }
+}
+
+export interface NotValidated { candidate_id: string; kind: OppKind; reasons: string[] }
+export interface Finalized { drafts: OpportunityDraft[]; notValidated: NotValidated[] }
+
 // Junta a redação da IA com os candidatos do código, valida e ordena. Devolve no máximo 3.
-export function finalize(opts: { lang: Lang; candidates: Candidate[]; facts: Fact[]; llm: LlmOpportunity[]; marketClaims?: string[] | null; photoCounts?: Record<string, number> }): OpportunityDraft[] {
+// Candidato cujas afirmações não se sustentam (sem fato com fonte, ou texto final ainda afirma período/ausência sem dado)
+// NÃO vira oportunidade: vai em `notValidated` (o chamador registra o motivo; nada entra na fila de aprovação).
+export function finalize(opts: Parameters<typeof finalizeChecked>[0]): OpportunityDraft[] { return finalizeChecked(opts).drafts }
+
+/** Frase de ação que o código escreve para item sem foto (usada pra reconhecer a tarefa "adicionar fotos"). */
+const photoActionNorm = (lang: Lang) => normAction(actionForPhotos('', ['x'], { x: 0 }, lang))
+const hypSuffix = (lang: Lang, connected: boolean) => lang === 'en'
+  ? ` — can't confirm: ${connected ? 'no Instagram data backs this' : 'Instagram is not connected'}.`
+  : ` — não dá pra confirmar: ${connected ? 'nenhum dado do Instagram sustenta isso' : 'o Instagram não está conectado'}.`
+
+export function finalizeChecked(opts: { lang: Lang; candidates: Candidate[]; facts: Fact[]; llm: LlmOpportunity[]; marketClaims?: string[] | null; photoCounts?: Record<string, number>; instagramConnected?: boolean }): Finalized {
   const { lang, candidates, facts } = opts
   const allowed = allowedNumbers(facts)
-  const guard = claimGuard(lang, facts.map(f => f.text), opts.marketClaims)
+  const baseGuard = claimGuard(lang, facts.map(f => f.text), opts.marketClaims)
   const byId = new Map(facts.map(f => [f.id, f]))
   const drafts: { s: Scored; d: Omit<OpportunityDraft, 'priority_rank' | 'priority_reasons'> }[] = []
+  const notValidated: NotValidated[] = []
   const seen = new Set<string>()
   for (const raw of opts.llm) {
     const cid = typeof raw.candidate_id === 'string' ? raw.candidate_id : ''
     const c = candidates.find(x => x.id === cid)
     if (!c || seen.has(cid)) continue
     seen.add(cid)
+    // Sem NENHUM fato com fonte por trás, não há o que afirmar.
+    const own = c.fact_ids.map(id => byId.get(id)).filter((f): f is Fact => !!f)
+    if (own.length === 0) {
+      notValidated.push({ candidate_id: c.id, kind: c.kind, reasons: [tr(lang, 'Nenhum fato com fonte sustenta este candidato.', 'No sourced fact backs this candidate.')] })
+      continue
+    }
+    // Oportunidade de mercado precisa responder as 5 perguntas (o que mudou, por que importa, quem é afetado, o que fazer, qual evidência).
+    if (c.kind === 'market_change' && !hasAllAnswers(raw.answers)) {
+      notValidated.push({ candidate_id: c.id, kind: c.kind, reasons: [tr(lang, 'Não respondeu às 5 perguntas (o que mudou, por que importa, quem é afetado, o que fazer, qual evidência).', 'Did not answer the 5 questions (what changed, why it matters, who is affected, what to do, what evidence).')] })
+      continue
+    }
+    // Porta de evidência: período/ausência só valem se os fatos DESTE candidato dizem o mesmo.
+    const ev = evidenceGuard(own, { instagramConnected: opts.instagramConnected })
+    const guard: ClaimGuard = { ...baseGuard, ev }
+    // Frase barrada SÓ pela regra de presença externa (o resto está ok) não some: vira hipótese rotulada.
+    const evOpen: EvidenceGuard = { ...ev, ig: true, igAbsence: true }
+    const converted: string[] = []
+    const splitExternal = (v: unknown): string => {
+      if (typeof v !== 'string') return ''
+      return sentences(v).filter(p => {
+        if (!violatesExternal(p, ev) || !sentenceOk(p, allowed, { ...guard, ev: evOpen })) return true
+        converted.push((lang === 'en' ? 'May be that ' : 'Pode ser que ') + p.charAt(0).toLowerCase() + p.slice(1).replace(/[.!?\s]+$/, '') + hypSuffix(lang, !!opts.instagramConnected))
+        return false
+      }).join(' ')
+    }
     // Evidência fact/data: os do candidato (código) + os ids extras que a IA citou SE existirem na entrada.
     const cited = Array.isArray(raw.cited_fact_ids) ? raw.cited_fact_ids.filter((x): x is string => typeof x === 'string' && byId.has(x)) : []
     const factIds = [...new Set([...c.fact_ids, ...cited])].slice(0, 8)
     // A prioridade/confiança contam só as evidências do PRÓPRIO candidato (código): citar mais fatos não sobe a nota.
     const sc = score(c, facts)
-    const evidence: Evidence[] = factIds.map(id => byId.get(id)!).map(f => ({ type: f.type, text: f.text, source: f.source, date: f.date }))
-    const hyps = [...c.hypotheses, ...(Array.isArray(raw.hypotheses) ? raw.hypotheses : []).map(h => cleanText(h, allowed, 220, guard))]
+    const evidence: Evidence[] = factIds.map(id => byId.get(id)).filter((f): f is Fact => !!f).map(f => ({ type: f.type, text: f.text, source: f.source, date: f.date }))
+    const description = splitSpeculation(cleanText(splitExternal(raw.description), allowed, 600, guard))
+    const problem = splitSpeculation(cleanText(splitExternal(raw.commercial_problem), allowed, 400, guard))
+    const hyps = [...c.hypotheses, ...(Array.isArray(raw.hypotheses) ? raw.hypotheses : []).map(h => cleanText(h, allowed, 220, guard)), ...description.hyps, ...problem.hyps, ...converted]
     for (const h of hyps) if (h && !evidence.some(e => e.type === 'hypothesis' && e.text === h) && evidence.filter(e => e.type === 'hypothesis').length < 4) evidence.push({ type: 'hypothesis', text: h, source: hypSource(lang), date: null })
     const audience = cleanText(raw.audience, allowed, 200, guard)
-    drafts.push({
-      s: sc,
-      d: {
-        kind: c.kind,
-        title: cleanText(raw.title, allowed, 120, guard) || c.fallback.title,
-        description: cleanText(raw.description, allowed, 600, guard),
-        commercial_problem: cleanText(raw.commercial_problem, allowed, 400, guard) || c.fallback.problem,
-        evidence,
-        item_ids: c.item_ids,
-        audience: audience || null,
-        suggested_action: actionForPhotos(cleanText(raw.suggested_action, allowed, 400, guard) || c.fallback.action, c.item_ids, opts.photoCounts, lang),
-        how_to_measure: cleanText(raw.how_to_measure, allowed, 300, guard) || c.fallback.measure,
-        confidence: sc.confidence,
-        needs_validation: sc.needs,
-      },
-    })
+    const d = {
+      kind: c.kind,
+      title: cleanText(raw.title, allowed, 120, guard) || c.fallback.title,
+      description: description.facts,
+      commercial_problem: problem.facts || c.fallback.problem,
+      evidence,
+      item_ids: c.item_ids,
+      audience: audience || null,
+      suggested_action: actionForPhotos(cleanAction(raw.suggested_action, allowed, guard, c.fallback.action), c.item_ids, opts.photoCounts, lang),
+      how_to_measure: cleanText(raw.how_to_measure, allowed, 300, guard) || c.fallback.measure,
+      confidence: sc.confidence,
+      needs_validation: sc.needs,
+    }
+    // Oportunidade de mercado não pode virar lembrete da fila de Aprovações: título/problema/ação centrados em
+    // "aprovar as peças prontas" voltam para o texto do código, que parte do sinal de mercado.
+    if (c.kind === 'market_change') {
+      if (mentionsBacklog(d.title)) d.title = c.fallback.title
+      if (mentionsBacklog(d.commercial_problem)) d.commercial_problem = c.fallback.problem
+      d.description = sentences(d.description).filter(p => !mentionsBacklog(p)).join(' ') // descrição não tem texto do código: vazia é aceitável
+      if (sentences(d.suggested_action).some(isBacklogCentric)) d.suggested_action = actionForPhotos(c.fallback.action, c.item_ids, opts.photoCounts, lang)
+    }
+    // Rede final: nem o texto do código (fallback) pode afirmar período/ausência que os fatos não sustentam.
+    const bad = (['title', 'description', 'commercial_problem', 'suggested_action', 'how_to_measure'] as const).filter(k => sentences(d[k]).some(p => violatesEvidence(p, ev)))
+    if (bad.length) {
+      notValidated.push({ candidate_id: c.id, kind: c.kind, reasons: [tr(lang, `O texto final afirma período ou ausência de post que os fatos não sustentam (${bad.join(', ')}).`, `The final text states a period or absence of posts the facts do not back (${bad.join(', ')}).`)] })
+      continue
+    }
+    drafts.push({ s: sc, d })
   }
   drafts.sort((a, b) => compareScored(a.s, b.s))
-  return drafts.slice(0, MAX_OPPORTUNITIES).map((x, i, arr) => ({ ...x.d, priority_rank: i + 1, priority_reasons: priorityReasons(x.s, arr[i + 1]?.s ?? null, lang) }))
+  // Mesma tarefa (mesmos itens + mesma ação) em duas oportunidades: fica a de melhor posição; a outra sai com o motivo.
+  const kept: typeof drafts = [], taskKey = new Map<string, number>()
+  for (const x of drafts) {
+    const key = x.d.item_ids.length ? `${[...x.d.item_ids].sort().join(',')}|${norm(x.d.suggested_action)}` : ''
+    const at = key ? taskKey.get(key) : undefined
+    if (at != null) {
+      notValidated.push({ candidate_id: x.s.c.id, kind: x.d.kind, reasons: [tr(lang, `Mesma tarefa da oportunidade #${at + 1} (mesmos itens, mesma ação).`, `Same task as opportunity #${at + 1} (same items, same action).`)] })
+      continue
+    }
+    if (key) taskKey.set(key, kept.length)
+    kept.push(x)
+  }
+  // Mesma ação para itens DIFERENTES (ex.: "adicionar fotos" em 3 regiões): uma tarefa só, com todos os itens listados.
+  const cons = consolidateByAction(kept, lang, new Set([photoActionNorm(lang)]))
+  kept.length = 0
+  kept.push(...cons.items.sort((a, b) => compareScored(a.s, b.s)))
+  for (const a of cons.absorbed) {
+    const at = kept.findIndex(x => x.s.c.id === a.into)
+    notValidated.push({ candidate_id: a.id, kind: a.kind, reasons: [tr(lang, `Juntada na tarefa única da oportunidade #${at + 1} (mesma ação para itens diferentes).`, `Merged into the single task of opportunity #${at + 1} (same action for different items).`)] })
+  }
+  // A tarefa juntada só reaproveita texto que JÁ passou na rede final de cada membro (título/ação/medida da base, títulos na descrição) + título do código.
+  return { drafts: kept.slice(0, MAX_OPPORTUNITIES).map((x, i, arr) => ({ ...x.d, priority_rank: i + 1, priority_reasons: priorityReasons(x.s, arr[i + 1]?.s ?? null, lang) })), notValidated }
 }

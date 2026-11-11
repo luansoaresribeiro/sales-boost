@@ -1,55 +1,59 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { LanguageProvider, useLang } from './contexts/LanguageContext'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import './lib/analytics' // inicializa o PostHog antes da app renderizar
 import './lib/facebookSdk' // carrega o Facebook SDK (JS) — exigência da Meta
 import './index.css'
-import App from './App.tsx'
 import ErrorBoundary from './components/ErrorBoundary.tsx'
 import { AuthProvider } from './contexts/AuthContext.tsx'
 import { useAuth } from './contexts/AuthContext.tsx'
 import { CompanyProvider, useCompany } from './contexts/CompanyContext.tsx'
-import LoginPage from './pages/auth/LoginPage.tsx'
-import SignupPage from './pages/auth/SignupPage.tsx'
-import GscCallbackPage from './pages/auth/GscCallbackPage.tsx'
-import GbpCallbackPage from './pages/auth/GbpCallbackPage.tsx'
-import DashboardLayout from './pages/dashboard/DashboardLayout.tsx'
-import ActivityPage from './pages/dashboard/ActivityPage.tsx'
-import DiagnosticsPage from './pages/dashboard/DiagnosticsPage.tsx'
-import InsightsPage from './pages/dashboard/InsightsPage.tsx'
-import SettingsPage from './pages/dashboard/SettingsPage.tsx'
-import OpportunitiesPage from './pages/dashboard/OpportunitiesPage.tsx'
-import GrowthOpportunitiesPage from './pages/dashboard/GrowthOpportunitiesPage.tsx'
-import MarketingAiHubPage from './pages/dashboard/MarketingAiHubPage.tsx'
-import CatalogPage from './pages/dashboard/CatalogPage.tsx'
-import BusinessProgressPage from './pages/dashboard/BusinessProgressPage.tsx'
-import TrialSummaryPage from './pages/dashboard/TrialSummaryPage.tsx'
-import AccessBlockedPage from './pages/dashboard/AccessBlockedPage.tsx'
-import MarketingAiSectionPage from './pages/dashboard/MarketingAiSectionPage.tsx'
-import ApprovalsPage from './pages/dashboard/ApprovalsPage.tsx'
-import ReportPage from './pages/dashboard/ReportPage.tsx'
-import OwnerPage from './pages/owner/OwnerPage.tsx'
-import CompanyDetailPage from './pages/owner/CompanyDetailPage.tsx'
-import ProspectsPage from './pages/owner/ProspectsPage.tsx'
-import LeadDiscoverySettingsPage from './pages/owner/LeadDiscoverySettingsPage.tsx'
-import OwnerSettingsPage from './pages/owner/OwnerSettingsPage.tsx'
-import PlatformHealthPage from './pages/owner/PlatformHealthPage.tsx'
 import { isShowcaseMode } from './lib/setupGate.ts'
-import FreePage from './pages/free/FreePage.tsx'
-import OnboardingPage from './pages/onboarding/OnboardingPage.tsx'
-import DiagnosticoPage from './pages/diagnostico/DiagnosticoPage.tsx'
-import PrivacyPolicyPage from './pages/legal/PrivacyPolicyPage.tsx'
-import TermsOfUsePage from './pages/legal/TermsOfUsePage.tsx'
-import PublicPropertyPage from './pages/public/PublicPropertyPage.tsx'
 import CookieConsent from './components/CookieConsent.tsx'
+import BrandLoader from './components/BrandLoader.tsx'
+import { lazyPage } from './lib/lazyPage.ts'
 
-const Spinner = () => (
-  <div style={{ minHeight: '100vh', background: '#0E0B0A', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-    <div style={{ width: '32px', height: '32px', border: '3px solid rgba(255,109,41,0.2)', borderTopColor: '#FF6D29', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-    <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-  </div>
-)
+// Cada página baixa só quando é aberta (ver src/lib/lazyPage.ts). O grupo "dashboard" é pré-baixado com o painel aberto.
+const App = lazyPage(() => import('./App.tsx'))
+const LoginPage = lazyPage(() => import('./pages/auth/LoginPage.tsx'))
+const SignupPage = lazyPage(() => import('./pages/auth/SignupPage.tsx'))
+const ForgotPasswordPage = lazyPage(() => import('./pages/auth/PasswordPages.tsx').then(m => ({ default: m.ForgotPasswordPage })))
+const ResetPasswordPage = lazyPage(() => import('./pages/auth/PasswordPages.tsx').then(m => ({ default: m.ResetPasswordPage })))
+const GscCallbackPage = lazyPage(() => import('./pages/auth/GscCallbackPage.tsx'))
+const GbpCallbackPage = lazyPage(() => import('./pages/auth/GbpCallbackPage.tsx'))
+const DashboardLayout = lazyPage(() => import('./pages/dashboard/DashboardLayout.tsx'))
+const ReportsPage = lazyPage(() => import('./pages/dashboard/ReportsPage.tsx'), 'dashboard')
+const DiagnosticsPage = lazyPage(() => import('./pages/dashboard/DiagnosticsPage.tsx'), 'dashboard')
+const InsightsPage = lazyPage(() => import('./pages/dashboard/InsightsPage.tsx'), 'dashboard')
+const SettingsPage = lazyPage(() => import('./pages/dashboard/SettingsPage.tsx'), 'dashboard')
+const OpportunitiesPage = lazyPage(() => import('./pages/dashboard/OpportunitiesPage.tsx'), 'dashboard')
+const GrowthOpportunitiesPage = lazyPage(() => import('./pages/dashboard/GrowthOpportunitiesPage.tsx'), 'dashboard')
+const MarketingAiHubPage = lazyPage(() => import('./pages/dashboard/MarketingAiHubPage.tsx'), 'dashboard')
+const AgentsPage = lazyPage(() => import('./pages/dashboard/AgentsPage.tsx'), 'dashboard')
+const CatalogPage = lazyPage(() => import('./pages/dashboard/CatalogPage.tsx'), 'dashboard')
+const TourVirtualPage = lazyPage(() => import('./pages/dashboard/TourVirtualPage.tsx'), 'dashboard')
+const BusinessProgressPage = lazyPage(() => import('./pages/dashboard/BusinessProgressPage.tsx'), 'dashboard')
+const TrialSummaryPage = lazyPage(() => import('./pages/dashboard/TrialSummaryPage.tsx'), 'dashboard')
+const AccessBlockedPage = lazyPage(() => import('./pages/dashboard/AccessBlockedPage.tsx'), 'dashboard')
+const MarketingAiSectionPage = lazyPage(() => import('./pages/dashboard/MarketingAiSectionPage.tsx'), 'dashboard')
+const ApprovalsPage = lazyPage(() => import('./pages/dashboard/ApprovalsPage.tsx'), 'dashboard')
+const ReportPage = lazyPage(() => import('./pages/dashboard/ReportPage.tsx'), 'dashboard')
+const OwnerPage = lazyPage(() => import('./pages/owner/OwnerPage.tsx'))
+const CompanyDetailPage = lazyPage(() => import('./pages/owner/CompanyDetailPage.tsx'))
+const ProspectsPage = lazyPage(() => import('./pages/owner/ProspectsPage.tsx'))
+const LeadDiscoverySettingsPage = lazyPage(() => import('./pages/owner/LeadDiscoverySettingsPage.tsx'))
+const OwnerSettingsPage = lazyPage(() => import('./pages/owner/OwnerSettingsPage.tsx'))
+const PlatformHealthPage = lazyPage(() => import('./pages/owner/PlatformHealthPage.tsx'))
+const FreePage = lazyPage(() => import('./pages/free/FreePage.tsx'))
+const OnboardingPage = lazyPage(() => import('./pages/onboarding/OnboardingPage.tsx'))
+const DiagnosticoPage = lazyPage(() => import('./pages/diagnostico/DiagnosticoPage.tsx'))
+const PrivacyPolicyPage = lazyPage(() => import('./pages/legal/PrivacyPolicyPage.tsx'))
+const TermsOfUsePage = lazyPage(() => import('./pages/legal/TermsOfUsePage.tsx'))
+const PublicPropertyPage = lazyPage(() => import('./pages/public/PublicPropertyPage.tsx'))
+
+// Carregamento de tela cheia com o logo (antes: bolinha girando sem marca).
+const Spinner = () => <BrandLoader fullScreen />
 
 const LoadRetry = ({ onRetry }: { onRetry: () => void }) => {
   const en = useLang().lang === 'en'
@@ -63,11 +67,11 @@ const LoadRetry = ({ onRetry }: { onRetry: () => void }) => {
 }
 
 // Página inicial do dashboard: cai no Marketing AI (agente principal). Se o
-// owner desligou o Marketing AI dessa empresa, cai em Atividades.
+// owner desligou o Marketing AI dessa empresa, cai em Relatórios (que inclui o histórico de atividades).
 function DashboardIndex() {
   const { company, loading } = useCompany()
   if (loading) return <Spinner />
-  return <Navigate to={company?.marketing_ai_enabled === false ? '/dashboard/atividades' : '/dashboard/marketing-ai'} replace />
+  return <Navigate to={company?.marketing_ai_enabled === false ? '/dashboard/relatorios' : '/dashboard/marketing-ai'} replace />
 }
 
 function ClientRoute({ children }: { children: React.ReactNode }) {
@@ -131,6 +135,8 @@ function RouterRoot() {
       <Route path="/" element={<App />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/auth/gsc/callback" element={<GscCallbackPage />} />
       <Route path="/auth/gbp/callback" element={<GbpCallbackPage />} />
 
@@ -152,7 +158,9 @@ function RouterRoot() {
         }
       >
         <Route index element={<DashboardIndex />} />
-        <Route path="atividades" element={<ActivityPage />} />
+        {/* Relatórios (07/11): relatórios em destaque + histórico de atividades. A rota antiga redireciona. */}
+        <Route path="relatorios" element={<ReportsPage />} />
+        <Route path="atividades" element={<Navigate to="/dashboard/relatorios" replace />} />
         <Route path="diagnostico" element={<DiagnosticsPage />} />
         <Route path="insights" element={<InsightsPage />} />
         <Route path="integrations" element={<Navigate to="/dashboard/marketing-ai/conexoes" replace />} />
@@ -160,8 +168,11 @@ function RouterRoot() {
         <Route path="posts/*" element={<Navigate to="/dashboard/marketing-ai" replace />} />
         <Route path="agente" element={<Navigate to="/dashboard/marketing-ai" replace />} />
         <Route path="marketing-ai" element={<MarketingAiHubPage />} />
+        {/* Aba Agentes (C.2): fábrica 3D (carregada à parte) + cartões dos 5 agentes. */}
+        <Route path="agentes" element={<AgentsPage />} />
         {/* Catálogo (imóveis/itens): página própria, aberta pelo botão "+" (2026-11-01). */}
         <Route path="catalogo" element={<CatalogPage />} />
+        <Route path="tour-virtual" element={<TourVirtualPage />} />
         <Route path="marketing-ai/:section" element={<MarketingAiSectionPage />} />
         <Route path="meta-ads" element={<Navigate to="/dashboard/marketing-ai/content?tab=campanha" replace />} />
         <Route path="progresso" element={<BusinessProgressPage />} />
@@ -196,7 +207,7 @@ function RouterRoot() {
 // Erro ao desenhar qualquer página mostra a mensagem (em vez de tela preta); trocar de rota limpa o erro.
 function SafeRoutes() {
   const location = useLocation()
-  return <ErrorBoundary resetKey={location.pathname}><RouterRoot /></ErrorBoundary>
+  return <ErrorBoundary resetKey={location.pathname}><Suspense fallback={<Spinner />}><RouterRoot /></Suspense></ErrorBoundary>
 }
 
 createRoot(document.getElementById('root')!).render(

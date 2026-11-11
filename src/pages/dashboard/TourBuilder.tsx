@@ -1,0 +1,198 @@
+// Tour completo de 1 imóvel (menu Tour virtual, 2026-11-10). O servidor sugere a ordem (item-videos plan_tour: cômodo
+// de cada foto pela IA de visão + ordem da ficha); o dono confere, sobe/desce/tira/inclui e manda gerar
+// (creative-generate tour_piece → legenda com as travas + item-videos, que confere o teto e paga). Caminhada só entre
+// cômodos vizinhos pela ficha; entre os outros, corte (a IA não inventa o caminho). O servidor recalcula tudo.
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { supabase } from '../../lib/supabase'
+import { useLang } from '../../contexts/LanguageContext'
+import { tourSegments, tourSeconds, type SegKind } from '../../lib/tourOrder'
+import { CARD, MUTED, BORDER, ORANGE, SUPABASE_URL } from './marketingAi/shared'
+
+const GREEN = '#4ade80'
+const RED = '#f87171'
+interface Plan {
+  photos: string[]; all: { url: string; room: string | null; quality: number | null }[]
+  room_labels: Record<string, string>; adjacent_rooms: [string, string][]; opening_rooms: string[]; max_photos: number
+  seconds: Record<SegKind, number>; cost_per_second_usd: number; month_spent_usd: number; month_cap_usd: number
+  studio_ready: boolean; blocked: string | null
+}
+interface Video { id: string; status: string; kind: string; created_at: string; video_url: string | null }
+
+const TX = {
+  pt: {
+    build: 'Montar a ordem do tour', building: 'Analisando as fotos (cômodo e qualidade)…',
+    order: 'Ordem do tour', help: 'Confira a ordem. Use ↑ ↓ para mudar, ✕ para tirar. A câmera caminha entre cômodos vizinhos e faz corte entre os que não se ligam.',
+    start: 'começo', walk: '🚶 caminha até aqui', cut: '✂️ corte', opening: '🏙️ abertura de fora',
+    noOpening: 'Para começar de fora, o imóvel precisa de uma foto real da fachada ou da vista. Sem ela, o tour começa dentro — a IA nunca cria o prédio nem a vista.',
+    unknown: 'cômodo não identificado',
+    left: 'Fotos fora do tour', add: '+ incluir', full: (n: number) => `Máximo de ${n} fotos por tour.`,
+    cost: (usd: number, s: number) => `Custo estimado: ≈ US$ ${usd.toFixed(2)} (${s} s de vídeo)`,
+    month: (a: number, b: number) => `Gasto do mês (vídeos, fotos e imagens): US$ ${a.toFixed(2)} de US$ ${b.toFixed(0)}`,
+    gen: 'Gerar tour completo →', genning: 'Preparando o tour…', min: 'Escolha pelo menos 2 fotos.',
+    studioOff: 'O servidor de vídeo está fora do ar agora. Tente de novo em alguns minutos — nada é cobrado.',
+    started: '✓ Tour pedido! Leva alguns minutos. Quando ficar pronto, aparece em Aprovações.',
+    tours: 'Tours deste imóvel', making: 'Gerando…', failed: 'Não deu certo', ready: 'Pronto', goApprove: 'Ver em Aprovações →',
+    err: 'Algo deu errado. Tente de novo em alguns minutos.',
+  },
+  en: {
+    build: 'Build the tour order', building: 'Analyzing the photos (room and quality)…',
+    order: 'Tour order', help: 'Check the order. Use ↑ ↓ to move, ✕ to remove. The camera walks between neighboring rooms and cuts between rooms that don\'t connect.',
+    start: 'start', walk: '🚶 walks here', cut: '✂️ cut', opening: '🏙️ opening from outside',
+    noOpening: 'To start outside, the property needs a real photo of the facade or the view. Without it, the tour starts inside — the AI never creates the building or the view.',
+    unknown: 'room not identified',
+    left: 'Photos left out', add: '+ add', full: (n: number) => `At most ${n} photos per tour.`,
+    cost: (usd: number, s: number) => `Estimated cost: ≈ US$ ${usd.toFixed(2)} (${s} s of video)`,
+    month: (a: number, b: number) => `Spent this month (videos, photos and images): US$ ${a.toFixed(2)} of US$ ${b.toFixed(0)}`,
+    gen: 'Generate full tour →', genning: 'Preparing the tour…', min: 'Pick at least 2 photos.',
+    studioOff: 'The video server is down right now. Try again in a few minutes — nothing is charged.',
+    started: '✓ Tour requested! It takes a few minutes. When ready, it shows up in Approvals.',
+    tours: 'Tours of this property', making: 'Generating…', failed: "Didn't work", ready: 'Ready', goApprove: 'See in Approvals →',
+    err: 'Something went wrong. Try again in a few minutes.',
+  },
+} as const
+
+async function call(fn: string, body: Record<string, unknown>): Promise<{ status: number; data: Record<string, unknown> }> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
+    method: 'POST', headers: { Authorization: `Bearer ${session?.access_token ?? ''}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  })
+  return { status: res.status, data: await res.json().catch(() => ({})) }
+}
+
+const btn = (bg: string, color: string, border?: string) => ({
+  minHeight: 36, padding: '8px 14px', borderRadius: '10px', fontSize: '12.5px', fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+  background: bg, color, border: border ? `1px solid ${border}` : 'none',
+})
+const mini = { ...btn('transparent', 'white', 'rgba(255,255,255,0.14)'), minHeight: 32, minWidth: 32, padding: '4px 8px' }
+
+export default function TourBuilder({ itemId }: { itemId: string }) {
+  const { lang } = useLang()
+  const tx = TX[lang]
+  const [plan, setPlan] = useState<Plan | null>(null)
+  const [order, setOrder] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [videos, setVideos] = useState<Video[]>([])
+
+  const loadVideos = useCallback(async () => {
+    const r = await call('item-videos', { action: 'list', item_id: itemId })
+    const list = ((r.data.videos ?? []) as Video[]).filter(v => v.kind === 'tour')
+    setVideos(list)
+    return list
+  }, [itemId])
+  useEffect(() => { void loadVideos() }, [loadVideos])
+  // Andamento: enquanto houver tour sendo feito, consulta a cada 15 s (o status avança a geração).
+  useEffect(() => {
+    if (!videos.some(v => v.status === 'generating' || v.status === 'assembling')) return
+    const t = setTimeout(async () => {
+      for (const v of videos.filter(x => x.status === 'generating' || x.status === 'assembling')) await call('item-videos', { action: 'status', video_id: v.id })
+      await loadVideos()
+    }, 15_000)
+    return () => clearTimeout(t)
+  }, [videos, loadVideos])
+
+  const build = async () => {
+    setBusy(true); setMsg(null)
+    const r = await call('item-videos', { action: 'plan_tour', item_id: itemId })
+    setBusy(false)
+    if (r.status !== 200) { setMsg({ ok: false, text: String(r.data.error ?? tx.err) }); return }
+    const p = r.data as unknown as Plan
+    setPlan(p); setOrder(p.photos)
+  }
+
+  const roomOf = useMemo(() => new Map((plan?.all ?? []).map(p => [p.url, p.room])), [plan])
+  const rooms = useMemo(() => order.map(u => roomOf.get(u) ?? null), [order, roomOf])
+  const { segments, passages } = useMemo(() => tourSegments(rooms, plan?.adjacent_rooms ?? [], plan?.opening_rooms ?? []), [rooms, plan])
+  const secs = plan ? tourSeconds(segments, plan.seconds) : 0
+  const usd = plan ? secs * plan.cost_per_second_usd : 0
+  const hasOpeningPhoto = !!plan?.all.some(p => p.room && plan.opening_rooms.includes(p.room))
+  const left = (plan?.all ?? []).filter(p => !order.includes(p.url))
+  // Nome curto do cômodo (a ficha traz "quarto / suíte", "vista (janela, …)"): só a 1ª parte cabe no celular.
+  const label = (room: string | null) => (room ? (plan?.room_labels[room] ?? room).split(/ \/ | \(/)[0] : tx.unknown)
+
+  const move = (i: number, d: number) => setOrder(o => { const n = [...o]; const j = i + d; if (j < 0 || j >= n.length) return o; [n[i], n[j]] = [n[j], n[i]]; return n })
+  const remove = (u: string) => setOrder(o => o.filter(x => x !== u))
+  const add = (u: string) => setOrder(o => (plan && o.length < plan.max_photos ? [...o, u] : o))
+
+  const generate = async () => {
+    if (order.length < 2) { setMsg({ ok: false, text: tx.min }); return }
+    setBusy(true); setMsg({ ok: true, text: tx.genning })
+    const r = await call('creative-generate', { action: 'tour_piece', item_id: itemId, photos: order })
+    setBusy(false)
+    if (r.status === 200) { setMsg({ ok: true, text: tx.started }); void loadVideos() }
+    else setMsg({ ok: false, text: String(r.data.error ?? tx.err) })
+  }
+
+  return (
+    <div>
+      {!plan && <button disabled={busy} onClick={() => void build()} style={btn(ORANGE, '#000')}>{busy ? tx.building : tx.build}</button>}
+
+      {plan && (
+        <section style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px' }}>
+          <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', marginBottom: '4px' }}>{tx.order}</div>
+          <div style={{ fontSize: '12px', color: MUTED, lineHeight: 1.55, marginBottom: '12px' }}>{tx.help}</div>
+          {plan.blocked && <div style={{ fontSize: '12.5px', color: RED, marginBottom: '10px' }}>{plan.blocked}</div>}
+          {!hasOpeningPhoto && <div style={{ fontSize: '12px', color: ORANGE, lineHeight: 1.55, marginBottom: '10px' }}>{tx.noOpening}</div>}
+          <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {order.map((u, i) => {
+              const isOpening = i === 0 && segments[0]?.kind === 'opening'
+              const pass = isOpening ? tx.opening : passages[i] === 'walk' ? tx.walk : passages[i] === 'cut' ? tx.cut : tx.start
+              return (
+                <li key={u} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px', borderRadius: '10px', border: `1px solid ${BORDER}` }}>
+                  <span style={{ width: 22, textAlign: 'center', fontSize: '12px', fontWeight: 800, color: ORANGE }}>{i + 1}</span>
+                  <img src={u} alt="" style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label(rooms[i])}</div>
+                    <div style={{ fontSize: '11px', color: passages[i] === 'cut' && i > 0 ? ORANGE : MUTED }}>{pass}</div>
+                  </div>
+                  <button aria-label="↑" disabled={i === 0} onClick={() => move(i, -1)} style={mini}>↑</button>
+                  <button aria-label="↓" disabled={i === order.length - 1} onClick={() => move(i, 1)} style={mini}>↓</button>
+                  <button aria-label="✕" onClick={() => remove(u)} style={{ ...mini, color: MUTED }}>✕</button>
+                </li>
+              )
+            })}
+          </ol>
+          {left.length > 0 && (
+            <div style={{ marginTop: '14px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: MUTED, marginBottom: '6px' }}>{tx.left}{order.length >= plan.max_photos ? ` · ${tx.full(plan.max_photos)}` : ''}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {left.map(p => (
+                  <div key={p.url} style={{ width: 92, fontSize: '10.5px', color: MUTED }}>
+                    <img src={p.url} alt="" style={{ width: 92, height: 69, borderRadius: 8, objectFit: 'cover', display: 'block', opacity: 0.8 }} />
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: '3px 0' }}>{label(p.room)}</div>
+                    <button disabled={order.length >= plan.max_photos} onClick={() => add(p.url)} style={{ ...mini, width: '100%' }}>{tx.add}</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{ marginTop: '14px', fontSize: '12px', color: 'white' }}>{tx.cost(usd, secs)}</div>
+          <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '12px' }}>{tx.month(plan.month_spent_usd, plan.month_cap_usd)}</div>
+          {!plan.studio_ready && <div style={{ fontSize: '12px', color: ORANGE, marginBottom: '10px' }}>{tx.studioOff}</div>}
+          <button disabled={busy || order.length < 2 || !!plan.blocked} onClick={() => void generate()} style={{ ...btn(ORANGE, '#000'), width: '100%', opacity: busy || order.length < 2 || plan.blocked ? 0.6 : 1 }}>{tx.gen}</button>
+        </section>
+      )}
+
+      {msg && <div role="status" style={{ marginTop: '10px', fontSize: '12.5px', color: msg.ok ? GREEN : RED, lineHeight: 1.55 }}>{msg.text}</div>}
+
+      {videos.length > 0 && (
+        <div style={{ marginTop: '20px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '8px' }}>{tx.tours}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {videos.map(v => (
+              <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '10px', border: `1px solid ${BORDER}`, background: CARD, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '12px', color: MUTED }}>{new Date(v.created_at).toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: v.status === 'completed' ? GREEN : v.status === 'failed' ? RED : ORANGE }}>
+                  {v.status === 'completed' ? tx.ready : v.status === 'failed' ? tx.failed : tx.making}
+                </span>
+                {v.video_url && <a href={v.video_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: ORANGE, fontWeight: 700 }}>▶</a>}
+                {v.status === 'completed' && <Link to="/dashboard/aprovacoes" style={{ marginLeft: 'auto', fontSize: '12px', color: ORANGE, fontWeight: 700 }}>{tx.goApprove}</Link>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

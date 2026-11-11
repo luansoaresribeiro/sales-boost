@@ -179,6 +179,34 @@ diferentes. O post só repete a forma exata que está na fonte.
 Tudo continua: vídeo só com foto real, Higgsfield só move a câmera, nada vai
 ao ar sem aprovação, teto de custo por cliente.
 
+### PR A — qualidade do tour (feito no código em 2026-11-02; branch `claude/nifty-shannon-ysp818-tour`, ainda NÃO publicado)
+
+Decisões do dono em [DECISIONS.md](DECISIONS.md#2026-11-02--tour-virtual-pr-a-qualidade-do-tour). O que mudou no automático
+(`creative-generate` → `planWeekFromStrategy` / `runVideoSlot`):
+
+| Antes (conferido em 2026-10-21) | Agora |
+|---|---|
+| Foto **sorteada** (`Math.random`) entre as não usadas | `_shared/photoScore.ts`: Haiku 4.5 dá nota (qualidade 0-100) e cômodo a cada foto **uma vez** (guarda em `meta.photos[i]`: `room`, `room_conf`, `quality`, `scored_at`, `model`, casando pela `url`; sem migration). `_shared/tourPick.ts` escolhe: nota ≥ piso, cômodo "evitar" (banheiro/corredor/área de serviço) só sem alternativa, prioridade da ficha, foto ainda não usada, **sem repetir o cômodo dos 2 últimos tours do imóvel** e sem repetir foto/cômodo entre as vagas da mesma semana. Foto sem nota = último recurso (nunca inventa nota). |
+| Tipo **sempre `room`** | Tipo vem do formato da vaga (`video_comodo`→room, `video_dois_comodos`→pair, `video_abertura_vista`→opening). Se nenhuma vaga da semana pediu pair/opening, a **2ª vaga** vira `pair` ou `opening` (alterna por semana). `opening` só com foto real de fachada/vista (confiança ≥ 0,6 e qualidade ≥ piso). `pair` só com 2 cômodos que a **ficha** lista como vizinhos, na ordem da ficha. Impossível → cai (pair → opening → room) e a peça diz por quê. |
+| Planejamento por vaga independente (corrida) | `planWeekFromStrategy` decide foto+tipo de **todas** as vagas de vídeo de uma vez (`planTours`) e manda no `SlotJob.tour`. Peça avulsa ("Gerar agora") escolhe na hora (`chooseTour`). |
+| Rodízio de imóvel por uso nas últimas 3 semanas | + **no máximo 1 tour por imóvel por semana** (só repete se só houver 1 imóvel elegível). |
+| Legenda "Reels curto (5 s)", sem trava | Prompt: o vídeo é **animação por IA** de foto real; nunca "filmado"; **sem duração/"segundos"**; não abrir como as últimas 6 legendas do imóvel. `_shared/captionGuard.ts` confere em código (lista `config.tour.forbidden_claims` + padrão de segundos + abertura de 4 palavras): reescreve **1 vez**; se ainda reprovar, a frase proibida sai em código. Aviso em `reasoning`. |
+| Vídeo 4:5 sem encerramento (fallback `mp4stream`) | Tour do calendário **só sai pelo estúdio (VPS)**: 1080×1920 + encerramento de ~2,5 s (fundo escuro da marca, logo + bairro + CTA sempre; preço **só se cadastrado**, mesmo valor com milhar e moeda: "R$ 3.000.000"; 0 não aparece). O encerramento é um PNG feito por código (`render-format`, template `tour_endcard`), emendado pelo `worker.mjs` com fusão. **VPS fora do ar = a peça fica "Aguardando estúdio" SEM gastar (o pedido fica em `concept.tour_pending` e o tick do `item-videos` retoma e só então paga os trechos)**; depois de montado, se o estúdio cair, espera e remonta (máx. 48 h; depois falha avisando). |
+| `pair` sem aviso | Toda peça `pair` leva em `reasoning`: "Aviso do tour: passagem entre cômodos não confirmada por planta…". |
+
+Ficha (regra 6, `20261102110000_tour_ficha.sql`): `config.tour` = `rooms`, `adjacent_rooms` (sala↔varanda, sala↔cozinha, sala↔sala de jantar,
+cozinha↔área de serviço, quarto↔banheiro, quarto↔varanda, sala↔hall, sala de jantar↔cozinha, hall↔sala de jantar), `opening_rooms`,
+`room_priority`, `avoid_rooms`, `min_quality`, `min_room_conf`, `recent_exclude`, `forbidden_claims`, `endcard_seconds`,
+`endcard_place_field`/`endcard_price_field` (quais campos do cadastro viram lugar e preço) e `clip_prompts.opening` (câmera sem "revelar"
+o que está fora do quadro). **Sem `config.tour` o código só faz `room`**, pela melhor nota (nunca pair/opening).
+
+**Divergências / limites registrados:**
+- A "vizinhança" do `pair` vem do **tipo** do cômodo, não da planta — por isso o aviso na aprovação.
+- Tour **manual** (tela de vídeos do imóvel) não mudou: continua podendo cair na colagem antiga (4:5, sem encerramento) se a VPS falhar.
+- O catálogo não mostra cômodo/nota da foto na tela (não pedido; só no banco, em `meta.photos[i]`).
+- As legendas do `catalog-package` (carrossel do tour) que afirmam "filmado" **não** foram tocadas (fora do pedido).
+- O teste Higgsfield real (3 vídeos, ≈ US$ 1,34) ainda **não foi feito**: precisa do OK do dono.
+
 ## Identidade visual — o "sistema de slides"
 
 Um único sistema de design no `render-format`, usado por todas as famílias
@@ -255,6 +283,7 @@ rotulada de um jeito.
 
 Imóvel por rodízio (`pickItem`), foto sorteada, vídeo sempre `room` — fase 7,
 não feita. O QUERO já foi corrigido (no ar).
+**Atualização 2026-11-02:** foto/tipo/legenda/encerramento do tour feitos no código (PR A) — ver "PR A — qualidade do tour" na seção Tour virtual; falta publicar e o teste real.
 
 ### Decisões propostas a partir desta análise
 
@@ -758,3 +787,69 @@ Complementa as seções acima sem apagar nada (decisões em [DECISIONS.md](DECIS
   disparada no `generateForCompany` quando a peça não foi pro Vault.
 - **Dicas opção A:** ver DECISIONS; testes em `scripts/test-deck-topic.mjs`.
 - **Testes novos:** `scripts/test-publish-slot.mjs`, `scripts/test-auto-redo.mjs`, `shouldPrepareLogo` em `test-logo-png.mjs`.
+
+## PR B — qualidade dos carrosséis (2026-11-02)
+
+Em código na branch `claude/nifty-shannon-ysp818-carrosseis` (sem deploy e sem migration aplicados). Decisões do dono em
+[DECISIONS.md](DECISIONS.md#2026-11-02--qualidade-dos-carrosséis-pr-b).
+
+- **Trava de afirmação de mercado** (`_shared/claimLock.ts`): legenda, CTA, hashtags e todo campo de slide (título, texto,
+  itens, destaque, botão), em `creative-generate` e `catalog-package`. Termos vêm da ficha (`opportunity_texts.market_claims`,
+  ampliados pela migration `20261102100000`); em `catalog-package` (só imóveis) sem ficha valem os genéricos de `opportunityOutput.ts`; em `creative-generate` **setor sem lista na ficha não passa pela trava** (regra 6: "premium" de uma cafeteria não é afirmação de mercado). Fatos permitidos =
+  cadastro do imóvel citado (`item_id` da vaga) + dicas conferidas (modo regulado). "luxo/nobre/premium/exclusivo" passam só
+  se o cadastro traz a palavra. Qualquer valor em dinheiro ("R$ 1,5 mi", "850 mil reais", "1.5 million"), com ou sem "acima de", só vale com o valor + unidade no cadastro (termos da migration são frases específicas; o reforço do prompt só entra se a ficha tem `market_claims`, com os termos da ficha);
+  educativo sem imóvel não cita faixa. Ordem: reescreve 1x (IA, com a lista barrada) → corta só a frase → aviso no
+  `reasoning`. Nunca troca por outro adjetivo. Capa/fecho que esvaziam ficam com o nome da marca; slide do meio que
+  esvazia sai (mínimo 3 slides). O retry de overflow também passa pelo corte.
+- **Capa do educativo:** rodízio `gancho` · `pergunta` · `erro` (erro comum, com "!"). A capa-índice (`lista`) saiu do
+  sorteio (o desenho ainda a aceita para peça antiga). O prompt proíbe listar os próximos slides, número e faixa sem fonte.
+- **Foto real no educativo:** só quando a vaga traz `item_id` **e** a ficha liga `carousel_cover.educativo.photo_when_item`.
+  Capa = foto de maior nota, fecho = a melhor seguinte; texto branco sobre degradê escuro (`render-format` template `slide`
+  aceita `background`). Sem imóvel: design da marca. Nunca `staged_photos`. **Hoje nenhuma vaga de texto traz `item_id`**
+  (`runPlanSlot` agora repassa `job.item_id`, mas o planejador só o preenche em vaga de imóvel) — a foto só aparece quando
+  uma vaga de texto passar a citar um imóvel.
+- **Oferta (`carrossel_tour`)** vira carrossel de verdade: capa (foto escolhida + tipo/bairro/quartos/preço só se cadastrado,
+  logo) · até 4 fotos (`foto`) · slide de dados (campos preenchidos; m² fora de 10–2000 não aparece) · fecho com o CTA seguro
+  (`decideVideoCta`; sem DM aprovada nunca "Comente QUERO"). **Máx. 7 slides.** `slides` e `media` gravam as mesmas URLs.
+  Falhou o desenho: fotos cruas, como antes. Fotos mobiliadas (até 2) só entram com o aviso da ficha.
+- **Foto da capa:** `_shared/carouselOffer.ts` `pickCoverPhoto` lê `meta.photos[].score`/`quality` (número, texto ou objeto)
+  de forma tolerante (forma do PR A ainda pode mudar); sem nota nenhuma = `photos[0]`; nunca sorteia.
+- **"3 coisas perto"** no sistema de slides: capa com a foto real, lista dos 3 lugares (OpenStreetMap) e fecho com CTA; logo e @
+  do template `slide`. Menos de 3 lugares: foto única com cartão de marca (logo + bairro, sem "1/1"). Se o desenho falhar,
+  volta o card antigo `trend` (que continua existindo para o fluxo manual).
+- **Variação:** o enfeite do slide muda de posição e de cor do kit (`pickAccents`, mesmo critério de contraste do `pickAccent`)
+  a cada página; `normalizeDeck` impede 3 slides iguais seguidos (lista↔passos).
+- **Tema repetido:** o Diretor Criativo recebe os temas das últimas 3 semanas + os já agendados (`_shared/themeDedupe.ts`) e
+  é proibido de repetir tema/ângulo; conferência em código (sobreposição de palavras) → 1 refação do texto, senão aviso no
+  `reasoning`. **Limite:** as vagas da semana são geradas em paralelo, então duas peças da MESMA semana ainda podem se
+  cruzar; o que já foi gravado é visto.
+- **Divergência corrigida (2026-11-02):** o educativo gravava só `slides` + `image_url` e a aprovação publicava só a capa. Agora
+  `generateForCompany` grava `media` com as URLs de todos os slides, na mesma ordem (`{url,type:'photo'}`, até 10 — o mesmo
+  formato que `agent-actions` lê em `publishCarouselToInstagram`). Só vale para peças novas; as antigas seguem sem `media`.
+- **Nota (item 8):** `content-test` `score` aplica `qualityFlags` (em `claimLock.ts`, sem IA): "Tirei afirmação sem fonte" no
+  reasoning e capa-índice valem -25 cada na nota e a peça não vai sozinha pro Vault; o motivo vai pro `reasoning` ("Nota reduzida: …") e a `TestingArea` mostra um aviso amarelo.
+- **Pulado (item 3):** preencher `item_id` na vaga educativa por afinidade tema×imóvel não é simples nem determinístico (precisa
+  mapear tema→bairro/imóvel, escolher entre vários imóveis e respeitar rodízio de uso). Fica para depois; hoje a foto no
+  educativo só aparece quando a vaga já traz `item_id`.
+- **Testes:** `scripts/test-claim-lock.mjs` (as 4 frases do relato, termos da migration), `scripts/test-carousel-quality.mjs`
+  (capa, foto, oferta, bairro, tema repetido).
+
+
+
+## Travas em código: tema repetido, número por extenso, frases de mercado (2026-11-02, branch `claude/nifty-shannon-ysp818-travas`)
+
+Decisões em [DECISIONS.md](DECISIONS.md#2026-11-02--travas-em-código-tema-repetido-número-por-extenso-frases-de-mercado-depois-do-relatório-da-tespon).
+Código **não publicado** (functions `creative-generate` e `catalog-package`) e migration **não aplicada** até o dono mandar.
+
+| Pedido | Já era coberto? | O que mudou / onde |
+| --- | --- | --- |
+| Tema repetido (educativo) | Parcial: `themeDedupe.findRepeatedTheme` (PR B) com janela fixa de 21 dias, só no prompt + 1 refação, valor "1,5" e dígito solto ignorados, vagas paralelas não se enxergavam | `themeDedupe.ts` (janela/limiar 0,8/bairros da ficha, `blockingThemes`, `pickAlternative`, números contam), `weekThemes.ts` (`planWeekThemes`: reserva da semana inteira), `creative-generate` (`planWeekFromStrategy` reserva antes de disparar; `generateForCompany` confere de novo, refaz 1x, cai na alternativa da ficha e escreve "Tema trocado…" no reasoning) |
+| Oferta repetida (mesmo imóvel + receita) | Não (só rodízio por menos usado, 21 dias) | `weekThemes.recipeBlocked` + `pickItem(…, strict)` em `planWeekFromStrategy`: sem imóvel livre na janela, a vaga vira "pra fazer" |
+| Número por extenso na legenda de vídeo/catálogo | Não (só algarismo, e só nas peças de oportunidade/FAQ) | `numberGuard.ts` (extenso → número), `claimLock.ClaimCtx.factNums`, `runVideoSlot` (trava nova na legenda do vídeo) e `catalog-package` (agora vale mesmo sem `market_claims` na ficha) |
+| "sem filtro, sem encenação" | **Sim** (PR A): `captionGuard.ts` + `tourPick.DEFAULT_FORBIDDEN`, aplicado em `creative-generate/index.ts` `runVideoSlot` (`checkCaption` → reescreve 1x → `stripForbidden`) | prova no teste `test-number-guard.mjs` |
+| "mais desejados", "endereços mais disputados", "bairro mais desejado" | **Sim** na ficha (`mais desejado/a/s`, `disputado/a/s`, PRs anteriores); na **legenda do vídeo** não havia trava | `runVideoSlot` passou a usar `claimLock` |
+| "demanda alta", "costuma ter liquidez", "tem liquidez", "boa liquidez", "liquidez alta", "valorização garantida", "mais disputado(a/s)" | **Não** | migration `20261102130000_travas_tema_numero.sql` (mescla sem duplicar, com SQL de reverter) |
+
+Testes: `scripts/test-number-guard.mjs` (caso exato da Tespon, frases de mercado em legenda e slide, "sem filtro, sem encenação") e
+`scripts/test-week-themes.mjs` (par "Comparativo… R$ 1,5 mi" × "Comparação… R$1,5 mi…" = repetido; par diferente não; janela de 4
+semanas; vagas paralelas; oferta).

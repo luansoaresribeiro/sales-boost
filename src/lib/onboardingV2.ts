@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { bi, type Bilingual } from './verticalPlaybook'
+import { licenseRule, type LicenseRule } from './license'
 
 // Onboarding v2 (pedido do dono 2026-10-16): diagnóstico curto antes do
 // cadastro + 5 etapas depois. As perguntas, etapas, perfis e textos vêm da
@@ -37,6 +38,8 @@ export interface V2Question {
   allow?: ('unknown' | 'na' | 'later')[] // estados aceitos; [] = obrigatória
   diagnostic?: boolean // também aparece no diagnóstico curto (antes do cadastro)
   needed_for?: string[] // funcionalidades que dependem da resposta (ex.: 'estrategia')
+  license?: LicenseRule // registro profissional (ficha: config.compliance.license) — a tela mostra PF/PJ e confere o formato
+  exclude_from?: string // multi_select: opções já escolhidas nessa outra pergunta não aparecem aqui (ex.: prioridade principal × "e depois disso?")
 }
 
 export interface V2Step { key: string; title: Bilingual; subtitle?: Bilingual }
@@ -70,7 +73,10 @@ export async function fetchOnboardingV2(verticalKey: string): Promise<Onboarding
   if (!verticalKey || verticalKey === 'generico') return null
   try {
     const { data } = await supabase.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
-    return parseOnboardingV2((data?.config as { onboarding_v2?: unknown } | undefined)?.onboarding_v2)
+    const v2 = parseOnboardingV2((data?.config as { onboarding_v2?: unknown } | undefined)?.onboarding_v2)
+    const rule = licenseRule(data?.config)
+    if (v2 && rule) v2.questions = v2.questions.map(q => (q.key === rule.answer_key && q.type === 'text' ? { ...q, license: rule } : q))
+    return v2
   } catch { return null }
 }
 
@@ -168,10 +174,15 @@ export function sanitizeV2(v2: OnboardingV2, rawAnswers: Record<string, unknown>
     } else if (q.type === 'select') {
       const s = String(value ?? '').trim()
       if (s && allowed.includes(s)) answers[key] = s
+    } else if (q.type === 'multi_select' && typeof value === 'string') {
+      // Resposta antiga (de quando a pergunta era de escolha única): fica como está, sem converter.
+      const v = value.trim()
+      if (v && allowed.includes(v) && !excludedOptions(q, rawAnswers).includes(v)) answers[key] = v
     } else if (Array.isArray(value)) {
       const max = q.max ?? 10
+      const excluded = excludedOptions(q, rawAnswers)
       const items = value.map(v => String(v ?? '').trim().slice(0, MAX_TEXT_LEN))
-        .filter(v => isMeaningful(v) && (q.type !== 'multi_select' || allowed.includes(v)))
+        .filter(v => isMeaningful(v) && (q.type !== 'multi_select' || (allowed.includes(v) && !excluded.includes(v))))
       const uniq = [...new Set(items)].slice(0, max)
       if (uniq.length) answers[key] = uniq
     }
@@ -191,6 +202,18 @@ export function sanitizeV2(v2: OnboardingV2, rawAnswers: Record<string, unknown>
     else if (!vals.length && status[d.from] && status[d.from] !== 'auto') status[d.to] = status[d.from]
   }
   return { answers, status }
+}
+
+/** Valores de uma resposta como lista. Resposta antiga em texto numa pergunta que virou de várias respostas vale como 1 item
+ *  (só na leitura: o que está gravado não é convertido; só muda quando a pessoa mexer na pergunta). */
+export function answerList(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map(String).filter(isMeaningful)
+  return isMeaningful(v) ? [String(v)] : []
+}
+
+/** Opções que não podem aparecer nesta pergunta porque já foram escolhidas na pergunta `exclude_from`. */
+export function excludedOptions(q: V2Question, answers: Record<string, unknown> | undefined): string[] {
+  return q.exclude_from && answers ? answerList(answers[q.exclude_from]) : []
 }
 
 /** Texto legível de uma resposta (pra resumos). */

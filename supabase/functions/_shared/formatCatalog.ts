@@ -58,7 +58,7 @@ const GENERIC: ContentFormat[] = [
 const PRODUCER_LABEL: Record<FormatProducer, string> = {
   post: 'gerado sozinho no calendário',
   item_package: 'criado sozinho no calendário a partir de um item do catálogo com fotos reais',
-  item_video: 'vídeo curto a partir de 1 foto real de um item (criado sozinho no calendário; custa ~US$ 0,42 do teto mensal)',
+  item_video: 'vídeo curto a partir de 1 foto real de um item (criado sozinho no calendário)',   // sem preço: custo interno do Sales Boost não vai pro texto do cliente (A.6)
   dm: 'resposta automática na DM (dono aprova a mensagem uma vez)',
 }
 const STATUS_LABEL: Record<FormatStatus, string> = { live: 'funciona hoje', needs_material: 'precisa de material/autorização do dono', planned: 'em breve (não planeje ainda)' }
@@ -125,19 +125,31 @@ export async function fetchFormatAliases(admin: SupaClient, verticalKey: string)
 // mínimo de vídeos por semana (decisão do dono 2026-10-14: "pelo menos uns 3
 // vídeos na semana e a estratégia, dependendo, pode jogar pra cima").
 export interface ContentRules { minVideosPerWeek: number }
+
+// Tour virtual SAIU do plano da semana (decisão do dono, 2026-11-10): agora tem menu próprio ("Tour virtual"),
+// onde o dono escolhe o imóvel e gera o tour completo. O plano da semana (estratégia + calendário de domingo +
+// "resto da semana") fica com os outros formatos. Vale pra qualquer setor: é o produtor, não um formato de setor.
+// A cópia da tela (src/lib/weekSlots.ts) tem a mesma lista — scripts/test-tour-order.mjs confere.
+export const OUT_OF_WEEKLY_PLAN: FormatProducer[] = ['item_video']
+export const inWeeklyPlan = (producer: unknown): boolean => !(OUT_OF_WEEKLY_PLAN as string[]).includes(String(producer))
+/** Formatos que a estratégia pode pôr no plano da semana. */
+export const planningFormats = (formats: ContentFormat[]): ContentFormat[] => formats.filter(f => inWeeklyPlan(f.producer))
 export async function fetchContentRules(admin: SupaClient, verticalKey: string): Promise<ContentRules> {
   try {
     const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
     const n = Number((data?.config as { content_rules?: { min_videos_per_week?: unknown } } | null)?.content_rules?.min_videos_per_week)
-    return { minVideosPerWeek: Number.isInteger(n) && n >= 0 && n <= 7 ? n : 0 }
+    // O mínimo era de vídeo do imóvel (item_video); fora do plano da semana desde 2026-11-10, ele vale 0.
+    return { minVideosPerWeek: inWeeklyPlan('item_video') && Number.isInteger(n) && n >= 0 && n <= 7 ? n : 0 }
   } catch { return { minVideosPerWeek: 0 } }
 }
 
 // Garante o mínimo de vídeos no mix: se a estratégia pediu menos, completa no
 // primeiro formato de vídeo que já está no mix (ou no primeiro que funciona
 // hoje no catálogo). Mais que o mínimo fica como a estratégia pediu.
-export function ensureMinVideos(mix: WeeklyMixItem[], formats: ContentFormat[], min: number): WeeklyMixItem[] {
-  if (min <= 0) return mix
+export function ensureMinVideos(mixRaw: WeeklyMixItem[], formats: ContentFormat[], min: number): WeeklyMixItem[] {
+  // Plano antigo com tour (antes de 2026-11-10) perde o tour aqui; e o mínimo de vídeo não volta a pôr tour.
+  const mix = mixRaw.filter(m => inWeeklyPlan(m.producer))
+  if (min <= 0 || !inWeeklyPlan('item_video')) return mix
   const have = mix.filter(m => m.producer === 'item_video').reduce((s, m) => s + (m.per_week | 0), 0)
   if (have >= min) return mix
   const out = mix.map(m => ({ ...m }))
@@ -145,13 +157,30 @@ export function ensureMinVideos(mix: WeeklyMixItem[], formats: ContentFormat[], 
   if (cur) { cur.per_week = Math.min(7, cur.per_week + (min - have)); return out }
   const f = formats.find(x => x.producer === 'item_video' && x.status === 'live')
   if (!f) return out
-  out.push({ format: f.key, name: f.name, producer: 'item_video', per_week: Math.min(7, min - have), pillar: f.pillar, familia: familyOf(f), tema: f.pillar, purpose: 'Mínimo de vídeos por semana (regra do setor): vídeo curto de uma foto real do imóvel.' })
+  out.push({ format: f.key, name: f.name, producer: 'item_video', per_week: Math.min(7, min - have), pillar: f.pillar, familia: familyOf(f), tema: f.pillar, purpose: 'Vídeo curto de uma foto real do imóvel, pra ter vídeo toda semana no calendário.' })
   return out
 }
 
+// Custo interno do Sales Boost (preço por vídeo/imagem, teto mensal, débito) e a diretriz de vídeos NÃO vão pro texto que o cliente lê
+// (A.6, 2026-11-07: a estratégia dizia "cada vídeo custa ~US$ 0,42… debitado do teto mensal contratado" e "mínimo de 3 vídeos por semana").
+// O prompt já proíbe; isto é a trava em código: tira a FRASE inteira que cita isso (nunca troca por outro texto).
+const INTERNAL_COST_RE = /US\$|\bUSD\b|teto\s+(?:mensal|do\s+plano|contratado|de\s+gasto)|d[eé]bit|custo\s+(?:interno|por\s+(?:v[ií]deo|imagem|pe[cç]a)|do\s+sales\s*boost)|sales\s*boost\s+(?:paga|gasta|custeia|arca)|regra\s+do\s+setor|m[ií]nimo\s+de\s+\d+\s+v[ií]deos/i
+export const hasInternalCost = (text: string): boolean => INTERNAL_COST_RE.test(String(text ?? ''))
+export function stripInternalCost(text: string): string {
+  return String(text ?? '').split('\n').map(line => line.split(/(?<=[.!?])\s+/).filter(sent => !INTERNAL_COST_RE.test(sent)).join(' ')).join('\n').trim()
+}
+/** Orçamento da estratégia (allocation[].reason e budget_reasoning) sem custo interno. Outros campos ficam como a IA mandou. */
+export function cleanBudgetText(budget: unknown): Record<string, unknown> {
+  const b = (budget && typeof budget === 'object' ? { ...(budget as Record<string, unknown>) } : {})
+  if (typeof b.budget_reasoning === 'string') b.budget_reasoning = stripInternalCost(b.budget_reasoning)
+  if (Array.isArray(b.allocation)) b.allocation = b.allocation.map(a => (a && typeof a === 'object' && typeof (a as { reason?: unknown }).reason === 'string' ? { ...(a as object), reason: stripInternalCost((a as { reason: string }).reason) } : a))
+  return b
+}
+
 export function formatCatalogBlock(formats: ContentFormat[]): string {
-  const line = (f: ContentFormat) => `- ${f.key} — ${f.name} [pilar: ${f.pillar}; ${STATUS_LABEL[f.status]}; ${PRODUCER_LABEL[f.producer]}${f.cost ? `; custo: ${f.cost}` : ''}]${f.notes ? ` (${f.notes})` : ''}`
-  return `\n\nCATÁLOGO DE FORMATOS DE CONTEÚDO (tudo o que o Sales Boost sabe produzir pra esta empresa — escolha SÓ por estas chaves):\n${formats.map(line).join('\n')}`
+  const line = (f: ContentFormat) => `- ${f.key} — ${f.name} [pilar: ${f.pillar}; ${STATUS_LABEL[f.status]}; ${PRODUCER_LABEL[f.producer]}]${f.notes ? ` (${f.notes})` : ''}`
+  // Só o que pode entrar no plano da semana (o tour virtual tem menu próprio desde 2026-11-10).
+  return `\n\nCATÁLOGO DE FORMATOS DE CONTEÚDO (tudo o que o Sales Boost sabe produzir pra esta empresa — escolha SÓ por estas chaves):\n${planningFormats(formats).map(line).join('\n')}`
 }
 
 // Valida a escolha da IA contra o catálogo: só chaves que existem e que
@@ -180,13 +209,13 @@ export function sanitizeContentPlan(raw: unknown, formats: ContentFormat[], prev
     const n = Math.max(0, Math.min(7, Math.round(Number(item.per_week) || 0), 14 - total))
     if (!n) continue
     total += n
-    mix.push({ format: f.key, name: f.name, producer: f.producer, per_week: n, pillar: String(item.pillar ?? f.pillar).slice(0, 60), purpose: String(item.purpose ?? '').slice(0, 240), ...(ss ? { pilar_ss: ss } : {}) })
+    mix.push({ format: f.key, name: f.name, producer: f.producer, per_week: n, pillar: String(item.pillar ?? f.pillar).slice(0, 60), purpose: stripInternalCost(String(item.purpose ?? '')).slice(0, 240), ...(ss ? { pilar_ss: ss } : {}) })
   }
   const central = String(r.central_line ?? prev?.central_line ?? '').trim().slice(0, 600)
   if (!central && !mix.length) return null
   const weekly = labelMix(ensureMinVideos(mix.length ? mix : (prev?.weekly_mix ?? []), formats, minVideos), byKey, ssKeys, opts)
   const pillars = Array.isArray(r.pillars) ? cleanPillars(r.pillars) : (prev?.pillars ?? [])
-  return { central_line: central, hero_formats: hero, why: String(r.why ?? prev?.why ?? '').slice(0, 600), weekly_mix: weekly, ...(pillars.length ? { pillars } : {}), updated_at: new Date().toISOString() }
+  return { central_line: central, hero_formats: hero, why: stripInternalCost(String(r.why ?? prev?.why ?? '')).slice(0, 600), weekly_mix: weekly, ...(pillars.length ? { pillars } : {}), updated_at: new Date().toISOString() }
 }
 
 // Rótulos de cada item do mix (decisão A). Roda DEPOIS do ensureMinVideos pra
@@ -238,7 +267,7 @@ export function weeklyMixPlan(plan: ContentPlan | null): { auto: WeeklyMixItem[]
   const left = autoItems.map(m => ({ m, n: Math.max(0, m.per_week | 0) }))
   const auto: WeeklyMixItem[] = []
   while (left.some(x => x.n > 0)) for (const x of left) if (x.n > 0) { auto.push(x.m); x.n-- }
-  const todo = mix.filter(m => m.producer !== 'post')
+  const todo = mix.filter(m => m.producer !== 'post' && inWeeklyPlan(m.producer))
     .map(m => ({ format: m.format, name: m.name, per_week: m.per_week, purpose: m.purpose }))
   return { auto, autoTotal: auto.length, todo }
 }
@@ -252,7 +281,7 @@ export function weeklyMixPlan(plan: ContentPlan | null): { auto: WeeklyMixItem[]
 // peças geradas caírem exatamente nos dias mostrados.
 export interface WeekSlot { date: string; format: string; name: string; producer: FormatProducer; pillar: string; purpose: string; familia?: FormatFamily; pilar_ss?: string; tema?: string }
 export function weekSlots(plan: ContentPlan | null, dates: string[]): WeekSlot[] {
-  const mix = (Array.isArray(plan?.weekly_mix) ? plan!.weekly_mix : []).filter(m => m.producer !== 'dm')
+  const mix = (Array.isArray(plan?.weekly_mix) ? plan!.weekly_mix : []).filter(m => m.producer !== 'dm' && inWeeklyPlan(m.producer))
   const left = mix.map(m => ({ m, n: Math.max(0, m.per_week | 0) }))
   const queue: WeeklyMixItem[] = []
   while (left.some(x => x.n > 0)) for (const x of left) if (x.n > 0) { queue.push(x.m); x.n-- }

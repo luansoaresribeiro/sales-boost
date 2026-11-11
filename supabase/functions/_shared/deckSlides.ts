@@ -48,7 +48,16 @@ export function normalizeSlide(raw: Raw, forced: 'capa' | 'fecho' | null, postCt
 export function normalizeDeck(rawSlides: unknown[], postCta = ''): DeckSlide[] {
   const rows = rawSlides.filter((x): x is Raw => !!x && typeof x === 'object')
     .filter(x => str(x.title).trim() || str(x.text).trim() || str(x.items).trim()).slice(0, MAX_SLIDES)
-  return rows.map((x, i) => normalizeSlide(x, i === 0 ? 'capa' : i === rows.length - 1 ? 'fecho' : null, postCta))
+  return varyLayouts(rows.map((x, i) => normalizeSlide(x, i === 0 ? 'capa' : i === rows.length - 1 ? 'fecho' : null, postCta)))
+}
+
+/** Nunca 3 slides do meio com o mesmo layout seguido: o 3º de "lista"/"passos" vira o irmão (mesmos campos, sem perder conteúdo). */
+export function varyLayouts(slides: DeckSlide[]): DeckSlide[] {
+  const twin: Record<string, string> = { lista: 'passos', passos: 'lista' }
+  return slides.map((s, i) => {
+    const a = slides[i - 1], b = slides[i - 2]
+    return a && b && s.layout === a.layout && s.layout === b.layout && twin[s.layout] ? { ...s, layout: twin[s.layout] } : s
+  })
 }
 
 /**
@@ -78,12 +87,14 @@ export const numbersOf = (txt: string): Set<string> => new Set((txt.match(numRe)
 /** Regras do prompt do carrossel (limites curtos por campo — o render mede o resto). */
 /** Modo do tema (deckTopic.ts): regulado = só dicas conferidas; geral = sem fato; leve/ausente = como sempre foi. */
 export interface DeckTopicRules { mode: 'regulado' | 'geral' | 'leve'; tipCount?: number }
-export function deckPromptRules(coverStyle: string, brandCta: string, topic?: DeckTopicRules): string {
+/** `claimRule` = linha de afirmação de mercado montada da ficha (claimLock.claimPromptRule); vazio = nada é acrescentado. */
+export function deckPromptRules(coverStyle: string, brandCta: string, topic?: DeckTopicRules, claimRule = ''): string {
+  // A capa prende; nunca é índice (lista dos slides seguintes) — 'lista' saiu do rodízio em 2026-11-02.
   const capa = coverStyle === 'pergunta' ? '"title" = uma PERGUNTA que o público se faz (até 70 caracteres)'
-    : coverStyle === 'lista' ? '"title" = promessa curta (até 60 caracteres) e "items" = 3 a 4 linhas (até 45 caracteres cada) com o que vem nos próximos slides'
-    : '"title" = gancho: afirmação forte (até 70 caracteres)'
-  return `- ESTE é um CARROSSEL DE SLIDES (design da marca, só texto na arte — sem foto): "slides" com ${topic?.mode === 'regulado' && topic.tipCount ? `${topic.tipCount + 2} itens (capa + ${topic.tipCount} slide${topic.tipCount > 1 ? 's' : ''} do meio, UM por dica, na ordem das dicas + fecho)` : '4 a 7 itens'}. Cada slide: {"layout","title","text","items","highlight","cta"}, em frases completas e curtas, NUNCA cortadas no meio, sem emoji, sem hashtag, sem setas.
-  • 1º slide: "layout":"capa" — ${capa}; "text" = apoio opcional (até 100 caracteres).
+    : coverStyle === 'erro' ? '"title" = um ERRO COMUM que o público comete, dito de frente (ex.: "O erro que faz você …"; até 70 caracteres)'
+    : '"title" = gancho: uma promessa concreta ou afirmação forte (até 70 caracteres)'
+  return `- ESTE é um CARROSSEL DE SLIDES (design da marca; o texto é desenhado pelo sistema, a foto de fundo quando existe é real e posta pelo sistema): "slides" com ${topic?.mode === 'regulado' && topic.tipCount ? `${topic.tipCount + 2} itens (capa + ${topic.tipCount} slide${topic.tipCount > 1 ? 's' : ''} do meio, UM por dica, na ordem das dicas + fecho)` : '4 a 7 itens'}. Cada slide: {"layout","title","text","items","highlight","cta"}, em frases completas e curtas, NUNCA cortadas no meio, sem emoji, sem hashtag, sem setas.
+  • 1º slide: "layout":"capa" — ${capa}; "text" = apoio opcional (até 100 caracteres). A capa NUNCA lista os slides seguintes nem vira índice, e não leva número nem faixa de preço sem fonte.
   • slides do MEIO: um destes layouts por slide, variando entre eles:
       "lista" — "title" até 60 caracteres + "items" com 3 a 5 linhas separadas por \\n (até 80 caracteres cada);
       "passos" — igual a lista, mas as linhas são ações em ordem;
@@ -96,7 +107,7 @@ ${topic?.mode === 'regulado'
     : topic?.mode === 'geral'
       ? '  • SEM FATOS: dica GERAL e prática, sem número, prazo, taxa, valor, percentual nem nome de lei, imposto ou programa, e sem afirmar nenhuma regra.'
       : '  • NÚMEROS: só use número, preço, prazo ou estatística que esteja nos dados fornecidos acima. Na dúvida, escreva sem número.'}
-  Deixe "image" vazio.
+${claimRule ? `  ${claimRule}` : ''}  Deixe "image" vazio.
 `
 }
 
@@ -110,7 +121,19 @@ export function rewritePrompt(brandName: string, s: DeckSlide, reasons: { tooLon
   ].filter(Boolean).join('; ')
   return `Você reescreve 1 slide de um carrossel de Instagram de "${brandName}". Motivo: ${why}.
 Slide atual (layout "${s.layout}"): ${JSON.stringify({ title: s.title, text: s.text, items: s.items, highlight: s.highlight, cta: s.cta })}
-Mantenha o layout, o sentido e o formato dos campos ("items" com linhas separadas por \\n; em "comparacao", linhas "lado A | lado B"). Sem emoji, sem inventar nada. Responda SÓ em JSON: {"title":"","text":"","items":"","highlight":"","cta":""}`
+Mantenha o layout, o sentido e o formato dos campos ("items" com linhas separadas por \\n; em "comparacao", linhas "lado A | lado B"). Escreva no mesmo idioma do slide, com ortografia correta e TODOS os acentos (os termos do motivo vêm sem acento só por serem uma lista técnica — não copie esse jeito). Sem emoji, sem inventar nada. Responda SÓ em JSON: {"title":"","text":"","items":"","highlight":"","cta":""}`
+}
+
+// Palavras do português que quase nunca aparecem sem acento em texto bem escrito. Duas ou mais delas sem acento num
+// slide = a reescrita perdeu a acentuação (Tespon, 2026-11-03: "voce", "imovel", "So entao") — tratar como falha.
+// 2ª versão (2026-11-03, FGTS geral): "Quer entender como funciona pra voce?" tinha só 1 palavra da lista e passou.
+// Palavras longas que NUNCA são certas sem acento contam com 1; as curtas e ambíguas (ja, ate, so) só com 2.
+const UNACCENTED_PT = /(?<![\p{L}\d])(voce|voces|nao|imovel|imoveis|entao|situacao|situacoes|informacao|informacoes|analise|condicoes|decisao|opcao|opcoes|avaliacao|documentacao|simulacao|regiao|duvida|duvidas|especifico|proximo|disponivel|tambem|credito|municipio|propria|historico)(?![\p{L}\d])/giu
+const UNACCENTED_PT_WEAK = /(?<![\p{L}\d])(ja|ate|so)(?![\p{L}\d])/giu
+export function lostAccents(s: Pick<DeckSlide, 'title' | 'text' | 'items' | 'highlight' | 'cta'>, lang?: string | null): boolean {
+  if (lang && !/^pt/i.test(lang)) return false
+  const t = [s.title, s.text, s.items, s.highlight, s.cta].filter(Boolean).join('\n')
+  return (t.match(UNACCENTED_PT) ?? []).length >= 1 || (t.match(UNACCENTED_PT_WEAK) ?? []).length >= 2
 }
 
 export { SLIDE_LAYOUTS }

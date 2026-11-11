@@ -241,3 +241,34 @@ Comandos (rodar no terminal da Hostinger):
   (nunca trava o post). Carrossel: foto real crua em cada slide.
 - Custo: 1 edição por post genérico. Sem teto próprio ainda — o volume é o
   do Vault (já limitado pelo plano).
+
+## Tour virtual completo — menu próprio (2026-11-10)
+
+**Divergência com o "vídeo-isca" (09/10):** o tour completo voltou, num menu próprio ("Tour virtual"). Os vídeos
+curtos do card do imóvel continuam como estavam. Decisão em [DECISIONS.md](DECISIONS.md).
+
+**Fluxo:**
+1. A tela (`src/pages/dashboard/TourVirtualPage.tsx` + `TourBuilder.tsx`) chama `item-videos` `plan_tour`.
+2. O servidor dá nota às fotos que faltam (`_shared/photoScore.ts`) e devolve a ordem (`_shared/tourOrder.ts`
+   `orderTour`): abertura de fora → `walk_order` da ficha → fotos sem cômodo identificado.
+3. O dono muda a ordem. A tela recalcula as passagens com a cópia `src/lib/tourOrder.ts`.
+4. "Gerar" chama `creative-generate` `tour_piece`, que confere o imóvel e o estúdio, faz a legenda com as travas
+   (`runVideoSlot` com `full`) e o encerramento, e chama `item-videos` `create` (`kind: 'tour'`, só pelo servidor).
+5. `item-videos` recalcula os trechos pela nota gravada (`tourSegments`) e confere o teto com a soma deles.
+   Depois manda cada trecho com a instrução do seu tipo (`clips[i].prompt`/`seconds`, em `tourEngine.submitAll`).
+6. O estúdio da VPS junta todos os trechos + encerramento num Reels 9:16. O vídeo entra na peça, que aparece em
+   Aprovações.
+
+**Trechos:**
+
+| Tipo | Quando | Duração |
+|---|---|---|
+| `opening` | foto de fachada ou vista, só se for a primeira | 5 s |
+| `pair` | caminhada da foto i até a i+1, se os cômodos forem vizinhos pela ficha (o mesmo tipo de cômodo não conta) | 6 s |
+| `room` | corte, foto sozinha | 5 s |
+
+Caminhadas seguidas se encadeiam: a foto de fim de uma é a de começo da próxima.
+
+**Fila de espera:** o tour completo não entra na fila "aguardando estúdio". Se a VPS estiver fora do ar, a tela avisa
+e nada é cobrado.
+

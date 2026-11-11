@@ -27,6 +27,16 @@ os 4 — corrigido em 2026-09-30 (antes só zerava `instagram_user_id` +
 `instagram_auto_post`, deixando o token válido escondido no banco mesmo
 com a tela mostrando "desconectado").
 
+**Troca pelo token de 60 dias falhou (corrigido 2026-11-10).** Antes, se o
+`ig_exchange_token` falhasse, o callback salvava o token CURTO (~1 h) com
+validade de 60 dias e mostrava "conectado". Caso real: A3 Imóveis (conectou
+em 06/11, token morto em horas, `instagram_username` nulo, logo automático
+"sem foto de perfil"). Agora o callback não salva nada, volta pra Conexões
+com erro claro e grava o motivo em `client_activity`
+(`event='instagram_connect_failed'`, `meta.detail`) e no log da function.
+A causa da falha da A3 ainda é desconhecida — aparece na próxima tentativa.
+Sinal de conexão "falsa": `instagram_username` nulo com token salvo.
+
 ## Proteção contra conta em 2 empresas (2026-10-01)
 
 `instagram-oauth-callback` agora confere, antes de salvar, se o

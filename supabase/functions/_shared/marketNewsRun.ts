@@ -11,12 +11,18 @@ import {
   capUsdOf, monthStartIso, normalizeUrl, normalizeTitle, parseIntelConfig, remainingFor, rotate, searchesToday, spentBySource, tavilyCostFromEnv,
   type IntelNewsConfig, type SearchUnit,
 } from './marketIntel.ts'
-import { filterHits, pickRegions, type NewsSignal, type TavilyHit } from './marketNews.ts'
+import { filterHitsReport, pickRegions, type TavilyHit } from './marketNews.ts'
 
 type Admin = { from: (t: string) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
 export type NewsSearch = (key: string, query: string, cfg: IntelNewsConfig, timeoutMs: number) => Promise<TavilyHit[]>
 
-export interface NewsResult { searched: number; added: number; spent_usd: number; skipped?: string }
+export interface NewsResult {
+  searched: number; added: number; spent_usd: number; skipped?: string
+  reused?: number // buscas reaproveitadas da pesquisa compartilhada (sem crédito)
+  // Fase 2 (registro por rodada): ausente = não medido.
+  collected?: number; filtered?: number; month_spent_usd?: number
+  details?: { quality_mode: string; quality_version: number; rejected: Record<string, number>; flagged: Record<string, number>; samples: { title: string; host: string; reason: string }[]; skipped?: string; cap_usd?: number }
+}
 export interface NewsOpts {
   companyId: string
   lang: 'pt' | 'en'
@@ -29,6 +35,7 @@ export interface NewsOpts {
   costUsd?: number                // custo estimado de 1 busca (padrão: env TAVILY_COST_USD ou 0.008)
   fitsTotalCap?: (estimateUsd: number) => Promise<boolean> // teto geral de US$ 40 (spendCap.fitsCap); erro/false = não busca
   nowMs?: number
+  cache?: SearchCache | null      // pesquisa compartilhada (padrão: market_search_cache); null = desliga
 }
 
 export const tavilyNews: NewsSearch = async (key, query, cfg, timeoutMs) => {
@@ -42,6 +49,34 @@ export const tavilyNews: NewsSearch = async (key, query, cfg, timeoutMs) => {
   const data = await res.json() as { results?: TavilyHit[] }
   return Array.isArray(data.results) ? data.results : []
 }
+
+// ── Pesquisa compartilhada por bairro (economia de custos, passo 2 — dono, 10/11) ──────────────────────────────────────
+// As buscas são montadas só com tema × bairro × cidade da FICHA (buildUnits) — nada de uma imobiliária específica — e o
+// resultado é notícia PÚBLICA. Então duas imobiliárias com imóveis no Leblon fazem a mesma busca: a 2ª, no mesmo dia, usa
+// o resultado guardado (market_search_cache, sem company_id) e não gasta crédito. Cada imobiliária continua com o próprio
+// filtro, a própria deduplicação e os próprios sinais (market_signals por empresa). Cache com erro = busca normal.
+export interface SearchCache {
+  get: (key: string, day: string) => Promise<TavilyHit[] | null>
+  put: (key: string, day: string, query: string, hits: TavilyHit[]) => Promise<void>
+}
+/** Chave da busca: tudo que muda o resultado da Tavily (texto, janela de dias, quantidade, domínios excluídos). */
+export async function searchCacheKey(query: string, cfg: Pick<IntelNewsConfig, 'days' | 'max_results' | 'exclude_domains'>): Promise<string> {
+  const raw = JSON.stringify({ v: 1, q: query.trim().toLowerCase(), topic: 'news', depth: 'basic', days: cfg.days, max: cfg.max_results, ex: [...(cfg.exclude_domains ?? [])].map(d => String(d).toLowerCase()).sort() })
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('')
+}
+export const dbSearchCache = (admin: Admin): SearchCache => ({
+  async get(key, day) {
+    try {
+      const { data, error } = await admin.from('market_search_cache').select('hits').eq('cache_key', key).eq('day', day).maybeSingle()
+      if (error || !data || !Array.isArray(data.hits)) return null
+      return data.hits as TavilyHit[]
+    } catch { return null }
+  },
+  async put(key, day, query, hits) {
+    try { await admin.from('market_search_cache').upsert({ cache_key: key, day, query: query.slice(0, 300), hits }, { onConflict: 'cache_key,day', ignoreDuplicates: true }) } catch { /* não guardar só perde a economia */ }
+  },
+})
 
 const log = (companyId: string, msg: string) => console.error(`[market_news] ${companyId}: ${msg}`)
 const DEDUPE_DAYS = 90
@@ -73,6 +108,17 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
   if (newsRows.some(r => (r.created_at ?? '') >= dayStart)) return { ...out, skipped: 'já coletou hoje' }
 
   const spent = spentBySource(rows)
+  // Estatística da rodada (só é lida se houve busca): quantos resultados vieram, quantos o filtro barrou e por quê.
+  const quality = cfg.quality
+  const stats = { hits: 0, rejected: {} as Record<string, number>, flagged: {} as Record<string, number>, samples: [] as { title: string; host: string; reason: string }[] }
+  const hostCounts = new Map<string, number>()
+  const done = (): NewsResult => {
+    if (out.searched > 0) {
+      out.collected = stats.hits; out.filtered = Object.values(stats.rejected).reduce((a, b) => a + b, 0); out.month_spent_usd = spent.total + out.spent_usd
+      out.details = { quality_mode: quality.mode, quality_version: quality.version, rejected: stats.rejected, flagged: stats.flagged, samples: stats.samples, cap_usd: capUsd, ...(out.skipped ? { skipped: out.skipped } : {}) }
+    }
+    return out
+  }
   let remaining = remainingFor('news', { split: intel.split, capUsd, spent })
   const monthLeft = cfg.max_searches_per_month - newsRows.length
   let newLeft = cfg.max_new_per_day - (newToday.count ?? 0)
@@ -94,6 +140,8 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
   const seen = new Set<string>(knownRows.map(r => normalizeUrl(r.source_url)).filter((u): u is string => !!u))
   const seenTitles = new Set<string>(knownRows.map(r => normalizeTitle(r.title)).filter(Boolean))
   const search = o.search ?? tavilyNews
+  const cache = o.cache === undefined ? dbSearchCache(admin) : o.cache
+  const today = dayStart.slice(0, 10)
 
   for (let i = 0; i < units.length; i += PARALLEL_SEARCHES) {
     if (o.canStart && !o.canStart()) { out.skipped = 'sem tempo no cron'; break }
@@ -123,9 +171,16 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
     if (stop) out.skipped = stop
 
     // 2) Buscas do lote em paralelo (12 s cada).
+    // Mesma busca já feita hoje por outra imobiliária (ou nesta) → reaproveita, sem crédito.
     const results = await Promise.all(batch.map(async b => {
-      try { return { hits: await search(key, b.u.query, cfg, SEARCH_TIMEOUT_MS), err: '', uncharged: false } }
-      catch (e) { return { hits: [] as TavilyHit[], err: String(e instanceof Error ? e.message : e).slice(0, 300), uncharged: !!(e as { uncharged?: boolean })?.uncharged } }
+      const ck = cache ? await searchCacheKey(b.u.query, cfg).catch(() => '') : ''
+      const cached = ck && cache ? await cache.get(ck, today).catch(() => null) : null
+      if (cached) return { hits: cached, err: '', uncharged: true, reused: true }
+      try {
+        const hits = await search(key, b.u.query, cfg, SEARCH_TIMEOUT_MS)
+        if (ck && cache) await cache.put(ck, today, b.u.query, hits).catch(() => {})
+        return { hits, err: '', uncharged: false, reused: false }
+      } catch (e) { return { hits: [] as TavilyHit[], err: String(e instanceof Error ? e.message : e).slice(0, 300), uncharged: !!(e as { uncharged?: boolean })?.uncharged, reused: false } }
     }))
 
     // 3) Ajusta a reserva com o resultado real.
@@ -133,9 +188,10 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
     for (let j = 0; j < batch.length; j++) {
       const r = results[j], b = batch[j]
       out.searched++
-      const cost = r.err && r.uncharged ? 0 : costUsd
+      if (r.reused) out.reused = (out.reused ?? 0) + 1
+      const cost = (r.err && r.uncharged) || r.reused ? 0 : costUsd
       out.spent_usd += cost
-      const { error: upErr } = await admin.from('agent_performance').update({ cost_usd: cost, latency_ms: Date.now() - b.t0, success: !r.err, ...(r.err ? { error_message: r.err } : {}) }).eq('id', b.id)
+      const { error: upErr } = await admin.from('agent_performance').update({ cost_usd: cost, latency_ms: Date.now() - b.t0, success: !r.err, ...(r.err ? { error_message: r.err } : {}), ...(r.reused ? { task_description: `Notícias (${b.u.topic.kind}): ${b.u.region} · reaproveitada`.slice(0, 200) } : {}) }).eq('id', b.id)
       if (upErr) log(o.companyId, `ajuste da reserva: ${upErr.message}`) // a reserva inteira fica (conservador)
       if (r.err) { failed = true; log(o.companyId, `${b.u.region}: ${r.err}`) }
     }
@@ -144,13 +200,17 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
     for (let j = 0; j < batch.length; j++) {
       const r = results[j], b = batch[j]
       if (r.err || newLeft <= 0) continue
-      const cands = filterHits(r.hits, { region: b.u.region, kind: b.u.topic.kind, days: cfg.days, excludeDomains: cfg.exclude_domains, nowMs: now, seen, seenTitles })
-      for (const s of cands as NewsSignal[]) {
+      const rep = filterHitsReport(r.hits, { region: b.u.region, kind: b.u.topic.kind, days: cfg.days, excludeDomains: cfg.exclude_domains, nowMs: now, seen, seenTitles, quality, hostCounts })
+      stats.hits += r.hits.length
+      for (const [k, v] of Object.entries(rep.rejected)) stats.rejected[k] = (stats.rejected[k] ?? 0) + v
+      for (const [k, v] of Object.entries(rep.flagged)) stats.flagged[k] = (stats.flagged[k] ?? 0) + v
+      for (const x of rep.samples) if (stats.samples.length < 5) stats.samples.push(x)
+      for (const s of rep.signals) {
         if (newLeft <= 0) break
         const { error } = await admin.from('market_signals').insert({ company_id: o.companyId, ...s })
         if (error) {
           if ((error as { code?: string }).code === '23505') continue // já existe (índice único): ok
-          log(o.companyId, `insert: ${error.message}`); out.skipped = 'erro ao gravar sinal'; return out
+          log(o.companyId, `insert: ${error.message}`); out.skipped = 'erro ao gravar sinal'; return done()
         }
         out.added++; newLeft--
       }
@@ -158,5 +218,5 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
     if (failed) { out.skipped = 'falha na busca'; break }
     if (stop) break
   }
-  return out
+  return done()
 }

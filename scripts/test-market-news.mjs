@@ -2,9 +2,10 @@ import assert from 'node:assert/strict'
 // Roda: node --experimental-strip-types scripts/test-market-news.mjs
 // Notícias automáticas v2 (2026-11-01): filtros em código, tópicos/kind da ficha, rotação, reserva de dólar no livro-caixa,
 // 1 rodada por dia, lotes de 3 em paralelo, falha da Tavily, dedupe por URL normalizada/título. Cron da coleta em test-market-intel.mjs.
-import { filterHits, pickRegions, buildQuery, sanitizeText } from '../supabase/functions/_shared/marketNews.ts'
-import { parseIntelConfig } from '../supabase/functions/_shared/marketIntel.ts'
-import { collectMarketNews } from '../supabase/functions/_shared/marketNewsRun.ts'
+import { readFileSync } from 'node:fs'
+import { filterHits, filterHitsReport, classifySignalQuality, signalStrength, hasTerm, pickRegions, buildQuery, sanitizeText } from '../supabase/functions/_shared/marketNews.ts'
+import { parseIntelConfig, parseQuality } from '../supabase/functions/_shared/marketIntel.ts'
+import { collectMarketNews, searchCacheKey } from '../supabase/functions/_shared/marketNewsRun.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
 const NOW = Date.parse('2026-11-10T12:00:00Z') // dia 10: restam 21 dias no mês
@@ -166,4 +167,201 @@ const goodSearch = async (_k, query) => [hit({ title: query, url: `https://news.
 { // sem tempo no cron
   const r = await collectMarketNews(fakeAdmin(), mk({ search: goodSearch, canStart: () => false })); assert.equal(r.searched, 0); assert.match(r.skipped, /tempo/); ok('sem tempo no cron: não começa lote')
 }
+// --- Fase 2: filtro de qualidade da ficha (regras REAIS da migration 20261104120000, amostras medidas em 04/11/2026 na Tespon + Teste Zero)
+const sql = readFileSync(new URL('../supabase/migrations/20261104120000_market_intel_quality.sql', import.meta.url), 'utf8')
+const QJSON = JSON.parse(/\$json\$([\s\S]*?)\$json\$/.exec(sql)[1])
+const QE = parseQuality({ ...QJSON, mode: 'enforce' }), QA = parseQuality(QJSON)
+assert.equal(QA.mode, 'audit'); assert.equal(QA.version, 1); assert.equal(QE.trusted_domains.length, 14); assert.ok(QE.news_title_terms.length > 5); assert.equal(QE.block_title_all.length, QJSON.block_title_all.length); assert.deepEqual(Object.keys(QE.kind_terms).sort(), ['economy', 'infrastructure', 'tourism']); ok('ficha da migration: JSON válido, modo inicial audit, parseQuality mantém todas as regras')
+assert.ok(!/\bdrop\b/i.test(sql.split('\n').filter(l => !l.trimStart().startsWith('--')).join('\n'))); ok('migration da ficha sem "drop" fora de comentário')
+const run = readFileSync(new URL('../supabase/migrations/20261104110000_market_intel_runs.sql', import.meta.url), 'utf8')
+assert.ok(!/\bdrop\b/i.test(run.split('\n').filter(l => !l.trimStart().startsWith('--')).join('\n')) && /enable row level security/.test(run) && /if not exists \(select 1 from pg_policies/.test(run)); ok('migration da tabela: RLS ligada, policy em bloco condicional, sem "drop" fora de comentário')
+assert.deepEqual(parseQuality(undefined), parseQuality({})); assert.equal(parseQuality({ mode: 'xxx' }).mode, 'off'); assert.equal(parseQuality({ mode: 'enforce', min_score: 7 }).min_score, null); assert.equal(parseQuality({ mode: 'enforce', trusted_domains: ['lixo', 'ok.com'] }).trusted_domains.length, 1); assert.deepEqual(parseQuality({ mode: 'audit', block_title_all: [['a'], ['a', 'b']] }).block_title_all, [['a', 'b']]); assert.equal(parseIntelConfig({ news: { topics: RAW.news.topics } }).news.quality.mode, 'off'); ok('parseQuality: lixo = desligado; nota fora de 0-1, domínio inválido e grupo de 1 termo são descartados')
+assert.ok(hasTerm('m² privativos', 'm² privativos') && hasTerm('435m² com 4', 'm²') && !hasTerm('cada venda', 'a venda') && hasTerm('x a venda y', 'a venda') && !hasTerm('km2', 'm2') && hasTerm('ocupacao hoteleira', 'hotel', true) && !hasTerm('ocupacao hoteleira', 'hotel') && !hasTerm('chotel', 'hotel', true)); ok('termo: borda de palavra só nas letras (dígito colado casa; "cada venda" não casa "a venda"); termo de tipo casa o começo da palavra ("hotel" casa "hoteleira")')
+
+const q = (kind, title, url, content = 'Texto da fonte com mais de quarenta caracteres para passar o mínimo do resumo.') => classifySignalQuality({ kind, title, summary: content, source_url: url }, QE)
+const BAD = [ // [motivo esperado, tipo, título, url]
+  ['block_title', 'launch', 'Apartamento para venda com 4 quartos em Ipanema com varanda', 'https://www.twoimoveis.com.br/ipanema-4q'],
+  ['block_title', 'launch', 'Apartamento Ipanema 74m2 | totalmente reformado', 'https://www.kaselle.com.br/ipanema-74'],
+  ['block_title', 'launch', 'Flat para venda - Leblon - RJ', 'https://www.podiumimoveis.com.br/flat-leblon'],
+  ['block_title', 'launch', 'Apartamento com 112,00 m² privativos, 3 quartos', 'https://www.porta8.com.br/ap-112'],
+  ['block_title', 'launch', 'Riserva Uno Barra da Tijuca - 435m² com 4 suítes', 'https://www.lancamentosrj.com.br/riserva'],
+  ['block_title', 'launch', '8 Imóveis encontrados Ipanema', 'https://www.robertoalmeidaimoveis.com.br/busca'],
+  ['block_title', 'launch', 'Imóveis encontrados - Casapē', 'https://www.casapeimoveis.com.br/busca'],
+  ['block_title', 'launch', 'Imóveis em Barra da Tijuca | Lançamentos RJ', 'https://www.lancamentos-rj.com.br/barra'],
+  ['block_title', 'launch', 'Arc Ipanema - Ipanema, Rio de Janeiro | Apto', 'https://www.novosimoveisrio.com.br/arc'],
+  ['block_title', 'launch', 'Tudo sobre o Bairro Ipanema', 'https://www.vgimobiliaria.com.br/bairro'],
+  ['block_title', 'infrastructure', 'Apartamento de 121 m² no Leblon à venda', 'https://www.evandroimoveisrj.com.br/ap-121'], // tipo errado + anúncio
+  ['block_title', 'infrastructure', 'Como chegar até Ipanema', 'https://moovitapp.com/rio/ipanema'],
+  ['block_title', 'economy', 'Vaga de Emprego em Ipanema', 'https://www.catho.com.br/vaga/1'],
+  ['block_title', 'tourism', 'Termos de Uso', 'https://www.ladorio.com.br/institucional'],
+  ['block_title', 'tourism', 'Descubra a magia do Rio de Janeiro', 'https://visitrio.com.br/'],
+  ['block_url', 'launch', 'Cobertura Leblon vista mar', 'https://www.suacasadigital.com.br/imovel/cobertura-leblon-123'],
+  ['block_url', 'launch', 'Condomínio Ipanema novidades', 'https://www.miguezimobiliaria.com.br/imoveis/rj/ipanema'],
+  ['block_url', 'tourism', 'Regras do site', 'https://www.ladorio.com.br/termos-de-uso'],
+]
+for (const [why, kind, title, url] of BAD) assert.equal(q(kind, title, url), why, `${title} -> esperado ${why}`)
+ok(`${BAD.length} amostras ruins medidas (anúncios avulsos, páginas sem valor, tipo errado) reprovam com o motivo certo`)
+assert.equal(q('infrastructure', 'Passeio de domingo em Ipanema', 'https://www.blogxyz.com.br/passeio'), 'kind_mismatch'); ok('tipo incoerente com o texto: kind_mismatch')
+assert.equal(q('economy', 'Mercado em Ipanema', 'https://www.blogxyz.com.br/a', 'curto'), 'short_summary'); ok('resumo curto: short_summary')
+assert.equal(q('launch', 'Lançamento em Ipanema', 'https://www.blogxyz.com.br/a'), 'ok'); assert.equal(q('news', 'Qualquer coisa em Ipanema', 'https://www.blogxyz.com.br/b'), 'ok'); ok('tipo sem lista na ficha fica livre')
+// Casos do QA (04/11): notícia de mercado legítima FORA dos portais de confiança não pode ser reprovada (a regra mira o anúncio, não o tema)
+const QA_GOOD = [
+  ['economy', 'Apartamento de 2 quartos fica 10% mais caro em Ipanema, diz FipeZap', 'https://www.blogxyz.com.br/fipezap'],
+  ['economy', 'Preço do m² sobe em Ipanema; apartamento com 3 suítes lidera valorização', 'https://www.blogxyz.com.br/preco-m2'],
+  ['economy', 'Aluguel de 2 quartos sobe 8% no Leblon, aponta pesquisa', 'https://www.blogxyz.com.br/aluguel'],
+  ['infrastructure', 'Obra à venda: construtora vende 500 unidades', 'https://www.blogxyz.com.br/obra-venda'],
+]
+for (const [kind, title, url] of QA_GOOD) assert.equal(q(kind, title, url), 'ok', title)
+for (const d of ['valor.globo.com', 'g1.globo.com', 'estadao.com.br', 'exame.com', 'infomoney.com.br', 'cnnbrasil.com.br', 'extra.globo.com', 'odia.ig.com.br']) assert.equal(q('launch', 'Apartamento para venda em Ipanema', `https://www.${d}/imovel/x`), 'ok', d)
+assert.equal(q('launch', 'Apartamento para venda com 4 quartos', 'https://www.blogxyz.com.br/ap'), 'block_title'); assert.equal(q('launch', 'Sobe o preço: apartamento para venda', 'https://www.kaselle.com.br/imovel/1'), 'block_url'); ok('casos do QA (notícia com quartos/m²/suítes/"à venda" fora dos trusted) passam; anúncio continua reprovando; 8 portais novos de confiança; endereço de anúncio reprova mesmo com "sobe"')
+const GOOD = [ // [tipo, título, url] — títulos reais medidos onde houve; os demais são sintéticos, só para o domínio
+  ['infrastructure', 'Metrô da Gávea tem obras retomadas', 'https://oglobo.globo.com/rio/metro-gavea'],
+  ['economy', 'Aluguel sobe acima da inflação', 'https://www1.folha.uol.com.br/mercado/aluguel'],
+  ['infrastructure', 'Nova estação do metrô avança em Ipanema', 'https://www.metrocptm.com.br/noticia/1'],
+  ['tourism', 'Ocupação hoteleira cresce no Rio', 'https://www.abihrj.com.br/noticia/1'],
+  ['tourism', 'Réveillon do Rio terá novo esquema de turismo', 'https://riotur.rio/noticia/1'],
+  ['tourism', 'Panorama do turismo no Rio', 'https://www.panrotas.com.br/noticia/1'],
+  ['tourism', 'Eventos movimentam hotéis do Rio', 'https://www.mercadoeeventos.com.br/noticia/1'],
+  ['economy', 'Mercado imobiliário do Rio em ritmo de alta', 'https://monitormercantil.com.br/noticia/1'],
+  ['tourism', 'Turismo no Rio: balanço do verão', 'https://vejario.abril.com.br/noticia/1'],
+  ['infrastructure', 'Obras de transporte mudam o trânsito do Rio', 'https://www.terra.com.br/noticias/rio/obras'],
+  ['economy', 'Carta ao mercado: juros e financiamento no Rio', 'https://www.maisvelozimoveis.com.br/carta-ao-mercado'],
+  ['infrastructure', 'Bairros do Rio com Melhor Mobilidade', 'https://www.enjoyimoveis.com.br/blog/mobilidade'],
+]
+for (const [kind, title, url] of GOOD) assert.equal(q(kind, title, url), 'ok', title)
+ok(`${GOOD.length} amostras boas (oglobo, folha, metrô CPTM, ABIH, Riotur, Panrotas, Mercado&Eventos, Monitor, Veja Rio, Terra, mais veloz, borderline enjoy) passam`)
+assert.equal(q('launch', 'Apartamento para venda em Ipanema', 'https://oglobo.globo.com/imovel/x'), 'ok'); assert.equal(q('launch', 'Apartamento para venda em Ipanema', 'https://www1.folha.uol.com.br/imoveis/x', 'x'), 'ok'); ok('domínio de confiança (inclusive subdomínio www1) passa mesmo com termo/URL de bloqueio')
+assert.equal(classifySignalQuality({ kind: 'launch', title: 'Flat para venda', summary: null, source_url: 'https://a.com/x' }, { ...QE, mode: 'off' }), 'ok'); ok('modo off nunca reprova')
+assert.equal(classifySignalQuality({ kind: 'launch', title: 'Lançamento em Ipanema', summary: 'Texto da fonte com mais de quarenta caracteres para passar o mínimo.', source_url: 'https://a.com/x', score: 0.2 }, { ...QE, min_score: 0.5 }), 'low_score'); assert.equal(classifySignalQuality({ kind: 'launch', title: 'Lançamento em Ipanema', summary: 'Texto da fonte com mais de quarenta caracteres para passar o mínimo.', source_url: 'https://a.com/x', score: null }, { ...QE, min_score: 0.5 }), 'ok'); ok('min_score: nota baixa reprova; nota desconhecida não')
+
+{ // filterHitsReport: enforce x audit x off, contagem por motivo, amostras, limite por site
+  const long = 'Conteúdo da fonte sobre Ipanema com mais de quarenta caracteres para passar o mínimo do resumo.'
+  const hits = [
+    hit({ title: 'Metrô de Ipanema ganha obras', url: 'https://oglobo.globo.com/a', content: long, score: 0.91 }),
+    hit({ title: 'Flat para venda - Ipanema - RJ', url: 'https://www.kaselle.com.br/f', content: long }),
+    hit({ title: 'Como chegar até Ipanema', url: 'https://moovitapp.com/x', content: long }),
+    hit({ title: 'Ipanema na Wikipédia', url: 'https://en.wikipedia.org/wiki/Ipanema', content: long }),
+    hit({ title: 'Obras em Ipanema (sem data)', url: 'https://x.com/s', content: long, published_date: undefined }),
+    hit({ title: 'Obras no Centro (sem região)', url: 'https://x.com/t', content: long.replace('Ipanema', 'Centro') }),
+    hit({ title: 'Obras de drenagem em Ipanema', url: 'https://blog.com/1', content: long }),
+    hit({ title: 'Obras de calçada em Ipanema', url: 'https://blog.com/2', content: long }),
+    hit({ title: 'Obras de ciclovia em Ipanema', url: 'https://blog.com/3', content: long }),
+  ]
+  const base = { region: 'Ipanema', kind: 'infrastructure', days: 30, excludeDomains: [...cfg.exclude_domains, 'moovitapp.com', 'wikipedia.org'], nowMs: NOW }
+  const enf = filterHitsReport(hits, { ...base, quality: QE })
+  assert.deepEqual(enf.signals.map(x => x.source_url), ['https://oglobo.globo.com/a', 'https://blog.com/1', 'https://blog.com/2'])
+  assert.deepEqual(enf.rejected, { excluded_domain: 2, no_date: 1, no_region: 1, block_title: 1, host_cap: 1 }); assert.deepEqual(enf.flagged, {}); assert.equal(enf.samples.length, 5); assert.ok(enf.samples.every(x => x.title && x.reason)); ok('enforce: reprova de verdade, conta por motivo (inclui os filtros antigos), ≤5 amostras, máx. 2 por site')
+  assert.deepEqual([enf.signals[0].meta.quality_v, enf.signals[0].meta.quality_ok, enf.signals[0].meta.score], [1, true, 0.91]); assert.equal(enf.signals[1].meta.score, null); ok('novos sinais gravam meta.score, meta.quality_v e meta.quality_ok')
+  const aud = filterHitsReport(hits, { ...base, quality: QA })
+  assert.equal(aud.signals.length, 5); assert.deepEqual(aud.flagged, { block_title: 1, host_cap: 1 }); assert.deepEqual(aud.signals.filter(x => x.meta.quality_ok === false).map(x => x.title), ['Flat para venda - Ipanema - RJ', 'Obras de ciclovia em Ipanema']); ok('audit: nada some; o que reprovaria vai para flagged e quality_ok=false')
+  const off = filterHitsReport(hits, { ...base, quality: undefined })
+  assert.equal(off.signals.length, 5); assert.ok(off.signals.every(x => x.meta.quality_v === undefined && x.meta.quality_ok === undefined)); assert.deepEqual(filterHits(hits, base).map(x => x.title), off.signals.map(x => x.title)); ok('off / sem ficha: igual ao comportamento antigo (wrapper filterHits), sem carimbo de qualidade')
+}
+{ // coleta de verdade com qualidade: reprovados não são gravados e a rodada devolve a estatística
+  const cfgQ = { ...RAW, news: { ...RAW.news, quality: { ...QJSON, mode: 'enforce' }, max_searches_per_day: 2 } }
+  const a = fakeAdmin()
+  const bad = async (_k, query) => [hit({ title: 'Flat para venda - ' + query, url: 'https://www.kaselle.com.br/' + encodeURIComponent(query), content: query + ' ' + 'x'.repeat(60) }), hit({ title: query + ' obra metrô', url: 'https://oglobo.globo.com/' + encodeURIComponent(query), content: query + ' ' + 'y'.repeat(60) })]
+  const r = await collectMarketNews(a, mk({ rawConfig: cfgQ, search: bad }))
+  assert.equal(r.searched, 2); assert.equal(r.collected, 4); assert.equal(r.filtered, 2); assert.equal(r.added, 2); assert.equal(r.details.rejected.block_title, 2); assert.equal(r.details.quality_mode, 'enforce'); assert.ok(a.db.signals.every(x => x.source_name === 'oglobo.globo.com' && x.meta.quality_ok === true)); assert.ok(Math.abs(r.month_spent_usd - 0.016) < 1e-9); ok('coleta em enforce: anúncio não é gravado; rodada devolve collected/filtered/accepted, motivos e acumulado do mês')
+  const none = await collectMarketNews(fakeAdmin(), mk({ search: goodSearch, canStart: () => false })); assert.equal(none.collected, undefined); assert.equal(none.details, undefined); ok('rodada sem busca: nada medido (undefined, não 0)')
+}
+
+{ // --- Gate da Fase 2 (04/11/2026): ficha v2 em enforce. Amostras = os 13 lixos que a v1 deixava passar + 10 manchetes que precisam passar.
+  const sql2 = readFileSync(new URL('../supabase/migrations/20261104150000_market_intel_quality_v2.sql', import.meta.url), 'utf8')
+  const Q2 = parseQuality(JSON.parse(/\$json\$([\s\S]*?)\$json\$/.exec(sql2)[1]))
+  assert.equal(Q2.mode, 'enforce'); assert.equal(Q2.version, 2); assert.equal(Q2.trusted_domains.length, 14); assert.ok(Q2.block_title_all.length <= 40)
+  assert.ok(/quality,version\}'\) = '1'/.test(sql2) && !/\bdrop\b/i.test(sql2.split('\n').filter(l => !l.trimStart().startsWith('--')).join('\n'))); ok('ficha v2: enforce, versão 2, só troca quem está na v1, sem "drop"')
+  const c2 = (kind, title, url, summary = 'Texto da fonte com mais de quarenta caracteres para passar o mínimo do resumo.') => classifySignalQuality({ kind, title, summary, source_url: url }, Q2)
+  const LEAKS = [ // [tipo, título, url, resumo] — reais, medidos na Tespon e na Teste Zero
+    ['infrastructure', 'Estação Jardim de Alah/Leblon do metrô recebe exposição ...', 'https://abihrj.com.br/noticias/exposicao-bailarinas', 'A estação Jardim de Alah/Leblon, da Linha 4 do metrô, recebe a exposição da artista.'],
+    ['infrastructure', 'Depósito de bagagem Estação de Metrô Leblon 24/7 | Radical Storage', 'https://radicalstorage.com/pt/deposito-bagagem/rio/leblon'],
+    ['infrastructure', 'Shopping Metrô Santa Cruz - Apps on Google Play', 'https://play.google.com/store/apps/details?id=x'],
+    ['news', 'Latitud Barra da Tijuca: 3 & 4 Bedrooms, Ready to Move In', 'https://evandroimoveisrj.com.br/en/latitud-barra'],
+    ['launch', 'Lançamentos em Copacabana: Apartamentos na Planta | Lançamentos RJ', 'https://lancamentosrj.com/busca-imoveis-bairro/copacabana'],
+    ['launch', 'Botafogo tem endereço. E tem oportunidade.', 'https://threads.com/@elensilvia.imoveis/video/DeM9'],
+    ['launch', 'We Barra by Living: 2 a 4 quartos a partir de R$ 910.230', 'https://twoimoveis.com.br/we-barra-by-living'],
+    ['launch', 'Jaguaripe 289 | Lancamento em Ipanema', 'https://kaselle.com.br/1637/jaguaripe-289/lancamento/ficha'],
+    ['launch', 'Apartamento, Garden, 3 Quartos com 1 Suíte | Botafogo ...', 'https://miguezimobiliaria.com.br/apartamento-botafogo-rio-de-janeiro'],
+    ['launch', 'Sensia Barra a partir de R$ 875.990', 'https://twoimoveis.com.br/sensia-barra'],
+    ['infrastructure', 'Praia da Barra da Tijuca - Metrô Jardim Oceânico - 4 Quartos', 'https://skyscanner.gg/hotels/brazil/rio-de-janeiro-hotels/cobertura'],
+    ['launch', 'Venda em Ipanema - Studio com varanda', 'https://semfronteirasimoveis.com.br/venda-em-ipanema-studio-com-varanda'],
+    ['infrastructure', 'Linhas e operadoras de vale-transporte do Rio de Janeiro', 'https://otimizapro.com/tarifa/rj', 'Barra da Tijuca (via Linha Vermelha) Ônibus RIOCARD R$ 15,95.'],
+  ]
+  for (const [k, t, u, s] of LEAKS) assert.notEqual(c2(k, t, u, s), 'ok', t)
+  ok('ficha v2: os 13 lixos que passavam na v1 agora são barrados')
+  const NEWS = [ // manchetes de notícia de fonte NÃO confiável: precisam passar (falso positivo zero)
+    ['infrastructure', 'Prefeitura anuncia obras de revitalização na orla da Barra'], ['launch', 'Cyrela lança empreendimento de alto padrão em Botafogo'],
+    ['launch', 'Lançamento em Ipanema esgota unidades em uma semana'], ['economy', 'Preço do aluguel em Copacabana dispara com alta do turismo'],
+    ['economy', 'Apartamentos de 2 quartos com suíte são os mais procurados no Rio, diz pesquisa', 'Pesquisa do mercado imobiliário aponta preferência por plantas compactas com suíte.'], ['launch', 'Studio com varanda vira tendência entre investidores no Leblon'],
+    ['tourism', 'Réveillon deve lotar hotéis de Copacabana'], ['economy', 'Imóveis a partir de R$ 300 mil ganham força com novo MCMV, que amplia o financiamento'],
+    ['infrastructure', 'Estação de metrô da Gávea deve abrir em 2028'], ['economy', 'Juros altos travam financiamento imobiliário no Rio'],
+  ]
+  for (const [k, t, s] of NEWS) assert.equal(c2(k, t, 'https://exemplonoticias.com.br/rio/noticia-2026', s ?? `${t}. Resumo da reportagem com mais de quarenta caracteres.`), 'ok', t)
+  ok('ficha v2: 10 manchetes de notícia continuam passando')
+  assert.equal(c2('economy', 'Aluguel sobe acima da inflação; veja onde é mais caro', 'https://www1.folha.uol.com.br/mercado/2026/10/aluguel.shtml'), 'ok'); ok('ficha v2: portal confiável continua passando')
+}
+
+{ // --- Correção 2 (05/11/2026 noite): força do sinal (forte × fraco). Ficha v3 lida da migration; casos reais da rodada de 05/11.
+  const sql3 = readFileSync(new URL('../supabase/migrations/20261106120000_market_intel_quality_v3.sql', import.meta.url), 'utf8')
+  const J3 = JSON.parse(/\$json\$([\s\S]*?)\$json\$/.exec(sql3.split('\n').filter(l => !l.trimStart().startsWith('--')).join('\n'))[1])
+  const Q3 = parseQuality(J3)
+  assert.equal(Q3.mode, 'enforce'); assert.equal(Q3.version, 3); assert.equal(Q3.trusted_domains.length, 14); assert.equal(Q3.block_title_all.length, J3.block_title_all.length)
+  assert.equal(Q3.weak_url_patterns.length, 6); assert.equal(Q3.weak_title_terms.length, 14); assert.deepEqual(Object.keys(Q3.impact_terms), ['infrastructure']); assert.equal(Q3.impact_terms.infrastructure.length, 16)
+  assert.ok(Q3.block_url_patterns.includes('/guia-de-bairros')); assert.ok(!/\bdrop\b/i.test(sql3.split('\n').filter(l => !l.trimStart().startsWith('--')).join('\n')))
+  assert.ok(/ROLLBACK/.test(sql3) && /"version": 2/.test(sql3)); ok('ficha v3 (migration): JSON válido, enforce, versão 3, parseQuality mantém tudo, rollback para a v2 no arquivo')
+  const st = (kind, title, url, summary = 'Resumo qualquer da reportagem.') => signalStrength({ kind, title, summary, source_url: url }, Q3)
+  // fracos (inclusive em domínio de confiança)
+  assert.deepEqual(st('launch', 'Estúdios ganham espaço entre os imóveis "triple A"', 'https://oglobo.globo.com/conteudo-de-marca/estudios-triple-a'), { strength: 'weak', reason: 'weak_url' }); ok('patrocinado do O Globo (domínio de confiança) = fraco')
+  assert.equal(classifySignalQuality({ kind: 'launch', title: 'Estúdios ganham espaço', summary: 'x'.repeat(60), source_url: 'https://oglobo.globo.com/conteudo-de-marca/a' }, Q3), 'ok'); ok('confiança continua passando no filtro de bloqueio (fraco só marca)')
+  assert.equal(st('infrastructure', 'Linha 2 do Metrô do Rio terá destinos diferentes neste fim de semana', 'https://metrocptm.com.br/noticias/linha-2').reason, 'weak_title')
+  assert.equal(st('infrastructure', 'Funcionamento do MetrôRio neste fim de semana (17 e 18 de outubro)', 'https://metrorio.com.br/aviso').strength, 'weak'); ok('avisos de fim de semana do metrô = fracos')
+  assert.equal(st('news', 'Barra da Tijuca ... | Guia de Bairros', 'https://buske.ai/guia-de-bairros/barra-da-tijuca').reason, 'weak_url')
+  assert.equal(classifySignalQuality({ kind: 'news', title: 'Barra da Tijuca | Guia de Bairros', summary: 'x'.repeat(60), source_url: 'https://buske.ai/guia-de-bairros/barra-da-tijuca' }, Q3), 'block_url'); ok('guia de bairros: fraco e barrado em coleta nova (enforce)')
+  assert.equal(st('infrastructure', 'Prefeitura embarga obra irregular em quiosque na Praia da Barra', 'https://noticias.r7.com/rio/embargo').reason, 'weak_title')
+  assert.equal(st('infrastructure', 'Obra irregular de quiosque é embargada na Barra da Tijuca', 'https://odia.ig.com.br/rio/quiosque').reason, 'weak_title'); ok('embargo de quiosque (R7 e O Dia) = fraco')
+  assert.deepEqual(st('infrastructure', 'Metrô da Gávea tem obras retomadas após dez anos', 'https://www1.folha.uol.com.br/cotidiano/2026/gavea.shtml', 'Obras da estação da Gávea foram retomadas após dez anos paradas.'), { strength: 'weak', reason: 'no_impact' }); ok('infraestrutura sem impacto no texto = fraco (no_impact)')
+  assert.equal(st('infrastructure', 'Metrô da Gávea tem obras retomadas após dez anos', 'https://www1.folha.uol.com.br/cotidiano/2026/gavea.shtml', 'Obras da estação retomadas; a expectativa é de valorização dos imóveis do entorno.').strength, 'strong'); ok('infraestrutura com "valorização dos imóveis" = forte')
+  assert.equal(st('launch', 'Transações Imobiliárias Realizadas | Amplitude Real Estate — Incorporação Residencial Estância Pernambuco Leblon', 'https://amplitudere.com.br/transacoes', 'Aquisição do terreno para incorporação residencial no Leblon.').strength, 'strong'); ok('lançamento da Amplitude = forte')
+  // ficha antiga/sem os campos, e modo off: tudo forte
+  const Q2only = parseQuality({ mode: 'enforce', version: 2, block_url_patterns: ['/x'] })
+  assert.deepEqual(signalStrength({ kind: 'launch', title: 'Funcionamento neste fim de semana', summary: '', source_url: 'https://a.com/conteudo-de-marca/x' }, Q2only), { strength: 'strong' })
+  assert.equal(signalStrength({ kind: 'launch', title: 'Funcionamento', summary: '', source_url: 'https://a.com/conteudo-de-marca/x' }, { ...Q3, mode: 'off' }).strength, 'strong'); ok('sem os campos novos (ou modo off) = tudo forte, comportamento antigo')
+  // coleta: grava strength/weak_reason na meta, nunca rejeita por fraco, conta em flagged
+  const rep = filterHitsReport([
+    hit({ title: 'Funcionamento do MetrôRio neste fim de semana em Ipanema', url: 'https://metrorio.com.br/aviso', content: 'Metrô de Ipanema funciona em horário especial neste fim de semana. Veja.' }),
+    hit({ title: 'Metrô chega a Ipanema e valoriza imóveis', url: 'https://oglobo.globo.com/rio/metro-ipanema', content: 'Obra em Ipanema deve valorizar os imóveis da região.' }),
+  ], { region: 'Ipanema', kind: 'infrastructure', days: 30, excludeDomains: [], nowMs: NOW, quality: Q3 })
+  assert.equal(rep.signals.length, 2); assert.equal(Object.keys(rep.rejected).length, 0)
+  assert.deepEqual([rep.signals[0].meta.strength, rep.signals[0].meta.weak_reason, rep.signals[1].meta.strength, rep.signals[1].meta.weak_reason], ['weak', 'weak_title', 'strong', undefined]); assert.equal(rep.flagged.weak_title, 1)
+  const off = filterHitsReport([hit()], { region: 'Ipanema', kind: 'infrastructure', days: 30, excludeDomains: [], nowMs: NOW }); assert.equal(off.signals[0].meta.strength, undefined); ok('coleta: meta.strength/weak_reason gravados, fraco não reprova e é contado; modo off não muda a meta')
+}
+
+
+{ // Pesquisa compartilhada por bairro (passo 2 da economia de custos, 10/11)
+  const store = new Map()
+  const memCache = { get: async (k, d) => store.get(`${k}|${d}`) ?? null, put: async (k, d, _q, hits) => { store.set(`${k}|${d}`, hits) } }
+  let calls = 0
+  const counted = async (k, q) => { calls++; return goodSearch(k, q) }
+  // Duas imobiliárias com os mesmos bairros, no mesmo dia, mesmo banco falso (sinais por empresa).
+  const a = fakeAdmin()
+  const r1 = await collectMarketNews(a, mk({ companyId: 'c1', search: counted, cache: memCache }))
+  const firstCalls = calls
+  assert.ok(r1.searched > 0 && firstCalls === r1.searched && !r1.reused && r1.spent_usd > 0)
+  const r2 = await collectMarketNews(a, mk({ companyId: 'c2', search: counted, cache: memCache }))
+  assert.equal(calls, firstCalls, 'a 2ª imobiliária não chama a Tavily'); assert.equal(r2.reused, r2.searched); assert.equal(r2.spent_usd, 0)
+  assert.ok(r2.added > 0 && a.db.signals.filter(x => x.company_id === 'c2').length === r2.added)
+  const c2rows = a.db.perf.filter(x => x.company_id === 'c2'); assert.ok(c2rows.every(x => x.cost_usd === 0 && /reaproveitada/.test(x.task_description)))
+  ok('mesma busca no mesmo dia: a 2ª imobiliária reaproveita (sem crédito, custo 0, marcada), e ganha os próprios sinais')
+  const r3 = await collectMarketNews(fakeAdmin(), mk({ companyId: 'c3', search: counted, cache: memCache, nowMs: NOW + 86400_000 }))
+  assert.ok(r3.searched > 0 && !r3.reused && calls > firstCalls); ok('no dia seguinte busca de novo (notícia nova)')
+  const broken = { get: async () => { throw new Error('x') }, put: async () => { throw new Error('y') } }
+  const before = calls
+  const r4 = await collectMarketNews(fakeAdmin(), mk({ companyId: 'c4', search: counted, cache: broken }))
+  assert.ok(r4.searched > 0 && calls - before === r4.searched); ok('cache com erro: busca normal (nunca fica sem notícia)')
+  const k1 = await searchCacheKey('Leblon imóveis', { days: 7, max_results: 5, exclude_domains: ['b.com', 'a.com'] })
+  assert.equal(k1, await searchCacheKey(' leblon IMÓVEIS ', { days: 7, max_results: 5, exclude_domains: ['A.com', 'b.com'] }))
+  assert.notEqual(k1, await searchCacheKey('Leblon imóveis', { days: 30, max_results: 5, exclude_domains: ['a.com', 'b.com'] }))
+  ok('chave da busca: mesma busca = mesma chave; janela de dias diferente = outra chave')
+}
+
 console.log(`\n${n} verificações ok`)

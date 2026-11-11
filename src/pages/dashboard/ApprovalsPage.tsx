@@ -12,6 +12,10 @@ import CalendarPostModal from './marketingAi/CalendarPostModal'
 import type { TestPost } from './marketingAi/TestingArea'
 import { PieceChips } from './marketingAi/PieceLabels'
 import { useSSNames } from './marketingAi/shared'
+import AgentConfigTab from './marketingAi/AgentConfigTab'
+import LicenseNotice from './LicenseNotice'
+import WeekApproval, { type WeekPieceRow } from './WeekApproval'
+import { weekWindow } from '../../lib/weekApproval'
 
 const EXEC_LABEL_EN: Record<string, string> = { organico: 'Organic', cliente: 'Reply to customer', campanha: 'Campaign' }
 const RISK_EN: Record<string, string> = { high: 'high', medium: 'medium', low: 'low' }
@@ -214,7 +218,7 @@ function HistoryRow({ a, busy, onRetry }: { a: AgentAction; busy: boolean; onRet
       <span style={{ fontSize: '14px' }}>{CHANNEL_ICON[a.channel ?? 'internal'] ?? '⚙️'}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: '12px', fontWeight: 600, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
-        <div style={{ fontSize: '9.5px', color: MUTED }}>{a.agent_name ?? a.agent_key} · {new Date(a.created_at).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' })}{a.execution_error ? ` · ${a.execution_error.slice(0, 60)}` : ''}</div>
+        <div style={{ fontSize: '9.5px', color: MUTED }}>{a.agent_name ?? a.agent_key} · {new Date(a.created_at).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' })}{a.execution_error ? ` · ${a.execution_error.slice(0, 60)}` : ''}{(a.execution_result as { waiting?: string } | null)?.waiting === 'availability_unverifiable' ? (lang === 'en' ? ' · checking availability, retrying' : ' · conferindo a disponibilidade, tentando de novo') : ''}</div>
       </div>
       <span style={{ fontSize: '9px', fontWeight: 700, color: ap.color, flexShrink: 0 }}>{lang === 'en' ? APPROVAL_LABEL_EN[a.approval_status] ?? ap.label : ap.label}</span>
       <span style={{ fontSize: '9px', fontWeight: 700, color: ex.color, flexShrink: 0 }}>{lang === 'en' ? EXECUTION_LABEL_EN[a.execution_status] ?? ex.label : ex.label}</span>
@@ -245,6 +249,7 @@ export default function ApprovalsPage() {
   const [pieces, setPieces] = useState<CalPiece[]>([])
   const [oppTitles, setOppTitles] = useState<Record<string, string>>({})
   const [openPiece, setOpenPiece] = useState<CalPiece | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   const token = session?.access_token ?? ''
 
@@ -265,6 +270,7 @@ export default function ApprovalsPage() {
     const queued = new Set(((q ?? []) as { ref_id: string }[]).map(r => r.ref_id))
     const shown = ((v ?? []) as CalPiece[]).filter(p => !queued.has(p.id))
     setPieces(shown)
+    setReloadKey(k => k + 1)
     // Selo "Da oportunidade: <título>" (Etapa 4B): título buscado de uma vez; coluna/tabela ausente = sem título, o selo continua.
     const oppIds = [...new Set(shown.map(p => p.opportunity_id).filter((x): x is string => !!x))]
     if (oppIds.length) {
@@ -339,7 +345,13 @@ export default function ApprovalsPage() {
     setContent(prev => prev.filter(i => i.id !== id)); setBusyId(null)
   }
 
-  const nothing = !loading && pending.length === 0 && content.length === 0 && pieces.length === 0
+  // "Sua semana" (2026-11-10): peças planejadas de hoje até +7 dias vão pro bloco da semana (aprovar tudo de uma vez);
+  // o resto continua na lista "Pra aprovar", uma a uma.
+  const { from: wFrom, to: wTo } = weekWindow()
+  const inWeek = (p: CalPiece) => !!p.planned_for && p.planned_for >= wFrom && p.planned_for <= wTo
+  const weekPieces = pieces.filter(inWeek)
+  const loose = pieces.filter(p => !inWeek(p))
+  const nothing = !loading && pending.length === 0 && content.length === 0 && loose.length === 0 && weekPieces.length === 0
 
   return (
     <div>
@@ -351,6 +363,13 @@ export default function ApprovalsPage() {
       </div>
 
       <div style={{ padding: '28px 32px', maxWidth: '820px' }}>
+        {companyId && <LicenseNotice companyId={companyId} lang={lang} />}
+        {/* 2026-11-04 (dono): a escolha "Pedir aprovação / Executar automaticamente" mora aqui (saiu de Configurações). */}
+        {companyId && (
+          <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px 18px', marginBottom: '28px' }}>
+            <AgentConfigTab company={{ id: companyId }} compact />
+          </div>
+        )}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px', color: MUTED }}>{d[lang].common.loading}</div>
         ) : (
@@ -358,9 +377,15 @@ export default function ApprovalsPage() {
             {/* Lista única — ações universais dos agentes + conteúdo orgânico,
                 combinados por data, cada card já classificado (Orgânico /
                 Responder cliente / Campanha) via ExecBadge. */}
-            {(pending.length > 0 || content.length > 0 || pieces.length > 0) && (
+            {companyId && (
+              <WeekApproval companyId={companyId} token={token} lang={lang} reloadKey={reloadKey}
+                pieces={weekPieces as unknown as WeekPieceRow[]}
+                onOpen={id => { const p = pieces.find(x => x.id === id); if (p) setOpenPiece(p) }}
+                onChanged={() => { void load() }} />
+            )}
+            {(pending.length > 0 || content.length > 0 || loose.length > 0) && (
               <section style={{ marginBottom: '28px' }}>
-                <SectionTitle label={tx.toApprove} count={pending.length + content.length + pieces.length} />
+                <SectionTitle label={tx.toApprove} count={pending.length + content.length + loose.length} />
                 {contentMsg && <div style={{ fontSize: '11.5px', color: contentMsg.startsWith('✓') ? GREEN : '#f87171', marginBottom: '10px' }}>{contentMsg}</div>}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {[
@@ -372,7 +397,7 @@ export default function ApprovalsPage() {
                       <ContentCard key={`c-${item.id}`} item={item} busy={busyId === item.id} lang={lang}
                         onApprove={() => approveContent(item)} onDiscard={() => discardContent(item.id)} />
                     ) })),
-                    ...pieces.map(p => ({ key: `p-${p.id}`, created_at: p.created_at, node: (
+                    ...loose.map(p => ({ key: `p-${p.id}`, created_at: p.created_at, node: (
                       <PieceCard key={`p-${p.id}`} p={p} lang={lang} ssNames={ssNames} oppTitle={p.opportunity_id ? oppTitles[p.opportunity_id] : undefined} onOpen={() => setOpenPiece(p)} />
                     ) })),
                   ]

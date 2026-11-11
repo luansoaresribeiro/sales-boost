@@ -29,6 +29,9 @@ function buildNotificationText(eventType: string, data?: Record<string, unknown>
       const novidade = newCount > 0 ? `${newCount} nova(s) desta vez.\n` : ''
       return `📋 Resumo do Agente de Marketing\n${openCount} oportunidade(s) aberta(s) aguardando você:\n${list}\n${novidade}Use /relatorio para mais detalhes.`
     }
+    case 'STRATEGY_PIVOT':
+      // Proposta do check-up (data.proposal) esperando o dono. Troca pedida pelo próprio dono mantém o texto genérico de sempre.
+      return data?.proposal ? '🧭 Há uma proposta de mudança na sua estratégia esperando você. Abra a tela Estratégia para aprovar ou descartar.' : (fallback ?? 'Nova atualização do Sales Boost.')
     case 'REPORT_READY':
       return `📊 Relatório disponível!\nPeríodo: ${(data?.period as string) ?? ''}\nScore: ${(data?.health_score as number) ?? ''}\nUse /relatorio para acessar.`
     case 'AGENT_ACTION': {
@@ -39,6 +42,10 @@ function buildNotificationText(eventType: string, data?: Record<string, unknown>
       if (action === 'posts_created') {
         const preview = sample ? `\n\nExemplo: "${sample.slice(0, 140)}${sample.length > 140 ? '…' : ''}"` : ''
         return `📝 O agente criou ${count} post(s) novo(s)\nMotivo: ${reason}${preview}\n\nAprove em Posts.`
+      }
+      // Domingo (2026-11-10): o plano da semana ficou pronto → o dono aprova a semana inteira de uma vez.
+      if (action === 'week_ready') {
+        return `🗓️ Sua semana está pronta: ${count} post(s) planejado(s).\n\nVeja e aprove a semana inteira de uma vez em Central do dono → Aprovações. Cada post sai sozinho no seu dia, e dá pra tirar ou cancelar qualquer um antes.\n\nhttps://getsaleboost.com/dashboard/aprovacoes`
       }
       if (action === 'replies_drafted') {
         return `💬 O agente rascunhou ${count} resposta(s) de avaliação\nMotivo: ${reason}\n\nAprove em Oportunidades.`

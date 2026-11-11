@@ -8,7 +8,7 @@ import {
   tipSources, topicCfgOf, topicText, validateGeneral, validateLight, validateRegulated, withSource,
 } from '../supabase/functions/_shared/deckTopic.ts'
 import { decideTopic, guardDeck, topicBlock } from '../supabase/functions/_shared/deckGuard.ts'
-import { deckPromptRules, rewritePrompt } from '../supabase/functions/_shared/deckSlides.ts'
+import { deckPromptRules, inventedNumbers, lostAccents, numbersOf, rewritePrompt } from '../supabase/functions/_shared/deckSlides.ts'
 import { fetchFaqConfig, isPublishable, isOfficiallyReleased, isUsableTip } from '../supabase/functions/_shared/faqCheck.ts'
 import { fetchFormatAliases } from '../supabase/functions/_shared/formatCatalog.ts'
 
@@ -308,6 +308,49 @@ ok('guarda regulado: IA sem slides → carrossel das dicas')
   assert.equal(r.slides[0].layout, 'capa'); assert.equal(r.slides[3].cta, 'Me chama no direct')
 }
 ok('guarda geral: dígito, lei e prazo caem; slide bom fica; sempre sem fato')
+{ // geral: regra afirmada como fato SEM número (caso Tespon 2026-11-03) — o verificador pega e o slide vira texto seguro
+  const geral = { mode: 'geral', category: 'financiamento', label: 'Financiamento', tips: [], hosts: [] }
+  const claim = 'Morar em outro estado não impede o uso do fundo de garantia.'
+  const slides = [S('capa', 'Fundo de garantia na compra', ''), S('destaque', '', claim), S('destaque', '', 'Confira sua situação com o banco antes.'), S('fecho', 'Dúvidas?', '', '', 'Me chama no direct')]
+  const ask = async (p) => (/AFIRMAM COMO FATO/.test(p) ? (/não impede/.test(p) ? '{"unsupported":[{"unit":"slide 2","claim":"não impede"}]}' : '{"unsupported":[]}') : `{"title":"","text":"${claim}","items":"","highlight":"","cta":""}`)
+  const r = await run(geral, slides, 'Confira com o banco.', ask)
+  assert.notEqual(r.slides[1].text, claim); assert.equal(r.slides[2].text, 'Confira sua situação com o banco antes.')
+  assert.ok(r.notes.some(x => /regra sem fonte/.test(x)), JSON.stringify(r.notes))
+}
+ok('guarda geral: regra afirmada como fato sem número → verificador → texto seguro')
+{ // reescrita que perde os acentos é descartada (caso Tespon: "voce", "imovel", "So entao")
+  assert.equal(lostAccents({ title: '', text: 'Verifique se voce tem saldo. So entao leve ao banco.', items: '', highlight: '', cta: '' }, 'pt'), true)
+  assert.equal(lostAccents({ title: '', text: 'Verifique se você tem saldo. Só então leve ao banco.', items: '', highlight: '', cta: '' }, 'pt'), false)
+  assert.equal(lostAccents({ title: '', text: 'nao imovel voce', items: '', highlight: '', cta: '' }, 'en'), false)
+  const geral = { mode: 'geral', category: 'impostos', label: 'Impostos e taxas', tips: [], hosts: [] }
+  const slides = [S('capa', 'Antes de comprar', ''), S('destaque', '', 'O prazo é de 30 dias para você.'), S('fecho', 'Dúvidas?', '', '', 'x')]
+  const r = await run(geral, slides, '', async (p) => (/Slide atual/.test(p) ? '{"title":"","text":"Voce nao precisa correr com o imovel.","items":"","highlight":"","cta":""}' : '{"unsupported":[]}'))
+  assert.notEqual(r.slides[1].text, 'Voce nao precisa correr com o imovel.')
+  assert.ok(!lostAccents(r.slides[1], 'pt'))
+}
+ok('reescrita sem acento é descartada (vira texto seguro no geral)')
+{ // texto ORIGINAL da IA sem acento (Tespon FGTS geral, 3ª rodada): 1 palavra longa já basta; reescrita com acento entra
+  assert.equal(lostAccents({ title: 'Quer entender como funciona pra voce?', text: '', items: '', highlight: '', cta: '' }, 'pt'), true)
+  assert.equal(lostAccents({ title: '', text: 'Nenhuma informacao geral substitui a analise do seu caso.', items: '', highlight: '', cta: '' }, 'pt'), true)
+  assert.equal(lostAccents({ title: '', text: 'Leve o documento ate o banco.', items: '', highlight: '', cta: '' }, 'pt'), false) // 1 curta só não basta
+  const geral = { mode: 'geral', category: 'impostos', label: 'Impostos e taxas', tips: [], hosts: [] }
+  const slides = [S('capa', 'Antes de comprar', ''), S('destaque', 'Regra de ouro', 'Nenhuma informacao geral substitui a analise do seu caso.'), S('fecho', 'Quer entender como funciona pra voce?', '', '', 'x')]
+  const fixed = await run(geral, slides, '', async (p) => (/SEM ACENTO/.test(p)
+    ? (/Regra de ouro/.test(p) ? '{"title":"Regra de ouro","text":"Nenhuma informação geral substitui a análise do seu caso.","items":"","highlight":"","cta":""}' : '{"title":"Quer entender como funciona pra você?","text":"","items":"","highlight":"","cta":"x"}')
+    : '{"unsupported":[]}'))
+  assert.equal(fixed.slides[1].text, 'Nenhuma informação geral substitui a análise do seu caso.')
+  assert.ok(fixed.slides.every(s => !lostAccents(s, 'pt')))
+  const stubborn = await run(geral, slides, '', async (p) => (/Slide atual/.test(p) ? '{"title":"","text":"Cada situacao e diferente.","items":"","highlight":"","cta":""}' : '{"unsupported":[]}'))
+  assert.ok(stubborn.slides.every(s => !lostAccents(s, 'pt')))
+  assert.ok(stubborn.notes.some(x => /sem acento/.test(x)))
+}
+ok('slide da IA sem acento → reescrita com acento → senão texto seguro')
+{ // número da dica conferida não é "inventado" (Tespon ITBI 2026-11-03: aviso falso no 3%). Mesma chave dos dois lados.
+  const tipText = 'Quanto é o ITBI no Rio? No Rio de Janeiro, o ITBI é de 3% sobre o valor de venda ou avaliação do imóvel.'
+  assert.deepEqual(inventedNumbers({ title: 'Como funciona', text: '', items: '3% sobre o valor', cta: '' }, numbersOf(tipText)), [])
+  assert.deepEqual(inventedNumbers({ title: 'Como funciona', text: '', items: '2% para o primeiro imóvel', cta: '' }, numbersOf(tipText)), ['2'])
+}
+ok('número que está na dica conferida não gera aviso; número fora dela gera')
 { // leve: reescreve 1x; se continuar, só avisa
   const slides = [S('capa', 'Primeiro imóvel', ''), S('destaque', '', 'Use o FGTS na entrada.'), S('destaque', '', 'Compare bairros com calma.'), S('fecho', 'Fale com a gente', '', '', 'x')]
   const leve = { mode: 'leve', category: null, label: '', tips: [], hosts: [] }

@@ -1,15 +1,19 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useCompany } from '../../../contexts/CompanyContext'
-import { weekSlots, planWindow, type MixItem, type WeekSlot } from '../../../lib/weekSlots'
+import type { MixItem, WeekSlot } from '../../../lib/weekSlots'
+import { buildFormatMeta, slotsByDay as groupSlotsByDay, openSlotsForDay, type FormatMeta } from './calendarSlots'
+import PieceIntent from './PieceIntent'
+import type { OppMap } from './activationType'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLang } from '../../../contexts/LanguageContext'
-import { CARD, MUTED, BORDER, D, SUPABASE_URL, useSSNames } from './shared'
+import { CARD, MUTED, BORDER, D, SUPABASE_URL, useSSNames, STATUS_META } from './shared'
 import { templateLabel, type TestPost } from './TestingArea'
 import CalendarPostModal from './CalendarPostModal'
 import MakeNowPicker from './MakeNowPicker'
 import { useRealtime } from '../../../lib/useRealtime'
 import { PieceChips } from './PieceLabels'
+import { useItemUsage } from './useItemUsage'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -41,16 +45,8 @@ const TX = {
   },
 } as const
 const KIND_ICON: Record<string, string> = { organico: '📝', stories: '📖', campanhas: '🎯' }
-const STATUS_META: Record<string, { label: string; color: string }> = {
-  draft: { label: 'Avaliando', color: MUTED },
-  review: { label: 'Nota baixa — revisar', color: '#FBBF24' },
-  vault: { label: 'Pronta pra aprovar', color: '#A78BFA' },
-  scheduled: { label: 'Agendado', color: GREEN },
-  adapt: { label: 'Adaptando', color: MUTED },
-}
 
-type Item = TestPost & { kind?: string; planned_for: string | null; item_id?: string | null; recipe?: string | null; story_worthy?: boolean | null }
-interface FormatMeta { surface?: string; recipe?: string; family?: string; pillar?: string }
+type Item = TestPost & { kind?: string; planned_for: string | null; item_id?: string | null; recipe?: string | null; story_worthy?: boolean | null; opportunity_id?: string | null }
 // Formatos genéricos (não vêm da ficha) e a família que o servidor dá a eles (formatCatalog.ts).
 const GENERIC_FAMILY: Record<string, string> = { post_card: 'eventual', carrossel_slides: 'educativo' }
 const SURFACE_ICON: Record<string, string> = { feed: '📝', stories: '📖', reels: '🎬', dm: '💬' }
@@ -69,6 +65,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   const token = session?.access_token ?? ''
   const { company } = useCompany()
   const ssNames = useSSNames(companyId)
+  const usage = useItemUsage(companyId)
   const [items, setItems] = useState<Item[]>([])
   const [mix, setMix] = useState<MixItem[]>([])
   const [formatMeta, setFormatMeta] = useState<Record<string, FormatMeta>>({})
@@ -82,6 +79,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   const [err, setErr] = useState('')
   const [open, setOpen] = useState<Item | null>(null)
   const [loose, setLoose] = useState<Item[]>([])
+  const [oppById, setOppById] = useState<OppMap>({})
 
   const thisWeekStart = startOfWeek(new Date())
   const nextWeekStart = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate() + 7)
@@ -100,12 +98,18 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
       // Vault, ficam aqui embaixo pra não sumirem.
       supabase.from('marketing_ai_test_content').select('*').eq('company_id', companyId).is('planned_for', null).in('status', ['vault', 'draft']).order('created_at', { ascending: false }).limit(12),
     ])
-    setLoose((avulsas ?? []) as Item[])
     const plan = (strat?.content_plan ?? null) as { weekly_mix?: MixItem[] } | null
     setMix(Array.isArray(plan?.weekly_mix) ? plan!.weekly_mix : [])
-    const fm: Record<string, FormatMeta> = {}
-    for (const f of ((pb?.config as { content_formats?: { key: string; surface?: string; recipe?: string; family?: string; pillar?: string; producer?: string }[] } | null)?.content_formats ?? [])) fm[f.key] = { surface: f.surface, recipe: f.recipe, family: f.family ?? (f.producer === 'item_video' ? 'tour' : 'eventual'), pillar: f.pillar }
-    setFormatMeta(fm)
+    setFormatMeta(buildFormatMeta(pb?.config))
+    // Oportunidades das peças (uma consulta em lote). Falhou = null → "Não foi possível verificar" (não afirma tipo).
+    const oppIds = [...new Set([...(posts ?? []), ...(avulsas ?? [])].map(p => (p as Item).opportunity_id).filter((x): x is string => !!x))]
+    if (!oppIds.length) setOppById({})
+    else {
+      const { data: os, error: oe } = await supabase.from('growth_opportunities').select('id, title, status').eq('company_id', companyId).in('id', oppIds)
+      setOppById(oe ? null : Object.fromEntries(((os ?? []) as { id: string; title: string; status: string }[]).map(o => [o.id, o])))
+    }
+    // Peças só entram na tela depois da resposta das oportunidades: o Tipo nunca aparece "não identificado" por falta de resposta.
+    setLoose((avulsas ?? []) as Item[])
     setItems((posts ?? []) as Item[])
     setScheduledIds(new Set(((actions ?? []) as { ref_id: string }[]).map(a => a.ref_id)))
     // null = o dono nunca mexeu → liga sozinho quando há plano da estratégia
@@ -154,24 +158,9 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   // Vagas do plano da estratégia: só a PRÓXIMA janela (seg–dom), que é a que
   // o domingo e o botão "Criar as peças" geram de fato (nextWeekDates no
   // creative-generate) — a tela não promete vaga que o servidor não preenche.
-  const slotsByDay: Record<string, WeekSlot[]> = {}
-  for (const sl of weekSlots(mix, planWindow(1, today))) {
-    if (sl.date < todayIso) continue
-    ;(slotsByDay[sl.date] ??= []).push(sl)
-  }
+  const slotsByDay = groupSlotsByDay(mix, todayIso, today)
   const dmItems = mix.filter(m => m.producer === 'dm')
-  // Peça já criada ocupa a vaga do mesmo formato (receita do item) ou, se for
-  // post solto (sem item), a primeira vaga de post do dia.
-  const openSlots = (iso: string, dayItems: Item[]): WeekSlot[] => {
-    const left = [...dayItems]
-    return (slotsByDay[iso] ?? []).filter(sl => {
-      // Vídeo do calendário: a peça nasce com a receita 'video_imovel' (creative-generate).
-      const recipe = sl.producer === 'item_video' ? 'video_imovel' : formatMeta[sl.format]?.recipe
-      const i = left.findIndex(it => (recipe && it.recipe === recipe) || (sl.producer === 'post' && !it.item_id))
-      if (i >= 0) { left.splice(i, 1); return false }
-      return true
-    })
-  }
+  const openSlots = (iso: string, dayItems: Item[]): WeekSlot[] => openSlotsForDay(slotsByDay[iso], dayItems, formatMeta)
   const slotWho = (sl: WeekSlot) => sl.producer === 'post' ? t.slotAuto
     : sl.producer === 'item_video' ? t.slotVideo
     : formatMeta[sl.format]?.recipe ? `${t.slotAuto} · ${t.slotItem}` : t.slotItem
@@ -204,6 +193,10 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                       <span style={{ fontSize: '8.5px', fontWeight: 700, color: sm.color }}>● {lang === 'en' ? STATUS_LABEL_EN[status] ?? sm.label : sm.label}{it.quality_score != null ? ` · ${it.quality_score}` : ''}</span>
                       {it.brief?.template && <span style={{ fontSize: '8.5px', color: MUTED }}>· {templateLabel(it.brief.template, lang)}</span>}
                     </div>
+                    {it.item_id && usage.data.items[it.item_id] && (
+                      <div title={usage.data.items[it.item_id].title} style={{ fontSize: '9px', color: 'rgba(255,255,255,0.7)', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🏠 {usage.data.items[it.item_id].title}</div>
+                    )}
+                    <PieceIntent mode="compact" piece={it} intent={it.intent} oppById={oppById} />
                     <div style={{ marginTop: '4px' }}><PieceChips familia={it.familia} pilarSs={it.pilar_ss} tema={it.pillar} ssNames={ssNames} /></div>
                     {it.story_worthy && it.kind !== 'stories' && <div style={{ fontSize: '8.5px', color: '#A78BFA', marginTop: '2px' }}>{t.alsoStory}</div>}
                   </button>
@@ -299,7 +292,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                 })}
               </div>}
           </div>
-          {open && <CalendarPostModal post={open} companyId={companyId} onClose={() => setOpen(null)} onChanged={() => { void load() }} />}
+          {open && <CalendarPostModal post={open} companyId={companyId} oppById={oppById} onClose={() => setOpen(null)} onChanged={() => { void load() }} />}
         </>
       )}
     </div>

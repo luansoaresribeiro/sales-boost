@@ -243,6 +243,18 @@ antiga sem rótulos é completada na hora de gerar (família/tema do catálogo,
 pilar pelo funil ou rodízio). O CTA sugerido nunca passa por cima da trava do
 QUERO. Detalhes e divergências: [PLANO-CRIATIVOS.md](PLANO-CRIATIVOS.md#fase-3-a--b--em-código-aguardando-migration-e-deploy-2026-10-22).
 
+### Contexto de mercado nos temas da semana (Fase 3, 2026-11-04)
+
+O pedido de temas da semana (`_shared/weekThemes.ts`, 1 chamada barata por semana — nenhuma chamada nova) pode receber, montado em CÓDIGO
+(`_shared/marketContext.ts`): até 5 sinais do sistema (`collected_by='system'`, não ignorados, `quality_ok` não reprovado, últimos 14 dias) + até 3
+tendências ativas (`marketing_ai_trends.status='active'`). Cada item vai com um código curto (S1…S5, T1…T3); o Diretor diz em `"fontes"` quais usou e o
+código descarta qualquer código que não estava na lista. Regra no prompt: "use só se encaixar no pilar da vaga; nunca cite número que não esteja no
+sinal". **Sem nenhum sinal elegível o pedido é idêntico ao de antes** (teste em `scripts/test-fase3-direcionamento.mjs`).
+O que foi usado fica na peça: `intent.market_context = { signal_ids, trend_ids, evidence:[{id,title,source_name,source_url,observed_at,quality_version}] }`
+(cópia no momento do plano; validada em `cleanIntent`/`cleanMarketContext`, com limites). **Só informação:** não entra no texto que vai à IA da peça
+(`intentBlock`). O modal da peça mostra "Tema inspirado em: título · fonte · data" (com link) **só** quando essa evidência existe. Vaga sem intenção
+(setor sem pilar de Social Selling) ganha uma "casca" de intenção só com o contexto. Peças de oportunidade seguem em trilha separada (não mexe).
+
 ## Trends de verdade (2026-10-09)
 
 Primeira fonte externa real de "o que está em alta": o diagnóstico grátis

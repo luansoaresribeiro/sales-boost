@@ -9,8 +9,11 @@ export type Familia = 'tour' | 'oferta' | 'educativo' | 'bairro' | 'eventual'
 export interface MixItem { format: string; name: string; producer: Producer; per_week: number; pillar: string; purpose: string; familia?: Familia; pilar_ss?: string; tema?: string }
 export interface WeekSlot { date: string; format: string; name: string; producer: Producer; pillar: string; purpose: string; familia?: Familia; pilar_ss?: string; tema?: string }
 
+// Tour virtual saiu do plano da semana (dono, 2026-11-10) — mesma lista de _shared/formatCatalog.ts.
+export const OUT_OF_WEEKLY_PLAN: Producer[] = ['item_video']
+
 export function weekSlots(mixRaw: MixItem[] | null | undefined, dates: string[]): WeekSlot[] {
-  const mix = (Array.isArray(mixRaw) ? mixRaw : []).filter(m => m.producer !== 'dm')
+  const mix = (Array.isArray(mixRaw) ? mixRaw : []).filter(m => m.producer !== 'dm' && !OUT_OF_WEEKLY_PLAN.includes(m.producer))
   const left = mix.map(m => ({ m, n: Math.max(0, m.per_week | 0) }))
   const queue: MixItem[] = []
   while (left.some(x => x.n > 0)) for (const x of left) if (x.n > 0) { queue.push(x.m); x.n-- }

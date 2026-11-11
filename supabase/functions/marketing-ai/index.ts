@@ -36,6 +36,7 @@ import { cronMarketIntel } from '../_shared/marketIntelCron.ts'
 import { fitsCap } from '../_shared/spendCap.ts'
 import { generateOpportunityPieces, type Dispatch } from '../_shared/opportunityPiecesRun.ts'
 import { PUBLIC_ACTIONS, getPublicPageState, handlePublicPage, publicCtxFrom, setPublicPage } from '../_shared/publicPageRun.ts'
+import type { Usage } from '../_shared/aiCost.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -168,7 +169,7 @@ async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1200
 }
 
 // Mesma Claude/modelo das outras actions, mas devolvendo também os tokens (custo vai pra agent_performance).
-async function callClaudeWithUsage(anthropicKey: string, prompt: string, maxTokens: number): Promise<{ text: string; tokens: number }> {
+async function callClaudeWithUsage(anthropicKey: string, prompt: string, maxTokens: number): Promise<{ text: string; tokens: number; usage?: Usage; model: string }> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -177,7 +178,8 @@ async function callClaudeWithUsage(anthropicKey: string, prompt: string, maxToke
   })
   if (!res.ok) throw new Error(`Claude error: ${(await res.text()).slice(0, 300)}`)
   const data = await res.json()
-  return { text: (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim(), tokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0) }
+  // usage/model: viram dólares e a separação do cache em agent_performance (medição 10/11). `tokens` segue igual (entrada + saída).
+  return { text: (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim(), tokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0), usage: data.usage ?? undefined, model: String(data.model ?? 'claude-sonnet-4-6') }
 }
 
 function parseJsonArray<T>(raw: string): T[] {
@@ -746,7 +748,7 @@ Deno.serve(async (req) => {
     // growth_opportunities — nada é publicado. Fica ANTES do getConfig de propósito: não depende da
     // configuração do Marketing AI (a Tespon pode não ter). Lógica em _shared/opportunityRun.ts.
     if (action === 'run_opportunities') {
-      const r = await runOpportunities(admin, company.id as string, (prompt, maxTokens) => callClaudeWithUsage(anthropicKey, prompt, maxTokens))
+      const r = await runOpportunities(admin, company.id as string, (prompt, maxTokens) => callClaudeWithUsage(anthropicKey, prompt, maxTokens), { trigger: 'manual' })
       const { status, ...rest } = r
       return json(rest, status)
     }

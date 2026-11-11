@@ -3,7 +3,7 @@
 // (decideTopic) e garantir, DEPOIS da IA escrever, que o texto respeita o modo (guardDeck).
 // A IA é injetada (`ask`) pra isso rodar igual no Deno e num teste em Node.
 import { checkAndSave, fetchFaqConfig, getTavilyKey, parseJson, type FaqConfig, type FaqRow } from './faqCheck.ts'
-import { normalizeSlide, rewritePrompt, type DeckSlide } from './deckSlides.ts'
+import { lostAccents, normalizeSlide, rewritePrompt, type DeckSlide } from './deckSlides.ts'
 import {
   classifyByTerms, dueTips, hostOf, generalFallbackCaption, generalFallbackDeck, norm, parseTopicAnswer, pickTips, slideText, tipFallbackCaption, tipFallbackDeck, tipSources,
   topicCfgOf, topicPrompt, validateGeneral, validateLight, validateRegulated, withSource, type DeckMode, type TopicCfg,
@@ -60,7 +60,7 @@ ${t.tips.map((x, i) => `Dica ${i + 1} — Pergunta: ${x.title}\nResposta: ${x.co
 ${t.hosts.length ? `Fonte oficial: ${t.hosts.join(', ')}. No slide final, "text" termina com "Fonte: ${t.hosts[0]}"; a legenda termina com "Fonte: ${t.hosts[0]}".` : ''}
 Regras: um slide do meio por dica, na ordem; explique com as palavras da resposta, sem acrescentar fato, exceção, número, prazo, taxa, lei, imposto ou programa que a resposta não diga. Se uma dica tem número ou nome de lei, copie exatamente. A legenda só explica o que as dicas dizem. Nada de números ou fatos vindos de outro lugar.\n`
   }
-  if (t.mode === 'geral') return `\nMODO DICA GERAL — tema regulado${t.label ? ` (${t.label})` : ''} SEM dica conferida em fonte oficial. Escreva só conselho geral e prático: NENHUM número, prazo, taxa, valor, percentual, nome de lei, imposto ou programa, e nenhuma regra afirmada como fato. Pode incentivar a conferir em fonte oficial ou falar com quem entende.\n`
+  if (t.mode === 'geral') return `\nMODO DICA GERAL — tema regulado${t.label ? ` (${t.label})` : ''} SEM dica conferida em fonte oficial. Escreva só conselho geral e prático: NENHUM número, prazo, taxa, valor, percentual, nome de lei, imposto ou programa, e nenhuma regra afirmada como fato — nem disfarçada de "mito", "erro comum" ou "o que é regra" (não prometa separar mito de regra). Pode incentivar a conferir em fonte oficial ou falar com quem entende.\n`
   return ''
 }
 
@@ -113,6 +113,8 @@ export async function guardDeck(a: {
       if (!Object.keys(raw).length) return null
       const next = normalizeSlide(raw, s.layout === 'capa' || s.layout === 'fecho' ? s.layout : null, s.cta)
       next.layout = s.layout
+      // Reescrita que perdeu os acentos não serve (vira texto de reserva ou fica o original no leve).
+      if (lostAccents(next, a.lang) && !lostAccents(s, a.lang)) { console.error('deckGuard: reescrita perdeu os acentos — descartada'); return null }
       return a.lockSlide(withSourceOne(next))
     } catch (e) { console.error('deckGuard: reescrita do slide falhou', e); return null }
   }
@@ -147,19 +149,28 @@ Responda SÓ em JSON: {"caption":""}`, 900), {})
     })(),
   ])
 
-  // 2) Só no regulado: um verificador barato procura AFIRMAÇÃO fora das dicas (o código só vê número, prazo, lei e termos).
-  if (mode === 'regulado') {
+  // 2) Regulado e geral: um verificador barato procura AFIRMAÇÃO sem base (o código só vê número, prazo, lei e termos).
+  // Geral entrou em 2026-11-03 (Tespon, FGTS sem dica liberada): o carrossel afirmou "morar em outro estado não impede
+  // o uso" — regra afirmada como fato, sem número nenhum, que o validador de código não pega.
+  if (mode !== 'leve') {
     const verify = async (idx: (number | 'c')[]): Promise<Set<number | 'c'> | null> => {
       try {
         const body = idx.map(u => (u === 'c' ? `[legenda]\n${caption}` : `[slide ${u + 1}]\n${slideText(slides[u])}`)).join('\n\n')
-        const raw = parseJson<{ unsupported?: { unit?: string; claim?: string }[] }>(await ask(`Você confere um carrossel de Instagram contra as DICAS CONFERIDAS abaixo, que são a única fonte de fatos permitida.
+        const q = mode === 'regulado'
+          ? `Você confere um carrossel de Instagram contra as DICAS CONFERIDAS abaixo, que são a única fonte de fatos permitida.
 DICAS:
 ${tips.map((t, i) => `${i + 1}. ${t.title}\n${t.content}`).join('\n')}
 
 TEXTOS:
 ${body}
 
-Liste os trechos que AFIRMAM algo (regra, prazo, valor, lei, imposto, programa, exceção, obrigação, condição) que NÃO está dito nas dicas. Conselho geral, convite ("fale com a gente") e a própria pergunta da dica NÃO contam. Responda SÓ em JSON: {"unsupported":[{"unit":"slide 2" ou "legenda","claim":"o trecho"}]}`, 500, true), {})
+Liste os trechos que AFIRMAM algo (regra, prazo, valor, lei, imposto, programa, exceção, obrigação, condição) que NÃO está dito nas dicas. Conselho geral, convite ("fale com a gente") e a própria pergunta da dica NÃO contam. Responda SÓ em JSON: {"unsupported":[{"unit":"slide 2" ou "legenda","claim":"o trecho"}]}`
+          : `Você confere um carrossel de Instagram sobre um tema regulado (${topic.label || 'regras oficiais'}) que NÃO tem fonte conferida: ele só pode dar conselho geral e prático.
+TEXTOS:
+${body}
+
+Liste os trechos que AFIRMAM COMO FATO uma regra, condição, exceção, permissão, proibição, prazo, valor, lei ou obrigação (ex.: "X pode usar", "Y não impede", "é obrigatório") — inclusive regra DISFARÇADA de "erro comum", "mito" ou "engano" (ex.: "erro: achar que precisa morar na cidade" afirma que NÃO precisa). Conselho geral ("confira com o banco", "peça a documentação"), pergunta e convite NÃO contam. Responda SÓ em JSON: {"unsupported":[{"unit":"slide 2" ou "legenda","claim":"o trecho"}]}`
+        const raw = parseJson<{ unsupported?: { unit?: string; claim?: string }[] }>(await ask(q, 500, true), {})
         const bad = new Set<number | 'c'>()
         for (const x of Array.isArray(raw.unsupported) ? raw.unsupported : []) { const u = unitIdx(String(x?.unit ?? '')); if (u !== null && idx.includes(u)) bad.add(u) }
         return bad
@@ -171,17 +182,28 @@ Liste os trechos que AFIRMAM algo (regra, prazo, valor, lei, imposto, programa, 
     else if (bad1.size) {
       const redo = [...bad1]
       await Promise.all(redo.map(async u => {
-        if (u === 'c') { const r = await rewriteCaption(['afirmação que a dica não diz']); if (r && !cIssues(r).length) caption = r; else caption = fbCaption(); return }
-        const r = await rewriteSlide(slides[u], ['afirmação que a dica não diz']); slides[u] = r && unitOk(u, r) ? r : fallbackSlide(u, slides[u])
+        if (u === 'c') { const r = await rewriteCaption([mode === 'regulado' ? 'afirmação que a dica não diz' : 'regra afirmada como fato sem fonte']); if (r && !cIssues(r).length) caption = r; else caption = fbCaption(); return }
+        const r = await rewriteSlide(slides[u], [mode === 'regulado' ? 'afirmação que a dica não diz' : 'regra afirmada como fato sem fonte']); slides[u] = r && unitOk(u, r) ? r : fallbackSlide(u, slides[u])
       }))
       const bad2 = await verify(redo)
       for (const u of bad2 ?? []) {
         if (u === 'c') caption = fbCaption(); else slides[u] = fallbackSlide(u, slides[u])
       }
-      notes.push(`O verificador achou afirmação fora das dicas em ${redo.map(u => (u === 'c' ? 'legenda' : `slide ${u + 1}`)).join(', ')}; o texto foi reescrito ou trocado pelo da dica`)
+      notes.push(`O verificador achou afirmação ${mode === 'regulado' ? 'fora das dicas' : 'de regra sem fonte'} em ${redo.map(u => (u === 'c' ? 'legenda' : `slide ${u + 1}`)).join(', ')}; o texto foi reescrito ou trocado pelo da dica`)
     }
-    slides = withSource(slides, topic.hosts, a.lang).map(s => a.lockSlide(s))
+    if (mode === 'regulado') slides = withSource(slides, topic.hosts, a.lang).map(s => a.lockSlide(s))
   }
+
+  // 3) Acento (2026-11-03, Tespon FGTS geral): a IA escreveu "Nenhuma informacao… Cada situacao… pra voce" e nada
+  // conferia o texto ORIGINAL — só a reescrita. Slide sem acento → 1 reescrita pedindo acento → ainda sem: texto seguro
+  // (leve não tem texto seguro: fica e avisa o dono).
+  const noAcc = slides.map((s, i) => (lostAccents(s, a.lang) ? i : -1)).filter(i => i >= 0)
+  await Promise.all(noAcc.map(async i => {
+    const r = await rewriteSlide(slides[i], ['o texto está SEM ACENTO (ex.: "voce", "situacao", "informacao") — reescreva com a ortografia correta do português, com todos os acentos, sem mudar o sentido'])
+    if (r && !lostAccents(r, a.lang) && unitOk(i, r)) { slides[i] = r; return }
+    if (mode === 'leve') { notes.push(`O slide ${i + 1} saiu sem acento — corrija antes de aprovar`); return }
+    slides[i] = fallbackSlide(i, slides[i]); notes.push(`O slide ${i + 1} saiu sem acento e foi trocado pelo texto seguro`)
+  }))
   return { slides, caption, notes, unitOk }
 }
 
