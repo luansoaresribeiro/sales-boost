@@ -21,6 +21,10 @@ mergeable vc já aprova por mim"):
 Sonnet 5.5 (~US$ 0,01 por par, uma vez por par) com uma pergunta que descreve as fotos antes de decidir. Divergência
 com a entrada abaixo, que dizia Haiku 4.5 a ~US$ 0,005.
 
+**Conferência de ligação v3 (mesma noite):** a v2 saiu rígida demais nas fotos da Tespon (ver MEDIA-ENGINE). Na v3 a
+IA relata só fatos das fotos e uma regra fixa, testada, decide — mesmo andar dentro de casa passa; troca de andar e
+fora → dentro precisam da escada/porta visível.
+
 **Enquete "pagaria":** a frase sai sem o bairro ("Quanto você pagaria por um apartamento assim?"). Com o bairro saía
 "assim em Barra da Tijuca" (o "em/na" errado que o dono pediu para tirar) e cortava no card; o bairro continua no selo
 "Enquete · Barra da Tijuca".
