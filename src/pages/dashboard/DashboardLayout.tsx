@@ -45,6 +45,10 @@ function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: bool
         // Aba Agentes (C.2, 2026-11-07): fábrica 3D + os 5 cartões dos agentes.
         to: '/dashboard/agentes', label: T.layout.nav.agents,
         icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><circle cx="6" cy="7" r="2.2" /><circle cx="18" cy="7" r="2.2" /><circle cx="12" cy="18" r="2.2" /><path d="M8.2 7h7.6M7.2 9l3.8 7M16.8 9 13 16" /></svg>,
+      }, {
+        // Tour virtual (2026-11-10, pedido do dono): tour completo do imóvel, fora do plano da semana.
+        to: '/dashboard/tour-virtual', label: T.layout.nav.tour,
+        icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>,
       }, ...(catalogLabel ? [{
         // Aba do catálogo (07/11): mesma página do "+" → Adicionar item. Rótulo vem da ficha do setor (vocabulary.catalog).
         to: CATALOG_PATH, label: catalogLabel,

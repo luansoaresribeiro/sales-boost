@@ -32,6 +32,7 @@ const GrowthOpportunitiesPage = lazyPage(() => import('./pages/dashboard/GrowthO
 const MarketingAiHubPage = lazyPage(() => import('./pages/dashboard/MarketingAiHubPage.tsx'), 'dashboard')
 const AgentsPage = lazyPage(() => import('./pages/dashboard/AgentsPage.tsx'), 'dashboard')
 const CatalogPage = lazyPage(() => import('./pages/dashboard/CatalogPage.tsx'), 'dashboard')
+const TourVirtualPage = lazyPage(() => import('./pages/dashboard/TourVirtualPage.tsx'), 'dashboard')
 const BusinessProgressPage = lazyPage(() => import('./pages/dashboard/BusinessProgressPage.tsx'), 'dashboard')
 const TrialSummaryPage = lazyPage(() => import('./pages/dashboard/TrialSummaryPage.tsx'), 'dashboard')
 const AccessBlockedPage = lazyPage(() => import('./pages/dashboard/AccessBlockedPage.tsx'), 'dashboard')
@@ -171,6 +172,7 @@ function RouterRoot() {
         <Route path="agentes" element={<AgentsPage />} />
         {/* Catálogo (imóveis/itens): página própria, aberta pelo botão "+" (2026-11-01). */}
         <Route path="catalogo" element={<CatalogPage />} />
+        <Route path="tour-virtual" element={<TourVirtualPage />} />
         <Route path="marketing-ai/:section" element={<MarketingAiSectionPage />} />
         <Route path="meta-ads" element={<Navigate to="/dashboard/marketing-ai/content?tab=campanha" replace />} />
         <Route path="progresso" element={<BusinessProgressPage />} />

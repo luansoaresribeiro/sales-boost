@@ -1,7 +1,10 @@
 import { fetchItemCfg, ownerBlockMessage } from '../_shared/itemService.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
-import { advanceTour, clipPrompt, estimateUsd, hfHeaders, SECONDS, studioReady, submitAll, VIDEO_BUCKET, type ClipKind, type TourRow } from '../_shared/tourEngine.ts'
+import { advanceTour, clipPrompt, COST_PER_SECOND, estimateUsd, hfHeaders, SECONDS, studioReady, submitAll, VIDEO_BUCKET, type ClipKind, type TourRow } from '../_shared/tourEngine.ts'
+import { tourCfgFrom, type TourPhoto } from '../_shared/tourPick.ts'
+import { orderTour, roomOf, tourOrderCfgFrom, tourSeconds, tourSegments, type Segment, type SegKind } from '../_shared/tourOrder.ts'
+import { ensurePhotoScores } from '../_shared/photoScore.ts'
 import { validEndcardUrl } from '../_shared/tourPick.ts'
 import { draftReply, type DmReplyConfig } from '../_shared/dmReply.ts'
 import { keepQueroNotice } from '../_shared/videoCta.ts'
@@ -26,6 +29,11 @@ import { lng } from '../_shared/publicPage.ts'
 //  - create {item_id, kind, photos[], label?}: confere teto e manda o trecho pra Higgsfield
 //  - status {video_id}: avança geração/gravação; no fim devolve a URL
 //  - save_reply {item_id, message, active}: aprova/desliga a resposta automática
+// Tour virtual COMPLETO (menu "Tour virtual", decisão do dono 2026-11-10 — volta o tour do imóvel inteiro):
+//  - plan_tour {item_id}: dá nota às fotos que faltam e devolve a ORDEM sugerida (_shared/tourOrder.ts), as passagens
+//    (caminhada entre cômodos vizinhos, corte entre os outros) e o custo estimado. Não gasta vídeo.
+//  - create {kind:'tour', photos[]} só pelo caminho do servidor (creative-generate tour_piece, que faz a legenda e a
+//    peça): os trechos são recalculados AQUI pela nota gravada de cada foto — nunca pelo que a tela mandou.
 // Caminho do cron (cron_secret no corpo, decisão do dono 2026-10-14: mínimo de
 // 3 vídeos/semana criados sozinhos pelo calendário):
 //  - create {company_id, item_id, kind, photos[], piece_id}: igual ao do dono,
@@ -47,7 +55,7 @@ function json(data: unknown, status = 200) {
 
 // deno-lint-ignore no-explicit-any
 type Admin = any
-interface PlanVideo { id: string; company_id: string; status: string; plan: { kind?: string; label?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number } | null; photos: string[]; clips: unknown; video_path: string | null; assembly: unknown; updated_at: string }
+interface PlanVideo { id: string; company_id: string; status: string; plan: { kind?: string; label?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number; segments?: Segment[] } | null; photos: string[]; clips: unknown; video_path: string | null; assembly: unknown; updated_at: string }
 
 // Avança 1 vídeo (Higgsfield → gravação). Pronto: põe na peça do calendário
 // ligada (plan.piece_id). Falhou: não conta no teto e a peça diz o motivo.
@@ -67,11 +75,13 @@ async function advanceVideo(admin: Admin, supabaseUrl: string, serviceKey: strin
   if (v.status === 'failed') return 'failed'
   const headers = hfHeaders()
   if (!headers) return 'processing'
-  const kind = (v.plan?.kind ?? 'room') as ClipKind
+  // Tour completo: cada trecho já guarda a própria instrução e duração (clips[i].prompt/seconds); o vídeo junta TODOS.
+  const full = v.plan?.kind === 'tour'
+  const kind = (full ? 'room' : (v.plan?.kind ?? 'room')) as ClipKind
   // Tour do calendário com encerramento de marca: só sai pelo estúdio (9:16 + encerramento).
   const endcard = v.plan?.endcard_url ? { url: v.plan.endcard_url, seconds: Number(v.plan.endcard_seconds) || 2.5 } : null
   const r = await advanceTour(admin, supabaseUrl, serviceKey, headers, await clipPrompt(admin, verticalKey, kind), v as unknown as TourRow,
-    () => [{ path: `plan/${v.company_id}/${v.id}.mp4`, from: 0, to: 1 }], SECONDS[kind], endcard)
+    (urls) => [{ path: `plan/${v.company_id}/${v.id}.mp4`, from: 0, to: full ? urls.length : 1 }], full ? undefined : SECONDS[kind], endcard)
   if (r.status === 'completed') return await finish(r.outputs[0].path)
   if (r.status === 'failed') {
     const studio = r.reason === 'studio'
@@ -113,6 +123,35 @@ async function createPlanVideo(admin: Admin, company: { id: string; vertical_key
     .select('id').single()
   if (error) return { ok: false, status: 500, error: error.message, paid: true } // trechos já mandados (pagos) e o registro falhou
   console.log('[item-videos] vídeo iniciado', company.id, v.id, kind, estimate.toFixed(2), 'USD')
+  return { ok: true, video_id: v.id }
+}
+
+// Segundos por tipo de trecho do tour completo (mesma tabela dos vídeos curtos).
+const SEG_SECONDS: Record<SegKind, number> = { opening: SECONDS.opening, pair: SECONDS.pair, room: SECONDS.room }
+const tourEstimate = (segments: Segment[]) => tourSeconds(segments, SEG_SECONDS) * COST_PER_SECOND
+
+// Tour completo: confere o teto com a soma dos trechos, manda TODOS pra Higgsfield (cada um com a instrução do seu tipo) e grava.
+async function createTourVideo(admin: Admin, company: { id: string; vertical_key: string | null }, itemId: string, photos: string[], segments: Segment[],
+  pieceId: string | undefined, endcard: { url: string; seconds: number }): Promise<CreateResult> {
+  const estimate = tourEstimate(segments)
+  const cap = await fitsCap(admin, company.id, estimate)
+  if (!cap.ok) return { ok: false, status: 429, error: capMessage(cap.spend.cap_usd), cap: true }
+  const headers = hfHeaders()
+  if (!headers) return { ok: false, status: 503, error: 'Geração de vídeo indisponível no momento.' }
+  const prompts: Record<SegKind, string> = {
+    opening: await clipPrompt(admin, company.vertical_key, 'opening'),
+    pair: await clipPrompt(admin, company.vertical_key, 'pair'),
+    room: await clipPrompt(admin, company.vertical_key, 'room'),
+  }
+  const plan = segments.map(g => ({ from: g.from, ...(g.to !== undefined ? { to: g.to } : {}), prompt: prompts[g.kind], seconds: SEG_SECONDS[g.kind] }))
+  const clips = await submitAll(headers, prompts.room, photos, plan)
+  // Nenhum trecho subiu = nada foi aceito (nada cobrado). Algum subiu: segue, e a consulta reenvia os que faltam.
+  if (!clips.some(c => c.job_ref)) return { ok: false, status: 502, error: 'Não consegui iniciar o tour agora. Tente de novo em alguns minutos.' }
+  const { data: v, error } = await admin.from('video_tours')
+    .insert({ company_id: company.id, kind: 'plan', item_id: itemId, status: 'generating', photos, clips, plan: { kind: 'tour', label: 'Tour virtual', segments, ...(pieceId ? { piece_id: pieceId } : {}), endcard_url: endcard.url, endcard_seconds: endcard.seconds }, cost_usd: estimate })
+    .select('id').single()
+  if (error) return { ok: false, status: 500, error: error.message, paid: true }
+  console.log('[item-videos] tour iniciado', company.id, v.id, segments.length, 'trechos', estimate.toFixed(2), 'USD')
   return { ok: true, video_id: v.id }
 }
 
@@ -265,6 +304,58 @@ Deno.serve(async (req) => {
         month_spent_usd: spent.total_usd, month_cap_usd: spent.cap_usd,
         cost_usd: Object.fromEntries(KINDS.map(k => [k, estimateUsd(k)])),
       })
+    }
+
+    if (body.action === 'plan_tour') {
+      const noPlan = await requirePaidAccess(admin, company.id)
+      if (noPlan) return noPlan
+      const item = await loadItem(body.item_id)
+      if (!item) return json({ error: 'Imóvel não encontrado.' }, 404)
+      const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
+      const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', company.vertical_key ?? 'generico').eq('enabled', true).maybeSingle()
+      const tcfg = tourCfgFrom(pb?.config), ocfg = tourOrderCfgFrom(pb?.config, tcfg)
+      // Nota de cômodo/qualidade: só das fotos que ainda não têm (IA de visão, ~US$ 0,003 por foto, uma vez só).
+      const scored = anthropicKey ? await ensurePhotoScores(admin, anthropicKey, company.id, item.id, tcfg) : ((item.meta?.photos ?? []) as TourPhoto[])
+      const order = orderTour(scored, tcfg, ocfg)
+      const [spent, ready] = await Promise.all([monthSpend(admin, company.id), studioReady(admin).catch(() => false)])
+      const blockMsg = ownerBlockMessage(item, { ...(await fetchItemCfg(admin, company.vertical_key)), minPhotos: 0 })
+      return json({
+        ...order,
+        all: scored.map(p => ({ url: p.url, room: roomOf(p, tcfg), quality: typeof p.quality === 'number' ? Math.round(p.quality) : null })),
+        room_labels: Object.fromEntries(tcfg.rooms.map(r => [r.key, r.label])),
+        adjacent_rooms: tcfg.adjacent_rooms, opening_rooms: tcfg.opening_rooms, max_photos: ocfg.tour_max_photos,
+        seconds: SEG_SECONDS, cost_per_second_usd: COST_PER_SECOND, estimate_usd: tourEstimate(order.segments),
+        month_spent_usd: spent.total_usd, month_cap_usd: spent.cap_usd, studio_ready: ready, blocked: blockMsg,
+      })
+    }
+
+    if (body.action === 'create' && body.kind === 'tour') {
+      // Só pelo servidor (creative-generate tour_piece já fez a peça, a legenda e o encerramento).
+      if (!isCron) return json({ error: 'Gere o tour pelo menu Tour virtual.' }, 400)
+      const noPlan = await requirePaidAccess(admin, company.id)
+      if (noPlan) return noPlan
+      const item = await loadItem(body.item_id)
+      if (!item) return json({ error: 'Imóvel não encontrado.' }, 404)
+      const blockMsg = ownerBlockMessage(item, { ...(await fetchItemCfg(admin, company.vertical_key)), minPhotos: 0 })
+      if (blockMsg) return json({ error: blockMsg, code: 'item_unavailable' }, 400)
+      const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', company.vertical_key ?? 'generico').eq('enabled', true).maybeSingle()
+      const tcfg = tourCfgFrom(pb?.config), ocfg = tourOrderCfgFrom(pb?.config, tcfg)
+      const meta = new Map(((item.meta?.photos ?? []) as { url: string; room?: string | null; room_conf?: number | null }[]).map(p => [p.url, p]))
+      const photos = Array.isArray(body.photos) ? body.photos.map(String) : []
+      if (photos.length < 2 || photos.length > ocfg.tour_max_photos || new Set(photos).size !== photos.length || photos.some(u => !meta.has(u))) {
+        return json({ error: `Escolha de 2 a ${ocfg.tour_max_photos} fotos diferentes deste imóvel.` }, 400)
+      }
+      if (!validEndcardUrl(body.endcard_url, supabaseUrl)) return json({ error: 'Encerramento da marca ausente ou inválido — o tour não é feito sem ele.' }, 400)
+      const endcard = { url: body.endcard_url, seconds: Math.min(6, Math.max(1, Number(body.endcard_seconds) || 2.5)) }
+      let pieceId: string | undefined
+      if (typeof body.piece_id === 'string') {
+        const { data: piece } = await admin.from('marketing_ai_test_content').select('id').eq('id', body.piece_id).eq('company_id', company.id).maybeSingle()
+        pieceId = piece?.id
+      }
+      const { segments } = tourSegments(photos.map(u => roomOf(meta.get(u) as never, tcfg)), tcfg.adjacent_rooms, tcfg.opening_rooms)
+      const r = await createTourVideo(admin, company, item.id, photos, segments, pieceId, endcard)
+      if (!r.ok) return json({ error: r.error, ...(r.cap ? { status: 'cap_reached' } : {}) }, r.status)
+      return json({ status: 'processing', video_id: r.video_id })
     }
 
     if (body.action === 'create') {

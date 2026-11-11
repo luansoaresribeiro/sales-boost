@@ -49,7 +49,9 @@ export async function clipPrompt(admin: any, verticalKey: string | null, kind: C
 }
 
 // from/to: índices das fotos de começo e fim (to ausente = trecho de uma foto só).
-export interface Clip { job_ref: string | null; status: string; attempts: number; from: number; to?: number }
+// prompt/seconds por trecho: só o tour completo usa (abertura de fora + caminhadas + cortes no mesmo vídeo);
+// sem eles, vale a instrução e a duração do vídeo inteiro, como sempre.
+export interface Clip { job_ref: string | null; status: string; attempts: number; from: number; to?: number; prompt?: string; seconds?: number }
 
 export function hfHeaders(): Record<string, string> | null {
   const cred = (Deno.env.get('HF_CREDENTIALS') ?? '').trim()
@@ -80,8 +82,8 @@ async function clipStatus(headers: Record<string, string>, jobRef: string): Prom
 }
 
 // Manda todos os trechos; o que não subir fica sem job_ref e tenta de novo na consulta.
-export async function submitAll(headers: Record<string, string>, prompt: string, photos: string[], plan: Pick<Clip, 'from' | 'to'>[], seconds?: number): Promise<Clip[]> {
-  const refs = await Promise.all(plan.map(c => submitClip(headers, prompt, photos[c.from], c.to !== undefined ? photos[c.to] : undefined, seconds)))
+export async function submitAll(headers: Record<string, string>, prompt: string, photos: string[], plan: Pick<Clip, 'from' | 'to' | 'prompt' | 'seconds'>[], seconds?: number): Promise<Clip[]> {
+  const refs = await Promise.all(plan.map(c => submitClip(headers, c.prompt ?? prompt, photos[c.from], c.to !== undefined ? photos[c.to] : undefined, c.seconds ?? seconds)))
   return refs.map((r, i) => ({ job_ref: r, status: 'processing', attempts: 1, ...plan[i] }))
 }
 
@@ -94,7 +96,7 @@ export async function pollClips(headers: Record<string, string>, prompt: string,
     const resubmit = async () => {
       if (c.attempts >= MAX_ATTEMPTS) { c.status = 'failed'; return }
       c.attempts += 1
-      c.job_ref = await submitClip(headers, prompt, photos[c.from ?? i], c.to !== undefined ? photos[c.to] : undefined, seconds)
+      c.job_ref = await submitClip(headers, c.prompt ?? prompt, photos[c.from ?? i], c.to !== undefined ? photos[c.to] : undefined, c.seconds ?? seconds)
       c.status = c.job_ref ? 'processing' : (c.attempts >= MAX_ATTEMPTS ? 'failed' : 'processing')
     }
     if (!c.job_ref) { if (c.status !== 'failed') await resubmit(); return }
