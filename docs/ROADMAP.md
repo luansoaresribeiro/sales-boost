@@ -4,6 +4,34 @@
 > pronto, arquivos envolvidos, riscos, e se envolve ALTERAÇÃO ARRISCADA
 > (ver CLAUDE.md).
 
+## Ordem aprovada (dono, 2026-11-11 noite) — substitui a ordem anterior como prioridade
+
+| Prioridade | Trabalho | Situação |
+|---|---|---|
+| 1 | Finalizar o Tour virtual | conferência de ligação v3 juntada (#149), falta publicar e retestar |
+| 2 | Validar tecnicamente o Tour (gate técnico) | depende da 1 |
+| 3 | Painel novo (funil comercial) | depende só de 2 decisões do dono, abaixo |
+| 4 | Revisar abas e fluxos | depois da 3 |
+| 5 | Telegram com dado real e aprovações | depois da 4 |
+| 6 | Remover o "Painel-resumo" | depois da 5 |
+
+**Regras:**
+- Uma frente de código por vez; nenhuma frente nova antes de fechar a atual, salvo dependência real.
+- O painel **não** espera imobiliária. Espera só:
+  - a definição de lead qualificado (proposta em [CONVERSION.md](CONVERSION.md));
+  - a decisão de privacidade (marcar ou não o navegador do visitante para saber o 1º e o último contato).
+- Boosts e cobrança continuam esperando a validação comercial (seção abaixo).
+- Em paralelo e sem abrir frente nova: o dono resolve as duas decisões e as conversas comerciais.
+
+**Painel novo, critério de pronto:** o topo mostra o resultado comercial, e não quantos posts saíram:
+- os números: visualizações dos imóveis → interessados → leads qualificados → visitas agendadas;
+- logo abaixo, o funil;
+- depois, a origem: por imóvel e por publicação.
+
+O que não tem medição aparece como "ainda sem dados", nunca como número inventado. Os gráficos que já existem são reaproveitados; o que não ajuda a decidir sai do topo.
+
+**Direção** (dono): o Sales Boost passa de ferramenta de marketing para sistema de inteligência e geração de demanda comercial. O painel tem que refletir isso, e não ser só uma tela mais bonita.
+
 ## Foco e gates do Tour virtual e dos Boosts (dono, 2026-11-11)
 
 **Regra de foco:** no máximo **1 frente de produto com código em execução por vez**.
@@ -176,6 +204,7 @@ Ordem do plano atual: Tour virtual (etapas 1–3) → N1 → Boosts. Só depois:
 | # | Pedido | Pronto quando |
 |---|---|---|
 | 4.1 | **Painel principal igual ao print de referência** que o dono vai mandar | Tela igual ao print, só com dado real; prints de celular e computador |
+| | *2026-11-11: o print chegou (funil visualizações → interessados → leads qualificados → visitas). Critério atualizado na "Ordem aprovada (2026-11-11 noite)" no topo.* | |
 | 4.2 | **Revisão de todas as abas e menus:** cada um ligado ao dado real e ao próximo passo; relatório do fluxo e do que melhorar | Mapa aba → dado → próximo passo, com as divergências corrigidas ou registradas |
 | 4.3 | **Telegram ligado de verdade ao painel:** perguntar "como está tudo" e receber só dado real (nada inventado); aprovar posts por lá | Respostas conferidas contra o painel nas contas de teste; aprovação só por botão assinado (texto nunca aprova — regra do plano T0–T6) |
 | 4.4 | **Tirar do painel principal o bloco "Painel-resumo ainda sem dado real"** (receita, ROAS e funil, com cadeado e "Ver exemplo") | Bloco fora do Marketing AI; nada mais quebra; prints |

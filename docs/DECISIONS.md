@@ -6,6 +6,25 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-11 (noite, 4) — Ordem de trabalho e direção do produto
+
+**Ordem:**
+1. finalizar o Tour;
+2. validar tecnicamente;
+3. painel novo;
+4. abas e fluxos;
+5. Telegram e aprovações;
+6. remover o Painel-resumo.
+
+Detalhe e critério de pronto no [ROADMAP.md](ROADMAP.md).
+
+**Regras:**
+- O painel não depende de cliente: só da definição de lead qualificado e da decisão de privacidade.
+- Boosts e monetização dependem da validação comercial com imobiliárias.
+- Nenhuma frente nova antes de concluir a atual, salvo dependência real.
+
+**Direção:** o Sales Boost evolui de ferramenta de marketing para sistema de inteligência e geração de demanda comercial. O painel gira em torno do resultado comercial (visualizações → interessados → leads qualificados → visitas), não de quantos posts foram gerados.
+
 ## 2026-11-11 (noite, 3) — Sai o formato "Quanto você pagaria?"
 
 Dono: "não existe postarmos uma foto perguntando quanto você pagaria nesse imóvel. Isso é um formato que não deveríamos
