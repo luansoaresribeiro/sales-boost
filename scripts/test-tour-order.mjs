@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { orderTour, tourSegments, tourOrderCfgFrom, linked, roomOf, tourSeconds } from '../supabase/functions/_shared/tourOrder.ts'
 import * as front from '../src/lib/tourOrder.ts'
+import { withOutsideFirst } from '../supabase/functions/_shared/tourOrder.ts'
 import { tourCfgFrom } from '../supabase/functions/_shared/tourPick.ts'
 import { planningFormats, inWeeklyPlan, weekSlots, ensureMinVideos, weeklyMixPlan } from '../supabase/functions/_shared/formatCatalog.ts'
 import { weekSlots as frontWeekSlots, OUT_OF_WEEKLY_PLAN as FRONT_OUT } from '../src/lib/weekSlots.ts'
@@ -99,6 +100,24 @@ t('Etapa 3: foto de FORA nunca caminha — abertura própria + corte automático
   assert.deepEqual(mid.segments, [{ kind: 'room', from: 0 }, { kind: 'opening', from: 1 }, { kind: 'room', from: 2 }])
   assert.ok(!mid.segments.some(s => s.kind === 'pair'))
 })
+t('dono escolhe abrir de fora com a 1ª foto: só ambientes da ficha (varanda sim, quarto nunca)', () => {
+  const op = cfg.opening_rooms, cand = ['varanda']
+  assert.deepEqual(withOutsideFirst(['varanda', 'sala'], op, cand, true), [op[op.length - 1], 'sala'])
+  assert.deepEqual(withOutsideFirst(['varanda', 'sala'], op, cand, false), ['varanda', 'sala'])
+  assert.deepEqual(withOutsideFirst(['quarto', 'sala'], op, cand, true), ['quarto', 'sala'])
+  assert.deepEqual(withOutsideFirst([null, 'sala'], op, cand, true), [null, 'sala'])
+  assert.deepEqual(withOutsideFirst(['vista', 'sala'], op, cand, true), ['vista', 'sala'])
+  const r = tourSegments(withOutsideFirst(['varanda', 'sala', 'sala_jantar'], op, cand, true), cfg.adjacent_rooms, op)
+  assert.deepEqual(r.segments[0], { kind: 'opening', from: 0 }); assert.equal(r.passages[1], 'enter')
+  for (const c of [['varanda', 'sala'], ['quarto'], [], ['vista', 'varanda']]) for (const f of [true, false]) assert.deepEqual(front.withOutsideFirst(c, op, cand, f), withOutsideFirst(c, op, cand, f))
+  const ficha = readFileSync(new URL('../supabase/migrations/20261111170000_tour_opening_candidates.sql', import.meta.url), 'utf8')
+  assert.match(ficha, /opening_candidates\}', '\["varanda"\]'/)
+  const iv = readFileSync(new URL('../supabase/functions/item-videos/index.ts', import.meta.url), 'utf8')
+  const cg = readFileSync(new URL('../supabase/functions/creative-generate/index.ts', import.meta.url), 'utf8')
+  assert.match(iv, /withOutsideFirst\(photos\.map\(u => roomOf\(meta\.get\(u\) as never, tcfg\)\), tcfg\.opening_rooms, ocfg\.opening_candidates, body\.outside_first === true\)/)
+  assert.match(cg, /withOutsideFirst\(order\.map\(u => roomOf\(byUrl\.get\(u\) as never, tcfg\)\), tcfg\.opening_rooms, ocfg\.opening_candidates, outsideFirst\)/)
+  assert.match(cg, /outside_first: full\.outsideFirst === true/)
+})
 t('prompt de abertura: drone, mas só dentro da foto (código e ficha)', () => {
   const eng = readFileSync(new URL('../supabase/functions/_shared/tourEngine.ts', import.meta.url), 'utf8')
   const mig = readFileSync(new URL('../supabase/migrations/20261111160000_tour_abertura_aerea.sql', import.meta.url), 'utf8')
@@ -124,7 +143,7 @@ t('servidor: tour só pelo caminho com peça e encerramento; passagens recalcula
   const create = iv.slice(iv.indexOf("body.action === 'create' && body.kind === 'tour'"), iv.indexOf("if (body.action === 'create') {"))
   assert.match(create, /if \(!isCron\) return json/)
   assert.match(create, /requirePaidAccess/); assert.match(create, /ownerBlockMessage/); assert.match(create, /validEndcardUrl/)
-  assert.match(create, /tourSegments\(photos\.map\(u => roomOf\(meta\.get\(u\) as never, tcfg\)\), tcfg\.adjacent_rooms, tcfg\.opening_rooms, cuts\)/)
+  assert.match(create, /tourSegments\(rooms, tcfg\.adjacent_rooms, tcfg\.opening_rooms, cuts\)/)
   assert.match(iv.slice(iv.indexOf('async function createTourVideo')), /fitsCap\(admin, company\.id, estimate\)/)
   const cg = readFileSync(new URL('../supabase/functions/creative-generate/index.ts', import.meta.url), 'utf8')
   const tp = cg.slice(cg.indexOf("body.action === 'tour_piece'"), cg.indexOf("body.action === 'relearn'"))

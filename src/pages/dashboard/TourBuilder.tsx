@@ -7,14 +7,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
-import { tourSegments, tourSeconds, type SegKind } from '../../lib/tourOrder'
+import { tourSegments, tourSeconds, withOutsideFirst, type SegKind } from '../../lib/tourOrder'
 import { CARD, MUTED, BORDER, ORANGE, SUPABASE_URL } from './marketingAi/shared'
 
 const GREEN = '#4ade80'
 const RED = '#f87171'
 interface Plan {
   photos: string[]; all: { url: string; room: string | null; quality: number | null }[]
-  room_labels: Record<string, string>; adjacent_rooms: [string, string][]; opening_rooms: string[]; max_photos: number
+  room_labels: Record<string, string>; adjacent_rooms: [string, string][]; opening_rooms: string[]; opening_candidates?: string[]; max_photos: number
   seconds: Record<SegKind, number>; cost_per_second_usd: number; month_spent_usd: number; month_cap_usd: number
   studio_ready: boolean; blocked: string | null
 }
@@ -26,6 +26,8 @@ const TX = {
     order: 'Ordem do tour', help: 'Confira a ordem. Use ↑ ↓ para mudar, ✕ para tirar. A câmera caminha sem parar de uma foto até a outra. A foto de fora (fachada/vista) abre o tour sozinha e corta para dentro — a IA nunca inventa o caminho de fora até a porta. Em amarelo: passagem entre cômodos que a ficha não confirma serem vizinhos — confira no vídeo. Use ✂️ se quiser um corte ali.',
     start: 'começo', walk: '🚶 caminha até aqui', unconfirmed: '🚶 caminha até aqui · passagem não confirmada', cut: '✂️ corte (você pediu)', enter: '🎬 corte automático: entra no imóvel', opening: '🏙️ abertura de fora (movimento de drone, só o que a foto mostra)',
     cutOn: 'Cortar antes desta foto', cutOff: 'Voltar a caminhar até esta foto',
+    hintOutside: 'Para começar de fora, suba (↑) para 1º lugar uma foto real da área externa ou da vista (ex.: varanda) e marque "Abrir de fora". A IA nunca cria o prédio nem a vista.',
+    outsideFirst: '🏙️ Abrir de fora com a 1ª foto (movimento de drone, só o que a foto mostra) — use se ela mostrar a área externa ou a vista.',
     noOpening: 'Para começar de fora, o imóvel precisa de uma foto real da fachada ou da vista. Sem ela, o tour começa dentro — a IA nunca cria o prédio nem a vista.',
     unknown: 'cômodo não identificado',
     left: 'Fotos fora do tour', add: '+ incluir', full: (n: number) => `Máximo de ${n} fotos por tour.`,
@@ -42,6 +44,8 @@ const TX = {
     order: 'Tour order', help: 'Check the order. Use ↑ ↓ to move, ✕ to remove. The camera walks non-stop from one photo to the next. The outside photo (facade/view) opens the tour on its own and cuts inside — the AI never invents the way from outside to the door. In yellow: a passage between rooms the profile doesn\'t confirm are next to each other — check it in the video. Use ✂️ for a cut there.',
     start: 'start', walk: '🚶 walks here', unconfirmed: '🚶 walks here · passage not confirmed', cut: '✂️ cut (you asked)', enter: '🎬 automatic cut: into the property', opening: '🏙️ opening from outside (drone-style move, only what the photo shows)',
     cutOn: 'Cut before this photo', cutOff: 'Walk to this photo again',
+    hintOutside: 'To start outside, move (↑) a real photo of the outdoor area or the view (e.g. balcony) to 1st place and tick "Open from outside". The AI never creates the building or the view.',
+    outsideFirst: '🏙️ Open from outside with the 1st photo (drone-style move, only what the photo shows) — use it if it shows the outdoor area or the view.',
     noOpening: 'To start outside, the property needs a real photo of the facade or the view. Without it, the tour starts inside — the AI never creates the building or the view.',
     unknown: 'room not identified',
     left: 'Photos left out', add: '+ add', full: (n: number) => `At most ${n} photos per tour.`,
@@ -76,6 +80,7 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
   const [order, setOrder] = useState<string[]>([])
   // Corte pedido pelo dono, guardado pela foto que vem DEPOIS do corte (sobrevive a ↑ ↓).
   const [cutBefore, setCutBefore] = useState<Set<string>>(new Set())
+  const [outsideFirst, setOutsideFirst] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [videos, setVideos] = useState<Video[]>([])
@@ -107,13 +112,18 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
   }
 
   const roomOf = useMemo(() => new Map((plan?.all ?? []).map(p => [p.url, p.room])), [plan])
-  const rooms = useMemo(() => order.map(u => roomOf.get(u) ?? null), [order, roomOf])
+  const baseRooms = useMemo(() => order.map(u => roomOf.get(u) ?? null), [order, roomOf])
+  const candidates = useMemo(() => plan?.opening_candidates ?? [], [plan])
+  // O dono pode abrir de fora com a 1ª foto se ela for de um ambiente que a ficha permite (ex.: varanda com vista).
+  const canOutside = !!baseRooms[0] && candidates.includes(baseRooms[0]) && !(plan?.opening_rooms ?? []).includes(baseRooms[0])
+  const rooms = useMemo(() => withOutsideFirst(baseRooms, plan?.opening_rooms ?? [], candidates, outsideFirst), [baseRooms, plan, candidates, outsideFirst])
   const cuts = useMemo(() => order.map((u, i) => (i > 0 && cutBefore.has(u) ? i : -1)).filter(i => i > 0), [order, cutBefore])
   const { segments, passages } = useMemo(() => tourSegments(rooms, plan?.adjacent_rooms ?? [], plan?.opening_rooms ?? [], cuts), [rooms, plan, cuts])
   const toggleCut = (u: string) => setCutBefore(prev => { const n = new Set(prev); if (n.has(u)) n.delete(u); else n.add(u); return n })
   const secs = plan ? tourSeconds(segments, plan.seconds) : 0
   const usd = plan ? secs * plan.cost_per_second_usd : 0
   const hasOpeningPhoto = !!plan?.all.some(p => p.room && plan.opening_rooms.includes(p.room))
+  const hasCandidate = !!plan?.all.some(p => p.room && candidates.includes(p.room))
   const left = (plan?.all ?? []).filter(p => !order.includes(p.url))
   // Nome curto do cômodo (a ficha traz "quarto / suíte", "vista (janela, …)"): só a 1ª parte cabe no celular.
   const label = (room: string | null) => (room ? (plan?.room_labels[room] ?? room).split(/ \/ | \(/)[0] : tx.unknown)
@@ -125,7 +135,7 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
   const generate = async () => {
     if (order.length < 2) { setMsg({ ok: false, text: tx.min }); return }
     setBusy(true); setMsg({ ok: true, text: tx.genning })
-    const r = await call('creative-generate', { action: 'tour_piece', item_id: itemId, photos: order, cuts })
+    const r = await call('creative-generate', { action: 'tour_piece', item_id: itemId, photos: order, cuts, outside_first: canOutside && outsideFirst })
     setBusy(false)
     if (r.status === 200) { setMsg({ ok: true, text: tx.started }); void loadVideos() }
     else setMsg({ ok: false, text: String(r.data.error ?? tx.err) })
@@ -140,7 +150,13 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
           <div style={{ fontSize: '14px', fontWeight: 800, color: 'white', marginBottom: '4px' }}>{tx.order}</div>
           <div style={{ fontSize: '12px', color: MUTED, lineHeight: 1.55, marginBottom: '12px' }}>{tx.help}</div>
           {plan.blocked && <div style={{ fontSize: '12.5px', color: RED, marginBottom: '10px' }}>{plan.blocked}</div>}
-          {!hasOpeningPhoto && <div style={{ fontSize: '12px', color: ORANGE, lineHeight: 1.55, marginBottom: '10px' }}>{tx.noOpening}</div>}
+          {canOutside && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', color: 'white', marginBottom: '10px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={outsideFirst} onChange={e => setOutsideFirst(e.target.checked)} />
+              {tx.outsideFirst}
+            </label>
+          )}
+          {!hasOpeningPhoto && !canOutside && <div style={{ fontSize: '12px', color: ORANGE, lineHeight: 1.55, marginBottom: '10px' }}>{hasCandidate ? tx.hintOutside : tx.noOpening}</div>}
           <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {order.map((u, i) => {
               const isOpening = segments.some(s => s.kind === 'opening' && s.from === i)

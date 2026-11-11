@@ -46,7 +46,7 @@ import { buildOpportunityJob } from '../_shared/opportunityPieceJob.ts'
 import { buildPickReason, cleanItemPick, fetchItemCfg, getItem, listPickableItems, ownerBlockMessage, rankItems, saveItemPick, usageLastDays, type ItemPick } from '../_shared/itemService.ts'
 import { checkCaption, promptRules as captionRules, rewriteRequest, stripForbidden, findForbidden } from '../_shared/captionGuard.ts'
 import { formatPrice, PAIR_NOTICE, tourCfgFrom, tourNotice, WAITING_STUDIO_PRE } from '../_shared/tourPick.ts'
-import { roomOf, tourOrderCfgFrom, tourSegments } from '../_shared/tourOrder.ts'
+import { roomOf, tourOrderCfgFrom, tourSegments, withOutsideFirst } from '../_shared/tourOrder.ts'
 import { studioReady } from '../_shared/tourEngine.ts'
 import { chooseTour, fetchTourCfg, planTours, previousCaptions, type TourPlan } from '../_shared/tourSlot.ts'
 
@@ -1566,7 +1566,7 @@ async function fetchFichaCtas(admin: SupaClient, verticalKey: string | null): Pr
 // diz o motivo — nada é cobrado.
 // `full` (menu Tour virtual, 2026-11-10): tour COMPLETO na ordem que o dono confirmou — vários trechos (abertura de fora,
 // caminhadas entre cômodos vizinhos, cortes entre os outros) num vídeo só. A peça nasce sem dia e vai pra Aprovações.
-export interface FullTour { photos: string[]; rooms: (string | null)[]; notes: string[]; cuts?: number[] }
+export interface FullTour { photos: string[]; rooms: (string | null)[]; notes: string[]; cuts?: number[]; outsideFirst?: boolean }
 async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Company, job: SlotJob, cronSecret: string, full?: FullTour): Promise<{ pieceId?: string; error?: string }> {
   const { data: item } = await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('id', job.item_id).eq('company_id', company.id).eq('kind', 'product').maybeSingle()
   const photos = ((item?.meta?.photos ?? []) as { url: string }[]).map(p => p.url).filter(Boolean)
@@ -1699,7 +1699,7 @@ Responda SÓ em JSON: {"caption":"...","hashtags":"#a #b","cta":"..."}`
   try {
     const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/item-videos`, {
       method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create', cron_secret: cronSecret, company_id: company.id, item_id: item.id, kind: full ? 'tour' : tour.kind, photos: tour.photos, ...(full ? { cuts: full.cuts ?? [] } : {}), label: full ? 'Tour virtual' : 'Calendário', piece_id: piece.id, endcard_url: card.url, endcard_seconds: tcfg.endcard_seconds }),
+      body: JSON.stringify({ action: 'create', cron_secret: cronSecret, company_id: company.id, item_id: item.id, kind: full ? 'tour' : tour.kind, photos: tour.photos, ...(full ? { cuts: full.cuts ?? [], outside_first: full.outsideFirst === true } : {}), label: full ? 'Tour virtual' : 'Calendário', piece_id: piece.id, endcard_url: card.url, endcard_seconds: tcfg.endcard_seconds }),
     })
     const r = await res.json().catch(() => ({})) as { error?: string }
     if (!res.ok) {
@@ -1883,7 +1883,9 @@ Deno.serve(async (req) => {
       try { ready = await studioReady(admin) } catch { /* trata como fora do ar */ }
       if (!ready) return json({ error: 'O servidor de vídeo está fora do ar agora. Nada foi cobrado — tente de novo em alguns minutos.' }, 503)
       // Cômodo de cada foto pela nota já gravada (nunca o que a tela mandou) e as passagens pela ficha.
-      const rooms = order.map(u => roomOf(byUrl.get(u) as never, tcfg))
+      // Abrir de fora com a 1ª foto, se o dono escolheu (só cômodos que a ficha permite; nunca o que a tela mandou como cômodo).
+      const outsideFirst = body.outside_first === true
+      const rooms = withOutsideFirst(order.map(u => roomOf(byUrl.get(u) as never, tcfg)), tcfg.opening_rooms, ocfg.opening_candidates, outsideFirst)
       // Caminhada contínua (dono, 2026-11-11); corte só onde o dono pediu.
       const cuts = Array.isArray(body.cuts) ? (body.cuts as unknown[]).map(Number).filter(i => Number.isInteger(i) && i > 0 && i < order.length) : []
       const { passages } = tourSegments(rooms, tcfg.adjacent_rooms, tcfg.opening_rooms, cuts)
@@ -1893,7 +1895,7 @@ Deno.serve(async (req) => {
       if (unconfirmed) notes.push(`${unconfirmed} passagem(ns) entre ambientes que a ficha não confirma serem vizinhos — confira no vídeo se a câmera não mostrou um espaço que não existe.`)
       if (passages.includes('enter')) notes.push('Abertura de fora a partir da foto real (movimento de drone só dentro do que a foto mostra) e corte automático para dentro do imóvel — a IA não inventa o caminho até a porta.')
       const job: SlotJob = { date: '', producer: 'item_video', name: 'Tour virtual', pillar: 'tour', purpose: 'Tour virtual completo pedido pelo dono', item_id: item.id, recipe: VIDEO_RECIPE, familia: 'tour', tema: 'tour' }
-      const r = await runVideoSlot(admin, anthropicKey, company, job, cronSecretEnv, { photos: order, rooms, notes, cuts })
+      const r = await runVideoSlot(admin, anthropicKey, company, job, cronSecretEnv, { photos: order, rooms, notes, cuts, outsideFirst })
       if (!r.pieceId) return json({ error: r.error ?? 'Não consegui criar o tour.' }, 500)
       return json({ ok: !r.error, piece_id: r.pieceId, ...(r.error ? { error: r.error } : {}) }, r.error ? 502 : 200)
     }

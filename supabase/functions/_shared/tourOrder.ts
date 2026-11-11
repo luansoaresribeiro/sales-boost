@@ -17,7 +17,7 @@ import type { TourCfg, TourPhoto } from './tourPick.ts'
 export type SegKind = 'opening' | 'pair' | 'room'
 export interface Segment { kind: SegKind; from: number; to?: number }
 export type Passage = 'start' | 'walk' | 'walk_unconfirmed' | 'cut' | 'enter'
-export interface TourOrderCfg { walk_order: string[]; tour_max_photos: number; tour_per_room: number }
+export interface TourOrderCfg { walk_order: string[]; tour_max_photos: number; tour_per_room: number; opening_candidates: string[] }
 export type ExcludeReason = 'low_quality' | 'repeat_room' | 'over_limit'
 export interface TourOrder {
   photos: string[]; rooms: (string | null)[]; segments: Segment[]; passages: Passage[]
@@ -36,7 +36,20 @@ export function tourOrderCfgFrom(config: unknown, base: Pick<TourCfg, 'room_prio
     walk_order: walk.length ? walk : base.room_priority,
     tour_max_photos: num(t.tour_max_photos, 10, 2, TOUR_MAX_HARD),
     tour_per_room: num(t.tour_per_room, 2, 1, 4),
+    // Ambientes que o DONO pode escolher pra abrir de fora (ex.: varanda com vista), além de fachada/vista. Ficha, regra 6.
+    opening_candidates: (Array.isArray(t.opening_candidates) ? t.opening_candidates : []).map(slug).filter(Boolean).slice(0, 10),
   }
+}
+
+/**
+ * O dono escolheu abrir de fora com a 1ª foto (Etapa 3, 2026-11-11): a IA pode ter chamado de "varanda" uma foto da
+ * piscina com a vista. Só vale se o cômodo da 1ª foto estiver em `opening_candidates` da ficha — um quarto nunca vira
+ * "cena de drone". A foto continua a mesma foto real; só o tipo do trecho muda pra abertura.
+ */
+export function withOutsideFirst(rooms: (string | null)[], openingRooms: string[], candidates: string[], outsideFirst: boolean): (string | null)[] {
+  const r0 = rooms[0]
+  if (!outsideFirst || !r0 || !openingRooms.length || openingRooms.includes(r0) || !candidates.includes(r0)) return rooms
+  return [openingRooms[openingRooms.length - 1], ...rooms.slice(1)]
 }
 
 /** Cômodo confiável da foto (abaixo da confiança mínima da ficha = não identificado). */

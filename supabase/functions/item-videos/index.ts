@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { advanceTour, clipPrompt, COST_PER_SECOND, estimateUsd, hfHeaders, SECONDS, studioReady, submitAll, VIDEO_BUCKET, type ClipKind, type TourRow } from '../_shared/tourEngine.ts'
 import { tourCfgFrom, type TourPhoto } from '../_shared/tourPick.ts'
-import { orderTour, roomOf, tourOrderCfgFrom, tourSeconds, tourSegments, type Segment, type SegKind } from '../_shared/tourOrder.ts'
+import { orderTour, roomOf, tourOrderCfgFrom, tourSeconds, tourSegments, withOutsideFirst, type Segment, type SegKind } from '../_shared/tourOrder.ts'
 import { ensurePhotoScores } from '../_shared/photoScore.ts'
 import { validEndcardUrl } from '../_shared/tourPick.ts'
 import { draftReply, type DmReplyConfig } from '../_shared/dmReply.ts'
@@ -217,7 +217,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const admin = createClient(supabaseUrl, serviceKey)
-    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number; cuts?: unknown }
+    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number; cuts?: unknown; outside_first?: unknown }
     const cronSecret = Deno.env.get('CRON_SECRET')
     const isCron = !!cronSecret && body.cron_secret === cronSecret
 
@@ -323,7 +323,7 @@ Deno.serve(async (req) => {
         ...order,
         all: scored.map(p => ({ url: p.url, room: roomOf(p, tcfg), quality: typeof p.quality === 'number' ? Math.round(p.quality) : null })),
         room_labels: Object.fromEntries(tcfg.rooms.map(r => [r.key, r.label])),
-        adjacent_rooms: tcfg.adjacent_rooms, opening_rooms: tcfg.opening_rooms, max_photos: ocfg.tour_max_photos,
+        adjacent_rooms: tcfg.adjacent_rooms, opening_rooms: tcfg.opening_rooms, opening_candidates: ocfg.opening_candidates, max_photos: ocfg.tour_max_photos,
         seconds: SEG_SECONDS, cost_per_second_usd: COST_PER_SECOND, estimate_usd: tourEstimate(order.segments),
         month_spent_usd: spent.total_usd, month_cap_usd: spent.cap_usd, studio_ready: ready, blocked: blockMsg,
       })
@@ -354,7 +354,9 @@ Deno.serve(async (req) => {
       }
       // Cortes pedidos pelo dono (índice da foto que começa depois do corte); o resto é caminhada contínua.
       const cuts = Array.isArray(body.cuts) ? (body.cuts as unknown[]).map(Number).filter(i => Number.isInteger(i) && i > 0 && i < photos.length) : []
-      const { segments } = tourSegments(photos.map(u => roomOf(meta.get(u) as never, tcfg)), tcfg.adjacent_rooms, tcfg.opening_rooms, cuts)
+      // Abrir de fora com a 1ª foto, se o dono escolheu (só cômodos que a ficha permite).
+      const rooms = withOutsideFirst(photos.map(u => roomOf(meta.get(u) as never, tcfg)), tcfg.opening_rooms, ocfg.opening_candidates, body.outside_first === true)
+      const { segments } = tourSegments(rooms, tcfg.adjacent_rooms, tcfg.opening_rooms, cuts)
       const r = await createTourVideo(admin, company, item.id, photos, segments, pieceId, endcard)
       if (!r.ok) return json({ error: r.error, ...(r.cap ? { status: 'cap_reached' } : {}) }, r.status)
       return json({ status: 'processing', video_id: r.video_id })
