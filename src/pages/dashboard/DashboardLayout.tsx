@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCompany } from '../../contexts/CompanyContext'
@@ -18,6 +18,8 @@ import { supabase } from '../../lib/supabase'
 import { fetchCatalogSchema } from '../../lib/verticalPlaybook'
 import { CATALOG_PATH } from './plusOptions'
 import logo from '../../assets/logo.png'
+import BrandLoader from '../../components/BrandLoader'
+import { prefetchGroup } from '../../lib/lazyPage'
 
 const ORANGE = '#FF6D29'
 const SIDEBAR_BG = '#0D0A07'
@@ -267,6 +269,8 @@ function DashboardShell() {
   useFirstStrategy(paid ? company?.id ?? null : null, readOnly)
   const [mobileOpen, setMobileOpen] = useState(false)
   useEffect(() => { if (!isMobile) setMobileOpen(false) }, [isMobile])
+  // Painel aberto → baixa as outras páginas em segundo plano (navegador ocioso): trocar de aba fica instantâneo.
+  useEffect(() => prefetchGroup('dashboard'), [])
   // Respostas do diagnóstico → empresa (antes era o /setup; saiu em 2026-10-19).
   const companyId = company?.id ?? null, verticalKey = company?.vertical_key ?? 'generico'
   useEffect(() => { if (companyId) void importDiagnosisAnswers(companyId, verticalKey) }, [companyId, verticalKey])
@@ -298,7 +302,8 @@ function DashboardShell() {
             </div>
           )}
           {!readOnly && <TrialStatusWidget />}
-          <Outlet />
+          {/* Trocar de página: o menu fica, só o conteúdo mostra o logo enquanto a página baixa. */}
+          <Suspense fallback={<BrandLoader />}><Outlet /></Suspense>
         </main>
       </div>
       {!readOnly && <TrialStartModal />}
