@@ -209,6 +209,55 @@ precisar virar especialista em marketing.
 - **Diferencial:** ninguém cruza preços + reviews + plano de ação + agente
   que executa + voz em PT-BR.
 
+## Conta dos Boosts — só documento, nada decidido (2026-11-12)
+
+> Pedido do dono (11/11): fazer a conta depois de ter o custo real do tour. **Nenhum código de Boosts ou cobrança**
+> antes dos dois gates (técnico do tour + validação comercial com imobiliárias) e da decisão do dono.
+
+**Custo real medido** (fonte: `video_tours.cost_usd` e o preço do Higgsfield, 11/11):
+
+| Item | Custo | Fonte |
+|---|---|---|
+| 1 caminhada de 6 s (Kling via Higgsfield) | US$ 0,504 (US$ 0,084/s) | medido |
+| Conferência de ligação, por par de fotos | ~US$ 0,01 (uma vez por par) | estimado pelo preço do Sonnet 5.5 |
+| Nota/cômodo de cada foto | ~US$ 0,003 (uma vez por foto) | estimado |
+| Tentativa que falha no fornecedor | US$ 0 (não é cobrada) | medido (3 falhas em 11/11) |
+| Trecho que sai ruim e precisa refazer | o preço de 1 caminhada | ainda sem média; uso **+20% de reserva** (hipótese) |
+| Estúdio (VPS), taxas do Stripe, câmbio e IOF | **a medir** (fatura do dono) | — |
+
+Tour de N fotos = (N − 1) caminhadas. Tours já feitos: 8 fotos = US$ 3,53 de vídeo (medido); 5 fotos = US$ 1,76 e
+2,02 (modelo antigo, com trecho de 5 s).
+
+**Custo por tour (com a reserva de 20%) e preço por regra:**
+
+| Fotos | Custo direto | Com reserva | +50% markup | +75% markup | 50% de margem | 75% de margem |
+|---|---|---|---|---|---|---|
+| 5 | US$ 2,07 | US$ 2,49 | US$ 3,73 | US$ 4,35 | US$ 4,97 | US$ 9,94 |
+| 8 | US$ 3,62 | US$ 4,35 | US$ 6,52 | US$ 7,61 | US$ 8,69 | US$ 17,39 |
+| 12 | US$ 5,69 | US$ 6,83 | US$ 10,24 | US$ 11,95 | US$ 13,66 | US$ 27,31 |
+
+**Markup ≠ margem:**
+- **"50 a 75% a mais"** (a ideia do dono) é **markup**: preço = custo × 1,5 a 1,75. Isso dá uma margem de 33% a 43% do preço.
+- **"50% de margem"** é preço = custo ÷ 0,5, ou seja, o dobro do custo.
+
+**Boost = 1 caminhada (proposta a validar):** fica simples para o cliente (tour de N fotos = N − 1 Boosts), e se a
+caminhada falhar no fornecedor o Boost volta. Custo por Boost com reserva: US$ 0,62. Preço por Boost:
+
+| Regra | Preço por Boost |
+|---|---|
+| +50% markup | US$ 0,93 |
+| +75% markup | US$ 1,08 |
+| 50% de margem | US$ 1,23 |
+
+O exemplo do dono ("tour de US$ 5 = 10 Boosts") só fecha com um valor por Boost definido. Com 1 Boost = 1 caminhada,
+um tour de 8 fotos = 7 Boosts.
+
+**O que falta antes de decidir:**
+1. Fechar o gate técnico do tour.
+2. Medir a média real de trechos refeitos, para trocar a reserva de 20% por número.
+3. Somar estúdio, Stripe e câmbio (faturas do dono).
+4. As conversas com imobiliárias: quantos tours por mês e quanto pagariam.
+
 ## Modelo de cobrança — DECIDIDO (2026-10-02)
 
 > **Divergência (2026-11-02):** o dono está repensando o preço — 3 planos em dólar (US$ 19 / 29 / 59; 5 / 15 / 30
