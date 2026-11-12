@@ -204,3 +204,87 @@ visita deve sair direto do Supabase, pelo mesmo caminho dos avisos do `telegram-
 **Preço do lead:** nenhum antes dos dados reais do piloto (dono, 10/11).
 
 **Até 17/11 (dono):** trabalho concentrado na **validação comercial**. Nada de implementação nem de escopo novo. O roteiro e a ficha de registro das conversas estão em [PILOTO.md](PILOTO.md) (seções 2.1 e 2.2).
+
+## 2026-11-12 — Especificação do fluxo de leads v2: direção aprovada (implementação só em parte)
+
+> **Aprovado pelo dono em 12/11:** a direção e as decisões abaixo. **Liberado para código agora:** só o painel com os dados
+> que já existem e as 2 correções de fidelidade (item 9). Pessoa/identidade, condições, entrega com recebimento,
+> contestação, agendamento e Boosts **esperam** a auditoria de custos (17/11), um piloto ou 3 conversas e a aprovação
+> final dos critérios. Telegram e Hostinger não mudam até o fim do teste do tour.
+
+**1. Pessoa, lead e negociação.**
+- **Pessoa:** quem demonstrou interesse. Tem um ou mais identificadores.
+- **Lead:** o interesse de uma pessoa num imóvel, por um canal, num momento. A mesma pessoa interessada em 2 imóveis gera 2 leads.
+- **Negociação:** o acompanhamento comercial de um lead (conversa, visita, proposta, venda). É o cartão do Funil.
+- **Nome:** "negociação", e não "oportunidade comercial", porque "oportunidade" já é a oportunidade de mercado (`growth_opportunities`, `leads.opportunity_id`).
+
+**2. Identidade (decisão do dono).** Só se vinculam registros e se declara duplicidade com identidade coincidente:
+- o mesmo telefone normalizado ou o mesmo e-mail normalizado, entre formulários;
+- o mesmo id do Instagram, dentro desse tipo de identificador, **depois de validar se o id do comentário é o mesmo da DM** (isso ainda não foi verificado);
+- telefone e Instagram sem vínculo comprovado: **não presumir** que são a mesma pessoa.
+
+Identidades diferentes não significam pessoas diferentes; significam só que não há evidência para juntá-las.
+
+**Achado em 12/11:** o link da DM é o mesmo para todos (um por imóvel, oportunidade e canal), então hoje não existe identidade em comum entre o formulário e o Instagram.
+
+**Futuro (não agora):**
+- **link pessoal na DM:** a solução principal, porque cria uma relação técnica entre o comentário ou a DM e o formulário;
+- **campo opcional de @ no formulário:** pode existir só como informação complementar, nunca como prova.
+
+**3. Condições independentes**, cada uma com sim/não, data, motivo e responsável, sem uma depender da outra para análise:
+- **Válido:**
+  - contato utilizável;
+  - evidência de consentimento, conforme a regra definida para o fluxo;
+  - sem spam nem robô.
+- **Qualificado:**
+  - interesse num imóvel específico;
+  - imóvel disponível no momento da manifestação;
+  - origem rastreável;
+  - sem duplicidade comprovada dentro da regra (hipótese: [30] dias, com a mesma identidade e o mesmo imóvel).
+- **Entregue:** ver o item 5.
+- **Cobrável (futuro):** válido + qualificado + recebimento confirmado + sem contestação aceita.
+
+**4. Contestação (hipótese para o piloto).**
+- **Prazo:** [7] dias depois do recebimento.
+- **Motivos fechados:** contato inválido, duplicado, sem intenção comercial, spam.
+- **Quem decide:**
+  - aceite automático quando o sistema prova o motivo;
+  - decisão humana quando o motivo depende de interpretação comercial.
+- **Registro:** motivo, data e responsável.
+
+**5. Entrega em 3 passos separados:**
+1. **encaminhamento iniciado** (hoje o clique em "Encaminhar por WhatsApp" não é registrado);
+2. **envio confirmado**, só quando o canal confirma (o link do WhatsApp nunca confirma);
+3. **recebimento confirmado pela imobiliária**.
+
+Para cobrança, vale o recebimento confirmado, registrado e auditável. É uma regra comercial: a confirmação da imobiliária não é prova técnica de que a mensagem chegou.
+
+**6. Mensagens ao interessado:** nada sai sem ação explícita. A exceção continua: a DM automática da automação de comentário, quando o usuário configurou e autorizou o modo automático.
+
+**7. Estágio da negociação, separado das condições:** novo → em conversa → visita agendada → visita realizada → proposta → venda | perdido. Ele nunca gera nem muda cobrança. Os nomes novos no Funil esperam a fase aprovada.
+
+**8. Divergências do código, lidas em 12/11:**
+- `tracked_links.content_id` nunca é preenchido;
+- o lead de comentário ignora o `item_id` da automação e cria um lead novo a cada comentário;
+- o lead de DM fica com o id do Instagram no `contact`;
+- o "Qualificado" do Funil é onde se grava a visita;
+- estágio, canal e origem são texto livre;
+- o encaminhamento ao corretor não é registrado;
+- o WhatsApp não cria lead.
+
+**9. Liberado agora, com limites:**
+- **(a) Painel novo** só com dados que existem. Sem métricas fictícias, e sem apresentar comentário ou DM como lead qualificado.
+- **(b)** Preencher o `content_id` quando a relação com a publicação estiver disponível.
+- **(c)** O lead de comentário recebe o imóvel da automação.
+
+Fica de fora: cobrança, identidade, contestação e regras novas de duplicidade.
+
+**10. Ordem (dono):**
+1. finalizar e testar o tour;
+2. painel + as 2 correções;
+3. um piloto ou conversas reais;
+4. validar qualificação, entrega e cobrança antes de construir essa camada.
+
+**Visão:** o diferencial é ligar a origem do interesse ao que aconteceu comercialmente depois.
+- **Geração de demanda:** inteligência → conteúdo → distribuição → tour → anúncios.
+- **Gestão da demanda:** captura → identificação → qualificação → entrega → negociação → visita.
