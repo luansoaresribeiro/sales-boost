@@ -577,7 +577,8 @@ async function execute(admin: Supa, act: any, fromCron = false): Promise<any> {
         }
       }
       if (p.create_lead || p.action_type === 'create_lead') {
-        await admin.from('leads').insert({ company_id: act.company_id, name: p.ig_user ?? 'Lead do Instagram', contact: p.ig_user ?? null, channel: 'instagram', stage: 'new', notes: act.agent_interpretation ?? null })
+        // item_id: imóvel da automação "Comente QUERO" (especificação de leads v2, 2026-11-12).
+        await admin.from('leads').insert({ company_id: act.company_id, name: p.ig_user ?? 'Lead do Instagram', contact: p.ig_user ?? null, item_id: typeof p.item_id === 'string' && /^[0-9a-f-]{36}$/i.test(p.item_id) ? p.item_id : null, channel: 'instagram', stage: 'new', notes: act.agent_interpretation ?? null })
       }
       if (p.event_id) await admin.from('engagement_events').update({ status: err ? 'failed' : (p.create_lead ? 'lead_created' : 'sent'), error: err || null }).eq('id', p.event_id)
       return err ? await fail(err) : await done({ engagement: true, dm: p.action_type !== 'create_lead', lead: !!p.create_lead })
