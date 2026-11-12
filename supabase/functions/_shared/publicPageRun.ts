@@ -11,7 +11,7 @@ import { licenseFooter, licenseRule, licenseStatus } from './compliance.ts'
 import {
   LEAD_SOURCE, LEAD_STAGE_NEW, NOT_FOUND_BODY, appendLinkOnce, clientIp, consentText, generateCode, instagramHandle, instagramUrl, isBot,
   isUuid, isValidCode, leadLimit, leadNotes, linkLine, lng, parsePublicPageConfig, publicFields, publicLink, publicPhotos,
-  validateLead, visitorHash, whatsappNumber, whatsappUrl, LIMITS, type Lang, type PublicPageConfig,
+  validateLead, visitorHash, whatsappNumber, whatsappUrl, LIMITS, linkCodes, swapLinkCode, type Lang, type PublicPageConfig,
 } from './publicPage.ts'
 
 type Admin = { from: (t: string) => any; rpc?: (fn: string, args: Record<string, unknown>) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -26,11 +26,13 @@ export type LinkChannel = 'caption' | 'dm' | 'bio' | 'manual'
 interface LinkRow { id: string; code: string; company_id: string; item_id: string; opportunity_id: string | null; channel: string }
 
 // ── link rastreável ──
-/** Acha ou cria o link de (imóvel, oportunidade, canal). A unicidade é do banco; colisão de código sorteia outro. Nunca lança. */
+/** Acha ou cria o link de (imóvel, oportunidade, canal, publicação — ou sem publicação). A unicidade é do banco; colisão de código sorteia outro. Nunca lança. */
 export async function ensureTrackedLink(admin: Admin, o: { companyId: string; itemId: string; opportunityId?: string | null; contentId?: string | null; channel: LinkChannel }): Promise<{ id: string; code: string } | null> {
   const find = async () => {
     let q = admin.from('tracked_links').select('id, code').eq('company_id', o.companyId).eq('item_id', o.itemId).eq('channel', o.channel)
     q = o.opportunityId ? q.eq('opportunity_id', o.opportunityId) : q.is('opportunity_id', null)
+    // Link por publicação (2026-11-12): com contentId, o link é daquela publicação; sem, é o link geral (sem publicação).
+    q = o.contentId ? q.eq('content_id', o.contentId) : q.is('content_id', null)
     const { data, error } = await q.limit(1).maybeSingle()
     return error ? { error } : { row: (data ?? null) as { id: string; code: string } | null }
   }
@@ -313,6 +315,31 @@ export async function attachTrackedLinks(admin: Admin, companyId: string, rawPub
     }
     return changed
   } catch (e) { console.error('[public_page] attachTrackedLinks:', String(e)); return 0 }
+}
+
+/**
+ * DM do "Comente QUERO" com o link DAQUELE post (dono, 2026-11-12: link por publicação, não por pessoa). A mensagem da
+ * automação traz o link geral do imóvel (canal 'dm'); se o comentário veio de um post publicado pelo Sales Boost
+ * (`posts.instagram_media_id`) do mesmo imóvel, troca pelo link do post (mesmo imóvel, canal 'dm', content_id = post).
+ * Assim o formulário aberto pela DM registra de qual publicação veio. Não identifica a pessoa e não é regra de cobrança.
+ * Qualquer falha devolve a mensagem como estava (o link geral continua funcionando). Nunca lança.
+ */
+export async function postDmMessage(admin: Admin, companyId: string, mediaId: string | null, message: string | null): Promise<string | null> {
+  try {
+    if (!message || !mediaId) return message
+    const codes = linkCodes(message)
+    if (!codes.length) return message
+    const { data: post } = await admin.from('posts').select('id, item_id, opportunity_id').eq('company_id', companyId).eq('instagram_media_id', mediaId).maybeSingle()
+    if (!post?.id || !post.item_id) return message
+    let out = message
+    for (const code of codes) {
+      const { data: link } = await admin.from('tracked_links').select('id, item_id, channel, content_id').eq('company_id', companyId).eq('code', code).maybeSingle()
+      if (!link || link.channel !== 'dm' || link.item_id !== post.item_id || link.content_id) continue
+      const per = await ensureTrackedLink(admin, { companyId, itemId: post.item_id, opportunityId: post.opportunity_id ?? null, contentId: post.id, channel: 'dm' })
+      if (per) out = swapLinkCode(out, code, per.code)
+    }
+    return out
+  } catch (e) { console.error('[public_page] postDmMessage:', String(e)); return message }
 }
 
 /** Mensagem NOVA do "Comente QUERO": se o imóvel tem página no ar, acrescenta a frase com o link (canal 'dm'). Sem página: devolve a mesma. */

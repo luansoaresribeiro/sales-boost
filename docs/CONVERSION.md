@@ -264,7 +264,7 @@ Para cobrança, vale o recebimento confirmado, registrado e auditável. É uma r
 **7. Estágio da negociação, separado das condições:** novo → em conversa → visita agendada → visita realizada → proposta → venda | perdido. Ele nunca gera nem muda cobrança. Os nomes novos no Funil esperam a fase aprovada.
 
 **8. Divergências do código, lidas em 12/11:**
-- `tracked_links.content_id` nunca é preenchido;
+- `tracked_links.content_id`: é preenchido, mas o link era um por (imóvel, oportunidade, canal), então as publicações dividiam o link. **Corrigido em 12/11:** link por publicação; a DM do "Comente QUERO" leva o link do post comentado (ver PITFALLS). Não é link por pessoa;
 - o lead de comentário ignora o `item_id` da automação e cria um lead novo a cada comentário;
 - o lead de DM fica com o id do Instagram no `contact`;
 - o "Qualificado" do Funil é onde se grava a visita;

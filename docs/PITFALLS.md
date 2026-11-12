@@ -936,6 +936,13 @@ trava/contador, confere o `error` retornado.
   Nunca grave IP nem user-agent em claro.
 - **Um link por (imóvel, oportunidade, canal):** peças diferentes da MESMA oportunidade e imóvel compartilham o código `caption`
   (`content_id` guarda só a primeira). A atribuição é por oportunidade + imóvel, não por peça.
+  **Divergência (2026-11-12, dono): link por PUBLICAÇÃO.** A publicação entra na unicidade (migration
+  `20261112190000_link_por_publicacao.sql`):
+  - **DM do "Comente QUERO":** na hora de responder, troca o link geral do imóvel pelo link do post comentado (`postDmMessage`: `posts.instagram_media_id` → `content_id` = `posts.id`).
+  - **Legenda:** cada rascunho ganha o seu link, mas o `content_id` é o id do rascunho, que é apagado ao publicar, e link na legenda não é clicável no Instagram. A atribuição que vale é a da DM.
+  - **Link geral** (sem publicação): continua para DM sem post conhecido, bio e manual.
+  - **Links antigos:** continuam funcionando.
+  - **Não é identidade de pessoa** nem regra de cobrança.
 - **A frase com o link na legenda é uma tentativa do cron, não do `creative-generate`:** só roda a cada 6 h (junto de
   `cron_opportunities`) e só em empresas com `auto_strategy`. A própria legenda é a marca de "já feito" (se ela contém o
   link, não repete). Troca condicional (`caption` igual ao lido): se o dono editou nesse meio-tempo, não sobrescreve.
