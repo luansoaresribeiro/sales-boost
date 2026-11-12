@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
           description: `Comentário "${text}" de ${fromUser}.`,
           agent_interpretation: interpretation, reason: `Automação "${chosen.name}" (${intentLabel}).`,
           expected_outcome: chosen.create_lead ? 'Entregar o recurso e capturar o lead.' : 'Entregar o recurso pedido.',
-          payload: { comment_id: commentId, ig_user_id: v.from?.id ?? null, ig_user: fromUser, media_ref: mediaId, message, create_lead: chosen.create_lead, event_id: ev?.id, action_type: actionType },
+          payload: { comment_id: commentId, ig_user_id: v.from?.id ?? null, ig_user: fromUser, media_ref: mediaId, message, create_lead: chosen.create_lead, event_id: ev?.id, action_type: actionType, item_id: chosen.item_id ?? null },
           risk_level: 'low', priority: 'normal', source: 'engagement',
           ref_type: 'engagement_event', ref_id: ev?.id ?? null,
           automation_enabled: auto,
@@ -287,6 +287,8 @@ async function executeAction(admin: Any, company: Any, act: Any, eventId?: strin
     if (p.create_lead || p.action_type === 'create_lead') {
       const { error } = await admin.from('leads').insert({
         company_id: company.id, name: p.ig_user ?? 'Lead do Instagram', contact: p.ig_user ?? null,
+        // Imóvel da automação "Comente QUERO" (especificação de leads v2, 2026-11-12): o lead do comentário guarda o imóvel.
+        item_id: typeof p.item_id === 'string' && /^[0-9a-f-]{36}$/i.test(p.item_id) ? p.item_id : null,
         channel: 'instagram', stage: 'new', notes: `Comentário: "${act.description}". ${act.agent_interpretation ?? ''}`,
       })
       if (error) leadOk = false
