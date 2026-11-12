@@ -11,6 +11,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { loadPublicTextRules, safeAutoReply } from '../_shared/compliance.ts'
+import { postDmMessage } from '../_shared/publicPageRun.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 const FB = 'https://graph.facebook.com/v21.0'
@@ -106,7 +107,8 @@ Deno.serve(async (req) => {
         if (!chosen) continue
 
         const actionType = chosen.action_type as string
-        const message = chosen.message as string | null
+        // Link do post comentado no lugar do link geral do imóvel (link por publicação, 2026-11-12).
+        const message = await postDmMessage(admin, company.id, mediaId, chosen.message as string | null)
 
         // Registra o evento (Conversations/Activity).
         const { data: ev } = await admin.from('engagement_events').insert({

@@ -6,7 +6,7 @@ import {
   CODE_ALPHABET, CODE_LENGTH, NOT_FOUND_BODY, appendLinkOnce, consentText, generateCode, instagramHandle, instagramUrl, isBot, isValidCode,
   clientIp, leadLimit, linkLine, parsePublicPageConfig, publicFields, publicLink, publicPhotos, validateLead, visitorHash, whatsappNumber, whatsappUrl,
 } from '../supabase/functions/_shared/publicPage.ts'
-import { attachTrackedLinks, ensureTrackedLink, getPublicPageState, handlePublicPage, setPublicPage, withDmLink } from '../supabase/functions/_shared/publicPageRun.ts'
+import { attachTrackedLinks, ensureTrackedLink, getPublicPageState, handlePublicPage, postDmMessage, setPublicPage, withDmLink } from '../supabase/functions/_shared/publicPageRun.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
 const RAW = { fields: ['tipo', 'bairro', 'quartos', 'preco', 'venda_ou_aluguel', 'm2', 'segredo', 'fotos_min_5'], min_photos: 3, country_code: '55', caption_line: { pt: 'Mais fotos e detalhes: {link}', en: 'More photos and details: {link}' } }
@@ -142,7 +142,7 @@ function memDb(seed = {}, opts = {}) {
         const p = { ...st.payload }
         if (st.op === 'upsert') { const ex = rows(name).find(r => r[st.onConflict] === p[st.onConflict]); if (ex) { Object.assign(ex, p); return { data: null, error: null } } }
         if (name === 'tracked_links') {
-          const dup = rows(name).find(r => r.code === p.code || (r.item_id === p.item_id && (r.opportunity_id ?? null) === (p.opportunity_id ?? null) && r.channel === p.channel))
+          const dup = rows(name).find(r => r.code === p.code || (r.item_id === p.item_id && (r.opportunity_id ?? null) === (p.opportunity_id ?? null) && r.channel === p.channel && (r.content_id ?? null) === (p.content_id ?? null)))
           if (dup) return { data: null, error: { message: 'duplicate key', code: '23505' } }
         }
         const row = { id: p.id ?? `id-${++seq}`, created_at: new Date().toISOString(), ...p }; rows(name).push(row)
@@ -287,7 +287,27 @@ const handle = (db, action, body, c = ctx) => handlePublicPage(db, action, body,
   const a = await ensureTrackedLink(db, { companyId: 'C1', itemId: 'I1', channel: 'manual' }); const b = await ensureTrackedLink(db, { companyId: 'C1', itemId: 'I1', channel: 'manual' })
   assert.ok(isValidCode(a.code)); assert.deepEqual(a, b); assert.equal(db.tables.tracked_links.length, 1); ok('link: mesmo (imóvel, canal) reaproveita o código')
   const c = await ensureTrackedLink(db, { companyId: 'C1', itemId: 'I1', opportunityId: 'O1', contentId: 'P1', channel: 'caption' }); assert.notEqual(c.code, a.code); assert.equal(db.tables.tracked_links[1].content_id, 'P1'); ok('link: oportunidade/canal diferente = outro código')
+  const d = await ensureTrackedLink(db, { companyId: 'C1', itemId: 'I1', opportunityId: 'O1', contentId: 'P2', channel: 'caption' }); assert.notEqual(d.code, c.code); assert.equal(db.tables.tracked_links.at(-1).content_id, 'P2'); ok('link: outra publicação = outro código (link por publicação)')
+  const e2 = await ensureTrackedLink(db, { companyId: 'C1', itemId: 'I1', opportunityId: 'O1', contentId: 'P1', channel: 'caption' }); assert.deepEqual(e2, c); ok('link: mesma publicação reaproveita o código')
+  const g1 = await ensureTrackedLink(db, { companyId: 'C1', itemId: 'I1', channel: 'dm' }); const g2 = await ensureTrackedLink(db, { companyId: 'C1', itemId: 'I1', channel: 'dm' }); assert.deepEqual(g1, g2); ok('link: link geral (sem publicação) continua um só')
   assert.equal((await ensureTrackedLink(memDb({ tracked_links: [] }, { fail: { 'tracked_links.insert': 'x' } }), { companyId: 'C1', itemId: 'I1', channel: 'dm' })), null); ok('link: insert recusado = null (e log), sem lançar')
+}
+
+// Link por publicação na DM do "Comente QUERO" (2026-11-12)
+{
+  const pp = await import('../supabase/functions/_shared/publicPage.ts')
+  assert.deepEqual(pp.linkCodes('veja https://x.com/p/AbC123 e /p/AbC123 e /p/Zz99'), ['AbC123', 'Zz99']); assert.deepEqual(pp.linkCodes(null), [])
+  assert.equal(pp.swapLinkCode('a /p/AAA1 b', 'AAA1', 'BBB2'), 'a /p/BBB2 b'); assert.equal(pp.swapLinkCode('x', 'AAA1', 'AAA1'), 'x')
+  const db = memDb({ tracked_links: [{ id: 'G', code: 'GERAL01', company_id: 'C1', item_id: 'I1', opportunity_id: null, channel: 'dm' }], posts: [{ id: 'POST1', company_id: 'C1', instagram_media_id: 'M1', item_id: 'I1', opportunity_id: 'O1' }, { id: 'POST2', company_id: 'C1', instagram_media_id: 'M2', item_id: 'I2' }] })
+  const msg = 'Oi! Veja: https://getsaleboost.com/p/GERAL01'
+  const out = await postDmMessage(db, 'C1', 'M1', msg)
+  const per = db.tables.tracked_links.find(l => l.content_id === 'POST1')
+  assert.ok(per && per.channel === 'dm' && per.item_id === 'I1' && per.opportunity_id === 'O1'); assert.equal(out, msg.replace('GERAL01', per.code)); ok('DM: comentário num post do imóvel leva o link DAQUELE post (imóvel e canal preservados)')
+  assert.equal(await postDmMessage(db, 'C1', 'M1', msg), out); assert.equal(db.tables.tracked_links.filter(l => l.content_id === 'POST1').length, 1); ok('DM: o mesmo post reaproveita o link')
+  assert.equal(await postDmMessage(db, 'C1', 'M2', msg), msg); ok('DM: post de outro imóvel não troca o link')
+  assert.equal(await postDmMessage(db, 'C1', 'MX', msg), msg); ok('DM: post que não é do Sales Boost mantém o link geral')
+  assert.equal(await postDmMessage(db, 'C1', null, msg), msg); assert.equal(await postDmMessage(db, 'C1', 'M1', 'sem link'), 'sem link'); assert.equal(await postDmMessage(db, 'C1', 'M1', null), null); ok('DM: sem post, sem link ou sem mensagem = igual')
+  assert.equal(await postDmMessage(memDb({ tracked_links: [] }, { fail: { 'posts.select': 'x' } }), 'C1', 'M1', msg), msg); ok('DM: erro de banco = mensagem como estava')
 }
 
 // --- set / get (dono)
@@ -335,7 +355,7 @@ const handle = (db, action, body, c = ctx) => handlePublicPage(db, action, body,
   const cap = id => db.tables.marketing_ai_test_content.find(r => r.id === id).caption
   assert.equal(changed, 2); assert.match(cap('P1'), /^Legenda 1\n\nMais fotos e detalhes: https:\/\/getsaleboost\.com\/p\/[a-z0-9]{8}$/); assert.match(cap('P2'), /p\/[a-z0-9]{8}$/); ok('cron: rascunhos de oportunidade ganham a frase com o link')
   assert.equal(cap('P3'), 'Já aprovada'); assert.equal(cap('P4'), 'Sem oportunidade'); assert.equal(cap('P5'), 'Imóvel sem página'); assert.equal(cap('P6'), 'Publicada'); assert.equal(cap('P7'), null); ok('cron: aprovada, sem oportunidade, sem página, publicada e sem legenda ficam como estão')
-  const codes = new Set([cap('P1'), cap('P2')].map(c => c.split('/p/')[1])); assert.equal(codes.size, 1); assert.equal(db.tables.tracked_links.length, 1); assert.deepEqual([db.tables.tracked_links[0].channel, db.tables.tracked_links[0].opportunity_id, db.tables.tracked_links[0].item_id], ['caption', 'O1', 'I1']); ok('cron: link canal "caption" ligado à oportunidade e ao imóvel')
+  const codes = new Set([cap('P1'), cap('P2')].map(c => c.split('/p/')[1])); assert.equal(codes.size, 2); assert.equal(db.tables.tracked_links.length, 2); assert.ok(db.tables.tracked_links.every(l => l.channel === 'caption' && l.opportunity_id === 'O1' && l.item_id === 'I1')); assert.deepEqual(db.tables.tracked_links.map(l => l.content_id).sort(), ['P1', 'P2']); ok('cron: cada peça ganha o seu link "caption" (por publicação), ligado à oportunidade e ao imóvel')
   const before = [cap('P1'), cap('P2')]; assert.equal(await attachTrackedLinks(db, 'C1', RAW), 0); assert.deepEqual([cap('P1'), cap('P2')], before); ok('cron: 2ª rodada não repete a frase (uma vez só)')
   const dbOff = memDb({ ...seed(), public_pages: [{ item_id: 'I1', company_id: 'C1', enabled: false }] }); assert.equal(await attachTrackedLinks(dbOff, 'C1', RAW), 0); assert.equal(dbOff.tables.marketing_ai_test_content[0].caption, 'Legenda 1'); ok('cron: página desligada = nada muda')
   assert.equal(await attachTrackedLinks(memDb(seed()), 'C1', undefined), 0); ok('cron: setor sem public_page = nada muda')

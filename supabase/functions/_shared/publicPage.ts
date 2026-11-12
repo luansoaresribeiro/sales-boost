@@ -39,6 +39,15 @@ export function generateCode(random: (n: number) => Uint8Array = n => crypto.get
 const CODE_RE = new RegExp(`^[${CODE_ALPHABET}]{${CODE_LENGTH}}$`)
 export const isValidCode = (c: unknown): c is string => typeof c === 'string' && CODE_RE.test(c)
 export const publicLink = (code: string): string => `${SITE_ORIGIN}/p/${code}`
+/** Códigos de link público (`/p/<código>`) que aparecem num texto, sem repetir. Puro. */
+export function linkCodes(text: string | null | undefined): string[] {
+  return [...new Set([...String(text ?? '').matchAll(/\/p\/([A-Za-z0-9_-]{4,40})/g)].map(m => m[1]))]
+}
+/** Troca o código de um link público por outro no texto (só o `/p/<de>` exato). Puro. */
+export function swapLinkCode(text: string, from: string, to: string): string {
+  if (!from || !to || from === to) return text
+  return text.split(`/p/${from}`).join(`/p/${to}`)
+}
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const isUuid = (v: unknown): v is string => typeof v === 'string' && UUID_RE.test(v)
 
