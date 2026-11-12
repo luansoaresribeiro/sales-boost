@@ -89,6 +89,8 @@ t('duração = soma dos trechos (N fotos = N−1 caminhadas)', () => {
 })
 t('instrução de câmera: drone só no MOVIMENTO, nunca inventar arquitetura; entrada de fora com instrução própria', () => {
   const eng = readFileSync(new URL('../supabase/functions/_shared/tourEngine.ts', import.meta.url), 'utf8')
+  // motivo da falha do fornecedor guardado e traduzido (11/11: "sem crédito" virava só "passagem falhou 2x")
+  assert.ok(eng.includes('sem crédito no Higgsfield') && eng.includes('c.error = st.error') && eng.includes('error: failReason('))
   const rule = /must not invent geometry, architecture, rooms, furniture or landscape that is not supported by the two photos/
   const pair = eng.slice(eng.indexOf('  pair:'), eng.indexOf('  pair_in:')), pairIn = eng.slice(eng.indexOf('  pair_in:'), eng.indexOf('  opening:'))
   assert.match(pair, rule); assert.match(pairIn, rule); assert.match(pair, /no cut and no jump/); assert.match(pairIn, /visible in the photos/)

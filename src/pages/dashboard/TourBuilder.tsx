@@ -17,7 +17,7 @@ interface Plan {
   seconds: Record<SegKind, number>; cost_per_second_usd: number; month_spent_usd: number; month_cap_usd: number
   studio_ready: boolean; blocked: string | null
 }
-interface Video { id: string; status: string; kind: string; created_at: string; video_url: string | null }
+interface Video { id: string; status: string; kind: string; created_at: string; video_url: string | null; error?: string | null }
 
 const TX = {
   pt: {
@@ -256,6 +256,7 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
                 <span style={{ fontSize: '12px', fontWeight: 700, color: v.status === 'completed' ? GREEN : v.status === 'failed' ? RED : ORANGE }}>
                   {v.status === 'completed' ? tx.ready : v.status === 'failed' ? tx.failed : tx.making}
                 </span>
+                {v.status === 'failed' && v.error && <span style={{ fontSize: '12px', color: MUTED }}>— {v.error}</span>}
                 {v.video_url && <a href={v.video_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: ORANGE, fontWeight: 700 }}>▶</a>}
                 {v.status === 'completed' && <Link to="/dashboard/aprovacoes" style={{ marginLeft: 'auto', fontSize: '12px', color: ORANGE, fontWeight: 700 }}>{tx.goApprove}</Link>}
               </div>

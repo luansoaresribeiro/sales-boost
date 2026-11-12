@@ -291,7 +291,7 @@ Deno.serve(async (req) => {
       const item = await loadItem(body.item_id)
       if (!item) return json({ error: 'Imóvel não encontrado.' }, 404)
       const [{ data: vids }, { data: auto }, { data: pb }, spent] = await Promise.all([
-        admin.from('video_tours').select('id, status, plan, video_path, created_at').eq('company_id', company.id).eq('kind', 'plan').eq('item_id', item.id)
+        admin.from('video_tours').select('id, status, plan, video_path, created_at, error').eq('company_id', company.id).eq('kind', 'plan').eq('item_id', item.id)
           .not('plan->>kind', 'is', null).order('created_at', { ascending: false }).limit(30),
         admin.from('engagement_automations').select('id, keywords, message, active').eq('company_id', company.id).eq('item_id', item.id).maybeSingle(),
         company.vertical_key ? admin.from('vertical_playbooks').select('config').eq('key', company.vertical_key).eq('enabled', true).maybeSingle() : Promise.resolve({ data: null }),
@@ -302,9 +302,10 @@ Deno.serve(async (req) => {
       // A já aprovada (`auto`) fica exatamente como o dono aprovou.
       if (!auto) draft.message = await withDmLink(admin, company.id, item.id, lng(company.language), (pb?.config as { public_page?: unknown } | null)?.public_page, draft.message)
       return json({
-        videos: (vids ?? []).map((v: { id: string; status: string; plan: { kind: string; label?: string }; video_path: string | null; created_at: string }) => ({
+        videos: (vids ?? []).map((v: { id: string; status: string; plan: { kind: string; label?: string }; video_path: string | null; created_at: string; error?: string | null }) => ({
           id: v.id, status: v.status, kind: v.plan?.kind, label: v.plan?.label ?? '', created_at: v.created_at,
           video_url: v.status === 'completed' && v.video_path ? publicVideo(v.video_path) : null,
+          error: v.status === 'failed' ? (v.error ?? null) : null,
         })),
         reply: auto ? { keyword: (auto.keywords ?? [draft.keyword])[0], message: auto.message, active: auto.active, saved: true } : { ...draft, active: false, saved: false },
         month_spent_usd: spent.total_usd, month_cap_usd: spent.cap_usd,
