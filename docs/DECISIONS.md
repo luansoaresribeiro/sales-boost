@@ -6,6 +6,15 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-12 — O site já é publicado sozinho (correção)
+
+O agente dizia que o site só ia ao ar com `npm run build` + `npx wrangler deploy` rodados pelo dono. **Não é mais
+assim:** a integração Git da Cloudflare (Workers Builds, `sales-boost-restaurants`) faz o build de produção e publica a
+cada merge no main. Conferido em 12/11: a mudança de tela do #156 já estava no getsaleboost.com sem ninguém rodar
+nada. Junto com as funções (`deploy-functions.yml`), o dono não precisa mais rodar comando de publicação. O agente
+continua conferindo o bundle no ar antes de escrever "Site publicado em getsaleboost.com ✅". A entrada abaixo, que
+dizia "o site fica de fora", fica como histórico.
+
 ## 2026-11-11 (noite, 5) — Funções publicadas sozinhas depois do merge
 
 Dono: "tá chato eu ter que rodar isso toda vez". O workflow `.github/workflows/deploy-functions.yml` publica no Supabase,
