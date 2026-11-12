@@ -62,7 +62,16 @@ export async function clipPrompt(admin: any, verticalKey: string | null, kind: C
 // prompt/seconds por trecho: só o tour completo usa (abertura de fora + caminhadas + cortes no mesmo vídeo);
 // sem eles, vale a instrução e a duração do vídeo inteiro, como sempre.
 // max_attempts: o tour completo usa 1 (dono, 2026-11-11: um trecho que falhou não é refeito sozinho — o dono decide).
-export interface Clip { job_ref: string | null; status: string; attempts: number; from: number; to?: number; prompt?: string; seconds?: number; max_attempts?: number }
+export interface Clip { job_ref: string | null; status: string; attempts: number; from: number; to?: number; prompt?: string; seconds?: number; max_attempts?: number; error?: string }
+
+/** Motivo da falha em português simples (pro dono), a partir do que a Higgsfield respondeu. Puro. */
+export function failReason(raw: string | undefined | null): string {
+  const t = String(raw ?? '').toLowerCase()
+  if (!t) return 'o vídeo falhou no fornecedor'
+  if (t.includes('credit') || t.includes('balance') || t.includes('top up')) return 'sem crédito no Higgsfield — recarregue o saldo para gerar'
+  if (t.includes('nsfw') || t.includes('moderat') || t.includes('safety')) return 'o fornecedor recusou a foto (filtro de conteúdo)'
+  return `o vídeo falhou no fornecedor: ${String(raw).slice(0, 160)}`
+}
 
 export function hfHeaders(): Record<string, string> | null {
   const cred = (Deno.env.get('HF_CREDENTIALS') ?? '').trim()
@@ -82,13 +91,17 @@ export async function submitClip(headers: Record<string, string>, prompt: string
   return out.request_id
 }
 
-async function clipStatus(headers: Record<string, string>, jobRef: string): Promise<{ status: string; url: string | null } | null> {
+async function clipStatus(headers: Record<string, string>, jobRef: string): Promise<{ status: string; url: string | null; error?: string } | null> {
   const res = await fetch(`${HF_BASE}/requests/${encodeURIComponent(jobRef)}/status`, { headers, signal: AbortSignal.timeout(20_000) })
   if (!res.ok) { console.log('[tour] status http', res.status); return null }
   const d = await res.json() as { status?: string; video?: { url?: string }; error?: unknown; detail?: unknown }
   // Falha: registra o motivo que a Higgsfield deu (saldo, moderação, foto…) —
   // sem isso só sobrava "passagem falhou 2x" (teste de 2026-10-14).
-  if (['failed', 'nsfw', 'canceled'].includes(String(d.status))) console.log('[tour] higgsfield recusou', jobRef, String(d.status), JSON.stringify(d.error ?? d.detail ?? d).slice(0, 400))
+  if (['failed', 'nsfw', 'canceled'].includes(String(d.status))) {
+    const why = (typeof d.error === 'string' ? d.error : JSON.stringify(d.error ?? d.detail ?? d.status)).slice(0, 400)
+    console.log('[tour] higgsfield recusou', jobRef, String(d.status), why)
+    return { status: String(d.status), url: null, error: String(d.status) === 'nsfw' ? 'nsfw' : why }
+  }
   return { status: String(d.status ?? 'queued'), url: d.video?.url ?? null }
 }
 
@@ -117,7 +130,7 @@ export async function pollClips(headers: Record<string, string>, prompt: string,
     const st = await clipStatus(headers, c.job_ref)
     if (!st) return
     if (st.status === 'completed' && st.url) { c.status = 'completed'; urls[i] = st.url; return }
-    if (['failed', 'nsfw', 'canceled'].includes(st.status)) { await resubmit(); return }
+    if (['failed', 'nsfw', 'canceled'].includes(st.status)) { c.error = st.error; await resubmit(); return }
     c.status = 'processing'
   }))
   return { done: clips.filter(c => c.status === 'completed').length, failed: clips.some(c => c.status === 'failed'), urls }
@@ -245,7 +258,7 @@ export async function advanceTour(admin: any, supabaseUrl: string, key: string, 
   if (tour.status === 'generating') {
     const { done, failed, urls } = await pollClips(headers, prompt, tour.photos, tour.clips, seconds)
     if (failed) {
-      await admin.from('video_tours').update({ status: 'failed', clips: tour.clips, error: 'passagem falhou 2x', updated_at: now() }).eq('id', tour.id)
+      await admin.from('video_tours').update({ status: 'failed', clips: tour.clips, error: failReason(tour.clips.find(c => c.status === 'failed')?.error), updated_at: now() }).eq('id', tour.id)
       return { status: 'failed', reason: 'generation' }
     }
     if (done < total) {

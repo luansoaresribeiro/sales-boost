@@ -328,7 +328,7 @@ baixo ("falta escada"), libera as 5 boas e o terraço → salão.
 | Trecho | Resultado | Custo |
 |---|---|---|
 | terraço (de fora, porta de vidro) → salão | ⚠️ sem corte e a câmera entra pela porta de vidro, mas pelo vidro aparece a sala de baixo (poltrona branca) que "vira" o salão no fim — a porta do terraço dá para a sala de baixo, não para o salão | US$ 0,504 |
-| terraço → sala de baixo (o par certo) | ❌ falhou no Higgsfield 2 vezes (sem cobrança); a mesma foto tinha funcionado no tour de 8 fotos — provável problema do fornecedor | US$ 0 |
+| terraço → sala de baixo (o par certo) | ❌ falhou 3 vezes (sem cobrança). **Causa (log, 12/11): o saldo de créditos do Higgsfield acabou** ("Your credit balance is too low"). A tela só dizia "passagem falhou 2x"; agora o motivo do fornecedor fica guardado e aparece em português no Tour virtual | US$ 0 |
 
 **Aprendizado:** a conferência sabe se a PORTA aparece, mas não sabe PARA QUAL cômodo ela dá. Quando o dono escolhe a
 ordem, um par "porta visível" ainda pode ligar ao cômodo errado. Próximo passo: na tela, junto do ✅, mostrar "confira:
