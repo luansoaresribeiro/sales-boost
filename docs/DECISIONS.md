@@ -6,6 +6,13 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-12 — O site também é publicado sozinho depois do merge
+
+Dono: "achei que você já publicava". O workflow `.github/workflows/deploy-site.yml` roda `npm run build` e
+`npx wrangler deploy` depois de cada merge no main que muda a tela. No fim, confere que o getsaleboost.com serve o
+bundle novo. Precisa dos secrets `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID`. Os comandos à mão continuam como
+plano B.
+
 ## 2026-11-11 (noite, 5) — Funções publicadas sozinhas depois do merge
 
 Dono: "tá chato eu ter que rodar isso toda vez". O workflow `.github/workflows/deploy-functions.yml` publica no Supabase,
