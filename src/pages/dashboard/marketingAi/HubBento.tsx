@@ -101,7 +101,7 @@ const BORDER_DIM = 'rgba(255,255,255,0.10)'
 
 export default function HubBento({ lang, companyId, kpis, kpisLoading, demo, attention, flow, strategyName, strategyObjective, strategyLoading, strategyError, revenue }: {
   lang: Lang; companyId: string; kpis: DecisionKpis; kpisLoading: boolean; demo: boolean; attention: AttentionData; flow: FlowSummary
-  strategyName: string | null; strategyObjective: string; strategyLoading: boolean; strategyError: boolean; revenue: ReactNode
+  strategyName: string | null; strategyObjective: string; strategyLoading: boolean; strategyError: boolean; revenue?: ReactNode
 }) {
   const t = TX[lang]
   const at = ATX[lang]
@@ -258,7 +258,7 @@ export default function HubBento({ lang, companyId, kpis, kpisLoading, demo, att
           {igBody}
         </Card>
 
-        <div className="hb-s12" style={{ minWidth: 0 }}>{revenue}</div>
+        {revenue ? <div className="hb-s12" style={{ minWidth: 0 }}>{revenue}</div> : null}
       </div>
     </>
   )

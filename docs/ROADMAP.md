@@ -13,7 +13,7 @@
 | 3 | Painel novo (funil comercial) | 12–13/11: 1ª parte feita — bloco "Resultado comercial" no topo do painel (visualizações → interessados → leads recebidos → visitas, funil e "de onde veio" por imóvel e por publicação, 30 dias, só dado real). "Leads qualificados" só quando a qualificação for aprovada. Próximo: revisar o resto do painel junto com a simplificação (prioridade 4) |
 | 4 | Revisar abas e fluxos | depois da 3 |
 | 5 | Telegram com dado real e aprovações | depois da 4 |
-| 6 | Remover o "Painel-resumo" | depois da 5 |
+| 6 | Remover o "Painel-resumo" | ✅ feito em 13/11 a pedido do dono (antecipado): saiu do topo do painel; o "Resultado comercial" mostra o funil com dado real |
 
 **Regras:**
 - Uma frente de código por vez; nenhuma frente nova antes de fechar a atual, salvo dependência real.

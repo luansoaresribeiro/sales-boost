@@ -4,11 +4,9 @@ import { useLang } from '../../contexts/LanguageContext'
 import { useCompany } from '../../contexts/CompanyContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
-import GrowthCommandCenter from './marketingAi/GrowthCommandCenter'
 import { buildGrowthDemo, buildDecisionDemo, useDemoMode, useDemoAllowed, type GrowthDemoData, type CommandInsight, type DemoAgentStatus } from './marketingAi/growthDemo'
 import { mapStage, type LeadRow } from './marketingAi/salesReal'
 import type { LeadStageKey } from './marketingAi/salesDemo'
-import DataVeil, { veilMode } from './marketingAi/DataVeil'
 import { MUTED, BORDER, D, SUPABASE_URL } from './marketingAi/shared'
 import { useStrategySummary } from './marketingAi/useStrategySummary'
 import HubBento from './marketingAi/HubBento'
@@ -36,10 +34,7 @@ const TX = {
     pending: (n: number) => `${n} lead${n === 1 ? '' : 's'} aguardando follow-up`,
     loading: 'Carregando...', sub: 'Seu departamento de crescimento com IA — encontra oportunidades, executa campanhas e transforma dados em vendas. Nada vai ao ar sem sua aprovação.',
     config: '⚙️ Configuração', demo: 'Modo demonstração',
-    vErrT: 'Erro ao carregar o painel-resumo', vEmptyT: 'Painel-resumo ainda sem dado real',
-    vErrM: 'A consulta ao banco/Meta falhou — veja o erro abaixo pra saber o que corrigir.',
-    vEmptyM: 'Receita, ROAS e funil agregados aqui em cima ainda não têm dado real — assim que houver leads, Instagram ou Meta Ads conectados, cada peça some aqui automaticamente. Ligue o Modo demonstração pra ver como fica quando tudo estiver somado.',
-    vCta: 'Ver exemplo (modo demonstração)', team: 'Sua equipe de agentes',
+    team: 'Sua equipe de agentes',
     noStrat: 'Ainda sem estratégia ativa — clique para criar.',
     conn: 'Conexões', ctx: 'Contexto do Negócio', inSettings: 'ficam em Configurações.', and: 'e',
   },
@@ -54,10 +49,7 @@ const TX = {
     pending: (n: number) => `${n} lead${n === 1 ? '' : 's'} awaiting follow-up`,
     loading: 'Loading...', sub: 'Your AI-powered growth department — finds opportunities, runs campaigns and turns data into sales. Nothing goes live without your approval.',
     config: '⚙️ Settings', demo: 'Demo mode',
-    vErrT: 'Error loading the summary panel', vEmptyT: 'Summary panel has no real data yet',
-    vErrM: 'The database/Meta query failed — see the error below to know what to fix.',
-    vEmptyM: 'Revenue, ROAS and the pipeline aggregated up here have no real data yet — as soon as leads, Instagram or Meta Ads are connected, each piece shows up here automatically. Turn on Demo mode to see how it looks when everything is added up.',
-    vCta: 'See an example (demo mode)', team: 'Your team of agents',
+    team: 'Your team of agents',
     noStrat: 'No active strategy yet — click to create one.',
     conn: 'Connections', ctx: 'Business Context', inSettings: 'live in Settings.', and: 'and',
   },
@@ -183,7 +175,7 @@ export default function MarketingAiHubPage() {
   const demoAllowed = useDemoAllowed()
 
   const demo = useMemo(() => (company ? buildGrowthDemo(company, lang) : null), [company, lang])
-  const { real, loading: realLoading, error: realError } = useRealGrowth(company?.id ?? '', session?.access_token ?? '', lang)
+  const { real, loading: realLoading } = useRealGrowth(company?.id ?? '', session?.access_token ?? '', lang)
   const { summary: strategySummary, loading: strategyLoading, error: strategyError } = useStrategySummary(company?.id)
   const flow = useFlowSummary(company?.id)
   const { kpis: realKpis, loading: kpisLoading } = useDecisionKpis(company?.id)
@@ -204,8 +196,6 @@ export default function MarketingAiHubPage() {
     lang, agents: demoMode ? demo.agents : real?.data.agents ?? null, loading: realLoading, kpis, kpisLoading: demoMode ? false : kpisLoading, flow,
     strategy: strategySummary ? { status: strategySummary.status, label: stratLabel, objective: stratObjective } : null, strategyLoading: !demoMode && strategyLoading, strategyError: !demoMode && strategyError,
   })
-  const panelData = real?.hasReal ? real.data : demo
-  const panelMode = veilMode({ hasReal: !!real?.hasReal, demoMode, error: !!realError })
 
   return (
     <div>
@@ -241,16 +231,9 @@ export default function MarketingAiHubPage() {
           receita soma o que já é real (leads → funil, Instagram, Meta Ads, insights_reports); sem peça real fica borrada — nunca 0 fingido. */}
       <HubBento lang={lang} companyId={company.id} kpis={kpis} kpisLoading={kpisLoading} demo={demoMode} attention={attention} flow={flow}
         strategyName={strategySummary?.name ?? (demoMode ? (lang === 'en' ? 'Example strategy' : 'Estratégia de exemplo') : null)}
-        strategyObjective={stratObjective} strategyLoading={!demoMode && strategyLoading} strategyError={!demoMode && strategyError}
-        revenue={!realLoading && (
-          <DataVeil mode={panelMode}
-            title={realError ? t.vErrT : t.vEmptyT}
-            message={realError ? t.vErrM : t.vEmptyM}
-            errorDetail={realError}
-            cta={{ label: t.vCta, onClick: () => setDemoMode(true) }}>
-            <GrowthCommandCenter data={panelData} />
-          </DataVeil>
-        )} />
+        strategyObjective={stratObjective} strategyLoading={!demoMode && strategyLoading} strategyError={!demoMode && strategyError} />
+      {/* Painel-resumo (receita/ROAS/funil agregado, DataVeil + GrowthCommandCenter) saiu do topo a pedido do dono em 2026-11-13:
+          o "Resultado comercial" acima mostra o funil com dado real. Os componentes continuam no código, sem uso aqui. */}
 
       <div style={{ padding: '10px 32px 32px' }}>
         {/* Os 5 cartões dos agentes e a fábrica 3D moraram aqui até C.2 (2026-11-07); agora ficam na aba Agentes. Aqui só a linha
