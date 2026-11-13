@@ -7,6 +7,73 @@
 > momento do caminho até a visita, gancho, estrutura slide a slide, dados reais, diferença visual, quando não usar e
 > rodízio. Comparação ou análise **só com dado real nosso**, nunca preço ou número de mercado inventado.
 
+## Resumo em 1 página (para o dono)
+
+Cada formato é um **tipo de post** diferente, com uma "cara" própria, para a semana não parecer sempre igual. Abaixo, um
+exemplo de cada um, como ele apareceria no Instagram de uma imobiliária. **Os exemplos são só ilustração** (bairros, notícia e números escolhidos para mostrar o formato, não são dados reais): no post
+de verdade, saem do cadastro do imóvel ou do mapa.
+
+| # | Formato | Em uma frase | Exemplo de capa | Hoje |
+|---|---|---|---|---|
+| 1 | **Por dentro** | Visita guiada pelas fotos reais de um imóvel | "3 quartos com varanda na Barra da Tijuca" | já existe |
+| 2 | **O detalhe que você não viu** | Um detalhe do imóvel em zoom | "Repara nesta janela da cozinha…" | já existe |
+| 3 | **A pé daqui** | Distâncias reais do imóvel até metrô, praia, mercado | "O metrô a ~180 m deste apartamento" | **novo** |
+| 4 | **Guia do bairro em 5 paradas** | 5 lugares do bairro, um por slide | "5 lugares para conhecer o Leblon a pé" | **novo** |
+| 5 | **Isso ou aquilo** | 2 imóveis do cliente lado a lado; o público escolhe | "Varanda gourmet ou 2 vagas?" | **novo** |
+| 6 | **O que R$X compra aqui** | Imóveis do cliente numa faixa de preço | "O que R$ 900 mil compra na Tijuca" | já existe |
+| 7 | **3 coisas perto** | O imóvel + 3 lugares a poucos metros | "3 coisas a menos de 500 m deste apartamento" | já existe |
+| 8 | **O que mudou no bairro** | Uma notícia real, com a fonte e a data | "Nova estação de metrô na Gávea (O Globo, 12/11)" | **novo** |
+| 9 | **Passo a passo** | Ensina uma etapa da compra ou do aluguel | "O erro que atrasa a escritura" | já existe |
+| 10 | **Pergunta de verdade / Antes da visita** | Uma dúvida respondida, ou um checklist da visita | "Posso usar o FGTS num imóvel usado?" | FAQ já existe; checklist **novo** |
+
+- **Como a semana fica:** 7 posts, um por dia. O mesmo formato nunca cai em dois dias seguidos, a semana usa pelo menos
+  5 formatos diferentes e pelo menos 2 posts não precisam de imóvel. Exemplo pronto no fim do documento.
+- **O que nunca muda:** foto de imóvel sempre real, nenhum número sem fonte, nada é publicado sem você aprovar.
+
+### As 4 perguntas, explicadas
+
+**1. Quais formatos você aprova?**
+- **O que falta:** saber quais dos 10 eu construo. Os que você recusar ficam de fora.
+- **Por que importa:** cada formato novo custa tempo de construção (C3) e uma peça de teste.
+- **Opções:**
+  - (a) todos os 10: ~1 semana de construção, menos de US$ 1 de teste;
+  - (b) só os 5 que já existem, melhorados: ~2 dias, ~US$ 0;
+  - (c) uma lista sua.
+- **Recomendo (a).** É o que dá variedade de verdade, e o custo cabe na verba de US$ 2.
+
+**2. No "Guia do bairro" (formato 4), posso citar o nome dos lugares?**
+- **O que falta:** saber se o post pode dizer "Padaria Talho Capixaba, a ~170 m" ou só "uma padaria a ~170 m".
+- **Por que importa:** o nome deixa o post útil e local. Mas é um estabelecimento real, e o post só cita, nunca avalia
+  ("o melhor…").
+- **Opções:**
+  - (a) com o nome;
+  - (b) só a categoria.
+  - As duas custam o mesmo.
+- **Recomendo (a)**, sempre sem avaliar o lugar.
+
+**3. No "Isso ou aquilo" (formato 5), posso mostrar o preço dos dois imóveis?**
+- **O que falta:** saber se a comparação mostra o preço ou só as características (quartos, m², vagas).
+- **Por que importa:** o preço ajuda a pessoa a escolher, mas alguns clientes preferem não mostrar o preço no Instagram.
+- **Opções:**
+  - (a) mostrar o preço quando o cadastro tem;
+  - (b) nunca mostrar;
+  - (c) seguir uma escolha de cada cliente (um campo novo na configuração).
+- **Recomendo (a)**, porque o preço já está no cadastro e no anúncio do cliente. A opção (c) pode vir depois, se algum
+  cliente pedir.
+
+**4. No "A pé daqui" (formato 3), a distância em linha reta serve?**
+- **O que falta:** hoje o sistema mede a distância em **linha reta** (no mapa), não pelo caminho das ruas. Andando, a
+  distância real é um pouco maior.
+- **Opções:**
+  - (a) usar agora, escrevendo "~180 m em linha reta": custo zero, entra já no C3;
+  - (b) calcular a rota a pé de verdade: um serviço de rotas grátis do OpenStreetMap, ~2 dias a mais de trabalho, e
+    pode falhar às vezes;
+  - (c) um serviço pago de rotas (gasto novo, precisa de aprovação).
+- **Recomendo (a) agora e (b) depois.** Nunca mostrar "minutos a pé" sem a rota real.
+
+**Como responder:** pode ser só "1a, 2a, 3a, 4a", ou o que você quiser mudar. Com a sua resposta, este catálogo vira
+aprovado e eu começo a construção (C3).
+
 ## Regras que valem para todos os formatos
 
 - **1 post por dia, 7 por semana** (C1). Cada dia recebe um formato deste catálogo.
@@ -256,7 +323,7 @@
 - **Custo estimado de teste:** 1 peça de cada formato novo na Teste Zero, cerca de US$ 0,05 a 0,10 de texto de IA por
   peça. Os 5 novos somam menos de US$ 1, dentro da verba de US$ 2 da frente.
 
-## Perguntas para o dono
+## Perguntas para o dono (versão curta; a explicação completa está no "Resumo em 1 página", no topo)
 
 1. **Quais formatos você aprova?** Marque os que entram (todos, ou uma lista). Os que você recusar não são construídos.
 2. **Formato 4 (Guia do bairro):** citar estabelecimentos pelo nome (do OpenStreetMap) está ok? A alternativa é citar
