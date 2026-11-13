@@ -230,6 +230,66 @@ Comandos (rodar no terminal da Hostinger):
   sofá/almofadas/quadro entraram, porta/espelho/piso iguais. O
   enquadramento muda um pouco (saída 3:4) — documentado como divergência.
 
+### Mobiliamento virtual em VÍDEO — especificação do dono (2026-11-13; não implementado)
+
+> **Ordem:** só depois de fechar o teste do tour e a simplificação de usabilidade. Nada de código antes disso.
+> **Ideia central:** não vender um vídeo de IA, e sim uma ferramenta de apresentação imobiliária que ajuda o comprador a ver o
+> potencial do imóvel sem confundir isso com a realidade física dele.
+
+**Onde fica:** dentro da aba **Tour virtual**, como função separada. O tour mostra o imóvel como ele é; o mobiliamento mostra
+possibilidades para os cômodos vazios. Não abrir aba nova agora.
+
+**Fluxo em 7 passos.** Nenhum vídeo é cobrado antes de a imagem ser aprovada.
+1. O cliente escolhe o cômodo vazio. O sistema só aceita cômodo realmente vazio.
+2. Escolhe um estilo de decoração predefinido: **Contemporâneo, Luxuoso, Minimalista ou Praiano**. As instruções de cada estilo
+   ficam na ficha (`config.virtual_staging`, regra 6).
+3. O Sales Boost gera a imagem mobiliada. Já existe: `virtual-staging`.
+4. O cliente aprova ou pede outra versão.
+5. O Sales Boost gera o vídeo.
+6. O cliente aprova o vídeo.
+7. O cliente publica ou baixa.
+
+**O vídeo:** 9:16, de 6 a 8 s, em três cenas.
+1. **Original:** o cômodo vazio por 1–2 s, igual à foto real.
+2. **Transformação:** transição suave e controlada da foto original para a mobiliada, com movimento discreto de câmera.
+3. **Resultado:** o ambiente mobiliado parado tempo suficiente para olhar os detalhes.
+
+Deve parecer uma apresentação imobiliária profissional, não um truque de IA. No fim, a tela final com logo e chamada (estúdio).
+
+**Regra técnica principal:** **não usar geração de vídeo para reconstruir o ambiente inteiro**, porque a IA de vídeo pode mudar
+detalhes físicos durante a animação mesmo com a imagem final certa.
+- **Preferência:** gerar a imagem mobiliada e montar o vídeo como uma transição controlada entre as duas fotos (original →
+  mobiliada) com movimento discreto, ou seja, uma montagem e não uma geração.
+- **Se usar vídeo gerado** e a estrutura não for preservada, o resultado não é usado.
+
+**Fidelidade** (conferida antes de liberar a imagem e o vídeo):
+- não alterar dimensões, paredes, portas, janelas nem piso;
+- não bloquear passagens nem inventar portas ou janelas;
+- respeitar a perspectiva e a iluminação originais;
+- não colocar móvel incompatível com o tamanho do ambiente;
+- guardar sempre a imagem original para comparação (original e mobiliada lado a lado);
+- se a IA não conseguir preservar a estrutura, não gerar o vídeo.
+
+**Transparência:**
+- o vídeo não pode fazer parecer que o imóvel já está mobiliado;
+- a etiqueta **"Imagem ilustrativa – mobiliado virtualmente"** fica **visível dentro do vídeo durante toda a parte mobiliada**,
+  e não só na legenda (a legenda pode ser apagada);
+- aprovação do dono antes de publicar (regra 1).
+- **Achado (2026-11-12):** hoje a foto mobiliada pode ir para a página pública sem a etiqueta. Corrigir antes de lançar.
+
+**Custo e produto (a medir, nada decidido):**
+- **Custo real** = imagem mobiliada + vídeo ou montagem + tentativas extras + armazenamento e processamento + margem.
+  Os US$ 0,42 por cômodo eram só a estimativa do vídeo.
+- **Pacotes a testar:**
+
+  | Pacote | O que entrega |
+  |---|---|
+  | 1 cômodo | imagem + vídeo |
+  | 3 cômodos | pacote de transformação |
+  | Imóvel completo | apresentação de vários ambientes |
+
+- O preço vem depois do custo medido e da validação comercial, junto da conta dos Boosts (ver [PRODUCT.md](PRODUCT.md)).
+
 ## Vault com foto real (2026-10-14)
 
 - `creative-generate` (`generateForCompany`): quando a ficha tem
