@@ -18,7 +18,7 @@
   - **Frente 1 — Tour do imóvel inteiro;**
   - **Frente de conteúdo**, em paralelo.
 - **Próximo item do agente:**
-  - **Frente de conteúdo:** C0 e C1 em 🧪 (#170). **Próximo: C2 — catálogo editorial** (documento, sem gasto).
+  - **Frente de conteúdo:** C1 em 🧪 (#170; falta conferir a semana de domingo 16/11). **C2 (catálogo, #171) espera o dono.** Depois: C5 (tour/mobiliado como post extra).
   - **Frente 1:** **1.1 — Ambientes físicos**, com a Tespon e dentro da verba D4.
 - **Esperando o dono:**
   - **D3:** tamanho das partes do tour.
@@ -26,6 +26,9 @@
   - **D6:** reserva da VPS.
   - **D7:** pitch.
   - **D2 (parte 1.5):** o dono indica o apartamento menor.
+  - **DA:** anúncio pago entra no modelo e no preço?
+  - **A3:** avisar que o Telegram foi desligado (texto pronto na conversa).
+  - **C2:** aprovar o catálogo editorial (#171).
 - **Gasto acumulado:**
 
   | Verba | Gasto até agora |
@@ -44,9 +47,10 @@
 | D2 | Imóvel e fotos do teste | Dono | P0 | — | ✅ parcial 13/11: 1.1 a 1.4 com a Tespon. ⏳ Para a 1.5, o dono indica um apartamento menor; a lista de fotos está em [PLANO-TOUR-COMPLETO 2.4](PLANO-TOUR-COMPLETO.md#24-lista-de-fotos-para-um-apartamento-de-2-quartos-para-quem-vai-fotografar) |
 | D3 | Tamanho máximo de cada parte do tour (proposta: ~8 passagens, ~50 s) | Dono | P1 | — | ⏳ |
 | D4 | Verba de teste da Frente 1 | Dono | P0 | — | ✅ 13/11: até **US$ 15** ([DECISIONS](DECISIONS.md#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo)). O provedor de nuvem da Frente 2 continua a decidir quando ela começar |
-| D5 | Telegram: quais avisos viram e-mail; aviso para a A3 (inclui o canal do aviso de visita, ver [CONVERSION](CONVERSION.md)) | Dono | P1 | — | ⏳ |
+| D5 | Telegram: quais avisos viram e-mail; aviso para a A3 (inclui o canal do aviso de visita, ver [CONVERSION](CONVERSION.md)) | Dono | P1 | — | ✅ parcial 13/11 (noite): Telegram desligado hoje, sem apagar; alertas da plataforma por e-mail ([DECISIONS](DECISIONS.md#2026-11-13-noite-2--telegram-desligado-hoje-vps-depois-campanha-volta-com-anúncio-pago-grupo-pro-no-menu)). ⏳ Falta avisar a A3 (texto pronto na conversa; quem envia é o dono) e decidir o canal do aviso de visita |
 | D6 | VPS: quanto tempo fica de reserva depois da troca | Dono | P2 | 2.3 | ⏳ |
 | D7 | Reescrever o pitch ([pitch/PITCH.md](../pitch/PITCH.md)). Entram "Technology Partner for Real Estate" e "sem anúncios pagos"; o preço do tour fica como hipótese | Dono + Agente | P2 | — | ⏳ |
+| DA | Anúncio pago entra no modelo comercial e no preço? (a Campanha voltou à plataforma em 13/11 noite) | Dono | P2 | — | ⏳ |
 | D8 | Tour pronto (e cômodo mobiliado) pode virar post? | Dono | P2 | — | ✅ 13/11 (noite): **sim, como post extra**, além do post do dia, só com aprovação ([DECISIONS](DECISIONS.md#2026-11-13-noite--d8-tour-pronto-e-cômodo-mobiliado-viram-post-extra)) |
 | DC | Verba de teste da Frente de conteúdo | Dono | — | — | ✅ 13/11: até **US$ 2** |
 
@@ -54,7 +58,7 @@
 
 | ID | Item | Resp. | Prior. | Depende de | Pronto quando | Status |
 |---|---|---|---|---|---|---|
-| C0 | Esconder a aba "Campanha" (anúncios) do menu do conteúdo, **sem apagar o código** | Agente | P0 | — | A aba não aparece (print desktop e celular); links antigos `?tab=campanha` caem no Conteúdo; o código continua no repositório; site publicado e conferido | 🧪 [#170](https://github.com/luansoaresribeiro/sales-boost/pull/170): print ok; falta site publicado e conferido. A "Saúde da Meta" (conexão, não anúncio) continua pelo link `?tab=campanha&sub=saude` |
+| C0 | Esconder a aba "Campanha" (anúncios) do menu do conteúdo, **sem apagar o código** | Agente | P0 | — | A aba não aparece (print desktop e celular); links antigos `?tab=campanha` caem no Conteúdo; o código continua no repositório; site publicado e conferido | ~~🧪 [#170](https://github.com/luansoaresribeiro/sales-boost/pull/170): print ok; falta site publicado e conferido. A "Saúde da Meta" (conexão, não anúncio) continua pelo link `?tab=campanha&sub=saude` ~~ **Substituído em 13/11 (noite):** a Campanha voltou como item do menu (grupo Pro), via #173 |
 | C1 | **Exatamente 1 post por dia, 7 por semana**, no plano automático. DM, "Comente QUERO", stories e mensagens não contam. Sem material de imóvel → formato que não depende de imóvel. Nunca dia vazio nem peça repetida. "Gerar agora" é extra | Agente | P0 | — | Teste automático: qualquer mix → 7 dias com 1 post cada, sem repetição. Na Teste Zero e na Tespon, a próxima semana planejada tem 7 posts (SQL) | 🧪 [#170](https://github.com/luansoaresribeiro/sales-boost/pull/170): teste automático ✅; falta o SQL da semana planejada no domingo 16/11 |
 | C2 | **Catálogo editorial** em `docs/`: 8 a 10 formatos realmente diferentes, cada um com objetivo, momento até a visita, gancho, slide a slide, dados reais, diferença visual, quando não usar e rodízio | Agente | P0 | C1 | Documento entregue e **aprovado pelo dono** | ⏳ |
 | C3 | Construir os formatos aprovados no C2 | Agente | P1 | C2 aprovado | Cada formato gera peça real na Teste Zero/Tespon, com print e travas de número passando | ⏳ |
@@ -97,9 +101,9 @@
 |---|---|---|---|---|---|---|
 | D5 | Telegram: quais avisos viram e-mail; aviso para a A3 | Dono | P1 | D1 | Decisão registrada | ⏳ |
 | D6 | VPS: quanto tempo fica de reserva depois da troca | Dono | P2 | 2.3 | Decisão registrada | ⏳ |
-| 3.1 | Substitutos por e-mail (alertas da plataforma e de lead) | Agente | P1 | D5 | Alerta de teste chega | ⏳ |
+| 3.1 | Substitutos por e-mail (alertas da plataforma e de lead) | Agente | P1 | D5 | Alerta de teste chega | 🧪 alertas da plataforma por e-mail no #174; falta o alerta de teste chegar e o alerta de lead |
 | 3.2 | Conferir se os bots antigos (`marketing-bot`, `vendas-bot`, `group-manager`) estão publicados | Agente | P2 | — | Lista do que está no ar | ⏳ |
-| 3.3 | Desligar Telegram e VPS por flag (sem apagar) | Agente | P2 | 2.3, 3.1, **autorização** | Checklist da seção 6 do plano | ⏳ |
+| 3.3 | Desligar Telegram e VPS por flag (sem apagar) | Agente | P2 | 2.3, 3.1, **autorização** | Checklist da seção 6 do plano | **Telegram:** 🧪 autorizado em 13/11 (noite); interruptor no #174, flag desligado depois do merge. **VPS:** ⏳ depois da Frente 2 |
 | 3.4 | Apagar estrutura antiga | Agente | P3 | 3.3 + 14 dias + **2ª autorização** | Nada perdido (checklist) | ⏳ |
 
 ## Frente 4 — Experiência do usuário (depois do fluxo do tour definido)
