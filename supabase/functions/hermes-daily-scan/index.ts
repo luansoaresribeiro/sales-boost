@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { runTool, TOOLS_ALL } from '../_shared/tools.ts'
 import type { Company } from '../_shared/tools.ts'
+import { tgFetch } from '../_shared/telegramSwitch.ts'
 
 const OPENAI_TOOLS = TOOLS_ALL.map(t => ({
   type: 'function' as const,
@@ -104,7 +105,7 @@ Deno.serve(async (req) => {
       let notified = false
       if (botToken && company.telegram_chat_id && postsCreated > 0) {
         const msg = `\u{1F916} O agente fez a varredura e preparou ${postsCreated} rascunho(s). Acesse o dashboard para aprovar.`
-        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        await tgFetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ chat_id: company.telegram_chat_id, text: msg }),

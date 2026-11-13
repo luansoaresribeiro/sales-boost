@@ -1,3 +1,4 @@
+import { tgFetch } from './telegramSwitch.ts'
 // Botões assinados do Telegram ("Aprovar" direto na conversa).
 //
 // O telegram-webhook NÃO tem como provar que uma chamada veio mesmo do
@@ -82,7 +83,7 @@ export async function tg(method: string, body: Record<string, unknown>): Promise
   const token = Deno.env.get('TELEGRAM_BOT_TOKEN')
   if (!token) return { ok: false, description: 'TELEGRAM_BOT_TOKEN ausente' }
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+    const res = await tgFetch(`https://api.telegram.org/bot${token}/${method}`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
     })
     const data = await res.json().catch(() => ({})) as { ok?: boolean; result?: unknown; description?: string }

@@ -5,6 +5,7 @@
  * Tier 2: gated — cria pending_action, avisa Luan, ele aprova no painel
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { tgFetch } from '../_shared/telegramSwitch.ts'
 
 type Admin = ReturnType<typeof createClient>
 type Args  = Record<string, unknown>
@@ -241,7 +242,7 @@ export async function executeTier2(name: string, args: Args, admin: Admin): Prom
   const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
   const ownerChat = Deno.env.get('OWNER_TELEGRAM_CHAT_ID')
   if (botToken && ownerChat) {
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    await tgFetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ chat_id: ownerChat, text: `🔐 Hermes pede aprovação:\n${description}\n\nAcesse o dashboard para aprovar ou rejeitar.` }),
