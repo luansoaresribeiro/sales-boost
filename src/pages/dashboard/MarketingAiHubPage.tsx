@@ -12,6 +12,8 @@ import DataVeil, { veilMode } from './marketingAi/DataVeil'
 import { MUTED, BORDER, D, SUPABASE_URL } from './marketingAi/shared'
 import { useStrategySummary } from './marketingAi/useStrategySummary'
 import HubBento from './marketingAi/HubBento'
+import CommercialFunnel from './marketingAi/CommercialFunnel'
+import { useCommercialFunnel } from './marketingAi/useCommercialFunnel'
 import { useDecisionKpis } from './marketingAi/useDecisionKpis'
 import { useFlowSummary } from './marketingAi/useFlowSummary'
 import { useAttention } from './marketingAi/useAttention'
@@ -185,6 +187,7 @@ export default function MarketingAiHubPage() {
   const { summary: strategySummary, loading: strategyLoading, error: strategyError } = useStrategySummary(company?.id)
   const flow = useFlowSummary(company?.id)
   const { kpis: realKpis, loading: kpisLoading } = useDecisionKpis(company?.id)
+  const funnel = useCommercialFunnel(company?.id, !demoMode)
   // Não chamar usePendencias() aqui: ele abre um canal realtime com nome fixo e o DashboardLayout já abre o mesmo —
   // a 2ª inscrição derruba a tela inteira ("cannot add postgres_changes callbacks after subscribe()", 2026-10-30).
   const decisionDemo = useMemo(() => (company && demoMode ? buildDecisionDemo(company.id) : null), [company, demoMode])
@@ -229,6 +232,9 @@ export default function MarketingAiHubPage() {
           </label>}
         </div>
       </div>
+
+      {/* Resultado comercial no topo (dono, 2026-11-12): visualizações → interessados → leads → visitas, e de onde veio. */}
+      <CommercialFunnel lang={lang} state={funnel} demo={demoMode} />
 
       {/* Bento do topo (C.1, 2026-11-07): próxima ação, aprovações, 4 indicadores, mercado, oportunidades, direcionamento e
           receita/ROAS/funil — mesmos hooks e números de antes (AttentionBlock/DecisionKpis seguem no código, sem uso aqui). A
