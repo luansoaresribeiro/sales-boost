@@ -34,7 +34,7 @@
 - **O que existe hoje:**
   - **Tour virtual:** contínuo e sem cortes, mas cobre só parte do imóvel (8 de 22 ambientes no teste da Tespon).
   - **Painel:** mostra o resultado comercial (visualizações → interessados → leads recebidos → visitas).
-  - **Agente de conteúdo:** só com foto; cuida só dos posts e da estratégia editorial. **Regra nova (13/11): exatamente 1 post por dia** no plano automático (ainda não implementada, item C1). O tour é um **produto à parte**.
+  - **Agente de conteúdo:** só com foto; cuida só dos posts e da estratégia editorial. **Regra nova (13/11): exatamente 1 post por dia** no plano automático (ainda não implementada, item C1). O tour é um **produto à parte**. Um tour pronto ou um cômodo mobiliado pode virar **post extra**, com aprovação (D8, 13/11).
   - **Aprovação humana** antes de publicar; CRECI obrigatório para publicar.
 - **Ainda não existe (não prometer):** tour do imóvel inteiro, agendamento de visita, lead "qualificado", cobrança
   por tour ou por lead, Boosts, anúncio pago, avatar, mobiliamento em vídeo.

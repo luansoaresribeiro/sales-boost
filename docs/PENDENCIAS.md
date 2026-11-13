@@ -21,7 +21,6 @@
   - **Frente de conteúdo:** C0 e C1 em 🧪 (#170). **Próximo: C2 — catálogo editorial** (documento, sem gasto).
   - **Frente 1:** **1.1 — Ambientes físicos**, com a Tespon e dentro da verba D4.
 - **Esperando o dono:**
-  - **D8:** tour pronto pode virar o post do dia?
   - **D3:** tamanho das partes do tour.
   - **D5:** avisos do Telegram.
   - **D6:** reserva da VPS.
@@ -48,7 +47,7 @@
 | D5 | Telegram: quais avisos viram e-mail; aviso para a A3 (inclui o canal do aviso de visita, ver [CONVERSION](CONVERSION.md)) | Dono | P1 | — | ⏳ |
 | D6 | VPS: quanto tempo fica de reserva depois da troca | Dono | P2 | 2.3 | ⏳ |
 | D7 | Reescrever o pitch ([pitch/PITCH.md](../pitch/PITCH.md)). Entram "Technology Partner for Real Estate" e "sem anúncios pagos"; o preço do tour fica como hipótese | Dono + Agente | P2 | — | ⏳ |
-| D8 | Um tour pronto pode virar post e ocupar o post do dia, sempre com a aprovação do dono? SIM / NÃO. O dono deixou as duas opções na mensagem de 13/11 | Dono | P2 | — | ⏳ |
+| D8 | Tour pronto (e cômodo mobiliado) pode virar post? | Dono | P2 | — | ✅ 13/11 (noite): **sim, como post extra**, além do post do dia, só com aprovação ([DECISIONS](DECISIONS.md#2026-11-13-noite--d8-tour-pronto-e-cômodo-mobiliado-viram-post-extra)) |
 | DC | Verba de teste da Frente de conteúdo | Dono | — | — | ✅ 13/11: até **US$ 2** |
 
 ## Frente de conteúdo (aberta em 13/11, em paralelo com a Frente 1)
@@ -60,6 +59,7 @@
 | C2 | **Catálogo editorial** em `docs/`: 8 a 10 formatos realmente diferentes, cada um com objetivo, momento até a visita, gancho, slide a slide, dados reais, diferença visual, quando não usar e rodízio | Agente | P0 | C1 | Documento entregue e **aprovado pelo dono** | ⏳ |
 | C3 | Construir os formatos aprovados no C2 | Agente | P1 | C2 aprovado | Cada formato gera peça real na Teste Zero/Tespon, com print e travas de número passando | ⏳ |
 | C4 | Tela do agente de conteúdo simplificada | Agente | P1 | C3, Frente 4 (4.1) | Print aprovado pelo dono | ⏳ |
+| C5 | Tour pronto e cômodo mobiliado viram **post extra** (D8). Não ocupam a vaga do dia; só com aprovação. Primeiro passo: conferir o que já existe (o `tour_piece` já cria uma peça sem dia em Aprovações; falta ver o mobiliado) | Agente | P1 | D8 ✅ | Na Teste Zero: um tour e um mobiliado aparecem em Aprovações como peças sem dia do calendário; aprovar publica como extra; o mobiliado com o aviso "Imagem ilustrativa – mobiliado virtualmente" | ⏳ |
 
 ## Validação comercial — sem prazo; não bloqueia trabalho técnico (dono, 13/11 tarde)
 

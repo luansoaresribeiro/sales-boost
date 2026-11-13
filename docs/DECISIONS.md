@@ -28,7 +28,7 @@
 | Merge e publicação | O agente junta o próprio PR com tudo verde dentro da frente aprovada, **exceto** PR que muda `CLAUDE.md`, `.claude/agents/` ou `ORCHESTRATION`, que espera a revisão do dono (resumo de no máximo 6 linhas). Instruções da IA do produto seguem o fluxo normal com testes, salvo se mudarem a direção. Site e funções vão ao ar sozinhos depois do merge. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) · [11/11](#2026-11-11-noite-2--eu-junto-os-prs-conferência-de-ligação-v2-enquete-sem-bairro-na-frase) · [11/11](#2026-11-11-noite-5--funções-publicadas-sozinhas-depois-do-merge) · [12/11](#2026-11-12--o-site-já-é-publicado-sozinho-correção) |
 | Aprovação humana | Nada vai ao público (post, DM, resposta) sem aprovação humana. | [07/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-07--etapa-0-nenhuma-publicação-no-instagram-sem-aprovação-humana-dono) |
 | Conformidade | CRECI obrigatório para publicar. O texto público passa pela trava de proteção. | [09/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-09--etapa-1--parte-a-creci-obrigatório-para-publicar-dono-autorizada-em-0711) · [09/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-09--etapa-1--parte-b-proteção-do-texto-que-vai-ao-público-dono-autorizada-em-0711) |
-| Tour virtual | **Produto à parte** do agente de conteúdo, com fluxo e modelo comercial próprios. Pronto para cliente = **imóvel inteiro**, sem inventar passagem. Pode sair em várias partes. Vídeo do imóvel só no menu Tour virtual. Tour pronto virar post do dia: **pergunta em aberto** (D8). | [13/11](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) · [13/11](#2026-11-13--tour-do-imóvel-inteiro-motor-próprio-e-saída-de-vpstelegram-planejamento-nada-implementado) · [11/11](#2026-11-11-noite--agente-de-conteúdo-só-com-foto-vídeo-do-imóvel-só-no-tour-virtual-avatar-em-breve) |
+| Tour virtual | **Produto à parte** do agente de conteúdo, com fluxo e modelo comercial próprios. Pronto para cliente = **imóvel inteiro**, sem inventar passagem. Pode sair em várias partes. Vídeo do imóvel só no menu Tour virtual. Tour pronto **e cômodo mobiliado** podem virar **post extra**, além do post do dia, só com a aprovação do dono ([D8, 13/11 noite](#2026-11-13-noite--d8-tour-pronto-e-cômodo-mobiliado-viram-post-extra)). | [13/11](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) · [13/11](#2026-11-13--tour-do-imóvel-inteiro-motor-próprio-e-saída-de-vpstelegram-planejamento-nada-implementado) · [11/11](#2026-11-11-noite--agente-de-conteúdo-só-com-foto-vídeo-do-imóvel-só-no-tour-virtual-avatar-em-breve) |
 | Conteúdo | O agente de conteúdo cuida **só dos posts e da estratégia editorial**, só com foto. Sem o formato "Quanto você pagaria?". Formatos novos só depois de o dono aprovar o **catálogo editorial** (8 a 10 formatos, com dado real). A aba "Campanha" (anúncios) sai do menu, escondida sem apagar o código. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) · [11/11](#2026-11-11-noite--agente-de-conteúdo-só-com-foto-vídeo-do-imóvel-só-no-tour-virtual-avatar-em-breve) · [11/11](#2026-11-11-noite-3--sai-o-formato-quanto-você-pagaria) |
 | Frequência de posts | O plano automático tem **exatamente 1 post por dia, 7 por semana**. DM, "Comente QUERO", stories e mensagens não contam. Faltou material para um dia: usar um formato que não depende de imóvel; nunca deixar o dia vazio nem repetir peça. "Gerar agora" é extra e continua permitido. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
 | Validação comercial | **Sem prazo** (o 17/11 saiu) e **não bloqueia** trabalho técnico aprovado. Continuam bloqueados até ela acontecer: preço do tour, Boosts, preço de lead e Fase 4. Não citar nos relatórios até o dono retomar. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
@@ -36,6 +36,18 @@
 | VPS e Telegram | Ficam intactos até o substituto estar construído e testado e o dono autorizar. A3 e os alertas da plataforma dependem deles. | [13/11](#2026-11-13--tour-do-imóvel-inteiro-motor-próprio-e-saída-de-vpstelegram-planejamento-nada-implementado) |
 | Liga dos Sonhos | Nunca tocar, nem ler. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-13 (noite) — D8: tour pronto e cômodo mobiliado viram post extra
+
+- **Palavras do dono:** "E sobre o D8, aprovado também. O tour pronto pode virar… E mobiliar o cômodo também, pode."
+- **Na pergunta de esclarecimento** (como ele entra no calendário?), o dono escolheu: **"Extra, além do post do dia"**.
+- **O que vale:**
+  - um tour pronto, ou um cômodo mobiliado virtualmente, pode virar post;
+  - entra como **post a mais** naquele dia, igual ao "Gerar agora";
+  - **não ocupa** a vaga do plano: o calendário continua com exatamente 1 post por dia;
+  - sempre **com a aprovação** do dono;
+  - o mobiliado leva o aviso "Imagem ilustrativa – mobiliado virtualmente".
+- **Na PENDENCIAS:** item C5 da Frente de conteúdo.
 
 ## 2026-11-13 (tarde) — Decisões do dono: frequência, catálogo editorial, revisão de PRs, verbas e frente de conteúdo
 
@@ -56,7 +68,7 @@ Pedido do dono: "Registre tudo no PR #169, antes do merge."
    - Comparação ou análise só com dado real nosso. Nunca preço ou número de mercado inventado.
 3. **Separação.** O agente de conteúdo cuida só dos posts e da estratégia editorial. O tour do imóvel inteiro é um produto
    à parte, com fluxo e modelo comercial próprios.
-   - **Em aberto (D8):** "Um tour pronto pode virar post e ocupar o post do dia, sempre com a minha aprovação: SIM / NÃO".
+   - **(Respondido em 13/11, noite: sim, como post extra; ver a entrada D8 acima.) Em aberto (D8):** "Um tour pronto pode virar post e ocupar o post do dia, sempre com a minha aprovação: SIM / NÃO".
      O dono deixou as duas opções na mensagem; nada foi presumido.
 4. **Revisão.**
    - Todo PR que mude `CLAUDE.md`, `.claude/agents/` ou `ORCHESTRATION` espera a revisão do dono.
