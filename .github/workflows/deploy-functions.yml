@@ -52,10 +52,26 @@ jobs:
           echo "list=$FNS" >> "$GITHUB_OUTPUT"
 
       - name: Supabase CLI
+        id: cli
         if: steps.fns.outputs.list != ''
+        # 13/11: falhou com "Failed to resolve latest Supabase CLI release: rate limit exceeded" (limite da API do GitHub).
+        # Não para o deploy: o passo seguinte instala pelo npm, que não usa essa API.
+        continue-on-error: true
         uses: supabase/setup-cli@v1
         with:
           version: latest
+
+      - name: Supabase CLI (reserva pelo npm)
+        if: steps.fns.outputs.list != '' && steps.cli.outcome == 'failure'
+        run: |
+          mkdir -p "$RUNNER_TEMP/sb" && cd "$RUNNER_TEMP/sb"
+          npm init -y > /dev/null
+          npm install supabase
+          echo "$RUNNER_TEMP/sb/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Versão da CLI
+        if: steps.fns.outputs.list != ''
+        run: supabase --version
 
       - name: Publicar
         if: steps.fns.outputs.list != ''
