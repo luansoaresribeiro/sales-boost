@@ -46,7 +46,7 @@ import { buildOpportunityJob } from '../_shared/opportunityPieceJob.ts'
 import { buildPickReason, cleanItemPick, fetchItemCfg, getItem, listPickableItems, ownerBlockMessage, rankItems, saveItemPick, usageLastDays, type ItemPick } from '../_shared/itemService.ts'
 import { checkCaption, promptRules as captionRules, rewriteRequest, stripForbidden, findForbidden } from '../_shared/captionGuard.ts'
 import { formatPrice, PAIR_NOTICE, tourCfgFrom, tourNotice, WAITING_STUDIO_PRE } from '../_shared/tourPick.ts'
-import { roomOf, tourOrderCfgFrom, tourSegments, withOutsideFirst } from '../_shared/tourOrder.ts'
+import { roomOf, tourOrderCfgFrom, tourRoomLabels, tourSegments, withOutsideFirst } from '../_shared/tourOrder.ts'
 import { blocks, checkPassages } from '../_shared/passageCheck.ts'
 import { studioReady } from '../_shared/tourEngine.ts'
 import { chooseTour, fetchTourCfg, planTours, previousCaptions, type TourPlan } from '../_shared/tourSlot.ts'
@@ -1569,7 +1569,7 @@ async function fetchFichaCtas(admin: SupaClient, verticalKey: string | null): Pr
 // diz o motivo — nada é cobrado.
 // `full` (menu Tour virtual, 2026-11-10): tour COMPLETO na ordem que o dono confirmou — vários trechos (abertura de fora,
 // caminhadas entre cômodos vizinhos, cortes entre os outros) num vídeo só. A peça nasce sem dia e vai pra Aprovações.
-export interface FullTour { photos: string[]; rooms: (string | null)[]; notes: string[]; outsideFirst?: boolean }
+export interface FullTour { photos: string[]; rooms: (string | null)[]; notes: string[]; outsideFirst?: boolean; seen?: (string | null)[] }
 async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Company, job: SlotJob, cronSecret: string, full?: FullTour): Promise<{ pieceId?: string; error?: string }> {
   const { data: item } = await admin.from('marketing_ai_knowledge').select('id, title, meta').eq('id', job.item_id).eq('company_id', company.id).eq('kind', 'product').maybeSingle()
   const photos = ((item?.meta?.photos ?? []) as { url: string }[]).map(p => p.url).filter(Boolean)
@@ -1596,7 +1596,7 @@ async function runVideoSlot(admin: SupaClient, anthropicKey: string, company: Co
   const decision = decideVideoCta(auto as { active?: boolean; message?: string; keywords?: string[] } | null, await fetchFichaCtas(admin, company.vertical_key))
   // Legenda: o vídeo é uma ANIMAÇÃO por IA de foto real (nunca "filmado"); sem duração; sem repetir a abertura das últimas legendas do imóvel.
   const prev = await previousCaptions(admin, company.id, item.id, VIDEO_RECIPE)
-  const scene = full ? `um tour por este imóvel real${full.rooms[0] && tcfg.opening_rooms.includes(full.rooms[0]) ? ', começando de fora' : ''}, passando pelos ambientes em sequência (${full.photos.length} fotos reais animadas)` : tour.kind === 'pair' ? '2 ambientes vizinhos deste imóvel real, numa passagem suave de um para o outro' : tour.kind === 'opening' ? 'o exterior/a vista deste imóvel real, em abertura de câmera suave' : '1 ambiente deste imóvel real, em movimento de câmera suave'
+  const scene = full ? `um tour por este imóvel real${full.rooms[0] && tcfg.opening_rooms.includes(full.rooms[0]) ? ', começando de fora' : ''}, passando pelos ambientes em sequência (${full.photos.length} fotos reais animadas). Ambientes que aparecem, NESTA ORDEM: ${tourRoomLabels(full.seen ?? full.rooms, tcfg.rooms, !!full.outsideFirst).join(' → ')}. Descreva o percurso só com esses ambientes e nessa ordem — nunca cite fachada, portaria, entrada, porta abrindo ou outro cômodo que não esteja nesta lista` : tour.kind === 'pair' ? '2 ambientes vizinhos deste imóvel real, numa passagem suave de um para o outro' : tour.kind === 'opening' ? 'o exterior/a vista deste imóvel real, em abertura de câmera suave' : '1 ambiente deste imóvel real, em movimento de câmera suave'
   const basePrompt = `Você escreve a legenda de um Reels de "${company.business_name}" mostrando ${scene}.
 Dados reais do imóvel (use só isto):
 ${facts || '(sem dados além do título)'}
@@ -1905,7 +1905,7 @@ Deno.serve(async (req) => {
       if (unlinked.length) notes.push(`${unlinked.length} passagem(ns) sem foto de ligação — você pediu para gerar mesmo assim; confira no vídeo se a câmera não inventou parede, porta ou escada.`)
       if (passages.includes('walk_in')) notes.push('A câmera começa na foto real de fora e entra no imóvel pela abertura visível — confira no vídeo se nada foi inventado no caminho.')
       const job: SlotJob = { date: '', producer: 'item_video', name: 'Tour virtual', pillar: 'tour', purpose: 'Tour virtual completo pedido pelo dono', item_id: item.id, recipe: VIDEO_RECIPE, familia: 'tour', tema: 'tour' }
-      const r = await runVideoSlot(admin, anthropicKey, company, job, cronSecretEnv, { photos: order, rooms, notes, outsideFirst })
+      const r = await runVideoSlot(admin, anthropicKey, company, job, cronSecretEnv, { photos: order, rooms, notes, outsideFirst, seen: order.map(u => roomOf(byUrl.get(u) as never, tcfg)) })
       if (!r.pieceId) return json({ error: r.error ?? 'Não consegui criar o tour.' }, 500)
       return json({ ok: !r.error, piece_id: r.pieceId, ...(r.error ? { error: r.error } : {}) }, r.error ? 502 : 200)
     }

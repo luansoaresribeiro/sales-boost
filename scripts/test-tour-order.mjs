@@ -209,3 +209,14 @@ t('fotos de ligação: resposta da IA lida com segurança; só "não" bloqueia; 
   assert.match(tv, /if \(tipo && bairro\) return `\$\{tipo\} \$\{bairro\}`/)   // título "Tipo Bairro"
 }
 console.log(`\n${n} verificações ok`)
+
+// Legenda do tour: ambientes na ordem do vídeo (2026-11-13)
+{
+  const { tourRoomLabels } = await import('../supabase/functions/_shared/tourOrder.ts')
+  const L = [{ key: 'varanda', label: 'varanda' }, { key: 'sala', label: 'sala' }, { key: 'quarto', label: 'quarto' }, { key: 'banheiro', label: 'banheiro' }]
+  const a = tourRoomLabels(['varanda', 'sala', 'sala', null, 'quarto', 'banheiro'], L, true)
+  if (JSON.stringify(a) !== JSON.stringify(['área externa', 'sala', 'outro ambiente', 'quarto', 'banheiro'])) throw new Error('tourRoomLabels outside: ' + JSON.stringify(a))
+  const b = tourRoomLabels(['varanda', 'sala'], L, false)
+  if (JSON.stringify(b) !== JSON.stringify(['varanda', 'sala'])) throw new Error('tourRoomLabels: ' + JSON.stringify(b))
+  console.log('ok — legenda do tour recebe os ambientes na ordem do vídeo')
+}
