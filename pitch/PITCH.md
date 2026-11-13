@@ -4,7 +4,17 @@
 > guardado no fim, sem alteração. **Preços ainda NÃO decididos** — tudo de preço abaixo é rascunho.
 > Regra: o pitch só promete o que o produto faz de verdade; o que ainda está sendo construído aparece marcado.
 
-## Versão de trabalho (PT)
+> **Divergência (2026-11-13) — este pitch está DESATUALIZADO na direção:**
+> - **Como foi escrito (02/11):** sobre um plano por quantidade de posts (US$ 19/29/59).
+> - **O que mudou desde então:**
+>   - slogan "gerando mais visitas para o seu imóvel" (10/11);
+>   - modelo de plataforma grátis + tour virtual pago + lead qualificado (10/11, preços não decididos);
+>   - direção de "sistema de inteligência e geração de demanda comercial" (11/11);
+>   - tour do imóvel inteiro como produto principal (13/11).
+> - **Reescrita:** o pitch precisa ser reescrito com o dono. Item **D7** em [PENDENCIAS.md](../docs/PENDENCIAS.md).
+> - **O texto abaixo fica como histórico.** Não usar com cliente sem a revisão.
+
+## Versão de trabalho (PT) — 02/11, histórico
 
 **Gancho (as dores)**
 Você não sabe como aumentar sua base de clientes?

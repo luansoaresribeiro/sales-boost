@@ -6,6 +6,11 @@ aprende com o resultado — sempre com o dono aprovando antes de qualquer
 coisa ir ao público. Setor piloto hoje: imóveis, Rio de Janeiro, via
 Instagram.
 Slogan (dono, 2026-11-10): **"Sales Boost — gerando mais visitas para o seu imóvel"**.
+Direção (dono, 2026-11-11/13): de ferramenta de marketing para **sistema de
+inteligência e geração de demanda comercial** — a medida é visita ao imóvel.
+Prioridade agora: Tour Virtual do imóvel inteiro → motor próprio de vídeo →
+sair de VPS/Telegram (só depois do substituto) → experiência do usuário.
+**Antes de qualquer etapa, consultar [docs/PENDENCIAS.md](docs/PENDENCIAS.md).**
 
 ## Índice da documentação
 
@@ -20,8 +25,9 @@ conteúdo técnico detalhado vive em `docs/`:
 - [docs/CONTENT-INTELLIGENCE.md](docs/CONTENT-INTELLIGENCE.md) — como o
   sistema decide o que criar (pilares, receitas de produção, pacote por
   item, calendário).
-- [docs/MEDIA-ENGINE.md](docs/MEDIA-ENGINE.md) — Higgsfield: fotos reais
-  do cliente → criativos (plano, ainda não implementado).
+- [docs/MEDIA-ENGINE.md](docs/MEDIA-ENGINE.md) — vídeo a partir das fotos
+  reais: Tour virtual (no ar, cobre parte do imóvel), estúdio na VPS,
+  mobiliamento (especificação).
 - [docs/PLANO-CRIATIVOS.md](docs/PLANO-CRIATIVOS.md) — plano: 4 famílias de
   conteúdo, formato fixo × intenção da estratégia, sistema de slides com a
   identidade do cliente (ainda não implementado).
@@ -46,6 +52,10 @@ conteúdo técnico detalhado vive em `docs/`:
   antes de cada etapa; item só fica ✅ com a validação feita.
 - [docs/PLANO-TOUR-COMPLETO.md](docs/PLANO-TOUR-COMPLETO.md) — tour do imóvel
   inteiro, motor próprio de vídeo, saída de VPS/Telegram (proposta 13/11).
+- [docs/AUDITORIA-CUSTOS.md](docs/AUDITORIA-CUSTOS.md) — custos medidos por
+  serviço (auditoria de 10/11; refazer a medição em 17/11).
+- Histórico, não guia de direção: `docs/DATA_AUDIT.md`, `DATA_GAPS_PLAN.md`,
+  `DATA_MAP.md`, `DATA_SYNC_ARCHITECTURE_PLAN.md` (levantamentos de set–out/2026).
 - [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) — roteiro do time de
   agentes (`.claude/agents/`: `product`, `engineer`, `qa`).
 
