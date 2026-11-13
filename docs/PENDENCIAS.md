@@ -18,7 +18,7 @@
   - **Frente 1 — Tour do imóvel inteiro;**
   - **Frente de conteúdo**, em paralelo.
 - **Próximo item do agente:**
-  - **Frente de conteúdo:** **C1 — exatamente 1 post por dia** e **C0 — esconder a aba "Campanha"**.
+  - **Frente de conteúdo:** C0 e C1 em 🧪 (#170). **Próximo: C2 — catálogo editorial** (documento, sem gasto).
   - **Frente 1:** **1.1 — Ambientes físicos**, com a Tespon e dentro da verba D4.
 - **Esperando o dono:**
   - **D8:** tour pronto pode virar o post do dia?
@@ -55,8 +55,8 @@
 
 | ID | Item | Resp. | Prior. | Depende de | Pronto quando | Status |
 |---|---|---|---|---|---|---|
-| C0 | Esconder a aba "Campanha" (anúncios) do menu do conteúdo, **sem apagar o código** | Agente | P0 | — | A aba não aparece (print desktop e celular); links antigos `?tab=campanha` caem no Conteúdo; o código continua no repositório; site publicado e conferido | ⏳ |
-| C1 | **Exatamente 1 post por dia, 7 por semana**, no plano automático. DM, "Comente QUERO", stories e mensagens não contam. Sem material de imóvel → formato que não depende de imóvel. Nunca dia vazio nem peça repetida. "Gerar agora" é extra | Agente | P0 | — | Teste automático: qualquer mix → 7 dias com 1 post cada, sem repetição. Na Teste Zero e na Tespon, a próxima semana planejada tem 7 posts (SQL) | ⏳ |
+| C0 | Esconder a aba "Campanha" (anúncios) do menu do conteúdo, **sem apagar o código** | Agente | P0 | — | A aba não aparece (print desktop e celular); links antigos `?tab=campanha` caem no Conteúdo; o código continua no repositório; site publicado e conferido | 🧪 [#170](https://github.com/luansoaresribeiro/sales-boost/pull/170): print ok; falta site publicado e conferido. A "Saúde da Meta" (conexão, não anúncio) continua pelo link `?tab=campanha&sub=saude` |
+| C1 | **Exatamente 1 post por dia, 7 por semana**, no plano automático. DM, "Comente QUERO", stories e mensagens não contam. Sem material de imóvel → formato que não depende de imóvel. Nunca dia vazio nem peça repetida. "Gerar agora" é extra | Agente | P0 | — | Teste automático: qualquer mix → 7 dias com 1 post cada, sem repetição. Na Teste Zero e na Tespon, a próxima semana planejada tem 7 posts (SQL) | 🧪 [#170](https://github.com/luansoaresribeiro/sales-boost/pull/170): teste automático ✅; falta o SQL da semana planejada no domingo 16/11 |
 | C2 | **Catálogo editorial** em `docs/`: 8 a 10 formatos realmente diferentes, cada um com objetivo, momento até a visita, gancho, slide a slide, dados reais, diferença visual, quando não usar e rodízio | Agente | P0 | C1 | Documento entregue e **aprovado pelo dono** | ⏳ |
 | C3 | Construir os formatos aprovados no C2 | Agente | P1 | C2 aprovado | Cada formato gera peça real na Teste Zero/Tespon, com print e travas de número passando | ⏳ |
 | C4 | Tela do agente de conteúdo simplificada | Agente | P1 | C3, Frente 4 (4.1) | Print aprovado pelo dono | ⏳ |
