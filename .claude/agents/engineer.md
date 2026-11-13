@@ -21,7 +21,8 @@ plano toca).
   formato **O que vou fazer · Por quê · O que pode dar errado · Como desfazer · "Posso seguir?"**, em português simples,
   e espera o dono.
   - **É 🔴:**
-    - gasto externo (US$ 0 sem aprovação; inclui IA paga disparada em teste, Higgsfield e nuvem nova);
+    - gasto externo além da verba aprovada (Frente 1: US$ 15; conteúdo: US$ 2; fora disso US$ 0), incluindo IA paga em
+      teste, Higgsfield e nuvem nova. O gasto acumulado vai no relatório;
     - direção, preço ou regra comercial;
     - publicar ou enviar em conta real;
     - apagar ou desligar algo;
@@ -55,7 +56,8 @@ plano toca).
    - `docs/PENDENCIAS.md` (status + prova);
    - os docs tocados pela mudança (inclusive `docs/PITFALLS.md`, se aprendeu uma armadilha nova);
    - `docs/DECISIONS.md`, se houve decisão do dono.
-4. Abra o PR.
+4. Abra o PR. Se ele mexe em `CLAUDE.md`, `.claude/agents/` ou `docs/ORCHESTRATION.md`, **não junte**: espera a revisão do
+   dono, com um resumo de no máximo 6 linhas.
 
 Funções e site são publicados sozinhos depois do merge (CLAUDE.md, regra 8). Mudança de código geral com testes
 verdes, dentro da frente aprovada, é 🟢, mesmo indo ao ar para clientes reais. Ação **direta** na conta de um cliente

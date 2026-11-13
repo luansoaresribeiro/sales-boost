@@ -206,6 +206,8 @@ visita deve sair direto do Supabase, pelo mesmo caminho dos avisos do `telegram-
 
 **Preço do lead:** nenhum antes dos dados reais do piloto (dono, 10/11).
 
+> **Substituído em 13/11 (tarde):** sem prazo; a validação comercial não bloqueia trabalho técnico aprovado, só preço do tour, Boosts, preço de lead e Fase 4.
+
 **Até 17/11 (dono):** trabalho concentrado na **validação comercial**. Nada de implementação nem de escopo novo. O roteiro e a ficha de registro das conversas estão em [PILOTO.md](PILOTO.md) (seções 2.1 e 2.2).
 
 ## 2026-11-12 — Especificação do fluxo de leads v2: direção aprovada (implementação só em parte)

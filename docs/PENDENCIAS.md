@@ -14,51 +14,74 @@
 
 ## Painel (atualizar a cada item)
 
-- **Frente atual:** 1 — Tour do imóvel inteiro. D1 foi aprovado em 13/11 ([DECISIONS](DECISIONS.md#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação)).
-- **Próximo item do agente:** **1.1 — Ambientes físicos.**
-  - **Agora:** construir e testar com testes automáticos, sem gasto. 🟢
-  - **Validação na Tespon:** precisa de IA de visão (paga) e por isso espera o **D4**. 🔴
+- **Frentes abertas** ([decisão 13/11, tarde](DECISIONS.md#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo)):
+  - **Frente 1 — Tour do imóvel inteiro;**
+  - **Frente de conteúdo**, em paralelo.
+- **Próximo item do agente:**
+  - **Frente de conteúdo:** **C1 — exatamente 1 post por dia** e **C0 — esconder a aba "Campanha"**.
+  - **Frente 1:** **1.1 — Ambientes físicos**, com a Tespon e dentro da verba D4.
 - **Esperando o dono:**
-  - **D4:** verba de teste, incluindo a IA de visão da 1.1/1.2;
-  - **D2:** fotos que faltam ou imóvel do teste;
-  - **D3:** tamanho das partes;
-  - **D5:** avisos do Telegram;
-  - **D6:** reserva da VPS;
-  - **D7:** pitch;
-  - **validação comercial** (trilha abaixo, até 17/11).
-- **Prioridade do negócio até 17/11:** a validação comercial. A Frente 1 anda em paralelo, sem tomar a atenção dela.
+  - **D8:** tour pronto pode virar o post do dia?
+  - **D3:** tamanho das partes do tour.
+  - **D5:** avisos do Telegram.
+  - **D6:** reserva da VPS.
+  - **D7:** pitch.
+  - **D2 (parte 1.5):** o dono indica o apartamento menor.
+- **Gasto acumulado:**
+
+  | Verba | Gasto até agora |
+  |---|---|
+  | Frente 1 (US$ 15) | US$ 0,00 |
+  | Frente de conteúdo (US$ 2) | US$ 0,00 |
 
 ## Decisões do dono
 
+> **Regra (13/11):** ao pedir uma decisão, dizer o que falta, por que precisamos, as alternativas (com custo e prazo) e a
+> recomendação.
+
 | ID | Item | Resp. | Prior. | Depende de | Status |
 |---|---|---|---|---|---|
-| D1 | Aprovar o roadmap de [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md) (4 frentes, uma por vez) | Dono | P0 | — | ✅ 13/11 ([DECISIONS](DECISIONS.md#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação)) |
-| D2 | Decidir quem tira as fotos que faltam na Tespon (tabela 2.3) ou qual imóvel usar no teste de ponta a ponta | Dono | P0 | — | ⏳ |
+| D1 | Aprovar o roadmap de [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md) | Dono | P0 | — | ✅ 13/11 ([DECISIONS](DECISIONS.md#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação)). "Uma frente por vez" substituído à tarde: Frente 1 + conteúdo em paralelo |
+| D2 | Imóvel e fotos do teste | Dono | P0 | — | ✅ parcial 13/11: 1.1 a 1.4 com a Tespon. ⏳ Para a 1.5, o dono indica um apartamento menor; a lista de fotos está em [PLANO-TOUR-COMPLETO 2.4](PLANO-TOUR-COMPLETO.md#24-lista-de-fotos-para-um-apartamento-de-2-quartos-para-quem-vai-fotografar) |
 | D3 | Tamanho máximo de cada parte do tour (proposta: ~8 passagens, ~50 s) | Dono | P1 | — | ⏳ |
-| D4 | Verba de teste da Frente 1: IA de visão da 1.1/1.2 (~US$ 0,30–0,80 por imóvel, estimado) + vídeo do teste de ponta a ponta (proposta: até US$ 15 no total). Também o provedor de nuvem da Frente 2 | Dono | P0 | — | ⏳ |
+| D4 | Verba de teste da Frente 1 | Dono | P0 | — | ✅ 13/11: até **US$ 15** ([DECISIONS](DECISIONS.md#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo)). O provedor de nuvem da Frente 2 continua a decidir quando ela começar |
 | D5 | Telegram: quais avisos viram e-mail; aviso para a A3 (inclui o canal do aviso de visita, ver [CONVERSION](CONVERSION.md)) | Dono | P1 | — | ⏳ |
 | D6 | VPS: quanto tempo fica de reserva depois da troca | Dono | P2 | 2.3 | ⏳ |
-| D7 | Reescrever o pitch ([pitch/PITCH.md](../pitch/PITCH.md)) com o modelo e o slogan novos. **Entram:** "Technology Partner for Real Estate" como posicionamento; **sem anúncios pagos**; o preço do tour como hipótese, que pode variar com o tamanho do imóvel | Dono + Agente | P2 | — | ⏳ |
+| D7 | Reescrever o pitch ([pitch/PITCH.md](../pitch/PITCH.md)). Entram "Technology Partner for Real Estate" e "sem anúncios pagos"; o preço do tour fica como hipótese | Dono + Agente | P2 | — | ⏳ |
+| D8 | Um tour pronto pode virar post e ocupar o post do dia, sempre com a aprovação do dono? SIM / NÃO. O dono deixou as duas opções na mensagem de 13/11 | Dono | P2 | — | ⏳ |
+| DC | Verba de teste da Frente de conteúdo | Dono | — | — | ✅ 13/11: até **US$ 2** |
 
-## Validação comercial (dono, até 17/11) — prioridade do negócio
+## Frente de conteúdo (aberta em 13/11, em paralelo com a Frente 1)
 
 | ID | Item | Resp. | Prior. | Depende de | Pronto quando | Status |
 |---|---|---|---|---|---|---|
-| V1 | Conversas com imobiliárias pelo roteiro do [PILOTO.md](PILOTO.md) (meta: 3 conversas ou 1 piloto) | Dono | P0 | — | 3 conversas feitas ou 1 piloto fechado | ⏳ 0 de 3 registradas |
-| V2 | Ficha preenchida por conversa (respostas como foram ditas) | Dono | P0 | V1 | 1 ficha por conversa | ⏳ |
-| V3 | Consolidar as fichas em `docs/relatorios/` (sem inventar número; "disse que usaria" ≠ "pagou") | Agente | P0 | V2 | Relatório em [relatorios/](relatorios) | ⏳ |
-| V4 | Revisão dos 3 portões da Fase 4 em 17/11 (custos medidos, demanda, critérios de lead) | Dono + Agente | P0 | V3 | Decisão registrada no DECISIONS | ⏳ |
+| C0 | Esconder a aba "Campanha" (anúncios) do menu do conteúdo, **sem apagar o código** | Agente | P0 | — | A aba não aparece (print desktop e celular); links antigos `?tab=campanha` caem no Conteúdo; o código continua no repositório; site publicado e conferido | ⏳ |
+| C1 | **Exatamente 1 post por dia, 7 por semana**, no plano automático. DM, "Comente QUERO", stories e mensagens não contam. Sem material de imóvel → formato que não depende de imóvel. Nunca dia vazio nem peça repetida. "Gerar agora" é extra | Agente | P0 | — | Teste automático: qualquer mix → 7 dias com 1 post cada, sem repetição. Na Teste Zero e na Tespon, a próxima semana planejada tem 7 posts (SQL) | ⏳ |
+| C2 | **Catálogo editorial** em `docs/`: 8 a 10 formatos realmente diferentes, cada um com objetivo, momento até a visita, gancho, slide a slide, dados reais, diferença visual, quando não usar e rodízio | Agente | P0 | C1 | Documento entregue e **aprovado pelo dono** | ⏳ |
+| C3 | Construir os formatos aprovados no C2 | Agente | P1 | C2 aprovado | Cada formato gera peça real na Teste Zero/Tespon, com print e travas de número passando | ⏳ |
+| C4 | Tela do agente de conteúdo simplificada | Agente | P1 | C3, Frente 4 (4.1) | Print aprovado pelo dono | ⏳ |
+
+## Validação comercial — sem prazo; não bloqueia trabalho técnico (dono, 13/11 tarde)
+
+> Bloqueia só: preço do tour, Boosts, preço de lead e Fase 4. **Não citar nos relatórios até o dono retomar.**
+
+| ID | Item | Resp. | Status |
+|---|---|---|---|
+| V1 | Conversas com imobiliárias pelo roteiro do [PILOTO.md](PILOTO.md) (meta: 3 conversas ou 1 piloto) | Dono | ⏸ pausado pelo dono |
+| V2 | Ficha preenchida por conversa | Dono | ⏸ |
+| V3 | Consolidar as fichas em [relatorios/](relatorios/) (sem inventar número) | Agente | ⏸ |
+| V4 | Revisão dos 3 portões da Fase 4 | Dono + Agente | ⏸ |
 
 ## Frente 1 — Tour Virtual completo
 
 | ID | Item | Resp. | Prior. | Depende de | Pronto quando | Status |
 |---|---|---|---|---|---|---|
 | 1.0 | Auditoria do tour + viabilidade da Tespon | Agente | P0 | — | Documento entregue + roadmap aprovado | ✅ 13/11 (#167; D1 aprovado) |
-| 1.1 | Ambientes físicos (agrupar as fotos do mesmo ambiente) | Agente | P0 | D1 ✅; validação na Tespon: D4 | Testes automáticos ✅ + grupos da Tespon = tabela 2.1 (o dono confere os ❓) | ⏳ |
-| 1.2 | Mapa de ligações com evidência (foto que prova cada ligação) | Agente | P0 | 1.1, D4 (IA de visão, 🔴) | Mapa da Tespon = 2.2, nenhuma ligação inventada; custo medido | ⏳ |
+| 1.1 | Ambientes físicos (agrupar as fotos do mesmo ambiente) | Agente | P0 | D1 ✅, D4 ✅ (US$ 15) | Testes automáticos ✅ + grupos da Tespon = tabela 2.1 (o dono confere os ❓) | ⏳ |
+| 1.2 | Mapa de ligações com evidência (foto que prova cada ligação) | Agente | P0 | 1.1, D4 ✅ | Mapa da Tespon = 2.2, nenhuma ligação inventada; custo medido | ⏳ |
 | 1.3 | Indicador de cobertura + lista de fotos que faltam (com ângulo) na tela | Agente | P0 | 1.2 | A tela mostra os pendentes da Tespon e a lista 2.3; print aprovado | ⏳ |
 | 1.4 | Tour em partes + conferência de destino | Agente | P1 | 1.3, D3 | Testes automáticos + revisão do dono | ⏳ |
-| 1.5 | Teste de ponta a ponta, imóvel inteiro | Agente + Dono | P0 | 1.4, D2, D4 | Os 7 critérios da seção 3, todos ✅, quadro a quadro; custo registrado | ⏳ |
+| 1.5 | Teste de ponta a ponta, imóvel inteiro (apartamento menor indicado pelo dono) | Agente + Dono | P0 | 1.4, D2 (imóvel), D4 ✅ | Os 7 critérios da seção 3, todos ✅, quadro a quadro; custo registrado | ⏳ |
 
 ## Frente 2 — Motor próprio de vídeo (só começa com a Frente 1 validada)
 
@@ -83,7 +106,7 @@
 
 | ID | Item | Resp. | Prior. | Depende de | Pronto quando | Status |
 |---|---|---|---|---|---|---|
-| 4.1 | Auditoria completa da jornada (prints no celular e no desktop) | Agente | P1 | 1.5 | Relatório aprovado pelo dono | ⏳ |
+| 4.1 | Auditoria completa da jornada (prints no celular e no desktop), incluindo a tela do agente de conteúdo (C4) | Agente | P1 | 1.5 | Relatório aprovado pelo dono | ⏳ |
 | 4.2 | Simplificações aprovadas, uma por PR | Agente | P1 | 4.1 | Print de cada uma + site publicado | ⏳ |
 
 ## Já validado (histórico)

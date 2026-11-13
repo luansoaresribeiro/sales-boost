@@ -40,6 +40,8 @@ devolve um plano em texto.
   em vez de omitir a seção.
 - **Semáforo:** a cor de cada ação (🟢/🟡/🔴, CLAUDE.md seção 4). Se houver 🔴, a sessão principal para e pede
   aprovação do dono antes de chamar o `engineer`. Na dúvida, é 🔴.
+- **Decisão para o dono:** se o plano depende de uma, escrever o que falta, por que precisamos, as alternativas (com custo e
+  prazo) e qual você recomenda.
 - **É pedido de direção?** Sim/Não (lista do CLAUDE.md, seção 6). Se sim, listar os docs a atualizar no mesmo PR:
   DECISIONS → PENDENCIAS → CLAUDE.md → doc da área. Se contradiz uma decisão em vigor, mostrar a decisão antiga (data +
   texto) e marcar 🔴.

@@ -13,12 +13,13 @@
 
 ## 2. Direção atual
 - **Estratégica, acima de tudo:** construir o sistema de inteligência e geração de demanda comercial.
-- **Negócio, até 17/11:** a **validação comercial** (conversas com imobiliárias) é a prioridade.
-- **Produto (D1 aprovado em 13/11),** uma frente por vez, a serviço da direção estratégica:
-  1. **Tour do imóvel inteiro** ← frente atual;
-  2. motor próprio de vídeo;
-  3. sair da VPS e do Telegram (só depois do substituto, sem apagar);
-  4. experiência do usuário.
+- **Frentes abertas (dono, 13/11):** **Frente 1 — Tour do imóvel inteiro** e, em paralelo, **Frente de conteúdo**
+  (1 post por dia → catálogo editorial → formatos aprovados → tela simples, junto com a Frente 4). Depois, nesta ordem:
+  motor próprio de vídeo → sair da VPS e do Telegram (só depois do substituto) → experiência do usuário.
+- **Dois produtos separados:** o **agente de conteúdo** cuida dos posts e da estratégia editorial; o **tour do imóvel
+  inteiro** tem fluxo e modelo comercial próprios.
+- **Bloqueados até a validação comercial** (que não bloqueia trabalho técnico aprovado): preço do tour, Boosts, preço
+  de lead e Fase 4. Não citar o assunto nos relatórios até o dono retomar.
 - **Próximo item e quem espera o quê:** [docs/PENDENCIAS.md](docs/PENDENCIAS.md) (topo).
 
 ## 3. Regras invioláveis
@@ -42,7 +43,8 @@
   - ler o banco (só leitura, contas de teste);
   - escrever código e testes;
   - abrir PR;
-  - **juntar o próprio PR** com todas as checagens verdes, se o item está dentro da frente aprovada;
+  - **juntar o próprio PR** com todas as checagens verdes, se o item está dentro da frente aprovada (**exceto** PR que
+    muda `CLAUDE.md`, `.claude/agents/` ou `docs/ORCHESTRATION.md`: esse espera a revisão do dono);
   - migrations que só acrescentam;
   - atualizar documentação.
   - Mudança de código geral que vai ao ar para todos os clientes (inclusive a A3) também é 🟢, com testes verdes e
@@ -53,8 +55,8 @@
   - correção pequena achada no caminho.
   - **Na dúvida, é 🔴.**
 - 🔴 **Para e pede aprovação antes:**
-  - **qualquer gasto externo (US$ 0 sem aprovação):** Higgsfield/Kling, IA paga disparada pelo agente em teste, API ou
-    fornecedor novo, nuvem nova;
+  - **gasto externo além da verba aprovada** (Higgsfield/Kling, IA paga em teste, API, fornecedor ou nuvem nova).
+    **Verbas (13/11):** Frente 1 até US$ 15; Frente de conteúdo até US$ 2. Fora delas, US$ 0 sem aprovação;
   - mudar direção, preço ou regra comercial, ou qualquer coisa que contradiga o DECISIONS;
   - publicar ou enviar em conta real (Instagram, DM, e-mail, WhatsApp, Telegram);
   - apagar ou desligar funcionalidade, infraestrutura, dado ou credencial;
@@ -63,13 +65,16 @@
   - **ação direta na A3** (cliente real): dados, mensagens, conta;
   - começar frente nova.
 - **Pedido 🔴:** O que vou fazer · Por quê · O que pode dar errado · Como desfazer · **"Posso seguir?"** — e esperar.
+- **Decisão que peço ao dono:** sempre dizer o que falta, por que precisamos, as alternativas (com custo e prazo) e qual
+  eu recomendo.
 
 ## 5. Protocolo de tarefa
 Quando o dono disser "continue a frente atual", ou pedir qualquer tarefa:
 0. **Se o pedido traz direção nova:** aplicar primeiro a seção 6 (registrar e conferir conflito com as decisões em
    vigor). Só depois executar.
 1. Ler este arquivo e o [docs/PENDENCIAS.md](docs/PENDENCIAS.md).
-2. **Achar o próximo item ⏳ da frente atual** que seja do Agente e tenha as dependências ✅.
+2. **Achar o próximo item ⏳ de uma frente aberta** (Frente 1 ou Frente de conteúdo) que seja do Agente e tenha as
+   dependências ✅.
    - Se não houver, reportar o que está bloqueado e o que depende do dono, e parar.
 3. **Ler a seção do item** no [docs/PLANO-TOUR-COMPLETO.md](docs/PLANO-TOUR-COMPLETO.md) e os docs da área.
    - Antes de mexer em cron, auth, domínio ou migration, ler o [docs/PITFALLS.md](docs/PITFALLS.md).
@@ -80,7 +85,7 @@ Quando o dono disser "continue a frente atual", ou pedir qualquer tarefa:
    - PENDENCIAS (status + prova);
    - DECISIONS (se houve decisão do dono);
    - o doc da área (se o código divergiu do doc).
-8. **Seguir ou parar.** Se o item foi validado e o próximo é da mesma frente e não depende do dono, voltar ao passo 2.
+8. **Seguir ou parar.** Se o item foi validado e o próximo de uma frente aberta não depende do dono, voltar ao passo 2.
    Senão, parar.
 9. **Relatório final** (seção 7).
 
@@ -116,14 +121,10 @@ Pedido pontual (bug, texto de tela) não é direção: atualiza só o doc da ár
   dúvida em "o que depende de você".
 
 ## 7. Formato do relatório final (sempre)
-Português simples, ~15 linhas:
-- o que foi feito;
-- a **prova** de validação (link, print, SQL, teste);
-- os custos;
-- o que falta;
-- o que depende do dono;
-- uma linha sobre a **validação comercial** (conversas registradas × meta, próximo prazo);
-- uma linha "**Docs atualizados:** …" (arquivos e o que mudou), ou "Docs: nada a atualizar (pedido pontual)".
+Português simples, ~15 linhas: o que foi feito · a **prova** (link, print, SQL, teste) · os custos e o **gasto
+acumulado** de cada verba · o que falta · o que depende do dono · "**Docs atualizados:** …" (ou "nada a atualizar").
+**PR que espera a revisão do dono:** resumo de **no máximo 6 linhas** (o que mudou, por quê, impacto, o que ele precisa
+decidir); o detalhe técnico fica no PR.
 
 Nunca dizer "pronto" sem prova.
 ## 8. Índice dos docs

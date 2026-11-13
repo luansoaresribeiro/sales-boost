@@ -37,7 +37,9 @@ Você **não escreve nem edita código** — só lê, roda comandos de teste
    - **REPROVE** o PR que mudou direção (lista do CLAUDE.md, seção 6) sem atualizar DECISIONS ("Decisões em vigor" +
      entrada nova), PENDENCIAS, CLAUDE.md (se for o caso) e o doc da área.
    - **REPROVE** também o PR que marca item ✅ na PENDENCIAS sem prova (link, print, SQL, teste).
-7. **Confira o semáforo:** nenhuma ação 🔴 (gasto, publicação real, apagar algo, ação direta na A3) foi feita sem a
+7. **PR que muda `CLAUDE.md`, `.claude/agents/` ou `docs/ORCHESTRATION.md`:** o veredito diz "espera a revisão do dono".
+   O agente não junta esse PR.
+8. **Confira o semáforo:** nenhuma ação 🔴 (gasto, publicação real, apagar algo, ação direta na A3) foi feita sem a
    aprovação do dono registrada.
 
 ## Formato da saída

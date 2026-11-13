@@ -5,6 +5,13 @@
 
 ## Ritmo
 
+> **Regra do dono (13/11, tarde) — vale acima do texto abaixo:** o plano automático tem **exatamente 1 post por dia, 7 por
+> semana**. DM, "Comente QUERO", stories e mensagens não contam. Sem material de imóvel → formato que não depende de imóvel.
+> Nunca dia vazio, nunca peça repetida. "Gerar agora" é extra.
+> - **Hoje (auditoria de 13/11) NÃO é assim:** o `weekSlots` (`_shared/formatCatalog.ts`) espalha as peças do mix pelos 7
+>   dias e, com menos de 7 peças, um dia fica vazio. O mix conta a DM e os vídeos, que saíram do plano.
+> - **Correção:** item C1 da [PENDENCIAS](PENDENCIAS.md). Formatos novos só depois de o dono aprovar o catálogo editorial (C2).
+
 Estratégia mensal (direção, ver [ARCHITECTURE.md](ARCHITECTURE.md) etapa 2)
 → **calendário semanal** (unidade de planejamento; dono aprova 1x/semana)
 → execução diária (publicar aprovado, Stories, responder). Imóvel novo

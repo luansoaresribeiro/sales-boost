@@ -9,7 +9,8 @@
 ## Direção atual (dono, 2026-11-13 — D1 aprovado)
 
 - **Estratégica, acima de tudo:** construir o sistema de inteligência e geração de demanda comercial para imobiliárias.
-- **Do negócio, até 17/11:** a validação comercial (trilha "Validação comercial" na [PENDENCIAS](PENDENCIAS.md)).
+- **Validação comercial (13/11, tarde):** sem prazo; não bloqueia trabalho técnico aprovado. Bloqueia preço do tour, Boosts, preço de lead e Fase 4 ([decisão](DECISIONS.md#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo)).
+- **Frente de conteúdo, em paralelo com a Frente 1:** 1 post por dia → catálogo editorial → formatos aprovados → tela simples (junto com a Frente 4).
 - **Do produto, uma frente por vez:**
   1. **Tour do imóvel inteiro** ← frente atual;
   2. **motor próprio de vídeo;**
@@ -64,6 +65,8 @@ Nenhuma implementação de Boosts nem cobrança começa sem aprovação do dono 
 | 3 | Decisão do modelo | depende das fases 1 e 2 e da validação de demanda |
 | 4 | Conversão: catálogo, agendamento, origem, lead qualificado e contestação | **preparada, não implementada** ([CONVERSION.md](CONVERSION.md)); só começa com os 3 portões abaixo |
 | 5 | Piloto real medindo leads, visitas, custo e receita | [PILOTO.md](PILOTO.md) (seção 2.1) |
+
+> **Substituído em 13/11 (tarde):** a validação comercial não tem mais prazo nem bloqueia trabalho técnico. Texto de 10/11:
 
 **Até 17/11 (dono, 10/11):** só validação comercial: conversas com imobiliárias, ficha em [PILOTO.md](PILOTO.md) 2.2. Sem implementação e sem escopo novo.
 

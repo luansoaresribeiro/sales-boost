@@ -24,8 +24,8 @@
   - **anúncios pagos (impulsionar publicação): fora do modelo atual.**
 - **Prioridade:**
   - **estratégica:** construir o sistema de inteligência e geração de demanda;
-  - **do negócio até 17/11:** a validação comercial;
-  - **do produto (D1 aprovado em 13/11):** 4 frentes, uma por vez:
+  - **validação comercial:** sem prazo e sem bloquear trabalho técnico; bloqueia só preço do tour, Boosts, preço de lead e Fase 4 (13/11, tarde);
+  - **do produto (D1 aprovado em 13/11):** 4 frentes; desde 13/11 (tarde), a **Frente de conteúdo** corre em paralelo com a Frente 1:
     1. **Tour Virtual do imóvel INTEIRO**: sem inventar passagem, sem omitir cômodo, e se faltar foto o sistema diz qual;
     2. **motor próprio de vídeo**: sair da dependência da VPS;
     3. **infraestrutura**: substituir e só então desligar VPS e Telegram;
@@ -34,7 +34,7 @@
 - **O que existe hoje:**
   - **Tour virtual:** contínuo e sem cortes, mas cobre só parte do imóvel (8 de 22 ambientes no teste da Tespon).
   - **Painel:** mostra o resultado comercial (visualizações → interessados → leads recebidos → visitas).
-  - **Agente de conteúdo:** só com foto.
+  - **Agente de conteúdo:** só com foto; cuida só dos posts e da estratégia editorial. **Regra nova (13/11): exatamente 1 post por dia** no plano automático (ainda não implementada, item C1). O tour é um **produto à parte**.
   - **Aprovação humana** antes de publicar; CRECI obrigatório para publicar.
 - **Ainda não existe (não prometer):** tour do imóvel inteiro, agendamento de visita, lead "qualificado", cobrança
   por tour ou por lead, Boosts, anúncio pago, avatar, mobiliamento em vídeo.

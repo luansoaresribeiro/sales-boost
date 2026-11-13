@@ -23,16 +23,69 @@
 | Lead | Sem preço até haver definição e medição. Especificação v2 em [CONVERSION.md](CONVERSION.md). | [10/11](#2026-11-10--novo-modelo-cenários-de-tour-lead-sem-preço-e-portões-da-fase-4-dono) |
 | Boosts | **Em aberto.** Não confundir com o preço do tour. A unidade comercial é validada nas conversas com imobiliárias. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Anúncios pagos (impulsionar) | **Fora do modelo atual.** Nenhum agente promete, planeja ou constrói sem decisão nova. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
-| Prioridade | **Estratégica:** construir o sistema de inteligência e geração de demanda. **Do negócio, até 17/11:** validação comercial. **Do produto (D1 ✅):** as 4 frentes, uma por vez: tour do imóvel inteiro → motor próprio de vídeo → sair de VPS/Telegram → experiência do usuário. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) · [plano 13/11](#2026-11-13--tour-do-imóvel-inteiro-motor-próprio-e-saída-de-vpstelegram-planejamento-nada-implementado) |
-| Autonomia dos agentes | Semáforo 🟢🟡🔴 do [CLAUDE.md](../CLAUDE.md). Gasto externo do agente = US$ 0 sem aprovação. Código geral com testes verdes é 🟢, mesmo chegando à A3. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) · substitui [29/10](historico/DECISIONS-2026-09-a-10.md#2026-10-29--autonomia-do-agente) |
-| Merge e publicação | O agente junta o próprio PR com tudo verde dentro da frente aprovada. Site e funções vão ao ar sozinhos depois do merge. | [11/11](#2026-11-11-noite-2--eu-junto-os-prs-conferência-de-ligação-v2-enquete-sem-bairro-na-frase) · [11/11](#2026-11-11-noite-5--funções-publicadas-sozinhas-depois-do-merge) · [12/11](#2026-11-12--o-site-já-é-publicado-sozinho-correção) |
+| Prioridade | **Estratégica:** construir o sistema de inteligência e geração de demanda. **Frentes abertas:** Frente 1 (tour do imóvel inteiro) **e, em paralelo, a Frente de conteúdo**. Depois: motor próprio de vídeo → sair de VPS/Telegram → experiência do usuário. | [13/11](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) · [plano 13/11](#2026-11-13--tour-do-imóvel-inteiro-motor-próprio-e-saída-de-vpstelegram-planejamento-nada-implementado) |
+| Autonomia dos agentes | Semáforo 🟢🟡🔴 do [CLAUDE.md](../CLAUDE.md). Código geral com testes verdes é 🟢, mesmo chegando à A3. Ao pedir decisão, o agente diz o que falta, por quê, as alternativas (custo e prazo) e a recomendação. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) · substitui [29/10](historico/DECISIONS-2026-09-a-10.md#2026-10-29--autonomia-do-agente) |
+| Merge e publicação | O agente junta o próprio PR com tudo verde dentro da frente aprovada, **exceto** PR que muda `CLAUDE.md`, `.claude/agents/` ou `ORCHESTRATION`, que espera a revisão do dono (resumo de no máximo 6 linhas). Instruções da IA do produto seguem o fluxo normal com testes, salvo se mudarem a direção. Site e funções vão ao ar sozinhos depois do merge. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) · [11/11](#2026-11-11-noite-2--eu-junto-os-prs-conferência-de-ligação-v2-enquete-sem-bairro-na-frase) · [11/11](#2026-11-11-noite-5--funções-publicadas-sozinhas-depois-do-merge) · [12/11](#2026-11-12--o-site-já-é-publicado-sozinho-correção) |
 | Aprovação humana | Nada vai ao público (post, DM, resposta) sem aprovação humana. | [07/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-07--etapa-0-nenhuma-publicação-no-instagram-sem-aprovação-humana-dono) |
 | Conformidade | CRECI obrigatório para publicar. O texto público passa pela trava de proteção. | [09/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-09--etapa-1--parte-a-creci-obrigatório-para-publicar-dono-autorizada-em-0711) · [09/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-09--etapa-1--parte-b-proteção-do-texto-que-vai-ao-público-dono-autorizada-em-0711) |
-| Tour virtual | Pronto para cliente = **imóvel inteiro**, sem inventar passagem. Pode sair em várias partes. Vídeo do imóvel só no menu Tour virtual. | [13/11](#2026-11-13--tour-do-imóvel-inteiro-motor-próprio-e-saída-de-vpstelegram-planejamento-nada-implementado) · [11/11](#2026-11-11-noite--agente-de-conteúdo-só-com-foto-vídeo-do-imóvel-só-no-tour-virtual-avatar-em-breve) |
-| Conteúdo | O agente de conteúdo trabalha só com foto. Sem o formato "Quanto você pagaria?". | [11/11](#2026-11-11-noite--agente-de-conteúdo-só-com-foto-vídeo-do-imóvel-só-no-tour-virtual-avatar-em-breve) · [11/11](#2026-11-11-noite-3--sai-o-formato-quanto-você-pagaria) |
+| Tour virtual | **Produto à parte** do agente de conteúdo, com fluxo e modelo comercial próprios. Pronto para cliente = **imóvel inteiro**, sem inventar passagem. Pode sair em várias partes. Vídeo do imóvel só no menu Tour virtual. Tour pronto virar post do dia: **pergunta em aberto** (D8). | [13/11](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) · [13/11](#2026-11-13--tour-do-imóvel-inteiro-motor-próprio-e-saída-de-vpstelegram-planejamento-nada-implementado) · [11/11](#2026-11-11-noite--agente-de-conteúdo-só-com-foto-vídeo-do-imóvel-só-no-tour-virtual-avatar-em-breve) |
+| Conteúdo | O agente de conteúdo cuida **só dos posts e da estratégia editorial**, só com foto. Sem o formato "Quanto você pagaria?". Formatos novos só depois de o dono aprovar o **catálogo editorial** (8 a 10 formatos, com dado real). A aba "Campanha" (anúncios) sai do menu, escondida sem apagar o código. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) · [11/11](#2026-11-11-noite--agente-de-conteúdo-só-com-foto-vídeo-do-imóvel-só-no-tour-virtual-avatar-em-breve) · [11/11](#2026-11-11-noite-3--sai-o-formato-quanto-você-pagaria) |
+| Frequência de posts | O plano automático tem **exatamente 1 post por dia, 7 por semana**. DM, "Comente QUERO", stories e mensagens não contam. Faltou material para um dia: usar um formato que não depende de imóvel; nunca deixar o dia vazio nem repetir peça. "Gerar agora" é extra e continua permitido. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
+| Validação comercial | **Sem prazo** (o 17/11 saiu) e **não bloqueia** trabalho técnico aprovado. Continuam bloqueados até ela acontecer: preço do tour, Boosts, preço de lead e Fase 4. Não citar nos relatórios até o dono retomar. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
+| Verbas de teste | **Frente 1 (D4 ✅):** até US$ 15. **Frente de conteúdo:** até US$ 2. O gasto acumulado vai em cada relatório. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
 | VPS e Telegram | Ficam intactos até o substituto estar construído e testado e o dono autorizar. A3 e os alertas da plataforma dependem deles. | [13/11](#2026-11-13--tour-do-imóvel-inteiro-motor-próprio-e-saída-de-vpstelegram-planejamento-nada-implementado) |
 | Liga dos Sonhos | Nunca tocar, nem ler. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-13 (tarde) — Decisões do dono: frequência, catálogo editorial, revisão de PRs, verbas e frente de conteúdo
+
+Pedido do dono: "Registre tudo no PR #169, antes do merge."
+
+1. **Frequência.** "o plano automático tem EXATAMENTE 1 post por dia, 7 por semana."
+   - DM, "Comente QUERO", stories e mensagens não contam como post.
+   - Se faltar material para um dia, usar um formato que não depende de imóvel. Nunca deixar o dia vazio nem repetir peça.
+   - O "Gerar agora" é extra e continua permitido.
+   - **Por quê:** a auditoria de 13/11 achou dias sem post. A Teste Zero e a Tespon tinham ~6 posts por semana, porque o
+     mix da estratégia conta a DM e vídeos que saíram do plano, e o `weekSlots` deixa um dia vazio quando há menos de 7
+     peças.
+2. **Carrosséis.** "não quero só mais templates."
+   - Antes de qualquer código: um **Catálogo editorial** em `docs/`, com 8 a 10 formatos realmente diferentes, para o
+     dono aprovar.
+   - Cada formato traz: objetivo; momento do caminho até a visita; gancho; estrutura slide a slide; dados reais que usa;
+     o que o torna visualmente diferente; quando não usar; regra de rodízio.
+   - Comparação ou análise só com dado real nosso. Nunca preço ou número de mercado inventado.
+3. **Separação.** O agente de conteúdo cuida só dos posts e da estratégia editorial. O tour do imóvel inteiro é um produto
+   à parte, com fluxo e modelo comercial próprios.
+   - **Em aberto (D8):** "Um tour pronto pode virar post e ocupar o post do dia, sempre com a minha aprovação: SIM / NÃO".
+     O dono deixou as duas opções na mensagem; nada foi presumido.
+4. **Revisão.**
+   - Todo PR que mude `CLAUDE.md`, `.claude/agents/` ou `ORCHESTRATION` espera a revisão do dono.
+   - Mudança nas instruções da IA do produto segue o fluxo normal com testes, salvo se mudar a direção.
+   - O resumo para o dono tem no máximo 6 linhas: o que mudou, por quê, impacto e o que ele precisa decidir. Os detalhes
+     técnicos ficam no PR.
+5. **Decisões pedidas ao dono:** sempre explicar o que falta, por que precisamos e as alternativas (com custo e prazo), e
+   dizer qual o agente recomenda.
+   - **D2:** as etapas 1.1 a 1.4 seguem com a Tespon. Para a 1.5, o dono vai indicar um imóvel menor, que dê para
+     fotografar com a lista de fotos de ligação.
+   - **Pedido junto:** a lista de fotos para um apartamento de 2 quartos, em linguagem simples (ver
+     [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md#24-lista-de-fotos-para-um-apartamento-de-2-quartos-para-quem-vai-fotografar)).
+6. **Validação comercial.**
+   - Sai o prazo de 17/11, e ela não bloqueia nenhum trabalho técnico aprovado.
+   - Continuam bloqueados até ela acontecer: preço do tour, Boosts, preço de lead e a Fase 4.
+   - Não citar o assunto nos relatórios até o dono retomar.
+   - **Substitui, em 13/11 (tarde):** "Até 17/11, a validação comercial continua sendo a prioridade do negócio", da entrada
+     da manhã.
+7. **Frentes.**
+   - Abre a **"Frente de conteúdo"** em paralelo com a Frente 1, porque o tour estava esperando a D2 e a D4.
+   - **Ordem dentro dela:**
+     1. exatamente 1 post por dia;
+     2. catálogo editorial para o dono aprovar;
+     3. construção dos formatos aprovados;
+     4. tela do agente de conteúdo simplificada, junto com a Frente 4.
+   - A aba "Campanha", que fala de anúncios, sai do menu: escondida, sem apagar o código.
+   - **Substitui, em 13/11 (tarde):** "uma frente por vez". Agora são 2 frentes abertas.
+8. **Verbas.** D4 aprovado: até US$ 15 para a Frente 1. Verba de teste da frente de conteúdo: até US$ 2. Registrar o
+   gasto acumulado em cada relatório.
 
 ## 2026-11-13 — Decisões do dono: identidade, mercado, modelo, D1, autonomia e documentação
 
@@ -66,13 +119,14 @@ quatro coisas: a empresa, a direção atual, o que ele pode fazer sozinho e qual
 **Prioridade.**
 - **Estratégica, acima de tudo:** construir o sistema de inteligência e geração de demanda comercial. As 4 frentes são
   prioridades de produto e infraestrutura a serviço dessa direção. Não a substituem.
-- **D1 APROVADO (13/11).** As frentes, uma por vez:
+- **D1 APROVADO (13/11).** As frentes, uma por vez **(a regra "uma por vez" foi substituída em 13/11, tarde: Frente 1 +
+  Frente de conteúdo em paralelo)**:
   1. Tour do imóvel inteiro;
   2. Motor próprio de vídeo;
   3. Sair da VPS e do Telegram (só depois do substituto, sem apagar);
   4. Experiência do usuário.
 - **Até 17/11, a prioridade do negócio continua sendo a validação comercial.** A Frente 1 avança em paralelo, sem tomar a
-  atenção da validação.
+  atenção da validação. **(Substituído em 13/11, tarde: sem prazo, não bloqueia trabalho técnico; ver a entrada acima.)**
 
 **Autonomia.** Substitui a nota de 29/10 do CLAUDE.md e a lista "Alterações arriscadas" (**substituídas em 13/11**).
 O semáforo completo está no [CLAUDE.md](../CLAUDE.md).
@@ -90,7 +144,8 @@ O semáforo completo está no [CLAUDE.md](../CLAUDE.md).
   - correção pequena achada no caminho.
   - Na dúvida, é 🔴.
 - 🔴 **Para e pede antes:**
-  - qualquer gasto externo (US$ 0 sem aprovação);
+  - qualquer gasto externo (US$ 0 sem aprovação) **(em 13/11, tarde: verbas aprovadas de US$ 15 para a Frente 1 e US$ 2
+    para a frente de conteúdo)**;
   - direção, preço ou regra comercial;
   - publicar ou enviar em conta real;
   - apagar ou desligar funcionalidade, infraestrutura, dado ou credencial;

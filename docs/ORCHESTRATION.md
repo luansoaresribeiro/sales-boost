@@ -16,7 +16,7 @@ Todos leem SEMPRE: `CLAUDE.md`, [PENDENCIAS.md](PENDENCIAS.md) e [PITFALLS.md](P
 - **`product`** (`.claude/agents/product.md`): planeja. Só leitura.
   - **Lê também:** [DECISIONS.md](DECISIONS.md) ("Decisões em vigor"), [PRODUCT.md](PRODUCT.md),
     [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md) e o doc da área.
-  - **Saída:** o plano (objetivo, passos, arquivos, riscos, "pronto quando"), os conflitos com as decisões em vigor, a cor
+  - **Saída:** o plano (objetivo, passos, arquivos, riscos, "pronto quando"). Decisão para o dono sempre com: o que falta, por quê, alternativas (custo e prazo) e a recomendação. os conflitos com as decisões em vigor, a cor
     de cada ação no semáforo e se o pedido é **de direção** (aí lista os docs a atualizar).
 - **`engineer`** (`.claude/agents/engineer.md`): implementa.
   - Só trabalha em branch.
@@ -37,7 +37,8 @@ Todos leem SEMPRE: `CLAUDE.md`, [PENDENCIAS.md](PENDENCIAS.md) e [PITFALLS.md](P
 3. `engineer` → implementa.
 4. `qa` → APROVADO/REPROVADO. Se REPROVADO, volta ao `engineer` (máx. 3 voltas; depois, parar e reportar o bloqueio).
 5. APROVADO e checagens verdes → o agente junta o próprio PR (🟢, dentro da frente aprovada). A publicação é automática.
-   - Quando o dono diz "eu reviso e junto" (como no PR da reorganização dos docs de 13/11), o agente **não** junta.
+   - **Exceção (dono, 13/11):** PR que muda `CLAUDE.md`, `.claude/agents/` ou este arquivo **espera a revisão do dono**. O
+     agente não junta, e manda um resumo de no máximo 6 linhas: o que mudou, por quê, impacto, o que decidir.
 6. **Validar** pelo "pronto quando". Marcar ✅ com a prova na PENDENCIAS, ou 🧪 se a prova ainda falta.
 7. Se o próximo item é da mesma frente e não depende do dono, voltar ao passo 1. Senão, parar.
 8. Relatório final no formato do CLAUDE.md, com a linha "Docs atualizados: …".
