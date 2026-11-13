@@ -14,6 +14,7 @@
 | 4 | Revisar abas e fluxos | depois da 3 |
 | 5 | Telegram com dado real e aprovações | depois da 4 |
 | 6 | Remover o "Painel-resumo" | ✅ feito em 13/11 a pedido do dono (antecipado): saiu do topo do painel; o "Resultado comercial" mostra o funil com dado real |
+| 7 | Mobiliamento virtual em vídeo (dentro da aba Tour virtual) | só especificação ([MEDIA-ENGINE.md](MEDIA-ENGINE.md)); começa depois do tour e da simplificação |
 
 **Regras:**
 - Uma frente de código por vez; nenhuma frente nova antes de fechar a atual, salvo dependência real.
