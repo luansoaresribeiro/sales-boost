@@ -412,3 +412,21 @@ foto de fora tem abertura própria e corte automático para dentro.
 **Fila de espera:** o tour completo não entra na fila "aguardando estúdio". Se a VPS estiver fora do ar, a tela avisa
 e nada é cobrado.
 
+### Teste do imóvel inteiro — 13/11 (Tespon) — gate técnico PASSOU
+
+- **Tour:** 8 fotos reais, 7 caminhadas de 6 s, abrindo de fora (`outside_first`): terraço → sala de baixo → sala de jantar → despensa/área de serviço → hall → corredor → quarto → banheiro, mais o encerramento do estúdio (logo + "Me chama no direct"). Vídeo de 41,3 s, 1080×1920.
+- **Ligações:** as 7 passagens saíram "sim" na conferência v4 antes de gerar; nenhuma foi forçada com "gerar mesmo assim".
+- **Conferência:**
+  - corte: `ffmpeg scene>0.25` não achou nenhum corte;
+  - folha de quadros 1/s e zoom 2/s nas passagens de risco:
+    - a sala → jantar passa ao lado da escada, e o jantar já aparece atrás dela na foto real;
+    - a despensa → hall sai pela porta do fundo, que aparece na foto da despensa;
+  - nenhuma parede, porta ou cômodo inventado.
+- **Custo:** US$ 3,528 (7 × US$ 0,504), gravado em `video_tours.cost_usd`; nenhuma falha, nenhuma regeração.
+- **Fora do tour:** o andar de cima (salão, jogos, piscina), porque o imóvel não tem foto da escada. A conferência bloqueia esse caminho, que é o comportamento certo.
+- **Achado na legenda (corrigido no mesmo PR):**
+  - **Problema:** a legenda abria com "A fachada já entrega o endereço. Depois, a porta abre…" e dizia "da entrada até a varanda", mas o vídeo começa no terraço e termina no banheiro. Os números (180 m², 4 quartos, preço) vinham do cadastro e estavam certos.
+  - **Causa:** o prompt só dizia "começando de fora, passando pelos ambientes".
+  - **Correção:** `tourRoomLabels` (`_shared/tourOrder.ts`) passa ao prompt os ambientes reais na ordem do vídeo, com a proibição de citar fachada, entrada ou cômodo fora da lista.
+  - **A peça deste teste** (`7e0f544c…`, em Aprovações, nada publicado) ficou com a legenda antiga: o dono edita ou descarta.
+

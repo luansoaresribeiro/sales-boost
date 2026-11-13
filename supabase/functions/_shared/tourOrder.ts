@@ -145,3 +145,14 @@ export function orderTour(photos: TourPhoto[], cfg: TourCfg, ocfg: TourOrderCfg)
 export function tourSeconds(segments: Segment[], seconds: Record<SegKind, number>): number {
   return segments.reduce((s, g) => s + seconds[g.kind], 0)
 }
+
+/**
+ * Ambientes do tour, NA ORDEM do vídeo, com o rótulo da ficha — vai pro prompt da legenda (2026-11-13: a legenda do tour
+ * do imóvel inteiro inventou "a fachada… a porta abre… até a varanda" num vídeo que começa no terraço e termina no
+ * banheiro). Foto aberta "de fora" = "área externa"; cômodo sem nota confiável = "outro ambiente". Repetição seguida sai.
+ */
+export function tourRoomLabels(rooms: (string | null)[], labels: { key: string; label: string }[], outsideFirst: boolean): string[] {
+  const byKey = new Map(labels.map(r => [r.key, r.label]))
+  const out = rooms.map((r, i) => (i === 0 && outsideFirst ? 'área externa' : (r && byKey.get(r)) || r || 'outro ambiente'))
+  return out.filter((l, i) => i === 0 || l !== out[i - 1])
+}
