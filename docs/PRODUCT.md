@@ -4,7 +4,35 @@
 > de produto, conteúdo ou posicionamento. Decisões com data ficam em
 > [DECISIONS.md](DECISIONS.md); aqui fica o estado atual, não o histórico.
 
-## Estado atual em uma tela (atualizado 2026-11-02)
+## Estado atual em uma tela (atualizado 2026-11-13)
+
+> Resumo do que vale HOJE. O resumo de 02/11 ficou logo abaixo, como histórico.
+
+- **Direção (dono, 11/11):** o Sales Boost deixa de ser uma ferramenta de marketing e passa a ser um **sistema de
+  inteligência e geração de demanda comercial para imobiliárias**. A medida de sucesso é **visita ao imóvel**, não
+  quantidade de posts.
+- **Slogan (10/11):** "Sales Boost — gerando mais visitas para o seu imóvel". Visita garantida nunca é prometida.
+- **Modelo de negócio em validação (10/11, NADA de preço decidido):**
+  - plataforma grátis;
+  - **tour virtual pago**;
+  - **lead qualificado**, sem preço até haver definição e medição ([CONVERSION.md](CONVERSION.md)).
+  - A conta dos Boosts está abaixo e é só documento.
+- **Prioridade agora (13/11): 4 frentes, uma por vez:**
+  1. **Tour Virtual do imóvel INTEIRO**: sem inventar passagem, sem omitir cômodo, e se faltar foto o sistema diz qual;
+  2. **motor próprio de vídeo**: sair da dependência da VPS;
+  3. **infraestrutura**: substituir e só então desligar VPS e Telegram;
+  4. **experiência do usuário**.
+  - O roadmap detalhado está em [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md) e aguarda a aprovação do dono (D1).
+  - O que falta está em [PENDENCIAS.md](PENDENCIAS.md).
+- **O que existe hoje:**
+  - **Tour virtual:** contínuo e sem cortes, mas cobre só parte do imóvel (8 de 22 ambientes no teste da Tespon).
+  - **Painel:** mostra o resultado comercial (visualizações → interessados → leads recebidos → visitas).
+  - **Agente de conteúdo:** só com foto.
+  - **Aprovação humana** antes de publicar.
+- **Ainda não existe (não prometer):** tour do imóvel inteiro, agendamento de visita, lead "qualificado", cobrança
+  por tour ou por lead, anúncio pago pelo Sales Boost, avatar, mobiliamento em vídeo.
+
+## Estado atual em uma tela (2026-11-02) — HISTÓRICO, substituído em 13/11
 
 > Resumo do que vale HOJE. As seções abaixo guardam o histórico com as divergências marcadas.
 
@@ -252,8 +280,14 @@ caminhada falhar no fornecedor o Boost volta. Custo por Boost com reserva: US$ 0
 O exemplo do dono ("tour de US$ 5 = 10 Boosts") só fecha com um valor por Boost definido. Com 1 Boost = 1 caminhada,
 um tour de 8 fotos = 7 Boosts.
 
+> **Atualização (2026-11-13):** com a regra nova do dono (tour = imóvel **inteiro**), a conta muda.
+> - Um imóvel grande como a Tespon (22 ambientes) precisa de cerca de 23 caminhadas, ou seja, **~US$ 14 de custo com
+>   reserva** (estimado; [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md), seção 9).
+> - Os US$ 15 por tour usados como hipótese no piloto **quase não deixam margem** em imóvel grande.
+> - O preço precisa variar com o tamanho do imóvel: por Boost, ou por faixa de ambientes. **Decisão do dono.**
+
 **O que falta antes de decidir:**
-1. Fechar o gate técnico do tour.
+1. Fechar o gate técnico do tour (agora: imóvel inteiro).
 2. Medir a média real de trechos refeitos, para trocar a reserva de 20% por número.
 3. Somar estúdio, Stripe e câmbio (faturas do dono).
 4. As conversas com imobiliárias: quantos tours por mês e quanto pagariam.

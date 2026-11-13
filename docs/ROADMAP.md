@@ -4,11 +4,30 @@
 > pronto, arquivos envolvidos, riscos, e se envolve ALTERAÇÃO ARRISCADA
 > (ver CLAUDE.md).
 
-## Ordem aprovada (dono, 2026-11-11 noite) — substitui a ordem anterior como prioridade
+## Direção atual (dono, 2026-11-13) — vale acima da ordem de 11/11
+
+**4 frentes, uma por vez:**
+1. **Tour Virtual do imóvel inteiro.**
+2. **Motor próprio de vídeo.**
+3. **Infraestrutura:** substituir e só então desligar VPS e Telegram.
+4. **Experiência do usuário.**
+
+**Etapas, critérios de pronto e decisões pendentes (D1–D7):** [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md) e
+[PENDENCIAS.md](PENDENCIAS.md). O roadmap detalhado **aguarda a aprovação do dono (D1)**. Nenhuma implementação começa antes.
+
+**O que muda na tabela de 11/11 abaixo** (fica como histórico):
+- **Itens 1 e 2:** viram a Frente 1. O tour só fica pronto quando cobre o imóvel inteiro.
+- **Item 3 (painel novo):** a 1ª parte já está no ar. O resto entra na Frente 4.
+- **Item 4 (abas e fluxos):** é a Frente 4.
+- **Item 5 ("Telegram com dado real e aprovações"):** **divergência.** A direção nova é deixar de depender do Telegram,
+  com as funções essenciais dentro do próprio Sales Boost. Nada é desligado antes do substituto (Frente 3).
+- **Item 7 (mobiliamento em vídeo):** continua depois das 4 frentes.
+
+## Ordem aprovada (dono, 2026-11-11 noite) — HISTÓRICO, substituída pela direção de 13/11 acima
 
 | Prioridade | Trabalho | Situação |
 |---|---|---|
-| 1 | Finalizar o Tour virtual | conferência de ligação v3 juntada (#149), falta publicar e retestar |
+| 1 | Finalizar o Tour virtual | conferência v4 publicada e testada (7/7, 11/11); tour contínuo da área social feito em 13/11. **Agora é a Frente 1 (imóvel inteiro).** |
 | 2 | Validar tecnicamente o Tour (gate técnico) | **13/11 (atualizado pelo critério novo do dono): o trecho social passou, mas o tour NÃO está pronto para clientes** — a regra agora é cobrir o imóvel INTEIRO e o vídeo cobriu 8 de 22 ambientes; plano e pendências em [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md) e [PENDENCIAS.md](PENDENCIAS.md). Registro original: tour do imóvel inteiro na Tespon (8 fotos, 7 caminhadas, 41 s, US$ 3,53), nenhum corte, nenhuma passagem inventada (todas "sim" na conferência v4); detalhe em MEDIA-ENGINE. Achado: a legenda descrevia fachada/varanda que não aparecem — corrigido (a legenda recebe os ambientes na ordem do vídeo). Histórico de 11/11: conferência v4 7/7 ✅; par terraço → sala de baixo travou por falta de saldo no Higgsfield |
 | 3 | Painel novo (funil comercial) | 12–13/11: 1ª parte feita — bloco "Resultado comercial" no topo do painel (visualizações → interessados → leads recebidos → visitas, funil e "de onde veio" por imóvel e por publicação, 30 dias, só dado real). "Leads qualificados" só quando a qualificação for aprovada. Próximo: revisar o resto do painel junto com a simplificação (prioridade 4) |
 | 4 | Revisar abas e fluxos | depois da 3 |

@@ -31,6 +31,10 @@
 ### 2.1 Perguntas de demanda (novo modelo, dono 10/11)
 Servem para validar as hipóteses, não para vender. Anotar a resposta como foi dita, sem arredondar.
 **Tour virtual (US$ 15 por imóvel):**
+
+> **Atenção (2026-11-13):** os US$ 15 são a hipótese de 10/11. Com o tour do imóvel **inteiro**, um imóvel grande custa
+> ~US$ 14 só de vídeo (estimado; ver [PRODUCT.md](PRODUCT.md), "Conta dos Boosts"). Por isso, perguntar também sobre
+> **preço por tamanho do imóvel** e não citar US$ 15 como preço fechado.
 - Quantos imóveis novos entram por mês?
 - Em quantos vocês pagariam um tour?
 - O que faria vocês pagarem, ou não pagarem?

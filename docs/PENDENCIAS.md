@@ -19,6 +19,7 @@
 | D1 | Aprovar o roadmap de [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md) | Dono | P0 | — | ⏳ |
 | D2 | Decidir quem tira as fotos que faltam na Tespon (tabela 2.3) ou qual imóvel usar no teste de ponta a ponta | Dono | P0 | D1 | ⏳ |
 | D3 | Tamanho máximo de cada parte do tour (proposta: ~8 passagens, ~50 s) | Dono | P1 | D1 | ⏳ |
+| D7 | Reescrever o pitch ([pitch/PITCH.md](../pitch/PITCH.md)) com o modelo e o slogan novos; o preço do tour precisa variar com o tamanho do imóvel | Dono + Agente | P2 | D1 | ⏳ |
 | D4 | Verba de teste da Frente 1 (proposta: até US$ 15) e provedor de nuvem da Frente 2 | Dono | P1 | D1 | ⏳ |
 
 ## Frente 1 — Tour Virtual completo
