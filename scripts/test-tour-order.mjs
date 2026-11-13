@@ -220,3 +220,41 @@ console.log(`\n${n} verificações ok`)
   if (JSON.stringify(b) !== JSON.stringify(['varanda', 'sala'])) throw new Error('tourRoomLabels: ' + JSON.stringify(b))
   console.log('ok — legenda do tour recebe os ambientes na ordem do vídeo')
 }
+
+// Exatamente 1 post por dia, 7 por semana (dono, 2026-11-13) — servidor e tela iguais
+{
+  const { weekSlots: wsS, dailySeven } = await import('../supabase/functions/_shared/formatCatalog.ts')
+  const { weekSlots: wsF } = await import('../src/lib/weekSlots.ts')
+  const dates = ['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20', '2026-11-21', '2026-11-22']
+  const it = (format, producer, per_week) => ({ format, name: format, producer, per_week, pillar: 'x', purpose: '' })
+  const cases = {
+    'A3 (8 com DM)': [it('carrossel_imovel', 'item_package', 2), it('comente_quero', 'dm', 1), it('o_que_rs_compra', 'item_package', 1), it('tres_coisas_perto', 'item_package', 1), it('carrossel_educativo', 'post', 2), it('dica_faq', 'post', 1)],
+    'Teste Zero (6 de verdade)': [it('carrossel_imovel', 'item_package', 2), it('comente_quero', 'dm', 2), it('o_que_rs_compra', 'item_package', 1), it('carrossel_educativo', 'post', 1), it('dica_faq', 'post', 1), it('tres_coisas_perto', 'item_package', 1), it('video_comodo', 'item_video', 2)],
+    'só 2 peças': [it('carrossel_educativo', 'post', 1), it('carrossel_imovel', 'item_package', 1)],
+    'demais (12)': [it('a', 'post', 4), it('b', 'item_package', 4), it('c', 'post', 4)],
+    'só imóvel': [it('carrossel_imovel', 'item_package', 3)],
+  }
+  for (const [nome, mix] of Object.entries(cases)) {
+    const s = wsS({ weekly_mix: mix }, dates), f = wsF(mix, dates)
+    assert.equal(s.length, 7, nome + ': 7 posts')
+    assert.deepEqual(s.map(x => x.date), dates, nome + ': 1 por dia, todos os dias')
+    assert.ok(s.every(x => x.producer !== 'dm' && x.producer !== 'item_video'), nome + ': DM e vídeo não contam')
+    assert.deepEqual(s, f, nome + ': tela igual ao servidor')
+    const fmts = new Set(mix.filter(m => m.producer !== 'dm' && m.producer !== 'item_video').map(m => m.format))
+    if (fmts.size > 1) assert.ok(s.every((x, i) => i === 0 || x.format !== s[i - 1].format), nome + ': mesmo formato não cai em dias seguidos')
+  }
+  // menos de 7: completa girando a fila, sem perder a variedade
+  const s2 = wsS({ weekly_mix: cases['só 2 peças'] }, dates)
+  assert.equal(s2.filter(x => x.producer === 'post').length, 4)
+  // stories não contam
+  const st = wsS({ weekly_mix: [it('stories_x', 'item_package', 3), it('carrossel_educativo', 'post', 1)] }, dates, { excludeFormats: ['stories_x'] })
+  assert.ok(st.length === 7 && st.every(x => x.format !== 'stories_x'))
+  assert.deepEqual(wsS({ weekly_mix: [] }, dates), [])
+  assert.deepEqual(dailySeven([]), [])
+  // servidor: vaga sem imóvel vira post (nunca dia vazio); caminho antigo = 1 por dia
+  const cg = readFileSync(new URL('../supabase/functions/creative-generate/index.ts', import.meta.url), 'utf8')
+  assert.match(cg, /if \(!recipe \|\| !picked\) \{ pushFiller\(slot\); continue \}/)
+  assert.match(cg, /const postsCount = 1/)
+  assert.match(cg, /excludeFormats: await storiesFormats\(admin, company\)/)
+  console.log('ok — exatamente 1 post por dia, 7 por semana (servidor = tela)')
+}

@@ -63,7 +63,10 @@ export default function ContentSection({ company }: { company: Company }) {
   const tx = TX[lang]
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab')
-  const [top, setTop] = useState<Top>(tab === 'campanha' ? 'campanha' : tab === 'conversas' ? 'conversas' : 'conteudo')
+  // Aba "Campanha" (anúncios) fora do menu (dono, 2026-11-13: anúncio pago fora do modelo) — escondida, código mantido.
+  // Link antigo ?tab=campanha cai no Conteúdo; ?tab=campanha&sub=saude continua abrindo a Saúde da Meta (conexão, não anúncio).
+  const metaHealth = tab === 'campanha' && params.get('sub') === 'saude'
+  const [top, setTop] = useState<Top>(tab === 'conversas' ? 'conversas' : 'conteudo')
   const [contentSub, setContentSub] = useState<ContentSub>('calendario')
 
   const pickTop = (k: Top) => {
@@ -77,12 +80,12 @@ export default function ContentSection({ company }: { company: Company }) {
   return (
     <div>
       <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', marginBottom: '22px', flexWrap: 'wrap' }}>
-        {(['conteudo', 'campanha', 'conversas'] as const).map(k => (
-          <TabButton key={k} t={tx.top[k]} active={top === k} onClick={() => pickTop(k)} badge={k === 'campanha' ? tx.soon : undefined} />
+        {(['conteudo', 'conversas'] as const).map(k => (
+          <TabButton key={k} t={tx.top[k]} active={top === k} onClick={() => pickTop(k)} />
         ))}
       </div>
 
-      {top === 'campanha' ? <CampanhaPanel company={company} /> : top === 'conversas' ? <ConversasPanel company={company} /> : (
+      {metaHealth ? <MetaHealthTab company={company} /> : top === 'campanha' ? <CampanhaPanel company={company} /> : top === 'conversas' ? <ConversasPanel company={company} /> : (
         <div>
           <SubTabs items={(['calendario', 'padrao'] as const).map(k => [k, ...tx.content[k]] as const)} active={contentSub} onPick={setContentSub} />
           {contentSub === 'calendario' ? (

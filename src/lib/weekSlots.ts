@@ -12,14 +12,30 @@ export interface WeekSlot { date: string; format: string; name: string; producer
 // Tour virtual saiu do plano da semana (dono, 2026-11-10) — mesma lista de _shared/formatCatalog.ts.
 export const OUT_OF_WEEKLY_PLAN: Producer[] = ['item_video']
 
-export function weekSlots(mixRaw: MixItem[] | null | undefined, dates: string[]): WeekSlot[] {
-  const mix = (Array.isArray(mixRaw) ? mixRaw : []).filter(m => m.producer !== 'dm' && !OUT_OF_WEEKLY_PLAN.includes(m.producer))
+// EXATAMENTE 1 post por dia (dono, 2026-11-13) — mesma conta de dailySeven em _shared/formatCatalog.ts.
+export function dailySeven<T extends { format: string; producer: string }>(queue: T[]): T[] {
+  if (!queue.length) return []
+  const pick = queue.slice(0, 7)
+  for (let i = 0; pick.length < 7; i++) pick.push(queue[i % queue.length])
+  // Ordena sem repetir formato em dias seguidos: a cada dia, o formato que mais sobra (≠ do dia anterior); empate = ordem da fila.
+  const rest = [...pick], out: T[] = []
+  while (rest.length) {
+    const prev = out.length ? out[out.length - 1].format : null
+    const left = (f: string) => rest.filter(m => m.format === f).length
+    let best = -1
+    for (let i = 0; i < rest.length; i++) if (rest[i].format !== prev && (best < 0 || left(rest[i].format) > left(rest[best].format))) best = i
+    out.push(rest.splice(best < 0 ? 0 : best, 1)[0])
+  }
+  return out
+}
+export function weekSlots(mixRaw: MixItem[] | null | undefined, dates: string[], opts: { excludeFormats?: string[] } = {}): WeekSlot[] {
+  const exclude = new Set(opts.excludeFormats ?? [])
+  const mix = (Array.isArray(mixRaw) ? mixRaw : []).filter(m => m.producer !== 'dm' && !OUT_OF_WEEKLY_PLAN.includes(m.producer) && !exclude.has(m.format))
   const left = mix.map(m => ({ m, n: Math.max(0, m.per_week | 0) }))
   const queue: MixItem[] = []
   while (left.some(x => x.n > 0)) for (const x of left) if (x.n > 0) { queue.push(x.m); x.n-- }
-  const n = queue.length
-  if (!n || dates.length !== 7) return []
-  return queue.map((m, k) => ({ date: dates[Math.floor((k * 7) / n)], format: m.format, name: m.name, producer: m.producer, pillar: m.pillar, purpose: m.purpose, familia: m.familia, pilar_ss: m.pilar_ss, tema: m.tema }))
+  if (!queue.length || dates.length !== 7) return []
+  return dailySeven(queue).map((m, k) => ({ date: dates[k], format: m.format, name: m.name, producer: m.producer, pillar: m.pillar, purpose: m.purpose, familia: m.familia, pilar_ss: m.pilar_ss, tema: m.tema }))
 }
 
 // Janela de planejamento = segunda a domingo (igual ao nextWeekDates do
