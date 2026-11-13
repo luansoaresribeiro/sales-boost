@@ -187,6 +187,9 @@ Depois vêm proposta e fechado, que já existem no Funil.
   5. **Funcionalidades da Fase 4:** catálogo da imobiliária e agendamento de visita com horário.
   6. **Conferir:** se `tracked_links.content_id` é preenchido quando a peça é publicada.
 
+> **Divergência (13/11):** a Frente 3 tira a dependência do Telegram. **O canal do aviso de visita é decidido junto com o D5**
+> ([PENDENCIAS.md](PENDENCIAS.md)). Texto de 10/11 mantido abaixo como registro.
+
 **Requisito do dono (10/11): Telegram avisa cada visita agendada pelo link.** Toda visita marcada pelo link rastreável gera um
 aviso no Telegram da imobiliária, com o imóvel, o horário, o nome do interessado e de onde ele veio. Entra junto com o
 agendamento de visita da Fase 4, que ainda não existe; até lá, nada a fazer no código.
@@ -202,6 +205,8 @@ visita deve sair direto do Supabase, pelo mesmo caminho dos avisos do `telegram-
 3. **Critérios aprovados:** a definição acima aprovada pelo dono, com os prazos de duplicidade e contestação já conversados com imobiliárias. (A decisão de privacidade já foi tomada: sem marca no celular na 1ª versão.)
 
 **Preço do lead:** nenhum antes dos dados reais do piloto (dono, 10/11).
+
+> **Substituído em 13/11 (tarde):** sem prazo; a validação comercial não bloqueia trabalho técnico aprovado, só preço do tour, Boosts, preço de lead e Fase 4.
 
 **Até 17/11 (dono):** trabalho concentrado na **validação comercial**. Nada de implementação nem de escopo novo. O roteiro e a ficha de registro das conversas estão em [PILOTO.md](PILOTO.md) (seções 2.1 e 2.2).
 
@@ -287,4 +292,5 @@ Fica de fora: cobrança, identidade, contestação e regras novas de duplicidade
 
 **Visão:** o diferencial é ligar a origem do interesse ao que aconteceu comercialmente depois.
 - **Geração de demanda:** inteligência → conteúdo → distribuição → tour → anúncios.
+  > **Divergência (13/11):** "anúncios" (pagos) está **fora do modelo atual**. Vale: inteligência → conteúdo → distribuição → tour.
 - **Gestão da demanda:** captura → identificação → qualificação → entrega → negociação → visita.

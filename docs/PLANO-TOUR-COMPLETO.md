@@ -1,6 +1,8 @@
 # Plano — Tour Virtual completo, motor próprio de vídeo e independência de VPS/Telegram
 
-> **Status: PROPOSTA (2026-11-13), aguardando aprovação do dono.** Nada aqui está autorizado a ser implementado.
+> **Status: APROVADO pelo dono em 2026-11-13 (D1)**: as 4 frentes, uma por vez. Gasto externo e os itens marcados 🔴 continuam
+> dependendo da aprovação dele (D2–D7, ver [PENDENCIAS.md](PENDENCIAS.md)). Status original desta linha: "PROPOSTA (2026-11-13),
+> aguardando aprovação do dono".
 > Pedido do dono de 13/11: primeiro investigar, depois recomendar, e só implementar com autorização.
 >
 > Pendências e status de cada item: [PENDENCIAS.md](PENDENCIAS.md), a lista central. Este arquivo é o "porquê" e o
@@ -148,6 +150,50 @@ São cerca de 15 a 17 fotos novas. Com elas, a estimativa é cobrir os 22 ambien
 - **Lazer:** cerca de 8 fotos.
 
 A Tespon é conta de teste. **Quem tira essas fotos é decisão do dono** (ver D2).
+
+### 2.4 Lista de fotos para um apartamento de 2 quartos (para quem vai fotografar)
+
+> Pedido do dono (13/11) para o teste de ponta a ponta (etapa 1.5). Linguagem simples, para entregar ao fotógrafo ou ao
+> corretor. A ideia: além da foto bonita de cada cômodo, precisamos das fotos **"de passagem"**, que mostram por onde se
+> vai de um cômodo ao outro. Sem elas, o sistema não monta o tour (ele não inventa porta nem corredor).
+
+**Antes de começar**
+- Celular **na horizontal ou na vertical, mas sempre igual** em todas as fotos. Altura do peito, sem zoom.
+- **Todas as portas internas abertas** e as luzes acesas. Nada de pessoas na foto.
+- Tire as fotos **na ordem do caminho**, como se estivesse mostrando o apartamento a um visitante.
+
+**As fotos (cerca de 18 a 22, ~30 minutos)**
+
+| # | Onde ficar | Para onde apontar | O que tem que aparecer |
+|---|---|---|---|
+| 1 | No corredor do prédio, na frente da porta | Para a porta do apartamento, aberta | A porta aberta e um pedaço da sala lá dentro |
+| 2 | Logo depois de entrar | Para dentro da sala | A sala inteira, do jeito que um visitante vê ao entrar |
+| 3 | No canto oposto da sala | De volta para a entrada | A sala pelo outro lado (mostra o tamanho) |
+| 4 | Na sala | Para a varanda (se houver), com a porta de vidro aberta | A porta da varanda e a varanda do outro lado |
+| 5 | Na varanda | Para fora | A vista |
+| 6 | Na varanda | De volta para a sala | Como se volta da varanda para dentro |
+| 7 | Na sala | Para a cozinha | A passagem (porta ou abertura) e a cozinha do outro lado |
+| 8 | Dentro da cozinha | O cômodo todo | A cozinha inteira |
+| 9 | Na cozinha | Para a área de serviço | A porta ou passagem e a área de serviço |
+| 10 | Dentro da área de serviço | O cômodo todo | A área de serviço |
+| 11 | Na sala | Para o corredor dos quartos | O começo do corredor, com as portas dos quartos |
+| 12 | No meio do corredor | Para o fundo | Todas as portas: quarto 1, quarto 2, banheiro |
+| 13 | No corredor, na porta do quarto 1 | Para dentro do quarto 1 | Porta aberta + o quarto |
+| 14 | Dentro do quarto 1 | O quarto todo | O quarto 1 inteiro |
+| 15 | No quarto 1, se for suíte | Para a porta do banheiro da suíte, aberta | A porta e o banheiro |
+| 16 | Dentro do banheiro da suíte | O cômodo todo | O banheiro da suíte |
+| 17 | No corredor, na porta do quarto 2 | Para dentro do quarto 2 | Porta aberta + o quarto |
+| 18 | Dentro do quarto 2 | O quarto todo | O quarto 2 inteiro |
+| 19 | No corredor, na porta do banheiro social | Para dentro | Porta aberta + o banheiro |
+| 20 | Dentro do banheiro social | O cômodo todo | O banheiro social |
+| 21 (opcional) | Na rua | Para a fachada do prédio e a portaria | A entrada do prédio (abertura "de fora") |
+| 22 (opcional) | Áreas comuns (piscina, salão) | — | Só se forem entrar no tour; cada área precisa da foto de passagem até ela |
+
+**Regras simples**
+- **Cada cômodo tem duas fotos:** uma "de passagem" (da porta, mostrando o cômodo do lado de lá) e uma do cômodo inteiro.
+- **Se não houver varanda, suíte ou área de serviço,** é só pular essas linhas.
+- **Não "melhore" a foto:** sem filtro, sem mudar móvel de lugar entre uma foto e outra do mesmo cômodo.
+- **Foto tremida ou escura não serve.** Na dúvida, tire de novo.
 
 ## 3. O que conta como "tour completo" (proposta de critério de aprovação)
 
@@ -299,7 +345,7 @@ O que já se sabe pelo código e pelos testes desta semana (nada alterado):
 - Lista por impacto × esforço × dependência.
 - Nenhuma tela é alterada antes da aprovação do dono.
 
-## 8. Roadmap recomendado (uma frente por vez)
+## 8. Roadmap recomendado (uma frente por vez; em 13/11, tarde, o dono abriu a Frente de conteúdo em paralelo, ver [PENDENCIAS.md](PENDENCIAS.md))
 
 Mantenho a ordem do dono, com um ajuste: a Frente 2 começa só **depois** do teste de ponta a ponta da Frente 1. Assim a mudança de servidor não se mistura com a mudança do tour.
 
@@ -341,9 +387,11 @@ Mantenho a ordem do dono, com um ajuste: a Frente 2 começa só **depois** do te
 
 | # | Decisão | Por que importa |
 |---|---|---|
-| D1 | Aprovar este roadmap e a ordem das frentes | Nada começa sem isso |
-| D2 | Quem tira as fotos que faltam na Tespon, ou se o teste de ponta a ponta usa outro imóvel em que dá para fotografar | Sem as fotos, a 1.5 não fecha |
+| D1 | Aprovar este roadmap e a ordem das frentes | ✅ **Aprovado em 13/11** |
+| D2 | Quem tira as fotos que faltam na Tespon, ou se o teste de ponta a ponta usa outro imóvel em que dá para fotografar | ✅ parcial (13/11): as etapas 1.1 a 1.4 seguem com a Tespon; para a 1.5, o dono indica um apartamento menor (lista na seção 2.4) |
 | D3 | Tamanho máximo de cada parte do tour (proposta: ~8 passagens, ~50 s) | Define as partes e o custo |
-| D4 | Verba de teste da Frente 1 (proposta: até US$ 15) e da Frente 2 (provedor de nuvem novo) | Gasto novo |
+| D4 | Verba de teste da Frente 1: IA de visão da 1.1/1.2 (~US$ 0,30–0,80 por imóvel) + vídeo do teste. Também a Frente 2 (provedor de nuvem novo) | ✅ 13/11: até US$ 15 para a Frente 1. A Frente 2 decide quando começar |
+| D8 | Um tour pronto pode virar o post do dia (com aprovação)? | ⏳ em aberto |
+| D7 | Reescrever o pitch com o modelo novo, "Technology Partner" e sem anúncios pagos | O pitch atual está desatualizado |
 | D5 | Telegram: quais avisos viram e-mail, e o aviso para a A3 | Cliente real usa |
 | D6 | O que fazer com a VPS depois da troca (manter de reserva, por quanto tempo) | Custo fixo × segurança |

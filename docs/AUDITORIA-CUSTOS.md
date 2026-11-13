@@ -1,6 +1,6 @@
 # Auditoria de custos (Fase 1 do novo modelo) — v0.1, 10/11/2026
 
-> **Por que existe.** O dono propôs uma plataforma grátis, com tour virtual pago (US$ 15) e cobrança por lead qualificado.
+> **Por que existe.** O dono propôs uma plataforma grátis, com tour virtual pago (US$ 15 — **hipótese**, não decisão; ver [Decisões em vigor](DECISIONS.md#decisões-em-vigor)) e cobrança por lead qualificado.
 > Antes de decidir, precisamos saber quanto custa manter uma imobiliária ativa e, principalmente, **quanto custa
 > cada resultado comercial** (oportunidade, estratégia, post, tour, lead).
 >

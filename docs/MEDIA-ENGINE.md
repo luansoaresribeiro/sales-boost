@@ -1,5 +1,15 @@
 # Sales Boost — Motor de Mídia (Higgsfield)
 
+> **Estado real (2026-11-13), que vale acima do aviso abaixo:**
+> - **No ar:**
+>   - Tour virtual contínuo (menu Tour virtual, caminhada Kling entre fotos reais, conferência de ligação v4). Cobre só parte do imóvel: 8 de 22 ambientes na Tespon.
+>   - Estúdio na VPS (acabamento 9:16 + encerramento).
+>   - Mobiliar uma foto (`virtual-staging`).
+> - **Só especificado:** mobiliamento em vídeo, tour do imóvel inteiro (Frente 1) e motor próprio de vídeo (Frente 2). Ver
+>   [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md).
+> - **Fora do modelo** (13/11): criativo para anúncio pago. A parte "(2) Criativos de anúncio" abaixo fica como histórico.
+> - O aviso "Nada disto está implementado ainda", logo abaixo, é de antes de out/2026 e fica como registro.
+
 > Como fotos reais do cliente + inteligência da estratégia viram criativos
 > prontos. **Nada disto está implementado ainda** — este doc é o plano
 > aprovado (ver [DECISIONS.md](DECISIONS.md)), não o estado atual. Estado
@@ -81,6 +91,7 @@ tours/mês) ainda em decisão do dono.
 
 **(2) Criativos de anúncio:** visual do Higgsfield a partir da foto real +
 texto via `render-format`.
+> **Divergência (13/11):** anúncios pagos estão **fora do modelo atual**. Não construir sem decisão nova do dono.
 
 ## Regras
 

@@ -5,179 +5,44 @@
 > orquestrador é sempre a sessão principal seguindo este roteiro, nunca um
 > arquivo de agente próprio.
 
+## Regra geral
+O [CLAUDE.md](../CLAUDE.md) manda: o semáforo 🟢🟡🔴, o protocolo de tarefa, a regra "Documentação sempre atualizada" e
+o formato do relatório. Nada aqui pode contradizer o CLAUDE.md. A fonte do próximo item é a [PENDENCIAS.md](PENDENCIAS.md),
+não o ROADMAP.
+
 ## Os 3 agentes
+Todos leem SEMPRE: `CLAUDE.md`, [PENDENCIAS.md](PENDENCIAS.md) e [PITFALLS.md](PITFALLS.md).
 
-Todos lêem SEMPRE, além do que é listado pra cada um: `CLAUDE.md` +
-[ROADMAP.md](ROADMAP.md) + [PITFALLS.md](PITFALLS.md).
+- **`product`** (`.claude/agents/product.md`): planeja. Só leitura.
+  - **Lê também:** [DECISIONS.md](DECISIONS.md) ("Decisões em vigor"), [PRODUCT.md](PRODUCT.md),
+    [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md) e o doc da área.
+  - **Saída:** o plano (objetivo, passos, arquivos, riscos, "pronto quando"). Decisão para o dono sempre com: o que falta, por quê, alternativas (custo e prazo) e a recomendação. os conflitos com as decisões em vigor, a cor
+    de cada ação no semáforo e se o pedido é **de direção** (aí lista os docs a atualizar).
+- **`engineer`** (`.claude/agents/engineer.md`): implementa.
+  - Só trabalha em branch.
+  - Executa o que é 🟢/🟡 e para no 🔴, com o pedido no formato combinado.
+  - Roda o build e os testes da área.
+  - Atualiza no mesmo PR a PENDENCIAS, o DECISIONS (se houve decisão do dono) e o doc da área.
+- **`qa`** (`.claude/agents/qa.md`): tenta quebrar. Sem `Edit/Write`.
+  - Confere o PITFALLS e as regras invioláveis.
+  - Testa a tela (inclusive no celular) com prints.
+  - **Reprova o PR** que mudou direção sem atualizar os docs (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área), ou
+    que marca ✅ sem prova.
+  - **Saída:** APROVADO/REPROVADO + resumo em português simples.
 
-- **`product`** (`.claude/agents/product.md`) — Planejador de produto.
-  Ferramentas: só leitura (`Read, Grep, Glob`). Lê também
-  [PRODUCT.md](PRODUCT.md), [DECISIONS.md](DECISIONS.md),
-  [ARCHITECTURE.md](ARCHITECTURE.md), [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md).
-  Saída: um plano com passos, arquivos, riscos, critério de pronto,
-  conflitos com [DECISIONS.md](DECISIONS.md)/[PITFALLS.md](PITFALLS.md), e
-  se há ALTERAÇÃO ARRISCADA (lista em CLAUDE.md).
-- **`engineer`** (`.claude/agents/engineer.md`) — Engenheiro. Todas as
-  ferramentas. Lê também [ARCHITECTURE.md](ARCHITECTURE.md) e o doc da
-  área específica ([MEDIA-ENGINE.md](MEDIA-ENGINE.md),
-  [CONVERSION.md](CONVERSION.md), [LEARNING.md](LEARNING.md),
-  [INSTAGRAM.md](INSTAGRAM.md), [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md)).
-  Só trabalha em branch. Antes de qualquer ALTERAÇÃO ARRISCADA: PARA e
-  devolve o aviso no formato combinado (CLAUDE.md seção de regras
-  invioláveis). Implementa, roda build + checagem de tipos, atualiza os
-  docs e o [ROADMAP.md](ROADMAP.md) no mesmo PR, abre o PR.
-- **`qa`** (`.claude/agents/qa.md`) — QA. Ferramentas: `Read, Grep, Glob,
-  Bash` (testes/Playwright), sem `Edit/Write`. Lê também
-  [PRODUCT.md](PRODUCT.md) (regras invioláveis) e o doc da área. Tenta
-  quebrar, confere cada armadilha do [PITFALLS.md](PITFALLS.md) e cada
-  regra inviolável, testa a tela (inclusive celular) com prints. Saída:
-  APROVADO/REPROVADO + resumo em português simples pro dono.
+## Roteiro (sessão principal) — para tarefa grande (3+ arquivos, feature nova)
+1. Seguir o **protocolo de tarefa** do CLAUDE.md: ler a PENDENCIAS e pegar o próximo item ⏳ da frente atual que seja
+   do Agente e tenha as dependências ✅.
+2. `product` → plano. Se houver ação 🔴 ou decisão do dono, **parar e pedir** no formato combinado.
+3. `engineer` → implementa.
+4. `qa` → APROVADO/REPROVADO. Se REPROVADO, volta ao `engineer` (máx. 3 voltas; depois, parar e reportar o bloqueio).
+5. APROVADO e checagens verdes → o agente junta o próprio PR (🟢, dentro da frente aprovada). A publicação é automática.
+   - **Exceção (dono, 13/11):** PR que muda `CLAUDE.md`, `.claude/agents/` ou este arquivo **espera a revisão do dono**. O
+     agente não junta, e manda um resumo de no máximo 6 linhas: o que mudou, por quê, impacto, o que decidir.
+6. **Validar** pelo "pronto quando". Marcar ✅ com a prova na PENDENCIAS, ou 🧪 se a prova ainda falta.
+7. Se o próximo item é da mesma frente e não depende do dono, voltar ao passo 1. Senão, parar.
+8. Relatório final no formato do CLAUDE.md, com a linha "Docs atualizados: …".
 
-**Regra comum:** ao aprender algo novo (armadilha nova, decisão nova),
-atualizar o doc correspondente no mesmo PR — nunca deixar pra depois.
-
-## Roteiro (sessão principal)
-
-1. Ler `CLAUDE.md` e [ROADMAP.md](ROADMAP.md); escolher o item de maior
-   prioridade ainda não feito e que não dependa do dono.
-2. Chamar o agente `product` → plano + critério de pronto.
-3. Se o plano tiver ALTERAÇÃO ARRISCADA ou depender de uma decisão do
-   dono → PARAR e perguntar no formato combinado (CLAUDE.md). Só seguir
-   com o "sim" explícito do dono.
-4. Chamar o agente `engineer` com o plano.
-5. Chamar o agente `qa` (que também confere se a tela bate com o que o
-   código faz de verdade — regra "tela e código andam juntos" do CLAUDE.md). Se REPROVADO → volta pro `engineer` (máx. 3
-   voltas; depois disso, parar e reportar o bloqueio pro dono em vez de
-   insistir sozinho).
-6. APROVADO → abrir PR com o resumo do QA em português simples, prints e
-   link de prévia (quando existir); marcar o item em
-   [ROADMAP.md](ROADMAP.md) como "aguardando aprovação do dono".
-   **Desde 2026-11-11** o agente junta o próprio PR quando tudo está verde
-   e o PR está juntável (ver [DECISIONS.md](DECISIONS.md)); a regra antiga
-   acima fica como histórico para o que ainda precisa do dono (gasto novo,
-   direção do produto, publicação em conta real).
-7. **Teto por rodada:** no máximo 2 tarefas, respeitando o limite de
-   custo de IA combinado com o dono.
-8. Relatório final pro dono: o que foi feito, o que espera aprovação, o
-   que travou e por quê — sempre em português simples (Luan não é
-   desenvolvedor).
-
-## Até o P4 existir (regra antiga — substituída em 2026-10-02)
-
-Texto original, mantido como registro: "Enquanto o P4 (infra de
-autonomia) não estiver pronto, os agentes **não rodam sozinhos sem o dono
-acompanhar** — este roteiro é pra ser executado com a sessão principal
-visível pro dono, nunca em background sem supervisão."
-
-**Divergência:** o dono decidiu liberar o modo autônomo abaixo enquanto o
-P4 é construído (ver [DECISIONS.md](DECISIONS.md)). O que segura a
-segurança agora é: só PR (nunca merge), `main` protegido no GitHub,
-sessões automáticas sem acesso a Supabase/Gmail/Instagram, e a lista de
-tarefas proibidas abaixo.
-
-## Modo autônomo (rotina agendada)
-
-> **PAUSADO desde 2026-10-06** (ver [DECISIONS.md](DECISIONS.md)): as duas
-> rotinas (seg/qua/sex e relatório de sexta) estão desligadas e o trabalho
-> segue por etapas que o dono comanda. O texto abaixo fica como referência
-> pra quando/se for religado.
-
-Princípio: **autonomia pra trabalhar ≠ autonomia pra publicar.**
-
-### Agenda (horário do Rio)
-
-- **Seg/qua/sex de manhã — rodada de trabalho:** no máximo **1 tarefa**
-  por rodada (aumentar só quando o dono decidir, depois de observar o
-  comportamento).
-- **Sexta 18h — relatório da semana.**
-
-### Rodada de trabalho
-
-1. Ler `CLAUDE.md`, [ROADMAP.md](ROADMAP.md), [PITFALLS.md](PITFALLS.md),
-   [DECISIONS.md](DECISIONS.md) e os PRs abertos.
-2. Escolher **1 tarefa elegível** (critérios abaixo). Se já houver PR
-   aberto do modo autônomo esperando o dono pra mesma tarefa, não repetir.
-3. Seguir o roteiro normal (`product` → `engineer` → `qa`, máx. 3 voltas).
-4. Abrir PR pro `main` com o **relatório por tarefa** na descrição.
-5. Parar. Nunca fazer merge, nunca deployar, nunca "aproveitar" pra fazer
-   uma segunda tarefa.
-
-**Se não houver tarefa claramente segura e bem definida, o agente não
-inventa trabalho** — não faz nada e registra isso no relatório (por que
-nenhuma tarefa era elegível e o que destravaria).
-
-### Tarefa elegível (todas as condições)
-
-- Está no [ROADMAP.md](ROADMAP.md) (ou é um bug real documentado), com
-  critério de pronto claro.
-- **Não depende do dono** (seção "Fora do código" do roadmap, conta da
-  Meta, credencial, decisão em aberto).
-- **Não envolve nenhuma ALTERAÇÃO ARRISCADA** (lista em `CLAUDE.md`).
-  No modo autônomo não há dono pra responder "Posso seguir?" — então o
-  agente não pergunta e segue: ele **pula a tarefa** e lista no relatório
-  como "precisa de você".
-- **Banco só o de ensaio** (`salesboost-ensaio`, ref
-  `ybmevrsijsayllgcxxeb`): desde 2026-10-02 o ambiente tem
-  `SUPABASE_ENSAIO_URL`, `SUPABASE_ENSAIO_ANON_KEY` e
-  `SUPABASE_ENSAIO_SERVICE_ROLE_KEY` (ver P4 no
-  [ROADMAP.md](ROADMAP.md)). ~~Não precisa de banco de dados enquanto a
-  rotina não tiver as chaves do ensaio~~ — superado. Migration/SQL só no
-  ensaio, nunca em produção; mudança de estrutura entra no PR com a
-  mesma mudança pro ensaio. ~~Fica marcada "precisa de você" pro dono
-  aplicar em produção~~ — desde 2026-10-02 o agente aplica em produção
-  depois que o PR for aprovado (ver seção abaixo).
-- Cabe em 1 PR revisável (prefira pequeno).
-
-### Proibido no modo autônomo (sem exceção)
-
-- Merge de PR, push no `main`, `wrangler deploy`, deploy de edge function.
-- Qualquer acesso ao banco de produção (`miwcxakzyforbahpnpst`) —
-  **única exceção:** aplicar o SQL de um PR já aprovado e juntado pelo
-  dono, seguindo a seção abaixo.
-- Publicar/enviar qualquer coisa (Instagram, DM, e-mail, Telegram).
-- Gastar com provedor pago (Higgsfield, IA em lote, API nova).
-- Mexer em secrets, auth, crons, DNS, painel da Meta.
-- Desligar/remover funcionalidade existente.
-
-### Banco de produção depois do PR aprovado
-
-Decisão de 2026-10-02 ([DECISIONS.md](DECISIONS.md)): o merge do PR pelo
-dono **é** a aprovação da mudança de banco que está nele. Regras:
-
-1. **No PR (antes do merge):** o SQL vai num arquivo em
-   `supabase/migrations/`, já aplicado e testado no ensaio. A descrição
-   do PR tem a seção "Banco de produção" em português simples: o que
-   muda, o que pode dar errado, e o SQL pra desfazer. Se apagar dados ou
-   mexer em RLS, dizer isso com essas palavras.
-2. **Só depois do merge no `main`:** PR aberto, só aprovado sem merge, ou
-   fechado sem merge = não aplica. Antes de aplicar, conferir que o PR
-   está mesmo juntado.
-3. **Exatamente o SQL do PR:** o mesmo arquivo, sem mudar nada e sem
-   acrescentar nada. Se precisar de ajuste, é outro PR.
-4. **Antes de aplicar, conferir que os dois bancos estão iguais** (consulta
-   md5 no P4 do [ROADMAP.md](ROADMAP.md)). Se estiverem diferentes, parar
-   e avisar o dono — não aplicar.
-5. **Depois de aplicar:** rodar a consulta md5 de novo e confirmar que os
-   dois bancos estão iguais. Relatar: PR, o que foi aplicado, resultado da
-   conferência.
-6. **Se der erro no meio:** parar, não tentar consertar direto em
-   produção, avisar o dono com o erro e o SQL de desfazer.
-7. Nunca criar cron que chame function de produção a partir de migration
-   sem estar escrito no PR (ver [PITFALLS.md](PITFALLS.md)).
-
-### Relatório por tarefa (descrição do PR)
-
-```
-Trabalho concluído: <o que foi feito, em português simples>
-Alterações: <arquivos principais>
-Testes: <build ok/falhou, checagens do qa, prints>
-PR: <link>
-Riscos/pendências: <ou "nenhum">
-Próximo passo: aguarda sua aprovação
-```
-
-### Relatório semanal (sexta 18h)
-
-O que foi implementado · PRs abertos/fechados · testes executados ·
-problemas encontrados · decisões que precisam do dono · próximo trabalho
-que o agente pretende executar. Sempre em português simples.
+## Histórico
+- O texto anterior (roteiro antigo, "Até o P4 existir", o modo autônomo agendado, pausado desde 06/10, e o banco de produção
+  depois do PR aprovado) está em [historico/ORCHESTRATION-ate-2026-11-12.md](historico/ORCHESTRATION-ate-2026-11-12.md).
