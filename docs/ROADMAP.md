@@ -9,7 +9,7 @@
 | Prioridade | Trabalho | Situação |
 |---|---|---|
 | 1 | Finalizar o Tour virtual | conferência de ligação v3 juntada (#149), falta publicar e retestar |
-| 2 | Validar tecnicamente o Tour (gate técnico) | **13/11: PASSOU** — tour do imóvel inteiro na Tespon (8 fotos, 7 caminhadas, 41 s, US$ 3,53), nenhum corte, nenhuma passagem inventada (todas "sim" na conferência v4); detalhe em MEDIA-ENGINE. Achado: a legenda descrevia fachada/varanda que não aparecem — corrigido (a legenda recebe os ambientes na ordem do vídeo). Histórico de 11/11: conferência v4 7/7 ✅; par terraço → sala de baixo travou por falta de saldo no Higgsfield |
+| 2 | Validar tecnicamente o Tour (gate técnico) | **13/11 (atualizado pelo critério novo do dono): o trecho social passou, mas o tour NÃO está pronto para clientes** — a regra agora é cobrir o imóvel INTEIRO e o vídeo cobriu 8 de 22 ambientes; plano e pendências em [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md) e [PENDENCIAS.md](PENDENCIAS.md). Registro original: tour do imóvel inteiro na Tespon (8 fotos, 7 caminhadas, 41 s, US$ 3,53), nenhum corte, nenhuma passagem inventada (todas "sim" na conferência v4); detalhe em MEDIA-ENGINE. Achado: a legenda descrevia fachada/varanda que não aparecem — corrigido (a legenda recebe os ambientes na ordem do vídeo). Histórico de 11/11: conferência v4 7/7 ✅; par terraço → sala de baixo travou por falta de saldo no Higgsfield |
 | 3 | Painel novo (funil comercial) | 12–13/11: 1ª parte feita — bloco "Resultado comercial" no topo do painel (visualizações → interessados → leads recebidos → visitas, funil e "de onde veio" por imóvel e por publicação, 30 dias, só dado real). "Leads qualificados" só quando a qualificação for aprovada. Próximo: revisar o resto do painel junto com a simplificação (prioridade 4) |
 | 4 | Revisar abas e fluxos | depois da 3 |
 | 5 | Telegram com dado real e aprovações | depois da 4 |
@@ -58,7 +58,7 @@ O que não tem medição aparece como "ainda sem dados", nunca como número inve
 
 Critérios por trecho em [MEDIA-ENGINE.md](MEDIA-ENGINE.md).
 
-**Situação do gate técnico — PASSOU em 13/11** (tour do imóvel inteiro, Tespon: terraço → sala de baixo → jantar → despensa/serviço → hall → corredor → quarto → banheiro; 0 cortes; fidelidade conferida trecho a trecho; US$ 3,528 gravado em `video_tours.cost_usd`). Andar de cima (salão, jogos, piscina) ficou de fora por falta de foto da escada — a conferência v4 bloqueia esse caminho, como deve.
+**Situação do gate técnico — trecho social PASSOU em 13/11; imóvel inteiro NÃO (8 de 22 ambientes; critério novo do dono, ver [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md))** (tour do imóvel inteiro, Tespon: terraço → sala de baixo → jantar → despensa/serviço → hall → corredor → quarto → banheiro; 0 cortes; fidelidade conferida trecho a trecho; US$ 3,528 gravado em `video_tours.cost_usd`). Andar de cima (salão, jogos, piscina) ficou de fora por falta de foto da escada — a conferência v4 bloqueia esse caminho, como deve.
 
 **Histórico — NÃO passou (5/7), teste de 11/11 na Tespon:**
 - 8 fotos, 7 caminhadas, nenhum corte, US$ 3,53;
