@@ -412,7 +412,7 @@ foto de fora tem abertura própria e corte automático para dentro.
 **Fila de espera:** o tour completo não entra na fila "aguardando estúdio". Se a VPS estiver fora do ar, a tela avisa
 e nada é cobrado.
 
-### Teste do imóvel inteiro — 13/11 (Tespon) — gate técnico PASSOU
+### Teste da área social (chamado de "imóvel inteiro" na hora) — 13/11 (Tespon) — trecho passou; imóvel inteiro NÃO (8 de 22 ambientes — ver PLANO-TOUR-COMPLETO.md)
 
 - **Tour:** 8 fotos reais, 7 caminhadas de 6 s, abrindo de fora (`outside_first`): terraço → sala de baixo → sala de jantar → despensa/área de serviço → hall → corredor → quarto → banheiro, mais o encerramento do estúdio (logo + "Me chama no direct"). Vídeo de 41,3 s, 1080×1920.
 - **Ligações:** as 7 passagens saíram "sim" na conferência v4 antes de gerar; nenhuma foi forçada com "gerar mesmo assim".

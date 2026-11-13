@@ -6,6 +6,34 @@
 > [CONTENT-INTELLIGENCE.md](CONTENT-INTELLIGENCE.md) etc.) em vez de
 > apagar a decisão daqui.
 
+## 2026-11-13 — Tour do imóvel INTEIRO, motor próprio e saída de VPS/Telegram (planejamento; nada implementado)
+
+**Decisões do dono:**
+- **Tour pronto = imóvel inteiro.** Um tour só está pronto para clientes se representa o imóvel inteiro de forma confiável.
+  - Pode sair em várias partes, organizadas por área, desde que nenhum ambiente fique de fora sem aviso.
+  - Nada de inventar porta, corredor ou escada. Se faltar foto, o sistema diz qual foto tirar e de qual ângulo.
+- **4 frentes, uma por vez:**
+  1. tour completo;
+  2. motor próprio de vídeo;
+  3. infraestrutura (VPS/Telegram);
+  4. experiência do usuário.
+- **VPS e Telegram ficam intactos** até o substituto estar construído e testado e o dono autorizar a desativação.
+- **Independência ≠ não usar ferramenta externa.** ffmpeg, as APIs de vídeo e a nuvem continuam valendo. O que precisa
+  ser nosso é a arquitetura, o fluxo, os dados, as regras e a experiência.
+- **Gestão:** uma etapa só é concluída com a validação definida. A lista central fica em [PENDENCIAS.md](PENDENCIAS.md)
+  e é consultada antes de cada etapa.
+
+**Auditoria (agente, só leitura, sem gasto):**
+- **Cobertura:** o tour de 13/11 cobriu 8 dos 22 ambientes da Tespon.
+- **Causa:** o sistema agrupa por *tipo* de cômodo e não por ambiente físico, e não tem mapa de ligações.
+- **Fotos:** as 50 fotos não bastam para o imóvel inteiro sem inventar passagens. Faltam cerca de 15 a 17 fotos de ligação.
+- **VPS:** faz um só tipo de trabalho (o acabamento com ffmpeg). O código é nosso (`public/vps/worker.mjs`).
+- **Telegram:** a A3 (cliente real) usa, e os alertas da plataforma para o dono também.
+- **Detalhe e roadmap proposto:** [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md). **Aguardando aprovação do dono (D1).**
+
+**Correção do que registrei antes:** no ROADMAP e no MEDIA-ENGINE de 13/11 eu tinha escrito que o gate técnico "passou".
+Isso vale só para o trecho social. Pelo critério novo, o tour não está pronto.
+
 ## 2026-11-12 — O site já é publicado sozinho (correção)
 
 O agente dizia que o site só ia ao ar com `npm run build` + `npx wrangler deploy` rodados pelo dono. **Não é mais

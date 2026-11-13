@@ -42,6 +42,10 @@ conteúdo técnico detalhado vive em `docs/`:
   preço (ainda não decidida).
 - [docs/PILOTO.md](docs/PILOTO.md) — kit do piloto com imobiliária parceira
   (roteiro, o que pedir, plano de 4 semanas, critérios de sucesso).
+- [docs/PENDENCIAS.md](docs/PENDENCIAS.md) — **lista central de pendências**: consultar
+  antes de cada etapa; item só fica ✅ com a validação feita.
+- [docs/PLANO-TOUR-COMPLETO.md](docs/PLANO-TOUR-COMPLETO.md) — tour do imóvel
+  inteiro, motor próprio de vídeo, saída de VPS/Telegram (proposta 13/11).
 - [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md) — roteiro do time de
   agentes (`.claude/agents/`: `product`, `engineer`, `qa`).
 
