@@ -1,6 +1,8 @@
 # Plano — Tour Virtual completo, motor próprio de vídeo e independência de VPS/Telegram
 
-> **Status: PROPOSTA (2026-11-13), aguardando aprovação do dono.** Nada aqui está autorizado a ser implementado.
+> **Status: APROVADO pelo dono em 2026-11-13 (D1)**: as 4 frentes, uma por vez. Gasto externo e os itens marcados 🔴 continuam
+> dependendo da aprovação dele (D2–D7, ver [PENDENCIAS.md](PENDENCIAS.md)). Status original desta linha: "PROPOSTA (2026-11-13),
+> aguardando aprovação do dono".
 > Pedido do dono de 13/11: primeiro investigar, depois recomendar, e só implementar com autorização.
 >
 > Pendências e status de cada item: [PENDENCIAS.md](PENDENCIAS.md), a lista central. Este arquivo é o "porquê" e o
@@ -341,9 +343,10 @@ Mantenho a ordem do dono, com um ajuste: a Frente 2 começa só **depois** do te
 
 | # | Decisão | Por que importa |
 |---|---|---|
-| D1 | Aprovar este roadmap e a ordem das frentes | Nada começa sem isso |
+| D1 | Aprovar este roadmap e a ordem das frentes | ✅ **Aprovado em 13/11** |
 | D2 | Quem tira as fotos que faltam na Tespon, ou se o teste de ponta a ponta usa outro imóvel em que dá para fotografar | Sem as fotos, a 1.5 não fecha |
 | D3 | Tamanho máximo de cada parte do tour (proposta: ~8 passagens, ~50 s) | Define as partes e o custo |
-| D4 | Verba de teste da Frente 1 (proposta: até US$ 15) e da Frente 2 (provedor de nuvem novo) | Gasto novo |
+| D4 | Verba de teste da Frente 1: IA de visão da 1.1/1.2 (~US$ 0,30–0,80 por imóvel) + vídeo do teste (proposta: até US$ 15 no total). Também a Frente 2 (provedor de nuvem novo) | Gasto novo (🔴: o agente gasta US$ 0 sem aprovação) |
+| D7 | Reescrever o pitch com o modelo novo, "Technology Partner" e sem anúncios pagos | O pitch atual está desatualizado |
 | D5 | Telegram: quais avisos viram e-mail, e o aviso para a A3 | Cliente real usa |
 | D6 | O que fazer com a VPS depois da troca (manter de reserva, por quanto tempo) | Custo fixo × segurança |

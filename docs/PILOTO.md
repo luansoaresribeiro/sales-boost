@@ -15,7 +15,13 @@
 **Ainda não prometer:**
 - **Publicar e medir no Instagram dela.** Isso só funciona se a conta for cadastrada como testadora do app na Meta, porque o app ainda não foi aprovado (ver [META-APP-REVIEW.md](META-APP-REVIEW.md)). Sem isso, as peças saem prontas para ela publicar.
 - **Qualquer número de resultado** (leads, vendas, visitas) antes de medir. Regra 5: nunca inventar números.
-- **Telegram como central de comando,** que ainda não está pronto (bloco 3 do roadmap).
+- ~~**Telegram como central de comando,** que ainda não está pronto (bloco 3 do roadmap).~~ **Atualizado em 13/11:** a direção
+  agora é **sair** da dependência do Telegram, com as funções essenciais dentro do próprio Sales Boost (Frente 3).
+  Não oferecer Telegram como recurso.
+- **Anúncios pagos / impulsionar publicação:** fora do modelo atual (13/11).
+- **Boosts:** em aberto, ainda sem unidade nem preço.
+- **Tour do imóvel inteiro:** ainda em construção (Frente 1). O que existe hoje cobre parte do imóvel.
+- **Preço do tour:** só como hipótese (US$ 15), nunca como preço fechado.
 
 ## 2. Roteiro da primeira conversa (dono)
 1. **Abrir com a dor, não com o software.** Por exemplo: "Como vocês ficam sabendo do que muda no mercado dos seus bairros? Quanto tempo isso toma?"
@@ -30,7 +36,7 @@
 
 ### 2.1 Perguntas de demanda (novo modelo, dono 10/11)
 Servem para validar as hipóteses, não para vender. Anotar a resposta como foi dita, sem arredondar.
-**Tour virtual (US$ 15 por imóvel):**
+**Tour virtual (hipótese: US$ 15 por imóvel — não é preço decidido):**
 
 > **Atenção (2026-11-13):** os US$ 15 são a hipótese de 10/11. Com o tour do imóvel **inteiro**, um imóvel grande custa
 > ~US$ 14 só de vídeo (estimado; ver [PRODUCT.md](PRODUCT.md), "Conta dos Boosts"). Por isso, perguntar também sobre
@@ -61,7 +67,7 @@ Campo sem resposta fica **"não informado"**.
 | Imóveis ativos na carteira | |
 | Imóveis novos por mês | |
 | **Tours que comprariam por mês** (hipótese-base do dono: 3; cenários 1 e 5) | |
-| Preço do tour (US$ 15): o que acharam e as objeções | |
+| Preço do tour (hipótese de US$ 15; perguntar também preço por tamanho do imóvel): o que acharam e as objeções | |
 | De onde vêm os interessados hoje e quantos por mês | |
 | Quantos interessados viram visita | |
 | **O que é um "lead bom" para eles** (comparar com os 7 critérios de [CONVERSION.md](CONVERSION.md)) | |

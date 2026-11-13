@@ -357,9 +357,11 @@ Telegram (`notifyMarketing()` → Cloudflare Worker `marketing-bot` →
   `20261027120000_ingles_padrao.sql`; editado em Configurações). Código fora do
   React lê a tela com `getCurrentLang()`. `business_types.label` é chave em PT
   (ficha/plano): traduzir só na exibição (`businessTypeLabel`). Ver
-  [DECISIONS.md](DECISIONS.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro).
+  [DECISIONS.md](historico/DECISIONS-2026-09-a-10.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro).
 - Deploy: `npm run build` → `npx wrangler deploy` (manual, sem CI/CD —
   ver P4 em [ROADMAP.md](ROADMAP.md)).
+  > **Divergência (12–13/11):** o site é publicado sozinho pela Cloudflare (Workers Builds) depois de cada merge na `main`,
+  > e as funções pelo `.github/workflows/deploy-functions.yml`. O comando manual fica só como plano B.
 
 ## Modelo de dados (principal)
 
@@ -453,7 +455,7 @@ growth_opportunities (id, company_id, kind, title, description,
 
 ## Opportunity Engine (Inteligência comercial, 2026-10-28) — 🟡 até teste em produção
 
-Decisão: [DECISIONS.md](DECISIONS.md#2026-10-28--inteligência-comercial-para-imobiliárias-opportunity-engine).
+Decisão: [DECISIONS.md](historico/DECISIONS-2026-09-a-10.md#2026-10-28--inteligência-comercial-para-imobiliárias-opportunity-engine).
 Código: `supabase/functions/_shared/opportunityEngine.ts` (fatos + candidatos), `opportunityOutput.ts` (prompt,
 validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action: 'run_opportunities'` em
 `marketing-ai/index.ts`. Tela: `/dashboard/opportunities` (`GrowthOpportunitiesPage.tsx`). Teste de lógica pura:
@@ -507,7 +509,7 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
   Divergência: o motor casa região por texto normalizado (igual/contida), então grafia diferente do catálogo não liga.
 
 - **Etapa 4A — plano da oportunidade + rodadas automáticas (2026-10-29) — 🟡 código pronto, falta migration/deploy/teste.**
-  Decisão: [DECISIONS.md](DECISIONS.md#2026-10-29--inteligência-comercial-etapa-4-plano-a-e-peças-b-tudo-automático).
+  Decisão: [DECISIONS.md](historico/DECISIONS-2026-09-a-10.md#2026-10-29--inteligência-comercial-etapa-4-plano-a-e-peças-b-tudo-automático).
   Código: `_shared/opportunityPlan.ts` (lógica pura: prompt, conferência, formato, CTA), `opportunityPlanRun.ts`
   (banco + IA: `decideOpportunity`, `createOpportunityPlan`, `approveOpportunityPlan`), `opportunityCron.ts`
   (rodadas automáticas). Tela: `opportunityPlan.tsx`. Testes: `scripts/test-opportunity-plan.mjs`.
@@ -560,10 +562,10 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
     setor na ficha: `config.market_news` (migration `20261030100000_noticias_automaticas.sql`). Limites: 3 buscas e 5
     sinais novos por empresa/7 dias; `MARKET_NEWS_MONTHLY_CAP` (padrão 120) conta `agent_performance`
     `task_key='market_news_search'`. Chave: `getTavilyKey` (env `TAVILY_API_KEY` ou `_app_config`); respeita o interruptor
-    `insight_sources` tavily. Teste: `scripts/test-market-news.mjs`. Decisão: [DECISIONS.md](DECISIONS.md#2026-10-30--inteligência-comercial-etapa-3-notícias-de-mercado-automáticas).
+    `insight_sources` tavily. Teste: `scripts/test-market-news.mjs`. Decisão: [DECISIONS.md](historico/DECISIONS-2026-09-a-10.md#2026-10-30--inteligência-comercial-etapa-3-notícias-de-mercado-automáticas).
   - **Inteligência de Mercado ampla — estágios 1-3 (2026-11-01 — 🟡 código pronto no branch `mi-stage1-3`; falta migration, deploy do
     `marketing-ai`, cron e secrets).** SUBSTITUI a coleta semanal descrita acima (mantida como histórico; divergência registrada
-    em [DECISIONS.md](DECISIONS.md#2026-11-01--inteligência-de-mercado-ampla-estágios-1-3)):
+    em [DECISIONS.md](historico/DECISIONS-2026-11-01-a-09.md#2026-11-01--inteligência-de-mercado-ampla-estágios-1-3)):
     - **Teto em dólar (estágio 1):** US$ 5/cliente/mês para Apify+Tavily (`MARKET_INTEL_CAP_USD`, padrão 5; ficha
       `market_intel.split` = instagram 3 / news 2, reduzida proporcionalmente se a soma passar do teto), **dentro dos US$ 40**:
       `spendCap.monthSpend` soma `market_news_search` e `market_intel_apify` no campo `market_usd`. Livro-caixa em
@@ -598,7 +600,7 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
       bairro e tipo, selo "Automático", fonte (domínio com link) e data da fonte, apagar; "Última coleta: dd/mm — próxima:
       amanhã" lido de `agent_performance` (se o RLS impedir a leitura, a linha some). Sem botão de gerar.
   - **Fase 2 — Inteligência de mercado (2026-11-04 — 🟡 código pronto no branch `claude/nifty-shannon-ysp818-fase2`; falta aplicar 2 migrations,
-    deploy de `marketing-ai` e publicar o site; sem PR ainda).** Decisão e medição: [DECISIONS.md](DECISIONS.md#2026-11-04--fase-2-inteligência-de-mercado-qualidade-registro-por-rodada-e-sem-reinterpretar).
+    deploy de `marketing-ai` e publicar o site; sem PR ainda).** Decisão e medição: [DECISIONS.md](historico/DECISIONS-2026-11-01-a-09.md#2026-11-04--fase-2-inteligência-de-mercado-qualidade-registro-por-rodada-e-sem-reinterpretar).
     - **Filtro de qualidade na ficha** (`config.market_intel.news.quality`, migration `20261104120000_market_intel_quality.sql`): `mode` off | audit | enforce,
       `version`, `block_url_patterns`, `block_title_terms`, `block_title_all` (grupos "E"; sem regex), `min_summary_chars`, `kind_terms` (por tipo, casa o começo da
       palavra), `max_per_host_per_run`, `trusted_domains` (passam pelas regras), `min_score` (nota da Tavily; `null` = não filtra). Código genérico:
@@ -627,7 +629,7 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
   o deploy do `marketing-ai` e rodar na Tespon. A Etapa 1 **não** publica nem envia nada.
 
 - **Etapa 4B — plano aprovado → peças em rascunho (2026-10-29) — 🟡 código pronto; migration/deploy/teste em produção por fazer.**
-  Decisão: [DECISIONS.md](DECISIONS.md#2026-10-29--inteligência-comercial-etapa-4b-plano-aprovado--peças-em-rascunho-automático).
+  Decisão: [DECISIONS.md](historico/DECISIONS-2026-09-a-10.md#2026-10-29--inteligência-comercial-etapa-4b-plano-aprovado--peças-em-rascunho-automático).
   Código: `_shared/opportunityPieces.ts` (lógica pura: formato sem vídeo, quantidade, limites, idempotência, mapa da
   ficha), `opportunityPiecesRun.ts` (banco + despacho), `opportunityPieceJob.ts` (monta a vaga no `creative-generate`).
   Testes: `scripts/test-opportunity-pieces.mjs`. Migration: `20261029130000_oportunidade_pecas.sql` (aditiva).
@@ -666,7 +668,7 @@ validação, prioridade), `opportunityRun.ts` (banco + IA) e o despacho `action:
   - **Reverter:** bloco "Como reverter" no próprio arquivo da migration; as functions voltam pelo commit anterior.
 
 - **Etapa 5 — página pública do imóvel + link rastreável (2026-10-30) — 🟡 código pronto; migration/deploy/aprovação do dono por fazer.**
-  Decisão: [DECISIONS.md](DECISIONS.md#2026-10-30--inteligência-comercial-etapa-5-página-pública-do-imóvel--link-rastreável--lead-com-origem).
+  Decisão: [DECISIONS.md](historico/DECISIONS-2026-09-a-10.md#2026-10-30--inteligência-comercial-etapa-5-página-pública-do-imóvel--link-rastreável--lead-com-origem).
   Código: `_shared/publicPage.ts` (puro: código sem ambíguos, lista branca de campos, fotos reais, validação do lead, limites,
   `wa.me`/`ig.me`, hash do visitante, frase com link uma vez só), `_shared/publicPageRun.ts` (banco). Tela pública
   `src/pages/public/PublicPropertyPage.tsx` (rota `/p/:code`, fora do `ClientRoute`); tela do dono `PublicPageButton.tsx` (no card do
@@ -729,10 +731,10 @@ regras do código permitem calcular), 1–2 contagens e, em laranja, o que esper
 ## Mapa de telas dos agentes (atualizado 2026-11-03)
 
 > **2026-11-07 (C.2):** os 5 cartões do fluxo saíram do hub e foram pra aba **Agentes** (`/dashboard/agentes`, `AgentsPage.tsx`, item do menu logo abaixo do hub),
-> junto da **Fábrica 3D parada** (`marketingAi/factory/`, chunk à parte — ver [DECISIONS.md](DECISIONS.md#2026-11-07--aba-agentes--fábrica-3d-parada-c2)).
+> junto da **Fábrica 3D parada** (`marketingAi/factory/`, chunk à parte — ver [DECISIONS.md](historico/DECISIONS-2026-11-01-a-09.md#2026-11-07--aba-agentes--fábrica-3d-parada-c2)).
 > **2026-11-10:** cortina e cartões **saíram** da aba Agentes — o 3D abre direto e é a aba inteira (ver [DECISIONS.md](DECISIONS.md)). O parágrafo abaixo fica como histórico.
 >
-> **2026-11-07 (C.2.1 — mapa da fábrica):** a fábrica agora é uma **cortina** no topo da aba Agentes (`FactorySection.tsx` + `CurtainUi.tsx`): fechada = HTML/CSS, 5 luzes + frase do que precisa do dono, **sem three e sem laço de animação**; aberta = chunk `FactoryScene` (`sceneCore.ts` câmera livre/escada de desempenho, `stations.ts` estações, `robots.ts` 5 robôs, `conveyor.ts`) ou a versão leve 2D (`StationUi.tsx`, mesmo conteúdo do painel 3D). O que cada robô mostra vem de `robotState.ts` (mapa estado → pose, testado em `scripts/test-robot-state.mjs`): só `EXECUTING` (estação 4) vira "Trabalhando"; estados desconhecidos ficam desligados, nunca "Descansando". Ver [DECISIONS.md](DECISIONS.md#2026-11-07--fábrica-c21-cortina-câmera-livre-e-robôs-que-mostram-a-verdade).
+> **2026-11-07 (C.2.1 — mapa da fábrica):** a fábrica agora é uma **cortina** no topo da aba Agentes (`FactorySection.tsx` + `CurtainUi.tsx`): fechada = HTML/CSS, 5 luzes + frase do que precisa do dono, **sem three e sem laço de animação**; aberta = chunk `FactoryScene` (`sceneCore.ts` câmera livre/escada de desempenho, `stations.ts` estações, `robots.ts` 5 robôs, `conveyor.ts`) ou a versão leve 2D (`StationUi.tsx`, mesmo conteúdo do painel 3D). O que cada robô mostra vem de `robotState.ts` (mapa estado → pose, testado em `scripts/test-robot-state.mjs`): só `EXECUTING` (estação 4) vira "Trabalhando"; estados desconhecidos ficam desligados, nunca "Descansando". Ver [DECISIONS.md](historico/DECISIONS-2026-11-01-a-09.md#2026-11-07--fábrica-c21-cortina-câmera-livre-e-robôs-que-mostram-a-verdade).
 > No hub ficou só a linha "Sua equipe de agentes" (5 luzes 2D + "Ver agentes →"). O item 4 da lista abaixo ("os 5 cards do fluxo") vale hoje para a aba Agentes.
 
 **Hub, de cima pra baixo (Fase 1, 2026-11-03):** (1) cabeçalho; (2) **4 indicadores de decisão** (`DecisionKpis.tsx` + `useDecisionKpis.ts`;
@@ -872,4 +874,4 @@ tabelas existentes; sem dado, "Hermes ainda está analisando".
 
 
 ## Imóveis e disponibilidade (Fase 4, 2026-11-04)
-`supabase/functions/_shared/itemService.ts` é o serviço único: `listPickableItems` (fotos mínimas da ficha + disponível), `availabilityOf`, `revalidate` (status manual + link do portal, prazo de 8 s, cache de 1 h em `meta.availability.checked_at`), `rankItems` (rotação "menos usado em 21 dias") e `buildPickReason`/`saveItemPick` (motivo em `item_pick`). Ficha: `vertical_playbooks.config.availability {statuses, blocking, default, removed, labels}`. Trava de publicação em `agent-actions` `execute()`. Decisões em [DECISIONS.md](DECISIONS.md#2026-11-04--fase-4-imóveis-e-ativação-imóvel-indisponível-não-publica). Diverge do texto antigo "O motivo da escolha não é gravado": agora é, quando a peça é nova (peças antigas seguem "motivo não registrado").
+`supabase/functions/_shared/itemService.ts` é o serviço único: `listPickableItems` (fotos mínimas da ficha + disponível), `availabilityOf`, `revalidate` (status manual + link do portal, prazo de 8 s, cache de 1 h em `meta.availability.checked_at`), `rankItems` (rotação "menos usado em 21 dias") e `buildPickReason`/`saveItemPick` (motivo em `item_pick`). Ficha: `vertical_playbooks.config.availability {statuses, blocking, default, removed, labels}`. Trava de publicação em `agent-actions` `execute()`. Decisões em [DECISIONS.md](historico/DECISIONS-2026-11-01-a-09.md#2026-11-04--fase-4-imóveis-e-ativação-imóvel-indisponível-não-publica). Diverge do texto antigo "O motivo da escolha não é gravado": agora é, quando a peça é nova (peças antigas seguem "motivo não registrado").

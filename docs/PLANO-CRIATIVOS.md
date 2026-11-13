@@ -181,7 +181,7 @@ ao ar sem aprovação, teto de custo por cliente.
 
 ### PR A — qualidade do tour (feito no código em 2026-11-02; branch `claude/nifty-shannon-ysp818-tour`, ainda NÃO publicado)
 
-Decisões do dono em [DECISIONS.md](DECISIONS.md#2026-11-02--tour-virtual-pr-a-qualidade-do-tour). O que mudou no automático
+Decisões do dono em [DECISIONS.md](historico/DECISIONS-2026-11-01-a-09.md#2026-11-02--tour-virtual-pr-a-qualidade-do-tour). O que mudou no automático
 (`creative-generate` → `planWeekFromStrategy` / `runVideoSlot`):
 
 | Antes (conferido em 2026-10-21) | Agora |
@@ -791,7 +791,7 @@ Complementa as seções acima sem apagar nada (decisões em [DECISIONS.md](DECIS
 ## PR B — qualidade dos carrosséis (2026-11-02)
 
 Em código na branch `claude/nifty-shannon-ysp818-carrosseis` (sem deploy e sem migration aplicados). Decisões do dono em
-[DECISIONS.md](DECISIONS.md#2026-11-02--qualidade-dos-carrosséis-pr-b).
+[DECISIONS.md](historico/DECISIONS-2026-11-01-a-09.md#2026-11-02--qualidade-dos-carrosséis-pr-b).
 
 - **Trava de afirmação de mercado** (`_shared/claimLock.ts`): legenda, CTA, hashtags e todo campo de slide (título, texto,
   itens, destaque, botão), em `creative-generate` e `catalog-package`. Termos vêm da ficha (`opportunity_texts.market_claims`,
@@ -838,7 +838,7 @@ Em código na branch `claude/nifty-shannon-ysp818-carrosseis` (sem deploy e sem 
 
 ## Travas em código: tema repetido, número por extenso, frases de mercado (2026-11-02, branch `claude/nifty-shannon-ysp818-travas`)
 
-Decisões em [DECISIONS.md](DECISIONS.md#2026-11-02--travas-em-código-tema-repetido-número-por-extenso-frases-de-mercado-depois-do-relatório-da-tespon).
+Decisões em [DECISIONS.md](historico/DECISIONS-2026-11-01-a-09.md#2026-11-02--travas-em-código-tema-repetido-número-por-extenso-frases-de-mercado-depois-do-relatório-da-tespon).
 Código **não publicado** (functions `creative-generate` e `catalog-package`) e migration **não aplicada** até o dono mandar.
 
 | Pedido | Já era coberto? | O que mudou / onde |

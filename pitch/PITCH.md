@@ -13,6 +13,11 @@
 >   - tour do imóvel inteiro como produto principal (13/11).
 > - **Reescrita:** o pitch precisa ser reescrito com o dono. Item **D7** em [PENDENCIAS.md](../docs/PENDENCIAS.md).
 > - **O texto abaixo fica como histórico.** Não usar com cliente sem a revisão.
+> - **Decisões de 13/11 que a reescrita precisa seguir:**
+>   - **posicionamento comercial:** "Technology Partner for Real Estate";
+>   - **anúncios pagos / impulsionar estão fora do modelo:** o passo 2 do pitch ("Ativação nos melhores conteúdos… vira campanha") e o plano Pro com Meta Ads **não valem mais**;
+>   - **Boosts em aberto;**
+>   - **mercado:** Brasil agora.
 
 ## Versão de trabalho (PT) — 02/11, histórico
 
