@@ -42,7 +42,8 @@ export default function AgentsPage() {
         <p style={{ color: MUTED, fontSize: '13px', margin: 0 }}>{t.sub}</p>
       </div>
       <div style={{ padding: narrow ? '12px 14px 24px' : '18px 32px 28px' }}>
-        <FactorySection lang={lang} stations={stations} selected={selected} onSelect={setSelected} onOpen={open} sheet={narrow} />
+        {/* Clique no robô abre o agente direto, sem o painel intermediário (dono, 13/11). O painel (StationPanel) continua no código. */}
+        <FactorySection lang={lang} stations={stations} selected={selected} onSelect={k => (k ? open(k) : setSelected(null))} onOpen={open} sheet={narrow} />
       </div>
     </div>
   )

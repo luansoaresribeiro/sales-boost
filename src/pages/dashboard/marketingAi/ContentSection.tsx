@@ -63,9 +63,10 @@ export default function ContentSection({ company }: { company: Company }) {
   const tx = TX[lang]
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab')
-  // Aba "Campanha" (anúncios) fora do menu (dono, 2026-11-13: anúncio pago fora do modelo) — escondida, código mantido.
-  // Link antigo ?tab=campanha cai no Conteúdo; ?tab=campanha&sub=saude continua abrindo a Saúde da Meta (conexão, não anúncio).
-  const metaHealth = tab === 'campanha' && params.get('sub') === 'saude'
+  // Campanha (dono, 13/11 noite): saiu das abas daqui e virou item próprio no menu da esquerda (grupo Pro). O item abre
+  // ?tab=campanha, que mostra só a Campanha (campanha ideal, anúncios e Saúde da Meta), sem as abas Conteúdo/Conversas.
+  // (Histórico: de manhã a aba tinha sido escondida porque anúncio pago estava fora do modelo; o dono reverteu à noite.)
+  const campaignOnly = tab === 'campanha'
   const [top, setTop] = useState<Top>(tab === 'conversas' ? 'conversas' : 'conteudo')
   const [contentSub, setContentSub] = useState<ContentSub>('calendario')
 
@@ -77,6 +78,8 @@ export default function ContentSection({ company }: { company: Company }) {
     setParams(next, { replace: true })
   }
 
+  if (campaignOnly) return <CampanhaPanel company={company} />
+
   return (
     <div>
       <div style={{ display: 'inline-flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', marginBottom: '22px', flexWrap: 'wrap' }}>
@@ -85,7 +88,7 @@ export default function ContentSection({ company }: { company: Company }) {
         ))}
       </div>
 
-      {metaHealth ? <MetaHealthTab company={company} /> : top === 'campanha' ? <CampanhaPanel company={company} /> : top === 'conversas' ? <ConversasPanel company={company} /> : (
+      {top === 'campanha' ? <CampanhaPanel company={company} /> : top === 'conversas' ? <ConversasPanel company={company} /> : (
         <div>
           <SubTabs items={(['calendario', 'padrao'] as const).map(k => [k, ...tx.content[k]] as const)} active={contentSub} onPick={setContentSub} />
           {contentSub === 'calendario' ? (

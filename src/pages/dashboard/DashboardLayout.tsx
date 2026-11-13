@@ -45,10 +45,6 @@ function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: bool
         // Aba Agentes (C.2, 2026-11-07): fábrica 3D + os 5 cartões dos agentes.
         to: '/dashboard/agentes', label: T.layout.nav.agents,
         icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><circle cx="6" cy="7" r="2.2" /><circle cx="18" cy="7" r="2.2" /><circle cx="12" cy="18" r="2.2" /><path d="M8.2 7h7.6M7.2 9l3.8 7M16.8 9 13 16" /></svg>,
-      }, {
-        // Tour virtual (2026-11-10, pedido do dono): tour completo do imóvel, fora do plano da semana.
-        to: '/dashboard/tour-virtual', label: T.layout.nav.tour,
-        icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>,
       }, ...(catalogLabel ? [{
         // Aba do catálogo (07/11): mesma página do "+" → Adicionar item. Rótulo vem da ficha do setor (vocabulary.catalog).
         to: CATALOG_PATH, label: catalogLabel,
@@ -56,9 +52,18 @@ function makeNavSections(T: typeof d[keyof typeof d], flags: { agentesMenu: bool
       }] : [])],
     }] : []),
     // Oportunidades saiu do menu (2026-11-01, pedido do dono): já é o card 2 do fluxo do Marketing AI.
+    // Grupo Pro (dono, 13/11 noite): Tour virtual, Campanha e Business Progress, cada um separado.
     {
-      section: T.layout.sections.progress, accent: true,
-      items: [{
+      section: T.layout.sections.pro, accent: true,
+      items: [...(flags.marketingAi ? [{
+        // Tour virtual (2026-11-10, pedido do dono): tour completo do imóvel, fora do plano da semana.
+        to: '/dashboard/tour-virtual', label: T.layout.nav.tour,
+        icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
+      }, {
+        // Campanha (dono, 13/11 noite): sai de dentro do agente de conteúdo e vira item próprio no grupo Pro.
+        to: '/dashboard/marketing-ai/content?tab=campanha', label: T.layout.nav.campaign,
+        icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 1 1 0-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 0 1-1.44-4.282m3.102.069a18.03 18.03 0 0 1-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 0 1 8.835 2.535M10.34 6.66a23.847 23.847 0 0 0 8.835-2.535m0 0A23.74 23.74 0 0 0 18.795 3m.38 1.125a23.91 23.91 0 0 1 1.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 0 0 1.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 0 1 0 3.46" /></svg>,
+      }] : []), {
         to: '/dashboard/progresso', label: T.layout.nav.progress,
         icon: <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, ...iconStroke }}><path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>,
       }],

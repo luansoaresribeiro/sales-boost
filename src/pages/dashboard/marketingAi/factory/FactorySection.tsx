@@ -21,11 +21,11 @@ const TX = {
   pt: { title: 'Fábrica dos agentes', loading: 'Carregando a fábrica…', home: 'Visão inicial', lite: 'Versão leve', try3d: 'tentar o 3D mesmo assim',
     liteAuto: 'Mostrando a versão leve neste aparelho.', weak: 'Este aparelho parece fraco para o 3D — mostrando a versão leve.', failed: 'Não foi possível abrir o 3D — mostrando a versão leve.', lowQ: 'Qualidade reduzida neste aparelho.',
     frozen: 'Os robôs pararam neste aparelho (a pose ainda mostra o estado real).', calm: 'Movimento reduzido: robôs parados (a pose ainda mostra o estado real).',
-    hint: 'Toque num robô para ver o que ele está fazendo.' },
+    hint: 'Toque num robô para abrir o agente.' },
   en: { title: 'Agent factory', loading: 'Loading the factory…', home: 'Reset view', lite: 'Light version', try3d: 'try 3D anyway',
     liteAuto: 'Showing the light version on this device.', weak: 'This device looks too weak for 3D — showing the light version.', failed: 'Could not open the 3D view — showing the light version.', lowQ: 'Reduced quality on this device.',
     frozen: 'Robots stopped on this device (their pose still shows the real state).', calm: 'Reduced motion: robots are still (their pose still shows the real state).',
-    hint: 'Tap a robot to see what it is doing.' },
+    hint: 'Tap a robot to open its agent.' },
 } as const
 
 const readPref = (): string | null => { try { return localStorage.getItem(PREF_KEY) } catch { return null } }
