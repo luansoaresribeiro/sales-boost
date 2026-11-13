@@ -1149,6 +1149,11 @@ async function resolveContentPlan(admin: SupaClient, company: Company, stratRow:
 // dias, não faz nada (o cron de domingo cobre a semana seguinte). Mesmas travas do cron de domingo: acesso pago,
 // interruptor auto_weekly_calendar=false desliga, e só planeja quem ligou ou pagou. Teto de vídeo: o plan_slot do
 // item_video já confere (item-videos, teto de US$ 40).
+// Stories não contam como post do dia (dono, 2026-11-13): os formatos de stories vêm da ficha (surface 'stories').
+async function storiesFormats(admin: SupaClient, company: Company): Promise<string[]> {
+  try { return (await fetchFormatCatalog(admin, company.vertical_key ?? 'generico', company.id)).filter(f => f.surface === 'stories').map(f => f.key) } catch { return [] }
+}
+
 async function planRestOfWeek(admin: SupaClient, companyId: string): Promise<{ planned: number; skipped?: string }> {
   const { data: companyRow } = await admin.from('companies').select(COMPANY_SELECT).eq('id', companyId).maybeSingle()
   const company = companyRow as Company | null
@@ -1166,7 +1171,7 @@ async function planRestOfWeek(admin: SupaClient, companyId: string): Promise<{ p
   const { data: stratRow } = await admin.from('marketing_ai_strategies').select('content_plan, funnel_plan').eq('company_id', company.id).eq('kind', 'main').eq('status', 'active').order('updated_at', { ascending: false }).limit(1).maybeSingle()
   const { contentPlan, funnelPlan, ssPillars } = await resolveContentPlan(admin, company, stratRow as { content_plan?: unknown; funnel_plan?: unknown } | null)
   // Espalha o mix pelos 7 dias da semana de segunda a domingo (mesma conta da tela) e fica só com os que faltam.
-  const slots = weekSlots(contentPlan, week).filter(sl => remaining.includes(sl.date))
+  const slots = weekSlots(contentPlan, week, { excludeFormats: await storiesFormats(admin, company) }).filter(sl => remaining.includes(sl.date))
   if (!slots.length) return { planned: 0, skipped: 'estratégia sem mix semanal' }
   const r = await planWeekFromStrategy(admin, company, slots, contentPlan!, funnelPlan, ssPillars)
   return { planned: r.planned }
@@ -1229,7 +1234,7 @@ async function planWeekForCompany(admin: SupaClient, anthropicKey: string, compa
   // Estratégia com mix semanal → o calendário é o plano dela, dia a dia
   // (weekSlots), sem a IA decidir cadência. Sem estratégia, vale o
   // planejamento antigo abaixo.
-  const slots = weekSlots(contentPlan, dates.map(d => d.iso))
+  const slots = weekSlots(contentPlan, dates.map(d => d.iso), { excludeFormats: await storiesFormats(admin, company) })
   if (slots.length) return await planWeekFromStrategy(admin, company, slots, contentPlan!, funnelPlan, ssPillars)
   const insights = (insRows ?? []) as { pillar: string; title: string; description: string }[]
   const pendingCount = (pendingRows ?? []).length
@@ -1237,7 +1242,7 @@ async function planWeekForCompany(admin: SupaClient, anthropicKey: string, compa
   const prompt = `Você é o planejador de conteúdo semanal de "${company.business_name}" (${company.business_type ?? 'negócio'} em ${company.city ?? 'Brasil'}).
 ${company.business_description ? `O que o negócio faz: ${company.business_description}.` : ''}${playbookBlock}${pillarOccupancyNote}
 
-Monte a CADÊNCIA da PRÓXIMA semana inteira: pra CADA um dos 7 dias, decida entre 1 ou 2 posts orgânicos (nunca 0 — todo dia tem pelo menos 1; nunca mais que 2).${mix.auto.length ? ` A estratégia ativa pede ${mix.autoTotal} peça(s) geradas nesta semana — faça a soma dos 7 dias chegar o mais perto possível disso.` : ''} Não escolha o tema/ideia aqui — só a cadência (isso é decidido depois, peça por peça, pelo Diretor Criativo). Considere que ${pendingCount} peça(s) recente(s) ainda nem foram avaliadas — se já tem bastante coisa parada, prefira 1 post nos dias mais fracos em vez de 2.
+Monte a CADÊNCIA da PRÓXIMA semana inteira: EXATAMENTE 1 post orgânico por dia, nos 7 dias (regra do dono, 2026-11-13).${mix.auto.length ? ` A estratégia ativa pede ${mix.autoTotal} peça(s) geradas nesta semana — faça a soma dos 7 dias chegar o mais perto possível disso.` : ''} Não escolha o tema/ideia aqui — só a cadência (isso é decidido depois, peça por peça, pelo Diretor Criativo). Considere que ${pendingCount} peça(s) recente(s) ainda nem foram avaliadas — se já tem bastante coisa parada, prefira 1 post nos dias mais fracos em vez de 2.
 ${insights.length ? `\nInsights abertos (ajudam a priorizar QUAIS dias merecem 2 posts):\n${insights.map(i => `- [${i.pillar}] ${i.title}: ${i.description}`).join('\n')}` : ''}
 
 Dias (use EXATAMENTE estas datas, uma linha por dia, na mesma ordem):
@@ -1252,7 +1257,7 @@ Retorne APENAS um JSON array, um item por dia, nesta ordem (sempre os 7 dias):
   let planned = 0, slot = 0
   const days: { date: string; posts: number; note: string }[] = []
   for (const p of parsedPlan) {
-    const postsCount = p.posts === 2 ? 2 : 1
+    const postsCount = 1   // exatamente 1 por dia (dono, 2026-11-13), mesmo que a IA responda 2
     const date = p.date && /^\d{4}-\d{2}-\d{2}$/.test(p.date) ? p.date : dates[0].iso
     let ok = 0
     for (let i = 0; i < postsCount; i++) {
@@ -1342,10 +1347,6 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
   }
 
   const todo = new Map<string, { format: string; name: string; per_week: number; purpose: string }>()
-  const addTodo = (s: { format: string; name: string; purpose: string }) => {
-    const cur = todo.get(s.format)
-    todo.set(s.format, { format: s.format, name: s.name, per_week: (cur?.per_week ?? 0) + 1, purpose: s.purpose })
-  }
   for (const m of plan.weekly_mix ?? []) if (m.producer === 'dm') todo.set(m.format, { format: m.format, name: m.name, per_week: m.per_week, purpose: m.purpose })
 
   const jobs: SlotJob[] = []
@@ -1353,6 +1354,17 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
     familia: slot.familia, pilar_ss: slot.pilar_ss, tema: slot.tema,
     intent: buildSlotIntent({ format: slot.format, pilar_ss: slot.pilar_ss }, plan, funnelPlan, ssPillars),
   })
+  // Faltou material para a vaga (sem imóvel livre, receita bloqueada pelo rodízio): o dia NÃO fica vazio (dono, 2026-11-13) —
+  // vira um post que não depende de imóvel, girando entre os do mix; sem nenhum no mix, o carrossel padrão da ficha (apelido).
+  const mixPosts = (plan.weekly_mix ?? []).filter(m => m.producer === 'post')
+  let fillerTurn = 0
+  const pushFiller = (slot: ReturnType<typeof weekSlots>[number]) => {
+    const m = mixPosts.length ? mixPosts[fillerTurn++ % mixPosts.length] : null
+    const wanted = resolveAlias(m?.format ?? DECK_FORMAT, aliases)
+    const format = formats.some(f => f.key === wanted) ? wanted : resolveAlias(DECK_FORMAT, aliases)
+    jobs.push({ date: slot.date, producer: 'post', name: m?.name ?? slot.name, pillar: m?.pillar ?? slot.pillar, purpose: m?.purpose ?? slot.purpose, format,
+      ...labelsOf(m ? { ...slot, format: m.format, familia: m.familia, pilar_ss: m.pilar_ss, tema: m.tema } : slot) })
+  }
   for (const slot of slots) {
     const recipe = slot.producer === 'item_package' ? recipeOf.get(slot.format) : slot.producer === 'item_video' ? VIDEO_RECIPE : undefined
     if (alreadyFilled(slot.date, recipe, slot.producer)) continue
@@ -1366,7 +1378,7 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
     }
     if (slot.producer === 'item_video') {
       const picked = pickItem(videoItems)
-      if (!picked) { addTodo(slot); continue }
+      if (!picked) { pushFiller(slot); continue }
       videoItems.add(picked.id)
       jobs.push({ date: slot.date, producer: 'item_video', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, format: slot.format, recipe: VIDEO_RECIPE, item_id: picked.id, item_pick: picked.pick, ...labelsOf(slot) })
       continue
@@ -1374,7 +1386,7 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
     // Oferta: o MESMO imóvel não repete a mesma receita antes de N semanas (ficha) nem 2x na semana (código; ângulo = receita).
     const recipeKey = recipe ? String(recipe) : ''
     const picked = recipeKey ? pickItem(new Set(itemIds.filter(i => recipeBlocked(pkgHistory, i, recipeKey, slot.date, themeCfg.cooldownWeeks))), true) : null
-    if (!recipe || !picked) { addTodo(slot); continue }
+    if (!recipe || !picked) { pushFiller(slot); continue }
     pkgHistory.push({ item_id: picked.id, recipe: recipeKey, date: slot.date })
     jobs.push({ date: slot.date, producer: 'item_package', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe, item_id: picked.id, item_pick: picked.pick, ...labelsOf(slot) })
   }
