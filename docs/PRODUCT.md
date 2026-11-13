@@ -21,7 +21,7 @@
   - **tour virtual pago**: US$ 15 por tour é **hipótese**, e um imóvel grande custa ~US$ 14 (estimado);
   - **lead qualificado**: sem preço até haver definição e medição ([CONVERSION.md](CONVERSION.md));
   - **Boosts: em aberto.** Não confundir com o preço do tour; a unidade comercial é validada nas conversas;
-  - **anúncios pagos (impulsionar publicação): fora do modelo atual.**
+  - **anúncios pagos:** voltaram à plataforma como **Campanha** (grupo Pro do menu, 13/11 noite); se entram no preço está em aberto. Criar ou impulsionar anúncio pelo Sales Boost ainda não existe (só leitura do Meta Ads).
 - **Prioridade:**
   - **estratégica:** construir o sistema de inteligência e geração de demanda;
   - **validação comercial:** sem prazo e sem bloquear trabalho técnico; bloqueia só preço do tour, Boosts, preço de lead e Fase 4 (13/11, tarde);
@@ -37,7 +37,7 @@
   - **Agente de conteúdo:** só com foto; cuida só dos posts e da estratégia editorial. **Regra nova (13/11): exatamente 1 post por dia** no plano automático (ainda não implementada, item C1). O tour é um **produto à parte**. Um tour pronto ou um cômodo mobiliado pode virar **post extra**, com aprovação (D8, 13/11).
   - **Aprovação humana** antes de publicar; CRECI obrigatório para publicar.
 - **Ainda não existe (não prometer):** tour do imóvel inteiro, agendamento de visita, lead "qualificado", cobrança
-  por tour ou por lead, Boosts, anúncio pago, avatar, mobiliamento em vídeo.
+  por tour ou por lead, Boosts, **criar ou impulsionar anúncio** pelo Sales Boost, avatar, mobiliamento em vídeo.
 
 ## Verticalização (regra central)
 
