@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { scanInstagram, fetchThumbs, contentFacts, type IgSignals } from './igSignals.ts'
 import { auditLead, computeLeadScore, contentFlags, type ScoringWeights, type WeakPresence } from './audit.ts'
 import { buildSearches, runBatch, SCAN_BUDGET_MS, MAX_CHAIN, type ScanQueue, type CandidateTask, type ProcessResult } from './scan.ts'
+import { tgFetch } from '../_shared/telegramSwitch.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -140,7 +141,7 @@ const DEFAULT_WEIGHTS: ScoringWeights = {
 
 async function sendOwnerAlert(botToken: string, chatId: string, text: string): Promise<void> {
   try {
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    await tgFetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text }),
     })

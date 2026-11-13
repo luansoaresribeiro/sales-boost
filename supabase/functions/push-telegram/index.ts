@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { tgFetch } from '../_shared/telegramSwitch.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -36,7 +37,7 @@ Deno.serve(async (req) => {
     const token = Deno.env.get('TELEGRAM_BOT_TOKEN')
     if (!token) return json({ ok: false, error: 'Bot not configured' })
 
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const res = await tgFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ chat_id: Number(company.telegram_chat_id), text }),

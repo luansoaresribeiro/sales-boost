@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { tgFetch } from '../_shared/telegramSwitch.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -206,7 +207,7 @@ Deno.serve(async (req) => {
       const notice = companies?.length
         ? 'Este Telegram está ligado a mais de uma empresa e eu não sei de qual responder. Gere um código novo em https://getsaleboost.com/dashboard/settings (logado na empresa que você quer usar) e mande /conectar CÓDIGO aqui — a conexão antiga é desligada sozinha.'
         : 'Para usar o chat, primeiro conecte sua conta com /conectar CÓDIGO.\nGere seu código em: https://getsaleboost.com/dashboard/settings'
-      const res = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+      const res = await tgFetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id, text: notice }),
@@ -315,7 +316,7 @@ Deno.serve(async (req) => {
       ])
     }
 
-    const sendMessageRes = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+    const sendMessageRes = await tgFetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chat_id, text: reply }),
