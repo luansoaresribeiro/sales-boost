@@ -22,6 +22,11 @@ const BUSINESS_TYPE_LABEL_EN: Record<string, string> = {
   'Imobiliárias': 'Real estate agencies',
   'Corretores de imóveis': 'Real estate agents',
   'Aluguel por temporada (Airbnb)': 'Short-term rentals (Airbnb)',
+  // Rótulos atuais da tabela business_types (conferido em 16/11).
+  'Imobiliária': 'Real estate agency',
+  'Corretor(a) de imóveis': 'Real estate agent',
+  'Airbnb / Aluguel por temporada': 'Airbnb / Short-term rental',
+  'Outro (especifique)': 'Other (specify)',
   'Restaurante / Food': 'Restaurant / Food',
   'Varejo / E-commerce': 'Retail / E-commerce',
   'Serviços': 'Services',

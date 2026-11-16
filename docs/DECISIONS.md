@@ -17,7 +17,7 @@
 | Posicionamento comercial | "Technology Partner for Real Estate", só no site e no pitch. Não substitui a definição operacional. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Slogan | "Sales Boost — gerando mais visitas para o seu imóvel". Nunca prometer visita garantida. | [10/11](#2026-11-10--slogan-gerando-mais-visitas-e-aviso-de-visita-no-telegram-dono) |
 | Mercado | **Brasil agora** (principalmente o Rio de Janeiro, em português). EUA depois, só com a revisão jurídica. A ficha dos EUA fica sem comercialização. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) · substitui [27/10](historico/DECISIONS-2026-09-a-10.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro) |
-| Idioma | O setor define o idioma: `imoveis_rio` = português. Idioma ≠ país ≠ regras. | [02/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-02--idioma-pelo-setor-a-ficha-diz-o-idioma-padrão) · [07/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-07--plataforma-internacional-idioma--país--regras-dono) |
+| Idioma | O setor define o idioma: `imoveis_rio` = português. Idioma ≠ país ≠ regras. **Toda tela tem a troca PT/EN** (16/11): diagnóstico, cadastro, entrada, páginas legais e painel. Texto novo nasce nos dois idiomas, inclusive na ficha. | [16/11](#2026-11-16--aprovações-do-dono-tradução-pten-em-todas-as-telas-a3-avisada) · [02/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-02--idioma-pelo-setor-a-ficha-diz-o-idioma-padrão) · [07/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-07--plataforma-internacional-idioma--país--regras-dono) |
 | Modelo de negócio | **Em validação:** plataforma grátis + tour pago + lead qualificado. **Nenhum preço decidido.** | [10/11](#2026-11-10--novo-modelo-cenários-de-tour-lead-sem-preço-e-portões-da-fase-4-dono) · [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Preço do tour | **Hipótese** de US$ 15 por tour, não é decisão. Um imóvel grande custa ~US$ 14 (estimado). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Lead | Sem preço até haver definição e medição. Especificação v2 em [CONVERSION.md](CONVERSION.md). | [10/11](#2026-11-10--novo-modelo-cenários-de-tour-lead-sem-preço-e-portões-da-fase-4-dono) |
@@ -39,6 +39,20 @@
 | Jornada do cliente | O cliente é **guiado desde a 1ª entrada**. O upsell é **contextual**: aparece quando o cliente acabou de ver valor, só com dado real, e leva ao Pro com a função certa aberta. Conteúdo descobre o imóvel que interessa; o tour aprofunda esse imóvel até a visita. Código só depois de o dono aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md), 1 PR por item. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Liga dos Sonhos | Nunca tocar, nem ler. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-16 — Aprovações do dono; tradução PT/EN em todas as telas; A3 avisada
+
+- **Palavras do dono:** "preciso que você garanta que no diagnóstico a gente também tem a opção de traduzir para o
+  inglês… A gente precisa garantir que em tudo tem a opção de tradução para inglês e português."
+  - **Regra nova:** toda tela tem a troca PT/EN, e texto novo nasce nos dois idiomas (inclusive o da ficha).
+  - **Feito:** botão PT/EN nas páginas sem a troca (diagnóstico, entrada, cadastro, senha, páginas legais, página
+    pública do imóvel); inglês nas 193 frases do diagnóstico que só tinham português (ficha `imoveis_rio`); tipos de
+    negócio traduzidos.
+  - **Fica igual:** o resultado do diagnóstico é escrito pelo servidor no idioma da conta; traduzir isso é outro item.
+- **Aprovações ("pode"):**
+  - #175 (decisões de 13/11 à noite) e #176 (jornada do cliente, **J0 aprovado**) juntados;
+  - #171 (**catálogo editorial, C2 aprovado**) juntado. As 4 perguntas do fim do catálogo continuam sem resposta.
+- **D5:** "Avisar a A3 que o Telegram foi desligado — feito" (o dono avisou).
 
 ## 2026-11-13 (noite, 3) — Jornada do cliente: custo do grátis, onboarding guiado, upsell contextual e menu Pro
 

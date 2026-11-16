@@ -11,6 +11,7 @@ import { useAuth } from './contexts/AuthContext.tsx'
 import { CompanyProvider, useCompany } from './contexts/CompanyContext.tsx'
 import { isShowcaseMode } from './lib/setupGate.ts'
 import CookieConsent from './components/CookieConsent.tsx'
+import FloatingLangSwitch from './components/FloatingLangSwitch.tsx'
 import BrandLoader from './components/BrandLoader.tsx'
 import { lazyPage } from './lib/lazyPage.ts'
 
@@ -218,6 +219,7 @@ createRoot(document.getElementById('root')!).render(
       <AuthProvider>
         <CompanyProvider>
           <SafeRoutes />
+          <FloatingLangSwitch />
           <CookieConsent />
         </CompanyProvider>
       </AuthProvider>
