@@ -50,6 +50,7 @@ import { roomOf, tourOrderCfgFrom, tourRoomLabels, tourSegments, withOutsideFirs
 import { blocks, checkPassages } from '../_shared/passageCheck.ts'
 import { studioReady } from '../_shared/tourEngine.ts'
 import { chooseTour, fetchTourCfg, planTours, previousCaptions, type TourPlan } from '../_shared/tourSlot.ts'
+import { fetchRetry, mapLimit } from '../_shared/rateLimitRetry.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -202,7 +203,7 @@ async function scoreTestContent(companyId: string, testId: string): Promise<bool
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   if (!supabaseUrl || !serviceKey) return false
-  const res = await fetch(`${supabaseUrl}/functions/v1/content-test`, {
+  const res = await fetchRetry(`${supabaseUrl}/functions/v1/content-test`, {
     method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'score', test_id: testId, company_id: companyId }),
   })
@@ -216,7 +217,7 @@ const AUTO_REDO_MAX_ELAPSED_MS = 100_000
 async function autoRedoOnce(companyId: string, testId: string): Promise<boolean> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL'), serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   if (!supabaseUrl || !serviceKey) return false
-  const res = await fetch(`${supabaseUrl}/functions/v1/content-test`, {
+  const res = await fetchRetry(`${supabaseUrl}/functions/v1/content-test`, {
     method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'regenerate', auto: true, test_id: testId, company_id: companyId }),
   })
@@ -450,7 +451,7 @@ async function renderGraphicCardFull(
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (auth.isCron && auth.cronSecret) { body.cron_secret = auth.cronSecret; body.company_id = companyId }
     else headers.Authorization = auth.bearer
-    const res = await fetch(`${supabaseUrl}/functions/v1/render-format`, { method: 'POST', headers, body: JSON.stringify(body) })
+    const res = await fetchRetry(`${supabaseUrl}/functions/v1/render-format`, { method: 'POST', headers, body: JSON.stringify(body) })
     const data = await res.json().catch(() => ({})) as { url?: string; overflow?: boolean }
     return res.ok && data.url ? { url: data.url, overflow: data.overflow === true } : null
   } catch (e) { console.error('renderGraphicCard error:', e); return null }
@@ -943,7 +944,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
         handle, name: company.business_name, page: String(i + 1), total: String(deckSlides.length),
       }, cardBrand, undefined, sl.layout === 'capa' ? coverPhoto?.url : sl.layout === 'fecho' ? closerPhoto?.url : null)
       const warnings: string[] = []
-      const done = await Promise.all(deckSlides.map(async (sl, i) => {
+      const done = await mapLimit(deckSlides, 2, async (sl, i) => {   // no máximo 2 slides ao mesmo tempo (limite de chamadas, C1 16/11)
         let cur = sl, r = await renderSlide(cur, i)
         const bad = inventedNumbers(cur, allowed)
         if (r?.overflow || bad.length) {
@@ -963,7 +964,7 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
         const still = inventedNumbers(cur, allowed)
         if (still.length) warnings.push(`slide ${i + 1} tem número que não veio dos dados cadastrados (${still.join(', ')}) — confira antes de aprovar`)
         return { cur, url: r?.url ?? null }
-      }))
+      })
       // `slides` e `media` ficam iguais: slide que não virou imagem sai dos dois (e o dono é avisado).
       const drawn = done.filter(d => d.url)
       if (drawn.length < done.length) warnings.push(drawn.length < 2 ? `só ${drawn.length} de ${done.length} slides foi desenhado, então a peça não vira carrossel` : `${done.length - drawn.length} de ${done.length} slides não foram desenhados e saíram do carrossel`)
@@ -1424,10 +1425,15 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
   const perDay = new Map<string, number>()
   let planned = 0
   if (cronSecret) {
-    const accepted = await Promise.all(jobs.map(async job => {
+    // Vagas espaçadas (C1, 16/11): todas juntas estouravam o limite de chamadas do Supabase e as peças saíam sem imagem.
+    // Cada vaga também leva um trace próprio, pra não dividir o mesmo limite com as outras vagas da rodada.
+    const DISPATCH_GAP_MS = 2_500
+    const accepted = await Promise.all(jobs.map(async (job, idx) => {
       try {
-        const res = await fetch(`${supabaseUrl}/functions/v1/creative-generate`, {
-          method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        if (idx) await new Promise(r => setTimeout(r, idx * DISPATCH_GAP_MS))
+        const traceparent = `00-${crypto.randomUUID().replaceAll('-', '')}-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}-01`
+        const res = await fetchRetry(`${supabaseUrl}/functions/v1/creative-generate`, {
+          method: 'POST', headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json', traceparent },
           body: JSON.stringify({ action: 'plan_slot', cron_secret: cronSecret, company_id: company.id, slot: job }),
           signal: AbortSignal.timeout(20_000),
         })
