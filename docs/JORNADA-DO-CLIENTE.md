@@ -1,6 +1,6 @@
 # Jornada do cliente — custo do grátis, onboarding guiado, upsell contextual e telas
 
-> **Status:** proposta para o dono aprovar (J0 da [PENDENCIAS](PENDENCIAS.md)). **Nada aqui foi implementado.** Depois da
+> **Status:** **aprovado pelo dono em 16/11** (J0), com as respostas da seção 5. O código entra em 1 PR por item. Depois da
 > aprovação, o código entra em **1 PR por item**, na ordem da seção 6.
 > **Decisões de origem:** [DECISIONS — 13/11 (noite, 3)](DECISIONS.md#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro).
 > **Levantamento:** feito em 16/11, só leitura e sem gasto. Liga dos Sonhos fora. Os números vêm do banco, e cada um diz
@@ -314,13 +314,13 @@ Configurações
 
 | # | Decisão | Por que precisa | Alternativas (custo e prazo) | Minha recomendação |
 |---|---|---|---|---|
-| J-a | Aprovar este documento | O código só começa com a aprovação | — | Aprovar e começar pelo J1 |
-| J-b | O que é "conta parada"? | Define quando a semana pausa | (1) não abriu nem aprovou em 7 dias; (2) em 14 dias. Ambos US$ 0, 1 PR | **(1) 7 dias**, como no pedido |
-| J-c | Pausar também as notícias do mercado na conta parada? | É o maior gasto parado | Sim (economiza ~US$ 0,5–0,8/mês por conta parada, estimado) · Não | **Sim**, buscando na hora da volta |
-| J-d | Avisos de plano antigos (preço em R$, cupom, teste de 7 dias): esconder? | Contradizem "plataforma grátis" e mostram preço não decidido | Esconder sem apagar (US$ 0, 1 PR) · Manter | **Esconder**, no J2 |
-| J-e | Quais funções "em breve" entram no Pro | A lista do Pro é do dono | Criativos de anúncio, Avatar do corretor, outra | O dono decide; eu só mostro o que ele listar |
-| J-f | Conta de teste nova para a auditoria da 1ª entrada | O cadastro pode gastar IA | Usar US$ 0,30–0,60 (estimado) da verba de conteúdo · Não criar | Criar no J3, dentro da verba de conteúdo |
-| J-g | Avisar a A3 que o Telegram foi desligado (D5) | Ela recebia avisos lá | O dono envia o texto | Enviar antes do J2 |
+| J-a | Aprovar este documento | O código só começa com a aprovação | — | ✅ aprovado (16/11) |
+| J-b | O que é "conta parada"? | Define quando a semana pausa | (1) não abriu nem aprovou em 7 dias; (2) em 14 dias. Ambos US$ 0, 1 PR | ✅ **7 dias** sem abrir nem aprovar nada (16/11) |
+| J-c | Pausar também as notícias do mercado na conta parada? | É o maior gasto parado | Sim (economiza ~US$ 0,5–0,8/mês por conta parada, estimado) · Não | ✅ **sim**, pausar as notícias enquanto a conta estiver parada (16/11) |
+| J-d | Avisos de plano antigos (preço em R$, cupom, teste de 7 dias): esconder? | Contradizem "plataforma grátis" e mostram preço não decidido | Esconder sem apagar (US$ 0, 1 PR) · Manter | ✅ **esconder**, sem apagar (16/11) |
+| J-e | Quais funções "em breve" entram no Pro | A lista do Pro é do dono | Criativos de anúncio, Avatar do corretor, outra | ✅ **Criativos de anúncio e Avatar do corretor** (16/11) |
+| J-f | Conta de teste nova para a auditoria da 1ª entrada | O cadastro pode gastar IA | Usar US$ 0,30–0,60 (estimado) da verba de conteúdo · Não criar | ✅ **sim**, criar a conta nova, até US$ 0,60 (16/11) |
+| J-g | Avisar a A3 que o Telegram foi desligado (D5) | Ela recebia avisos lá | O dono envia o texto | ✅ feito: o dono avisou a A3 (16/11) |
 
 ---
 
