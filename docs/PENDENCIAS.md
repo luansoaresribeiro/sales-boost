@@ -17,6 +17,7 @@
 - **Frentes abertas** ([decisão 13/11, tarde](DECISIONS.md#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo)):
   - **Frente 1 — Tour do imóvel inteiro;**
   - **Frente de conteúdo**, em paralelo.
+- **Jornada do cliente** ([decisão 13/11 noite, 3](DECISIONS.md#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro)): **J0 (documento) espera a aprovação do dono.** O código (J1–J5) só começa depois.
 - **Próximo item do agente:**
   - **Frente de conteúdo:** C1 em 🧪 (#170; falta conferir a semana de domingo 16/11). **C2 (catálogo, #171) espera o dono.** Depois: C5 (tour/mobiliado como post extra).
   - **Frente 1:** **1.1 — Ambientes físicos**, com a Tespon e dentro da verba D4.
@@ -29,6 +30,7 @@
   - **DA:** anúncio pago entra no modelo e no preço?
   - **A3:** avisar que o Telegram foi desligado (texto pronto na conversa).
   - **C2:** aprovar o catálogo editorial (#171).
+  - **J0:** aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md) e responder às perguntas da seção 5 dele.
 - **Gasto acumulado:**
 
   | Verba | Gasto até agora |
@@ -76,6 +78,20 @@
 | V3 | Consolidar as fichas em [relatorios/](relatorios/) (sem inventar número) | Agente | ⏸ |
 | V4 | Revisão dos 3 portões da Fase 4 | Dono + Agente | ⏸ |
 
+## Jornada do cliente (dono, 13/11; registrada em 16/11) — documento primeiro, código só depois da aprovação
+
+> Detalhe, custo, risco e como desfazer de cada item: [JORNADA-DO-CLIENTE.md](JORNADA-DO-CLIENTE.md). 1 PR por item, nesta
+> ordem. Cada PR com prints do celular e do desktop, só dado real. **Não muda o tour nem a frente de conteúdo.**
+
+| ID | Item | Resp. | Prior. | Depende de | Pronto quando | Status |
+|---|---|---|---|---|---|---|
+| J0 | Documento [JORNADA-DO-CLIENTE.md](JORNADA-DO-CLIENTE.md): custo medido, onboarding, upsell, auditoria de telas, menu, modelo de página, glossário | Agente | P0 | — | **Aprovado pelo dono** (merge do PR) | 🧪 entregue em 16/11, esperando o dono |
+| J1 | Custo do grátis: semana pausada para conta parada, teto por conta, estratégia completa semanal (já é quase assim, ver doc §1) | Agente | P0 | J0 | Teste automático das regras + SQL na Teste Zero mostrando a semana pausada e retomada; o post do dia nunca cortado | ⏳ |
+| J2 | Correções que atrapalham hoje: pop-up "Seu status de negócio" por cima da tela; avisos de plano contraditórios ("Plano Free", "modo demonstração", cupom com preço) | Agente | P0 | J0 | Prints celular e desktop sem bloqueio e sem aviso contraditório; site publicado e conferido | ⏳ |
+| J3 | Onboarding guiado: checklist "Primeiros passos", dica de 1ª visita guardada por conta, no máximo 1 pop-up de evento real por sessão | Agente | P1 | J2 | Conta de teste nova: a checklist marca sozinha com dado real e some no fim; dica aparece 1 vez por conta (outro navegador não repete) | ⏳ |
+| J4 | Modelo único de página do agente (frase → precisa de você → o que fez → próximo passo → configurações), começando pelo conteúdo; depois 1 agente por PR | Agente | P1 | J3 | Print de cada página no modelo; ações feitas na própria tela | ⏳ |
+| J5 | Upsell contextual para o Pro, gatilho por gatilho, com medição (mostrado/clicado/convertido) e "agora não" por 7 dias | Agente | P2 | J4 | Cada gatilho aparece só com dado real (SQL) e grava as 3 medidas | ⏳ |
+
 ## Frente 1 — Tour Virtual completo
 
 | ID | Item | Resp. | Prior. | Depende de | Pronto quando | Status |
@@ -103,14 +119,14 @@
 | D6 | VPS: quanto tempo fica de reserva depois da troca | Dono | P2 | 2.3 | Decisão registrada | ⏳ |
 | 3.1 | Substitutos por e-mail (alertas da plataforma e de lead) | Agente | P1 | D5 | Alerta de teste chega | 🧪 alertas da plataforma por e-mail no #174; falta o alerta de teste chegar e o alerta de lead |
 | 3.2 | Conferir se os bots antigos (`marketing-bot`, `vendas-bot`, `group-manager`) estão publicados | Agente | P2 | — | Lista do que está no ar | ⏳ |
-| 3.3 | Desligar Telegram e VPS por flag (sem apagar) | Agente | P2 | 2.3, 3.1, **autorização** | Checklist da seção 6 do plano | **Telegram:** 🧪 autorizado em 13/11 (noite); interruptor no #174, flag desligado depois do merge. **VPS:** ⏳ depois da Frente 2 |
+| 3.3 | Desligar Telegram e VPS por flag (sem apagar) | Agente | P2 | 2.3, 3.1, **autorização** | Checklist da seção 6 do plano | **Telegram:** 🧪 #174 juntado em 16/11; `telegram_enabled` e `telegram_buddy` = desligados no banco em 16/11 (SQL). Falta a prova no log. **VPS:** ⏳ depois da Frente 2 |
 | 3.4 | Apagar estrutura antiga | Agente | P3 | 3.3 + 14 dias + **2ª autorização** | Nada perdido (checklist) | ⏳ |
 
 ## Frente 4 — Experiência do usuário (depois do fluxo do tour definido)
 
 | ID | Item | Resp. | Prior. | Depende de | Pronto quando | Status |
 |---|---|---|---|---|---|---|
-| 4.1 | Auditoria completa da jornada (prints no celular e no desktop), incluindo a tela do agente de conteúdo (C4) | Agente | P1 | 1.5 | Relatório aprovado pelo dono | ⏳ |
+| 4.1 | Auditoria completa da jornada (prints no celular e no desktop), incluindo a tela do agente de conteúdo (C4) | Agente | P1 | 1.5 | Relatório aprovado pelo dono | ⏳ A auditoria de telas foi antecipada no J0 (16/11), a pedido do dono |
 | 4.2 | Simplificações aprovadas, uma por PR | Agente | P1 | 4.1 | Print de cada uma + site publicado | ⏳ |
 
 ## Já validado (histórico)
