@@ -17,7 +17,7 @@
 - **Frentes abertas** ([decisão 13/11, tarde](DECISIONS.md#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo)):
   - **Frente 1 — Tour do imóvel inteiro;**
   - **Frente de conteúdo**, em paralelo.
-- **Jornada do cliente** ([decisão 13/11 noite, 3](DECISIONS.md#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro)): **J0 ✅ aprovado em 16/11** ([decisão](DECISIONS.md#2026-11-16--aprovações-do-dono-tradução-pten-em-todas-as-telas-a3-avisada)). Próximo: **J1 (custo do grátis)**, depois das respostas J-a a J-g.
+- **Jornada do cliente** ([decisão 13/11 noite, 3](DECISIONS.md#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro)): **J0 ✅ aprovado em 16/11** ([decisão](DECISIONS.md#2026-11-16--aprovações-do-dono-tradução-pten-em-todas-as-telas-a3-avisada)). Respostas J-a a J-g ✅ (16/11). Próximo: **J1 (custo do grátis)**; em paralelo, **I1 (tudo em inglês no modo inglês)**.
 - **Próximo item do agente:**
   - **Frente de conteúdo:** **C1 🧪:** o plano de 15/11 perdeu posts por limite de chamadas do Supabase (causa nos logs); correção no PR do C1, conferir no domingo 22/11. C2 ✅ (16/11). Depois: C3 (construir os formatos aprovados) e C5.
   - **Frente 1:** **1.1 — Ambientes físicos**, com a Tespon e dentro da verba D4.
@@ -28,7 +28,6 @@
   - **D2 (parte 1.5):** o dono indica o apartamento menor.
   - **DA:** anúncio pago entra no modelo e no preço?
   - **D5 (resto):** em que canal vai o aviso de visita agendada, agora que o Telegram está desligado.
-  - **J-a a J-g:** perguntas da seção 5 do [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md).
   - **C2 (4 perguntas):** o catálogo foi aprovado; faltam as respostas às 4 perguntas do fim do [CATALOGO-EDITORIAL](CATALOGO-EDITORIAL.md).
 - **Gasto acumulado:**
 
@@ -85,6 +84,7 @@
 | ID | Item | Resp. | Prior. | Depende de | Pronto quando | Status |
 |---|---|---|---|---|---|---|
 | J0 | Documento [JORNADA-DO-CLIENTE.md](JORNADA-DO-CLIENTE.md): custo medido, onboarding, upsell, auditoria de telas, menu, modelo de página, glossário | Agente | P0 | — | **Aprovado pelo dono** (merge do PR) | ✅ 16/11: aprovado pelo dono ("pode"), #176 juntado |
+| I1 | **Tudo em inglês no modo inglês** (dono, 16/11): textos de tela vindos da ficha e de tabelas ("Meus imóveis", "imóvel", ferramentas, nomes dos formatos), mensagens da Atividade gravadas em português | Agente | P0 | — | Varredura com Playwright em todas as telas, modo EN, sem texto de tela em português (o conteúdo escrito pela IA para o negócio fica no idioma da conta) | 🔨 varredura feita em 16/11 |
 | J1 | Custo do grátis: semana pausada para conta parada, teto por conta, estratégia completa semanal (já é quase assim, ver doc §1) | Agente | P0 | J0 | Teste automático das regras + SQL na Teste Zero mostrando a semana pausada e retomada; o post do dia nunca cortado | ⏳ |
 | J2 | Correções que atrapalham hoje: pop-up "Seu status de negócio" por cima da tela; avisos de plano contraditórios ("Plano Free", "modo demonstração", cupom com preço) | Agente | P0 | J0 | Prints celular e desktop sem bloqueio e sem aviso contraditório; site publicado e conferido | ⏳ |
 | J3 | Onboarding guiado: checklist "Primeiros passos", dica de 1ª visita guardada por conta, no máximo 1 pop-up de evento real por sessão | Agente | P1 | J2 | Conta de teste nova: a checklist marca sozinha com dado real e some no fim; dica aparece 1 vez por conta (outro navegador não repete) | ⏳ |

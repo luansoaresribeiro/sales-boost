@@ -40,6 +40,22 @@
 | Liga dos Sonhos | Nunca tocar, nem ler. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 
+## 2026-11-16 (noite) — Respostas da jornada, A3 completada, inglês em tudo, mobiliado no conteúdo
+
+- **Jornada (respostas do dono):**
+  - J-b: conta parada = **7 dias** sem abrir nem aprovar;
+  - J-c: **pausar as notícias** enquanto a conta estiver parada;
+  - J-d: **esconder** os avisos antigos de plano, sem apagar;
+  - J-e: "em breve" no Pro = **Criativos de anúncio e Avatar do corretor**;
+  - J-f: **criar a conta de teste nova** (até US$ 0,60).
+- **A3:** "pode fazer" — completar os dias sem post da semana de 17 a 22/11.
+- **Idioma:** "tudo da plataforma deve estar em inglês no modo inglês, analise e corrija" (item I1). O conteúdo que a IA
+  escreve para o negócio continua no idioma da conta.
+- **Mobiliado:** "a versão mobiliada também deve ir para o agente de conteúdo" — reforça o D8: o cômodo mobiliado vira
+  post extra pelo agente de conteúdo (C5), com o aviso "Imagem ilustrativa – mobiliado virtualmente".
+- **Perguntas do dono, respondidas na conversa:** "já dá para retirar a VPS?" (ainda não; depende da Frente 2) e "já
+  começamos o front-end?" (o J2 é o próximo).
+
 ## 2026-11-16 — Aprovações do dono; tradução PT/EN em todas as telas; A3 avisada
 
 - **Palavras do dono:** "preciso que você garanta que no diagnóstico a gente também tem a opção de traduzir para o
