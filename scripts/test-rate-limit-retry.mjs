@@ -40,4 +40,7 @@ assert.ok(cg.includes('fetchRetry(`${supabaseUrl}/functions/v1/render-format`'))
 assert.ok(cg.includes('mapLimit(deckSlides, 2,'))
 assert.ok(cg.includes('DISPATCH_GAP_MS'))
 assert.equal((cg.match(/fetchRetry\(`\$\{supabaseUrl\}\/functions\/v1\/content-test`/g) ?? []).length, 2)
-console.log('ok — limite de chamadas: nova tentativa, slides 2 por vez e vagas espaçadas')
+// Dia ocupado (16/11): qualquer peça ativa no dia ocupa a vaga, e arquivada não conta
+assert.ok(cg.includes("const i = existing.findIndex(r => r.planned_for === date)"))
+assert.ok(cg.includes(".in('planned_for', dates).not('status', 'in', '(archived,rejected)')"))
+console.log('ok — limite de chamadas: nova tentativa, slides 2 por vez e vagas espaçadas; dia ocupado por qualquer peça ativa')

@@ -1318,7 +1318,7 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
     fetchFormatAliases(admin, company.vertical_key ?? 'generico'),
     listPickableItems(admin, company.id, itemCfg),
     admin.from('marketing_ai_test_content').select('item_id').eq('company_id', company.id).not('item_id', 'is', null).gte('created_at', since),
-    admin.from('marketing_ai_test_content').select('planned_for, item_id, recipe').eq('company_id', company.id).in('planned_for', dates),
+    admin.from('marketing_ai_test_content').select('planned_for, item_id, recipe').eq('company_id', company.id).in('planned_for', dates).not('status', 'in', '(archived,rejected)'),
     // Trava de repetição (2026-11-02): oferta = mesmo imóvel + mesma receita; educativo = tema parecido. Janela de N semanas da ficha.
     admin.from('marketing_ai_test_content').select('item_id, recipe, planned_for, created_at').eq('company_id', company.id).not('item_id', 'is', null).not('recipe', 'is', null).gte('created_at', cooldownSince),
     admin.from('marketing_ai_test_content').select('idea, planned_for, created_at').eq('company_id', company.id).is('item_id', null).not('idea', 'is', null)
@@ -1341,8 +1341,10 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
     return { id: rank.id, pick: buildPickReason({ rule: 'least_used', item, cfg: itemCfg, rank }) }
   }
   const existing = ((existingRows ?? []) as { planned_for: string; item_id: string | null; recipe: string | null }[]).map(r => ({ ...r }))
-  const alreadyFilled = (date: string, recipe: string | undefined, producer: string): boolean => {
-    const i = existing.findIndex(r => r.planned_for === date && ((recipe && r.recipe === recipe) || (producer === 'post' && !r.item_id)))
+  // 1 post por dia (dono, 13/11): QUALQUER peça ativa no dia já ocupa a vaga, de qualquer tipo. Antes só contava peça do
+  // mesmo tipo, e completar a semana dobrava dias (Tespon 20 e 21/11, achado em 16/11). Arquivada/recusada não ocupa.
+  const alreadyFilled = (date: string, _recipe: string | undefined, _producer: string): boolean => {
+    const i = existing.findIndex(r => r.planned_for === date)
     if (i >= 0) { existing.splice(i, 1); return true }
     return false
   }
