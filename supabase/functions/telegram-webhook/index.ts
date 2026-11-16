@@ -11,6 +11,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { parseButton, verifyButton, pendingKeyboard, confirmKeyboard, tg } from '../_shared/telegramButtons.ts'
 import { plannedPublishAt, publishWhenLabel } from '../_shared/publishSlot.ts'
+import { tgFetch, telegramOn } from '../_shared/telegramSwitch.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -27,7 +28,7 @@ interface TelegramCallback { id: string; from: { id: number }; data?: string; me
 interface TelegramUpdate { message?: TelegramMessage; edited_message?: TelegramMessage; callback_query?: TelegramCallback }
 
 async function sendMessage(token: string, chatId: number, text: string): Promise<void> {
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  const res = await tgFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text }),
@@ -135,10 +136,10 @@ async function handleVoice(admin: SupaClient, token: string, chatId: number, aud
 
   let text = ''
   try {
-    const info = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(audio.file_id)}`).then(r => r.json()) as { ok?: boolean; result?: { file_path?: string } }
+    const info = await tgFetch(`https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(audio.file_id)}`).then(r => r.json()) as { ok?: boolean; result?: { file_path?: string } }
     const path = info.result?.file_path
     if (!info.ok || !path) { await fail('não consegui baixar'); return }
-    const file = await fetch(`https://api.telegram.org/file/bot${token}/${path}`)
+    const file = await tgFetch(`https://api.telegram.org/file/bot${token}/${path}`)
     if (!file.ok) { await fail('não consegui baixar'); return }
     const form = new FormData()
     form.append('file', new Blob([await file.arrayBuffer()], { type: 'audio/ogg' }), path.split('/').pop() || 'audio.ogg')
@@ -271,6 +272,8 @@ Deno.serve(async (req) => {
     const token = Deno.env.get('TELEGRAM_BOT_TOKEN')
     const webhookSecret = Deno.env.get('TELEGRAM_WEBHOOK_SECRET') ?? ''
     if (!token) return json({ error: 'TELEGRAM_BOT_TOKEN nao configurado' }, 500)
+    // Telegram desligado (dono, 13/11 noite): o bot não responde nem age; o Telegram recebe 200 pra não reenviar.
+    if (!(await telegramOn())) return json({ ok: true, telegram_off: true })
 
     const admin = createClient(supabaseUrl, serviceKey)
     const update = await req.json().catch(() => ({})) as TelegramUpdate

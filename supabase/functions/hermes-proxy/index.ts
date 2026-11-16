@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { answerContextBlock } from '../_shared/answerContext.ts'
+import { tgFetch } from '../_shared/telegramSwitch.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -902,7 +903,7 @@ async function runChatTurn(
 }
 
 async function sendTelegramMessage(token: string, chatId: number, text: string): Promise<void> {
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  const res = await tgFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text }),

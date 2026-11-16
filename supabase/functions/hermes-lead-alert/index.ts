@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { runTool, TOOLS_ALL } from '../_shared/tools.ts'
 import type { Company } from '../_shared/tools.ts'
 import { buddyDeliversNow } from '../_shared/telegramButtons.ts'
+import { tgFetch } from '../_shared/telegramSwitch.ts'
 
 const OPENAI_TOOLS = TOOLS_ALL.map(t => ({
   type: 'function' as const,
@@ -116,7 +117,7 @@ Deno.serve(async (req) => {
     const msg = followupCreated
       ? `\u{1F4AC} Novo lead de ${lead.name}! Preparei um follow-up. Acesse o dashboard para aprovar e enviar.`
       : `\u{1F4AC} Novo lead: ${lead.name} via ${lead.channel ?? 'manual'}. Acesse o dashboard.`
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    await tgFetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: company.telegram_chat_id, text: msg }),

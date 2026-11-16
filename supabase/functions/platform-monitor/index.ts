@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { tgFetch, telegramOn } from '../_shared/telegramSwitch.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -166,9 +167,30 @@ function diagnose(svc: ServiceRow, r: CheckResult, recurring: number): {
   return { severity, title, what: recPrefix + what, affected, impact, root_cause, suggested_fix, preventive, priority, auto_recoverable }
 }
 
+// Alerta de ops pro dono do Sales Boost (13/11 noite: Telegram desligado → e-mail). Com o Telegram ligado e configurado,
+// segue indo pro Telegram como antes; senão vai por e-mail (Resend) pros e-mails com papel 'owner' em user_roles.
+// deno-lint-ignore no-explicit-any
+async function sendOpsAlert(admin: any, cfg: Config, env: { TELEGRAM_BOT_TOKEN?: string }, text: string) {
+  if (cfg.notify_telegram && cfg.admin_telegram_chat_id && env.TELEGRAM_BOT_TOKEN && await telegramOn()) {
+    await sendTelegram(env.TELEGRAM_BOT_TOKEN, cfg.admin_telegram_chat_id, text); return
+  }
+  const key = Deno.env.get('RESEND_API_KEY')
+  if (!key) { console.error('platform-monitor: alerta sem canal (Telegram desligado e RESEND_API_KEY ausente):', text.slice(0, 120)); return }
+  const { data } = await admin.from('user_roles').select('email').eq('role', 'owner')
+  const to = ((data ?? []) as { email?: string | null }[]).map(r => r.email).filter((e): e is string => !!e && /@/.test(e))
+  if (!to.length) { console.error('platform-monitor: nenhum e-mail de dono em user_roles'); return }
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'Sales Boost <onboarding@resend.dev>', to, subject: text.split('\n')[0].slice(0, 120), text }),
+    })
+    if (!res.ok) console.error('platform-monitor: e-mail de alerta falhou', res.status, (await res.text()).slice(0, 200))
+  } catch (e) { console.error('platform-monitor: e-mail de alerta falhou', e) }
+}
+
 async function sendTelegram(token: string, chatId: string, text: string) {
   try {
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    await tgFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text }),
     })
@@ -237,8 +259,8 @@ Deno.serve(async (req) => {
           await admin.from('platform_incidents').insert({ service_key: svc.key, severity: d.severity, title: d.title, what_happened: d.what, affected: d.affected, impact: d.impact, root_cause: d.root_cause, suggested_fix: d.suggested_fix, preventive: d.preventive, priority: d.priority, auto_recoverable: d.auto_recoverable, recovery_status, correlated_change: svc.category === 'edge_function' || svc.category === 'worker' ? 'Verificar deploy recente.' : null })
           opened++
           // Alerta de ops (bypassa gate de cliente — é alerta do admin).
-          if (d.severity === 'critical' && cfg.notify_telegram && cfg.admin_telegram_chat_id && env.TELEGRAM_BOT_TOKEN) {
-            await sendTelegram(env.TELEGRAM_BOT_TOKEN, cfg.admin_telegram_chat_id, `🛡️ INCIDENTE CRÍTICO\n${d.title}\n\nO que houve: ${d.what}\nCausa provável: ${d.root_cause}\nAção sugerida: ${d.suggested_fix}\nRecuperação automática: ${recovery_status}`)
+          if (d.severity === 'critical') {
+            await sendOpsAlert(admin, cfg as Config, env, `🛡️ INCIDENTE CRÍTICO\n${d.title}\n\nO que houve: ${d.what}\nCausa provável: ${d.root_cause}\nAção sugerida: ${d.suggested_fix}\nRecuperação automática: ${recovery_status}`)
           }
         }
       } else if (!bad && openInc) {
@@ -247,8 +269,8 @@ Deno.serve(async (req) => {
         // Avisa no Telegram que o serviço crítico VOLTOU (espelha o alerta de
         // queda — só pra quem recebeu o "INCIDENTE CRÍTICO" também saber que
         // normalizou, sem precisar ficar checando).
-        if ((openInc as { severity?: string }).severity === 'critical' && cfg.notify_telegram && cfg.admin_telegram_chat_id && env.TELEGRAM_BOT_TOKEN) {
-          await sendTelegram(env.TELEGRAM_BOT_TOKEN, cfg.admin_telegram_chat_id, `✅ SERVIÇO RECUPERADO\n${svc.name} voltou a funcionar normalmente.\n\nStatus atual: ${result.detail ?? 'OK'}${result.latency ? ` (${result.latency}ms)` : ''}`)
+        if ((openInc as { severity?: string }).severity === 'critical') {
+          await sendOpsAlert(admin, cfg as Config, env, `✅ SERVIÇO RECUPERADO\n${svc.name} voltou a funcionar normalmente.\n\nStatus atual: ${result.detail ?? 'OK'}${result.latency ? ` (${result.latency}ms)` : ''}`)
         }
       }
     }
