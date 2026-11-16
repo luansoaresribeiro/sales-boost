@@ -22,6 +22,10 @@
   - **lead qualificado**: sem preço até haver definição e medição ([CONVERSION.md](CONVERSION.md));
   - **Boosts: em aberto.** Não confundir com o preço do tour; a unidade comercial é validada nas conversas;
   - **anúncios pagos:** voltaram à plataforma como **Campanha** (grupo Pro do menu, 13/11 noite); se entram no preço está em aberto. Criar ou impulsionar anúncio pelo Sales Boost ainda não existe (só leitura do Meta Ads).
+- **Menu Pro e custo do grátis (dono, 13/11 noite, 3):** "Pro" **não é um plano**; é o menu das funções pagas com Boosts
+  (a lista é o dono que define). A plataforma é grátis, mas cada conta custa; esse custo é controlado e recuperado pelo
+  que é pago (hoje, o tour). O cliente é guiado desde a 1ª entrada e recebe oferta só no contexto, com dado real.
+  Proposta completa, ainda não implementada: [JORNADA-DO-CLIENTE.md](JORNADA-DO-CLIENTE.md).
 - **Prioridade:**
   - **estratégica:** construir o sistema de inteligência e geração de demanda;
   - **validação comercial:** sem prazo e sem bloquear trabalho técnico; bloqueia só preço do tour, Boosts, preço de lead e Fase 4 (13/11, tarde);

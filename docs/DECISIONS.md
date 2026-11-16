@@ -21,7 +21,7 @@
 | Modelo de negócio | **Em validação:** plataforma grátis + tour pago + lead qualificado. **Nenhum preço decidido.** | [10/11](#2026-11-10--novo-modelo-cenários-de-tour-lead-sem-preço-e-portões-da-fase-4-dono) · [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Preço do tour | **Hipótese** de US$ 15 por tour, não é decisão. Um imóvel grande custa ~US$ 14 (estimado). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Lead | Sem preço até haver definição e medição. Especificação v2 em [CONVERSION.md](CONVERSION.md). | [10/11](#2026-11-10--novo-modelo-cenários-de-tour-lead-sem-preço-e-portões-da-fase-4-dono) |
-| Boosts | **Em aberto.** Não confundir com o preço do tour. A unidade comercial é validada nas conversas com imobiliárias. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+| Boosts | **Em aberto.** Não confundir com o preço do tour. A unidade comercial é validada nas conversas com imobiliárias. Nenhum código de cobrança de Boosts; o menu Pro só mostra e explica ([13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro)). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Anúncios pagos (impulsionar) | **Voltam para a plataforma** (13/11 noite): a **Campanha** (campanha ideal, anúncios, Saúde da Meta) é item próprio do menu, no grupo **Pro**. O anúncio continua "em construção" (só leitura do Meta Ads hoje), e nada vai ao ar sem aprovação. **Em aberto:** se o anúncio entra no modelo comercial e no preço. Substitui "fora do modelo" (13/11 tarde). | [13/11 noite](#2026-11-13-noite-2--telegram-desligado-hoje-vps-depois-campanha-volta-com-anúncio-pago-grupo-pro-no-menu) |
 | Prioridade | **Estratégica:** construir o sistema de inteligência e geração de demanda. **Frentes abertas:** Frente 1 (tour do imóvel inteiro) **e, em paralelo, a Frente de conteúdo**. Depois: motor próprio de vídeo → sair de VPS/Telegram → experiência do usuário. | [13/11](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) · [plano 13/11](#2026-11-13--tour-do-imóvel-inteiro-motor-próprio-e-saída-de-vpstelegram-planejamento-nada-implementado) |
 | Autonomia dos agentes | Semáforo 🟢🟡🔴 do [CLAUDE.md](../CLAUDE.md). Código geral com testes verdes é 🟢, mesmo chegando à A3. Ao pedir decisão, o agente diz o que falta, por quê, as alternativas (custo e prazo) e a recomendação. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) · substitui [29/10](historico/DECISIONS-2026-09-a-10.md#2026-10-29--autonomia-do-agente) |
@@ -33,9 +33,41 @@
 | Frequência de posts | O plano automático tem **exatamente 1 post por dia, 7 por semana**. DM, "Comente QUERO", stories e mensagens não contam. Faltou material para um dia: usar um formato que não depende de imóvel; nunca deixar o dia vazio nem repetir peça. "Gerar agora" é extra e continua permitido. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
 | Validação comercial | **Sem prazo** (o 17/11 saiu) e **não bloqueia** trabalho técnico aprovado. Continuam bloqueados até ela acontecer: preço do tour, Boosts, preço de lead e Fase 4. Não citar nos relatórios até o dono retomar. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
 | Verbas de teste | **Frente 1 (D4 ✅):** até US$ 15. **Frente de conteúdo:** até US$ 2. O gasto acumulado vai em cada relatório. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
-| VPS e Telegram | **Telegram desligado em 13/11** (interruptor `feature_flags.telegram_enabled`, **sem apagar**: dá para religar). Alertas da plataforma por **e-mail**. A A3 precisa ser avisada. **VPS fica** até o motor próprio de vídeo (Frente 2), para o tour não parar. Apagar de vez só com uma 2ª autorização. | [13/11 noite](#2026-11-13-noite-2--telegram-desligado-hoje-vps-depois-campanha-volta-com-anúncio-pago-grupo-pro-no-menu) |
+| VPS e Telegram | **Telegram desligado** (decidido em 13/11, ligado no banco em 16/11; interruptor `feature_flags.telegram_enabled`, **sem apagar**: dá para religar). Alertas da plataforma por **e-mail**. A A3 precisa ser avisada. **VPS fica** até o motor próprio de vídeo (Frente 2), para o tour não parar. Apagar de vez só com uma 2ª autorização. | [13/11 noite](#2026-11-13-noite-2--telegram-desligado-hoje-vps-depois-campanha-volta-com-anúncio-pago-grupo-pro-no-menu) |
+| Menu Pro | **"Pro" NÃO é um plano.** É um menu que reúne as funções pagas com Boosts (hoje: Tour virtual, Campanha, Business Progress). **Quem entra no Pro é o dono que define; o agente não mexe nessa lista.** Enquanto o Boost não tiver unidade e preço, o Pro mostra e explica as funções, **sem cobrar**. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
+| Custo do grátis | A plataforma é grátis, mas cada conta custa (estratégia, mercado, posts). O custo do grátis **precisa ser controlado** e é recuperado pelo que é pago (hoje, principalmente o tour). **Regras propostas, não implementadas** até o dono aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md): teto de US$ 8/mês por conta grátis, conta parada não gera a semana inteira, estratégia completa 1×/semana, **o post do dia nunca é cortado**. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
+| Jornada do cliente | O cliente é **guiado desde a 1ª entrada**. O upsell é **contextual**: aparece quando o cliente acabou de ver valor, só com dado real, e leva ao Pro com a função certa aberta. Conteúdo descobre o imóvel que interessa; o tour aprofunda esse imóvel até a visita. Código só depois de o dono aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md), 1 PR por item. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Liga dos Sonhos | Nunca tocar, nem ler. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-13 (noite, 3) — Jornada do cliente: custo do grátis, onboarding guiado, upsell contextual e menu Pro
+
+> Pedido do dono de 13/11, recebido de novo em 16/11. Registrado em 16/11, junto com o documento para aprovação
+> [JORNADA-DO-CLIENTE.md](JORNADA-DO-CLIENTE.md). **Nenhum código** antes da aprovação; depois, 1 PR por item, na ordem
+> da seção 6 do documento.
+
+- **A ideia central, nas palavras do dono:**
+  - "A plataforma é grátis, mas cada conta tem custo para nós (estratégia, inteligência de mercado, posts)."
+  - "O grátis precisa ter custo controlado. O custo é recuperado pelo que é pago: hoje, principalmente o tour virtual,
+    pago com Boosts dentro do menu 'Pro'."
+  - "'Pro' NÃO é um plano. É um menu que reúne as funções pagas com Boosts. Quem entra no Pro eu estou definindo; não
+    mexa nessa lista."
+  - "O cliente é guiado em todo o processo desde a primeira entrada."
+  - "O upsell é CONTEXTUAL: aparece no momento em que o cliente acabou de ver valor, com dado real, e leva ao Pro com a
+    função certa já aberta."
+  - "O conteúdo e o tour conversam entre si: o conteúdo descobre qual imóvel desperta interesse, e o tour aprofunda esse
+    imóvel até a visita."
+- **Valores do dono** (vieram marcados para ajuste; ficam como ele mandou): teto de **US$ 8/mês** por conta grátis;
+  estratégia completa **1×/semana**; "agora não" silencia a oferta por **7 dias**.
+- **Boost continua em aberto:** o Pro mostra e explica, **não cobra**. Nenhum código de cobrança de Boosts.
+- **Conflitos esclarecidos com o dono antes de registrar:**
+  - **Campanha:** o pedido dizia "a aba Campanha sai do menu". O dono confirmou que **vale a decisão de 13/11 (noite,
+    2)**: a Campanha **fica** no menu Pro, com anúncio pago. Essa frase do pedido não vale.
+  - **Tour como post:** o pedido perguntava "tour pronto pode virar o post do dia?". O dono confirmou que **vale o D8**:
+    tour pronto vira **post extra**, sem ocupar o post do dia.
+  - **"Business Game"** = a página **Business Progress**, que já existe no Pro.
+- **O que é direção (atualiza docs):** o Pro como menu e não plano, o custo do grátis como regra, o onboarding guiado e
+  o upsell contextual. Tudo o mais é proposta no documento, à espera da aprovação.
 
 ## 2026-11-13 (noite, 2) — Telegram desligado hoje, VPS depois; Campanha volta com anúncio pago; grupo Pro no menu
 

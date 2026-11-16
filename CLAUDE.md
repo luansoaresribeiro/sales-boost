@@ -9,6 +9,8 @@
   EUA só depois, com a revisão jurídica.
 - **Modelo em validação, sem preço decidido:** plataforma grátis + tour pago (US$ 15 é hipótese) + lead qualificado.
   **Boosts:** em aberto. **Anúncio pago:** voltou à plataforma (Campanha, grupo Pro, 13/11 noite); entrar no preço está em aberto.
+- **Pro não é plano:** é o menu das funções pagas com Boosts; **a lista é do dono, não mexer**. O grátis tem custo controlado
+  e o cliente é guiado, com oferta só no contexto ([JORNADA-DO-CLIENTE](docs/JORNADA-DO-CLIENTE.md), em aprovação).
 - O que vale hoje, tema a tema: [docs/DECISIONS.md → Decisões em vigor](docs/DECISIONS.md#decisões-em-vigor).
 
 ## 2. Direção atual
