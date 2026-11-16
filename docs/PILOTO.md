@@ -18,7 +18,7 @@
 - ~~**Telegram como central de comando,** que ainda não está pronto (bloco 3 do roadmap).~~ **Atualizado em 13/11:** a direção
   agora é **sair** da dependência do Telegram, com as funções essenciais dentro do próprio Sales Boost (Frente 3).
   Não oferecer Telegram como recurso.
-- **Anúncios pagos / impulsionar publicação:** fora do modelo atual (13/11).
+- **Criar ou impulsionar anúncio pelo Sales Boost:** ainda não existe. A Campanha (grupo Pro) mostra a campanha ideal e a leitura do Meta Ads (13/11 noite).
 - **Boosts:** em aberto, ainda sem unidade nem preço.
 - **Tour do imóvel inteiro:** ainda em construção (Frente 1). O que existe hoje cobre parte do imóvel.
 - **Preço do tour:** só como hipótese (US$ 15), nunca como preço fechado.

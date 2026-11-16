@@ -17,7 +17,8 @@
   3. **infraestrutura:** substituir e só então desligar VPS e Telegram, sem apagar;
   4. **experiência do usuário.**
 - **Depois das 4 frentes:** mobiliamento virtual em vídeo (especificação em [MEDIA-ENGINE.md](MEDIA-ENGINE.md)).
-- **Fora do modelo** (não planejar sem decisão nova): anúncios pagos / impulsionar publicação.
+- **Anúncios pagos:** voltaram à plataforma como Campanha (grupo Pro, 13/11 noite). Entrar no preço está em aberto (pergunta ao dono).
+- **Telegram:** desligado em 13/11 (sem apagar). **VPS:** fica até a Frente 2.
 - **Em aberto:** Boosts e qualquer preço.
 
 ## Gates do Tour virtual (técnico e comercial)

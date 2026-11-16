@@ -8,14 +8,14 @@
 - **Mercado agora:** Brasil, principalmente o Rio de Janeiro, em português (ficha `imoveis_rio`, canal Instagram).
   EUA só depois, com a revisão jurídica.
 - **Modelo em validação, sem preço decidido:** plataforma grátis + tour pago (US$ 15 é hipótese) + lead qualificado.
-  **Boosts:** em aberto. **Anúncio pago (impulsionar):** fora do modelo.
+  **Boosts:** em aberto. **Anúncio pago:** voltou à plataforma (Campanha, grupo Pro, 13/11 noite); entrar no preço está em aberto.
 - O que vale hoje, tema a tema: [docs/DECISIONS.md → Decisões em vigor](docs/DECISIONS.md#decisões-em-vigor).
 
 ## 2. Direção atual
 - **Estratégica, acima de tudo:** construir o sistema de inteligência e geração de demanda comercial.
 - **Frentes abertas (dono, 13/11):** **Frente 1 — Tour do imóvel inteiro** e, em paralelo, **Frente de conteúdo**
   (1 post por dia → catálogo editorial → formatos aprovados → tela simples, junto com a Frente 4). Depois, nesta ordem:
-  motor próprio de vídeo → sair da VPS e do Telegram (só depois do substituto) → experiência do usuário.
+  motor próprio de vídeo → sair da VPS (Telegram já desligado em 13/11, sem apagar) → experiência do usuário.
 - **Dois produtos separados:** o **agente de conteúdo** cuida dos posts e da estratégia editorial; o **tour do imóvel
   inteiro** tem fluxo e modelo comercial próprios.
 - **Bloqueados até a validação comercial** (que não bloqueia trabalho técnico aprovado): preço do tour, Boosts, preço

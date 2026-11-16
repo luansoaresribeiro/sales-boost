@@ -15,7 +15,7 @@
 > - **O texto abaixo fica como histórico.** Não usar com cliente sem a revisão.
 > - **Decisões de 13/11 que a reescrita precisa seguir:**
 >   - **posicionamento comercial:** "Technology Partner for Real Estate";
->   - **anúncios pagos / impulsionar estão fora do modelo:** o passo 2 do pitch ("Ativação nos melhores conteúdos… vira campanha") e o plano Pro com Meta Ads **não valem mais**;
+>   - **(Substituído em 13/11 noite: a Campanha com anúncio pago voltou à plataforma; entrar no preço está em aberto.)** anúncios pagos / impulsionar estão fora do modelo: o passo 2 do pitch ("Ativação nos melhores conteúdos… vira campanha") e o plano Pro com Meta Ads **não valem mais**;
 >   - **Boosts em aberto;**
 >   - **mercado:** Brasil agora.
 
