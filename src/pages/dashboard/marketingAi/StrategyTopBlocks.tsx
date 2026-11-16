@@ -5,6 +5,7 @@ import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER } from './shared'
 import type { Strategy } from './strategyTypes'
 import { buildFormatMeta, slotsByDay, openSlotsForDay, type FormatMeta } from './calendarSlots'
+import { useFormatName } from '../../../lib/formatNames'
 
 // Topo da Estratégia (Pacote A, 2026-11-03): 4 blocos que separam direcionamento, plano da semana, próxima ação e o "por quê".
 // Tudo vem da estratégia e do calendário já existentes (sem tabela nova, sem duplicar content_plan). Estados: valor / ausência /
@@ -32,6 +33,7 @@ const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 export default function StrategyTopBlocks({ active, main }: { active: Strategy; main: Strategy | null }) {
   const { lang } = useLang(); const t = TX[lang]
   const { company } = useCompany()
+  const fmtName = useFormatName(company?.vertical_key)
   const [next, setNext] = useState<Next>({ state: 'loading' })
   const [opps, setOpps] = useState<Opps>({ state: 'loading' })
   const mix = main?.content_plan?.weekly_mix
@@ -87,7 +89,7 @@ export default function StrategyTopBlocks({ active, main }: { active: Strategy; 
       </div>
       <div style={box}>
         <div style={lbl}>{t.plan}</div>
-        {Array.isArray(mix) && mix.length ? mix.map(m => <div key={m.format} style={txt}>{m.name} <span style={{ color: MUTED }}>· {t.perWeek(m.per_week)}</span></div>) : <div style={{ ...txt, color: MUTED }}>{t.noMix}</div>}
+        {Array.isArray(mix) && mix.length ? mix.map(m => <div key={m.format} style={txt}>{fmtName(m.format, m.name)} <span style={{ color: MUTED }}>· {t.perWeek(m.per_week)}</span></div>) : <div style={{ ...txt, color: MUTED }}>{t.noMix}</div>}
       </div>
       <div style={box}>
         <div style={lbl}>{t.next}</div>

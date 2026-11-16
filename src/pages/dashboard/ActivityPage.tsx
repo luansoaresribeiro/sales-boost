@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import { timeAgo } from './marketingAi/shared'
+import { activityText } from '../../lib/activityText'
 
 const CARD = '#150E08'
 const MUTED = '#BABABA'
@@ -94,7 +95,7 @@ export function MessageModal({ row, lang, onClose }: { row: BotNotifRow; lang: '
       </div>
       <div style={{ padding: '28px' }}>
         <div style={{ fontSize: '13.5px', color: 'rgba(255,255,255,0.85)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
-          {row.message}
+          {activityText(row.message, lang)}
         </div>
       </div>
     </div>
@@ -141,7 +142,7 @@ export default function ActivityPage({ embedded = false }: { embedded?: boolean 
           ✨ {lang === 'en' ? 'Agent activity' : 'Atividade do agente'}
         </h1>
         <p style={{ color: MUTED, fontSize: '13px' }}>
-          {lang === 'en' ? 'Everything the agent sent to Telegram — reports, actions and opportunities found.' : 'Tudo que o agente mandou pro Telegram — relatórios, ações e oportunidades encontradas.'}
+          {lang === 'en' ? 'Everything the agent did — reports, actions and opportunities found.' : 'Tudo o que o agente fez — relatórios, ações e oportunidades encontradas.'}
         </p>
       </div>}
 
@@ -159,7 +160,7 @@ export default function ActivityPage({ embedded = false }: { embedded?: boolean 
                 {lang === 'en' ? 'History' : 'Histórico'}
               </span>
               <span style={{ fontSize: '11px', color: MUTED }}>
-                {lang === 'en' ? 'Same as Telegram · live' : 'Igual ao Telegram · ao vivo'}
+                {lang === 'en' ? 'Live' : 'Ao vivo'}
               </span>
             </div>
             {isDemo && (
@@ -173,8 +174,8 @@ export default function ActivityPage({ embedded = false }: { embedded?: boolean 
               <div style={{ padding: '8px 0', opacity: isDemo ? 0.6 : 1 }}>
                 {rows.map((a, i) => {
                   const m = eventMeta(a.event_type, lang)
-                  const title = firstLine(a.message)
-                  const preview = restOf(a.message)
+                  const title = firstLine(activityText(a.message, lang))
+                  const preview = restOf(activityText(a.message, lang))
                   return (
                     <div key={a.id} onClick={() => setSelected(a)} style={{
                       display: 'flex', gap: '14px', padding: '12px 24px',

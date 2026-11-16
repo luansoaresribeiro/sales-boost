@@ -5,6 +5,7 @@
 import type { CompanyData } from '../../../contexts/CompanyContext'
 import { seededRng } from './growthDemo'
 import type { Lang } from '../../../contexts/LanguageContext'
+import { businessTypeLabel } from '../../../lib/businessTypes'
 
 // ── Canal de origem (Instagram | WhatsApp) ────────────────────────────────
 // Origem real do cliente/conversa. Vale para Funil e Atendimento: definida
@@ -229,7 +230,7 @@ export function buildWhatsAppDemo(company: Pick<CompanyData, 'id' | 'business_na
 
 function buildWhatsAppDemoEn(company: Pick<CompanyData, 'id' | 'business_name' | 'business_type'>): WhatsAppDemo {
   const biz = company.business_name || 'your company'
-  const type = company.business_type || 'business'
+  const type = company.business_type ? businessTypeLabel(company.business_type, 'en') : 'business'
 
   const conversations: DemoWaConversation[] = [
     {

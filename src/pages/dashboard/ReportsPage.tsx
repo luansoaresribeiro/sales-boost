@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { useLang } from '../../contexts/LanguageContext'
 import ActivityPage, { MessageModal, eventMeta, firstLine, type BotNotifRow } from './ActivityPage'
+import { activityText } from '../../lib/activityText'
 
 // Aba "Relatórios" (07/11): em cima os relatórios que o sistema já gera (bot_notifications com event_type
 // WEEKLY_/MONTHLY_/ANNUAL_REPORT, gravados pela periodic-report); embaixo o histórico de atividades (o mesmo componente da
@@ -77,11 +78,12 @@ export default function ReportsPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px' }}>
               {rows.map(r => {
                 const m = eventMeta(r.event_type, lang)
-                const body = r.message.split('\n').slice(1).join(' ').trim()
+                const msg = activityText(r.message, lang)
+                const body = msg.split('\n').slice(1).join(' ').trim()
                 return (
                   <button key={r.id} onClick={() => setSelected(r)} style={{ textAlign: 'left', background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px 18px', cursor: 'pointer', color: 'inherit', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <span style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,109,41,0.8)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{m.icon} {m.label}</span>
-                    <span style={{ fontSize: '13px', color: 'white', fontWeight: 600 }}>{firstLine(r.message)}</span>
+                    <span style={{ fontSize: '13px', color: 'white', fontWeight: 600 }}>{firstLine(msg)}</span>
                     <span style={{ fontSize: '11px', color: MUTED }}>{new Date(r.created_at).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                     {body && <span style={{ fontSize: '11.5px', color: MUTED, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{body}</span>}
                     <span style={{ fontSize: '11.5px', color: '#FF6D29', marginTop: '2px' }}>{t.open}</span>

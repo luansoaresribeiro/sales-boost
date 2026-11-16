@@ -4,7 +4,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { processImageTo4x5 } from '../../../lib/imageProcessing'
 import { catalogMinPhotos, MAX_PHOTOS_PER_ITEM } from '../../../lib/setupRules'
 import { bi, sanitizeCatalogValues, titleFromFields, type CatalogSchema } from '../../../lib/verticalPlaybook'
-import { CARD, MUTED, BORDER, D, SUPABASE_URL } from './shared'
+import { CARD, MUTED, BORDER, D, SUPABASE_URL, toolText } from './shared'
 import PublicPageButton from './PublicPageButton'
 import ItemActivity from './ItemActivity'
 import ItemAvailability from './ItemAvailability'
@@ -52,7 +52,7 @@ interface CatalogItem { id: string; title: string; image_url: string | null; met
 // múltiplas + campos estruturados vindos da ficha do setor (catalog_fields).
 // Quem não tem ficha com catálogo nunca vê essa tela (fica só "Produtos").
 interface PackageResult { generated: { recipe: string; pillar: string; planned_for: string }[]; skipped: { recipe: string; reason: string }[] }
-interface ToolRow { id: string; name: string; description: string; status: 'live' | 'partial' | 'planned' }
+interface ToolRow { id: string; name: string; description: string; name_en?: string | null; description_en?: string | null; status: 'live' | 'partial' | 'planned' }
 // Só a ferramenta "Tour virtual" já gera de verdade hoje (carrossel de
 // fotos reais) — mapeia pro mesmo motor do "Gerar pacote", só que 1 receita
 // isolada em vez do pacote inteiro. Ferramentas novas que também virarem
@@ -66,11 +66,12 @@ const TOOL_RECIPE: Record<string, string> = { tour_virtual_tool: 'carrossel_tour
 function ItemCreationTools({ itemId, companyId, verticalKey, itemLabel, onGenerate, busy }: {
   itemId: string; companyId: string; verticalKey: string; itemLabel: string; onGenerate: (itemId: string, recipe: string) => void; busy: string | null
 }) {
-  const tx = TX[useLang().lang]
+  const { lang } = useLang()
+  const tx = TX[lang]
   const [tools, setTools] = useState<ToolRow[]>([])
   const [interested, setInterested] = useState<Set<string>>(new Set())
   useEffect(() => {
-    supabase.from('marketing_ai_tool_registry').select('id, name, description, status').eq('vertical_key', verticalKey).eq('category', 'criacao')
+    supabase.from('marketing_ai_tool_registry').select('id, name, description, name_en, description_en, status').eq('vertical_key', verticalKey).eq('category', 'criacao')
       .then(({ data }) => setTools((data ?? []) as ToolRow[]))
   }, [verticalKey])
   useEffect(() => {
@@ -88,7 +89,7 @@ function ItemCreationTools({ itemId, companyId, verticalKey, itemLabel, onGenera
       <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
         {tools.map(t => (
           <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-            <span style={{ fontSize: '10.5px', color: 'white' }}>{t.name}</span>
+            <span style={{ fontSize: '10.5px', color: 'white' }}>{toolText(t, lang).name}</span>
             {t.status === 'live' && TOOL_RECIPE[t.id] ? (
               <button onClick={() => onGenerate(itemId, TOOL_RECIPE[t.id])} disabled={busy === itemId}
                 style={{ padding: '4px 9px', background: 'rgba(255,109,41,0.14)', border: '1px solid rgba(255,109,41,0.4)', borderRadius: '6px', color: ORANGE, fontWeight: 700, fontSize: '10px', cursor: busy === itemId ? 'default' : 'pointer' }}>
