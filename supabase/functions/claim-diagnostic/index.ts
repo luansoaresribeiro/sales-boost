@@ -12,6 +12,12 @@ interface Bilingual { pt: string; en?: string }
 interface PlaybookQuestion { key: string; label: Bilingual; type: 'select' | 'multi_text' | 'text'; options?: Bilingual[]; max?: number }
 const MAX_TEXT_LEN = 200
 
+/** Idioma dos posts escolhido no cadastro (I2). Só 'pt' ou 'en'; qualquer outra coisa = não escolheu (fica o da ficha). */
+function contentLanguageFrom(oc: Record<string, unknown>): 'pt' | 'en' | null {
+  const v = oc.content_language
+  return v === 'pt' || v === 'en' ? v : null
+}
+
 // Mesmo lookup que o trigger sync_company_vertical_key faz no banco — usado
 // aqui só pra saber QUAL ficha validar as respostas contra, antes do
 // insert (o trigger continua sendo a fonte de verdade de vertical_key na
@@ -154,6 +160,14 @@ Deno.serve(async (req) => {
 
       if (companyErr || !company) return json({ error: companyErr?.message ?? 'Erro ao criar empresa' }, 500)
       companyId = company.id
+
+      // I2 (16/11): idioma dos posts escolhido no cadastro. Vai num update depois do insert porque o gatilho
+      // sync_company_vertical_key põe o idioma da ficha do setor no INSERT; no update ele não mexe mais.
+      const contentLang = contentLanguageFrom(oc)
+      if (contentLang) {
+        const { error: langErr } = await serviceClient.from('companies').update({ language: contentLang }).eq('id', companyId)
+        if (langErr) console.log('[claim-diagnostic] idioma não gravou', langErr.message)
+      }
 
       await serviceClient.from('progress_events').insert({
         company_id: companyId, event_type: 'trial_started', gp: 10, source: 'trial', dedupe_key: `trial_started:${companyId}`,

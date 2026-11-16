@@ -130,9 +130,10 @@ interface Company {
   main_challenges: string | null; website_summary: string | null; marketing_monthly_budget: number | null
   avg_ticket: number | null; vertical_key: string | null; playbook_answers: Record<string, unknown> | null
   telegram_chat_id: number | null; notification_prefs: Record<string, boolean> | null
+  language?: string | null
 }
 
-const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, business_stage, main_challenges, website_summary, marketing_monthly_budget, avg_ticket, vertical_key, playbook_answers, telegram_chat_id, notification_prefs'
+const COMPANY_SELECT = 'id, business_name, business_type, city, goal, business_description, ideal_customer, business_stage, main_challenges, website_summary, marketing_monthly_budget, avg_ticket, vertical_key, playbook_answers, telegram_chat_id, notification_prefs, language'
 
 // Custo (A.6, 2026-11-07): ANTES gravava US$ 0,15 FIXO com tokens_used 0 (estimativa, não custo). AGORA o custo real de cada
 // chamada à Claude (tokens da resposta × preço em _shared/aiCost.ts) vai pra agent_performance em linhas próprias
@@ -393,7 +394,11 @@ const GOAL_TYPES = ['lead_gen', 'sales', 'acquisition', 'awareness', 'instagram_
 const COMPONENTS = ['positioning', 'offer', 'acquisition', 'content', 'conversion', 'customer_service', 'retention', 'reactivation', 'reputation', 'competitive_response', 'digital_infrastructure']
 
 function businessPreamble(company: Company, cfg: { brand_voice?: string; target_audience?: string; content_pillars?: string[]; marketing_goals?: string }): string {
-  return `Negócio: "${company.business_name}" (${company.business_type ?? 'tipo não informado'}) em ${company.city ?? 'Brasil'}.
+  // Idioma da conta (I2, 16/11): a estratégia e todo texto que o dono lê saem na língua da empresa (companies.language).
+  const langRule = String(company.language ?? '').toLowerCase().startsWith('en')
+    ? 'IMPORTANTE: escreva TODO o texto da resposta (títulos, objetivos, foco, público, justificativas, nomes de iniciativas) em INGLÊS — o dono e os clientes deste negócio falam inglês. As chaves do JSON continuam iguais.\n'
+    : ''
+  return `${langRule}Negócio: "${company.business_name}" (${company.business_type ?? 'tipo não informado'}) em ${company.city ?? 'Brasil'}.
 O que o negócio faz: ${company.business_description ?? 'não informado'}.
 Cliente ideal: ${company.ideal_customer ?? cfg.target_audience ?? 'não informado'}.
 Fase do negócio: ${company.business_stage ?? 'não informada'}.

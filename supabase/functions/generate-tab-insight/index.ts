@@ -20,7 +20,7 @@ const TAB_LABELS: Record<TabKey, string> = {
 }
 
 interface CompanyRow {
-  id: string; business_name: string; business_type: string | null
+  id: string; business_name: string; business_type: string | null; language?: string | null
   google_rating: number | null; google_review_count: number | null
   website_url: string | null; instagram_url: string | null; facebook_url: string | null
   tiktok_url: string | null; google_maps_url: string | null; tripadvisor_url: string | null
@@ -108,7 +108,8 @@ function hashData(obj: unknown): string {
 }
 
 async function generateReport(company: CompanyRow, tabKey: TabKey, anthropicKey: string, context: Record<string, unknown>): Promise<{ summary: string; suggestions: string[] }> {
-  const prompt = `Você é o consultor de crescimento de "${company.business_name}" (${company.business_type ?? 'negócio'}).
+  const langRule = String(company.language ?? '').toLowerCase().startsWith('en') ? 'IMPORTANTE: escreva o resumo e as sugestões em INGLÊS (o dono deste negócio fala inglês).\n' : ''  // I2 (16/11)
+  const prompt = `${langRule}Você é o consultor de crescimento de "${company.business_name}" (${company.business_type ?? 'negócio'}).
 
 Área: ${TAB_LABELS[tabKey]}
 
@@ -131,7 +132,7 @@ Retorne APENAS um JSON válido, sem markdown:
 }
 
 const ALL_TAB_KEYS: TabKey[] = ['avaliacoes', 'opinioes', 'concorrentes', 'crescimento', 'performance', 'audiencia', 'diagnostico']
-const COMPANY_FIELDS = 'id, business_name, business_type, google_rating, google_review_count, website_url, instagram_url, facebook_url, tiktok_url, google_maps_url, tripadvisor_url, reclame_aqui_url, ifood_url, social_data'
+const COMPANY_FIELDS = 'id, business_name, business_type, language, google_rating, google_review_count, website_url, instagram_url, facebook_url, tiktok_url, google_maps_url, tripadvisor_url, reclame_aqui_url, ifood_url, social_data'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
