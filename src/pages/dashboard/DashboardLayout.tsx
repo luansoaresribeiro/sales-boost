@@ -151,13 +151,15 @@ function SidebarInner({ isMobile, open, onNavigate, onClose, approvalsCount }: {
 
   // Rótulo da aba do catálogo: vem da ficha do setor (vocabulary.catalog); ficha sem catálogo = "Catálogo"/"Catalog" genérico.
   // Só aparece depois de resolvido (evita piscar o nome errado).
-  const [catalogLabel, setCatalogLabel] = useState<string | null>(null)
+  const [catalogSchema, setCatalogSchema] = useState<Awaited<ReturnType<typeof fetchCatalogSchema>> | undefined>(undefined)
   const cVertical = company?.vertical_key ?? 'generico'
   useEffect(() => {
     let alive = true
-    void fetchCatalogSchema(cVertical).then(sc => { if (alive) setCatalogLabel(sc?.catalogLabel ?? T.layout.nav.catalog) })
+    void fetchCatalogSchema(cVertical).then(sc => { if (alive) setCatalogSchema(sc) })
     return () => { alive = false }
-  }, [cVertical, T.layout.nav.catalog])
+  }, [cVertical])
+  // Lido a cada desenho: segue o idioma da tela (PT/EN).
+  const catalogLabel = catalogSchema === undefined ? null : (catalogSchema?.catalogLabel ?? T.layout.nav.catalog)
   const navSections = makeNavSections(T, flags, company?.business_name ?? null, approvalsCount, catalogLabel)
   const bottomItems = makeBottomItems(T)
 

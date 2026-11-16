@@ -93,13 +93,16 @@ export async function fetchCatalogSchema(verticalKey: string): Promise<CatalogSc
   if (verticalKey === 'generico') return null
   try {
     const { data } = await supabase.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle()
-    const config = (data?.config ?? {}) as { catalog_fields?: { required?: CatalogField[]; optional?: CatalogField[] }; vocabulary?: { item?: string; catalog?: string }; catalog_import?: CatalogImportMap; nearby_places?: { categories?: unknown[] }; faq?: { categories?: { key: string; label: string }[]; official_domains?: unknown[] }; market_intel?: unknown; opportunity_fields?: { location?: unknown } }
+    const config = (data?.config ?? {}) as { catalog_fields?: { required?: CatalogField[]; optional?: CatalogField[] }; vocabulary?: { item?: string; catalog?: string }; vocabulary_en?: { item?: string; catalog?: string }; catalog_import?: CatalogImportMap; nearby_places?: { categories?: unknown[] }; faq?: { categories?: { key: string; label: string }[]; official_domains?: unknown[] }; market_intel?: unknown; opportunity_fields?: { location?: unknown } }
     const required = config.catalog_fields?.required ?? []
     const optional = config.catalog_fields?.optional ?? []
     if (required.length === 0 && optional.length === 0) return null
+    // Inglês da ficha em `vocabulary_en` (I1, 16/11) — separado de `vocabulary`, que os agentes do servidor leem como texto.
+    // Getters: o rótulo segue o idioma da tela na hora de desenhar (trocar PT/EN não precisa buscar a ficha de novo).
+    const word = (k: 'item' | 'catalog') => (getCurrentLang() === 'en' ? config.vocabulary_en?.[k] : undefined) ?? config.vocabulary?.[k]
     return {
-      itemLabel: config.vocabulary?.item ?? 'Item',
-      catalogLabel: config.vocabulary?.catalog ?? (getCurrentLang() === 'en' ? 'Catalog' : 'Catálogo'),
+      get itemLabel() { return word('item') ?? 'Item' },
+      get catalogLabel() { return word('catalog') ?? (getCurrentLang() === 'en' ? 'Catalog' : 'Catálogo') },
       required, optional,
       importMap: config.catalog_import?.fields ? config.catalog_import : undefined,
       nearby: Array.isArray(config.nearby_places?.categories) && config.nearby_places.categories.length > 0,

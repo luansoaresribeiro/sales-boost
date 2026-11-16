@@ -1,5 +1,7 @@
 import { useLang } from '../../../contexts/LanguageContext'
 import { CARD, MUTED, BORDER, D, ORANGE, timeAgo } from './shared'
+import { useCompany } from '../../../contexts/CompanyContext'
+import { useFormatName } from '../../../lib/formatNames'
 import {
   type Strategy, type LogRow, type Budget,
   FEASIBILITY_COLOR, STATUS_COLOR, DECISION_TYPE_COLOR, strategyLabels,
@@ -99,6 +101,7 @@ export function BudgetPanel({ budget, onChange, onSave, saving }: { budget: Budg
 
 // ── Conteúdo & Campanha (plano de funil) ────────────────────────────────
 export function FunnelPanel({ strategy }: { strategy: Strategy }) {
+  const fmtName = useFormatName(useCompany().company?.vertical_key)
   const { lang } = useLang()
   const t = TX[lang]
   const L = strategyLabels(lang)
@@ -117,7 +120,7 @@ export function FunnelPanel({ strategy }: { strategy: Strategy }) {
           {cp.hero_formats.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginBottom: '10px' }}>
               <span style={{ fontSize: '10px', fontWeight: 700, color: MUTED, textTransform: 'uppercase' }}>{t.heroFormats}:</span>
-              {cp.hero_formats.map(h => <span key={h.key} style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '99px', padding: '3px 9px' }}>{h.name}</span>)}
+              {cp.hero_formats.map(h => <span key={h.key} style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, background: 'rgba(255,109,41,0.1)', border: '1px solid rgba(255,109,41,0.25)', borderRadius: '99px', padding: '3px 9px' }}>{fmtName(h.key, h.name)}</span>)}
             </div>
           )}
           {cp.weekly_mix.length > 0 && <>
@@ -125,7 +128,7 @@ export function FunnelPanel({ strategy }: { strategy: Strategy }) {
             {cp.weekly_mix.map(m => (
               <div key={m.format} style={{ padding: '7px 0', borderTop: `1px solid ${BORDER}`, fontSize: '12px', lineHeight: 1.5 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-                  <strong style={{ color: 'white' }}>{m.name}</strong>
+                  <strong style={{ color: 'white' }}>{fmtName(m.format, m.name)}</strong>
                   <span style={{ color: ORANGE, fontWeight: 700 }}>{t.perWeek(m.per_week)}</span>
                 </div>
                 <div style={{ color: MUTED, fontSize: '11.5px' }}>{m.purpose}{m.purpose ? ' · ' : ''}{t.producer[m.producer] ?? m.producer}</div>

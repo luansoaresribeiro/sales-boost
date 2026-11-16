@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useLang } from '../../../contexts/LanguageContext'
-import { ORANGE, CARD, MUTED, BORDER, timeAgo, type ToolRegistryRow, type ToolConfigRow } from './shared'
+import { ORANGE, CARD, MUTED, BORDER, timeAgo, toolText, type ToolRegistryRow, type ToolConfigRow } from './shared'
 
 const TX = {
   pt: {
@@ -76,10 +76,10 @@ function CreationToolsPanel({ tools, companyId }: { tools: ToolRegistryRow[]; co
         {tools.map(t => (
           <div key={t.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '14px 16px' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '6px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{t.name}</div>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{toolText(t, lang).name}</div>
               <span style={{ fontSize: '9.5px', fontWeight: 700, color: STATUS_COLOR[t.status], padding: '1px 7px', borderRadius: '99px', border: `1px solid ${STATUS_COLOR[t.status]}44`, flexShrink: 0 }}>{tx.status[t.status]}</span>
             </div>
-            <div style={{ fontSize: '11px', color: MUTED, marginBottom: '10px', lineHeight: 1.5 }}>{t.description}</div>
+            <div style={{ fontSize: '11px', color: MUTED, marginBottom: '10px', lineHeight: 1.5 }}>{toolText(t, lang).description}</div>
             {t.status === 'planned' && (
               interested.has(t.id) ? (
                 <span style={{ fontSize: '11px', color: '#4ade80', fontWeight: 700 }}>{tx.notified}</span>
@@ -133,12 +133,12 @@ export default function ToolsTab({ companyId, tools, configs, onRefresh }: { com
           return (
             <div key={t.id} style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '14px 16px', gridColumn: fields.length > 2 ? 'span 2' : undefined }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '6px' }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{t.name}</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: 'white' }}>{toolText(t, lang).name}</div>
                 <label style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}>
                   <input type="checkbox" checked={cfg?.enabled ?? true} onChange={e => toggleEnabled(t.id, e.target.checked)} style={{ width: '15px', height: '15px', accentColor: ORANGE, cursor: 'pointer' }} />
                 </label>
               </div>
-              <div style={{ fontSize: '11px', color: MUTED, marginBottom: '10px', lineHeight: 1.5 }}>{t.description}</div>
+              <div style={{ fontSize: '11px', color: MUTED, marginBottom: '10px', lineHeight: 1.5 }}>{toolText(t, lang).description}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: fields.length ? '10px' : 0 }}>
                 <span style={{ fontSize: '9.5px', fontWeight: 700, color: STATUS_COLOR[t.status], padding: '1px 7px', borderRadius: '99px', border: `1px solid ${STATUS_COLOR[t.status]}44` }}>{tx.status[t.status]}</span>
                 <span style={{ fontSize: '10px', color: HEALTH_COLOR[cfg?.health ?? 'unknown'] }}>{tx.health[cfg?.health ?? 'unknown']}</span>

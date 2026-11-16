@@ -117,6 +117,8 @@ export interface ToolRegistryRow {
   id: string
   name: string
   description: string
+  name_en?: string | null      // I1 (16/11): texto em inglês para a tela em inglês
+  description_en?: string | null
   category: string
   connected: boolean
   requires_integration: string | null
@@ -299,4 +301,9 @@ export const preferredLogo = (logo: string | null | undefined, meta: LogoMeta | 
   const m = usableLogoMeta(meta, logo)
   if (m?.kind === 'foto') return null
   return (m?.png_url || logo) || null
+}
+
+/** Nome/descrição de uma ferramenta no idioma da tela (cai no português se faltar o inglês). */
+export function toolText(t: { name: string; description?: string; name_en?: string | null; description_en?: string | null }, lang: 'pt' | 'en') {
+  return lang === 'en' ? { name: t.name_en || t.name, description: t.description_en || t.description || '' } : { name: t.name, description: t.description ?? '' }
 }

@@ -14,6 +14,7 @@ import MakeNowPicker from './MakeNowPicker'
 import { useRealtime } from '../../../lib/useRealtime'
 import { PieceChips } from './PieceLabels'
 import { useItemUsage } from './useItemUsage'
+import { useFormatName } from '../../../lib/formatNames'
 
 const ORANGE = '#FF6D29'
 const GREEN = '#4ade80'
@@ -64,6 +65,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
   const { session } = useAuth()
   const token = session?.access_token ?? ''
   const { company } = useCompany()
+  const fmtName = useFormatName(company?.vertical_key)
   const ssNames = useSSNames(companyId)
   const usage = useItemUsage(companyId)
   const [items, setItems] = useState<Item[]>([])
@@ -207,7 +209,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
                 return (
                   <div key={`slot-${k}`} title={sl.purpose} style={{ padding: '6px 8px', border: `1px dashed ${BORDER}`, borderRadius: '8px' }}>
                     <div style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {SURFACE_ICON[surface] ?? '📝'} {sl.name}
+                      {SURFACE_ICON[surface] ?? '📝'} {fmtName(sl.format, sl.name)}
                     </div>
                     <div style={{ fontSize: '8.5px', color: MUTED, marginTop: '2px' }}>{t.surf[surface] ?? surface} · {slotWho(sl)}</div>
                     <div style={{ marginTop: '4px' }}><PieceChips familia={sl.familia ?? formatMeta[sl.format]?.family ?? GENERIC_FAMILY[sl.format] ?? (sl.producer === 'item_video' ? 'tour' : 'eventual')} pilarSs={sl.pilar_ss} tema={sl.tema ?? formatMeta[sl.format]?.pillar ?? sl.pillar} ssNames={ssNames} /></div>
@@ -235,7 +237,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
         )}
         {dmItems.length > 0 && (
           <div style={{ fontSize: '11px', color: MUTED, marginTop: '8px' }}>
-            {t.also} {dmItems.map(m => `💬 ${m.name}`).join(' · ')}
+            {t.also} {dmItems.map(m => `💬 ${fmtName(m.format, m.name)}`).join(' · ')}
           </div>
         )}
       </div>
@@ -266,7 +268,7 @@ export default function WeeklyCalendarTab({ companyId }: { companyId: string }) 
             <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '12px', lineHeight: 1.6 }}>
               {t.todo}
               <ul style={{ margin: '4px 0 0', paddingLeft: '18px', color: 'white' }}>
-                {todo.map(x => <li key={x.format}>{t.perWeek(x.per_week)} {x.name}{x.purpose ? <span style={{ color: MUTED }}> — {x.purpose}</span> : null}</li>)}
+                {todo.map(x => <li key={x.format}>{t.perWeek(x.per_week)} {fmtName(x.format, x.name)}{x.purpose ? <span style={{ color: MUTED }}> — {x.purpose}</span> : null}</li>)}
               </ul>
             </div>
           )}
