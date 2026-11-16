@@ -140,8 +140,10 @@ function pickSlot(dates: string[], occ: Occupancy, pillar: string, pillarWeightP
 // ── Geração de texto por peça (1 função parametrizada em vez de 5 quase
 // iguais — reuso normal DENTRO do arquivo, não é a lib compartilhada ENTRE
 // functions que o projeto evita) ──────────────────────────────────────────
-async function writeCopy(anthropicKey: string, briefing: string, extra = '', claimRule = ''): Promise<{ caption: string; hashtags: string; cta: string }> {
-  const prompt = `Você é o Content Agent do Sales Boost, especializado em corretores de imóveis no Rio de Janeiro.
+async function writeCopy(anthropicKey: string, briefing: string, extra = '', claimRule = '', lang: 'pt' | 'en' = 'pt'): Promise<{ caption: string; hashtags: string; cta: string }> {
+  // Idioma da conta (I2, 16/11): legenda, CTA e hashtags na língua da empresa (companies.language).
+  const langRule = lang === 'en' ? 'IMPORTANTE: escreva a legenda, o CTA e as hashtags em INGLÊS — este negócio fala com clientes em inglês. Nomes de bairro ficam como estão.\n' : ''
+  const prompt = `${langRule}Você é o Content Agent do Sales Boost, especializado em corretores de imóveis no Rio de Janeiro.
 ${briefing}
 ${extra}Ao nomear o imóvel, escreva tipo + bairro sem "em/na/no" (ex.: "Apartamento Barra da Tijuca", "Casa Ipanema"); no resto do texto, português normal ("morar na Barra").
 Regras inegociáveis: nunca invente preço, m², condomínio ou qualquer dado de mercado além do que foi passado; nunca invente cliente, depoimento, venda fechada nem distância; a legenda é SEMPRE pro público do Instagram — nunca um recado, aviso, alerta ou ressalva pro corretor, nem pedido de dado (nada de "⚠️", "os dados que recebi", "precisam de confirmação", "antes de publicar"). Se um dado parecer estranho ou faltar, simplesmente não o cite; nunca prometa valorização; tom próximo e carioca, direto nos números reais, sem "oportunidade imperdível".
@@ -253,16 +255,16 @@ Deno.serve(async (req) => {
     const cronSecretEnv = Deno.env.get('CRON_SECRET')
     const internal = !!cronSecretEnv && body.cron_secret === cronSecretEnv && typeof body.company_id === 'string'
     const bearer = req.headers.get('Authorization') ?? ''
-    let company: { id: string; vertical_key: string | null; city: string | null; business_name: string | null; instagram_username: string | null } | null = null
+    let company: { id: string; vertical_key: string | null; city: string | null; business_name: string | null; instagram_username: string | null; language?: string | null } | null = null
     if (internal) {
-      const { data } = await admin.from('companies').select('id, vertical_key, city, business_name, instagram_username').eq('id', body.company_id as string).maybeSingle()
+      const { data } = await admin.from('companies').select('id, vertical_key, city, business_name, instagram_username, language').eq('id', body.company_id as string).maybeSingle()
       company = data
     } else {
       if (!bearer) return json({ error: 'Unauthorized' }, 401)
       const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: bearer } } })
       const { data: { user } } = await userClient.auth.getUser()
       if (!user) return json({ error: 'Unauthorized' }, 401)
-      const { data } = await admin.from('companies').select('id, vertical_key, city, business_name, instagram_username').eq('user_id', user.id).maybeSingle()
+      const { data } = await admin.from('companies').select('id, vertical_key, city, business_name, instagram_username, language').eq('user_id', user.id).maybeSingle()
       company = data
     }
     if (!company) return json({ error: 'Empresa não encontrada' }, 404)
@@ -311,7 +313,7 @@ Deno.serve(async (req) => {
     const claimsNoNums = { ...claims }
     claims.factNums = allowedValues(facts.texts)
     const copy = async (briefing: string) => {
-      const c = await writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`, claimPromptRule(ficha.marketClaims) + ficha.publicTextRule)
+      const c = await writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`, claimPromptRule(ficha.marketClaims) + ficha.publicTextRule, String(company.language ?? '').toLowerCase().startsWith('en') ? 'en' : 'pt')
       const cap = stripInternalNotes(c.caption), cta = stripInternalNotes(c.cta)
       pieceNotes.push(...cap.notes, ...cta.notes)
       if (c.caption.trim() && !cap.text.trim()) pieceEmptied = true

@@ -100,6 +100,7 @@ const TX = {
     v2s2t: 'Seu mercado e sua prioridade', v2s2s: 'Com isso o Sales Boost já monta sua estratégia certa desde o primeiro dia. Não sabe alguma? Marque e siga.',
     v2s3t: 'Seu Instagram', v2s3s: 'É ele que a gente analisa (só dados públicos). O e-mail é pra você acessar o resultado e o painel.',
     v2later: 'O resto (equipe, carteira, canais) você completa depois do cadastro, no seu ritmo.',
+    postLang: 'Em que idioma seus posts devem sair?', postLangH: 'Vale para legendas, estratégia e textos que os agentes escrevem. Dá para mudar depois em Configurações.',
   },
   en: {
     select: 'Select...', add: '+ Add', typeEnter: 'Type and press Enter',
@@ -129,6 +130,7 @@ const TX = {
     v2s2t: 'Your market and your priority', v2s2s: 'With this, Sales Boost builds the right strategy from day one. Not sure about one? Mark it and move on.',
     v2s3t: 'Your Instagram', v2s3s: 'This is what we analyze (public data only). The email lets you access the result and the dashboard.',
     v2later: 'The rest (team, listings, channels) you complete after signing up, at your own pace.',
+    postLang: 'What language should your posts be in?', postLangH: 'Applies to captions, strategy and the text the agents write. You can change it later in Settings.',
   },
 }
 
@@ -380,6 +382,9 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
   const [fichaLoading, setFichaLoading] = useState(false)
   const [v2Answers, setV2Answers] = useState<Record<string, unknown>>({})
   const [v2Status, setV2Status] = useState<AnswerStatus>({})
+  // I2: idioma dos posts (companies.language). Padrão = idioma da tela no momento do cadastro.
+  const [postLang, setPostLang] = useState<'pt' | 'en' | null>(null)
+  const contentLang = postLang ?? lang
   const setV2Answer = (k: string, v: unknown) => setV2Answers(a => {
     const next = { ...a, [k]: v }
     // Trocou o perfil: respostas que só valiam pro perfil antigo saem.
@@ -448,12 +453,13 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
       const onboarding_context = v2 && clean
         ? { ...buildContextV2(v2, clean.answers, clean.status, data.business_type, data.city.trim()), profile_type: data.business_name.trim() ? 'profissional' : 'pessoal' }
         : buildContext(data)
+      const ctxWithLang = { ...onboarding_context, content_language: contentLang }
       const goal = v2 && clean ? String(clean.answers.prioridade_principal ?? '') : data.goal
       const payload = {
         business_name: data.business_name, business_type: data.business_type, city: data.city,
         website_url: data.website_url.trim(), instagram_url: normalizeInstagram(data.instagram_url) ?? '', facebook_url: data.facebook_url,
         tiktok_url: data.tiktok_url, google_maps_url: data.google_maps_url, phone: data.phone,
-        contact_email: data.contact_email.trim(), goal, onboarding_context,
+        contact_email: data.contact_email.trim(), goal, onboarding_context: ctxWithLang,
       }
       const res = await fetch(`${supabaseUrl}/functions/v1/run-diagnosis`, {
         method: 'POST',
@@ -600,6 +606,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                 <Field label={t.s4mail} value={data.contact_email} onChange={set('contact_email')} type="email" placeholder={t.s4mailp} required hint={emailInvalid ? t.s4mailBad : t.s4mailh} />
                 <Field label={t.s4phone} value={data.phone} onChange={set('phone')} type="tel" placeholder="(21) 99999-9999" required hint={phoneInvalid ? t.s4phoneBad : t.s4phoneH} />
                 <Field label={t.s3site} value={data.website_url} onChange={set('website_url')} type="url" placeholder="https://seunegocio.com.br" hint={siteInvalid ? t.s3siteBad : t.s3siteHint} />
+                <MultiSelect label={t.postLang} values={[contentLang]} options={['pt', 'en']} onToggle={v => setPostLang(v as 'pt' | 'en')} optLabel={o => (o === 'pt' ? '🇧🇷 Português' : '🇺🇸 English')} hint={t.postLangH} />
                 <p style={{ fontSize: '12px', color: MUTED, lineHeight: 1.5, margin: '4px 0 0' }}>{t.v2later}</p>
                 {errorBlock}
               </>
@@ -637,6 +644,7 @@ export function DiagnosticFlow({ embedded = false, onDone }: { embedded?: boolea
                 <Field label={t.s4city} value={data.city} onChange={set('city')} placeholder={t.s4cityp} required />
                 <Field label={t.s4mail} value={data.contact_email} onChange={set('contact_email')} type="email" placeholder={t.s4mailp} required hint={emailInvalid ? t.s4mailBad : t.s4mailh} />
                 <Field label={t.s4phone} value={data.phone} onChange={set('phone')} type="tel" placeholder="(21) 99999-9999" required hint={phoneInvalid ? t.s4phoneBad : t.s4phoneH} />
+                <MultiSelect label={t.postLang} values={[contentLang]} options={['pt', 'en']} onToggle={v => setPostLang(v as 'pt' | 'en')} optLabel={o => (o === 'pt' ? '🇧🇷 Português' : '🇺🇸 English')} hint={t.postLangH} />
                 {errorBlock}
               </>
             )}
