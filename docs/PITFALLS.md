@@ -1163,3 +1163,15 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
   `/` e `/login` no navegador e veja se aparece texto. Hoje o site no ar só usa essas duas; PostHog/Facebook/Google ficam vazios.
 - Outra sessão publicando ao mesmo tempo: compare o `index-*.js` do site no ar com um build do `main` antes de publicar — se
   forem diferentes, há trabalho de outra sessão no ar que ainda não está no `main` e o seu deploy apagaria.
+
+## Limite de chamadas entre funções por "trace" (C1, 16/11)
+
+- **O que aconteceu:** no plano de domingo 15/11, as 7 vagas de cada conta rodaram juntas, e cada carrossel desenhava
+  até 6 slides em paralelo no `render-format`. O runtime do Supabase recusou as chamadas com
+  `RateLimitError: Rate limit exceeded for trace … Retry after N ms` (N chegou a 48 s). A rodada inteira dividia o
+  mesmo trace.
+- **Efeito:** `renderGraphicCardFull` tratava a recusa como "sem imagem" e a trava A.6 descartava a peça. Ficaram 2 de
+  7 posts na Teste Zero e 4 de 7 na Tespon.
+- **Regra:** chamada de função para função usa `fetchRetry` (`_shared/rateLimitRetry.ts`), que espera o tempo pedido
+  se couber no relógio. Trabalho em lote usa `mapLimit` (no máximo 2 ao mesmo tempo). Despacho de vagas é espaçado
+  (`DISPATCH_GAP_MS`) e cada vaga leva um `traceparent` próprio.
