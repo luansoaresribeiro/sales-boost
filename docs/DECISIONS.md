@@ -50,7 +50,7 @@
 - **Feito em 17/11** (SQL, conta `48f9dede`):
   - acesso liberado à mão (`manual_access=true`);
   - conteúdo em inglês (`language='en'`);
-  - **agendamentos automáticos desligados só para ele** (`auto_strategy=false`) até existir a ficha dos EUA. Sem isso, a
+  - **agendamentos automáticos desligados só para ele** (`auto_strategy=false`) até existir a ficha dos EUA. **Religados no mesmo dia**, depois da ficha `imoveis_us` (E1, #185) e da prova. Sem isso, a
     pesquisa de notícias, as oportunidades e a estratégia rodariam com a ficha do Rio.
   - **Desfazer:** voltar os 3 campos.
 - **O que falta: a ficha dos EUA (item E1 da PENDENCIAS).** Hoje "Corretor(a) de imóveis" leva sempre à ficha
