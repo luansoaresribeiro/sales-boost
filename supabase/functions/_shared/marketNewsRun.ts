@@ -23,11 +23,18 @@ export interface NewsResult {
   collected?: number; filtered?: number; month_spent_usd?: number
   details?: { quality_mode: string; quality_version: number; rejected: Record<string, number>; flagged: Record<string, number>; samples: { title: string; host: string; reason: string }[]; skipped?: string; cap_usd?: number }
 }
+/** A cidade da ficha manda; ficha sem cidade (mercado com várias cidades, ex.: EUA) usa a da empresa. */
+export function cityFor(fichaCity: string, companyCity?: string | null): string {
+  return fichaCity.trim() || String(companyCity ?? '').trim().slice(0, 80)
+}
+
 export interface NewsOpts {
   companyId: string
   lang: 'pt' | 'en'
   rawConfig: unknown              // vertical_playbooks.config.market_intel
   locationKey: string | undefined // vertical_playbooks.config.opportunity_fields.location
+  /** Cidade da empresa (companies.city): usada quando a ficha não fixa a cidade (ex.: imoveis_us, E1 17/11). */
+  companyCity?: string | null
   search?: NewsSearch
   getKey?: () => Promise<string | undefined>
   canStart?: () => boolean        // orçamento de tempo do cron: só começa um lote se sobrar tempo
@@ -133,7 +140,7 @@ export async function collectMarketNews(admin: Admin, o: NewsOpts): Promise<News
   if (itErr) { log(o.companyId, `catálogo: ${itErr.message}`); return { ...out, skipped: 'erro ao ler o catálogo' } }
   const regions = pickRegions(((items ?? []) as { meta: { fields?: Record<string, unknown> } | null }[]).map(r => r.meta?.fields?.[o.locationKey!]), cfg.max_regions)
   if (!regions.length) return { ...out, skipped: 'catálogo sem região' }
-  const units = rotate(buildUnits(cfg.topics, regions, cfg.city, o.lang), n, dayNumber(now))
+  const units = rotate(buildUnits(cfg.topics, regions, cityFor(cfg.city, o.companyCity), o.lang), n, dayNumber(now))
   if (!units.length) return { ...out, skipped: 'ficha sem tópico utilizável' }
 
   const knownRows = (known.data ?? []) as { source_url: string | null; title: string | null }[]

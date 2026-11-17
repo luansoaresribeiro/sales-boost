@@ -70,7 +70,13 @@ const MULTS: Record<string, number> = { k: 1e3, mil: 1e3, mi: 1e6, milhao: 1e6, 
  * "850 mil" → "R$ 850.000"; "R$ 980.000" → "R$ 980.000". Formato ambíguo ("12.5", "1,500", "1.5.3"), vazio, zero ou lixo → ''
  * (não mostra; nunca "R$ —" nem um valor chutado).
  */
-export function formatPrice(v: unknown): string {
+/** Moeda/idioma do slide (ficha: `currency`, E1 17/11). Padrão = reais em português, como era. */
+export interface OfferLocale { lang: 'pt' | 'en'; currency: string }
+export const PT_LOCALE: OfferLocale = { lang: 'pt', currency: 'R$' }
+const isDollar = (l: OfferLocale) => l.currency.trim() === '$' || /usd/i.test(l.currency)
+
+export function formatPrice(v: unknown, loc: OfferLocale = PT_LOCALE): string {
+  if (isDollar(loc)) return formatUsd(v)
   const raw = str(v)
   if (!raw) return ''
   const t = raw.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/r\$|reais|real/g, ' ').replace(/\s+/g, ' ').trim()
@@ -88,6 +94,25 @@ export function formatPrice(v: unknown): string {
   return `R$ ${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
 }
 
+/** Dólar: "1250000", "1,250,000", "$1,250,000", "1.25 million", "850k" → "$1,250,000". Ambíguo ("1.250.000", "12,5") → ''. */
+export function formatUsd(v: unknown): string {
+  const raw = str(v)
+  if (!raw) return ''
+  const t = raw.toLowerCase().replace(/us\$|usd|\$|dollars?/g, ' ').replace(/\s+/g, ' ').trim()
+  const m = /^(\d[\d.,]*)\s*(millions?|mi|k)?$/.exec(t)
+  if (!m) return ''
+  const body = m[1], mult = m[2] ? MULTS[m[2]] : 1
+  let n: number
+  if (/^\d+$/.test(body)) n = Number(body)
+  else if (m[2] && /^\d+\.\d{1,2}$/.test(body)) n = Number(body)                              // "1.25 million"
+  else if (!m[2] && /^\d{1,3}(,\d{3})+$/.test(body)) n = Number(body.replace(/,/g, ''))           // "1,250,000"
+  else if (!m[2] && /^\d{1,3}(,\d{3})+\.\d{2}$/.test(body)) n = Number(body.replace(/,/g, ''))   // "1,250,000.00"
+  else return ''
+  n *= mult
+  if (!Number.isFinite(n) || n <= 0 || n > 1e10) return ''
+  return `$${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`
+}
+
 const num = (v: unknown): number | null => { const s = str(v).replace(',', '.'); return s && Number.isFinite(Number(s)) ? Number(s) : null }
 
 export interface OfferSlide {
@@ -98,13 +123,21 @@ export interface OfferSlide {
 }
 
 /** Linhas do slide de dados: só campo preenchido e coerente (m² fora de 10–2000 é erro de cadastro → não aparece). */
-export function dataLines(f: Record<string, unknown>): string[] {
-  const out: string[] = []
-  const q = num(f.quartos); if (q !== null && q > 0 && q < 30) out.push(`Quartos: ${q}`)
-  const m2 = num(f.m2); if (m2 !== null && m2 >= 10 && m2 <= 2000) out.push(`Área: ${m2} m²`)
-  const v = num(f.vagas); if (v !== null && v >= 0 && v < 30 && str(f.vagas)) out.push(`Vagas: ${v}`)
-  if (str(f.bairro)) out.push(`Bairro: ${str(f.bairro)}`)
-  const price = formatPrice(f.preco); if (price) out.push(`Preço: ${price}`)
+const LBL = {
+  pt: { beds: 'Quartos', area: 'Área', parking: 'Vagas', hood: 'Bairro', price: 'Preço', data: 'Os dados', bed1: 'quarto', bedN: 'quartos', near3: '3 coisas perto daqui', nearIn: (b: string) => `Perto do imóvel em ${b}`, near: 'Perto do imóvel', live: (b: string) => `Morar em ${b}` },
+  en: { beds: 'Bedrooms', area: 'Area', parking: 'Parking', hood: 'Neighborhood', price: 'Price', data: 'The details', bed1: 'bedroom', bedN: 'bedrooms', near3: '3 things nearby', nearIn: (b: string) => `Near this home in ${b}`, near: 'Near this home', live: (b: string) => `Living in ${b}` },
+}
+
+export function dataLines(f: Record<string, unknown>, loc: OfferLocale = PT_LOCALE): string[] {
+  const L = LBL[loc.lang], out: string[] = []
+  const q = num(f.quartos); if (q !== null && q > 0 && q < 30) out.push(`${L.beds}: ${q}`)
+  // Área: m² no Brasil; nos EUA o cadastro é em sq ft (o número entra como foi digitado, faixa maior).
+  const m2 = num(f.m2)
+  if (isDollar(loc)) { if (m2 !== null && m2 >= 100 && m2 <= 30000) out.push(`${L.area}: ${m2.toLocaleString('en-US')} sq ft`) }
+  else if (m2 !== null && m2 >= 10 && m2 <= 2000) out.push(`${L.area}: ${m2} m²`)
+  const v = num(f.vagas); if (v !== null && v >= 0 && v < 30 && str(f.vagas)) out.push(`${L.parking}: ${v}`)
+  if (str(f.bairro)) out.push(`${L.hood}: ${str(f.bairro)}`)
+  const price = formatPrice(f.preco, loc); if (price) out.push(`${L.price}: ${price}`)
   return out
 }
 
@@ -124,6 +157,8 @@ export interface OfferIn {
   handle?: string
   /** Cômodos da ficha pra escolher a capa (opcional). */
   rooms?: CoverRooms | null
+  /** Idioma e moeda do slide (padrão: português em reais). */
+  locale?: OfferLocale
 }
 
 /** Monta os slides da oferta: capa (foto de maior nota + tipo/bairro/quartos/preço) · até 4 fotos · dados · fecho. Máx. 7. */
@@ -131,15 +166,16 @@ export function buildOfferSlides(i: OfferIn): OfferSlide[] {
   const cover = pickCoverPhoto(i.photos, i.rooms)
   if (!cover) return []
   const head = offerHeadline(i.fields)
-  const q = num(i.fields.quartos), price = formatPrice(i.fields.preco)
-  const sub = [q !== null && q > 0 && q < 30 ? `${q} ${q === 1 ? 'quarto' : 'quartos'}` : '', price].filter(Boolean).join(' · ')
+  const loc = i.locale ?? PT_LOCALE, L = LBL[loc.lang]
+  const q = num(i.fields.quartos), price = formatPrice(i.fields.preco, loc)
+  const sub = [q !== null && q > 0 && q < 30 ? `${q} ${q === 1 ? L.bed1 : L.bedN}` : '', price].filter(Boolean).join(' · ')
   const out: OfferSlide[] = [{ kind: 'capa', photo: cover.url, fields: { layout: 'capa', cover_style: 'gancho', title: head, text: head ? sub : '' } }]
   if (!head && sub) out[0].fields.title = sub // sem tipo nem bairro: a capa leva só o que existe
   const staged = usable(i.staged).slice(0, 2)
   const middle = [...staged, ...pickMiddlePhotos(i.photos, cover, OFFER_MAX_PHOTOS)].slice(0, OFFER_MAX_PHOTOS)
   for (const p of middle) out.push({ kind: 'foto', photo: p.url, fields: { layout: 'foto' } })
-  const lines = dataLines(i.fields)
-  if (lines.length >= 2) out.push({ kind: 'dados', fields: { layout: 'lista', title: 'Os dados', items: lines.join('\n') } })
+  const lines = dataLines(i.fields, loc)
+  if (lines.length >= 2) out.push({ kind: 'dados', fields: { layout: 'lista', title: L.data, items: lines.join('\n') } })
   // Fecho: foto do imóvel (a última do meio, ou a capa) + botão com o CTA seguro.
   const closer = middle[middle.length - 1]?.url ?? cover.url
   out.push({ kind: 'fecho', photo: closer, fields: { layout: 'fecho', title: head, cta: i.cta } })
@@ -147,13 +183,13 @@ export function buildOfferSlides(i: OfferIn): OfferSlide[] {
 }
 
 /** "3 coisas perto": capa com a foto real + lista dos 3 lugares (OpenStreetMap) + fecho com CTA. Sem lugares → []. */
-export function buildNearbySlides(i: { photo: CatalogPhoto | null; bairro: string; places: string[]; cta: string }): OfferSlide[] {
+export function buildNearbySlides(i: { photo: CatalogPhoto | null; bairro: string; places: string[]; cta: string; locale?: OfferLocale }): OfferSlide[] {
   const places = i.places.map(str).filter(Boolean).slice(0, 3)
   if (!i.photo || places.length < 3) return []
-  const bairro = str(i.bairro)
+  const bairro = str(i.bairro), L = LBL[(i.locale ?? PT_LOCALE).lang]
   return [
-    { kind: 'capa', photo: i.photo.url, fields: { layout: 'capa', cover_style: 'gancho', title: '3 coisas perto daqui', text: bairro } },
-    { kind: 'dados', fields: { layout: 'lista', title: bairro ? `Perto do imóvel em ${bairro}` : 'Perto do imóvel', items: places.join('\n') } },
-    { kind: 'fecho', photo: i.photo.url, fields: { layout: 'fecho', title: bairro ? `Morar em ${bairro}` : '3 coisas perto daqui', cta: i.cta } },
+    { kind: 'capa', photo: i.photo.url, fields: { layout: 'capa', cover_style: 'gancho', title: L.near3, text: bairro } },
+    { kind: 'dados', fields: { layout: 'lista', title: bairro ? L.nearIn(bairro) : L.near, items: places.join('\n') } },
+    { kind: 'fecho', photo: i.photo.url, fields: { layout: 'fecho', title: bairro ? L.live(bairro) : L.near3, cta: i.cta } },
   ]
 }

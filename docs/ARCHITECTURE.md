@@ -358,6 +358,12 @@ Telegram (`notifyMarketing()` → Cloudflare Worker `marketing-bot` →
   React lê a tela com `getCurrentLang()`. `business_types.label` é chave em PT
   (ficha/plano): traduzir só na exibição (`businessTypeLabel`). Ver
   [DECISIONS.md](historico/DECISIONS-2026-09-a-10.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro).
+- **Fichas de imóveis (17/11, E1):** `imoveis_rio` (Brasil) e `imoveis_us` (EUA). A ficha sai do tipo de negócio: "Realtor
+  (EUA)" → `imoveis_us` (gatilho `sync_company_vertical_key`). A `imoveis_us` tem as mesmas chaves de campo do imóvel
+  (`bairro`, `preco`, `m2`…) e mais `currency: '$'`. A área é lida em sq ft. `market_intel.news.city` vazio → a busca de notícias
+  usa `companies.city` (`cityFor`, `_shared/marketNewsRun.ts`). Os slides do imóvel seguem o idioma da conta e a moeda da ficha
+  (`OfferLocale`, `_shared/carouselOffer.ts`). A licença não trava a publicação (`block_publish_without: false`) até a revisão
+  jurídica (E2).
 - Deploy: `npm run build` → `npx wrangler deploy` (manual, sem CI/CD —
   ver P4 em [ROADMAP.md](ROADMAP.md)).
   > **Divergência (12–13/11):** o site é publicado sozinho pela Cloudflare (Workers Builds) depois de cada merge na `main`,
