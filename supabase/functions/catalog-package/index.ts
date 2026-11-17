@@ -329,7 +329,7 @@ Deno.serve(async (req) => {
       return { ...c, caption: pc.text, cta: pt.text, hashtags: lh.text }
     }
 
-    const fieldsLine = `Tipo: ${fields.tipo ?? '—'} · Bairro: ${fields.bairro ?? '—'} · ${fields.venda_ou_aluguel ?? '—'} · Preço: ${ficha.currency} ${fields.preco ?? '—'} · Quartos: ${fields.quartos ?? '—'} · Metragem: ${fields.m2 ?? '—'}m²${fields.perto_de ? ` · Perto de: ${fields.perto_de}` : ''}${fields.descricao ? `\nDescrição real escrita pelo corretor (use só o que está aqui, sem acrescentar): ${String(fields.descricao).slice(0, 1500)}` : ''}`
+    const fieldsLine = `Tipo: ${fields.tipo ?? '—'} · Bairro: ${fields.bairro ?? '—'} · ${fields.venda_ou_aluguel ?? '—'} · Preço: ${ficha.currency} ${fields.preco ?? '—'} · Quartos: ${fields.quartos ?? '—'} · Metragem: ${fields.m2 ?? '—'}${ficha.currency === '$' ? ' sq ft' : 'm²'}${fields.perto_de ? ` · Perto de: ${fields.perto_de}` : ''}${fields.descricao ? `\nDescrição real escrita pelo corretor (use só o que está aqui, sem acrescentar): ${String(fields.descricao).slice(0, 1500)}` : ''}`
 
     // Data-fonte de agendamento: hoje + 21 dias (3 semanas), calculada 1x e
     // consumida (reservada) peça por peça via pickSlot.
