@@ -18,6 +18,7 @@
   - **Frente 1 — Tour do imóvel inteiro;**
   - **Frente de conteúdo**, em paralelo.
 - **Jornada do cliente** ([decisão 13/11 noite, 3](DECISIONS.md#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro)): **J0 ✅ aprovado em 16/11** ([decisão](DECISIONS.md#2026-11-16--aprovações-do-dono-tradução-pten-em-todas-as-telas-a3-avisada)). Respostas J-a a J-g ✅ (16/11). Próximo: **J1 (custo do grátis)**; em paralelo, **I1 (tudo em inglês no modo inglês)**.
+- **EUA aberto em 17/11** ([decisão](DECISIONS.md#2026-11-17--mercado-dos-eua-aberto-agora-tim-reyes-liberado)): Tim Reyes liberado. Próximo: **E1 (ficha dos EUA)**, com o plano para aprovação antes do código.
 - **Próximo item do agente:**
   - **Frente de conteúdo:** **C1 🧪:** o plano de 15/11 perdeu posts por limite de chamadas do Supabase (causa nos logs); correção no PR do C1, conferir no domingo 22/11. C2 ✅ (16/11). Depois: C3 (construir os formatos aprovados) e C5.
   - **Frente 1:** **1.1 — Ambientes físicos**, com a Tespon e dentro da verba D4.
@@ -92,6 +93,14 @@
 | J3 | Onboarding guiado: checklist "Primeiros passos", dica de 1ª visita guardada por conta, no máximo 1 pop-up de evento real por sessão | Agente | P1 | J2 | Conta de teste nova: a checklist marca sozinha com dado real e some no fim; dica aparece 1 vez por conta (outro navegador não repete) | ⏳ |
 | J4 | Modelo único de página do agente (frase → precisa de você → o que fez → próximo passo → configurações), começando pelo conteúdo; depois 1 agente por PR | Agente | P1 | J3 | Print de cada página no modelo; ações feitas na própria tela | ⏳ |
 | J5 | Upsell contextual para o Pro, gatilho por gatilho, com medição (mostrado/clicado/convertido) e "agora não" por 7 dias | Agente | P2 | J4 | Cada gatilho aparece só com dado real (SQL) e grava as 3 medidas | ⏳ |
+
+## Mercado dos EUA (aberto pelo dono em 17/11)
+
+| ID | Item | Resp. | Prior. | Depende de | Pronto quando | Status |
+|---|---|---|---|---|---|---|
+| E0 | Liberar o Tim Reyes (Boynton Beach, FL) | Agente | P0 | — | `manual_access=true`, `language='en'`, `auto_strategy=false` (SQL) | ✅ 17/11 (SQL) |
+| E1 | **Ficha dos EUA** (`imoveis_us`): textos e perguntas em inglês; licença estadual do corretor no lugar do CRECI; frases proibidas de Fair Housing; fontes de notícias dos EUA; a ficha é escolhida pela cidade/país do cadastro, e não só pelo tipo de negócio | Agente | P0 | plano aprovado pelo dono | O Tim gera 1 post em inglês sobre o mercado dele, sem CRECI nem conteúdo do Rio; depois disso, religar os agendamentos dele | ⏳ plano para aprovação |
+| E2 | Revisão jurídica dos EUA (Fair Housing, licença, divulgação) | Dono | P1 | — | Parecer registrado no DECISIONS | ⏳ risco aceito em 17/11, sem prazo |
 
 ## Frente 1 — Tour Virtual completo
 

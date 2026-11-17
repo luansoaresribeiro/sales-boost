@@ -16,7 +16,7 @@
 | Identidade (operacional) | **Sistema de inteligência e geração de demanda comercial para imobiliárias.** A medida de sucesso é a visita ao imóvel. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Posicionamento comercial | "Technology Partner for Real Estate", só no site e no pitch. Não substitui a definição operacional. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Slogan | "Sales Boost — gerando mais visitas para o seu imóvel". Nunca prometer visita garantida. | [10/11](#2026-11-10--slogan-gerando-mais-visitas-e-aviso-de-visita-no-telegram-dono) |
-| Mercado | **Brasil agora** (principalmente o Rio de Janeiro, em português). EUA depois, só com a revisão jurídica. A ficha dos EUA fica sem comercialização. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) · substitui [27/10](historico/DECISIONS-2026-09-a-10.md#2026-10-27--inglês-como-idioma-principal-mercado-eua-inteiro) |
+| Mercado | **Brasil (principalmente o Rio, em português) e EUA, aberto em 17/11** sem a revisão jurídica (risco aceito pelo dono). A ficha dos EUA ainda não existe (E1); até ela, conta dos EUA sem agendamentos automáticos. | [17/11](#2026-11-17--mercado-dos-eua-aberto-agora-tim-reyes-liberado) · substitui [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Idioma | O setor define o idioma: `imoveis_rio` = português. Idioma ≠ país ≠ regras. **Toda tela tem a troca PT/EN** (16/11): diagnóstico, cadastro, entrada, páginas legais e painel. Texto novo nasce nos dois idiomas, inclusive na ficha. **O idioma dos posts é escolhido no cadastro** (`companies.language`, padrão = idioma da tela) e todos os agentes o seguem (16/11). | [16/11 noite, 2](#2026-11-16-noite-2--idioma-dos-posts-escolhido-no-cadastro) · [16/11](#2026-11-16--aprovações-do-dono-tradução-pten-em-todas-as-telas-a3-avisada) · [02/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-02--idioma-pelo-setor-a-ficha-diz-o-idioma-padrão) · [07/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-07--plataforma-internacional-idioma--país--regras-dono) |
 | Modelo de negócio | **Em validação:** plataforma grátis + tour pago + lead qualificado. **Nenhum preço decidido.** | [10/11](#2026-11-10--novo-modelo-cenários-de-tour-lead-sem-preço-e-portões-da-fase-4-dono) · [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Preço do tour | **Hipótese** de US$ 15 por tour, não é decisão. Um imóvel grande custa ~US$ 14 (estimado). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
@@ -39,6 +39,24 @@
 | Jornada do cliente | O cliente é **guiado desde a 1ª entrada**. O upsell é **contextual**: aparece quando o cliente acabou de ver valor, só com dado real, e leva ao Pro com a função certa aberta. Conteúdo descobre o imóvel que interessa; o tour aprofunda esse imóvel até a visita. Código só depois de o dono aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md), 1 PR por item. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Liga dos Sonhos | Nunca tocar, nem ler. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-17 — Mercado dos EUA aberto agora; Tim Reyes liberado
+
+- **Pedido do dono:** "liberemos o acesso ao último novo cadastro feito, que foi do Tim Reyes". O Tim é corretor em
+  Boynton Beach, Florida.
+- **Conflito mostrado ao dono:** a decisão de [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação)
+  dizia "Brasil agora; EUA depois, só com a revisão jurídica". Na pergunta, **o dono escolheu "Abrir os EUA agora"**.
+  - A linha Mercado de 13/11 fica **substituída em 17/11**.
+- **Feito em 17/11** (SQL, conta `48f9dede`):
+  - acesso liberado à mão (`manual_access=true`);
+  - conteúdo em inglês (`language='en'`);
+  - **agendamentos automáticos desligados só para ele** (`auto_strategy=false`) até existir a ficha dos EUA. Sem isso, a
+    pesquisa de notícias, as oportunidades e a estratégia rodariam com a ficha do Rio.
+  - **Desfazer:** voltar os 3 campos.
+- **O que falta: a ficha dos EUA (item E1 da PENDENCIAS).** Hoje "Corretor(a) de imóveis" leva sempre à ficha
+  `imoveis_rio`, que tem bairros do Rio, temas brasileiros (ITBI) e o CRECI, que trava a publicação.
+- **Risco aceito pelo dono:** a revisão jurídica dos EUA não foi feita. Os pontos são Fair Housing, a licença estadual do
+  corretor e as regras de divulgação. Até lá, nada é publicado sem a aprovação do próprio corretor, como em todas as contas.
 
 ## 2026-11-16 (noite, 2) — Idioma dos posts escolhido no cadastro
 

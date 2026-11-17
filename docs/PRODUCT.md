@@ -14,8 +14,9 @@
 - **Posicionamento comercial (só no site e no pitch):** "Technology Partner for Real Estate". Não substitui a definição
   operacional.
 - **Slogan:** "Sales Boost — gerando mais visitas para o seu imóvel". Visita garantida nunca é prometida.
-- **Mercado:** **Brasil agora** (principalmente o Rio de Janeiro, em português). EUA depois, só com a revisão jurídica.
-  A ficha dos EUA fica sem comercialização.
+- **Mercado:** **Brasil** (principalmente o Rio de Janeiro, em português) **e EUA, aberto em 17/11** sem a revisão
+  jurídica (risco aceito pelo dono). A ficha dos EUA ainda não existe (E1). Até ela, conta dos EUA roda sem
+  agendamentos automáticos. Substitui "EUA depois" de 13/11.
 - **Modelo de negócio em validação (NADA de preço decidido):**
   - plataforma grátis;
   - **tour virtual pago**: US$ 15 por tour é **hipótese**, e um imóvel grande custa ~US$ 14 (estimado);
