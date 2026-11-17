@@ -5,8 +5,8 @@
   imobiliárias. A medida de sucesso é a **visita ao imóvel**, não a quantidade de posts.
 - **Posicionamento comercial (só no site e no pitch):** "Technology Partner for Real Estate".
 - **Slogan:** "Sales Boost — gerando mais visitas para o seu imóvel". Nunca prometer visita garantida.
-- **Mercado agora:** Brasil, principalmente o Rio de Janeiro, em português (ficha `imoveis_rio`, canal Instagram).
-  EUA só depois, com a revisão jurídica.
+- **Mercado agora:** Brasil, principalmente o Rio (ficha `imoveis_rio`, canal Instagram), e **EUA, aberto em 17/11** sem a
+  revisão jurídica (risco aceito pelo dono). A ficha dos EUA ainda não existe (E1, na PENDENCIAS).
 - **Modelo em validação, sem preço decidido:** plataforma grátis + tour pago (US$ 15 é hipótese) + lead qualificado.
   **Boosts:** em aberto. **Anúncio pago:** voltou à plataforma (Campanha, grupo Pro, 13/11 noite); entrar no preço está em aberto.
 - **Pro não é plano:** é o menu das funções pagas com Boosts; **a lista é do dono, não mexer**. O grátis tem custo controlado
