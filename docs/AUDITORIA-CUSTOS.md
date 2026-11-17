@@ -1,4 +1,4 @@
-# Auditoria de custos (Fase 1 do novo modelo) — v0.1, 10/11/2026
+# Auditoria de custos (Fase 1 do novo modelo) — v1, 17/11/2026 (v0.1 de 10/11 abaixo)
 
 > **Por que existe.** O dono propôs uma plataforma grátis, com tour virtual pago (US$ 15 — **hipótese**, não decisão; ver [Decisões em vigor](DECISIONS.md#decisões-em-vigor)) e cobrança por lead qualificado.
 > Antes de decidir, precisamos saber quanto custa manter uma imobiliária ativa e, principalmente, **quanto custa
@@ -12,6 +12,58 @@
 > - A Liga dos Sonhos não foi consultada.
 >
 > **v0.1** corrige a v0 (revisão do dono, 10/11). A **v1 sai em 17/11**, com custo **medido** por função (as funções do #127, que gravam o custo real, entraram no ar em 10/11).
+
+## v1 (17/11) — o que foi MEDIDO de 10 a 17/11
+
+**Fonte:** SQL só de leitura em `agent_performance` e `market_intel_runs`, contas Teste Zero e Tespon. A conta Sales Boost
+não teve nenhum registro no período. A Liga dos Sonhos não foi consultada.
+
+### Custo medido por conta (7 dias)
+
+| Tarefa | Teste Zero | Tespon | Custo por unidade | Fonte |
+|---|---|---|---|---|
+| Texto das peças (Claude, `ai_text_content`) | US$ 0,744 (11 peças) | US$ 0,630 (9 peças) | **≈ US$ 0,07 por peça** | [medido] |
+| Leitura do mercado → oportunidades (Claude, `run_opportunities`) | US$ 0,100 (6 leituras) | US$ 0,039 (1 leitura) | **≈ US$ 0,017 a 0,039 por leitura** | [medido] |
+| Estratégia (Claude, `ai_text_strategy`) | US$ 0,016 (1) | US$ 0,018 (1) | **≈ US$ 0,02 por estratégia** | [medido] |
+| Pesquisa de notícias (Tavily) | 32 buscas | 8 buscas | US$ 0,006 a 0,008 por busca **a preço de tabela**; hoje US$ 0 (plano grátis, 1.000 por mês para a organização inteira) | [medido] buscas |
+| **Claude no total** | **US$ 0,86** | **US$ 0,69** | | [medido] |
+
+**Como ler:**
+- Quase todo o custo de Claude vem de **agendamento** (`call_origin = cron`), não de clique.
+- Esse agendamento inclui os reenchimentos de semana feitos em 16/11, que foram disparados pelo mesmo caminho do
+  agendamento. Por isso, os 7 dias **não** são uma semana típica de uma conta parada.
+- A Teste Zero teve 8 coletas de notícias e 6 leituras do mercado. A Tespon teve 1 de cada. A diferença de uso entre
+  as duas contas aparece aqui.
+- **O reaproveitamento de prompt já funciona nas peças:** 17,5 mil tokens lidos do reaproveitamento e 9,3 mil gravados
+  nele, desde 13/11.
+
+### Projeção por conta por mês (marcada como projeção, não medida)
+Base: 1 post por dia, 1 leitura do mercado por dia e 1 estratégia por semana.
+
+| Item | Conta | Valor |
+|---|---|---|
+| Peças | 30 × US$ 0,07 | ≈ US$ 2,10 |
+| Oportunidades | até 30 × US$ 0,02 a 0,04 | ≈ US$ 0,50 a 1,20 |
+| Estratégia | 4 × US$ 0,02 | ≈ US$ 0,08 |
+| **Claude, total** | | **≈ US$ 2,70 a 3,40 por conta por mês** |
+| Tavily | 4 a 8 buscas por dia × 30 = 120 a 240 créditos | US$ 0 até a organização somar 1.000 créditos (≈ 4 a 8 contas); depois, US$ 0,96 a 1,92 por conta por mês |
+
+A v0 tinha estimado US$ 8,50 por conta por mês. A medição real ficou bem abaixo disso, **mas está incompleta** (abaixo).
+
+### O que ainda NÃO é medido (lacunas da v1)
+Estas funções chamam Claude e **não gravam custo** em `agent_performance`, então o total acima está **subestimado**:
+- `content-test` (nota de qualidade e refação automática de cada peça);
+- `catalog-package` (post e carrossel do imóvel);
+- `generate-tab-insight`, `creative-ideas`, `telegram-chat` e o diagnóstico (`run-diagnosis`).
+
+**Próximo passo:** gravar o custo nessas funções (o mesmo registro do #127) e refazer a medição em 7 dias.
+
+### Custo por resultado comercial (atualiza a seção 3)
+| Resultado | Antes | Agora |
+|---|---|---|
+| 1 oportunidade identificada | US$ 0,008 a 0,041 (estimado) | US$ 0,017 a 0,039 por leitura do mercado (medido); cada leitura gera 0 ou mais oportunidades |
+| 1 estratégia | não medido | ≈ US$ 0,02 (medido) |
+| 1 post | não medido | ≈ US$ 0,07 só o texto (medido); a nota e a refação ainda não são medidas |
 
 ## 1. Dados de partida
 
