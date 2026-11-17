@@ -28,10 +28,10 @@ export async function cronMarketIntel(
   const { data: cfg } = await admin.from('hermes_config').select('auto_strategy_enabled').eq('id', true).maybeSingle()
   if (cfg && cfg.auto_strategy_enabled === false) return { ...sum, skipped_reason: 'auto_strategy_enabled=false no painel Owner' }
 
-  const { data: companies } = await admin.from('companies').select('id, vertical_key, language').eq('auto_strategy', true).eq('active', true).limit(200)
+  const { data: companies } = await admin.from('companies').select('id, vertical_key, language, city').eq('auto_strategy', true).eq('active', true).limit(200)
   const windowOpen = () => Date.now() - started < MI_START_UNTIL_MS
   let worked = 0
-  for (const c of (companies ?? []) as { id: string; vertical_key: string | null; language: string | null }[]) {
+  for (const c of (companies ?? []) as { id: string; vertical_key: string | null; language: string | null; city?: string | null }[]) {
     if (worked >= MI_COMPANIES_PER_CALL || !windowOpen()) break
     try {
       if (!(await hasPaidAccess(admin, c.id))) continue // conta vitrine: cron não gasta
@@ -54,7 +54,7 @@ export async function cronMarketIntel(
         } catch (e) { console.error(`[cron_market_intel] reclassificação ${c.id}:`, String(e)) }
       }
       const r = await collect(admin, {
-        companyId: c.id, lang: c.language === 'en' ? 'en' : 'pt', rawConfig: pbCfg.market_intel, locationKey: pbCfg.opportunity_fields.location, canStart: windowOpen,
+        companyId: c.id, lang: c.language === 'en' ? 'en' : 'pt', rawConfig: pbCfg.market_intel, locationKey: pbCfg.opportunity_fields.location, companyCity: c.city ?? null, canStart: windowOpen,
         fitsTotalCap: deps.fitsCap ? (est) => deps.fitsCap!(c.id, est) : undefined,
       })
       sum.searched += r.searched; sum.added += r.added; sum.spent_usd += r.spent_usd

@@ -102,7 +102,7 @@ export function publicFields(catalog: { required?: unknown; optional?: unknown }
     if (def.type === 'number') {
       const n = Number(raw)
       if (!Number.isFinite(n)) continue
-      value = unit === 'R$' ? `R$ ${fmtNumber(n, lang)}` : unit ? `${fmtNumber(n, lang)} ${unit}` : fmtNumber(n, lang)
+      value = unit === 'R$' ? `R$ ${fmtNumber(n, lang)}` : unit === '$' ? `$${fmtNumber(n, lang)}` : unit ?`${fmtNumber(n, lang)} ${unit}` : fmtNumber(n, lang)
     } else if (def.type === 'select') {
       const opt = (def.options ?? []).find(o => o.pt === String(raw))
       if (!opt) continue // valor que não é uma opção da ficha: não mostra
