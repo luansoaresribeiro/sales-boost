@@ -39,4 +39,5 @@ assert.ok(spacesPrompt(50, [{ key: 'quarto', label: 'quarto' }]).includes('quart
 const iv = readFileSync('supabase/functions/item-videos/index.ts', 'utf8')
 assert.ok(iv.includes("body.action === 'group_spaces'") && iv.includes('requirePaidAccess'))
 assert.ok(readFileSync('supabase/functions/_shared/photoSpaces.ts', 'utf8').includes("taskKey: 'ai_vision_spaces'"))
+assert.ok(spacesPrompt(3, []).includes('NUNCA use nome de pessoa'))
 console.log('ok — ambientes físicos: leitura da IA, comparação com a tabela 2.1, ação group_spaces')

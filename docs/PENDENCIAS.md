@@ -34,7 +34,7 @@
 
   | Verba | Gasto até agora |
   |---|---|
-  | Frente 1 (US$ 15) | US$ 0,00 |
+  | Frente 1 (US$ 15) | US$ 0,32 (1.1, 18/11) |
   | Frente de conteúdo (US$ 2) | US$ 0,00 |
 
 ## Decisões do dono
@@ -107,7 +107,7 @@
 | ID | Item | Resp. | Prior. | Depende de | Pronto quando | Status |
 |---|---|---|---|---|---|---|
 | 1.0 | Auditoria do tour + viabilidade da Tespon | Agente | P0 | — | Documento entregue + roadmap aprovado | ✅ 13/11 (#167; D1 aprovado) |
-| 1.1 | Ambientes físicos (agrupar as fotos do mesmo ambiente) | Agente | P0 | D1 ✅, D4 ✅ (US$ 15) | Testes automáticos ✅ + grupos da Tespon = tabela 2.1 (o dono confere os ❓) | ⏳ |
+| 1.1 | Ambientes físicos (agrupar as fotos do mesmo ambiente) | Agente | P0 | D1 ✅, D4 ✅ (US$ 15) | Testes automáticos ✅ + grupos da Tespon = tabela 2.1 (o dono confere os ❓) | 🧪 18/11 (#187): IA de visão agrupa as 50 fotos da Tespon em **24 ambientes** (a tabela 2.1 tem 22). **Precisão 1,0** (nunca juntou ambientes diferentes) e **cobertura 0,93**. As 2 diferenças são dois ❓ da tabela: o closet do quarto 2 em 2 partes (#7 e #33) e o #27 separado do salão. Custo medido: US$ 0,32. **Falta o dono conferir os ❓** (lista no relatório de 18/11). A instrução não usa mais nome de pessoa no rótulo |
 | 1.2 | Mapa de ligações com evidência (foto que prova cada ligação) | Agente | P0 | 1.1, D4 ✅ | Mapa da Tespon = 2.2, nenhuma ligação inventada; custo medido | ⏳ |
 | 1.3 | Indicador de cobertura + lista de fotos que faltam (com ângulo) na tela | Agente | P0 | 1.2 | A tela mostra os pendentes da Tespon e a lista 2.3; print aprovado | ⏳ |
 | 1.4 | Tour em partes + conferência de destino | Agente | P1 | 1.3, D3 | Testes automáticos + revisão do dono | ⏳ |
