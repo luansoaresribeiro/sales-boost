@@ -93,6 +93,8 @@ partes do mesmo tour. Dividir em partes nunca pode servir para esconder ambiente
 | Lazer | Quadra coberta (grama sintética) | 16, 17, 20 | outro / varanda |
 | Lazer | Pátio com cadeiras ❓ | 21 | varanda |
 
+> **18/11 (item 1.1, #187):** a IA de visão (`group_spaces`, `_shared/photoSpaces.ts`) achou 24 ambientes nestas 50 fotos: precisão 1,0 e cobertura 0,93 em relação a esta tabela. As diferenças são dois ❓: o closet do quarto 2 em 2 partes (#7 e #33) e o #27 separado do salão.
+
 **O tour de 13/11 cobriu 8 de 22 ambientes** (36%): terraço, sala, jantar, despensa, copa, corredor, suíte e banheiro da suíte.
 
 ### 2.2 Mapa de ligações

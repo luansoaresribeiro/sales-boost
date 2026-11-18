@@ -34,7 +34,7 @@ export function spacesPrompt(n: number, rooms: { key: string; label: string }[])
   return `Acima estão ${n} fotos REAIS de UM imóvel, numeradas de 0 a ${n - 1}. Agrupe as fotos por AMBIENTE FÍSICO: fotos do mesmo cômodo (mesmo quarto, mesmo banheiro, mesma sala), mesmo que de ângulos diferentes, ficam juntas; cômodos diferentes do mesmo tipo (quarto 2 e quarto 3) ficam SEPARADOS.
 Compare móveis, revestimentos, janelas, cores, objetos e o que se vê pela janela para decidir. Não invente ambiente que não aparece.
 Para cada ambiente:
-- "label": nome curto em português com o detalhe que o diferencia (ex.: "Quarto 2 (cabeceira cinza)", "Banheiro da suíte");
+- "label": nome curto em português com o detalhe que o diferencia (ex.: "Quarto 2 (cabeceira cinza)", "Banheiro da suíte"). NUNCA use nome de pessoa, mesmo que apareça escrito na foto (ex.: nome na parede ou na porta): diga "Quarto 2", "Quarto 3";
 - "room": o tipo, uma chave desta lista: ${roomList}; se nenhuma servir, "outro";
 - "area": "social", "intima", "lazer", "servico" ou "externa";
 - "photos": os números das fotos;
