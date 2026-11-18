@@ -5,6 +5,7 @@ import { advanceTour, clipPrompt, COST_PER_SECOND, estimateUsd, hfHeaders, SECON
 import { tourCfgFrom, type TourPhoto } from '../_shared/tourPick.ts'
 import { checkPassages, MAX_PAIRS_PER_CALL } from '../_shared/passageCheck.ts'
 import { orderTour, roomOf, tourOrderCfgFrom, tourSeconds, tourSegments, withOutsideFirst, type Segment, type SegKind } from '../_shared/tourOrder.ts'
+import { ensureSpaces } from '../_shared/photoSpaces.ts'
 import { ensurePhotoScores } from '../_shared/photoScore.ts'
 import { validEndcardUrl } from '../_shared/tourPick.ts'
 import { draftReply, type DmReplyConfig } from '../_shared/dmReply.ts'
@@ -223,7 +224,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const admin = createClient(supabaseUrl, serviceKey)
-    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number; cuts?: unknown; outside_first?: unknown }
+    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number; cuts?: unknown; outside_first?: unknown; force?: unknown }
     const cronSecret = Deno.env.get('CRON_SECRET')
     const isCron = !!cronSecret && body.cron_secret === cronSecret
 
@@ -325,6 +326,19 @@ Deno.serve(async (req) => {
       if (photos.length < 2 || photos.length > MAX_PAIRS_PER_CALL + 1 || photos.some(u => !own.has(u))) return json({ error: 'Fotos inválidas para este imóvel.' }, 400)
       const checks = await checkPassages(admin, Deno.env.get('ANTHROPIC_API_KEY') ?? '', company.id, item.id, photos)
       return json({ passages: checks.map((c, i) => ({ from: i, to: i + 1, linked: c.linked, missing: c.missing })) })
+    }
+
+    // Frente 1, item 1.1: ambientes físicos (fotos do mesmo cômodo juntas; "Quarto 2" ≠ "Quarto 3"). IA de visão uma vez
+    // por conjunto de fotos (~US$ 0,30, guardado em meta.spaces); `force` refaz.
+    if (body.action === 'group_spaces') {
+      const noPlan = await requirePaidAccess(admin, company.id)
+      if (noPlan) return noPlan
+      const item = await loadItem(body.item_id)
+      if (!item) return json({ error: 'Imóvel não encontrado.' }, 404)
+      const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', company.vertical_key ?? 'generico').eq('enabled', true).maybeSingle()
+      const r = await ensureSpaces(admin, Deno.env.get('ANTHROPIC_API_KEY') ?? '', company.id, item.id, tourCfgFrom(pb?.config).rooms, { force: body.force === true })
+      if (!r) return json({ error: 'Não deu para identificar os ambientes agora (fotos insuficientes ou IA indisponível).' }, 502)
+      return json({ spaces: r.spaces, at: r.at, cost_usd: r.cost_usd ?? null })
     }
 
     if (body.action === 'plan_tour') {
