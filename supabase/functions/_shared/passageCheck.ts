@@ -12,11 +12,14 @@
 // decidir (andar, piso, aberturas), aceita a abertura visível em qualquer uma das fotos no mesmo andar, e só aceita troca
 // de andar com a escada visível na FOTO 1. Resultado guardado com `v` — checagem de versão antiga é refeita.
 
+import type { Usage } from './aiCost.ts'
+
 export type Linked = 'yes' | 'no' | 'unsure'
 export type Missing = 'escada' | 'porta' | 'abertura' | null
 export interface PassageCheck { linked: Linked; missing: Missing; checked_at?: string; v?: number; facts?: PassageFacts }
 
-const MODEL = 'claude-sonnet-5-5'
+export const PASSAGE_MODEL = 'claude-sonnet-5-5'
+const MODEL = PASSAGE_MODEL
 /** Versão da pergunta. Resultado guardado com outra versão (ou sem) é perguntado de novo. */
 export const CHECK_VERSION = 4
 export const isCurrent = (c: PassageCheck | null | undefined): c is PassageCheck => !!c && c.v === CHECK_VERSION
@@ -59,7 +62,7 @@ export const MISSING_LABEL: Record<NonNullable<Missing>, string> = {
 // andar sem a escada na foto de saída, e de fora para dentro sem a porta aparecer. Dentro de casa, no mesmo andar, a
 // caminhada saiu fiel em 5 de 5 — então essa passa.
 export type Tri = 'yes' | 'no' | 'unsure'
-export interface PassageFacts { outside1: Tri; outside2: Tri; sameFloor: Tri; stairsInPhoto1: Tri; doorBetweenVisible: Tri; stairsInPhoto2?: Tri }
+export interface PassageFacts { outside1: Tri; outside2: Tri; sameFloor: Tri; stairsInPhoto1: Tri; doorBetweenVisible: Tri; stairsInPhoto2?: Tri; throughView?: Tri }
 
 const tri = (v: unknown): Tri => { const s = String(v ?? '').toLowerCase(); return s === 'yes' || s === 'sim' || s === 'true' ? 'yes' : s === 'no' || s === 'nao' || s === 'não' || s === 'false' ? 'no' : 'unsure' }
 
@@ -69,7 +72,7 @@ export function parseFacts(raw: string): PassageFacts | null {
   if (!m) return null
   try {
     const o = JSON.parse(m) as Record<string, unknown>
-    return { outside1: tri(o.photo1_outside), outside2: tri(o.photo2_outside), sameFloor: tri(o.same_floor), stairsInPhoto1: tri(o.stairs_in_photo1), doorBetweenVisible: tri(o.door_between_visible), stairsInPhoto2: tri(o.stairs_in_photo2) }
+    return { outside1: tri(o.photo1_outside), outside2: tri(o.photo2_outside), sameFloor: tri(o.same_floor), stairsInPhoto1: tri(o.stairs_in_photo1), doorBetweenVisible: tri(o.door_between_visible), stairsInPhoto2: tri(o.stairs_in_photo2), ...(o.other_visible_through !== undefined ? { throughView: tri(o.other_visible_through) } : {}) }
   } catch { return null }
 }
 
@@ -92,6 +95,18 @@ export function decidePassage(f: PassageFacts): Omit<PassageCheck, 'checked_at' 
   return { linked: 'yes', missing: null }
 }
 
+/**
+ * Frente 1, item 1.2 (mapa de ligações): a mesma pergunta de fatos, com UMA pergunta a mais — pela porta/vão, a foto 1
+ * mostra parte do ambiente da foto 2 (ou o contrário)? Porta visível sozinha não prova para onde ela leva (piscina →
+ * salão e jogos → sala de baixo deram errado assim). O tour (checkPassages) não usa esta pergunta.
+ */
+export type LinkClass = 'confirmed' | 'probable' | 'unknown'
+export function classifyLink(f: PassageFacts): { cls: LinkClass; missing: Missing } {
+  const d = decidePassage(f)
+  if (d.linked !== 'yes') return { cls: 'unknown', missing: d.missing }
+  return f.throughView === 'yes' ? { cls: 'confirmed', missing: null } : { cls: 'probable', missing: null }
+}
+
 const PROMPT = `São duas fotos REAIS do mesmo imóvel. Responda só sobre o que se VÊ nelas.
 Primeiro descreva em poucas linhas cada foto: o ambiente, se é dentro ou fora (área externa, piscina, terraço e varanda descoberta são "fora"), e as portas, vãos, portas de vidro e escadas que aparecem.
 Depois responda:
@@ -102,10 +117,14 @@ Depois responda:
 - door_between_visible: quando uma foto é de fora e a outra de dentro, alguma das duas mostra a porta, porta de vidro ou vão que liga os dois? Se não aparece, "no". (Se as duas são de dentro ou as duas de fora, "unsure".)
 Termine com UMA linha só com o JSON: {"photo1_outside":"yes|no","photo2_outside":"yes|no","same_floor":"yes|no|unsure","stairs_in_photo1":"yes|no","stairs_in_photo2":"yes|no","door_between_visible":"yes|no|unsure"}`
 
+export const LINK_PROMPT = PROMPT.replace('Termine com UMA linha', `- other_visible_through: olhando PELA porta, vão, vidro ou escada, a FOTO 1 mostra uma parte do MESMO ambiente que está na FOTO 2 (o mesmo piso, móvel, parede ou janela), ou a FOTO 2 mostra parte do ambiente da FOTO 1? Só "yes" se você reconhece o outro ambiente pelo que aparece; porta ou vão sem dar para ver aonde leva = "no"; na dúvida, "unsure".
+Termine com UMA linha`).replace('"door_between_visible":"yes|no|unsure"}', '"door_between_visible":"yes|no|unsure","other_visible_through":"yes|no|unsure"}')
+
 // deno-lint-ignore no-explicit-any
 type Admin = any
 
-async function askPair(anthropicKey: string, a: string, b: string): Promise<PassageCheck | null> {
+/** Uma pergunta de fatos para o par (A, B). Devolve também o uso de tokens (para gravar o custo). */
+export async function askPairFacts(anthropicKey: string, a: string, b: string, prompt = PROMPT): Promise<{ text: string; usage: Usage | null; error: string | null }> {
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -113,18 +132,24 @@ async function askPair(anthropicKey: string, a: string, b: string): Promise<Pass
       body: JSON.stringify({ model: MODEL, max_tokens: 2000, output_config: { effort: 'medium' }, messages: [{ role: 'user', content: [
         { type: 'text', text: 'FOTO 1:' }, { type: 'image', source: { type: 'url', url: a } },
         { type: 'text', text: 'FOTO 2:' }, { type: 'image', source: { type: 'url', url: b } },
-        { type: 'text', text: PROMPT },
+        { type: 'text', text: prompt },
       ] }] }),
       signal: AbortSignal.timeout(90_000),
     })
-    if (!res.ok) { console.error('passageCheck: IA recusou', res.status); await res.body?.cancel(); return null }
+    if (!res.ok) { const t = (await res.text()).slice(0, 200); return { text: '', usage: null, error: `IA recusou (${res.status}): ${t}` } }
     const data = await res.json()
-    if (data.stop_reason === 'refusal') return null
+    if (data.stop_reason === 'refusal') return { text: '', usage: data.usage ?? null, error: 'recusa' }
     // Com o raciocínio ligado, o 1º bloco pode ser de "thinking": junta só os blocos de texto.
     const text = (Array.isArray(data.content) ? data.content : []).filter((b: { type?: string }) => b?.type === 'text').map((b: { text?: string }) => b.text ?? '').join('\n')
-    const facts = parseFacts(text)
-    return facts ? { ...decidePassage(facts), facts } : parsePassageCheck(text)
-  } catch (e) { console.error('passageCheck: falhou', String(e).slice(0, 200)); return null }
+    return { text, usage: data.usage ?? null, error: null }
+  } catch (e) { return { text: '', usage: null, error: String(e).slice(0, 200) } }
+}
+
+async function askPair(anthropicKey: string, a: string, b: string): Promise<PassageCheck | null> {
+  const r = await askPairFacts(anthropicKey, a, b)
+  if (r.error || !r.text) { if (r.error) console.error('passageCheck: falhou', r.error); return null }
+  const facts = parseFacts(r.text)
+  return facts ? { ...decidePassage(facts), facts } : parsePassageCheck(r.text)
 }
 
 /**

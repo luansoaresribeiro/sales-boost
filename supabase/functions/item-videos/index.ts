@@ -6,6 +6,7 @@ import { tourCfgFrom, type TourPhoto } from '../_shared/tourPick.ts'
 import { checkPassages, MAX_PAIRS_PER_CALL } from '../_shared/passageCheck.ts'
 import { orderTour, roomOf, tourOrderCfgFrom, tourSeconds, tourSegments, withOutsideFirst, type Segment, type SegKind } from '../_shared/tourOrder.ts'
 import { ensureSpaces } from '../_shared/photoSpaces.ts'
+import { DEFAULT_MAX_USD, ensureLinks } from '../_shared/spaceLinks.ts'
 import { ensurePhotoScores } from '../_shared/photoScore.ts'
 import { validEndcardUrl } from '../_shared/tourPick.ts'
 import { draftReply, type DmReplyConfig } from '../_shared/dmReply.ts'
@@ -224,7 +225,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const admin = createClient(supabaseUrl, serviceKey)
-    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number; cuts?: unknown; outside_first?: unknown; force?: unknown }
+    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number; cuts?: unknown; outside_first?: unknown; force?: unknown; max_usd?: unknown; dry_run?: unknown }
     const cronSecret = Deno.env.get('CRON_SECRET')
     const isCron = !!cronSecret && body.cron_secret === cronSecret
 
@@ -339,6 +340,19 @@ Deno.serve(async (req) => {
       const r = await ensureSpaces(admin, Deno.env.get('ANTHROPIC_API_KEY') ?? '', company.id, item.id, tourCfgFrom(pb?.config).rooms, { force: body.force === true })
       if (!r) return json({ error: 'Não deu para identificar os ambientes agora (fotos insuficientes ou IA indisponível).' }, 502)
       return json({ spaces: r.spaces, at: r.at, cost_usd: r.cost_usd ?? null })
+    }
+
+    // Frente 1, item 1.2: mapa de ligações entre os ambientes do 1.1 — só com a foto que prova cada ligação; o resto
+    // fica "desconhecido". Teto rígido de custo (max_usd, padrão US$ 1); dry_run devolve só a estimativa.
+    if (body.action === 'map_links') {
+      const noPlan = await requirePaidAccess(admin, company.id)
+      if (noPlan) return noPlan
+      const item = await loadItem(body.item_id)
+      if (!item) return json({ error: 'Imóvel não encontrado.' }, 404)
+      const r = await ensureLinks(admin, Deno.env.get('ANTHROPIC_API_KEY') ?? '', company.id, item.id, { maxUsd: Number(body.max_usd ?? DEFAULT_MAX_USD), force: body.force === true, dryRun: body.dry_run === true })
+      if (r.error) return json({ error: r.error, estimate: r.estimate ?? null }, 400)
+      if (!r.result) return json({ estimate: r.estimate })
+      return json({ links: r.result.links, provisional: r.result.provisional, cost_usd: r.result.cost_usd, estimate: r.estimate, stopped_by_cap: r.result.stopped_by_cap, total_cost_usd: r.result.total_cost_usd, pending: r.result.pending, out_of_time: r.result.out_of_time, at: r.result.at })
     }
 
     if (body.action === 'plan_tour') {
