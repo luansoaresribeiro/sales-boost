@@ -18,6 +18,8 @@ export const MAX_LINK_PAIRS = 30
 // Estimativa (tokens por imagem ~1.600 numa foto de anúncio; saída com o raciocínio curto). Medido de novo a cada rodada.
 const IMG_TOKENS = 1600
 const PROPOSE_OUT = 4000
+const PAIR_BATCH = 6
+const TIME_BUDGET_MS = 90_000 // a função tem ~150 s; a proposta leva ~60–90 s, então a conferência pode seguir numa 2ª chamada
 const PAIR_OUT = 700 // a conferência v4 mediu ~US$ 0,01 por par; 700 de saída deixa folga
 
 export interface SpaceLink {
@@ -33,7 +35,8 @@ export interface SpaceLink {
 }
 export interface LinksResult {
   v: number; spaces_sig: string; provisional: boolean; links: SpaceLink[]; at: string
-  cost_usd: number; proposal_cost_usd: number; estimate_usd: number; stopped_by_cap: boolean
+  cost_usd: number; total_cost_usd: number; proposal_cost_usd: number; estimate_usd: number; stopped_by_cap: boolean
+  pending: number; out_of_time: boolean
 }
 export interface Proposal { a: string; b: string; photo: number; other_photo: number | null; why: string }
 
@@ -159,9 +162,12 @@ export async function ensureLinks(admin: Admin, anthropicKey: string, companyId:
   if (reuseProposal) estimate.total = Math.round(estimate.perPair * guessPairs * 1000) / 1000
   if (opts.dryRun) return { estimate }
   if (!anthropicKey) return { error: 'IA indisponível.' }
-  if ((reuseProposal ? estimate.perPair : estimate.proposal + estimate.perPair) > maxUsd) return { estimate, error: `A estimativa passa do teto de US$ ${maxUsd.toFixed(2)}.` }
+  // O teto vale para o mapa inteiro: com a proposta reaproveitada, conta o que já foi gasto nas chamadas anteriores.
+  const priorCost = reuseProposal ? Number(prev!.total_cost_usd ?? prev!.cost_usd ?? 0) : 0
+  if (priorCost + (reuseProposal ? estimate.perPair : estimate.proposal + estimate.perPair) > maxUsd) return { estimate, error: `A estimativa passa do teto de US$ ${maxUsd.toFixed(2)}.` }
 
   let spent = 0, proposalCost = 0
+  const tStart = Date.now()
   let proposals: Proposal[]
   if (reuseProposal) proposals = prev!.proposal!.items
   else {
@@ -180,32 +186,43 @@ export async function ensureLinks(admin: Admin, anthropicKey: string, companyId:
 
   const byKey = new Map(spaces.map(s => [s.key, s]))
   const cachedBySig = new Map((prev?.v === LINKS_VERSION ? prev.links : []).filter(l => l.checked).map(l => [`${l.sig}#${l.photo}`, l]))
-  const links: SpaceLink[] = []
-  let stopped = false
-  for (const p of proposals) {
+  const links: SpaceLink[] = proposals.map(p => {
     const A = byKey.get(p.a)!, B = byKey.get(p.b)!
     const sig = pairSig(A, B)
-    const base: SpaceLink = { a: p.a, b: p.b, cls: 'unknown', photo: p.photo, other_photo: p.other_photo, missing: null, why: p.why, checked: false, sig }
     const hit = !opts.force ? cachedBySig.get(`${sig}#${p.photo}`) : undefined
-    if (hit) { links.push({ ...hit, a: p.a, b: p.b }); continue }
-    if (p.other_photo === null) { links.push(base); continue }
-    if (spent + estimate.perPair > maxUsd) { stopped = true; links.push(base); continue }
-    // A foto da evidência é a "FOTO 1" (de onde se olha); a outra é o ambiente que deve aparecer pela passagem.
-    const t0 = Date.now()
-    const r = await askPairFacts(anthropicKey, urls[p.photo], urls[p.other_photo], LINK_PROMPT)
-    const cost = anthropicCostUsd(PASSAGE_MODEL, r.usage)
-    spent += cost
-    const facts = r.text ? parseFacts(r.text) : null
-    await logAiCost(admin, { companyId, role: 'tour', taskKey: 'ai_vision_links_pair', description: `Ligação ${A.label} ↔ ${B.label} (fotos ${p.photo} e ${p.other_photo})`.slice(0, 200), tokens: totalTokens(breakdownOf(r.usage)), costUsd: cost, latencyMs: Date.now() - t0, success: !!facts, error: facts ? null : (r.error ?? 'resposta sem JSON válido'), breakdown: breakdownOf(r.usage), trigger: 'manual' }).catch(() => {})
-    if (!facts) { links.push(base); continue }
-    const c = classifyLink(facts)
-    links.push({ ...base, cls: c.cls, missing: c.missing, facts, checked: true })
+    return hit ? { ...hit, a: p.a, b: p.b } : { a: p.a, b: p.b, cls: 'unknown', photo: p.photo, other_photo: p.other_photo, missing: null, why: p.why, checked: false, sig }
+  })
+  // Conferência em lotes paralelos. Para antes do teto de custo (somado ao que já foi gasto neste mapa) e antes do
+  // limite de tempo da função; o que sobrar fica "não conferido" e uma nova chamada continua dali (cache).
+  const todo = links.map((l, i) => ({ l, i })).filter(x => !x.l.checked && x.l.other_photo !== null && x.l.photo !== null)
+  let stopped = false, outOfTime = false
+  for (let k = 0; k < todo.length;) {
+    if (Date.now() - tStart > TIME_BUDGET_MS) { outOfTime = true; break }
+    const fits = Math.floor((maxUsd - priorCost - spent) / estimate.perPair)
+    if (fits < 1) { stopped = true; break }
+    const batch = todo.slice(k, k + Math.min(PAIR_BATCH, fits))
+    k += batch.length
+    await Promise.all(batch.map(async ({ l, i }) => {
+      const A = byKey.get(l.a)!, B = byKey.get(l.b)!
+      // A foto da evidência é a "FOTO 1" (de onde se olha); a outra é o ambiente que deve aparecer pela passagem.
+      const t0 = Date.now()
+      const r = await askPairFacts(anthropicKey, urls[l.photo!], urls[l.other_photo!], LINK_PROMPT)
+      const cost = anthropicCostUsd(PASSAGE_MODEL, r.usage)
+      spent += cost
+      const facts = r.text ? parseFacts(r.text) : null
+      await logAiCost(admin, { companyId, role: 'tour', taskKey: 'ai_vision_links_pair', description: `Ligação ${A.label} ↔ ${B.label} (fotos ${l.photo} e ${l.other_photo})`.slice(0, 200), tokens: totalTokens(breakdownOf(r.usage)), costUsd: cost, latencyMs: Date.now() - t0, success: !!facts, error: facts ? null : (r.error ?? 'resposta sem JSON válido'), breakdown: breakdownOf(r.usage), trigger: 'manual' }).catch(() => {})
+      // Falha da IA: fica desconhecida e marcada como conferida (sem nova tentativa paga automática).
+      if (!facts) { links[i] = { ...l, checked: true, missing: null }; return }
+      const c = classifyLink(facts)
+      links[i] = { ...l, cls: c.cls, missing: c.missing, facts, checked: true }
+    }))
   }
 
   const round = (x: number) => Math.round(x * 10000) / 10000
   const result: LinksResult & { proposal: { spaces_sig: string; items: Proposal[] } } = {
     v: LINKS_VERSION, spaces_sig: sSig, provisional: opts.provisional ?? spaces.some(s => s.uncertain), links, at: new Date().toISOString(),
-    cost_usd: round(spent), proposal_cost_usd: round(proposalCost), estimate_usd: estimate.total, stopped_by_cap: stopped,
+    cost_usd: round(spent), total_cost_usd: round(priorCost + spent), proposal_cost_usd: round(proposalCost), estimate_usd: estimate.total, stopped_by_cap: stopped,
+    pending: links.filter(l => !l.checked && l.other_photo !== null).length, out_of_time: outOfTime,
     proposal: { spaces_sig: sSig, items: proposals },
   }
   try {

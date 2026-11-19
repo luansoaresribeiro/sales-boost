@@ -352,7 +352,7 @@ Deno.serve(async (req) => {
       const r = await ensureLinks(admin, Deno.env.get('ANTHROPIC_API_KEY') ?? '', company.id, item.id, { maxUsd: Number(body.max_usd ?? DEFAULT_MAX_USD), force: body.force === true, dryRun: body.dry_run === true })
       if (r.error) return json({ error: r.error, estimate: r.estimate ?? null }, 400)
       if (!r.result) return json({ estimate: r.estimate })
-      return json({ links: r.result.links, provisional: r.result.provisional, cost_usd: r.result.cost_usd, estimate: r.estimate, stopped_by_cap: r.result.stopped_by_cap, at: r.result.at })
+      return json({ links: r.result.links, provisional: r.result.provisional, cost_usd: r.result.cost_usd, estimate: r.estimate, stopped_by_cap: r.result.stopped_by_cap, total_cost_usd: r.result.total_cost_usd, pending: r.result.pending, out_of_time: r.result.out_of_time, at: r.result.at })
     }
 
     if (body.action === 'plan_tour') {
