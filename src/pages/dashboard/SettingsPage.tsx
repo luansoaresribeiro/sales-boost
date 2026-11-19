@@ -6,7 +6,6 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useCompany } from '../../contexts/CompanyContext'
 import { useLang } from '../../contexts/LanguageContext'
 import { d } from '../../i18n-dash'
-import NotificationsCard from './settings/NotificationsCard'
 import BusinessUnderstandingCard from './settings/BusinessUnderstandingCard'
 import CompanyLanguageCard from './settings/CompanyLanguageCard'
 import BrokersCard from './settings/BrokersCard'
@@ -196,16 +195,18 @@ export default function SettingsPage() {
 
   // 2026-11-04 (dono): a escolha "Pedir aprovação / Executar automaticamente" saiu daqui e foi para a página Aprovações
   // do menu. Links antigos (?tab=agentes / ?tab=aprovacoes) levam para lá. 'conta' = "Sua conta".
-  type SettingsTab = 'info' | 'integrations' | 'conexoes' | 'conta'
+  // 2026-11-19 (dono): a aba "Notificações" saiu (era só o Telegram, desligado em 13/11). O componente NotificationsCard
+  // e as preferências continuam no código e no banco, para religar se precisar; ?tab=integracoes cai em Informações.
+  type SettingsTab = 'info' | 'conexoes' | 'conta'
   const tabFromParam = (p: string | null): SettingsTab =>
-    p === 'integracoes' ? 'integrations' : p === 'conexoes' ? 'conexoes' : p === 'conta' ? 'conta' : 'info'
+    p === 'conexoes' ? 'conexoes' : p === 'conta' ? 'conta' : 'info'
   const [tab, setTab] = useState<SettingsTab>(tabFromParam(searchParams.get('tab')))
   const navigate = useNavigate()
 
   useEffect(() => {
     const p = searchParams.get('tab')
     if (p === 'agentes' || p === 'aprovacoes') { navigate('/dashboard/aprovacoes', { replace: true }); return }
-    if (p === 'integracoes') setTab('integrations')
+    if (p === 'integracoes') setTab('info')
     if (p === 'conta') setTab('conta')
     if (p === 'conexoes') setTab('conexoes')
     const section = searchParams.get('section')
@@ -423,7 +424,7 @@ export default function SettingsPage() {
 
         {/* Tab switcher */}
         <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.03)', border: `1px solid ${BORDER}`, borderRadius: '12px', padding: '5px', marginBottom: '24px', width: 'fit-content', flexWrap: 'wrap' }}>
-          {(['info', 'conexoes', 'integrations', 'conta'] as const).map(key => [key, X.tabs[key]] as const).map(([key, label]) => (
+          {(['info', 'conexoes', 'conta'] as const).map(key => [key, X.tabs[key]] as const).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
               style={{ padding: '9px 18px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 700, background: tab === key ? ORANGE : 'transparent', color: tab === key ? '#000' : MUTED, transition: 'all 0.15s' }}>
               {label}
@@ -437,7 +438,6 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {tab === 'integrations' && <NotificationsCard />}
 
         {tab === 'conta' && <AccountTab />}
 

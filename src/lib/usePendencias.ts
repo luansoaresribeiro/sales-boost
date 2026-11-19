@@ -160,9 +160,7 @@ export function usePendencias() {
             }
           }
         }
-        if (!data.telegram_chat_id) {
-          out.push({ id: 'telegram', kind: 'telegram', tone: 'muted', low: true, title: t.telegram, hint: t.telegramHint, destino: t.settingsInt, to: '/dashboard/settings?tab=integracoes' })
-        }
+        // 2026-11-19: sem a pendência "conectar o Telegram" (Telegram desligado em 13/11; a aba Notificações saiu).
       }
     } catch { /* fonte ignorada */ }
 

@@ -189,7 +189,6 @@ export default function TrialSummaryPage() {
           <PanelBlock icon="🔍" title={tx.bComp} value={metrics.competitorsAnalyzed > 0 ? tx.compN(metrics.competitorsAnalyzed) : null} to="/dashboard/marketing-ai/dados" />
           <PanelBlock icon="💡" title={tx.bIdeas} value={panel.ideas > 0 ? tx.ideasN(panel.ideas) : null} to="/dashboard/marketing-ai/dados?sub=ideias" />
           <PanelBlock icon="✅" title={tx.bPlan} value={panel.initiatives > 0 ? tx.planN(panel.initiatives) : null} to="/dashboard/marketing-ai/estrategia" />
-          <PanelBlock icon="✈️" title={tx.bTg} value={panel.telegramConnected ? tx.tgOn : tx.tgOff} to="/dashboard/settings?tab=integracoes" cta={panel.telegramConnected ? tx.see : tx.connect} />
           {panel.estimateTotal != null && (
             <PanelBlock icon="📈" title={tx.bResults} value={tx.resultsV(panel.estimateTotal.toLocaleString(loc), panel.estimateCount)} note={tx.estimate} to="/dashboard/opportunities" />
           )}
