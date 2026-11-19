@@ -21,7 +21,7 @@
 - **EUA aberto em 17/11** ([decisão](DECISIONS.md#2026-11-17--mercado-dos-eua-aberto-agora-tim-reyes-liberado)): Tim Reyes liberado. Próximo: **E1 (ficha dos EUA)**, com o plano para aprovação antes do código.
 - **Próximo item do agente:**
   - **Frente de conteúdo:** **C1 🧪:** o plano de 15/11 perdeu posts por limite de chamadas do Supabase (causa nos logs); correção no PR do C1, conferir no domingo 22/11. C2 ✅ (16/11). Depois: C3 (construir os formatos aprovados) e C5.
-  - **Frente 1:** **1.1 — Ambientes físicos**, com a Tespon e dentro da verba D4.
+  - **Frente 1:** **1.2 — Mapa de ligações** (código no #189; prova na Tespon assim que a função for publicada). Depois 1.3. **Tour virtual com exemplos (B)** espera 2 respostas do dono.
 - **Esperando o dono:**
   - **D3:** tamanho das partes do tour.
   - **D6:** reserva da VPS.
@@ -66,6 +66,7 @@
 | C3 | Construir os formatos aprovados no C2 | Agente | P1 | C2 aprovado | Cada formato gera peça real na Teste Zero/Tespon, com print e travas de número passando | ⏳ |
 | C4 | Tela do agente de conteúdo simplificada | Agente | P1 | C3, Frente 4 (4.1) | Print aprovado pelo dono | ⏳ |
 | C5 | Tour pronto e cômodo mobiliado viram **post extra** (D8). Não ocupam a vaga do dia; só com aprovação. Primeiro passo: conferir o que já existe (o `tour_piece` já cria uma peça sem dia em Aprovações; falta ver o mobiliado) | Agente | P1 | D8 ✅ | Na Teste Zero: um tour e um mobiliado aparecem em Aprovações como peças sem dia do calendário; aprovar publica como extra; o mobiliado com o aviso "Imagem ilustrativa – mobiliado virtualmente" | ⏳ |
+| C6 | **Pontos fortes do imóvel** (marcar na ficha) guiando a escolha dos lugares perto e a legenda. Achado: hoje não há campo de marcar; os 12 tipos de lugar saem sempre na mesma ordem; `lazer`, `vista`, `andar` e `vagas` não chegam à legenda | Agente | P2 | 1.2 validado; **lista aprovada pelo dono** | Documento com os grupos para aprovar; depois, na Teste Zero, imóvel com "vida noturna" mostra restaurantes/cultura primeiro e a legenda cita as marcas | ⏳ (dono, 19/11) |
 
 ## Validação comercial — sem prazo; não bloqueia trabalho técnico (dono, 13/11 tarde)
 
@@ -108,7 +109,7 @@
 |---|---|---|---|---|---|---|
 | 1.0 | Auditoria do tour + viabilidade da Tespon | Agente | P0 | — | Documento entregue + roadmap aprovado | ✅ 13/11 (#167; D1 aprovado) |
 | 1.1 | Ambientes físicos (agrupar as fotos do mesmo ambiente) | Agente | P0 | D1 ✅, D4 ✅ (US$ 15) | Testes automáticos ✅ + grupos da Tespon = tabela 2.1 (o dono confere os ❓) | 🧪 18/11 (#187): IA de visão agrupa as 50 fotos da Tespon em **24 ambientes** (a tabela 2.1 tem 22). **Precisão 1,0** (nunca juntou ambientes diferentes) e **cobertura 0,93**. As 2 diferenças são dois ❓ da tabela: o closet do quarto 2 em 2 partes (#7 e #33) e o #27 separado do salão. Custo medido: US$ 0,32. **Falta o dono conferir os ❓** (lista no relatório de 18/11). A instrução não usa mais nome de pessoa no rótulo |
-| 1.2 | Mapa de ligações com evidência (foto que prova cada ligação) | Agente | P0 | 1.1, D4 ✅ | Mapa da Tespon = 2.2, nenhuma ligação inventada; custo medido | ⏳ |
+| 1.2 | Mapa de ligações com evidência (foto que prova cada ligação) | Agente | P0 | 1.1, D4 ✅ | Mapa da Tespon = 2.2, nenhuma ligação inventada; custo medido | 🔨 19/11: código juntado no [#189](https://github.com/luansoaresribeiro/sales-boost/pull/189) (confirmada / provável / desconhecida; teto US$ 1; custo por chamada). **⛔ publicação da função falhou: a chave `SUPABASE_ACCESS_TOKEN` do GitHub foi recusada ("Invalid access token"); o dono precisa trocar.** Depois: prova na Tespon. Fica provisório até as ❓ do 1.1 |
 | 1.3 | Indicador de cobertura + lista de fotos que faltam (com ângulo) na tela | Agente | P0 | 1.2 | A tela mostra os pendentes da Tespon e a lista 2.3; print aprovado | ⏳ |
 | 1.4 | Tour em partes + conferência de destino | Agente | P1 | 1.3, D3 | Testes automáticos + revisão do dono | ⏳ |
 | 1.5 | Teste de ponta a ponta, imóvel inteiro (apartamento menor indicado pelo dono) | Agente + Dono | P0 | 1.4, D2 (imóvel), D4 ✅ | Os 7 critérios da seção 3, todos ✅, quadro a quadro; custo registrado | ⏳ |
@@ -131,6 +132,7 @@
 | 3.2 | Conferir se os bots antigos (`marketing-bot`, `vendas-bot`, `group-manager`) estão publicados | Agente | P2 | — | Lista do que está no ar | ⏳ |
 | 3.3 | Desligar Telegram e VPS por flag (sem apagar) | Agente | P2 | 2.3, 3.1, **autorização** | Checklist da seção 6 do plano | **Telegram:** 🧪 #174 juntado em 16/11; `telegram_enabled` e `telegram_buddy` = desligados no banco em 16/11 (SQL). Falta a prova no log. **VPS:** ⏳ depois da Frente 2 |
 | 3.4 | Apagar estrutura antiga | Agente | P3 | 3.3 + 14 dias + **2ª autorização** | Nada perdido (checklist) | ⏳ |
+| 3.5 | Tirar a aba "Notificações" de Configurações (só a tela; código e preferências ficam) | Agente | P1 | pedido do dono 19/11 | Aba some (print desktop e celular), `?tab=integracoes` não quebra, site no ar conferido | 🧪 19/11: prints locais ok; falta o site no ar |
 
 ## Frente 4 — Experiência do usuário (depois do fluxo do tour definido)
 

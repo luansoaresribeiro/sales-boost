@@ -33,12 +33,31 @@
 | Frequência de posts | O plano automático tem **exatamente 1 post por dia, 7 por semana**. DM, "Comente QUERO", stories e mensagens não contam. Faltou material para um dia: usar um formato que não depende de imóvel; nunca deixar o dia vazio nem repetir peça. "Gerar agora" é extra e continua permitido. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
 | Validação comercial | **Sem prazo** (o 17/11 saiu) e **não bloqueia** trabalho técnico aprovado. Continuam bloqueados até ela acontecer: preço do tour, Boosts, preço de lead e Fase 4. Não citar nos relatórios até o dono retomar. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
 | Verbas de teste | **Frente 1 (D4 ✅):** até US$ 15. **Frente de conteúdo:** até US$ 2. O gasto acumulado vai em cada relatório. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
-| VPS e Telegram | **Telegram desligado** (decidido em 13/11, ligado no banco em 16/11; interruptor `feature_flags.telegram_enabled`, **sem apagar**: dá para religar). Alertas da plataforma por **e-mail**. A A3 precisa ser avisada. **VPS fica** até o motor próprio de vídeo (Frente 2), para o tour não parar. Apagar de vez só com uma 2ª autorização. | [13/11 noite](#2026-11-13-noite-2--telegram-desligado-hoje-vps-depois-campanha-volta-com-anúncio-pago-grupo-pro-no-menu) |
+| VPS e Telegram | **Telegram desligado** (decidido em 13/11, ligado no banco em 16/11; interruptor `feature_flags.telegram_enabled`, **sem apagar**: dá para religar). A aba "Notificações" de Configurações saiu da tela em 19/11 (código e preferências ficam). Alertas da plataforma por **e-mail**. A A3 precisa ser avisada. **VPS fica** até o motor próprio de vídeo (Frente 2), para o tour não parar. Apagar de vez só com uma 2ª autorização. | [13/11 noite](#2026-11-13-noite-2--telegram-desligado-hoje-vps-depois-campanha-volta-com-anúncio-pago-grupo-pro-no-menu) |
 | Menu Pro | **"Pro" NÃO é um plano.** É um menu que reúne as funções pagas com Boosts (hoje: Tour virtual, Campanha, Business Progress). **Quem entra no Pro é o dono que define; o agente não mexe nessa lista.** Enquanto o Boost não tiver unidade e preço, o Pro mostra e explica as funções, **sem cobrar**. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Custo do grátis | A plataforma é grátis, mas cada conta custa (estratégia, mercado, posts). O custo do grátis **precisa ser controlado** e é recuperado pelo que é pago (hoje, principalmente o tour). **Regras propostas, não implementadas** até o dono aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md): teto de US$ 8/mês por conta grátis, conta parada não gera a semana inteira, estratégia completa 1×/semana, **o post do dia nunca é cortado**. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Jornada do cliente | O cliente é **guiado desde a 1ª entrada**. O upsell é **contextual**: aparece quando o cliente acabou de ver valor, só com dado real, e leva ao Pro com a função certa aberta. Conteúdo descobre o imóvel que interessa; o tour aprofunda esse imóvel até a visita. Código só depois de o dono aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md), 1 PR por item. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Liga dos Sonhos | Nunca tocar, nem ler. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-19 — Revisão do plano do 1.2; 3 necessidades novas (pontos fortes, exemplos no Tour, sem a aba Notificações)
+
+- **Palavras do dono (revisão do 1.2):** "É melhor deixar uma passagem desconhecida do que criar uma conexão errada";
+  "o mapa de ligações deve ser considerado provisório enquanto existirem dúvidas sobre a identificação dos ambientes";
+  "não crie uma segunda lógica de classificação"; teto de ~US$ 1 para a prova, "sem novas tentativas pagas".
+  - Registrado: ligação **confirmada / provável / desconhecida**; confirmada só quando a foto mostra o outro ambiente
+    pela passagem. Feito no #189 sobre o `passageCheck` existente. Verba: D4 (13/11, até US$ 15).
+  - Sequência: o 1.3 só começa com o 1.2 validado; o 1.4 só com o 1.3 + D3.
+- **Necessidades novas e onde entraram:**
+  - **C. Tirar a aba "Notificações" de Configurações** ("não utilizamos mais o Telegram"). Feito logo depois do 1.2.
+    Sai só da tela, junto com os dois links que levavam a ela e a pendência "conectar o Telegram". **Não apaga** o
+    componente, as preferências (`notification_prefs`) nem as funções: religar continua possível, como no C0.
+  - **B. Exemplos no topo do Tour virtual** (tour do imóvel × "apresentação do imóvel por uma imobiliária"). Depois
+    do 1.2. Não há vídeo de exemplo salvo no código; há tours prontos das contas de teste.
+    - **Em aberto (dono):** qual é a 2ª opção e se o tour da Tespon pode aparecer para todos os clientes.
+  - **A. Pontos fortes do imóvel guiando as referências de localização.** Etapa futura da Frente de conteúdo (C6),
+    com proposta em documento primeiro e código só depois da aprovação da lista.
+- **Motivo:** "essas novas necessidades [não podem] desviar a atenção da prioridade atual".
 
 ## 2026-11-17 — Mercado dos EUA aberto agora; Tim Reyes liberado
 
