@@ -40,6 +40,17 @@
 | Liga dos Sonhos | Nunca tocar, nem ler. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 
+## 2026-11-20 — Dúvidas do 1.1 fechadas; exemplos do Tour virtual (B); chave do Supabase sem vencimento
+
+- **1.1 (fotos da Tespon):** o dono respondeu "concordo com as 3": #7 e #33 são um closet só; a #27 faz parte do
+  salão; #35/#36 são o "Quarto 4 / escritório". Com isso, o mapa do 1.2 deixa de ser provisório.
+- **B (exemplos no topo do Tour virtual):** o 2º exemplo é o **Mobiliar cômodo vazio**. O dono autorizou ("sim, pode
+  usar") o **tour da Tespon de 13/11** como exemplo para todos os clientes.
+  - **Achado:** não há foto mobiliada boa para exemplo. A de 14/10 expirou no fornecedor. A gerada em 20/11 inventou
+    teto e parede num terraço (item 1.3c). O exemplo do mobiliado espera uma foto real de cômodo vazio e a trava do 1.3c.
+- **Chave do Supabase no GitHub:** trocada em 20/11, **sem vencimento** (escolha do dono). Permissões mínimas: só o
+  projeto, Edge Functions com leitura e escrita.
+
 ## 2026-11-19 — Revisão do plano do 1.2; 3 necessidades novas (pontos fortes, exemplos no Tour, sem a aba Notificações)
 
 - **Palavras do dono (revisão do 1.2):** "É melhor deixar uma passagem desconhecida do que criar uma conexão errada";

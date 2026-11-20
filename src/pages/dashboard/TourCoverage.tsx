@@ -150,8 +150,8 @@ export default function TourCoverage({ itemId }: { itemId: string }) {
                 <button style={btn(false)} onClick={() => void copy()}>{copied ? tx.copied : tx.copy}</button>
               </div>
               <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '8px' }}>{tx.todoHelp}</div>
-              <ol style={{ margin: 0, paddingLeft: '18px' }}>
-                {cov.todo.map((t, i) => <li key={i} style={{ fontSize: '12.5px', color: 'white', lineHeight: 1.55, marginBottom: '6px' }}>{t.text}</li>)}
+              <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                {cov.todo.map((t, i) => <li key={i} style={{ fontSize: '12.5px', color: 'white', lineHeight: 1.55, marginBottom: '6px', display: 'flex', gap: '8px' }}><span style={{ color: ORANGE, fontWeight: 700, minWidth: '18px' }}>{i + 1}.</span><span>{t.text}</span></li>)}
               </ol>
             </div>
           )}
