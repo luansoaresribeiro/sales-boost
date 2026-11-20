@@ -201,7 +201,7 @@ voltar a aparecer, procure pastas de worktree de agente
 - **Sintoma:** o workflow "Deploy functions" falha em segundos com `unexpected list functions status 401: {"message":"Invalid access token"}`. O PR está juntado, mas a função continua na versão antiga (ação nova responde "Ação desconhecida").
 - **Causa:** a chave `SUPABASE_ACCESS_TOKEN` (secret do GitHub) venceu ou foi revogada. As chaves novas do Supabase têm validade (o padrão é 7 dias).
 - **Quem resolve:** o dono (secrets são 🔴). Chave nova: só o projeto do Sales Boost, preset Read-only + **Edge Functions: leitura e escrita**, validade longa. Depois, rodar de novo o workflow (rerun) e conferir com uma chamada barata (ex.: `map_links` com `dry_run`).
-- **Trocada em 20/11.** Perguntar ao dono a validade escolhida e anotar aqui.
+- **Trocada em 20/11, sem vencimento** ("NUNCA", escolha do dono). Se o erro voltar, a chave foi revogada: o dono gera outra.
 
 ## Deploy do site é a Cloudflare, não o GitHub
 

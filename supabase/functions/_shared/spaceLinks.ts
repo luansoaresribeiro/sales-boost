@@ -34,7 +34,7 @@ export interface SpaceLink {
   sig: string                      // assinatura das fotos dos dois ambientes (para refazer só o que mudou)
 }
 export interface LinksResult {
-  v: number; spaces_sig: string; provisional: boolean; links: SpaceLink[]; at: string
+  v: number; spaces_sig: string; photos_sig?: string; provisional: boolean; links: SpaceLink[]; at: string
   cost_usd: number; total_cost_usd: number; proposal_cost_usd: number; estimate_usd: number; stopped_by_cap: boolean
   pending: number; out_of_time: boolean
 }
@@ -109,6 +109,28 @@ export function tourEvidencePairs(checks: Record<string, PassageCheck> | null | 
     if (seen.has(pk)) continue
     seen.add(pk)
     out.push({ a: A.key, b: B.key, photo: i, other_photo: j, why: 'passagem já aprovada na conferência do tour' })
+  }
+  return out
+}
+
+/**
+ * Prova encontrada numa rodada continua valendo enquanto as fotos forem as mesmas: quando os ambientes mudam (ex.: o
+ * dono corrige o 1.1), as ligações e propostas antigas viram candidatas de novo, remapeadas pelos NÚMEROS das fotos.
+ * Motivo (20/11): duas propostas da IA com as mesmas fotos acharam pares diferentes; sem isso, uma prova se perdia.
+ */
+export function carryOver(old: { photo: number | null; other_photo: number | null; why?: string }[], spaces: PhotoSpace[], already: Proposal[]): Proposal[] {
+  const spaceOf = new Map<number, PhotoSpace>()
+  spaces.forEach(s => s.photos.forEach(p => spaceOf.set(p, s)))
+  const seen = new Set(already.map(p => [p.a, p.b].sort().join('~')))
+  const out: Proposal[] = []
+  for (const o of old) {
+    if (o.photo == null || o.other_photo == null) continue
+    const A = spaceOf.get(o.photo), B = spaceOf.get(o.other_photo)
+    if (!A || !B || A.key === B.key) continue
+    const pk = [A.key, B.key].sort().join('~')
+    if (seen.has(pk)) continue
+    seen.add(pk)
+    out.push({ a: A.key, b: B.key, photo: o.photo, other_photo: o.other_photo, why: o.why ?? '' })
   }
   return out
 }
@@ -207,6 +229,7 @@ export async function ensureLinks(admin: Admin, anthropicKey: string, companyId:
     await logAiCost(admin, { companyId, role: 'tour', taskKey: 'ai_vision_links_propose', description: `Mapa de ligações: proposta (${urls.length} fotos, ${spaces.length} ambientes)`, tokens: totalTokens(breakdownOf(r.usage)), costUsd: proposalCost, latencyMs: Date.now() - t0, success: !!parsed, error: parsed ? null : (r.error ?? 'resposta sem JSON válido'), breakdown: breakdownOf(r.usage), trigger: 'manual' }).catch(() => {})
     if (!parsed) return { error: 'A IA não devolveu a proposta de ligações (sem nova tentativa paga).' }
     proposals = parsed.slice(0, MAX_LINK_PAIRS)
+    if (prev?.v === LINKS_VERSION && prev.photos_sig === photosSig(urls)) proposals = [...proposals, ...carryOver([...(prev.proposal?.items ?? []), ...prev.links], spaces, proposals)]
   }
 
   const candidates = [...proposals, ...evidence(proposals)].slice(0, MAX_LINK_PAIRS)
@@ -246,7 +269,7 @@ export async function ensureLinks(admin: Admin, anthropicKey: string, companyId:
 
   const round = (x: number) => Math.round(x * 10000) / 10000
   const result: LinksResult & { proposal: { spaces_sig: string; items: Proposal[] } } = {
-    v: LINKS_VERSION, spaces_sig: sSig, provisional: opts.provisional ?? spaces.some(s => s.uncertain), links, at: new Date().toISOString(),
+    v: LINKS_VERSION, spaces_sig: sSig, photos_sig: photosSig(urls), provisional: opts.provisional ?? spaces.some(s => s.uncertain), links, at: new Date().toISOString(),
     cost_usd: round(spent), total_cost_usd: round(priorCost + spent), proposal_cost_usd: round(proposalCost), estimate_usd: estimate.total, stopped_by_cap: stopped,
     pending: links.filter(l => !l.checked && l.other_photo !== null).length, out_of_time: outOfTime,
     proposal: { spaces_sig: sSig, items: proposals },
