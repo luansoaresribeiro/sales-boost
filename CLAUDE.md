@@ -26,7 +26,8 @@
 
 ## 3. Regras invioláveis
 1. Nada vai ao público sem aprovação do dono (post, DM, resposta, anúncio).
-2. **Liga dos Sonhos:** nunca tocar, nem ler. Testes só nas contas de teste (Teste Zero, Tespon).
+2. **Liga dos Sonhos:** nunca tocar, nem ler. Testes nas contas de teste (Teste Zero, Tespon) e, para o tour, **primeiro na
+   A3** nas condições do [DECISIONS](docs/DECISIONS.md) (20/11): só leitura/análise e rascunho, com backup, custo avisado antes.
 3. Nunca publicar em Instagram real sem aprovação explícita. Isso inclui @getsaleboost; uso em teste só nas condições do
    [DECISIONS](docs/DECISIONS.md).
 4. Foto de imóvel é sempre real. A IA de imagem ou vídeo nunca escreve texto (texto só via `render-format` ou legenda).
@@ -64,11 +65,16 @@
   - apagar ou desligar funcionalidade, infraestrutura, dado ou credencial;
   - migration que altera ou apaga dado, ou que muda RLS;
   - autenticação, secrets, domínio, DNS, painel da Meta, crons novos ou alterados;
-  - **ação direta na A3** (cliente real): dados, mensagens, conta;
+  - **ação direta na A3** (cliente real): dados, mensagens, conta. Exceção 🟢 (20/11): ler/analisar os imóveis e gerar
+    tour/peça só em rascunho, nas condições do DECISIONS;
   - começar frente nova.
 - **Pedido 🔴:** O que vou fazer · Por quê · O que pode dar errado · Como desfazer · **"Posso seguir?"** — e esperar.
 - **Decisão que peço ao dono:** sempre dizer o que falta, por que precisamos, as alternativas (com custo e prazo) e qual
   eu recomendo.
+
+## 4b. Ritmo de trabalho (dono, 20/11)
+- Um PR por item, com código e docs juntos. Avisar só quando algo termina, falha ou depende do dono.
+- Decisões ao dono juntas, com a recomendação. Custo e teto de cada item **antes** de começar.
 
 ## 5. Protocolo de tarefa
 Quando o dono disser "continue a frente atual", ou pedir qualquer tarefa:
