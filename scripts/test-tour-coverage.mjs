@@ -59,3 +59,14 @@ assert.ok(readFileSync('src/pages/dashboard/TourVirtualPage.tsx', 'utf8').includ
 const mig = readFileSync('supabase/migrations/20261120200000_tour_coverage_hints.sql', 'utf8')
 assert.ok(mig.includes("not (config->'tour' ? 'coverage_hints')") && !/delete\s+from/i.test(mig.replace(/^--.*$/gm, '')))
 console.log('ok — cobertura do tour: só confirmada conta, fotos que faltam com o ângulo, textos da ficha, prova acumulada')
+
+// B (1.3b): exemplos no topo do Tour virtual vêm da ficha; mobiliado sem exemplo mostra "em breve", nunca inventa.
+{
+  const page = readFileSync('src/pages/dashboard/TourVirtualPage.tsx', 'utf8')
+  assert.ok(page.indexOf('<TourExamples') > 0 && page.indexOf('<TourExamples') < page.indexOf('{tx.pick}'))
+  const ex = readFileSync('src/pages/dashboard/TourExamples.tsx', 'utf8')
+  assert.ok(ex.includes("tour?: { examples?: Examples }") && ex.includes('tx.soon'))
+  const m = readFileSync('supabase/migrations/20261120210000_tour_exemplos.sql', 'utf8')
+  assert.ok(m.includes("not (config->'tour' ? 'examples')") && m.includes("'staging', null"))
+  console.log('ok — exemplos do Tour virtual: da ficha, antes da lista, mobiliado sem exemplo inventado')
+}
