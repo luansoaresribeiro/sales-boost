@@ -31,7 +31,7 @@ assert.equal(c.linked, c.spaces.filter(s => s.status === 'linked').length)      
 for (const s of c.spaces.filter(x => x.status !== 'linked')) assert.ok(c.todo.some(t => t.spaces.includes(s.key)), s.key)
 // A provável entre um ligado e um não ligado gera o pedido; a pátio isolado gera o "da porta para dentro".
 assert.ok(c.todo.some(t => t.kind === 'probable' && t.text.includes('Varanda coberta') && t.text.includes('Sala de estar')))
-assert.ok(c.todo.some(t => t.kind === 'isolated' && t.text.includes('Pátio')))
+assert.ok(c.todo.some(t => t.kind === 'isolated' && t.text.includes('Pátio') && t.text.includes('caminho até a porta de entrada')))   // externa: caminho, não "porta para dentro"
 // O pedido parte do ambiente da foto que mostrou a passagem (foto 40 é da varanda).
 assert.ok(c.todo.find(t => t.spaces.includes('s22') && t.spaces.includes('s2')).text.startsWith('Fique em Varanda coberta'))
 // Escada que falta gera a dica da escada.

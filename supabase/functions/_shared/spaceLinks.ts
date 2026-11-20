@@ -90,8 +90,8 @@ export function parseProposal(text: string, spaces: PhotoSpace[]): Proposal[] | 
 }
 
 /**
- * Candidatos que já têm prova: pares de fotos que a conferência do tour (v4, `meta.passage_checks`) aprovou. Não é
- * proximidade — é uma passagem que a IA de visão já viu. Mesmo assim, só viram "confirmada" pela pergunta do mapa
+ * Candidatos que já têm prova: pares de fotos que a conferência do tour (v4, `meta.passage_checks`) aprovou COM evidência
+ * (porta/vão visível ou escada na foto de saída). Não é proximidade — é uma passagem que a IA de visão já viu. Mesmo assim, só viram "confirmada" pela pergunta do mapa
  * (o outro ambiente aparece pela passagem). Fotos de ambientes iguais ou que não estão mais no imóvel são ignoradas.
  */
 export function tourEvidencePairs(checks: Record<string, PassageCheck> | null | undefined, urls: string[], spaces: PhotoSpace[], already: Proposal[]): Proposal[] {
@@ -103,6 +103,10 @@ export function tourEvidencePairs(checks: Record<string, PassageCheck> | null | 
     if (i === j) continue
     const c = checks?.[pairKey(urls[i], urls[j])]
     if (!isCurrent(c) || c.linked !== 'yes') continue
+    // 20/11 (A3): o "sim" da conferência do tour, para dois ambientes internos no mesmo andar, é o padrão da regra (não
+    // prova nada). Só vale como candidato quando houve evidência: porta/vão visível ou escada na foto de saída.
+    const f = c.facts
+    if (!f || !(f.doorBetweenVisible === 'yes' || (f.sameFloor === 'no' && f.stairsInPhoto1 === 'yes'))) continue
     const A = spaceOf.get(i), B = spaceOf.get(j)
     if (!A || !B || A.key === B.key) continue
     const pk = [A.key, B.key].sort().join('~')
