@@ -60,8 +60,9 @@ assert.equal(bad.probable, 1)
 // Candidatos com prova do tour: só pares v4 "yes", entre ambientes diferentes, sem repetir a proposta.
 const urls = Array.from({ length: 50 }, (_, i) => `https://x/p${i}.jpg`)
 const chk = {
-  [pairKey(urls[40], urls[1])]: { linked: 'yes', missing: null, v: 4 },     // terraço → sala (novo)
-  [pairKey(urls[1], urls[0])]: { linked: 'yes', missing: null, v: 4 },      // sala → jantar (já proposto)
+  [pairKey(urls[40], urls[1])]: { linked: 'yes', missing: null, v: 4, facts: { outside1: 'yes', outside2: 'no', sameFloor: 'yes', stairsInPhoto1: 'no', doorBetweenVisible: 'yes' } }, // terraço → sala (porta vista)
+  [pairKey(urls[3], urls[41])]: { linked: 'yes', missing: null, v: 4, facts: { outside1: 'no', outside2: 'no', sameFloor: 'yes', stairsInPhoto1: 'no', doorBetweenVisible: 'unsure' } }, // "sim" padrão: não entra
+  [pairKey(urls[1], urls[0])]: { linked: 'yes', missing: null, v: 4, facts: { outside1: 'no', outside2: 'no', sameFloor: 'yes', stairsInPhoto1: 'no', doorBetweenVisible: 'yes' } }, // sala → jantar (já proposto)
   [pairKey(urls[13], urls[23])]: { linked: 'no', missing: 'escada', v: 4 }, // "não" não entra
   [pairKey(urls[4], urls[34])]: { linked: 'yes', missing: null, v: 4 },     // mesmo ambiente não entra
   [pairKey(urls[6], urls[41])]: { linked: 'yes', missing: null, v: 3 },     // versão antiga não entra

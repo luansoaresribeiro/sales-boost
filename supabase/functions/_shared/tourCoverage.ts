@@ -8,7 +8,7 @@
 export type CoverStatus = 'linked' | 'probable' | 'none'
 export interface CovSpace { key: string; label: string; area: string; photos: number[] }
 export interface CovLink { a: string; b: string; cls: 'confirmed' | 'probable' | 'unknown'; missing?: string | null; photo?: number | null }
-export interface CoverageHints { probable: string; isolated: string; stairs: string }
+export interface CoverageHints { probable: string; isolated: string; stairs: string; outside: string }
 export interface Todo { kind: 'probable' | 'isolated' | 'stairs'; area: string; spaces: string[]; text: string }
 export interface Coverage {
   total: number; linked: number
@@ -21,11 +21,13 @@ export const DEFAULT_HINTS: Record<'pt' | 'en', CoverageHints> = {
     probable: 'Fique em {a}, na passagem que dá para {b}, e fotografe com a porta aberta: os dois ambientes precisam aparecer na mesma foto.',
     isolated: 'Da porta de {a}, pelo lado de fora, fotografe para dentro com a porta aberta: precisa aparecer o batente e o ambiente.',
     stairs: 'No meio da escada de {a}, aponte para onde ela chega: os degraus e o ambiente de cima (ou de baixo) na mesma foto.',
+    outside: 'Para ligar {a} ao imóvel: fotografe o caminho até a porta de entrada (portaria, corredor do andar ou a porta aberta mostrando a sala).',
   },
   en: {
     probable: 'Stand in {a}, at the passage to {b}, and take the photo with the door open: both spaces must show in the same photo.',
     isolated: 'From the door of {a}, standing outside, shoot inwards with the door open: the door frame and the space must show.',
     stairs: 'Halfway up the stairs in {a}, point to where they lead: the steps and the space above (or below) in the same photo.',
+    outside: 'To connect {a} to the property: photograph the way to the front door (lobby, hallway, or the open door showing the living room).',
   },
 }
 
@@ -37,7 +39,7 @@ export function hintsFrom(cfg: unknown, lang: 'pt' | 'en'): CoverageHints {
   const raw = (cfg && typeof cfg === 'object' ? (cfg as Record<string, unknown>)[lang] : null) as Record<string, unknown> | null
   const d = DEFAULT_HINTS[lang]
   const pick = (k: keyof CoverageHints) => typeof raw?.[k] === 'string' && (raw[k] as string).includes('{a}') ? raw[k] as string : d[k]
-  return { probable: pick('probable'), isolated: pick('isolated'), stairs: pick('stairs') }
+  return { probable: pick('probable'), isolated: pick('isolated'), stairs: pick('stairs'), outside: pick('outside') }
 }
 
 export function computeCoverage(spaces: CovSpace[], links: CovLink[], hints: CoverageHints): Coverage {
@@ -79,7 +81,8 @@ export function computeCoverage(spaces: CovSpace[], links: CovLink[], hints: Cov
     todo.push({ kind: 'stairs', area: byKey.get(l.a)!.area, spaces: [l.a, l.b], text: fill(hints.stairs, lab(l.a)) })
   }
   // 3) Ambiente sem nenhuma ligação (nem provável): a foto de porta para dentro.
-  for (const s of out) if (s.status === 'none') todo.push({ kind: 'isolated', area: s.area, spaces: [s.key], text: fill(hints.isolated, s.label) })
+  // Área externa (fachada, portaria) não tem "porta para dentro": o pedido é o caminho até a entrada (20/11, A3).
+  for (const s of out) if (s.status === 'none') todo.push({ kind: 'isolated', area: s.area, spaces: [s.key], text: fill(s.area === 'externa' ? hints.outside : hints.isolated, s.label) })
   todo.sort((x, y) => (AREA_ORDER.indexOf(x.area) + 99) % 99 - (AREA_ORDER.indexOf(y.area) + 99) % 99)
   return { total: spaces.length, linked: out.filter(s => s.status === 'linked').length, spaces: out, todo }
 }
