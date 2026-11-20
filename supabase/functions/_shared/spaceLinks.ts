@@ -9,7 +9,7 @@
 // mudar (o dono corrige o 1.1), só as ligações que tocam nele são refeitas.
 // Parte pura testada em scripts/test-space-links.mjs.
 import { anthropicCostUsd, breakdownOf, logAiCost, priceFor, totalTokens, type Usage } from './aiCost.ts'
-import { askPairFacts, classifyLink, LINK_PROMPT, parseFacts, PASSAGE_MODEL, type LinkClass, type Missing, type PassageFacts } from './passageCheck.ts'
+import { askPairFacts, classifyLink, isCurrent, LINK_PROMPT, pairKey, parseFacts, PASSAGE_MODEL, type LinkClass, type Missing, type PassageCheck, type PassageFacts } from './passageCheck.ts'
 import { photosSig, SPACES_MODEL, type PhotoSpace, type SpacesResult } from './photoSpaces.ts'
 
 export const LINKS_VERSION = 1
@@ -89,6 +89,30 @@ export function parseProposal(text: string, spaces: PhotoSpace[]): Proposal[] | 
   return out
 }
 
+/**
+ * Candidatos que já têm prova: pares de fotos que a conferência do tour (v4, `meta.passage_checks`) aprovou. Não é
+ * proximidade — é uma passagem que a IA de visão já viu. Mesmo assim, só viram "confirmada" pela pergunta do mapa
+ * (o outro ambiente aparece pela passagem). Fotos de ambientes iguais ou que não estão mais no imóvel são ignoradas.
+ */
+export function tourEvidencePairs(checks: Record<string, PassageCheck> | null | undefined, urls: string[], spaces: PhotoSpace[], already: Proposal[]): Proposal[] {
+  const spaceOf = new Map<number, PhotoSpace>()
+  spaces.forEach(s => s.photos.forEach(p => spaceOf.set(p, s)))
+  const seen = new Set(already.map(p => [p.a, p.b].sort().join('~')))
+  const out: Proposal[] = []
+  for (let i = 0; i < urls.length; i++) for (let j = 0; j < urls.length; j++) {
+    if (i === j) continue
+    const c = checks?.[pairKey(urls[i], urls[j])]
+    if (!isCurrent(c) || c.linked !== 'yes') continue
+    const A = spaceOf.get(i), B = spaceOf.get(j)
+    if (!A || !B || A.key === B.key) continue
+    const pk = [A.key, B.key].sort().join('~')
+    if (seen.has(pk)) continue
+    seen.add(pk)
+    out.push({ a: A.key, b: B.key, photo: i, other_photo: j, why: 'passagem já aprovada na conferência do tour' })
+  }
+  return out
+}
+
 /** Custo estimado (US$): a proposta com todas as fotos + uma conferência de 2 fotos por par proposto. */
 export function estimateUsd(nPhotos: number, nPairs: number): { proposal: number; perPair: number; total: number } {
   const ps = priceFor(SPACES_MODEL), pp = priceFor(PASSAGE_MODEL)
@@ -157,7 +181,8 @@ export async function ensureLinks(admin: Admin, anthropicKey: string, companyId:
   const sSig = spacesSigOf(spaces)
   const prev = item?.meta?.space_links as (LinksResult & { proposal?: { spaces_sig: string; items: Proposal[] } }) | undefined
   const reuseProposal = !opts.force && prev?.v === LINKS_VERSION && prev.proposal?.spaces_sig === sSig
-  const guessPairs = reuseProposal ? prev!.proposal!.items.length : Math.min(spaces.length, MAX_LINK_PAIRS)
+  const evidence = (prop: Proposal[]) => tourEvidencePairs(item?.meta?.passage_checks as Record<string, PassageCheck> | undefined, urls, spaces, prop)
+  const guessPairs = reuseProposal ? prev!.proposal!.items.length + evidence(prev!.proposal!.items).length : Math.min(spaces.length, MAX_LINK_PAIRS)
   const estimate = estimateUsd(reuseProposal ? 0 : urls.length, guessPairs)
   if (reuseProposal) estimate.total = Math.round(estimate.perPair * guessPairs * 1000) / 1000
   if (opts.dryRun) return { estimate }
@@ -184,9 +209,10 @@ export async function ensureLinks(admin: Admin, anthropicKey: string, companyId:
     proposals = parsed.slice(0, MAX_LINK_PAIRS)
   }
 
+  const candidates = [...proposals, ...evidence(proposals)].slice(0, MAX_LINK_PAIRS)
   const byKey = new Map(spaces.map(s => [s.key, s]))
   const cachedBySig = new Map((prev?.v === LINKS_VERSION ? prev.links : []).filter(l => l.checked).map(l => [`${l.sig}#${l.photo}`, l]))
-  const links: SpaceLink[] = proposals.map(p => {
+  const links: SpaceLink[] = candidates.map(p => {
     const A = byKey.get(p.a)!, B = byKey.get(p.b)!
     const sig = pairSig(A, B)
     const hit = !opts.force ? cachedBySig.get(`${sig}#${p.photo}`) : undefined
