@@ -272,7 +272,9 @@ Deno.serve(async (req) => {
     }
 
     let company: { id: string; plan: string | null; manual_access?: boolean | null; vertical_key: string | null; language?: string | null } | null = null
-    if (isCron && body.action === 'create' && typeof body.company_id === 'string') {
+    // Pelo servidor (cron_secret): criar vídeo e, desde 20/11 (dono, opção 1), só a ANÁLISE do tour — ambientes, passagens,
+    // cobertura e partes — para testar na A3 sem o login do cliente. Nada disso publica nem cria peça.
+    if (isCron && typeof body.company_id === 'string' && ['create', 'group_spaces', 'map_links', 'coverage', 'plan_parts'].includes(String(body.action))) {
       const { data } = await admin.from('companies').select('id, plan, manual_access, vertical_key, language').eq('id', body.company_id).maybeSingle()
       company = data
     } else {

@@ -73,4 +73,6 @@ assert.equal(e.covered, 3)
 // Servidor e tela.
 const iv = readFileSync('supabase/functions/item-videos/index.ts', 'utf8')
 assert.ok(iv.includes("body.action === 'plan_parts'") && iv.includes('planParts('))
+// Pelo servidor (cron_secret) só a análise do tour; publicar ou gerar peça continuam fora dessa lista.
+assert.ok(iv.includes("['create', 'group_spaces', 'map_links', 'coverage', 'plan_parts'].includes(String(body.action))"))
 console.log('ok — tour em partes: só ligação confirmada, ≤ 8 passagens, nada some, partes por área')
