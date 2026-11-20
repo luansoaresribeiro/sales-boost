@@ -5,8 +5,9 @@ import { advanceTour, clipPrompt, COST_PER_SECOND, estimateUsd, hfHeaders, SECON
 import { tourCfgFrom, type TourPhoto } from '../_shared/tourPick.ts'
 import { checkPassages, MAX_PAIRS_PER_CALL } from '../_shared/passageCheck.ts'
 import { orderTour, roomOf, tourOrderCfgFrom, tourSeconds, tourSegments, withOutsideFirst, type Segment, type SegKind } from '../_shared/tourOrder.ts'
-import { ensureSpaces } from '../_shared/photoSpaces.ts'
-import { DEFAULT_MAX_USD, ensureLinks } from '../_shared/spaceLinks.ts'
+import { ensureSpaces, photosSig, type PhotoSpace } from '../_shared/photoSpaces.ts'
+import { DEFAULT_MAX_USD, ensureLinks, spacesSigOf } from '../_shared/spaceLinks.ts'
+import { computeCoverage, hintsFrom, type CovLink, type CovSpace } from '../_shared/tourCoverage.ts'
 import { ensurePhotoScores } from '../_shared/photoScore.ts'
 import { validEndcardUrl } from '../_shared/tourPick.ts'
 import { draftReply, type DmReplyConfig } from '../_shared/dmReply.ts'
@@ -225,7 +226,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const admin = createClient(supabaseUrl, serviceKey)
-    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number; cuts?: unknown; outside_first?: unknown; force?: unknown; max_usd?: unknown; dry_run?: unknown }
+    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number; cuts?: unknown; outside_first?: unknown; force?: unknown; max_usd?: unknown; dry_run?: unknown; lang?: unknown }
     const cronSecret = Deno.env.get('CRON_SECRET')
     const isCron = !!cronSecret && body.cron_secret === cronSecret
 
@@ -344,6 +345,23 @@ Deno.serve(async (req) => {
 
     // Frente 1, item 1.2: mapa de ligações entre os ambientes do 1.1 — só com a foto que prova cada ligação; o resto
     // fica "desconhecido". Teto rígido de custo (max_usd, padrão US$ 1); dry_run devolve só a estimativa.
+    // Frente 1, item 1.3: cobertura do imóvel + fotos que faltam (com o ângulo). Só lê meta.spaces e meta.space_links:
+    // sem IA, sem custo. Só ligação CONFIRMADA conta como coberta; a provável vira pedido de foto.
+    if (body.action === 'coverage') {
+      const item = await loadItem(body.item_id)
+      if (!item) return json({ error: 'Imóvel não encontrado.' }, 404)
+      const urls = ((item.meta?.photos ?? []) as { url?: string }[]).map(p => String(p?.url ?? ''))
+      const meta = (item.meta ?? {}) as Record<string, unknown>
+      const sp = meta.spaces as { sig?: string; spaces?: CovSpace[] } | undefined
+      if (!sp?.spaces?.length || sp.sig !== photosSig(urls)) return json({ needs: 'spaces', photos: urls.length })
+      const sl = meta.space_links as { spaces_sig?: string; links?: CovLink[]; provisional?: boolean; at?: string } | undefined
+      if (!sl?.links || sl.spaces_sig !== spacesSigOf(sp.spaces as PhotoSpace[])) return json({ needs: 'links', photos: urls.length, spaces: sp.spaces.length })
+      const { data: pb } = await admin.from('vertical_playbooks').select('config').eq('key', company.vertical_key ?? 'generico').eq('enabled', true).maybeSingle()
+      const lang = body.lang === 'en' ? 'en' : 'pt'
+      const cov = computeCoverage(sp.spaces, sl.links, hintsFrom((pb?.config as { tour?: { coverage_hints?: unknown } } | null)?.tour?.coverage_hints, lang))
+      return json({ ...cov, provisional: sl.provisional === true, at: sl.at ?? null })
+    }
+
     if (body.action === 'map_links') {
       const noPlan = await requirePaidAccess(admin, company.id)
       if (noPlan) return noPlan
