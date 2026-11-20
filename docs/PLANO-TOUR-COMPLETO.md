@@ -124,6 +124,8 @@ Legenda:  ══ comprovada (foto mostra + conferência v4 "sim" + vídeo de 13/
  Sala de jogos ?? Salão     Quadra coberta ??     Pátio (#21) ??
 ```
 
+> **20/11 (item 1.2, #189/#191):** o mapa automático (`map_links`, `_shared/spaceLinks.ts`) confirmou 6 ligações (Quarto 2–Closet, da tabela, e mais 4 fora dela, sendo 1 duvidosa por espelho). Marcou as 7 ══ do percurso social como **prováveis**: a caminhada funcionou, mas nenhuma foto mostra o outro cômodo pela porta. Nenhuma ligação inventada; terraço–salão (erro conhecido) saiu só provável. Custo US$ 0,72.
+
 **Conclusão: com as 50 fotos de hoje, NÃO é possível montar o imóvel inteiro sem inventar passagens.**
 - Comprovado: 1 percurso de 8 ambientes, que é o vídeo de 13/11.
 - Mais 1 par seguro: Quarto 2 → Closet.
