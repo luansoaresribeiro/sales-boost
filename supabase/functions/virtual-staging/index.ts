@@ -11,6 +11,8 @@
  *    do cliente em dólar (_shared/spendCap.ts).
  *  - Nunca grava a foto no item sozinho: a tela mostra o antes/depois e o
  *    dono escolhe "usar no imóvel".
+ *  - Trava 1.3c (20/11): a foto pronta passa pela conferência de arquitetura
+ *    (_shared/stagingCheck.ts). Mudou teto/parede/janela/vista/piso → recusada.
  *
  * Ações (POST, JWT do dono):
  *   { action: 'start', item_id, photo_url, style } → { id }
@@ -23,6 +25,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { HF_BASE, hfHeaders } from '../_shared/tourEngine.ts'
 import { capMessage, fitsCap, HF_EDIT_COST_USD } from '../_shared/spendCap.ts'
+import { checkStaging } from '../_shared/stagingCheck.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -111,14 +114,17 @@ Deno.serve(async (req) => {
     if (!row) return json({ error: 'Pedido não encontrado' }, 404)
 
     if (body.action === 'status') {
-      if (row.status !== 'processing') return json({ ok: true, status: row.status, ready: row.status === 'completed' })
+      if (row.status !== 'processing') return json({ ok: true, status: row.status, ready: row.status === 'completed' && row.arch_check?.ok === true, rejected: row.arch_check && !row.arch_check.ok ? row.arch_check.reasons : undefined })
       const res = await fetch(`${HF_BASE}/requests/${encodeURIComponent(row.job_ref)}/status`, { headers, signal: AbortSignal.timeout(20_000) })
       if (!res.ok) return json({ ok: true, status: 'processing', ready: false })
       const d = await res.json() as { status?: string; images?: { url?: string }[] }
       const url = d.images?.[0]?.url
       if (d.status === 'completed' && url) {
-        await admin.from('virtual_staging').update({ status: 'completed', result_url: url }).eq('id', row.id)
-        return json({ ok: true, status: 'completed', ready: true })
+        // 1.3c (20/11): trava obrigatória — a IA de visão compara a foto real com a mobiliada; se a arquitetura mudou
+        // (teto, parede, janela, vista, piso) ou se não deu para conferir, a foto é recusada e nunca chega ao imóvel.
+        const check = await checkStaging(admin, Deno.env.get('ANTHROPIC_API_KEY') ?? '', company.id as string, row.source_url, url)
+        await admin.from('virtual_staging').update({ status: check.ok ? 'completed' : 'failed', result_url: url, arch_check: check }).eq('id', row.id)
+        return check.ok ? json({ ok: true, status: 'completed', ready: true }) : json({ ok: true, status: 'failed', ready: false, rejected: check.reasons })
       }
       if (['failed', 'nsfw', 'canceled'].includes(String(d.status))) {
         if (row.attempts >= MAX_ATTEMPTS) {
@@ -133,6 +139,8 @@ Deno.serve(async (req) => {
 
     if (body.action === 'result') {
       if (row.status !== 'completed' || !row.result_url) return json({ error: 'Ainda não ficou pronto.' }, 409)
+      // Sem a conferência de arquitetura aprovada, a foto não sai (vale também para pedidos antigos, de antes da trava).
+      if (row.arch_check?.ok !== true) return json({ error: 'Esta foto mudou a arquitetura do ambiente e não pode ser usada.', code: 'architecture' }, 422)
       const img = await fetch(row.result_url, { signal: AbortSignal.timeout(60_000) })
       if (!img.ok) return json({ error: 'O link da imagem expirou — peça de novo.' }, 410)
       return new Response(new Uint8Array(await img.arrayBuffer()), { headers: { ...cors, 'Content-Type': img.headers.get('content-type') ?? 'image/png', 'Cache-Control': 'no-store' } })
