@@ -16,6 +16,7 @@ const TX = {
   pt: {
     open: '🛋️ Mobiliar cômodo vazio', pick: 'Escolha a foto real do cômodo vazio:', style: 'Estilo:',
     go: 'Mobiliar esta foto', working: 'Mobiliando... (leva 1–2 minutos)', failed: 'Não deu certo desta vez. Tente outra foto ou outro estilo.',
+    rejected: (why: string) => `A IA mudou a arquitetura do ambiente (${why}), então a foto foi descartada. Use a foto de um cômodo interno vazio e tente de novo.`,
     before: 'Antes (real)', after: 'Depois (virtual)', use: '✅ Usar no imóvel', discard: 'Descartar', saving: 'Salvando...',
     note: 'Custa por foto (conta no limite do mês). A foto real nunca é trocada: a mobiliada fica separada e todo post que usar ela avisa na legenda que os móveis são ilustrativos.',
     staged: 'Mobiliadas (virtual)', remove: 'Remover', close: 'Fechar', planRequired: 'Disponível no plano.',
@@ -23,6 +24,7 @@ const TX = {
   en: {
     open: '🛋️ Furnish an empty room', pick: 'Pick the real photo of the empty room:', style: 'Style:',
     go: 'Furnish this photo', working: 'Furnishing... (takes 1–2 minutes)', failed: "It didn't work this time. Try another photo or style.",
+    rejected: (why: string) => `The AI changed the room's architecture (${why}), so the photo was discarded. Use a photo of an empty indoor room and try again.`,
     before: 'Before (real)', after: 'After (virtual)', use: '✅ Use on the listing', discard: 'Discard', saving: 'Saving...',
     note: 'Paid per photo (counts toward the monthly limit). The real photo is never replaced: the furnished one is kept apart and every post that uses it says in the caption that the furniture is illustrative.',
     staged: 'Furnished (virtual)', remove: 'Remove', close: 'Close', planRequired: 'Available on the plan.',
@@ -69,7 +71,7 @@ export default function VirtualStaging({ itemId, companyId, verticalKey, photos,
     let alive = true
     const tick = async () => {
       try {
-        const r = await (await call({ action: 'status', id: jobId })).json() as { status?: string; ready?: boolean }
+        const r = await (await call({ action: 'status', id: jobId })).json() as { status?: string; ready?: boolean; rejected?: string[] }
         if (!alive) return
         if (r.ready) {
           const res = await call({ action: 'result', id: jobId })
@@ -78,7 +80,7 @@ export default function VirtualStaging({ itemId, companyId, verticalKey, photos,
           if (alive) { setResult({ blob, preview: URL.createObjectURL(blob) }); setJobId(null) }
           return
         }
-        if (r.status === 'failed') { setErr(tx.failed); setJobId(null); return }
+        if (r.status === 'failed') { setErr(r.rejected?.length ? tx.rejected(r.rejected.join('; ')) : tx.failed); setJobId(null); return }
       } catch { if (alive) { setErr(tx.failed); setJobId(null) } return }
       if (alive) timer = setTimeout(tick, 6000)
     }
