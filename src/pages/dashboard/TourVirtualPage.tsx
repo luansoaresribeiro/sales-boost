@@ -7,6 +7,7 @@ import { useLang } from '../../contexts/LanguageContext'
 import { supabase } from '../../lib/supabase'
 import TourBuilder from './TourBuilder'
 import TourCoverage from './TourCoverage'
+import TourExamples from './TourExamples'
 import VirtualStaging from './marketingAi/VirtualStaging'
 import { CARD, MUTED, BORDER, ORANGE, D } from './marketingAi/shared'
 
@@ -76,6 +77,8 @@ export default function TourVirtualPage() {
         <p style={{ color: MUTED, fontSize: '13px', lineHeight: 1.55, maxWidth: 720 }}>{tx.sub}</p>
       </div>
       <div style={{ padding: '24px 32px', maxWidth: 900 }}>
+        {/* B (dono, 19–20/11): exemplos reais antes da lista de imóveis */}
+        <TourExamples verticalKey={company?.vertical_key ?? null} />
         <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '10px' }}>{tx.pick}</div>
         {items === null ? <div style={{ color: MUTED, fontSize: '13px' }}>{tx.loading}</div>
           : items.length === 0 ? <div style={{ color: MUTED, fontSize: '13px', padding: '14px', border: `1px dashed ${BORDER}`, borderRadius: '12px' }}>{tx.none}</div>
