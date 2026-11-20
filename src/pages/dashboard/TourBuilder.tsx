@@ -80,7 +80,7 @@ const btn = (bg: string, color: string, border?: string) => ({
 })
 const mini = { ...btn('transparent', 'white', 'rgba(255,255,255,0.14)'), minHeight: 32, minWidth: 32, padding: '4px 8px' }
 
-export default function TourBuilder({ itemId }: { itemId: string }) {
+export default function TourBuilder({ itemId, preset }: { itemId: string; preset?: { urls: string[]; n: number } | null }) {
   const { lang } = useLang()
   const tx = TX[lang]
   const [plan, setPlan] = useState<Plan | null>(null)
@@ -120,6 +120,11 @@ export default function TourBuilder({ itemId }: { itemId: string }) {
     const p = r.data as unknown as Plan
     setPlan(p); setOrder(p.photos)
   }
+  // 1.4 (20/11): "Montar esta parte" na cobertura manda as fotos da parte; a ordem do montador vira a da parte.
+  useEffect(() => {
+    if (!preset?.urls.length) return
+    void (async () => { if (!plan) await build(); setOrder(preset.urls) })()
+  }, [preset]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const roomOf = useMemo(() => new Map((plan?.all ?? []).map(p => [p.url, p.room])), [plan])
   const baseRooms = useMemo(() => order.map(u => roomOf.get(u) ?? null), [order, roomOf])

@@ -47,6 +47,7 @@ export default function TourVirtualPage() {
   const [mode, setMode] = useState<Mode>('tour')
   const [company, setCompany] = useState<{ id: string; vertical_key: string | null } | null>(null)
   const [reload, setReload] = useState(0)
+  const [preset, setPreset] = useState<{ urls: string[]; n: number } | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -111,7 +112,7 @@ export default function TourVirtualPage() {
               <button disabled title={tx.avatarHelp} aria-disabled="true" style={{ ...chip(false), cursor: 'not-allowed', opacity: 0.55 }}>{tx.avatar}</button>
             </div>
             {mode === 'tour'
-              ? <>{/* 1.3 (20/11): cobertura e fotos que faltam, antes de montar o tour */}<TourCoverage key={`cov-${itemId}`} itemId={itemId} /><TourBuilder key={itemId} itemId={itemId} /></>
+              ? <>{/* 1.3 (20/11): cobertura e fotos que faltam, antes de montar o tour */}<TourCoverage key={`cov-${itemId}`} itemId={itemId} onPickPart={urls => setPreset(p => ({ urls, n: (p?.n ?? 0) + 1 }))} /><TourBuilder key={itemId} itemId={itemId} preset={preset} /></>
               : current && company && (
                 <section style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '14px', padding: '16px', maxWidth: 520 }}>
                   <div style={{ fontSize: '12.5px', color: 'white', lineHeight: 1.55, marginBottom: '8px' }}>{tx.stagingHelp}</div>
