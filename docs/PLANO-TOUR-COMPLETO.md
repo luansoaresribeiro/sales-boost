@@ -148,6 +148,8 @@ Legenda:  ══ comprovada (foto mostra + conferência v4 "sim" + vídeo de 13/
 | 11 | Do lugar de onde se chega ao pátio do #21 | Para o pátio | A porta ou passagem para o pátio | pátio |
 | 12 (opcional) | Na rua ou no portão | Para a fachada e a porta de entrada | A entrada principal | abertura "de fora" verdadeira |
 
+> **20/11 (item 1.3, #193):** essa lista agora sai sozinha, na tela do Tour virtual ("Fotos que faltam"), a partir dos ambientes e do mapa de ligações. Na Tespon, deu 16 fotos e cobre quase todos os lugares desta tabela; ainda **não** pede as 2 fotos da escada (#1 e #2) nem a fachada (#12, opcional).
+
 São cerca de 15 a 17 fotos novas. Com elas, a estimativa é cobrir os 22 ambientes **em 3 vídeos**:
 - **Social:** cerca de 9 fotos.
 - **Íntima:** cerca de 11 fotos.
