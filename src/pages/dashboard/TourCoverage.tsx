@@ -11,6 +11,8 @@ const GREEN = '#4ade80', AMBER = '#FBBF24'
 type Status = 'linked' | 'probable' | 'none'
 interface Space { key: string; label: string; area: string; status: Status; confirmed: string[]; probable: string[] }
 interface Todo { kind: 'probable' | 'isolated' | 'stairs'; area: string; spaces: string[]; text: string }
+interface PartV { area: string; index: number; total: number; labels: string[]; urls: string[]; passages: { cls: string }[]; estimate_usd: number }
+interface Parts { parts: PartV[]; pending: { key: string; label: string; reason: string }[]; covered: number; total: number }
 interface Cov { total: number; linked: number; spaces: Space[]; todo: Todo[]; provisional?: boolean; needs?: 'spaces' | 'links'; error?: string }
 
 const TX = {
@@ -25,6 +27,10 @@ const TX = {
     copy: 'Copiar lista', copied: '✓ Copiada',
     needsSpaces: 'Primeiro, a IA precisa separar as fotos por ambiente.', needsLinks: 'Agora, a IA precisa mapear quais ambientes se ligam (só com foto que prova).',
     runSpaces: 'Identificar ambientes', runLinks: 'Mapear passagens', estimate: (v: number) => `Custo estimado: US$ ${v.toFixed(2)}. Confirmar?`,
+    parts: 'Tour em partes (sugestão)', partsHelp: 'Cada parte é um vídeo de até 8 passagens, só por passagem comprovada. Juntas, cobrem o que já dá para mostrar.',
+    part: (i: number, n: number, a: string) => `Parte ${i} de ${n} · ${a}`, passages: (n: number, usd: number) => `${n} passage${n === 1 ? 'm' : 'ns'} · ~US$ ${usd.toFixed(2)}`,
+    pick: 'Montar esta parte ↓', probable: 'Incluir passagens prováveis (confira no vídeo)', probTag: '◐ provável',
+    left: (n: number) => `Ainda fora das partes (${n}): precisam das fotos que faltam acima.`,
     yes: 'Sim, rodar', no: 'Cancelar', running: 'Analisando as fotos… (até 2 min)', err: 'Não deu certo agora. Tente de novo em alguns minutos.', loading: 'Carregando a cobertura…',
   },
   en: {
@@ -38,6 +44,10 @@ const TX = {
     copy: 'Copy list', copied: '✓ Copied',
     needsSpaces: 'First, the AI needs to group the photos by space.', needsLinks: 'Now the AI needs to map which spaces connect (only with a photo that proves it).',
     runSpaces: 'Identify spaces', runLinks: 'Map passages', estimate: (v: number) => `Estimated cost: US$ ${v.toFixed(2)}. Confirm?`,
+    parts: 'Tour in parts (suggestion)', partsHelp: 'Each part is a video of up to 8 passages, only through proven passages. Together they cover what can be shown today.',
+    part: (i: number, n: number, a: string) => `Part ${i} of ${n} · ${a}`, passages: (n: number, usd: number) => `${n} passage${n === 1 ? '' : 's'} · ~US$ ${usd.toFixed(2)}`,
+    pick: 'Build this part ↓', probable: 'Include probable passages (check in the video)', probTag: '◐ probable',
+    left: (n: number) => `Still outside the parts (${n}): they need the missing photos above.`,
     yes: 'Yes, run it', no: 'Cancel', running: 'Analysing the photos… (up to 2 min)', err: 'That did not work now. Try again in a few minutes.', loading: 'Loading coverage…',
   },
 } as const
@@ -55,7 +65,7 @@ const btn = (primary: boolean) => ({
   background: primary ? ORANGE : 'transparent', color: primary ? '#0E0B0A' : 'white', border: primary ? 'none' : '1px solid rgba(255,255,255,0.14)',
 })
 
-export default function TourCoverage({ itemId }: { itemId: string }) {
+export default function TourCoverage({ itemId, onPickPart }: { itemId: string; onPickPart?: (urls: string[]) => void }) {
   const { lang } = useLang()
   const tx = TX[lang]
   const [cov, setCov] = useState<Cov | null>(null)
@@ -63,12 +73,20 @@ export default function TourCoverage({ itemId }: { itemId: string }) {
   const [running, setRunning] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [parts, setParts] = useState<Parts | null>(null)
+  const [withProbable, setWithProbable] = useState(false)
 
   const load = useCallback(async () => {
     const r = await call({ action: 'coverage', item_id: itemId, lang })
     setCov(r.status === 200 ? r.data as unknown as Cov : { total: 0, linked: 0, spaces: [], todo: [], error: String(r.data.error ?? tx.err) })
   }, [itemId, lang, tx.err])
   useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    if (!cov || cov.needs || cov.error) return
+    let off = false
+    void call({ action: 'plan_parts', item_id: itemId, allow_probable: withProbable }).then(r => { if (!off && r.status === 200 && !r.data.needs) setParts(r.data as unknown as Parts) })
+    return () => { off = true }
+  }, [cov, itemId, withProbable])
 
   // Antes de gastar: estimativa (mapa: dry_run do servidor; ambientes: medido em 18/11, ~US$ 0,32 para 50 fotos).
   const prepare = async (action: 'group_spaces' | 'map_links') => {
@@ -153,6 +171,26 @@ export default function TourCoverage({ itemId }: { itemId: string }) {
               <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
                 {cov.todo.map((t, i) => <li key={i} style={{ fontSize: '12.5px', color: 'white', lineHeight: 1.55, marginBottom: '6px', display: 'flex', gap: '8px' }}><span style={{ color: ORANGE, fontWeight: 700, minWidth: '18px' }}>{i + 1}.</span><span>{t.text}</span></li>)}
               </ol>
+            </div>
+          )}
+          {parts && (
+            <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: '12px', marginTop: '12px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'white', marginBottom: '4px' }}>{tx.parts}</div>
+              <div style={{ fontSize: '11.5px', color: MUTED, marginBottom: '8px' }}>{tx.partsHelp}</div>
+              <label style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12px', color: AMBER, marginBottom: '10px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={withProbable} onChange={e => setWithProbable(e.target.checked)} /> {tx.probable}
+              </label>
+              {parts.parts.map(p => (
+                <div key={`${p.index}-${p.urls[0]}`} style={{ border: `1px solid ${BORDER}`, borderRadius: '10px', padding: '10px', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ fontSize: '12.5px', fontWeight: 700, color: 'white' }}>{tx.part(p.index, p.total, tx.area[p.area] ?? p.area)}</div>
+                    {onPickPart && <button style={btn(false)} onClick={() => onPickPart(p.urls)}>{tx.pick}</button>}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'white', lineHeight: 1.5, marginTop: '4px' }}>{p.labels.join(' → ')}</div>
+                  <div style={{ fontSize: '11.5px', color: MUTED }}>{tx.passages(p.passages.length, p.estimate_usd)}{p.passages.some(x => x.cls === 'probable') ? ` · ${tx.probTag}` : ''}</div>
+                </div>
+              ))}
+              {parts.pending.length > 0 && <div style={{ fontSize: '11.5px', color: MUTED }}>{tx.left(parts.pending.length)}</div>}
             </div>
           )}
         </>

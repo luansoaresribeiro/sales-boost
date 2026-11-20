@@ -8,6 +8,7 @@ import { orderTour, roomOf, tourOrderCfgFrom, tourSeconds, tourSegments, withOut
 import { ensureSpaces, photosSig, type PhotoSpace } from '../_shared/photoSpaces.ts'
 import { DEFAULT_MAX_USD, ensureLinks, spacesSigOf } from '../_shared/spaceLinks.ts'
 import { computeCoverage, hintsFrom, type CovLink, type CovSpace } from '../_shared/tourCoverage.ts'
+import { planParts, type PLink } from '../_shared/tourParts.ts'
 import { ensurePhotoScores } from '../_shared/photoScore.ts'
 import { validEndcardUrl } from '../_shared/tourPick.ts'
 import { draftReply, type DmReplyConfig } from '../_shared/dmReply.ts'
@@ -226,7 +227,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const admin = createClient(supabaseUrl, serviceKey)
-    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number; cuts?: unknown; outside_first?: unknown; force?: unknown; max_usd?: unknown; dry_run?: unknown; lang?: unknown }
+    const body = await req.json().catch(() => ({})) as { action?: string; item_id?: string; video_id?: string; kind?: string; photos?: unknown; label?: string; message?: string; active?: boolean; cron_secret?: string; company_id?: string; piece_id?: string; endcard_url?: string; endcard_seconds?: number; cuts?: unknown; outside_first?: unknown; force?: unknown; max_usd?: unknown; dry_run?: unknown; lang?: unknown; allow_probable?: unknown }
     const cronSecret = Deno.env.get('CRON_SECRET')
     const isCron = !!cronSecret && body.cron_secret === cronSecret
 
@@ -360,6 +361,24 @@ Deno.serve(async (req) => {
       const lang = body.lang === 'en' ? 'en' : 'pt'
       const cov = computeCoverage(sp.spaces, sl.links, hintsFrom((pb?.config as { tour?: { coverage_hints?: unknown } } | null)?.tour?.coverage_hints, lang))
       return json({ ...cov, provisional: sl.provisional === true, at: sl.at ?? null })
+    }
+
+    // Frente 1, item 1.4: tour em partes (social, íntima, lazer; ≤ 8 passagens cada), só por ligação confirmada do mapa
+    // (a provável só com `allow_probable`, que a tela só manda com o "gerar mesmo assim" do dono). Sem IA, sem custo.
+    if (body.action === 'plan_parts') {
+      const item = await loadItem(body.item_id)
+      if (!item) return json({ error: 'Imóvel não encontrado.' }, 404)
+      const urls = ((item.meta?.photos ?? []) as { url?: string }[]).map(p => String(p?.url ?? ''))
+      const meta = (item.meta ?? {}) as Record<string, unknown>
+      const sp = meta.spaces as { sig?: string; spaces?: CovSpace[] } | undefined
+      const sl = meta.space_links as { spaces_sig?: string; links?: CovLink[] } | undefined
+      if (!sp?.spaces?.length || sp.sig !== photosSig(urls) || !sl?.links || sl.spaces_sig !== spacesSigOf(sp.spaces as PhotoSpace[])) return json({ needs: 'coverage' })
+      const plan = planParts(sp.spaces, sl.links as PLink[], { allowProbable: body.allow_probable === true })
+      const label = new Map(sp.spaces.map(s => [s.key, s.label]))
+      return json({
+        ...plan,
+        parts: plan.parts.map(p => ({ ...p, urls: p.photos.map(i => urls[i]), labels: p.spaces.map(k => label.get(k) ?? k), estimate_usd: Math.round(p.passages.length * SEG_SECONDS.pair * COST_PER_SECOND * 100) / 100 })),
+      })
     }
 
     if (body.action === 'map_links') {
