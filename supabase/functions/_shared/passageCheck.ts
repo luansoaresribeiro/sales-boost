@@ -117,7 +117,7 @@ Depois responda:
 - door_between_visible: quando uma foto é de fora e a outra de dentro, alguma das duas mostra a porta, porta de vidro ou vão que liga os dois? Se não aparece, "no". (Se as duas são de dentro ou as duas de fora, "unsure".)
 Termine com UMA linha só com o JSON: {"photo1_outside":"yes|no","photo2_outside":"yes|no","same_floor":"yes|no|unsure","stairs_in_photo1":"yes|no","stairs_in_photo2":"yes|no","door_between_visible":"yes|no|unsure"}`
 
-export const LINK_PROMPT = PROMPT.replace('Termine com UMA linha', `- other_visible_through: olhando PELA porta, vão, vidro ou escada, a FOTO 1 mostra uma parte do MESMO ambiente que está na FOTO 2 (o mesmo piso, móvel, parede ou janela), ou a FOTO 2 mostra parte do ambiente da FOTO 1? Só "yes" se você reconhece o outro ambiente pelo que aparece; porta ou vão sem dar para ver aonde leva = "no"; na dúvida, "unsure".
+export const LINK_PROMPT = PROMPT.replace('Termine com UMA linha', `- other_visible_through: olhando PELA porta, vão, vidro ou escada, a FOTO 1 mostra uma parte do MESMO ambiente que está na FOTO 2 (o mesmo piso, móvel, parede ou janela), ou a FOTO 2 mostra parte do ambiente da FOTO 1? Só "yes" se você reconhece o outro ambiente pelo que aparece; reflexo em espelho ou em vidro NÃO conta (só o que se vê através da abertura); porta ou vão sem dar para ver aonde leva = "no"; na dúvida, "unsure".
 Termine com UMA linha`).replace('"door_between_visible":"yes|no|unsure"}', '"door_between_visible":"yes|no|unsure","other_visible_through":"yes|no|unsure"}')
 
 // deno-lint-ignore no-explicit-any

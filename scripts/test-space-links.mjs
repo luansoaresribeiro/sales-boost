@@ -2,8 +2,8 @@
 // Frente 1, item 1.2 (19/11): mapa de ligações — classificação rigorosa, leitura da proposta, custo e tabela 2.2.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-const { classifyLink, decidePassage, parseFacts, LINK_PROMPT, CHECK_VERSION } = await import('../supabase/functions/_shared/passageCheck.ts')
-const { parseProposal, proposePrompt, estimateUsd, compareLinks, pairSig, spacesSigOf } = await import('../supabase/functions/_shared/spaceLinks.ts')
+const { classifyLink, decidePassage, parseFacts, LINK_PROMPT, CHECK_VERSION, pairKey } = await import('../supabase/functions/_shared/passageCheck.ts')
+const { parseProposal, proposePrompt, estimateUsd, compareLinks, pairSig, spacesSigOf, tourEvidencePairs } = await import('../supabase/functions/_shared/spaceLinks.ts')
 const { TESPON_21 } = await import('./test-photo-spaces.mjs')
 
 const F = (o) => ({ outside1: 'no', outside2: 'no', sameFloor: 'yes', stairsInPhoto1: 'no', doorBetweenVisible: 'unsure', stairsInPhoto2: 'no', ...o })
@@ -44,9 +44,10 @@ const e = estimateUsd(50, 20)
 assert.ok(e.total < 1 && e.total > 0.2, JSON.stringify(e))
 assert.ok(estimateUsd(50, 30).total > e.total)
 
-// Tabela 2.2 (grupos da 2.1): 7 ligações ══ comprovadas + Quarto 2 ── Closet. Erros conhecidos: piscina–salão, jogos–sala.
+// Tabela 2.2 (grupos da 2.1): 7 ligações ══ comprovadas + Quarto 2 ── Closet. Erros conhecidos: piscina–salão, jogos–sala
+// de baixo e terraço–salão (no reteste de 11/11, pelo vidro do terraço aparece a sala de baixo, não o salão).
 export const TESPON_22_YES = [[0, 1], [1, 2], [2, 4], [4, 3], [3, 7], [7, 8], [8, 9], [10, 11]]
-export const TESPON_22_WRONG = [[19, 16], [17, 1]]
+export const TESPON_22_WRONG = [[19, 16], [17, 1], [0, 16]]
 const L = (a, b, cls) => ({ a: `s${a + 1}`, b: `s${b + 1}`, cls, photo: null, other_photo: null, missing: null, why: '', checked: true, sig: '' })
 const perfect = compareLinks(TESPON_22_YES.map(([a, b]) => L(a, b, 'confirmed')), spaces, TESPON_21, TESPON_22_YES, TESPON_22_WRONG)
 assert.equal(perfect.correct, 8); assert.equal(perfect.invented, 0); assert.equal(perfect.missed, 0); assert.equal(perfect.precisionVsTable, 1)
@@ -55,6 +56,20 @@ assert.equal(bad.invented, 1)                              // piscina–salão c
 assert.equal(bad.outside.length, 1)                        // escritório–lavabo: fora da tabela, a conferir no olho
 assert.equal(bad.missed, 7)
 assert.equal(bad.probable, 1)
+
+// Candidatos com prova do tour: só pares v4 "yes", entre ambientes diferentes, sem repetir a proposta.
+const urls = Array.from({ length: 50 }, (_, i) => `https://x/p${i}.jpg`)
+const chk = {
+  [pairKey(urls[40], urls[1])]: { linked: 'yes', missing: null, v: 4 },     // terraço → sala (novo)
+  [pairKey(urls[1], urls[0])]: { linked: 'yes', missing: null, v: 4 },      // sala → jantar (já proposto)
+  [pairKey(urls[13], urls[23])]: { linked: 'no', missing: 'escada', v: 4 }, // "não" não entra
+  [pairKey(urls[4], urls[34])]: { linked: 'yes', missing: null, v: 4 },     // mesmo ambiente não entra
+  [pairKey(urls[6], urls[41])]: { linked: 'yes', missing: null, v: 3 },     // versão antiga não entra
+}
+const ev = tourEvidencePairs(chk, urls, spaces, [{ a: 's2', b: 's3', photo: 1, other_photo: 0, why: '' }])
+assert.deepEqual(ev.map(e => [e.a, e.b, e.photo, e.other_photo]), [['s1', 's2', 40, 1]])
+assert.deepEqual(tourEvidencePairs(undefined, urls, spaces, []), [])
+assert.ok(LINK_PROMPT.includes('reflexo em espelho'))
 
 // item-videos expõe a ação, com acesso pago, teto e estimativa; o custo é gravado por chamada.
 const iv = readFileSync('supabase/functions/item-videos/index.ts', 'utf8')
