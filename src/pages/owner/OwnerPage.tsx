@@ -57,6 +57,9 @@ export default function OwnerPage() {
   // Exclusão em lote: ids marcados + janela de confirmação.
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkOpen, setBulkOpen] = useState(false)
+  // Liberar direto da lista (dono, 21/11): mesma ação "grant_access" da ficha da empresa (owner-company-activity),
+  // que confere o owner, grava quem liberou e o registro em access_audit_log.
+  const [granting, setGranting] = useState<string | null>(null)
 
   useEffect(() => {
     if (!session) return
@@ -82,6 +85,21 @@ export default function OwnerPage() {
     setLoading(false)
   }
 
+  const grantAccess = async (c: Company) => {
+    if (!c.id || !session) return
+    if (!window.confirm(`Liberar os agentes para "${c.business_name ?? c.user_email}"?`)) return
+    setGranting(c.id)
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/owner-company-activity`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: c.id, action: 'grant_access', reason: 'Liberado pela lista de contas do Owner.' }),
+      })
+      if (!res.ok) window.alert('Não foi possível liberar agora. Tente pela ficha da empresa.')
+      await loadCompanies()
+    } catch { window.alert('Não foi possível liberar agora. Tente pela ficha da empresa.') }
+    setGranting(null)
+  }
   const handleSignOut = async () => { await signOut(); navigate('/') }
 
   const filtered = companies.filter(c =>
@@ -268,6 +286,13 @@ export default function OwnerPage() {
                     )}
                     {c.has_company && isShowcaseMode({ created_at: c.created_at, manual_access: c.manual_access }, { granted: c.access_source === 'paid' || c.access_source === 'manual' || c.access_source === 'trial', source: c.access_source ?? 'none', status_label: c.access_status_label ?? 'Expired' }) && (
                       <span title="Conta nova que ainda não pagou: vê o painel em modo demonstração" style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '99px', background: 'rgba(255,109,41,0.12)', color: ORANGE, border: '1px solid rgba(255,109,41,0.3)' }}>Vitrine</span>
+                    )}
+                    {c.has_company && c.id && (c.access_source === 'none' || c.access_source === 'blocked' || isShowcaseMode({ created_at: c.created_at, manual_access: c.manual_access }, { granted: c.access_source === 'paid' || c.access_source === 'manual' || c.access_source === 'trial', source: c.access_source ?? 'none', status_label: c.access_status_label ?? 'Expired' })) && (
+                      <button type="button" onClick={e => { e.stopPropagation(); void grantAccess(c) }} disabled={granting === c.id}
+                        title="Libera os agentes desta conta (acesso manual)"
+                        style={{ fontSize: '10.5px', fontWeight: 700, padding: '3px 9px', borderRadius: '99px', background: ORANGE, color: '#0E0B0A', border: 'none', cursor: granting === c.id ? 'wait' : 'pointer' }}>
+                        {granting === c.id ? '...' : '🔓 Liberar'}
+                      </button>
                     )}
                     {c.id && <span style={{ fontSize: '10px', color: 'rgba(255,109,41,0.4)' }}>→</span>}
                   </div>

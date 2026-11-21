@@ -38,7 +38,7 @@ import { cachedContent, logAiCost, newCostTracker, type CostTracker } from '../_
 import { complianceNotice, cutPublicText, loadPublicTextRules, publicTextPromptRule } from '../_shared/compliance.ts'
 import { fallbackCardPlan, hasMarketSource, hasUsableImage, needsImage, pieceTrendIssues, resolveTemplate, trendNotice, trendPromptRule } from '../_shared/pieceGuard.ts'
 import { pickCoverPhoto, pickMiddlePhotos, type CatalogPhoto } from '../_shared/carouselOffer.ts'
-import { blockingThemes, findRepeatedTheme, pickAlternative, recentThemes, themeBlock, themeRetryNote, weekStartOf } from '../_shared/themeDedupe.ts'
+import { blockingThemes, findRepeat, pickAlternative, recentThemes, themeBlock, themeRetryNote, weekStartOf, weekThemesOf } from '../_shared/themeDedupe.ts'
 import { fetchThemeCfg, planWeekThemes, recipeBlocked } from '../_shared/weekThemes.ts'
 import { resolveAlias, topicText } from '../_shared/deckTopic.ts'
 import { currentWeekBRT } from '../_shared/publishSlot.ts'
@@ -628,9 +628,11 @@ async function generateForCompanyInner(admin: SupaClient, anthropicKey: string, 
   // Janela e limiar vêm da ficha (content_rules.theme_cooldown_weeks / theme_similarity; padrão 4 semanas) e valem a partir da SEMANA da peça.
   const themeCfg = await fetchThemeCfg(admin, company.vertical_key ?? null)
   const themeWeek = opts.plannedFor || new Date().toISOString().slice(0, 10)
-  const { data: themeRows } = await admin.from('marketing_ai_test_content').select('idea, planned_for, created_at').eq('company_id', company.id).is('item_id', null).not('idea', 'is', null)
+  const { data: themeRows } = await admin.from('marketing_ai_test_content').select('idea, planned_for, created_at').eq('company_id', company.id).is('item_id', null).not('idea', 'is', null).not('status', 'in', '(archived,rejected)')
     .or(`created_at.gte.${new Date(Date.parse(`${weekStartOf(themeWeek)}T00:00:00Z`) - themeCfg.cooldownWeeks * 7 * 86400000).toISOString()},planned_for.gte.${weekStartOf(themeWeek)}`).order('created_at', { ascending: false }).limit(120)
   const pastThemes = recentThemes(blockingThemes(((themeRows ?? []) as { idea: string | null; planned_for: string | null; created_at: string | null }[]).map(r => ({ idea: r.idea, date: r.planned_for || r.created_at })), themeWeek, themeCfg).map(t => ({ idea: t })), 60)
+  // Mesma semana (C1b, 21/11): regra mais rígida — mesmo assunto-chave da ficha (sinônimos) ou sobreposição menor. Só peças ativas.
+  const weekThemes = weekThemesOf(((themeRows ?? []) as { idea: string | null; planned_for: string | null }[]).map(r => ({ idea: r.idea, date: r.planned_for })), themeWeek)
   const recent = (recentRows ?? []) as { format: string | null; brief: { visual_system?: string; framework?: string; template?: string } | null }[]
   const recentUsed = recent.filter(r => r.format || r.brief?.visual_system || r.brief?.framework)
     .map(r => `- formato "${r.format ?? '—'}", template "${r.brief?.template ?? '—'}", sistema visual "${r.brief?.visual_system ?? '—'}", framework "${r.brief?.framework ?? '—'}"`).join('\n')
@@ -775,17 +777,19 @@ Retorne APENAS um JSON array:
   const redo = async (note: string): Promise<Record<string, unknown> | null> => {
     try { return extractOne(await callClaude(anthropicKey, execPrompt + note, opts.deck ? 3000 : 2000, track, pre)) } catch (e) { console.error('creative-generate: refação por tema repetido falhou', company.id, e); return null }
   }
-  const repeats = (p: Record<string, unknown> | null) => (p ? findRepeatedTheme(String(p.idea ?? ''), pastThemes, themeCfg.similarity, themeCfg.places) : null)
-  const repeated = repeats(post)
+  const repeatOf = (p: Record<string, unknown> | null) => (p ? findRepeat(String(p.idea ?? ''), pastThemes, weekThemes, themeCfg) : null)
+  const repeats = (p: Record<string, unknown> | null) => repeatOf(p)?.theme ?? null
+  const repeatHit = repeatOf(post)
+  const repeated = repeatHit?.theme ?? null
   if (post && repeated) {
     const was = String(post.idea ?? '')
     let fixed = false
     if (hasTime()) { const again = await redo(themeRetryNote(repeated)); if (again && !repeats(again)) { post = again; fixed = true } }
     if (!fixed) {
-      const alt = pickAlternative(themeCfg.alternatives, [...pastThemes, was], themeCfg)
+      const alt = pickAlternative(themeCfg.alternatives, [...pastThemes, was], themeCfg, weekThemes)
       if (alt && hasTime()) { const forced = await redo(`\n\nATENÇÃO: o tema anterior repetia uma peça recente. Escreva SOBRE ESTE TEMA (e só ele): "${alt}". O "idea" tem que ser esse tema.\n`); if (forced) { post = forced; fixed = true } }
     }
-    brief.reasoning = `${brief.reasoning ?? ''} ${fixed ? `Tema trocado: “${was}” repetia “${repeated}” (últimas ${themeCfg.cooldownWeeks} semanas ou esta semana); escrevi sobre “${String(post!.idea ?? '')}”.` : `Atenção: o tema parece repetir uma peça recente (“${repeated}”) e não consegui trocar — confira antes de aprovar.`}`.trim()
+    brief.reasoning = `${brief.reasoning ?? ''} ${fixed ? `Tema trocado: “${was}” repetia “${repeated}” (${repeatHit?.reason ?? `últimas ${themeCfg.cooldownWeeks} semanas ou esta semana`}); escrevi sobre “${String(post!.idea ?? '')}”.` : `Atenção: o tema parece repetir uma peça recente (“${repeated}”) e não consegui trocar — confira antes de aprovar.`}`.trim()
   }
   if (opts.themeNote) brief.reasoning = `${brief.reasoning ?? ''} ${opts.themeNote}`.trim()
   if (!post) {
@@ -1321,7 +1325,7 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
     admin.from('marketing_ai_test_content').select('planned_for, item_id, recipe').eq('company_id', company.id).in('planned_for', dates).not('status', 'in', '(archived,rejected)'),
     // Trava de repetição (2026-11-02): oferta = mesmo imóvel + mesma receita; educativo = tema parecido. Janela de N semanas da ficha.
     admin.from('marketing_ai_test_content').select('item_id, recipe, planned_for, created_at').eq('company_id', company.id).not('item_id', 'is', null).not('recipe', 'is', null).gte('created_at', cooldownSince),
-    admin.from('marketing_ai_test_content').select('idea, planned_for, created_at').eq('company_id', company.id).is('item_id', null).not('idea', 'is', null)
+    admin.from('marketing_ai_test_content').select('idea, planned_for, created_at').eq('company_id', company.id).is('item_id', null).not('idea', 'is', null).not('status', 'in', '(archived,rejected)')
       .or(`created_at.gte.${cooldownSince},planned_for.gte.${weekStartOf(weekOf)}`).order('created_at', { ascending: false }).limit(120),
   ])
   const pkgHistory = ((pkgRows ?? []) as { item_id: string; recipe: string; planned_for: string | null; created_at: string }[]).map(r => ({ item_id: r.item_id, recipe: r.recipe, date: r.planned_for || r.created_at }))
@@ -1404,7 +1408,8 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
       const slotsT = postJobs.map((j, i) => ({ key: `v${i + 1}`, date: j.date, hint: `${j.name} — ${j.purpose || j.pillar}${j.intent ? ` · ${intentBlock(j.intent).replace(/\s+/g, ' ').slice(0, 260)}` : ''}` }))
       // Contexto de mercado (opcional, montado em código, sem IA nova): sem sinal/tendência elegível o pedido é idêntico ao de antes.
       const market = await fetchMarketItems(admin, company.id)
-      const assigned = await planWeekThemes({ slots: slotsT, history, cfg: themeCfg, brand: company.business_name, market, ask: p => callModel(key, p, 700, CHEAP_MODEL) })
+      const weekHistory = weekThemesOf(((themeRows ?? []) as { idea: string | null; planned_for: string | null }[]).map(r => ({ idea: r.idea, date: r.planned_for })), weekOf)
+      const assigned = await planWeekThemes({ slots: slotsT, history, weekHistory, cfg: themeCfg, brand: company.business_name, market, ask: p => callModel(key, p, 700, CHEAP_MODEL) })
       postJobs.forEach((j, i) => {
         const a = assigned.get(`v${i + 1}`); if (a?.idea) j.theme_idea = a.idea; if (a?.note) j.theme_note = a.note
         const mc = a?.idea && a.market ? buildMarketContext(a.market, market) : null
