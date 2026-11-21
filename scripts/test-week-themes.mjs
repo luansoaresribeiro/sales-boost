@@ -76,3 +76,52 @@ assert.equal(recipeBlocked(used, 'i2', 'r_agua', '2026-11-03', 4), false)
 assert.equal(recipeBlocked([...used, { item_id: 'i3', recipe: 'r_agua', date: '2026-11-04' }], 'i3', 'r_agua', '2026-11-06', 4), true)
 ok('oferta: mesmo imóvel + mesma receita bloqueia na janela e na mesma semana; outra receita ou fora da janela libera')
 console.log(`\n${n} ok`)
+
+// ── C1b (dono, 21/11): ASSUNTO repetido na MESMA semana, com sinônimos — casos reais de 16–22/11 ─────────────────────
+{
+  const { findWeekRepeat, findRepeat, weekThemesOf, topicsIn, parseThemeCfg: P2, DEFAULT_THEME_CFG: D2 } = await import('../supabase/functions/_shared/themeDedupe.ts')
+  const { planWeekThemes: plan2 } = await import('../supabase/functions/_shared/weekThemes.ts')
+  const mig2 = readFileSync(new URL('../supabase/migrations/20261121120000_tema_semana_assuntos.sql', import.meta.url), 'utf8')
+  const topicsRio = JSON.parse(mig2.match(/\$json\$(\[.*?\])\$json\$/s)[1])
+  const c = P2({ theme_similarity: 0.8, theme_week_similarity: 0.6, theme_topics: topicsRio })
+  assert.ok(c.topics.length >= 6 && c.weekSimilarity === 0.6); ok('ficha traz os assuntos-chave e o limiar da semana (0.6)')
+  assert.equal(D2.weekSimilarity, 0.6); assert.deepEqual(D2.topics, []); ok('sem ficha: limiar da semana 0.6 e nenhum assunto-chave')
+  assert.equal(P2({ theme_similarity: 0.7, theme_week_similarity: 0.9 }).weekSimilarity, 0.7); ok('a semana nunca fica mais frouxa que a janela')
+  // Tespon 18 × 20/11: títulos diferentes, mesmo imposto
+  const t18 = 'Carrossel educativo revelando o ITBI e as taxas que encarecem a compra de imóvel no Rio além do preço anunciado'
+  const t20 = 'Quanto é o ITBI no Rio de Janeiro e quem paga?'
+  assert.match(findWeekRepeat(t20, [t18], c)?.reason ?? '', /ITBI/); ok('"ITBI e as taxas…" × "Quanto é o ITBI… quem paga?" = mesmo assunto (ITBI)')
+  assert.ok(findWeekRepeat('O imposto de transmissão no Rio, explicado', [t20], c)); ok('sinônimo conta ("imposto de transmissão" = ITBI)')
+  // Teste Zero 18 × 20/11: 75% de sobreposição passava no 0.8
+  const z18 = 'Carrossel educativo revelando os custos invisíveis além do preço do imóvel acima de R$1,5mi — ITBI, escritura'
+  const z20 = 'Carrossel educativo sobre custos além do preço do imóvel acima de R$ 1,5 mi — checklist para compradores qualificados'
+  assert.ok(findWeekRepeat(z20, [z18], c)); ok('"custos invisíveis além do preço" × "custos além do preço" = repetido na semana')
+  // A3 17/20/22: o mesmo checklist de perguntas 3x
+  const a17 = 'Carrossel educativo: as perguntas que todo comprador de cobertura deveria fazer antes de assinar — dica geral'
+  const a22 = '5 perguntas que todo comprador de alto padrão deveria fazer antes de assinar qualquer proposta'
+  assert.ok(findWeekRepeat(a22, [a17], c)); ok('A3: "perguntas que todo comprador… antes de assinar" 2x na semana = repetido (outras palavras)')
+  // Relacionados, mas outro assunto: passam
+  const week = [t18, 'Quais são as formas aceitas de garantia no aluguel?']
+  for (const d of ['Carrossel educativo sobre liquidez do imóvel no Rio para quem compra de fora: a dúvida invisível sobre revenda',
+    'Carrossel educativo: dúvidas sobre financiamento de imóvel no Rio para quem mora fora',
+    'Carrossel educativo sobre a etapa de verificação de certidões e registros que quem compra de fora do Rio costuma esquecer',
+    'Carrossel educativo sobre o custo de desistir do financiamento após assinar']) assert.equal(findWeekRepeat(d, week, c), null, d)
+  ok('assuntos relacionados mas diferentes (liquidez, financiamento, certidões, desistência) NÃO são bloqueados')
+  assert.equal(findWeekRepeat('Dicas de financiamento para quem compra no Leblon', ['Dicas de financiamento para quem compra na Barra'], { ...c, places: ['leblon', 'barra'] }), null); ok('lugares diferentes da ficha continuam separando')
+  // Fora da semana vale só a janela antiga (0.8, sem assunto-chave): ITBI de novo na semana seguinte pode
+  assert.equal(findRepeat(t20, [t18], [], c), null); ok('ITBI em outra semana (fora da regra da semana) não é bloqueado pelo assunto')
+  assert.deepEqual(weekThemesOf([{ idea: 'A', date: '2026-11-16' }, { idea: 'B', date: '2026-11-22' }, { idea: 'C', date: '2026-11-23' }, { idea: 'D' }], '2026-11-18'), ['A', 'B'])
+  ok('weekThemesOf: só o que tem data dentro da semana (seg–dom)')
+  assert.deepEqual([...topicsIn(z18, c.topics)].sort(), ['ITBI', 'custos da compra']); ok('topicsIn acha os assuntos da ficha')
+  // Reserva da semana: o Diretor propõe 2 vagas sobre ITBI → a 2ª é trocada e o motivo fica registrado
+  let asks = 0
+  const ask = async () => (++asks === 1
+    ? JSON.stringify({ temas: [{ vaga: 'v1', tema: 'Quanto é o ITBI e quem paga' }, { vaga: 'v2', tema: 'O ITBI e as taxas que encarecem a compra' }] })
+    : JSON.stringify({ temas: [{ vaga: 'v2', tema: 'Como funciona a vistoria antes da entrega das chaves' }] }))
+  const r = await plan2({ slots: [{ key: 'v1', date: '2026-11-23', hint: '' }, { key: 'v2', date: '2026-11-24', hint: '' }], history: [], weekHistory: [], cfg: c, brand: 'X', ask })
+  assert.equal(r.get('v1').idea, 'Quanto é o ITBI e quem paga'); assert.match(r.get('v2').idea, /vistoria/); assert.match(r.get('v2').note ?? '', /mesmo assunto na semana: ITBI/)
+  ok('reserva da semana: 2ª vaga sobre ITBI é trocada, com o motivo "mesmo assunto na semana: ITBI"')
+  const r2 = await plan2({ slots: [{ key: 'v1', date: '2026-11-23', hint: '' }], history: [t18], weekHistory: [t18], cfg: c, brand: 'X', ask: async () => JSON.stringify({ temas: [{ vaga: 'v1', tema: 'Quanto é o ITBI e quem paga' }] }) })
+  assert.notEqual(r2.get('v1').idea, 'Quanto é o ITBI e quem paga'); ok('peça já planejada/aprovada na semana também bloqueia o mesmo assunto')
+}
+console.log(`\n${n} ok (C1b incluído)`)

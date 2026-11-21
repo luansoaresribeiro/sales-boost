@@ -4,7 +4,7 @@
 // (themeDedupe: janela de N semanas da ficha + temas já reservados na semana) → o que repete pede outro tema 1x com a lista
 // proibida → ainda repete: tema alternativo da ficha que não repita → senão fica sem reserva (a vaga escolhe e a conferência
 // na geração segue valendo). Sem Deno/rede: `ask` é injetado, teste em Node (scripts/test-week-themes.mjs).
-import { findRepeatedTheme, pickAlternative, parseThemeCfg, weekStartOf, DEFAULT_THEME_CFG, type ThemeCfg } from './themeDedupe.ts'
+import { findRepeat, pickAlternative, parseThemeCfg, weekStartOf, DEFAULT_THEME_CFG, type ThemeCfg } from './themeDedupe.ts'
 import { parseJson } from './faqCheck.ts'
 import { marketPromptBlock, pickAliases, type MarketItem } from './marketContext.ts'
 
@@ -44,9 +44,11 @@ const askedSources = (raw: string, market: MarketItem[]): Map<string, string[]> 
   return out
 }
 
-export async function planWeekThemes(a: { slots: ThemeSlot[]; history: string[]; cfg: ThemeCfg; brand: string; market?: MarketItem[]; ask?: (prompt: string) => Promise<string>; timeoutMs?: number }): Promise<Map<string, ThemeAssign>> {
+export async function planWeekThemes(a: { slots: ThemeSlot[]; history: string[]; weekHistory?: string[]; cfg: ThemeCfg; brand: string; market?: MarketItem[]; ask?: (prompt: string) => Promise<string>; timeoutMs?: number }): Promise<Map<string, ThemeAssign>> {
   const { cfg } = a
   const taken = [...a.history]
+  // Mesma semana (C1b, 21/11): o que já está na semana + o que as vagas desta rodada reservam (todas são da mesma semana).
+  const week = [...(a.weekHistory ?? [])]
   const out = new Map<string, ThemeAssign>()
   const market = a.market ?? []
   const srcs = new Map<string, string[]>()
@@ -66,9 +68,9 @@ export async function planWeekThemes(a: { slots: ThemeSlot[]; history: string[];
     for (const s of slots) {
       const idea = proposals.get(s.key)
       if (!idea) { failed.push({ slot: s, why: '' }); continue }
-      const rep = findRepeatedTheme(idea, taken, cfg.similarity, cfg.places)
-      if (rep) { failed.push({ slot: s, why: `“${idea}” repetia “${rep}”` }); continue }
-      taken.push(idea); out.set(s.key, { key: s.key, idea, source: 'diretor', ...(srcs.get(s.key) ? { market: srcs.get(s.key) } : {}) })
+      const rep = findRepeat(idea, taken, week, cfg)
+      if (rep) { failed.push({ slot: s, why: `“${idea}” repetia “${rep.theme}” (${rep.reason})` }); continue }
+      taken.push(idea); week.push(idea); out.set(s.key, { key: s.key, idea, source: 'diretor', ...(srcs.get(s.key) ? { market: srcs.get(s.key) } : {}) })
     }
     return failed
   }
@@ -82,14 +84,14 @@ export async function planWeekThemes(a: { slots: ThemeSlot[]; history: string[];
     failed = [...failed.filter(f => !f.why), ...left.map(l => ({ slot: l.slot, why: l.why || again.find(f => f.slot.key === l.slot.key)?.why || '' }))]
   }
   for (const { slot, why } of failed) {
-    const alt = pickAlternative(cfg.alternatives, taken, cfg)
+    const alt = pickAlternative(cfg.alternatives, taken, cfg, week)
     if (alt) {
-      taken.push(alt)
-      out.set(slot.key, { key: slot.key, idea: alt, source: 'alternativa', note: `Tema trocado${why ? ` (${why} nas últimas ${cfg.cooldownWeeks} semanas)` : ''}: usei “${alt}”, que não repete nada recente.` })
+      taken.push(alt); week.push(alt)
+      out.set(slot.key, { key: slot.key, idea: alt, source: 'alternativa', note: `Tema trocado${why ? ` (${why})` : ''}: usei “${alt}”, que não repete nada recente.` })
     } else out.set(slot.key, { key: slot.key, idea: null, source: 'livre', note: why ? `Atenção: ${why} e não achei tema alternativo — confira antes de aprovar.` : undefined })
   }
   // Troca que o Diretor fez na 2ª tentativa também fica registrada
-  for (const f of again) { const o = out.get(f.slot.key); if (o && o.source === 'diretor' && !o.note) o.note = `Tema trocado (${f.why} nas últimas ${cfg.cooldownWeeks} semanas): usei “${o.idea}”.` }
+  for (const f of again) { const o = out.get(f.slot.key); if (o && o.source === 'diretor' && !o.note) o.note = `Tema trocado (${f.why}): usei “${o.idea}”.` }
   return out
 }
 
