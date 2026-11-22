@@ -12,7 +12,12 @@ type Admin = { from: (t: string) => any } // eslint-disable-line @typescript-esl
 // name_pattern (opcional): o nome tem que bater (ex.: praia começa com
 // "Praia" — no mapa tem parquinho marcado como praia).
 export interface NearbyCategory { key: string; label: string; emoji: string; osm: string[]; name_pattern?: string }
-export interface NearbyConfig { address_field: string; area_field: string; radius_m: number; max_per_category: number; categories: NearbyCategory[] }
+export interface NearbyConfig {
+  address_field: string; area_field: string; radius_m: number; max_per_category: number; categories: NearbyCategory[]
+  // Pontos fortes, item 3 (dono, 22/11 — docs/PONTOS-FORTES.md): a marca de localização do imóvel puxa estas categorias
+  // para a frente (ficha: nearby_places.mark_field + mark_categories). Sem marca = ordem da ficha, como antes.
+  mark_field?: string; mark_categories?: Record<string, string[]>
+}
 export interface NearbyPlace { cat: string; name: string; distance_m: number; osm: string; hidden?: boolean }
 export interface NearbyData {
   source: 'openstreetmap'; fetched_at: string; precision: 'endereco' | 'bairro'
@@ -45,6 +50,7 @@ export async function fetchNearbyConfig(admin: Admin, verticalKey: string | null
       radius_m: Math.min(3000, Math.max(200, Number(raw.radius_m) || 1500)),
       max_per_category: Math.min(10, Math.max(1, Number(raw.max_per_category) || 3)),
       categories,
+      ...parseMarkCfg(raw as Record<string, unknown>, categories.map(c => c.key)),
     }
   } catch { return null }
 }
@@ -192,13 +198,37 @@ export function fmtDistance(m: number): string {
   return m < 1000 ? `${Math.max(50, Math.round(m / 50) * 50)} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`
 }
 
-// Pro post: o lugar visível mais perto de cada categoria, na ORDEM da ficha
-// (a ficha põe primeiro o que mais vende: praia, metrô, parque…).
-export function topPlaces(data: NearbyData | null, cfg: NearbyConfig | null, n = 3): (NearbyPlace & { label: string; emoji: string })[] {
+/** Lê mark_field/mark_categories da ficha; só categorias que existem e marcas com texto. */
+export function parseMarkCfg(raw: Record<string, unknown>, catKeys: string[]): Pick<NearbyConfig, 'mark_field' | 'mark_categories'> {
+  const field = typeof raw.mark_field === 'string' && /^[a-z_]{1,40}$/.test(raw.mark_field) ? raw.mark_field : undefined
+  const mc = raw.mark_categories && typeof raw.mark_categories === 'object' ? raw.mark_categories as Record<string, unknown> : null
+  if (!field || !mc) return {}
+  const out: Record<string, string[]> = {}
+  for (const [mark, cats] of Object.entries(mc)) {
+    const list = (Array.isArray(cats) ? cats : []).filter((c): c is string => typeof c === 'string' && catKeys.includes(c))
+    if (mark.trim() && list.length) out[mark] = list
+  }
+  return Object.keys(out).length ? { mark_field: field, mark_categories: out } : {}
+}
+
+/** Categorias que as marcas de localização do imóvel puxam para a frente, na ordem das marcas, sem repetir. */
+export function priorityCategories(cfg: NearbyConfig | null, fields: Record<string, unknown> | null | undefined): string[] {
+  if (!cfg?.mark_field || !cfg.mark_categories) return []
+  const marks = fields?.[cfg.mark_field]
+  const out: string[] = []
+  for (const m of Array.isArray(marks) ? marks : []) for (const c of cfg.mark_categories[String(m)] ?? []) if (!out.includes(c)) out.push(c)
+  return out
+}
+
+// Pro post: o lugar visível mais perto de cada categoria. Ordem: primeiro as categorias que as marcas do imóvel
+// puxam (item 3, 22/11), depois a ORDEM da ficha (que põe primeiro o que mais vende: praia, metrô, parque…).
+// Categoria sem lugar perto é pulada: a marca nunca inventa um lugar.
+export function topPlaces(data: NearbyData | null, cfg: NearbyConfig | null, n = 3, priority: string[] = []): (NearbyPlace & { label: string; emoji: string })[] {
   if (!data || !cfg) return []
   const visible = data.places.filter(p => !p.hidden)
   const out: (NearbyPlace & { label: string; emoji: string })[] = []
-  for (const c of cfg.categories) {
+  const ordered = [...priority.map(k => cfg.categories.find(c => c.key === k)).filter((c): c is NearbyCategory => !!c), ...cfg.categories.filter(c => !priority.includes(c.key))]
+  for (const c of ordered) {
     const best = visible.filter(p => p.cat === c.key).sort((a, b) => a.distance_m - b.distance_m)[0]
     if (best) out.push({ ...best, label: c.label, emoji: c.emoji })
     if (out.length >= n) break
