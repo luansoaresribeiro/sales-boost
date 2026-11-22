@@ -28,7 +28,7 @@ const admin = { from: (tb) => ({ insert: async (row) => { rows.push({ tb, row })
 await logAiCost(admin, { companyId: 'c1', role: 'conteudo', taskKey: 'ai_text_content', description: 'x'.repeat(500), tokens: 13_000, costUsd: 0.075, latencyMs: 1234.6 })
 assert.equal(rows.length, 1); const r = rows[0].row
 assert.equal(rows[0].tb, 'agent_performance')
-assert.deepEqual({ ...r, task_description: r.task_description.length }, { company_id: 'c1', agent_role: 'conteudo', task_key: 'ai_text_content', task_description: 200, tokens_used: 13000, cost_usd: 0.075, latency_ms: 1235, success: true, error_message: null })
+assert.deepEqual({ ...r, task_description: r.task_description.length }, { company_id: 'c1', agent_role: 'conteudo', task_key: 'ai_text_content', task_description: 200, tokens_used: 13000, cost_usd: 0.075, latency_ms: 1235, success: true, error_message: null, cost_kind: 'medido', provider: 'anthropic' })
 await logAiCost(admin, { companyId: 'c1', role: 'conteudo', taskKey: 'k', description: 'd', tokens: 0, costUsd: 0 })
 assert.equal(rows.length, 1, 'nada medido = nada gravado (não inventa custo)')
 ok('grava em agent_performance no formato das outras functions (tokens_used, cost_usd, latency_ms); sem tokens não grava')
