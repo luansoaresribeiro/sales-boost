@@ -152,6 +152,12 @@ export default function OwnerPage() {
             🛡️ Saúde
           </button>
           <button
+            onClick={() => navigate('/owner/costs')}
+            style={{ padding: '7px 16px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '12px', cursor: 'pointer' }}
+          >
+            💲 Custos
+          </button>
+          <button
             onClick={() => navigate('/owner/settings')}
             style={{ padding: '7px 16px', background: 'transparent', border: `1px solid ${BORDER}`, borderRadius: '8px', color: MUTED, fontSize: '12px', cursor: 'pointer' }}
           >
