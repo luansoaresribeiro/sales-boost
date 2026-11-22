@@ -26,6 +26,10 @@
 - **Custos fixos** em `platform_fixed_costs` (mês, item, valor, origem), só o Owner lê; nunca somados ao custo de um
   cliente sem o rótulo "rateio".
 - Migration `20261122160000_custos_operacao_fixos.sql` (só acrescenta; rollback comentado no arquivo).
+- **Tela (A2): Owner → 💲 Custos** (`/owner/costs`, função `api-usage` ação `costs`, só Owner): período (7/30/90 dias, mês),
+  variável por tipo, fixo informado à parte com o rateio rotulado, por cliente/funcionalidade/operação/provedor/agente, evolução
+  diária, custo por peça e a lista "não medido". A ficha da empresa (`CompanyAiUsage`) deixou de somar tokens × preço médio
+  **mais** o custo real (contava duas vezes); o total da Anthropic em Configurações passou de estimado (US$ 6/M tokens) a medido.
 
 ## v1 (17/11) — o que foi MEDIDO de 10 a 17/11
 

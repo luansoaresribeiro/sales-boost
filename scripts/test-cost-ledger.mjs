@@ -67,7 +67,9 @@ ok('sem fixo informado: "não informado", sem rateio')
 // 5. Post de imóvel: texto + nota ligados à mesma peça (ref_id), cada um uma operação
 const piece = rows.filter(r => r.ref_id === 'peca1')
 assert.equal(new Set(piece.map(r => r.operation_id)).size, 2); near(piece.reduce((t, r) => t + r.cost_usd, 0), 0.05)
-ok('post de imóvel = operação de texto + operação de nota, ligadas pela peça')
+const pc = s.byPiece.find(p => p.ref === 'peca1'); near(pc.total, 0.05); assert.equal(pc.ops.length, 2); assert.equal(pc.company, 'Teste Zero')
+assert.equal(featureOf(row({ source: 'video_tours', kind: 'staging' })).key, 'mobiliado')
+ok('post de imóvel = operação de texto + operação de nota, ligadas pela peça (custo por peça na tela)')
 
 // 6. Código: cada chamada à Anthropic das funções instrumentadas soma na operação; cada operação tem id único
 const src = (p) => readFileSync(new URL(`../supabase/functions/${p}`, import.meta.url), 'utf8')
@@ -85,5 +87,12 @@ assert.ok(/create unique index if not exists agent_performance_operation_uq/i.te
 ok('funções instrumentadas: toda chamada soma; id único; migration só acrescenta')
 assert.ok(NAO_MEDIDO.length > 0 && !NAO_MEDIDO.some(x => /catalog-package|content-test/.test(x.fn)))
 ok('lista "não medido" sem as funções já medidas')
+
+// 7. Etapa A2: sem conta dupla na ficha da empresa e sem a estimativa de US$ 6/M tokens no total da plataforma
+const usage = readFileSync(new URL('../src/pages/owner/CompanyAiUsage.tsx', import.meta.url), 'utf8')
+assert.ok(!/COST_PER_1K/.test(usage) && /const rowCost = \(r: PerfRow\) => Number\(r\.cost_usd\) \|\| 0/.test(usage))
+const api = src('api-usage/index.ts')
+assert.ok(!/\* 6 \*/.test(api) && /summarize\(/.test(api) && /action === 'costs'/.test(api))
+ok('ficha da empresa soma só o custo gravado; api-usage usa o classificador único')
 
 console.log(`\n${n} ok`)

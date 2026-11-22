@@ -24,6 +24,8 @@ export interface CostRow {
   provider?: string | null
   calls?: number | null
   source?: 'agent_performance' | 'video_tours'
+  /** video_tours.kind (tour × mobiliado). */
+  kind?: string | null
 }
 
 /** Estratégia antiga: valor fixo gravado sem tokens. Depois do #127 essas linhas vêm com 0 e o real vai em ai_text_strategy. */
@@ -57,7 +59,7 @@ const FEATURES: [RegExp, Feature][] = [
   [/^audio_transcription$/, F('telegram', 'Telegram (áudio)')],
 ]
 export function featureOf(r: CostRow): Feature {
-  if (r.source === 'video_tours') return F('tour', 'Tour virtual', true)
+  if (r.source === 'video_tours') return /stag|mobil/i.test(r.kind ?? '') ? F('mobiliado', 'Mobiliar cômodo', true) : F('tour', 'Tour virtual', true)
   const k = r.task_key ?? ''
   for (const [re, f] of FEATURES) if (re.test(k)) return f
   return F('outros', k || 'Sem nome')
@@ -103,6 +105,8 @@ export interface LedgerSummary {
   fixedPerActiveClient: number | null
   byCompany: Bucket[]; byFeature: Bucket[]; byOperation: Bucket[]; byAgent: Bucket[]; byProvider: Bucket[]; byDay: Bucket[]
   freeVsPaid: { free: number; paidByClient: number }
+  /** Custo por peça/estratégia (ref_id): soma das operações ligadas a ela (ex.: texto + nota de 1 post). Mais recentes primeiro. */
+  byPiece: { ref: string; company: string; total: number; ops: { task: string; usd: number; calls: number | null; tokens: number; at: string }[] }[]
 }
 
 function add(map: Map<string, Bucket>, key: string, label: string, kind: CostKind, usd: number, extra?: Partial<Bucket>) {
@@ -119,6 +123,7 @@ export function summarize(rows: CostRow[], fixed: FixedCost[] = [], companyNames
   const byCompany = new Map<string, Bucket>(), byFeature = new Map<string, Bucket>(), byOp = new Map<string, Bucket>()
   const byAgent = new Map<string, Bucket>(), byProv = new Map<string, Bucket>(), byDay = new Map<string, Bucket>()
   const kinds = zero(); let total = 0, n = 0, free = 0, paid = 0
+  const pieces = new Map<string, LedgerSummary['byPiece'][number] & { last: string }>()
   for (const r of dedupe(rows)) {
     const kind = costKindOf(r)
     if (!kind) continue
@@ -132,6 +137,12 @@ export function summarize(rows: CostRow[], fixed: FixedCost[] = [], companyNames
     add(byAgent, r.agent_role ?? '—', r.agent_role ?? '—', kind, usd)
     const p = providerOf(r); add(byProv, p, p, kind, usd)
     const d = r.created_at.slice(0, 10); add(byDay, d, d, kind, usd)
+    if (r.ref_id) {
+      const p = pieces.get(r.ref_id) ?? { ref: r.ref_id, company: companyNames[cid] ?? cid, total: 0, ops: [], last: r.created_at }
+      p.total += usd; p.ops.push({ task: r.task_key ?? '—', usd: r6(usd), calls: r.calls ?? null, tokens: num(r.tokens_used), at: r.created_at })
+      if (r.created_at > p.last) p.last = r.created_at
+      pieces.set(r.ref_id, p)
+    }
   }
   const items = fixed.map(x => ({ item: x.item, provider: x.provider ?? null, amount_usd: num(x.amount_usd) })).filter(x => x.amount_usd >= 0)
   const fixedTotal = r6(items.reduce((s, x) => s + x.amount_usd, 0))
@@ -142,6 +153,7 @@ export function summarize(rows: CostRow[], fixed: FixedCost[] = [], companyNames
     fixedPerActiveClient: items.length && active ? r6(fixedTotal / active) : null,
     byCompany: out(byCompany), byFeature: out(byFeature), byOperation: out(byOp), byAgent: out(byAgent), byProvider: out(byProv), byDay: out(byDay, true),
     freeVsPaid: { free: r6(free), paidByClient: r6(paid) },
+    byPiece: [...pieces.values()].sort((a, b) => b.last.localeCompare(a.last)).slice(0, 30).map(({ last: _l, ...p }) => ({ ...p, total: r6(p.total) })),
   }
 }
 
