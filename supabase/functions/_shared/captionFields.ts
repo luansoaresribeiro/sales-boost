@@ -26,9 +26,13 @@ export function captionExtrasLine(fields: Record<string, unknown> | null | undef
   const parts: string[] = []
   for (const d of defs) {
     const v = f[d.key]
+<<<<<<< HEAD
     // Lista (caixinhas de pontos fortes, 22/11) vira "a, b, c".
     const raw = Array.isArray(v) ? v.filter(x => typeof x === 'string' && x.trim()).join(', ') : v
     const s = typeof raw === 'number' ? (Number.isFinite(raw) ? String(raw) : '') : typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim().slice(0, 300) : ''
+=======
+    const s = typeof v === 'number' ? (Number.isFinite(v) ? String(v) : '') : typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 300) : ''
+>>>>>>> origin/main
     if (s) parts.push(`${d.label}: ${s}`)
   }
   return parts.length ? `\nDiferenciais informados pelo corretor (use só o que está aqui, sem acrescentar): ${parts.join(' · ')}` : ''

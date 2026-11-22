@@ -39,7 +39,20 @@
 | Jornada do cliente | O cliente é **guiado desde a 1ª entrada**. O upsell é **contextual**: aparece quando o cliente acabou de ver valor, só com dado real, e leva ao Pro com a função certa aberta. Conteúdo descobre o imóvel que interessa; o tour aprofunda esse imóvel até a visita. Código só depois de o dono aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md), 1 PR por item. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Liga dos Sonhos | Nunca tocar, nem ler. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Testes na A3 | Para o tour: **primeiro na A3**, só leitura/análise e rascunho sem publicar; custo avisado antes, verba da Frente 1, backup antes de alterar, nada de original apagado ou sobrescrito, nada experimental em Aprovações visível à A3 sem ela concordar. O resto continua 🔴. | [20/11 tarde](#2026-11-20-tarde--testes-do-tour-primeiro-na-a3-com-condições-d3-d2-trava-do-mobiliado-e-ritmo-de-trabalho) |
+| Pontos fortes do imóvel | Marcas de pontos fortes no cadastro (e por cômodo) decidem imóvel, formato, foto, lugares perto e gancho; sem marca = como antes; IA por cômodo **não agora**; correção rápida da legenda primeiro. | [22/11](#2026-11-22--pontos-fortes-do-imóvel-c6-aprovados) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-22 — Pontos fortes do imóvel (C6) aprovados
+
+- **O dono:** "aprovado" (22/11), sobre o documento [PONTOS-FORTES](PONTOS-FORTES.md) e as 3 recomendações dele.
+- **Vale:**
+  - a lista de marcas da seção 3, como está (localização, imóvel, para quem é), e os pontos fortes por cômodo;
+  - as marcas passam a **decidir** imóvel da semana, formato, foto de abertura, lugares perto e gancho; sem marca,
+    tudo continua como antes; nada é afirmado sem o corretor ter marcado ou escrito;
+  - **IA sugerindo pontos fortes por cômodo: não agora** (começa manual, custo zero);
+  - **correção rápida primeiro:** vista, lazer, andar, vagas e o detalhe entram na legenda do pacote do imóvel.
+- **Ordem:** a da seção 8 do documento, 1 PR por item.
+- **Motivo:** o cliente real (A3) já informa os diferenciais e o sistema não usava a maior parte.
 
 ## 2026-11-20 (tarde) — Testes do tour primeiro na A3 (com condições), D3, D2, trava do mobiliado e ritmo de trabalho
 

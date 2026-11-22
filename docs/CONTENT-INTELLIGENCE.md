@@ -270,3 +270,5 @@ engajam nas hashtags da região nos últimos 30 dias e grava os 5 melhores em
 `marketing_ai_trends` (`source='diagnostico'`) quando a conta é criada.
 **Divergência registrada:** o planejador da semana ainda não lê essa tabela
 pra decidir os posts — próximo passo é ligar `post_trend` a ela.
+
+> **22/11:** proposta de pontos fortes do imóvel guiando a escolha de imóvel, formato, foto e lugares perto: [PONTOS-FORTES](PONTOS-FORTES.md) (aprovado em 22/11).
