@@ -101,8 +101,8 @@ inventar nada). É pequena, sem custo novo de IA e não depende da lista de marc
 ## 8. Ordem de implementação (1 PR por item, cada um com teste)
 | # | Item | Custo de IA | Pronto quando |
 |---|---|---|---|
-| 1 | Correção rápida (item 5) | 0 | legenda de imóvel da Teste Zero cita vista/lazer/andar/vagas do cadastro |
-| 2 | Marcas na ficha + caixinhas no cadastro | 0 | marcar e salvar no imóvel (print celular e desktop) |
+| 1 ✅ | Correção rápida (item 5) | 0 | legenda de imóvel da Teste Zero cita vista/lazer/andar/vagas do cadastro (feito 22/11) |
+| 2 🧪 | Marcas na ficha + caixinhas no cadastro | 0 | marcar e salvar no imóvel (print celular e desktop). As marcas de localização e de imóvel também entram na legenda; "para quem é" não |
 | 3 | Lugares perto na ordem das marcas | 0 | imóvel "vida noturna" mostra restaurante/cultura primeiro (teste + Teste Zero) |
 | 4 | Marcas escolhem formato, foto de abertura e gancho | o mesmo de hoje | peça da Teste Zero com o motivo anotado |
 | 5 | Pontos fortes por cômodo (manual) | 0 | marcar por cômodo e a foto certa abrir o post |

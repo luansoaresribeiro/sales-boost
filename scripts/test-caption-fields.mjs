@@ -25,3 +25,24 @@ assert.deepEqual(captionFieldsFrom(null), []); ok('ficha sem caption_fields = li
 const src = readFileSync(new URL('../supabase/functions/catalog-package/index.ts', import.meta.url), 'utf8')
 assert.ok(/captionExtrasLine\(fields, ficha\.captionFields\)/.test(src)); ok('catalog-package usa a linha extra no fieldsLine')
 console.log(`\n${n} ok`)
+
+// ── Item 2 (22/11): caixinhas de pontos fortes ─────────────────────────────────────────────────────────────────────
+{
+  const mig2 = readFileSync(new URL('../supabase/migrations/20261122130000_pontos_fortes_marcas.sql', import.meta.url), 'utf8')
+  const added = JSON.parse(mig2.match(/\$json\$(\[[\s\S]*?\])\$json\$/)[1])
+  assert.deepEqual(added.map(f => f.key), ['pontos_localizacao', 'pontos_imovel', 'pontos_para_quem']); assert.ok(added.every(f => f.type === 'multi_select' && f.options.every(o => o.pt && o.en)))
+  ok('3 campos de marcar na ficha, cada opção em pt e en')
+  assert.equal(added.reduce((a, f) => a + f.options.length, 0), 21); ok('21 marcas = a lista aprovada (6 + 10 com a vista separada em 3 + 5)')
+  assert.ok(/'\["pontos_localizacao","pontos_imovel"\]'/.test(mig2) && !/caption_fields.*pontos_para_quem/.test(mig2)); ok('"para quem é" NÃO entra na legenda (só tom)')
+  const cf = { optional: [...catalog_fields.optional, ...added] }
+  const d2 = captionFieldsFrom({ caption_fields: ['vista', 'pontos_localizacao', 'pontos_imovel'], catalog_fields: cf })
+  const l2 = captionExtrasLine({ vista: 'Mar', pontos_imovel: ['Varanda', 'Andar alto'], pontos_localizacao: [] }, d2)
+  assert.match(l2, /Vista: Mar · Pontos fortes: imóvel: Varanda, Andar alto/); assert.ok(!/localização/.test(l2)); ok('marcas entram na legenda como lista; lista vazia não aparece')
+  const vp = readFileSync(new URL('../src/lib/verticalPlaybook.ts', import.meta.url), 'utf8')
+  assert.match(vp, /f\.type === 'multi_select'[\s\S]{0,400}allowed\.has\(v\)[\s\S]{0,120}new Set\(arr\)\]\.slice\(0, 15\)/); ok('ao salvar: só opção da ficha, sem repetir, no máximo 15 (sanitizeCatalogValues)')
+  const ed = readFileSync(new URL('../src/pages/dashboard/marketingAi/CatalogItemEditor.tsx', import.meta.url), 'utf8')
+  assert.match(ed, /field\.type === 'multi_select'[\s\S]{0,800}aria-pressed=\{on\}/); ok('tela: caixinhas de marcar (aria-pressed) no editor e no cadastro')
+  const { itemFacts } = await import('../supabase/functions/_shared/claimLock.ts')
+  assert.ok(itemFacts('Apto', { pontos_imovel: ['Vista para o mar'] }).texts.includes('Vista para o mar')); ok('marca do cadastro conta como fato (trava de afirmação não corta)')
+}
+console.log(`\n${n} ok (com o item 2)`)

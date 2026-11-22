@@ -44,6 +44,26 @@ export function FieldInput({ field, value, onChange }: { field: CatalogField; va
       </div>
     )
   }
+  if (field.type === 'multi_select') {
+    // Caixinhas de marcar (pontos fortes do imóvel, 22/11 — docs/PONTOS-FORTES.md). Valor = lista de opções (texto em pt).
+    const arr = Array.isArray(value) ? value.map(String) : []
+    return (
+      <div style={{ marginBottom: '12px' }}>
+        {lbl}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {(field.options ?? []).map(o => {
+            const on = arr.includes(o.pt)
+            return (
+              <button key={o.pt} type="button" aria-pressed={on} onClick={() => onChange(on ? arr.filter(x => x !== o.pt) : [...arr, o.pt])}
+                style={{ padding: '6px 11px', borderRadius: '99px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', border: `1px solid ${on ? ORANGE : BORDER}`, background: on ? 'rgba(255,109,41,0.16)' : 'transparent', color: on ? 'white' : MUTED }}>
+                {on ? '✓ ' : ''}{bi(o, lang)}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
   if (field.type === 'text' && (field.max ?? 0) > 200) {
     return (
       <div style={{ marginBottom: '10px' }}>
@@ -146,11 +166,11 @@ export default function CatalogItemEditor({ item, companyId, schema, onClose, on
 
           <div style={{ fontSize: '11px', fontWeight: 700, color: ORANGE, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 8px' }}>{tx.details}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', columnGap: '12px' }}>
-            {formFields.filter(f => !(f.type === 'text' && (f.max ?? 0) > 200)).map(f => (
+            {formFields.filter(f => !(f.type === 'text' && (f.max ?? 0) > 200) && f.type !== 'multi_select').map(f => (
               <FieldInput key={f.key} field={f} value={fields[f.key]} onChange={v => setFields(p => ({ ...p, [f.key]: v }))} />
             ))}
           </div>
-          {formFields.filter(f => f.type === 'text' && (f.max ?? 0) > 200).map(f => (
+          {formFields.filter(f => (f.type === 'text' && (f.max ?? 0) > 200) || f.type === 'multi_select').map(f => (
             <FieldInput key={f.key} field={f} value={fields[f.key]} onChange={v => setFields(p => ({ ...p, [f.key]: v }))} />
           ))}
 

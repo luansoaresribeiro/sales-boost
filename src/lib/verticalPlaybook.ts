@@ -14,7 +14,7 @@ export interface PlaybookQuestion {
   key: string
   label: Bilingual
   type: PlaybookQuestionType
-  options?: Bilingual[] // só pra 'select'
+  options?: Bilingual[] // 'select' e 'multi_select' (caixinhas de marcar, ex.: pontos fortes do imóvel, 22/11)
   max?: number // só pra 'multi_text'
 }
 
@@ -50,13 +50,13 @@ export async function fetchOnboardingQuestions(verticalKey: string): Promise<{ n
   } catch { return { name: '', questions: [] } }
 }
 
-export type CatalogFieldType = 'text' | 'number' | 'select' | 'url' | 'photos'
+export type CatalogFieldType = 'text' | 'number' | 'select' | 'multi_select' | 'url' | 'photos'
 
 export interface CatalogField {
   key: string
   type: CatalogFieldType
   label: Bilingual
-  options?: Bilingual[] // só pra 'select'
+  options?: Bilingual[] // 'select' e 'multi_select' (caixinhas de marcar, ex.: pontos fortes do imóvel, 22/11)
   min?: number // só pra 'photos' (mínimo de fotos)
   max?: number // só pra 'text': tamanho máximo (acima de 200 vira caixa grande, ex.: descrição)
   private?: boolean // só pra busca interna (ex.: endereço) — nunca vai pra legenda
@@ -156,6 +156,12 @@ export function sanitizeCatalogValues(raw: unknown, schema: CatalogSchema): Reco
     if (f.type === 'number') {
       const n = Number(value)
       if (Number.isFinite(n)) out[key] = n
+    } else if (f.type === 'multi_select') {
+      // Marcas (pontos fortes, 22/11): só opções da ficha, sem repetir, no máximo 15.
+      const allowed = new Set((f.options ?? []).map(o => o.pt))
+      const arr = (Array.isArray(value) ? value : []).map(v => String(v ?? '').trim()).filter(v => allowed.has(v))
+      const uniq = [...new Set(arr)].slice(0, 15)
+      if (uniq.length) out[key] = uniq
     } else if (f.type === 'select') {
       const s = String(value ?? '').trim()
       const allowed = (f.options ?? []).map(o => o.pt)
