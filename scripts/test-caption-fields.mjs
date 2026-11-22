@@ -25,7 +25,6 @@ assert.deepEqual(captionFieldsFrom(null), []); ok('ficha sem caption_fields = li
 const src = readFileSync(new URL('../supabase/functions/catalog-package/index.ts', import.meta.url), 'utf8')
 assert.ok(/captionExtrasLine\(fields, ficha\.captionFields\)/.test(src)); ok('catalog-package usa a linha extra no fieldsLine')
 console.log(`\n${n} ok`)
-<<<<<<< HEAD
 
 // ── Item 2 (22/11): caixinhas de pontos fortes ─────────────────────────────────────────────────────────────────────
 {
@@ -47,5 +46,3 @@ console.log(`\n${n} ok`)
   assert.ok(itemFacts('Apto', { pontos_imovel: ['Vista para o mar'] }).texts.includes('Vista para o mar')); ok('marca do cadastro conta como fato (trava de afirmação não corta)')
 }
 console.log(`\n${n} ok (com o item 2)`)
-=======
->>>>>>> origin/main
