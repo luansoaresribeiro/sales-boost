@@ -383,6 +383,13 @@ export default function CompanyDetailPage() {
               🔴 <strong>Multa por cancelamento antecipado: R$ {((detail.early_termination_fee_cents ?? 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong> (30% das mensalidades restantes). Registrada, <strong>não cobrada</strong> — a cobrança é manual e depende de decisão do dono.
             </div>
           )}
+          {/* Liberado à mão vale mesmo com teste grátis ainda gravado (22/11, caso Tim Reyes): a função do banco mostra
+              "Trial" antes de "Manual", e o dono achava que a conta não estava liberada. */}
+          {detail.manual_access && access?.source === 'trial' && (
+            <div style={{ padding: '10px 13px', background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: '9px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '14px' }}>
+              ✅ <strong>Liberado manualmente</strong> por {detail.manual_access_granted_by ?? 'um owner'}{detail.manual_access_granted_at ? ` em ${new Date(detail.manual_access_granted_at).toLocaleDateString('pt-BR')}` : ''}. O teste grátis gravado{detail.trial_expires_at ? ` até ${new Date(detail.trial_expires_at).toLocaleDateString('pt-BR')}` : ''} não muda nada: quando ele acabar, a conta continua liberada.
+            </div>
+          )}
           {access?.source === 'manual' && (
             <div style={{ padding: '10px 13px', background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.22)', borderRadius: '9px', fontSize: '11.5px', color: 'white', lineHeight: 1.6, marginBottom: '14px' }}>
               🟡 <strong>Manual access.</strong> Sem assinatura ativa — liberado por {detail.manual_access_granted_by ?? 'um owner'}{detail.manual_access_granted_at ? ` em ${new Date(detail.manual_access_granted_at).toLocaleDateString('pt-BR')}` : ''}.{detail.manual_access_reason ? ` Motivo: "${detail.manual_access_reason}"` : ''}
@@ -398,6 +405,14 @@ export default function CompanyDetailPage() {
             <input value={accessReason} onChange={e => setAccessReason(e.target.value)} placeholder="Motivo (opcional)" style={{ ...inputStyle, marginBottom: '10px' }} />
           )}
 
+          {access && (() => {
+            const showcase = isShowcaseMode({ created_at: detail.created_at, manual_access: detail.manual_access }, access)
+            const [txt, color] = access.source === 'blocked' ? ['🔴 Acesso: bloqueado', '#f87171']
+              : showcase ? ['🟠 Acesso: modo demonstração (os agentes não trabalham)', ORANGE]
+              : access.granted ? ['🟢 Acesso: liberado (os agentes trabalham)', '#4ade80']
+              : ['🔴 Acesso: sem acesso', '#f87171']
+            return <div style={{ fontSize: '12.5px', fontWeight: 700, color, marginBottom: '10px' }}>{txt}</div>
+          })()}
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             {/* Vitrine (conta nova em trial, sem pagar/liberar) conta como "granted" no banco, mas os robôs não
                 trabalham — então o botão de liberar aparece também nesse caso (2026-11-10, caso A3 Imóveis). */}
