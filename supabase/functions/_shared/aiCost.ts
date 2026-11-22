@@ -72,11 +72,22 @@ export type Trigger = 'cron' | 'manual'
  * recusa a linha: aí grava de novo SEM as colunas novas — a medição antiga nunca se perde por causa da nova.
  */
 // deno-lint-ignore no-explicit-any
-export async function insertPerf(admin: { from: (t: string) => any }, row: Record<string, unknown>, extra: { breakdown?: Breakdown | null; trigger?: Trigger | null }): Promise<void> {
+export interface PerfExtra { breakdown?: Breakdown | null; trigger?: Trigger | null; operationId?: string | null; refId?: string | null; costKind?: CostKind | null; provider?: string | null; calls?: number | null }
+/** Tipo do custo (etapa A, 22/11): medido pela resposta, preço de lista por chamada, ou estimado. "Não medido" = sem linha. */
+export type CostKind = 'medido' | 'preco_por_uso' | 'estimado'
+export async function insertPerf(admin: { from: (t: string) => any }, row: Record<string, unknown>, extra: PerfExtra): Promise<void> {
   const cols: Record<string, unknown> = {}
   if (extra.breakdown) Object.assign(cols, { input_tokens: Math.round(extra.breakdown.input), output_tokens: Math.round(extra.breakdown.output), cache_write_tokens: Math.round(extra.breakdown.cacheWrite), cache_read_tokens: Math.round(extra.breakdown.cacheRead) })
   if (extra.trigger) cols.call_origin = extra.trigger
+  // Etapa A (migration 20261122160000): identificador único da operação e classificação do custo.
+  if (extra.operationId) cols.operation_id = extra.operationId
+  if (extra.refId) cols.ref_id = String(extra.refId).slice(0, 80)
+  if (extra.costKind) cols.cost_kind = extra.costKind
+  if (extra.provider) cols.provider = extra.provider
+  if (extra.calls != null && Number.isFinite(extra.calls)) cols.calls = Math.round(extra.calls)
   const { error } = await admin.from('agent_performance').insert({ ...row, ...cols })
+  // Mesma operação gravada de novo (índice único de operation_id): NÃO grava outra vez — nem sem o identificador.
+  if (error && String(error.code ?? '') === '23505') { console.warn('aiCost: operação já registrada, não duplica', extra.operationId); return }
   if (error && Object.keys(cols).length) {
     console.warn('aiCost: colunas novas recusadas (migration pendente?) — gravando sem elas', String(error.message ?? error).slice(0, 200))
     const { error: e2 } = await admin.from('agent_performance').insert(row)
@@ -87,14 +98,14 @@ export async function insertPerf(admin: { from: (t: string) => any }, row: Recor
 // deno-lint-ignore no-explicit-any
 type Admin = { from: (t: string) => any }
 /** Grava 1 linha em agent_performance. NUNCA derruba o fluxo se a gravação falhar (nem se o banco recusar). latency_ms é coluna obrigatória. */
-export async function logAiCost(admin: Admin, row: { companyId: string; role: string; taskKey: string; description: string; tokens: number; costUsd: number; latencyMs?: number; success?: boolean; error?: string | null; breakdown?: Breakdown | null; trigger?: Trigger | null }): Promise<void> {
+export async function logAiCost(admin: Admin, row: { companyId: string; role: string; taskKey: string; description: string; tokens: number; costUsd: number; latencyMs?: number; success?: boolean; error?: string | null; breakdown?: Breakdown | null; trigger?: Trigger | null; operationId?: string | null; refId?: string | null; costKind?: CostKind | null; provider?: string | null; calls?: number | null }): Promise<void> {
   try {
     if (!(row.tokens > 0)) return   // nada medido = nada a gravar (não inventa custo)
     await insertPerf(admin, {
       company_id: row.companyId, agent_role: row.role, task_key: row.taskKey, task_description: row.description.slice(0, 200),
       tokens_used: Math.round(row.tokens), cost_usd: row.costUsd, latency_ms: Math.round(row.latencyMs ?? 0),
       success: row.success !== false, error_message: row.error ? row.error.slice(0, 500) : null,
-    }, { breakdown: row.breakdown ?? null, trigger: row.trigger ?? null })
+    }, { breakdown: row.breakdown ?? null, trigger: row.trigger ?? null, operationId: row.operationId ?? null, refId: row.refId ?? null, costKind: row.costKind ?? (row.tokens > 0 ? 'medido' : null), provider: row.provider ?? 'anthropic', calls: row.calls ?? null })
   } catch (e) { console.error('aiCost: custo não gravado (segue)', e) }
 }
 
