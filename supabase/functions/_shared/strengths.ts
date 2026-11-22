@@ -41,3 +41,14 @@ export function hookLine(marks: string[]): string {
   if (!marks.length) return ''
   return `\nPONTOS FORTES MARCADOS PELO CORRETOR (fatos): ${marks.join(' · ')}. Abra a legenda pelo primeiro ("${marks[0]}"), com palavras suas, sem exagerar e sem acrescentar nada que não esteja aqui.`
 }
+
+/** A foto que a marca escolheu, SÓ se existir foto de um cômodo que a marca puxa (senão null: nada é anotado como "escolhido
+ *  pela marca"). Caso de 22/11: a receita "detalhe" usava a última foto (quarto) e a legenda falava da varanda marcada. */
+export function markedPhoto<P extends { url: string; room?: unknown }>(photos: P[], marks: string[], cfg: StrengthsCfg | null): { photo: P; mark: string } | null {
+  if (!cfg) return null
+  for (const m of marks) for (const r of cfg.rooms[m] ?? []) {
+    const p = photos.find(x => typeof x?.url === 'string' && /^https?:\/\//.test(x.url) && x.room === r)
+    if (p) return { photo: p, mark: m }
+  }
+  return null
+}
