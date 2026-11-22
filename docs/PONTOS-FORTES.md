@@ -1,7 +1,8 @@
 # Pontos fortes do imóvel — como o sistema vai usar o que o imóvel tem de melhor
 
-> **Status: PROPOSTA para o dono aprovar** (item C6 da [PENDENCIAS.md](PENDENCIAS.md); pedido do dono em 19/11 e
-> 21/11). Nenhum código antes da aprovação. Custo deste documento: US$ 0.
+> **Status: APROVADO pelo dono em 22/11** ([DECISIONS](DECISIONS.md#2026-11-22--pontos-fortes-do-imóvel-c6-aprovados)):
+> lista de marcas como está, IA por cômodo **não agora**, correção rápida (seção 5) primeiro. Item C6 da
+> [PENDENCIAS.md](PENDENCIAS.md).
 
 ## Resumo (6 linhas)
 1. Hoje o sistema **perde informação real**: vista, lazer, andar e vagas, que a A3 preenche, nunca chegam à legenda.
