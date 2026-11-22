@@ -19,6 +19,7 @@
  * por planWeekForCompany em creative-generate, pra o cron semanal não
  * empilhar mais conteúdo em cima do que o pacote já agendou.
  */
+import { captionExtrasLine, captionFieldsFrom, type CaptionField } from '../_shared/captionFields.ts'
 import { loadLessons, lessonsBlock } from '../_shared/contentLessons.ts'
 import { buildPickReason, cleanItemPick, fetchItemCfg, availabilityOf, ownerBlockMessage, saveItemPick, type PickItem } from '../_shared/itemService.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -42,7 +43,7 @@ type SupaClient = ReturnType<typeof createClient>
 interface Photo { url: string; path: string }
 interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
 interface RecipeGroup { recipes: string[]; fonte_midia: string; descricao: string }
-interface FichaConfig { pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; claimCtx: { terms: string[]; context: string[] } | null; publicText: PublicTextRules | null; publicTextRule: string; currency: string }
+interface FichaConfig { captionFields: CaptionField[]; pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; claimCtx: { terms: string[]; context: string[] } | null; publicText: PublicTextRules | null; publicTextRule: string; currency: string }
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -68,7 +69,7 @@ async function fetchFichaConfig(admin: SupaClient, verticalKey: string | null): 
     const c = (data?.config ?? {}) as Record<string, unknown>
     if (!c.production_recipes) return null
     const disclosure = String((c.virtual_staging as { disclosure?: string } | undefined)?.disclosure ?? '').slice(0, 200)
-    return { pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null,
+    return { captionFields: captionFieldsFrom(c, 'pt'), pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null,
       // Trava de afirmação de mercado (claimLock): termos e campos de preço/quartos vêm da ficha (regra 6).
       marketClaims: ((c.opportunity_texts as { market_claims?: { pt?: unknown } } | undefined)?.market_claims?.pt as string[] | undefined)?.filter(x => typeof x === 'string' && x.trim()) ?? null,
       // Capa pelos cômodos da ficha (tour.room_priority / avoid_rooms), igual ao tour em vídeo — nunca a 1ª foto no escuro.
@@ -329,7 +330,7 @@ Deno.serve(async (req) => {
       return { ...c, caption: pc.text, cta: pt.text, hashtags: lh.text }
     }
 
-    const fieldsLine = `Tipo: ${fields.tipo ?? '—'} · Bairro: ${fields.bairro ?? '—'} · ${fields.venda_ou_aluguel ?? '—'} · Preço: ${ficha.currency} ${fields.preco ?? '—'} · Quartos: ${fields.quartos ?? '—'} · Metragem: ${fields.m2 ?? '—'}${ficha.currency === '$' ? ' sq ft' : 'm²'}${fields.perto_de ? ` · Perto de: ${fields.perto_de}` : ''}${fields.descricao ? `\nDescrição real escrita pelo corretor (use só o que está aqui, sem acrescentar): ${String(fields.descricao).slice(0, 1500)}` : ''}`
+    const fieldsLine = `Tipo: ${fields.tipo ?? '—'} · Bairro: ${fields.bairro ?? '—'} · ${fields.venda_ou_aluguel ?? '—'} · Preço: ${ficha.currency} ${fields.preco ?? '—'} · Quartos: ${fields.quartos ?? '—'} · Metragem: ${fields.m2 ?? '—'}${ficha.currency === '$' ? ' sq ft' : 'm²'}${fields.perto_de ? ` · Perto de: ${fields.perto_de}` : ''}${fields.descricao ? `\nDescrição real escrita pelo corretor (use só o que está aqui, sem acrescentar): ${String(fields.descricao).slice(0, 1500)}` : ''}${captionExtrasLine(fields, ficha.captionFields)}`
 
     // Data-fonte de agendamento: hoje + 21 dias (3 semanas), calculada 1x e
     // consumida (reservada) peça por peça via pickSlot.
