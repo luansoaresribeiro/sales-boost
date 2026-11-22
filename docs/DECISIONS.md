@@ -39,8 +39,20 @@
 | Jornada do cliente | O cliente é **guiado desde a 1ª entrada**. O upsell é **contextual**: aparece quando o cliente acabou de ver valor, só com dado real, e leva ao Pro com a função certa aberta. Conteúdo descobre o imóvel que interessa; o tour aprofunda esse imóvel até a visita. Código só depois de o dono aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md), 1 PR por item. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Liga dos Sonhos | Nunca tocar, nem ler. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Testes na A3 | Para o tour: **primeiro na A3**, só leitura/análise e rascunho sem publicar; custo avisado antes, verba da Frente 1, backup antes de alterar, nada de original apagado ou sobrescrito, nada experimental em Aprovações visível à A3 sem ela concordar. O resto continua 🔴. | [20/11 tarde](#2026-11-20-tarde--testes-do-tour-primeiro-na-a3-com-condições-d3-d2-trava-do-mobiliado-e-ritmo-de-trabalho) |
+| Evolução da plataforma | Auditoria das 7 áreas entregue em 22/11, **execução só com o OK do dono**; 2 posts/dia **não agora** (tem custo); verba de teste US$ 5. | [22/11 (2)](#2026-11-22-2--evolução-inteligente-da-plataforma-auditoria-primeiro-2-postsdia-não-agora) |
 | Pontos fortes do imóvel | Marcas de pontos fortes no cadastro (e por cômodo) decidem imóvel, formato, foto, lugares perto e gancho; sem marca = como antes; IA por cômodo **não agora**; correção rápida da legenda primeiro. | [22/11](#2026-11-22--pontos-fortes-do-imóvel-c6-aprovados) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-22 (2) — Evolução inteligente da plataforma: auditoria primeiro; 2 posts/dia não agora
+
+- **O dono:** pediu a evolução em 7 áreas (frequência, memória, formatos, funil, frontend/upsell, dashboard honesto,
+  custos no Owner), com "auditoria primeiro, depois executo" e diretrizes de inteligência, economia e governança
+  (decidir em vez de só executar; 5 memórias; custo incremental antes de qualquer IA nova; interface simples; reaproveitar
+  a arquitetura; justificativa, custo, risco, aceite e como desfazer em cada item). Verba de teste: **US$ 5** ("o recomendado").
+- **2 posts por dia:** "a geração de posts tem custo para a gente? se ela não tiver eu quero 2 posts por dia mas só se
+  não tiver custo". **Tem custo** (~US$ 0,068 por post, medido em `agent_performance`, 7 dias). Então **continua 1 por
+  dia** (a decisão de 13/11 vale). A alternativa de um 2º post sem IA fica para o dono decidir depois da medição de custos.
+- **Documento:** [AUDITORIA-EVOLUCAO](AUDITORIA-EVOLUCAO.md), que espera a aprovação para executar.
 
 ## 2026-11-22 — Pontos fortes do imóvel (C6) aprovados
 
