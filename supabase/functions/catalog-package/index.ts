@@ -27,7 +27,7 @@ import { requirePaidAccess } from '../_shared/access.ts'
 import { applyQueroLock, cleanLabels, dropUnknownPilar, fetchSSPillars } from '../_shared/slotIntent.ts'
 import { decideVideoCta } from '../_shared/videoCta.ts'
 import { stripInternalNotes, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
-import { ensureNearby, fetchNearbyConfig, fmtDistance, topPlaces } from '../_shared/nearbyPlaces.ts'
+import { ensureNearby, fetchNearbyConfig, fmtDistance, priorityCategories, topPlaces } from '../_shared/nearbyPlaces.ts'
 import { buildNearbySlides, buildOfferSlides, pickCoverPhoto, type CoverRooms, type OfferLocale, type OfferSlide } from '../_shared/carouselOffer.ts'
 import { allowedValues } from '../_shared/numberGuard.ts'
 import { complianceNotice, cutPublicText, publicTextPromptRule, publicTextRules, type PublicTextRules } from '../_shared/compliance.ts'
@@ -354,7 +354,8 @@ Deno.serve(async (req) => {
     const loadNear = async () => {
       const cfg = await fetchNearbyConfig(admin, company!.vertical_key)
       const data = cfg ? await ensureNearby(admin, { itemId: item.id as string, companyId: company!.id, verticalKey: company!.vertical_key, city: String(company!.city ?? '') }) : null
-      return { top: topPlaces(data, cfg, 3), precise: data?.precision === 'endereco' }
+      // Pontos fortes, item 3: marca de localização do imóvel ("Vida noturna e restaurantes") puxa restaurante/cultura para a frente.
+      return { top: topPlaces(data, cfg, 3, priorityCategories(cfg, fields)), precise: data?.precision === 'endereco' }
     }
 
     for (const [pillarKey, group] of Object.entries(ficha.production_recipes)) {
