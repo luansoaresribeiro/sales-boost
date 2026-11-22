@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 // Roda: node --experimental-strip-types scripts/test-strengths.mjs
 // Pontos fortes, item 4 (22/11): as marcas do imóvel decidem a foto de abertura e a primeira frase; sem marca = como antes.
-import { strengthsCfgFrom, itemMarks, coverRoomsWithMarks, hookLine } from '../supabase/functions/_shared/strengths.ts'
+import { strengthsCfgFrom, itemMarks, coverRoomsWithMarks, hookLine, markedPhoto } from '../supabase/functions/_shared/strengths.ts'
 import { pickCoverPhoto } from '../supabase/functions/_shared/carouselOffer.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
@@ -29,5 +29,10 @@ assert.equal(pickCoverPhoto(noRoom, mc.rooms).url, 'https://x/sala.jpg'); ok('se
 assert.equal(hookLine([]), ''); assert.match(hookLine(marks), /Abra a legenda pelo primeiro \("Varanda"\)[\s\S]*sem acrescentar/); ok('gancho: primeira frase pela marca mais forte, sem acrescentar')
 const src = readFileSync(new URL('../supabase/functions/catalog-package/index.ts', import.meta.url), 'utf8')
 assert.ok(/\$\{hookLine\(marks\)\}/.test(src) && (src.match(/markCover\.rooms/g) ?? []).length >= 4 && !/pickCoverPhoto\(photos, ficha\.coverRooms\)/.test(src)); ok('catalog-package usa capa e gancho das marcas em todas as receitas')
-assert.ok(/Foto de abertura escolhida pelo ponto forte marcado/.test(src)); ok('o motivo vai na peça (reasoning)')
+assert.ok(/markPick \? `Foto de abertura escolhida pelo ponto forte marcado/.test(src)); ok('o motivo só é anotado quando a foto da marca foi mesmo usada')
+// Caso real 22/11 (Teste Zero, Apartamento Leblon): "detalhe" usava a ÚLTIMA foto (quarto) e a legenda falava da varanda.
+const apto = [{ url: 'https://x/1.jpg', room: 'sala_jantar' }, { url: 'https://x/2.jpg', room: 'sala' }, { url: 'https://x/3.jpg', room: 'varanda' }, { url: 'https://x/4.jpg', room: 'sala_jantar' }, { url: 'https://x/5.jpg', room: 'quarto' }]
+assert.deepEqual(markedPhoto(apto, ['Varanda'], cfg), { photo: apto[2], mark: 'Varanda' }); ok('"Varanda" marcada: a foto da varanda é a escolhida')
+assert.equal(markedPhoto(apto, ['Lazer completo'], cfg), null); assert.equal(markedPhoto(photos.slice(0, 1), ['Varanda'], cfg), null); assert.equal(markedPhoto(apto, ['Varanda'], null), null); ok('sem foto do cômodo da marca (ou sem regra): nada é anotado como escolhido pela marca')
+assert.ok(/media = \[\{ url: \(markPick\?\.photo \?\? photos\[photos\.length - 1\]\)\.url/.test(src)); ok('receita "detalhe" usa a foto da marca (antes: sempre a última foto)')
 console.log(`\n${n} ok`)

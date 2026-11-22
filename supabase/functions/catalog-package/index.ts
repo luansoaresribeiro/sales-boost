@@ -19,7 +19,7 @@
  * por planWeekForCompany em creative-generate, pra o cron semanal não
  * empilhar mais conteúdo em cima do que o pacote já agendou.
  */
-import { coverRoomsWithMarks, hookLine, itemMarks, strengthsCfgFrom, type StrengthsCfg } from '../_shared/strengths.ts'
+import { coverRoomsWithMarks, hookLine, itemMarks, markedPhoto, strengthsCfgFrom, type StrengthsCfg } from '../_shared/strengths.ts'
 import { captionExtrasLine, captionFieldsFrom, type CaptionField } from '../_shared/captionFields.ts'
 import { loadLessons, lessonsBlock } from '../_shared/contentLessons.ts'
 import { buildPickReason, cleanItemPick, fetchItemCfg, availabilityOf, ownerBlockMessage, saveItemPick, type PickItem } from '../_shared/itemService.ts'
@@ -334,6 +334,8 @@ Deno.serve(async (req) => {
     // Pontos fortes, item 4 (22/11): marcas do imóvel puxam a foto de abertura e a primeira frase; o motivo vai na peça.
     const marks = itemMarks(fields, ficha.strengths)
     const markCover = coverRoomsWithMarks(ficha.coverRooms, marks, ficha.strengths)
+    // Só anota "foto escolhida pela marca" quando existe foto de um cômodo que a marca puxa (sem foto = capa de antes).
+    const markPick = markedPhoto(photos, marks, ficha.strengths)
     const fieldsLine = `Tipo: ${fields.tipo ?? '—'} · Bairro: ${fields.bairro ?? '—'} · ${fields.venda_ou_aluguel ?? '—'} · Preço: ${ficha.currency} ${fields.preco ?? '—'} · Quartos: ${fields.quartos ?? '—'} · Metragem: ${fields.m2 ?? '—'}${ficha.currency === '$' ? ' sq ft' : 'm²'}${fields.perto_de ? ` · Perto de: ${fields.perto_de}` : ''}${fields.descricao ? `\nDescrição real escrita pelo corretor (use só o que está aqui, sem acrescentar): ${String(fields.descricao).slice(0, 1500)}` : ''}${captionExtrasLine(fields, ficha.captionFields)}${hookLine(marks)}`
 
     // Data-fonte de agendamento: hoje + 21 dias (3 semanas), calculada 1x e
@@ -397,13 +399,14 @@ Deno.serve(async (req) => {
             const pairs = specs.map((sp, k) => ({ sp, url: urls[k] })).filter((x): x is { sp: OfferSlide; url: string } => !!x.url)
             media = pairs.map(x => ({ url: x.url, type: 'photo' }))
             slidesOut = pairs.map(x => ({ text: slideLabel(x.sp), image_prompt: '', image_url: x.url, layout: x.sp.fields.layout }))
-          } else media = [photos[0], ...(useStaged ? staged : []), ...photos.slice(1)].slice(0, 10).map(p => ({ url: p.url, type: 'photo' }))
+          } else media = [markPick?.photo ?? photos[0], ...(useStaged ? staged : []), ...photos.filter(p => p.url !== (markPick?.photo ?? photos[0]).url)].slice(0, 10).map(p => ({ url: p.url, type: 'photo' }))
           const c = await copy(lessonsTxt + `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
           caption = useStaged ? [c.caption, ficha.stagingDisclosure].filter(Boolean).join('\n\n') : c.caption
           hashtags = c.hashtags; cta = c.cta
           provider = 'catalogo_real'
         } else if (recipe === 'post_detalhe_que_voce_nao_viu') {
-          media = [{ url: photos[photos.length - 1].url, type: 'photo' }]
+          // Com ponto forte marcado que tem foto (ex.: varanda), o detalhe mostra ESSA foto, para a legenda e a imagem falarem da mesma coisa.
+          media = [{ url: (markPick?.photo ?? photos[photos.length - 1]).url, type: 'photo' }]
           const detalhe = fields.detalhe_que_ninguem_percebe ? String(fields.detalhe_que_ninguem_percebe) : null
           const c = await copy(lessonsTxt + `Escreva um post de 1 foto destacando um detalhe do imóvel que ninguém repara de cara${detalhe ? ` (o detalhe real é: "${detalhe}")` : ' (fale de algo real do imóvel que só quem visita percebe, sem inventar um detalhe específico que não foi informado — pode ser mais genérico, tipo iluminação natural, silêncio, vista)'}. \n${fieldsLine}`)
           caption = c.caption; hashtags = c.hashtags; cta = c.cta
@@ -445,7 +448,7 @@ Deno.serve(async (req) => {
           // imóvel e texto sem nome de lugar. Antes saía uma imagem genérica de
           // IA (gente na calçada, padaria inventada) — o dono pediu pra
           // tirar (2026-10-14): parecia post "do fluxo antigo".
-          media = [{ url: (photos[1] ?? photos[0]).url, type: 'photo' }]
+          media = [{ url: (markPick?.photo ?? photos[1] ?? photos[0]).url, type: 'photo' }]
           // Foto real com cartão de marca (logo + bairro) em vez de foto crua; falhou o desenho: a foto crua, como era antes.
           if (fields.bairro) {
             const sp: OfferSlide = { kind: 'capa', photo: media[0].url, fields: { layout: 'capa', cover_style: 'gancho', title: String(fields.bairro) } }
@@ -480,7 +483,7 @@ Deno.serve(async (req) => {
         caption = lock.caption ?? ''
         if (cta || lock.approved) cta = lock.cta ?? ''
         // Avisos pro dono: o do QUERO vem primeiro (o prefixo dele fica intacto — keepQueroNotice) e depois o recado que saiu.
-        const reasoning = [markCover.why ? `Foto de abertura escolhida pelo ponto forte marcado ("${markCover.why}").` : null, marks.length ? `Primeira frase pelo ponto forte "${marks[0]}".` : null, lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null, claimNotice(pieceClaims), complianceNotice(pieceCompliance)].filter(Boolean).join(' ') || null
+        const reasoning = [markPick ? `Foto de abertura escolhida pelo ponto forte marcado ("${markPick.mark}").` : null, marks.length ? `Primeira frase pelo ponto forte "${marks[0]}".` : null, lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null, claimNotice(pieceClaims), complianceNotice(pieceCompliance)].filter(Boolean).join(' ') || null
 
         const slot = forcedDate || loose ? { date: forcedDate ?? '', overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
         const { data: row, error } = await admin.from('marketing_ai_test_content').insert({
