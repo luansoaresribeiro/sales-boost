@@ -51,7 +51,8 @@ export function claimCtx(lang: Lang, factTexts: string[], numSources: NumSource[
 /** Fatos de UM imóvel do catálogo (título + campos). Preço e quartos entram com unidade quando a ficha diz qual campo é (opportunity_fields). */
 export function itemFacts(title: string, fields: Record<string, unknown> | null | undefined, map?: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null): { texts: string[]; nums: NumSource[]; places: string[] } {
   const f = fields ?? {}
-  const texts = [title, ...Object.values(f).filter(v => typeof v === 'string' || typeof v === 'number').map(String)].filter(t => t.trim())
+  // Lista de marcas do cadastro (pontos fortes, 22/11) também é fato do corretor: "vista para o mar" marcado não é cortado.
+  const texts = [title, ...Object.values(f).flatMap(v => (Array.isArray(v) ? v : [v])).filter(v => typeof v === 'string' || typeof v === 'number').map(String)].filter(t => t.trim())
   const nums: NumSource[] = texts.map(t => ({ text: t }))
   const priceRaw = map?.price ? f[map.price] : undefined
   if (priceRaw !== undefined && priceRaw !== null && String(priceRaw).trim()) nums.push({ text: '', numTags: [{ value: String(priceRaw), unit: 'cur' }] })
