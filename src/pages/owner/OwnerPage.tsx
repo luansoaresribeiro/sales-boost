@@ -275,7 +275,7 @@ export default function OwnerPage() {
               >
                 <div onClick={e => e.stopPropagation()}>
                   {c.delete_lock
-                    ? <span title={`Não pode ser excluído: ${c.delete_lock}`} style={{ fontSize: '13px', cursor: 'help' }}>🔒</span>
+                    ? <span title={`Não pode ser excluído em lote: ${c.delete_lock} (isso não é bloqueio de acesso)`} aria-label={`Não pode ser excluído em lote: ${c.delete_lock}`} style={{ fontSize: '13px', cursor: 'help' }}>🔒</span>
                     : <input type="checkbox" aria-label={`Selecionar ${c.business_name ?? c.user_email}`} checked={selected.has(rowKey(c))} onChange={() => toggle(rowKey(c))} style={{ width: 16, height: 16, cursor: 'pointer' }} />}
                 </div>
                 <div>
@@ -286,6 +286,9 @@ export default function OwnerPage() {
                     )}
                     {c.has_company && isShowcaseMode({ created_at: c.created_at, manual_access: c.manual_access }, { granted: c.access_source === 'paid' || c.access_source === 'manual' || c.access_source === 'trial', source: c.access_source ?? 'none', status_label: c.access_status_label ?? 'Expired' }) && (
                       <span title="Conta nova que ainda não pagou: vê o painel em modo demonstração" style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '99px', background: 'rgba(255,109,41,0.12)', color: ORANGE, border: '1px solid rgba(255,109,41,0.3)' }}>Vitrine</span>
+                    )}
+                    {c.has_company && c.manual_access && c.access_source !== 'blocked' && (
+                      <span title="Acesso liberado manualmente pelo Owner" style={{ fontSize: '10px', fontWeight: 700, padding: '2px 7px', borderRadius: '99px', background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}>Liberado</span>
                     )}
                     {c.has_company && c.id && (c.access_source === 'none' || c.access_source === 'blocked' || isShowcaseMode({ created_at: c.created_at, manual_access: c.manual_access }, { granted: c.access_source === 'paid' || c.access_source === 'manual' || c.access_source === 'trial', source: c.access_source ?? 'none', status_label: c.access_status_label ?? 'Expired' })) && (
                       <button type="button" onClick={e => { e.stopPropagation(); void grantAccess(c) }} disabled={granting === c.id}
