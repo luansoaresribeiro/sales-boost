@@ -14,11 +14,12 @@
 | Tema | O que vale hoje | Origem |
 |---|---|---|
 | Identidade (operacional) | **Sistema de inteligência e geração de demanda comercial para imobiliárias.** A medida de sucesso é a visita ao imóvel. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
-| Posicionamento comercial | "Technology Partner for Real Estate", só no site e no pitch. Não substitui a definição operacional. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
-| Slogan | "Sales Boost — gerando mais visitas para o seu imóvel". Nunca prometer visita garantida. | [10/11](#2026-11-10--slogan-gerando-mais-visitas-e-aviso-de-visita-no-telegram-dono) |
+| Posicionamento | **"Sales Boost — Real Estate Opportunity & Growth Platform"**: "Identificamos oportunidades comerciais para imobiliárias e ajudamos a transformá-las em ações." Documento institucional: [SALES-BOOST.md](SALES-BOOST.md). Substitui "Technology Partner for Real Estate" (13/11). | [23/11](#2026-11-23--posicionamento-real-estate-opportunity--growth-platform) |
+| Fonte de verdade | **[SALES-BOOST.md](SALES-BOOST.md) é a fonte oficial** da empresa; Website, Product Documentation e Sales Strategy derivam dele e não podem contradizê-lo. Princípio: *"We don't just help real estate agencies create content. We help them identify opportunities and turn them into action."* | [23/11 (2)](#2026-11-23-2--sales-boostmd-é-a-fonte-oficial-de-verdade-princípio-orientador) |
+| Slogan | **Substituído em 23/11** pela frase do posicionamento. A visita ao imóvel continua sendo a medida de sucesso; visita garantida nunca é prometida. | [23/11](#2026-11-23--posicionamento-real-estate-opportunity--growth-platform) |
 | Mercado | **Brasil (principalmente o Rio, em português) e EUA, aberto em 17/11** sem a revisão jurídica (risco aceito pelo dono). A ficha dos EUA ainda não existe (E1); até ela, conta dos EUA sem agendamentos automáticos. | [17/11](#2026-11-17--mercado-dos-eua-aberto-agora-tim-reyes-liberado) · substitui [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Idioma | O setor define o idioma: `imoveis_rio` = português. Idioma ≠ país ≠ regras. **Toda tela tem a troca PT/EN** (16/11): diagnóstico, cadastro, entrada, páginas legais e painel. Texto novo nasce nos dois idiomas, inclusive na ficha. **O idioma dos posts é escolhido no cadastro** (`companies.language`, padrão = idioma da tela) e todos os agentes o seguem (16/11). | [16/11 noite, 2](#2026-11-16-noite-2--idioma-dos-posts-escolhido-no-cadastro) · [16/11](#2026-11-16--aprovações-do-dono-tradução-pten-em-todas-as-telas-a3-avisada) · [02/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-02--idioma-pelo-setor-a-ficha-diz-o-idioma-padrão) · [07/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-07--plataforma-internacional-idioma--país--regras-dono) |
-| Modelo de negócio | **Em validação:** plataforma grátis + tour pago + lead qualificado. **Nenhum preço decidido.** | [10/11](#2026-11-10--novo-modelo-cenários-de-tour-lead-sem-preço-e-portões-da-fase-4-dono) · [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+| Modelo de negócio | **Em validação:** plataforma grátis + tour pago + lead qualificado. **Nenhum preço decidido.** | [10/11](#2026-11-10--novo-modelo-cenários-de-tour-lead-sem-preço-e-portões-da-fase-4-dono) · [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) · [23/11](#2026-11-23--posicionamento-real-estate-opportunity--growth-platform): assinatura recorrente, planos com limites e pacotes premium entram como **hipóteses novas**, nada decidido. |
 | Preço do tour | **Hipótese** de US$ 15 por tour, não é decisão. Um imóvel grande custa ~US$ 14 (estimado). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Lead | Sem preço até haver definição e medição. Especificação v2 em [CONVERSION.md](CONVERSION.md). | [10/11](#2026-11-10--novo-modelo-cenários-de-tour-lead-sem-preço-e-portões-da-fase-4-dono) |
 | Boosts | **Em aberto.** Não confundir com o preço do tour. A unidade comercial é validada nas conversas com imobiliárias. Nenhum código de cobrança de Boosts; o menu Pro só mostra e explica ([13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro)). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
@@ -42,6 +43,43 @@
 | Evolução da plataforma | Auditoria das 7 áreas entregue em 22/11, **execução só com o OK do dono**; 2 posts/dia **não agora** (tem custo); verba de teste US$ 5. | [22/11 (2)](#2026-11-22-2--evolução-inteligente-da-plataforma-auditoria-primeiro-2-postsdia-não-agora) |
 | Pontos fortes do imóvel | Marcas de pontos fortes no cadastro (e por cômodo) decidem imóvel, formato, foto, lugares perto e gancho; sem marca = como antes; IA por cômodo **não agora**; correção rápida da legenda primeiro. | [22/11](#2026-11-22--pontos-fortes-do-imóvel-c6-aprovados) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-23 (2) — SALES-BOOST.md é a fonte oficial de verdade; princípio orientador
+
+**O dono (23/11):** "Eu usaria esse documento como a fonte oficial de verdade da empresa. A partir dele, deveriam derivar
+três outros materiais: 1. Website: como apresentamos e vendemos o Sales Boost. 2. Product Documentation: como o produto
+realmente funciona. 3. Sales Strategy: como adquirimos imobiliárias e monetizamos a solução. Assim, evitamos que o site
+venda uma coisa, o produto entregue outra e a documentação descreva uma terceira." E manter como princípio orientador:
+"We don't just help real estate agencies create content. We help them identify opportunities and turn them into action."
+
+- **[SALES-BOOST.md](SALES-BOOST.md) é a fonte oficial de verdade.** Em conflito, ele vale; mudança de posicionamento,
+  produto ou modelo entra nele primeiro (regra 6 do CLAUDE.md: DECISIONS → SALES-BOOST → material derivado).
+- **Três materiais derivados:** Website (apresentar e vender), Product Documentation (como funciona), Sales Strategy
+  (aquisição e monetização). Cada um cita o SALES-BOOST e não promete além dele.
+- **Princípio orientador** (em inglês, como o dono escreveu), no topo do SALES-BOOST.
+- **Estado hoje:** site com o slogan antigo; documentação de produto só interna; pitch desatualizado e estratégia comercial
+  ainda não escrita. Itens D7 (pitch → Sales Strategy) e D7b (site) na PENDENCIAS. Nada de site muda sem o dono aprovar o texto.
+
+## 2026-11-23 — Posicionamento: Real Estate Opportunity & Growth Platform
+
+**O dono (23/11):** "Estamos consolidando e refinando o posicionamento estratégico do Sales Boost." "O Sales Boost é uma
+plataforma de inteligência e execução comercial desenvolvida para imobiliárias." "Sales Boost — Real Estate Opportunity &
+Growth Platform. 'Identificamos oportunidades comerciais para imobiliárias e ajudamos a transformá-las em ações.'"
+
+- **Posicionamento:** a definição nova **substitui** o "Technology Partner for Real Estate" (13/11) **e** o slogan
+  "gerando mais visitas para o seu imóvel" (10/11) — resposta do dono à pergunta de conflito, 23/11. A visita continua sendo
+  a medida de sucesso.
+- **Pergunta central:** "Quais oportunidades comerciais existem e o que devemos fazer para aproveitá-las?" Conteúdo, tour e
+  vídeo são instrumentos de execução; o Sales Boost não é agência, gerador de posts nem só plataforma de tour.
+- **Cinco etapas preservadas:** Market Intelligence → Opportunity Engine → Strategy Agent → Activation → Results & Learning.
+- **Produtos:** Sales Boost Platform (principal) · Property Studio / Virtual Tours (inclui o mobiliado; fonte transacional
+  em estudo) · AI-Powered Activation (instrumento).
+- **Modelo de negócio:** "tudo como hipóteses" (resposta do dono). Continuam em validação plataforma grátis + tour pago +
+  lead; entram como hipóteses novas assinatura recorrente, planos com limites e pacotes premium. **Nenhum preço decidido.**
+- **Público:** imobiliárias com equipe (pequenas e médias, equipes independentes, especializadas); identidade sem limite de
+  região.
+- **Documento:** novo [SALES-BOOST.md](SALES-BOOST.md) (resposta do dono: documento novo). Os textos do site (`src/i18n.ts`,
+  hero "geramos mais visitas") ainda usam o slogan antigo: pendência de tela, com texto a aprovar pelo dono.
 
 ## 2026-11-22 (2) — Evolução inteligente da plataforma: auditoria primeiro; 2 posts/dia não agora
 
@@ -303,9 +341,9 @@ quatro coisas: a empresa, a direção atual, o que ele pode fazer sozinho e qual
 **Identidade.**
 - **Definição operacional** (a que os agentes usam): "sistema de inteligência e geração de demanda comercial para
   imobiliárias". A medida de sucesso é a visita ao imóvel.
-- **Posicionamento comercial:** "Technology Partner for Real Estate", só no site e no pitch. Não substitui a definição
+- **Posicionamento comercial (substituído em 23/11):** "Technology Partner for Real Estate", só no site e no pitch. Não substitui a definição
   operacional.
-- **Slogan:** "Sales Boost — gerando mais visitas para o seu imóvel". Nunca prometer visita garantida.
+- **Slogan (substituído em 23/11):** "Sales Boost — gerando mais visitas para o seu imóvel". Nunca prometer visita garantida.
 - **Substituído em 13/11:** "growth engine de IA pra pequenos negócios" (CLAUDE.md antigo) deixa de ser a definição atual.
 
 **Mercado.**
@@ -745,6 +783,8 @@ A preparação documental (#135) foi aprovada. **A Fase 4 não é implementada a
 - Sem implementação e sem escopo novo.
 - Depois da medição de custos e das conversas, voltam os 3 portões da Fase 4.
 ## 2026-11-10 — Slogan "gerando mais visitas" e aviso de visita no Telegram (dono)
+
+> **Slogan substituído em 23/11** pelo posicionamento "Real Estate Opportunity & Growth Platform" ([23/11](#2026-11-23--posicionamento-real-estate-opportunity--growth-platform)).
 
 **Slogan.**
 - O novo slogan é **"Sales Boost — gerando mais visitas para o seu imóvel"**, em inglês "more viewings for your property".
