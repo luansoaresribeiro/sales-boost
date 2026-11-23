@@ -1,5 +1,9 @@
 # Catálogo editorial — formatos de post do agente de conteúdo
 
+> **23/11:** complementado pela [AUDITORIA-CONTEUDO](AUDITORIA-CONTEUDO.md) (aprovada): "3 coisas perto" e "A pé daqui" viram
+> um formato só ("Vida a pé"); FAQ e educativo dividem a mesma trava de assunto; entram as arquiteturas por objetivo
+> (visita guiada, custo de morar, objeção honesta, educativo ligado a decisão, captação de imóvel, bastidor).
+
 > **Status: PROPOSTA para o dono aprovar** (item C2 da [PENDENCIAS.md](PENDENCIAS.md); decisão de 13/11 em
 > [DECISIONS.md](DECISIONS.md)). Nenhum código novo antes da aprovação. A construção é o C3.
 >
