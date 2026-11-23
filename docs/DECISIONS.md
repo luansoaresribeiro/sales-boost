@@ -15,6 +15,7 @@
 |---|---|---|
 | Identidade (operacional) | **Sistema de inteligência e geração de demanda comercial para imobiliárias.** A medida de sucesso é a visita ao imóvel. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Posicionamento | **"Sales Boost — Real Estate Opportunity & Growth Platform"**: "Identificamos oportunidades comerciais para imobiliárias e ajudamos a transformá-las em ações." Documento institucional: [SALES-BOOST.md](SALES-BOOST.md). Substitui "Technology Partner for Real Estate" (13/11). | [23/11](#2026-11-23--posicionamento-real-estate-opportunity--growth-platform) |
+| Fonte de verdade | **[SALES-BOOST.md](SALES-BOOST.md) é a fonte oficial** da empresa; Website, Product Documentation e Sales Strategy derivam dele e não podem contradizê-lo. Princípio: *"We don't just help real estate agencies create content. We help them identify opportunities and turn them into action."* | [23/11 (2)](#2026-11-23-2--sales-boostmd-é-a-fonte-oficial-de-verdade-princípio-orientador) |
 | Slogan | **Substituído em 23/11** pela frase do posicionamento. A visita ao imóvel continua sendo a medida de sucesso; visita garantida nunca é prometida. | [23/11](#2026-11-23--posicionamento-real-estate-opportunity--growth-platform) |
 | Mercado | **Brasil (principalmente o Rio, em português) e EUA, aberto em 17/11** sem a revisão jurídica (risco aceito pelo dono). A ficha dos EUA ainda não existe (E1); até ela, conta dos EUA sem agendamentos automáticos. | [17/11](#2026-11-17--mercado-dos-eua-aberto-agora-tim-reyes-liberado) · substitui [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 | Idioma | O setor define o idioma: `imoveis_rio` = português. Idioma ≠ país ≠ regras. **Toda tela tem a troca PT/EN** (16/11): diagnóstico, cadastro, entrada, páginas legais e painel. Texto novo nasce nos dois idiomas, inclusive na ficha. **O idioma dos posts é escolhido no cadastro** (`companies.language`, padrão = idioma da tela) e todos os agentes o seguem (16/11). | [16/11 noite, 2](#2026-11-16-noite-2--idioma-dos-posts-escolhido-no-cadastro) · [16/11](#2026-11-16--aprovações-do-dono-tradução-pten-em-todas-as-telas-a3-avisada) · [02/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-02--idioma-pelo-setor-a-ficha-diz-o-idioma-padrão) · [07/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-07--plataforma-internacional-idioma--país--regras-dono) |
@@ -42,6 +43,22 @@
 | Evolução da plataforma | Auditoria das 7 áreas entregue em 22/11, **execução só com o OK do dono**; 2 posts/dia **não agora** (tem custo); verba de teste US$ 5. | [22/11 (2)](#2026-11-22-2--evolução-inteligente-da-plataforma-auditoria-primeiro-2-postsdia-não-agora) |
 | Pontos fortes do imóvel | Marcas de pontos fortes no cadastro (e por cômodo) decidem imóvel, formato, foto, lugares perto e gancho; sem marca = como antes; IA por cômodo **não agora**; correção rápida da legenda primeiro. | [22/11](#2026-11-22--pontos-fortes-do-imóvel-c6-aprovados) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-23 (2) — SALES-BOOST.md é a fonte oficial de verdade; princípio orientador
+
+**O dono (23/11):** "Eu usaria esse documento como a fonte oficial de verdade da empresa. A partir dele, deveriam derivar
+três outros materiais: 1. Website: como apresentamos e vendemos o Sales Boost. 2. Product Documentation: como o produto
+realmente funciona. 3. Sales Strategy: como adquirimos imobiliárias e monetizamos a solução. Assim, evitamos que o site
+venda uma coisa, o produto entregue outra e a documentação descreva uma terceira." E manter como princípio orientador:
+"We don't just help real estate agencies create content. We help them identify opportunities and turn them into action."
+
+- **[SALES-BOOST.md](SALES-BOOST.md) é a fonte oficial de verdade.** Em conflito, ele vale; mudança de posicionamento,
+  produto ou modelo entra nele primeiro (regra 6 do CLAUDE.md: DECISIONS → SALES-BOOST → material derivado).
+- **Três materiais derivados:** Website (apresentar e vender), Product Documentation (como funciona), Sales Strategy
+  (aquisição e monetização). Cada um cita o SALES-BOOST e não promete além dele.
+- **Princípio orientador** (em inglês, como o dono escreveu), no topo do SALES-BOOST.
+- **Estado hoje:** site com o slogan antigo; documentação de produto só interna; pitch desatualizado e estratégia comercial
+  ainda não escrita. Itens D7 (pitch → Sales Strategy) e D7b (site) na PENDENCIAS. Nada de site muda sem o dono aprovar o texto.
 
 ## 2026-11-23 — Posicionamento: Real Estate Opportunity & Growth Platform
 

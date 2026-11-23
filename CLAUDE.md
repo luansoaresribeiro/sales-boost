@@ -5,7 +5,9 @@
   imobiliárias. A medida de sucesso é a **visita ao imóvel**, não a quantidade de posts.
 - **Posicionamento (dono, 23/11):** "Sales Boost — Real Estate Opportunity & Growth Platform": "Identificamos oportunidades
   comerciais para imobiliárias e ajudamos a transformá-las em ações." Visita garantida nunca é prometida. Documento
-  institucional: [docs/SALES-BOOST.md](docs/SALES-BOOST.md).
+  institucional: [docs/SALES-BOOST.md](docs/SALES-BOOST.md), **fonte oficial de verdade**: site, documentação de produto e
+  estratégia comercial derivam dele e não podem contradizê-lo. Princípio: *"We don't just help real estate agencies create
+  content. We help them identify opportunities and turn them into action."*
 - **Mercado agora:** Brasil, principalmente o Rio (ficha `imoveis_rio`, canal Instagram), e **EUA, aberto em 17/11** sem a
   revisão jurídica (risco aceito pelo dono). Ficha dos EUA (`imoveis_us`) criada em 17/11 (E1 ✅).
 - **Modelo em validação, sem preço decidido:** plataforma grátis + tour pago (US$ 15 é hipótese) + lead qualificado.
@@ -117,6 +119,8 @@ Pedido pontual (bug, texto de tela) não é direção: atualiza só o doc da ár
 **Onde atualizar, nesta ordem:**
 1. **[DECISIONS](docs/DECISIONS.md):** entrada nova com data, as palavras do dono (citação curta) e o motivo. Atualizar a
    linha do tema em "Decisões em vigor". O que foi substituído ganha "substituído em DD/MM", nunca é apagado.
+1b. **[SALES-BOOST](docs/SALES-BOOST.md):** se mudou posicionamento, produto, público ou modelo (fonte oficial; site e
+   materiais derivados seguem depois).
 2. **[PENDENCIAS](docs/PENDENCIAS.md):** criar, mudar ou fechar itens; manter no topo a frente atual e o próximo item.
 3. **Este arquivo:** só se mudou identidade, direção, autonomia, regras ou protocolo. Ficar em ~150 linhas; o detalhe vai
    para os docs.

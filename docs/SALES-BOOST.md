@@ -2,10 +2,23 @@
 
 > **"Identificamos oportunidades comerciais para imobiliárias e ajudamos a transformá-las em ações."**
 >
-> Documento institucional (dono, 23/11/2026). Para funcionários, parceiros, investidores, desenvolvedores e potenciais
-> clientes. Consolida o posicionamento do Sales Boost; não descreve uma empresa nova. Decisão de origem:
-> [DECISIONS](DECISIONS.md#2026-11-23--posicionamento-real-estate-opportunity--growth-platform). O que vale para os agentes no
-> dia a dia continua em [PRODUCT](PRODUCT.md) e [PENDENCIAS](PENDENCIAS.md).
+> **Princípio orientador:** *"We don't just help real estate agencies create content. We help them identify opportunities
+> and turn them into action."*
+>
+> **Fonte oficial de verdade da empresa** (dono, 23/11/2026). Para funcionários, parceiros, investidores, desenvolvedores e
+> potenciais clientes. Consolida o posicionamento do Sales Boost; não descreve uma empresa nova. Decisões de origem:
+> [posicionamento](DECISIONS.md#2026-11-23--posicionamento-real-estate-opportunity--growth-platform) ·
+> [fonte de verdade](DECISIONS.md#2026-11-23-2--sales-boostmd-é-a-fonte-oficial-de-verdade-princípio-orientador). Quando outro material contradiz este documento, **este documento vale** e o outro
+> é corrigido (ou a mudança é decidida pelo dono e entra aqui primeiro).
+>
+> **Três materiais derivam daqui** (o site não vende uma coisa, o produto entrega outra e a documentação descreve uma
+> terceira):
+>
+> | Material | Responde | Onde está hoje | Estado |
+> |---|---|---|---|
+> | **Website** | Como apresentamos e vendemos o Sales Boost | site getsaleboost.com (`src/i18n.ts`, páginas públicas) | ⚠️ ainda usa o slogan antigo ("geramos mais visitas") — alinhar (D7b) |
+> | **Product Documentation** | Como o produto realmente funciona | [PRODUCT](PRODUCT.md), [ARCHITECTURE](ARCHITECTURE.md) e os docs de área | ✅ interno, para os agentes; versão para cliente ainda não existe |
+> | **Sales Strategy** | Como adquirimos imobiliárias e monetizamos | [PILOTO](PILOTO.md), [PITCH](../pitch/PITCH.md) | ⚠️ pitch desatualizado (D7); estratégia comercial a escrever a partir daqui |
 >
 > **Legenda usada neste documento:** ✅ existe e está em uso · 🔨 em desenvolvimento · 🔭 visão (ainda não existe).
 
@@ -18,6 +31,9 @@ o produto é:
 A plataforma ajuda a imobiliária a identificar oportunidades relevantes no seu mercado, entender o que merece atenção,
 transformar isso em decisões e executar as ações para aproveitá-las. A medida de sucesso é comercial: **mais visitas aos
 imóveis**, nunca a quantidade de posts. Visita garantida nunca é prometida.
+
+Em uma frase, o princípio que orienta a empresa: *"We don't just help real estate agencies create content. We help them
+identify opportunities and turn them into action."*
 
 O Sales Boost **não é** uma agência de marketing, nem um gerador de posts com IA, nem uma plataforma de tours virtuais.
 Conteúdo, vídeo e tour são **instrumentos de execução** dentro de um sistema que começa na leitura do mercado e termina
@@ -142,3 +158,6 @@ mobiliado em vídeo.
 - **Modelo de negócio:** assinatura, planos com limites e pacotes premium entram como **hipóteses novas**, ao lado das
   que já estavam em validação; nada decidido.
 - **Público:** imobiliárias com equipe como foco, sem limitar a identidade a uma região.
+- **Governança (23/11, 2):** este documento é a **fonte oficial de verdade**; Website, Product Documentation e Sales Strategy
+  derivam dele. Princípio orientador: *"We don't just help real estate agencies create content. We help them identify
+  opportunities and turn them into action."*
