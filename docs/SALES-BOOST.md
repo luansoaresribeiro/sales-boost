@@ -16,7 +16,7 @@
 >
 > | Material | Responde | Onde está hoje | Estado |
 > |---|---|---|---|
-> | **Website** | Como apresentamos e vendemos o Sales Boost | site getsaleboost.com (`src/i18n.ts`, páginas públicas) | ✅ alinhado em 23/11 (D7b), salvo o painel de exemplo da seção "Plataforma completa", ainda genérico |
+> | **Website** | Como apresentamos e vendemos o Sales Boost | site getsaleboost.com (`src/i18n.ts`, páginas públicas) | ✅ alinhado em 23/11 (D7b) |
 > | **Product Documentation** | Como o produto realmente funciona | [PRODUCT](PRODUCT.md), [ARCHITECTURE](ARCHITECTURE.md) e os docs de área | ✅ interno, para os agentes; versão para cliente ainda não existe |
 > | **Sales Strategy** | Como adquirimos imobiliárias e monetizamos | [PILOTO](PILOTO.md), [PITCH](../pitch/PITCH.md) | ⚠️ pitch desatualizado (D7); estratégia comercial a escrever a partir daqui |
 >
