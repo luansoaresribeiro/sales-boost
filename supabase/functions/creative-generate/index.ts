@@ -38,9 +38,10 @@ import { cachedContent, logAiCost, newCostTracker, type CostTracker } from '../_
 import { complianceNotice, cutPublicText, loadPublicTextRules, publicTextPromptRule } from '../_shared/compliance.ts'
 import { fallbackCardPlan, hasMarketSource, hasUsableImage, needsImage, pieceTrendIssues, resolveTemplate, trendNotice, trendPromptRule } from '../_shared/pieceGuard.ts'
 import { pickCoverPhoto, pickMiddlePhotos, type CatalogPhoto } from '../_shared/carouselOffer.ts'
+import { allowedTemplates, chooseCta, editorialRulesFrom, educationalOverflow, experientialRule, pickUnregulatedAlternative, stripExperiential, swapCtaText, type EditorialRules, type Objective } from '../_shared/editorialRules.ts'
 import { blockingThemes, findRepeat, pickAlternative, recentThemes, themeBlock, themeRetryNote, weekStartOf, weekThemesOf } from '../_shared/themeDedupe.ts'
 import { assignFaqTips, fetchThemeCfg, planWeekThemes, recipeBlocked } from '../_shared/weekThemes.ts'
-import { resolveAlias, topicText } from '../_shared/deckTopic.ts'
+import { classifyByTerms, resolveAlias, topicText } from '../_shared/deckTopic.ts'
 import { currentWeekBRT } from '../_shared/publishSlot.ts'
 import { buildOpportunityJob } from '../_shared/opportunityPieceJob.ts'
 import { buildPickReason, cleanItemPick, fetchItemCfg, getItem, listPickableItems, ownerBlockMessage, rankItems, saveItemPick, usageLastDays, type ItemPick } from '../_shared/itemService.ts'
@@ -134,7 +135,24 @@ interface Know { kind: string; title: string; content: string; module?: string }
 // Regra 5 (nunca inventar) vale pra história também: o teste de 2026-10-14
 // gerou um "depoimento" de cliente que nunca existiu ("Ele me mandou uma
 // mensagem…", "o negócio foi fechado"). Vale pra qualquer setor.
-const HONESTY_RULE = 'REGRA INEGOCIÁVEL: nunca invente cliente, depoimento, conversa, caso, venda/negócio fechado, número, distância ("a 10 minutos de…") ou fato do bairro que não esteja nos dados acima. Pode falar de forma geral ("quem vem de fora costuma…"), nunca como se tivesse acontecido.'
+// C7: regras editoriais da ficha (teto do educativo, CTA por objetivo, modelos desligados, frases experienciais). Sem ficha = desligado.
+async function fetchEditorialRules(admin: SupaClient, verticalKey: string | null): Promise<EditorialRules> {
+  if (!verticalKey) return editorialRulesFrom(null)
+  try { const { data } = await admin.from('vertical_playbooks').select('config').eq('key', verticalKey).eq('enabled', true).maybeSingle(); return editorialRulesFrom(data?.config ?? null) } catch { return editorialRulesFrom(null) }
+}
+/** Objetivo da peça enquanto o C10 não grava o objetivo da vaga: educativo/dica = destravar a decisão; o resto = provar que conhece o bairro. */
+const objectiveOfPost = (format: string | null | undefined, rules: EditorialRules): Objective => (rules.educationalFormats.includes(String(format ?? '')) ? 'decisao' : 'bairro')
+/** CTAs da semana da peça (peças ativas), para o teto de repetição. */
+async function weekCtasOf(admin: SupaClient, companyId: string, day: string): Promise<string[]> {
+  const ws = weekStartOf(day), we = new Date(Date.parse(`${ws}T00:00:00Z`) + 6 * 86400000).toISOString().slice(0, 10)
+  const { data } = await admin.from('marketing_ai_test_content').select('cta').eq('company_id', companyId).gte('planned_for', ws).lte('planned_for', we).not('status', 'in', '(archived,rejected)')
+  return ((data ?? []) as { cta: string | null }[]).map(r => r.cta ?? '').filter(Boolean)
+}
+
+/** C7 (a): tema regulado sem dica liberada e sem tema alternativo — a vaga não vira peça (nunca o texto fixo vazio). */
+export class NoReleasedTipError extends Error { constructor(label: string) { super(`Sem dica liberada${label ? ` de ${label}` : ''} e sem tema alternativo na ficha: a vaga não virou peça (o texto fixo vazio não é publicado).`); this.name = 'NoReleasedTipError' } }
+
+const HONESTY_RULE = 'REGRA INEGOCIÁVEL: nunca invente cliente, depoimento, conversa, caso, venda/negócio fechado, número, distância ("a 10 minutos de…") ou fato do bairro que não esteja nos dados acima. Pode falar de forma geral ("quem vem de fora costuma…"), nunca como se tivesse acontecido. Nunca atribua ao corretor experiência pessoal que ele não informou ("na minha experiência", "já vi muitos clientes").'
 
 function preamble(config: Config, company: Company, playbookBlock = ''): string {
   const name = config.agent_name?.trim() || 'Agente de Marketing'
@@ -513,6 +531,7 @@ interface GenOpts {
   deck?: boolean
   // Vaga de dica_faq sem dica liberada: o carrossel sai como dica geral (sem número, prazo, taxa nem lei), conferida em código.
   forceGeneral?: boolean
+  slotFormat?: string // C7: formato da vaga do plano (objetivo da peça para o CTA)
 }
 
 // Rótulo único da peça (familia · pilar_ss · tema→pillar) + intenção que a guiou.
@@ -617,7 +636,9 @@ async function generateForCompanyInner(admin: SupaClient, anthropicKey: string, 
     primary2: kitColors?.primary?.[1] || bd?.colors?.[1], accent2: kitColors?.accent?.[1],
   }
   const product = ((productRows ?? [])[0] as { title: string; image_url: string | null } | undefined) ?? null
-  const templateDesc = TEMPLATE_DESC(!!product?.image_url, !!realReview, !!realStat)
+  const edRules = await fetchEditorialRules(admin, company.vertical_key ?? null)
+  // C7 (e): modelos de card desligados pela ficha (imóveis: "trend" pede tendência sem fonte, "problem" pede citação de dor inventada).
+  const templateDesc = allowedTemplates(TEMPLATE_DESC(!!product?.image_url, !!realReview, !!realStat), edRules)
   const templateKeys = Object.keys(templateDesc)
   const templateList = templateKeys.map(k => `"${k}"`).join('|')
 
@@ -733,11 +754,25 @@ Decida o brief. Retorne APENAS um JSON:
   const pubRule = publicTextPromptRule(pub?.config, claimLang)
   const ask: Ask = (p, max, cheap) => callModel(anthropicKey, p, max, cheap ? CHEAP_MODEL : undefined, (m, u) => track.add(m, u))
   let guardCfg: Awaited<ReturnType<typeof loadGuardCfg>> = null
+  let themeSwap: string | null = null
   let topic: TopicDecision | null = null
   if (opts.deck) {
     try {
       guardCfg = await loadGuardCfg(admin, company.vertical_key ?? null)
       if (guardCfg) topic = await decideTopic({ admin, ...guardCfg, text: topicText({ title: seed?.title, titleIsFormat: seed?.titleIsFormat, hook: seed?.hook, angle: seed?.angle, hookAngle: brief.hook_angle, offer: brief.offer }), forceGeneral: opts.forceGeneral, ask, anthropicKey, company })
+      // C7 (a): tema regulado SEM dica liberada não vira peça com texto fixo vazio ("Cada caso tem as suas particularidades").
+      // A vaga troca de assunto: primeiro tema alternativo da ficha que não é regulado e não repete. Sem alternativa: a vaga não sai.
+      if (guardCfg && topic?.mode === 'geral') {
+        const gc = guardCfg
+        const isReg = (t: string) => { const k = classifyByTerms(t, gc.tcfg).category; return !!k && gc.tcfg.regulated_categories.includes(k) }
+        const alt = pickUnregulatedAlternative(themeCfg.alternatives, isReg, t => !!findRepeat(t, pastThemes, weekThemes, themeCfg))
+        if (!alt) throw new NoReleasedTipError(topic.label)
+        const was = seed?.title ?? topic.label
+        themeSwap = alt
+        topic = await decideTopic({ admin, ...gc, text: alt, ask, anthropicKey, company })
+        if (topic.mode === 'geral') throw new NoReleasedTipError(topic.label)
+        brief.reasoning = `${brief.reasoning ?? ''} Assunto trocado: “${was}” é tema regulado sem dica liberada em Dicas e FAQ; escrevi sobre “${alt}”.`.trim()
+      }
     } catch (e) { console.error('creative-generate: classificação do tema falhou (segue como tema leve)', company.id, e); topic = null }
   }
   // Afirmação de tendência de mercado (A.6): só com sinal real COM fonte ligado à vaga; senão o texto sai como orientação do corretor. Ficha sem market_trends = nada muda.
@@ -756,7 +791,7 @@ Siga fielmente o brief do Diretor Criativo:
 - Ângulo do hook: ${brief.hook_angle ?? '—'}
 - CTA desejado: ${brief.cta ?? '—'}
 - Oferta: ${strict ? '—' : brief.offer ?? '—'}
-${strict ? '' : intentTxt}${topic ? topicBlock(topic) : ''}${brief.template === 'product' && product ? `- Produto real desse post: "${product.title}" — a legenda precisa ser sobre ESTE produto especificamente.` : ''}
+${strict ? '' : intentTxt}${themeSwap ? `\nATENÇÃO: o assunto da vaga mudou. Escreva SOBRE ESTE TEMA (e só ele), ignorando o gancho e a oferta acima: "${themeSwap}". O "idea" tem que ser esse tema.\n` : ''}${topic ? topicBlock(topic) : ''}${brief.template === 'product' && product ? `- Produto real desse post: "${product.title}" — a legenda precisa ser sobre ESTE produto especificamente.` : ''}
 ${frameworkContent ? `\nUse este framework de copy:\n${frameworkContent}` : ''}
 ${visualContent ? `\nConceito visual a evocar:\n${visualContent}` : ''}
 
@@ -818,6 +853,18 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
   let caption = lock.caption
   if (brief.cta) brief.cta = stripPieceTexts(null, String(brief.cta)).cta // os outros leitores de brief.cta (card/deck) também sem recado
   post.cta = rawCta ? lock.cta : null // CTA vazio fica vazio (não inventa CTA onde a IA não pôs); o deck lê post.cta
+  // C7 (c): o mesmo CTA no máximo N vezes na semana (ficha); passou → o próximo da lista do objetivo da peça. QUERO aprovado não troca.
+  let ctaNote: string | null = null
+  if (post.cta && edRules.ctaMaxPerWeek != null) {
+    try {
+      const ch = chooseCta({ current: String(post.cta), objective: objectiveOfPost(opts.slotFormat ?? null, edRules), weekCtas: await weekCtasOf(admin, company.id, opts.plannedFor || new Date().toISOString().slice(0, 10)), rules: edRules, locked: lock.approved })
+      if (ch.changed && ch.cta) { caption = caption ? swapCtaText(caption, String(post.cta), ch.cta) : caption; post.cta = ch.cta; ctaNote = ch.reason }
+    } catch (e) { console.error('creative-generate: teto de CTA não conferido (segue)', company.id, e) }
+  }
+  // C7 (d): experiência pessoal do corretor que ele não informou sai da legenda (ficha: content_rules.experiential_phrases).
+  const exp = stripExperiential(caption ?? '', edRules)
+  if (exp.removed.length) { caption = exp.text || caption; ctaNote = [ctaNote, `Tirei frase de experiência pessoal não informada pelo corretor: “${exp.removed[0].slice(0, 80)}”.`].filter(Boolean).join(' ') }
+  if (ctaNote) brief.reasoning = `${brief.reasoning ?? ''} ${ctaNote}`.trim()
   // Avisos pro dono, nesta ordem: Diretor (brief.reasoning) · QUERO · recado que saiu · legenda vazia.
   brief.reasoning = [brief.reasoning, lock.notice, internalNotesNotice(sp.notes), sp.emptied ? EMPTY_CAPTION_NOTICE : null].filter(Boolean).join(' ') || brief.reasoning
 
@@ -846,6 +893,11 @@ Escreva 1 post de Instagram pronto pra publicar sobre o negócio (formato ${brie
       console.error('creative-generate: guarda do carrossel falhou', company.id, e)
       if (strict) brief.reasoning = `${brief.reasoning ?? ''} Atenção: não consegui conferir o texto contra as dicas — confira tudo antes de aprovar.`.trim()
     }
+  }
+
+  // C7 (d): o mesmo corte da experiência pessoal vale para o texto dos slides.
+  if (deckSlides.length && edRules.experientialPhrases.length) {
+    deckSlides = deckSlides.map(sl => { const t = stripExperiential(sl.text ?? '', edRules), h = stripExperiential(sl.title ?? '', edRules); return t.removed.length || h.removed.length ? { ...sl, text: t.text, title: h.text } : sl })
   }
 
   // Trava de afirmação de mercado (PR B, 2026-11-02): legenda, CTA, hashtags e TODO campo de slide. Fatos permitidos = cadastro do imóvel
@@ -1400,6 +1452,33 @@ async function planWeekFromStrategy(admin: SupaClient, company: Company, slots: 
     jobs.push({ date: slot.date, producer: 'item_package', name: slot.name, pillar: slot.pillar, purpose: slot.purpose, recipe, item_id: picked.id, item_pick: picked.pick, ...labelsOf(slot) })
   }
 
+  // C7 (b): teto de educativos na semana (ficha: educational_max_per_week). As vagas a mais viram peça de imóvel (receita com
+  // foto real, mesmo rodízio e trava de repetição) ou, sem imóvel livre, um post do mix que não é educativo. Nada fica vazio.
+  const edRules = await fetchEditorialRules(admin, company.vertical_key ?? null)
+  const over = educationalOverflow(jobs.map(j => (j.producer === 'post' ? String(j.format ?? '') : '')), edRules)
+  if (over.length) {
+    const recipeFormats = formats.filter(f => f.producer === 'item_package' && f.recipe)
+    const nonEduPosts = mixPosts.filter(m => !edRules.educationalFormats.includes(resolveAlias(m.format, aliases)))
+    let turn = 0
+    for (const idx of over) {
+      const j = jobs[idx]
+      let done = false
+      for (let k = 0; k < recipeFormats.length && !done; k++) {
+        const f = recipeFormats[(turn + k) % recipeFormats.length]
+        const rk = String(f.recipe)
+        const picked = pickItem(new Set(itemIds.filter(i => recipeBlocked(pkgHistory, i, rk, j.date, themeCfg.cooldownWeeks))), true)
+        if (!picked) continue
+        pkgHistory.push({ item_id: picked.id, recipe: rk, date: j.date })
+        jobs[idx] = { date: j.date, producer: 'item_package', name: f.name ?? j.name, pillar: j.pillar, purpose: j.purpose, recipe: rk, item_id: picked.id, item_pick: picked.pick, familia: j.familia, pilar_ss: j.pilar_ss, tema: j.tema, intent: j.intent }
+        turn += k + 1; done = true
+      }
+      if (!done && nonEduPosts.length) {
+        const m = nonEduPosts[turn++ % nonEduPosts.length]
+        jobs[idx] = { ...j, format: resolveAlias(m.format, aliases), name: m.name, purpose: m.purpose ?? j.purpose }
+      }
+    }
+  }
+
   // Temas da semana INTEIRA reservados antes de disparar (vagas rodam em paralelo e não se enxergam): 1 pedido curto ao Diretor
   // Criativo → conferido em código (janela da ficha + entre as vagas) → repetiu: outro tema 1x → alternativa da ficha. Falha não trava o despacho.
   // C1b (correção 23/11): as vagas de FAQ também se enxergam — cada uma recebe AQUI uma dica diferente (sem repetir assunto
@@ -1532,7 +1611,7 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
       // Só o card genérico (post_card, em setor que não desligou) usa o
       // caminho de imagem+template; qualquer outro formato de post — inclusive
       // um antigo que ficou numa estratégia — sai como carrossel de slides.
-      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', itemId: job.item_id ?? null, forceGeneral: job.format === FAQ_FORMAT, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: withMarketContext(job.intent, job.market_context), opportunityId: job.opportunity_id ?? null, itemPick: job.item_pick ?? null, reservedTheme: job.theme_idea ?? null, themeNote: job.theme_note ?? null, weekReserved: job.week_reserved ?? [] })
+      await generateForCompany(admin, anthropicKey, company, 'organico', { bearer: '', isCron: true, cronSecret, plannedFor: job.date || null, seed, deck: job.format !== 'post_card', itemId: job.item_id ?? null, forceGeneral: job.format === FAQ_FORMAT, slotFormat: job.format, labels: { familia: job.familia, pilar_ss: job.pilar_ss, tema: job.tema ?? job.pillar }, intent: withMarketContext(job.intent, job.market_context), opportunityId: job.opportunity_id ?? null, itemPick: job.item_pick ?? null, reservedTheme: job.theme_idea ?? null, themeNote: job.theme_note ?? null, weekReserved: job.week_reserved ?? [] })
       return
     }
     if (job.producer === 'item_video') { await runVideoSlot(admin, anthropicKey, company, job, cronSecret); return }
@@ -1542,7 +1621,11 @@ async function runPlanSlot(admin: SupaClient, anthropicKey: string, company: Com
     })
     const r = await res.json().catch(() => ({})) as { error?: string; generated?: unknown[] }
     if (!res.ok || !r.generated?.length) console.error('runPlanSlot: catalog-package sem peça', company.id, job.date, job.recipe, res.status, r.error)
-  } catch (e) { console.error('runPlanSlot falhou', company.id, job.date, e) }
+  } catch (e) {
+    console.error('runPlanSlot falhou', company.id, job.date, e)
+    // C7 (a): a vaga sem dica e sem alternativa fica registrada para o dono (não vira peça vazia).
+    if (e instanceof NoReleasedTipError) { try { await admin.from('agent_performance').insert({ company_id: company.id, agent_role: 'conteudo', task_key: 'content_no_tip', task_description: `Vaga ${job.date}: ${e.message}`.slice(0, 300), latency_ms: 0, success: false, error_message: e.message }) } catch { /* só registro */ } }
+  }
 }
 
 // Vaga "Dica/FAQ conferida": pega a dica liberada menos usada. Categoria REGULADA da ficha: só dica conferida em

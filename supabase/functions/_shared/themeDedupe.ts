@@ -53,7 +53,7 @@ export function findRepeatedTheme(idea: string, recent: string[], ratio: number 
 // ── Trava de tema em CÓDIGO (2026-11-02): janela de N semanas (ficha) e nunca 2x na mesma semana ─────────────────
 /** Assunto-chave da ficha (content_rules.theme_topics): `terms` são sinônimos/variações ("itbi", "imposto de transmissão"). */
 export interface ThemeTopic { key: string; terms: string[] }
-export interface ThemeCfg { cooldownWeeks: number; similarity: number; alternatives: string[]; places: string[]; topics: ThemeTopic[]; weekSimilarity: number }
+export interface ThemeCfg { cooldownWeeks: number; similarity: number; alternatives: string[]; places: string[]; topics: ThemeTopic[]; weekSimilarity: number; topicWindow?: boolean }
 /** Limiar mais baixo DENTRO da mesma semana (C1b, 21/11): "custos invisíveis além do preço" × "custos além do preço" passava com 0.8. */
 export const THEME_WEEK_RATIO = 0.6
 /** Sem ficha (setor genérico): 4 semanas, mesmo limiar de antes, nenhuma alternativa pronta. */
@@ -76,6 +76,8 @@ export function parseThemeCfg(rules: unknown): ThemeCfg {
     places: Array.isArray(r.theme_places) ? r.theme_places.filter((x): x is string => typeof x === 'string' && !!x.trim()).slice(0, 200) : [],
     topics,
     // Nunca mais frouxo que o da janela (a semana é sempre a regra mais rígida).
+    // C7 (auditoria 23/11): assunto-chave da ficha (custos, documentação, financiamento…) também trava na janela de semanas, não só na semana.
+    ...(r.theme_topic_window === true ? { topicWindow: true } : {}),
     weekSimilarity: Number.isFinite(wsim) && wsim >= 0.4 && wsim <= 1 ? Math.min(wsim, Number.isFinite(sim) && sim >= 0.5 && sim <= 1 ? sim : THEME_RATIO) : THEME_WEEK_RATIO,
   }
 }
@@ -130,6 +132,10 @@ export function weekThemesOf(rows: ThemeRow[], weekOf: string): string[] {
 export function findRepeat(idea: string, recent: string[], week: string[], cfg: ThemeCfg = DEFAULT_THEME_CFG): WeekRepeat | null {
   const r = findRepeatedTheme(idea, recent, cfg.similarity, cfg.places)
   if (r) return { theme: r, reason: `parecido com tema das últimas ${cfg.cooldownWeeks} semanas` }
+  if (cfg.topicWindow && cfg.topics.length) {
+    const mine = topicsIn(idea, cfg.topics)
+    if (mine.size) for (const x of recent) { const shared = [...topicsIn(x, cfg.topics)].filter(k => mine.has(k)); if (shared.length) return { theme: x, reason: `mesmo assunto nas últimas ${cfg.cooldownWeeks} semanas: ${shared.join(', ')}` } }
+  }
   return findWeekRepeat(idea, week, cfg)
 }
 
@@ -158,7 +164,7 @@ export function blockingThemes(rows: ThemeRow[], weekOf: string, cfg: ThemeCfg =
 }
 /** Primeiro tema alternativo (da ficha/estratégia) que não repete nada de `taken`. */
 export function pickAlternative(alternatives: string[], taken: string[], cfg: ThemeCfg = DEFAULT_THEME_CFG, week: string[] = []): string | null {
-  for (const a of alternatives) if (a && !findRepeatedTheme(a, taken, cfg.similarity, cfg.places) && !findWeekRepeat(a, week, cfg)) return a
+  for (const a of alternatives) if (a && !findRepeat(a, taken, week, cfg)) return a
   return null
 }
 

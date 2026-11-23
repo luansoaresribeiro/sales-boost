@@ -29,6 +29,8 @@ import { requirePaidAccess } from '../_shared/access.ts'
 import { beginCostOperation, trackUsage, withCostScope } from '../_shared/costScope.ts'
 import { applyQueroLock, cleanLabels, dropUnknownPilar, fetchSSPillars } from '../_shared/slotIntent.ts'
 import { decideVideoCta } from '../_shared/videoCta.ts'
+import { chooseCta, editorialRulesFrom, stripExperiential, swapCtaText, type EditorialRules } from '../_shared/editorialRules.ts'
+import { weekStartOf } from '../_shared/themeDedupe.ts'
 import { stripInternalNotes, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
 import { ensureNearby, fetchNearbyConfig, fmtDistance, priorityCategories, topPlaces } from '../_shared/nearbyPlaces.ts'
 import { buildNearbySlides, buildOfferSlides, pickCoverPhoto, type CoverRooms, type OfferLocale, type OfferSlide } from '../_shared/carouselOffer.ts'
@@ -46,7 +48,7 @@ type SupaClient = ReturnType<typeof createClient>
 interface Photo { url: string; path: string }
 interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
 interface RecipeGroup { recipes: string[]; fonte_midia: string; descricao: string }
-interface FichaConfig { itemAngles: ItemAnglesCfg | null; strengths: StrengthsCfg | null; captionFields: CaptionField[]; pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; claimCtx: { terms: string[]; context: string[] } | null; publicText: PublicTextRules | null; publicTextRule: string; currency: string }
+interface FichaConfig { itemAngles: ItemAnglesCfg | null; strengths: StrengthsCfg | null; captionFields: CaptionField[]; pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; claimCtx: { terms: string[]; context: string[] } | null; publicText: PublicTextRules | null; publicTextRule: string; currency: string; editorial: EditorialRules }
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -73,7 +75,7 @@ async function fetchFichaConfig(admin: SupaClient, verticalKey: string | null): 
     const c = (data?.config ?? {}) as Record<string, unknown>
     if (!c.production_recipes) return null
     const disclosure = String((c.virtual_staging as { disclosure?: string } | undefined)?.disclosure ?? '').slice(0, 200)
-    return { itemAngles: itemAnglesCfgFrom(c), strengths: strengthsCfgFrom(c), captionFields: captionFieldsFrom(c, 'pt'), pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null,
+    return { editorial: editorialRulesFrom(c), itemAngles: itemAnglesCfgFrom(c), strengths: strengthsCfgFrom(c), captionFields: captionFieldsFrom(c, 'pt'), pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null,
       // Trava de afirmação de mercado (claimLock): termos e campos de preço/quartos vêm da ficha (regra 6).
       marketClaims: ((c.opportunity_texts as { market_claims?: { pt?: unknown } } | undefined)?.market_claims?.pt as string[] | undefined)?.filter(x => typeof x === 'string' && x.trim()) ?? null,
       // Capa pelos cômodos da ficha (tour.room_priority / avoid_rooms), igual ao tour em vídeo — nunca a 1ª foto no escuro.
@@ -299,6 +301,18 @@ Deno.serve((req) => withCostScope(async () => {
     const { data: auto } = await admin.from('engagement_automations').select('active, message, keywords').eq('company_id', company.id).eq('item_id', item.id).maybeSingle()
     const automation = auto as { active?: boolean; message?: string; keywords?: string[] } | null
     const decision = decideVideoCta(automation, ficha.ctas)
+    // C7 (c): o mesmo CTA no máximo N vezes na semana (ficha). O "Me chama no direct" (sem automação) passou → o próximo
+    // da lista do objetivo "levar à visita". QUERO aprovado não troca.
+    let ctaNote: string | null = null
+    if (ficha.editorial.ctaMaxPerWeek != null && !decision.approved) {
+      try {
+        const day = forcedDate ?? new Date().toISOString().slice(0, 10), ws = weekStartOf(day)
+        const we = new Date(Date.parse(`${ws}T00:00:00Z`) + 6 * 86400000).toISOString().slice(0, 10)
+        const { data: wk } = await admin.from('marketing_ai_test_content').select('cta').eq('company_id', company.id).gte('planned_for', ws).lte('planned_for', we).not('status', 'in', '(archived,rejected)')
+        const ch = chooseCta({ current: decision.cta, objective: 'visita', weekCtas: ((wk ?? []) as { cta: string | null }[]).map(r => r.cta ?? ''), rules: ficha.editorial })
+        if (ch.changed && ch.cta) { decision.promptRule = decision.promptRule.replace(decision.cta, ch.cta); decision.cta = ch.cta; ctaNote = ch.reason }
+      } catch (e) { console.error('catalog-package: teto de CTA não conferido (segue)', e) }
+    }
     // Etapa 4B: peça de oportunidade — só no modo interno, e só se a oportunidade é desta empresa (senão a FK quebraria o insert).
     let opportunityId: string | null = null
     if (internal && typeof body.opportunity_id === 'string' && /^[0-9a-f-]{36}$/i.test(body.opportunity_id)) {
@@ -502,8 +516,13 @@ Deno.serve((req) => withCostScope(async () => {
           const lock = applyQueroLock(caption || null, cta || null, automation, ficha.ctas)
           caption = lock.caption ?? ''
           if (cta || lock.approved) cta = lock.cta ?? ''
+          // C7 (c): a trava do QUERO volta para o "sem automação" da ficha; o teto da semana vale para ele também.
+          if (ctaNote && cta && cta !== decision.cta && !lock.approved) { caption = swapCtaText(caption, cta, decision.cta); cta = decision.cta }
+          // C7 (d): experiência pessoal do corretor que ele não informou sai da legenda.
+          const exp = stripExperiential(caption, ficha.editorial)
+          if (exp.removed.length) caption = exp.text || caption
           // Avisos pro dono: o do QUERO vem primeiro (o prefixo dele fica intacto — keepQueroNotice) e depois o recado que saiu.
-          const reasoning = [mem.angle ? `Ângulo: ${mem.angle.label}${mem.source === 'receita' ? ' (o da receita)' : mem.why ? ` — ${mem.why}` : ''}.` : null, markPick ? `Foto de abertura escolhida pelo ponto forte marcado ("${markPick.mark}").` : null, marks.length ? `Primeira frase pelo ponto forte "${marks[0]}".` : null, lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null, claimNotice(pieceClaims), complianceNotice(pieceCompliance)].filter(Boolean).join(' ') || null
+          const reasoning = [ctaNote, exp.removed.length ? `Tirei frase de experiência pessoal não informada pelo corretor: “${exp.removed[0].slice(0, 80)}”.` : null, mem.angle ? `Ângulo: ${mem.angle.label}${mem.source === 'receita' ? ' (o da receita)' : mem.why ? ` — ${mem.why}` : ''}.` : null, markPick ? `Foto de abertura escolhida pelo ponto forte marcado ("${markPick.mark}").` : null, marks.length ? `Primeira frase pelo ponto forte "${marks[0]}".` : null, lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null, claimNotice(pieceClaims), complianceNotice(pieceCompliance)].filter(Boolean).join(' ') || null
 
           const slot = forcedDate || loose ? { date: forcedDate ?? '', overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
           const { data: row, error } = await admin.from('marketing_ai_test_content').insert({
