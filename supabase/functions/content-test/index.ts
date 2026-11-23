@@ -17,6 +17,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
 import { autoRedoEligible, newNumbers } from '../_shared/autoRedo.ts'
 import { stripPieceTexts } from '../_shared/internalNotes.ts'
+import { beginCostOperation, trackUsage, withCostScope } from '../_shared/costScope.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -65,6 +66,7 @@ async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1500
   })
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
   const data = await res.json()
+  trackUsage('claude-sonnet-4-6', data.usage)   // etapa A: soma na operação (nota/refação/geração) desta requisição
   return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
 }
 
@@ -97,6 +99,7 @@ async function callClaudeVision(anthropicKey: string, prompt: string, image: { d
   })
   if (!res.ok) throw new Error(`Claude vision error: ${await res.text()}`)
   const data = await res.json()
+  trackUsage('claude-sonnet-4-6', data.usage)
   return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
 }
 
@@ -238,8 +241,13 @@ Retorne APENAS um JSON: {"score":0,"comment":"1 frase curta — o que está bom,
   return { scores, quality: score }
 }
 
-Deno.serve(async (req) => {
+// Etapa A (22/11): cada ação que gasta IA (gerar, nota, refazer) = 1 operação com identificador único, ligada à peça (ref_id).
+const COST_TASK: Record<string, string> = { generate: 'ai_text_test_content', score: 'ai_text_quality_score', regenerate: 'ai_text_regenerate' }
+
+Deno.serve((req) => withCostScope(async () => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  let costFinish: (() => Promise<void>) | null = null
+  let costRef: string | null = null
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
@@ -271,6 +279,11 @@ Deno.serve(async (req) => {
     if (!company) return json({ error: 'Empresa não encontrada.' }, 404)
 
     const action = String(body.action ?? '')
+    if (COST_TASK[action]) {
+      const costOp = beginCostOperation(), co = company
+      costRef = action === 'generate' ? null : (String(body.test_id ?? '') || null)
+      costFinish = () => costOp.finish(admin, { companyId: co.id, role: 'conteudo', taskKey: COST_TASK[action], description: `Teste de conteúdo: ${action}${costRef ? ` ${costRef}` : ''}`, refId: costRef, trigger: isService ? null : 'manual' })
+    }
     // Só ações que gastam IA, e só no caminho do usuário (o lote/server-a-server
     // já foi filtrado por quem chamou).
     if (!isService && ['generate', 'score', 'regenerate'].includes(action)) {
@@ -308,6 +321,7 @@ Gere 1 ideia de conteúdo alinhada com a estratégia acima. Retorne APENAS um JS
         cta: idea.cta ?? null, format: idea.format, reasoning: idea.reasoning,
       }).select('id').single()
       if (insErr) return json({ error: insErr.message }, 500)
+      costRef = inserted.id as string
 
       const url = await generateImage(company.id, company.business_type, idea.idea, company.business_description)
       if (url) await admin.from('marketing_ai_test_content').update({ image_url: url }).eq('id', inserted.id)
@@ -462,8 +476,10 @@ Retorne APENAS um JSON: {"idea":"...","caption":"...","hashtags":"#...","cta":".
   } catch (err) {
     console.error('content-test error:', err)
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)
+  } finally {
+    if (costFinish) await costFinish()
   }
-})
+}))
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type': 'application/json' } })

@@ -8,15 +8,15 @@ const MUTED = '#BABABA'
 const BORDER = 'rgba(255,255,255,0.06)'
 const GREEN = '#4ade80'
 
-const COST_PER_1K = 0.006 // igual ao backend (ESTIMATED_COST_PER_1K_TOKENS)
 
 const AGENT_LABEL: Record<string, string> = { marketing: 'Agente Geral', hermes: 'Orquestrador', sales: 'Vendas', imagem: 'Geração de Imagem', estrategia: 'Estratégia (Hermes)' }
 const agentLabel = (r: string | null) => AGENT_LABEL[r ?? ''] ?? (r ?? 'Agente')
 
-// cost_usd é custo real não-baseado em token (hoje só geração de imagem) —
-// soma direto ao custo estimado de tokens, mesma linha do tempo/agente.
+// Etapa A (22/11): custo = só o cost_usd gravado (medido pelos tokens reais, ou preço por uso). Antes somava tokens ×
+// preço médio MAIS o cost_usd, contando duas vezes as linhas que já trazem o custo real. A visão completa (tipos,
+// fixo, não medido) fica em Owner → Custos.
 interface PerfRow { agent_role: string | null; tokens_used: number | null; cost_usd: number | null; success: boolean | null; created_at: string }
-const rowCost = (r: PerfRow) => ((Number(r.tokens_used) || 0) / 1000) * COST_PER_1K + (Number(r.cost_usd) || 0)
+const rowCost = (r: PerfRow) => Number(r.cost_usd) || 0
 
 function fmtTokens(n: number) { return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n) }
 function fmtUsd(n: number) { return `US$ ${n.toFixed(2)}` }

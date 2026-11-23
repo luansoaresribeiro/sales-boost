@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { NAO_MEDIDO, summarize, type CostRow, type FixedCost } from '../_shared/costLedger.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -69,14 +70,62 @@ async function dataforseoUsage(login: string, password: string): Promise<Usage> 
   return { label: 'Saldo da conta', used: Math.round(balance * 100) / 100, limit: null, unit: 'USD', pct: null }
 }
 
-// Claude não expõe saldo por chave — estimamos o gasto pelo que rastreamos
-// (tokens_used em agent_performance). ~US$6 por milhão de tokens (blend Sonnet).
+// Claude não expõe saldo por chave. Etapa A (22/11): mostra o gasto MEDIDO no mês (tokens reais × tabela, linhas
+// classificadas pelo costLedger), sem a estimativa antiga de US$ 6 por milhão de tokens (que contava estimativa e real juntos).
 async function anthropicTracked(admin: SupaClient): Promise<Usage> {
   const monthStart = new Date(); monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0)
-  const { data } = await admin.from('agent_performance').select('tokens_used').gte('created_at', monthStart.toISOString())
-  const tokens = (data as { tokens_used: number | null }[] | null ?? []).reduce((s, r) => s + (r.tokens_used ?? 0), 0)
-  const usd = Math.round((tokens / 1_000_000) * 6 * 100) / 100
-  return { label: 'Gasto estimado no mês', used: usd, limit: null, unit: 'USD', pct: null }
+  const rows = await perfRows(admin, monthStart.toISOString())
+  const s = summarize(rows.filter(r => !r.provider || r.provider === 'anthropic'))
+  return { label: 'Gasto medido no mês', used: Math.round(s.variable.kinds.medido * 100) / 100, limit: null, unit: 'USD', pct: null }
+}
+
+const PERF_COLS = 'id, company_id, agent_role, task_key, cost_usd, tokens_used, created_at, operation_id, ref_id, cost_kind, provider, calls'
+// Lê em páginas (o limite padrão é 1000 linhas). Sem as colunas da etapa A (migration pendente), lê as antigas.
+async function perfRows(admin: SupaClient, since: string, until?: string): Promise<CostRow[]> {
+  const out: CostRow[] = []
+  let cols = PERF_COLS
+  for (let from = 0; from < 50_000; from += 1000) {
+    let q = admin.from('agent_performance').select(cols).gte('created_at', since).order('created_at').range(from, from + 999)
+    if (until) q = q.lt('created_at', until)
+    const { data, error } = await q
+    if (error && cols === PERF_COLS) { cols = 'id, company_id, agent_role, task_key, cost_usd, tokens_used, created_at'; from -= 1000; continue }
+    if (error) throw new Error(error.message)
+    const page = (data ?? []) as unknown as CostRow[]
+    out.push(...page.map(r => ({ ...r, source: 'agent_performance' as const })))
+    if (page.length < 1000) break
+  }
+  return out
+}
+
+/** Etapa A2: a visão central de custos do Owner (variável por tipo/cliente/funcionalidade/operação + fixo separado). */
+async function costsReport(admin: SupaClient, body: Record<string, unknown>) {
+  const now = new Date()
+  let since: Date, until: Date | null = null, label: string
+  const month = typeof body.month === 'string' && /^\d{4}-\d{2}$/.test(body.month) ? body.month : null
+  if (month) {
+    since = new Date(`${month}-01T00:00:00Z`); until = new Date(since); until.setUTCMonth(until.getUTCMonth() + 1); label = month
+  } else {
+    const days = [7, 30, 90].includes(Number(body.days)) ? Number(body.days) : 30
+    since = new Date(now.getTime() - days * 86_400_000); label = `${days} dias`
+  }
+  const sinceIso = since.toISOString(), untilIso = until?.toISOString()
+  const perf = await perfRows(admin, sinceIso, untilIso)
+  let tq = admin.from('video_tours').select('id, company_id, kind, cost_usd, created_at').gte('created_at', sinceIso).gt('cost_usd', 0)
+  if (untilIso) tq = tq.lt('created_at', untilIso)
+  const { data: tours } = await tq
+  const tourRows: CostRow[] = ((tours ?? []) as { id: string; company_id: string; kind: string | null; cost_usd: number; created_at: string }[])
+    .map(t => ({ id: t.id, company_id: t.company_id, agent_role: 'tour', task_key: `video_tour_${t.kind ?? 'tour'}`, cost_usd: t.cost_usd, tokens_used: 0, created_at: t.created_at, source: 'video_tours', kind: t.kind, provider: 'higgsfield' }))
+  // Fixos: os meses que o período toca. Sem tabela (migration pendente) = "não informado".
+  const firstMonth = `${sinceIso.slice(0, 7)}-01`, lastMonth = `${(untilIso ? new Date(until!.getTime() - 1).toISOString() : now.toISOString()).slice(0, 7)}-01`
+  const { data: fx } = await admin.from('platform_fixed_costs').select('month, item, provider, amount_usd, source, note').gte('month', firstMonth).lte('month', lastMonth).order('month')
+  const ids = [...new Set([...perf, ...tourRows].map(r => r.company_id).filter(Boolean))] as string[]
+  const names: Record<string, string> = {}
+  if (ids.length) {
+    const { data: cs } = await admin.from('companies').select('id, business_name').in('id', ids)
+    for (const c of (cs ?? []) as { id: string; business_name: string | null }[]) names[c.id] = c.business_name ?? c.id
+  }
+  const summary = summarize([...perf, ...tourRows], (fx ?? []) as FixedCost[], names)
+  return { ok: true, period: { label, since: sinceIso, until: untilIso ?? now.toISOString() }, summary, fixed_rows: fx ?? [], not_measured: NAO_MEDIDO, generated_at: now.toISOString() }
 }
 
 async function keyFor(_admin: SupaClient, secretName: string, cfg: Record<string, string>): Promise<string | null> {
@@ -105,6 +154,16 @@ Deno.serve(async (req) => {
       if (!user) return json({ error: 'Unauthorized' }, 401)
       const { data: roleRow } = await admin.from('user_roles').select('role').eq('email', user.email ?? '').maybeSingle()
       if ((roleRow as { role?: string } | null)?.role !== 'owner') return json({ error: 'Forbidden' }, 403)
+    }
+
+    if (body.action === 'costs') return json(await costsReport(admin, body))
+    if (body.action === 'set_fixed') {
+      // Custo fixo do mês informado pelo dono (só Owner chega aqui). Mesmo mês + item = atualiza; nada é apagado.
+      const month = String(body.month ?? ''), item = String(body.item ?? '').trim().slice(0, 80), amount = Number(body.amount_usd)
+      if (!/^\d{4}-\d{2}$/.test(month) || !item || !Number.isFinite(amount) || amount < 0 || amount > 100_000) return json({ error: 'Informe mês (AAAA-MM), item e valor em US$ (>= 0).' }, 400)
+      const { error } = await admin.from('platform_fixed_costs').upsert({ month: `${month}-01`, item, provider: body.provider ? String(body.provider).slice(0, 40) : null, amount_usd: Math.round(amount * 100) / 100, note: body.note ? String(body.note).slice(0, 200) : null }, { onConflict: 'month,item' })
+      if (error) return json({ error: error.message }, 500)
+      return json({ ok: true })
     }
 
     const { data: providers } = await admin.from('api_providers').select('*').eq('enabled', true).order('sort')

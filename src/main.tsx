@@ -46,6 +46,7 @@ const ProspectsPage = lazyPage(() => import('./pages/owner/ProspectsPage.tsx'))
 const LeadDiscoverySettingsPage = lazyPage(() => import('./pages/owner/LeadDiscoverySettingsPage.tsx'))
 const OwnerSettingsPage = lazyPage(() => import('./pages/owner/OwnerSettingsPage.tsx'))
 const PlatformHealthPage = lazyPage(() => import('./pages/owner/PlatformHealthPage.tsx'))
+const OwnerCostsPage = lazyPage(() => import('./pages/owner/OwnerCostsPage.tsx'))
 const FreePage = lazyPage(() => import('./pages/free/FreePage.tsx'))
 const OnboardingPage = lazyPage(() => import('./pages/onboarding/OnboardingPage.tsx'))
 const DiagnosticoPage = lazyPage(() => import('./pages/diagnostico/DiagnosticoPage.tsx'))
@@ -148,6 +149,7 @@ function RouterRoot() {
       <Route path="/owner/prospects/settings" element={<OwnerRoute><LeadDiscoverySettingsPage /></OwnerRoute>} />
       <Route path="/owner/settings" element={<OwnerRoute><OwnerSettingsPage /></OwnerRoute>} />
       <Route path="/owner/health" element={<OwnerRoute><PlatformHealthPage /></OwnerRoute>} />
+      <Route path="/owner/costs" element={<OwnerRoute><OwnerCostsPage /></OwnerRoute>} />
 
       {/* Client dashboard */}
       <Route

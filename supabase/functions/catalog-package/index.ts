@@ -25,6 +25,7 @@ import { loadLessons, lessonsBlock } from '../_shared/contentLessons.ts'
 import { buildPickReason, cleanItemPick, fetchItemCfg, availabilityOf, ownerBlockMessage, saveItemPick, type PickItem } from '../_shared/itemService.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requirePaidAccess } from '../_shared/access.ts'
+import { beginCostOperation, trackUsage, withCostScope } from '../_shared/costScope.ts'
 import { applyQueroLock, cleanLabels, dropUnknownPilar, fetchSSPillars } from '../_shared/slotIntent.ts'
 import { decideVideoCta } from '../_shared/videoCta.ts'
 import { stripInternalNotes, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
@@ -54,6 +55,7 @@ async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700)
   })
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
   const data = await res.json()
+  trackUsage('claude-sonnet-4-6', data.usage)   // etapa A: custo real da peça (cada chamada soma na operação da peça)
   return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
 }
 function parseObj(raw: string): Record<string, unknown> {
@@ -232,7 +234,7 @@ async function renderSlides(supabaseUrl: string, auth: RenderAuth, specs: OfferS
 }
 const slideLabel = (sl: OfferSlide): string => [sl.fields.title, sl.fields.text, (sl.fields.items ?? '').split('\n').join(' · '), sl.fields.cta].filter(Boolean).join(' — ') || 'Foto do imóvel'
 
-Deno.serve(async (req) => {
+Deno.serve((req) => withCostScope(async () => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -370,149 +372,157 @@ Deno.serve(async (req) => {
       const weight = ficha.pillars[pillarKey] ?? 10
 
       for (const recipe of etapaA.recipes) {
-        if (only_recipe && recipe !== only_recipe) continue
-        if (etapaA.fonte_midia === 'material_e_autorizacao_cliente') {
-          skipped.push({ recipe, reason: 'Precisa de material real e autorização do cliente/corretor — o "Gerar pacote" não preenche isso sozinho.' })
-          continue
-        }
+        // Etapa A: cada peça = 1 operação com identificador único; todas as chamadas à IA desta volta somam nela.
+        const costOp = beginCostOperation()
+        let costRef: string | null = null
+        try {
+          if (only_recipe && recipe !== only_recipe) continue
+          if (etapaA.fonte_midia === 'material_e_autorizacao_cliente') {
+            skipped.push({ recipe, reason: 'Precisa de material real e autorização do cliente/corretor — o "Gerar pacote" não preenche isso sozinho.' })
+            continue
+          }
 
-        let media: { url: string; type: string }[] = []
-        let slidesOut: { text: string; image_prompt: string; image_url: string; layout: string }[] | null = null   // espelho de `media` com a arte do sistema de slides (a prévia lê slides; a publicação lê media)
-        let caption = '', hashtags = '', cta = ''
-        let kind = 'organico'
-        let provider = ''
-        pieceNotes = []; pieceEmptied = false; pieceClaims = []; pieceCompliance = []
+          let media: { url: string; type: string }[] = []
+          let slidesOut: { text: string; image_prompt: string; image_url: string; layout: string }[] | null = null   // espelho de `media` com a arte do sistema de slides (a prévia lê slides; a publicação lê media)
+          let caption = '', hashtags = '', cta = ''
+          let kind = 'organico'
+          let provider = ''
+          pieceNotes = []; pieceEmptied = false; pieceClaims = []; pieceCompliance = []
 
-        if (recipe === 'carrossel_tour') {
-          // Até 2 fotos mobiliadas virtualmente (escolhidas pelo dono) entram
-          // logo depois da capa real — e aí a legenda SEMPRE leva o aviso da
-          // ficha (nunca enganar o comprador sobre o que vem no imóvel).
-          const staged = (meta.staged_photos ?? []).slice(0, 2)
-          const useStaged = staged.length > 0 && !!ficha.stagingDisclosure
-          // Instagram aceita até 10 mídias no carrossel — corta aqui, não na publicação.
-          // Carrossel de verdade no sistema de slides (decisão do dono, 2026-11-02): capa com a foto de maior nota + tipo/bairro/quartos/preço
-          // (só o que está cadastrado) · até 4 fotos reais · slide de dados · fecho com o CTA seguro. Máx. 7. Falhou o desenho: fotos cruas, como era antes.
-          const specs = buildOfferSlides({ photos, staged: useStaged ? staged : [], fields, cta: decision.cta, rooms: markCover.rooms, locale: slideLocale })
-          const urls = specs.length ? await renderSlides(supabaseUrl, auth, specs, await getBrand(), handle) : []
-          const okAll = specs.length > 0 && urls[0] && urls.filter(Boolean).length >= 3
-          if (okAll) {
-            const pairs = specs.map((sp, k) => ({ sp, url: urls[k] })).filter((x): x is { sp: OfferSlide; url: string } => !!x.url)
-            media = pairs.map(x => ({ url: x.url, type: 'photo' }))
-            slidesOut = pairs.map(x => ({ text: slideLabel(x.sp), image_prompt: '', image_url: x.url, layout: x.sp.fields.layout }))
-          } else media = [markPick?.photo ?? photos[0], ...(useStaged ? staged : []), ...photos.filter(p => p.url !== (markPick?.photo ?? photos[0]).url)].slice(0, 10).map(p => ({ url: p.url, type: 'photo' }))
-          const c = await copy(lessonsTxt + `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
-          caption = useStaged ? [c.caption, ficha.stagingDisclosure].filter(Boolean).join('\n\n') : c.caption
-          hashtags = c.hashtags; cta = c.cta
-          provider = 'catalogo_real'
-        } else if (recipe === 'post_detalhe_que_voce_nao_viu') {
-          // Com ponto forte marcado que tem foto (ex.: varanda), o detalhe mostra ESSA foto, para a legenda e a imagem falarem da mesma coisa.
-          media = [{ url: (markPick?.photo ?? photos[photos.length - 1]).url, type: 'photo' }]
-          const detalhe = fields.detalhe_que_ninguem_percebe ? String(fields.detalhe_que_ninguem_percebe) : null
-          const c = await copy(lessonsTxt + `Escreva um post de 1 foto destacando um detalhe do imóvel que ninguém repara de cara${detalhe ? ` (o detalhe real é: "${detalhe}")` : ' (fale de algo real do imóvel que só quem visita percebe, sem inventar um detalhe específico que não foi informado — pode ser mais genérico, tipo iluminação natural, silêncio, vista)'}. \n${fieldsLine}`)
-          caption = c.caption; hashtags = c.hashtags; cta = c.cta
-          provider = 'catalogo_real'
-        } else if ((recipe === 'reels_o_que_compra_no_bairro' || recipe === 'post_3_coisas_perto') && (near ??= await loadNear()).top.length >= (recipe === 'post_3_coisas_perto' ? 3 : 1)) {
-          // Lugares de verdade (OpenStreetMap, aba "Lugares perto"): nome e
-          // distância calculada — nada inventado. "3 coisas perto" vira
-          // carrossel: card com os 3 lugares (texto só pelo render-format,
-          // regra 4) + a capa real do imóvel.
-          const lista = near!.top.map(p => `${p.emoji} ${p.name} (${p.label.toLowerCase()})${near!.precise ? ` — ${fmtDistance(p.distance_m)}` : ''}`)
-          const distRule = near!.precise
-            ? 'As distâncias são em linha reta a partir do imóvel: escreva "a uns X" ou "a X em linha reta", nunca minutos a pé/de carro nem outro número.'
-            : 'Esses lugares ficam no bairro (o endereço exato do imóvel não foi informado): NÃO escreva distância nem minutos, só que ficam no bairro/pertinho.'
-          if (recipe === 'post_3_coisas_perto') {
-            // Card de lista (template "trend" do render-format): sem emoji — a
-            // fonte do card não tem esse glifo.
-            // "Metrô · Antero de Quental" — a categoria entra quando o nome sozinho não diz o que é (ex.: estação de metrô).
-            const placeLines = near!.top.slice(0, 3).map(p => `${p.label.toLowerCase().split(/\s+/).some(w => w.length > 3 && p.name.toLowerCase().includes(w)) ? '' : `${p.label.split(' ')[0]} · `}${p.name}${near!.precise ? ` · ${fmtDistance(p.distance_m)}` : ''}`)
-            // Sistema de slides (PR B): capa com a foto real, lista dos 3 lugares e fecho com CTA — logo e @ vêm do template 'slide'.
-            const specs = buildNearbySlides({ photo: pickCoverPhoto(photos, markCover.rooms), bairro: String(fields.bairro ?? ''), places: placeLines, cta: decision.cta, locale: slideLocale })
+          if (recipe === 'carrossel_tour') {
+            // Até 2 fotos mobiliadas virtualmente (escolhidas pelo dono) entram
+            // logo depois da capa real — e aí a legenda SEMPRE leva o aviso da
+            // ficha (nunca enganar o comprador sobre o que vem no imóvel).
+            const staged = (meta.staged_photos ?? []).slice(0, 2)
+            const useStaged = staged.length > 0 && !!ficha.stagingDisclosure
+            // Instagram aceita até 10 mídias no carrossel — corta aqui, não na publicação.
+            // Carrossel de verdade no sistema de slides (decisão do dono, 2026-11-02): capa com a foto de maior nota + tipo/bairro/quartos/preço
+            // (só o que está cadastrado) · até 4 fotos reais · slide de dados · fecho com o CTA seguro. Máx. 7. Falhou o desenho: fotos cruas, como era antes.
+            const specs = buildOfferSlides({ photos, staged: useStaged ? staged : [], fields, cta: decision.cta, rooms: markCover.rooms, locale: slideLocale })
             const urls = specs.length ? await renderSlides(supabaseUrl, auth, specs, await getBrand(), handle) : []
-            if (specs.length && urls.every(Boolean)) {
-              media = urls.map(u => ({ url: u as string, type: 'photo' }))
-              slidesOut = specs.map((sp, k) => ({ text: slideLabel(sp), image_prompt: '', image_url: urls[k] as string, layout: sp.fields.layout }))
+            const okAll = specs.length > 0 && urls[0] && urls.filter(Boolean).length >= 3
+            if (okAll) {
+              const pairs = specs.map((sp, k) => ({ sp, url: urls[k] })).filter((x): x is { sp: OfferSlide; url: string } => !!x.url)
+              media = pairs.map(x => ({ url: x.url, type: 'photo' }))
+              slidesOut = pairs.map(x => ({ text: slideLabel(x.sp), image_prompt: '', image_url: x.url, layout: x.sp.fields.layout }))
+            } else media = [markPick?.photo ?? photos[0], ...(useStaged ? staged : []), ...photos.filter(p => p.url !== (markPick?.photo ?? photos[0]).url)].slice(0, 10).map(p => ({ url: p.url, type: 'photo' }))
+            const c = await copy(lessonsTxt + `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
+            caption = useStaged ? [c.caption, ficha.stagingDisclosure].filter(Boolean).join('\n\n') : c.caption
+            hashtags = c.hashtags; cta = c.cta
+            provider = 'catalogo_real'
+          } else if (recipe === 'post_detalhe_que_voce_nao_viu') {
+            // Com ponto forte marcado que tem foto (ex.: varanda), o detalhe mostra ESSA foto, para a legenda e a imagem falarem da mesma coisa.
+            media = [{ url: (markPick?.photo ?? photos[photos.length - 1]).url, type: 'photo' }]
+            const detalhe = fields.detalhe_que_ninguem_percebe ? String(fields.detalhe_que_ninguem_percebe) : null
+            const c = await copy(lessonsTxt + `Escreva um post de 1 foto destacando um detalhe do imóvel que ninguém repara de cara${detalhe ? ` (o detalhe real é: "${detalhe}")` : ' (fale de algo real do imóvel que só quem visita percebe, sem inventar um detalhe específico que não foi informado — pode ser mais genérico, tipo iluminação natural, silêncio, vista)'}. \n${fieldsLine}`)
+            caption = c.caption; hashtags = c.hashtags; cta = c.cta
+            provider = 'catalogo_real'
+          } else if ((recipe === 'reels_o_que_compra_no_bairro' || recipe === 'post_3_coisas_perto') && (near ??= await loadNear()).top.length >= (recipe === 'post_3_coisas_perto' ? 3 : 1)) {
+            // Lugares de verdade (OpenStreetMap, aba "Lugares perto"): nome e
+            // distância calculada — nada inventado. "3 coisas perto" vira
+            // carrossel: card com os 3 lugares (texto só pelo render-format,
+            // regra 4) + a capa real do imóvel.
+            const lista = near!.top.map(p => `${p.emoji} ${p.name} (${p.label.toLowerCase()})${near!.precise ? ` — ${fmtDistance(p.distance_m)}` : ''}`)
+            const distRule = near!.precise
+              ? 'As distâncias são em linha reta a partir do imóvel: escreva "a uns X" ou "a X em linha reta", nunca minutos a pé/de carro nem outro número.'
+              : 'Esses lugares ficam no bairro (o endereço exato do imóvel não foi informado): NÃO escreva distância nem minutos, só que ficam no bairro/pertinho.'
+            if (recipe === 'post_3_coisas_perto') {
+              // Card de lista (template "trend" do render-format): sem emoji — a
+              // fonte do card não tem esse glifo.
+              // "Metrô · Antero de Quental" — a categoria entra quando o nome sozinho não diz o que é (ex.: estação de metrô).
+              const placeLines = near!.top.slice(0, 3).map(p => `${p.label.toLowerCase().split(/\s+/).some(w => w.length > 3 && p.name.toLowerCase().includes(w)) ? '' : `${p.label.split(' ')[0]} · `}${p.name}${near!.precise ? ` · ${fmtDistance(p.distance_m)}` : ''}`)
+              // Sistema de slides (PR B): capa com a foto real, lista dos 3 lugares e fecho com CTA — logo e @ vêm do template 'slide'.
+              const specs = buildNearbySlides({ photo: pickCoverPhoto(photos, markCover.rooms), bairro: String(fields.bairro ?? ''), places: placeLines, cta: decision.cta, locale: slideLocale })
+              const urls = specs.length ? await renderSlides(supabaseUrl, auth, specs, await getBrand(), handle) : []
+              if (specs.length && urls.every(Boolean)) {
+                media = urls.map(u => ({ url: u as string, type: 'photo' }))
+                slidesOut = specs.map((sp, k) => ({ text: slideLabel(sp), image_prompt: '', image_url: urls[k] as string, layout: sp.fields.layout }))
+              } else {
+                // Reserva (desenho falhou): o card antigo "trend" + foto real, como era antes.
+                const card = await renderListCard(supabaseUrl, auth, { eyebrow: `Perto do imóvel em ${String(fields.bairro ?? 'Rio')}`.slice(0, 40), title: '3 coisas perto daqui', items: placeLines.join('\n') }, await getBrand())
+                if (!card) { skipped.push({ recipe, reason: 'Falha ao gerar o card dos lugares — tente de novo depois.' }); continue }
+                media = [{ url: card, type: 'photo' }, { url: (pickCoverPhoto(photos, markCover.rooms) ?? photos[0]).url, type: 'photo' }]
+              }
             } else {
-              // Reserva (desenho falhou): o card antigo "trend" + foto real, como era antes.
-              const card = await renderListCard(supabaseUrl, auth, { eyebrow: `Perto do imóvel em ${String(fields.bairro ?? 'Rio')}`.slice(0, 40), title: '3 coisas perto daqui', items: placeLines.join('\n') }, await getBrand())
-              if (!card) { skipped.push({ recipe, reason: 'Falha ao gerar o card dos lugares — tente de novo depois.' }); continue }
-              media = [{ url: card, type: 'photo' }, { url: (pickCoverPhoto(photos, markCover.rooms) ?? photos[0]).url, type: 'photo' }]
+              media = [{ url: (pickCoverPhoto(photos, markCover.rooms) ?? photos[0]).url, type: 'photo' }]
             }
+            const c = await copy(lessonsTxt + `${recipe === 'post_3_coisas_perto' ? 'Escreva um post "3 coisas perto" deste imóvel' : `Escreva um post sobre como é morar perto deste imóvel em ${fields.bairro ?? 'no bairro'} — estilo de vida, não o imóvel em si`}. Use SÓ estes lugares reais, com o nome exatamente assim (dados do OpenStreetMap):\n${lista.join('\n')}\n${distRule} Nunca diga o endereço/rua do imóvel.\n${fieldsLine}`)
+            caption = c.caption; hashtags = c.hashtags; cta = c.cta
+            provider = 'lugares_osm'
+          } else if (recipe === 'reels_o_que_compra_no_bairro' || recipe === 'post_3_coisas_perto') {
+            // Sem lugares reais (mapa sem resultado ou sem bairro): foto REAL do
+            // imóvel e texto sem nome de lugar. Antes saía uma imagem genérica de
+            // IA (gente na calçada, padaria inventada) — o dono pediu pra
+            // tirar (2026-10-14): parecia post "do fluxo antigo".
+            media = [{ url: (markPick?.photo ?? photos[1] ?? photos[0]).url, type: 'photo' }]
+            // Foto real com cartão de marca (logo + bairro) em vez de foto crua; falhou o desenho: a foto crua, como era antes.
+            if (fields.bairro) {
+              const sp: OfferSlide = { kind: 'capa', photo: media[0].url, fields: { layout: 'capa', cover_style: 'gancho', title: String(fields.bairro) } }
+              const [u] = await renderSlides(supabaseUrl, auth, [sp], await getBrand(), handle)
+              if (u) media = [{ url: u, type: 'photo' }]
+            }
+            const briefing = recipe === 'reels_o_que_compra_no_bairro'
+              ? `Escreva um post sobre como é morar no bairro "${fields.bairro ?? 'da região'}" — estilo de vida, sem citar nome de estabelecimento nem número que não esteja nos dados. A foto é do imóvel real.`
+              : `Escreva um post "o que tem perto" do imóvel${fields.perto_de ? ` — use SÓ isto que o corretor informou: ${fields.perto_de}` : ' — fale de forma geral do bairro, sem inventar nome de lugar nem distância'}. A foto é do imóvel real.`
+            const c = await copy(lessonsTxt + `${briefing}\n${fieldsLine}`)
+            caption = c.caption; hashtags = c.hashtags; cta = c.cta
+            provider = 'catalogo_real'
+          } else if (recipe === 'stories_enquete_pagaria') {
+            // Artigo pelo gênero da palavra (Teste Zero 2026-11-03: "por um cobertura"). Terminada em "a" → "uma" (casa, cobertura, sala, loja).
+            const tipoTxt = String(fields.tipo ?? 'imóvel').toLowerCase().trim() || 'imóvel'
+            const art = /a$/.test(tipoTxt.split(/\s+/)[0]) ? 'uma' : 'um'
+            // Sem o bairro na frase (dono, 2026-11-11): "assim em Barra da Tijuca" é o "em/na" errado e cortava no card. O bairro
+            // já aparece no selo de cima ("Enquete · Barra da Tijuca").
+            const cardText = `Quanto você pagaria por ${art} ${tipoTxt} assim?`
+            const url = await renderPollCard(supabaseUrl, internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }, (pickCoverPhoto(photos, markCover.rooms) ?? photos[0]).url, { eyebrow: fields.bairro ? `Enquete · ${fields.bairro}` : 'Enquete', headline: cardText, cta: 'Vote na enquete' }, await getBrand())
+            if (!url) { skipped.push({ recipe, reason: 'Falha ao gerar o card — tente de novo depois.' }); continue }
+            media = [{ url, type: 'photo' }]
+            caption = cardText; hashtags = ''; cta = 'Comenta aqui embaixo 👇'
+            kind = 'stories'
+            provider = 'render-format'
           } else {
-            media = [{ url: (pickCoverPhoto(photos, markCover.rooms) ?? photos[0]).url, type: 'photo' }]
+            continue // pilar 'educacao' não tem receita ligada a um item específico
           }
-          const c = await copy(lessonsTxt + `${recipe === 'post_3_coisas_perto' ? 'Escreva um post "3 coisas perto" deste imóvel' : `Escreva um post sobre como é morar perto deste imóvel em ${fields.bairro ?? 'no bairro'} — estilo de vida, não o imóvel em si`}. Use SÓ estes lugares reais, com o nome exatamente assim (dados do OpenStreetMap):\n${lista.join('\n')}\n${distRule} Nunca diga o endereço/rua do imóvel.\n${fieldsLine}`)
-          caption = c.caption; hashtags = c.hashtags; cta = c.cta
-          provider = 'lugares_osm'
-        } else if (recipe === 'reels_o_que_compra_no_bairro' || recipe === 'post_3_coisas_perto') {
-          // Sem lugares reais (mapa sem resultado ou sem bairro): foto REAL do
-          // imóvel e texto sem nome de lugar. Antes saía uma imagem genérica de
-          // IA (gente na calçada, padaria inventada) — o dono pediu pra
-          // tirar (2026-10-14): parecia post "do fluxo antigo".
-          media = [{ url: (markPick?.photo ?? photos[1] ?? photos[0]).url, type: 'photo' }]
-          // Foto real com cartão de marca (logo + bairro) em vez de foto crua; falhou o desenho: a foto crua, como era antes.
-          if (fields.bairro) {
-            const sp: OfferSlide = { kind: 'capa', photo: media[0].url, fields: { layout: 'capa', cover_style: 'gancho', title: String(fields.bairro) } }
-            const [u] = await renderSlides(supabaseUrl, auth, [sp], await getBrand(), handle)
-            if (u) media = [{ url: u, type: 'photo' }]
+
+          // Trava depois da IA: legenda e CTA obedecem a decisão do código (CTA vazio continua vazio, salvo QUERO aprovado).
+          const lock = applyQueroLock(caption || null, cta || null, automation, ficha.ctas)
+          caption = lock.caption ?? ''
+          if (cta || lock.approved) cta = lock.cta ?? ''
+          // Avisos pro dono: o do QUERO vem primeiro (o prefixo dele fica intacto — keepQueroNotice) e depois o recado que saiu.
+          const reasoning = [markPick ? `Foto de abertura escolhida pelo ponto forte marcado ("${markPick.mark}").` : null, marks.length ? `Primeira frase pelo ponto forte "${marks[0]}".` : null, lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null, claimNotice(pieceClaims), complianceNotice(pieceCompliance)].filter(Boolean).join(' ') || null
+
+          const slot = forcedDate || loose ? { date: forcedDate ?? '', overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
+          const { data: row, error } = await admin.from('marketing_ai_test_content').insert({
+            company_id: company.id, kind, idea: item.title, caption, hashtags, cta,
+            format: media.length > 1 ? 'carrossel' : 'foto', image_url: media[0]?.url ?? null,
+            item_id: item.id, media, pillar: pillarKey, recipe, provider, planned_for: loose ? null : slot.date,
+            ...(reasoning ? { reasoning } : {}),
+            ...(slidesOut ? { slides: slidesOut } : {}),
+          }).select('id').single()
+          if (error) { skipped.push({ recipe, reason: error.message }); continue }
+          costRef = row!.id as string
+          // Rótulo num UPDATE à parte e tolerante: sem a migration das colunas, a peça nasce sem rótulo mas nasce.
+          // (pillar já foi gravado acima com o pilar de conteúdo da receita = tema.)
+          if (labels.familia || labels.pilar_ss) {
+            try {
+              const { error: lerr } = await admin.from('marketing_ai_test_content').update({ ...(labels.familia ? { familia: labels.familia } : {}), ...(labels.pilar_ss ? { pilar_ss: labels.pilar_ss } : {}) }).eq('id', row!.id)
+              if (lerr) console.error('catalog-package: rótulo não gravado (migration aplicada?)', lerr.message)
+            } catch (e) { console.error('catalog-package: rótulo falhou', e) }
           }
-          const briefing = recipe === 'reels_o_que_compra_no_bairro'
-            ? `Escreva um post sobre como é morar no bairro "${fields.bairro ?? 'da região'}" — estilo de vida, sem citar nome de estabelecimento nem número que não esteja nos dados. A foto é do imóvel real.`
-            : `Escreva um post "o que tem perto" do imóvel${fields.perto_de ? ` — use SÓ isto que o corretor informou: ${fields.perto_de}` : ' — fale de forma geral do bairro, sem inventar nome de lugar nem distância'}. A foto é do imóvel real.`
-          const c = await copy(lessonsTxt + `${briefing}\n${fieldsLine}`)
-          caption = c.caption; hashtags = c.hashtags; cta = c.cta
-          provider = 'catalogo_real'
-        } else if (recipe === 'stories_enquete_pagaria') {
-          // Artigo pelo gênero da palavra (Teste Zero 2026-11-03: "por um cobertura"). Terminada em "a" → "uma" (casa, cobertura, sala, loja).
-          const tipoTxt = String(fields.tipo ?? 'imóvel').toLowerCase().trim() || 'imóvel'
-          const art = /a$/.test(tipoTxt.split(/\s+/)[0]) ? 'uma' : 'um'
-          // Sem o bairro na frase (dono, 2026-11-11): "assim em Barra da Tijuca" é o "em/na" errado e cortava no card. O bairro
-          // já aparece no selo de cima ("Enquete · Barra da Tijuca").
-          const cardText = `Quanto você pagaria por ${art} ${tipoTxt} assim?`
-          const url = await renderPollCard(supabaseUrl, internal ? { cronSecret: cronSecretEnv!, companyId: company.id as string, serviceKey } : { bearer }, (pickCoverPhoto(photos, markCover.rooms) ?? photos[0]).url, { eyebrow: fields.bairro ? `Enquete · ${fields.bairro}` : 'Enquete', headline: cardText, cta: 'Vote na enquete' }, await getBrand())
-          if (!url) { skipped.push({ recipe, reason: 'Falha ao gerar o card — tente de novo depois.' }); continue }
-          media = [{ url, type: 'photo' }]
-          caption = cardText; hashtags = ''; cta = 'Comenta aqui embaixo 👇'
-          kind = 'stories'
-          provider = 'render-format'
-        } else {
-          continue // pilar 'educacao' não tem receita ligada a um item específico
+          // Vínculo com a oportunidade num UPDATE à parte e tolerante (sem a coluna, a peça nasce do mesmo jeito).
+          if (opportunityId) {
+            try {
+              const { error: oerr } = await admin.from('marketing_ai_test_content').update({ opportunity_id: opportunityId }).eq('id', row!.id)
+              if (oerr) console.error('catalog-package: opportunity_id não gravado (migration aplicada?)', oerr.message)
+              else await admin.from('agent_performance').insert({ company_id: company.id, agent_role: 'cmo', task_key: 'opportunity_piece_created', task_description: `opp:${opportunityId} peça ${row!.id}`, latency_ms: 0, tokens_used: 0, success: true }) // marca que a peça existiu (a exclusão do rascunho não a apaga)
+            } catch (e) { console.error('catalog-package: opportunity_id falhou', e) }
+          }
+          await saveItemPick(admin, row!.id as string, itemPick) // UPDATE à parte e tolerante (PITFALLS)
+          await scoreTestContent(supabaseUrl, serviceKey, company.id as string, row!.id as string)
+          generated.push({ recipe, pillar: pillarKey, planned_for: slot.date, id: row!.id as string, over_capacity: slot.overCapacity })
+        } finally {
+          await costOp.finish(admin, { companyId: company.id as string, role: 'conteudo', taskKey: 'ai_text_catalog', description: `Pacote do imóvel: ${recipe} · ${String(item.title ?? '')}`.slice(0, 200), refId: costRef, trigger: internal ? 'cron' : 'manual' })
         }
-
-        // Trava depois da IA: legenda e CTA obedecem a decisão do código (CTA vazio continua vazio, salvo QUERO aprovado).
-        const lock = applyQueroLock(caption || null, cta || null, automation, ficha.ctas)
-        caption = lock.caption ?? ''
-        if (cta || lock.approved) cta = lock.cta ?? ''
-        // Avisos pro dono: o do QUERO vem primeiro (o prefixo dele fica intacto — keepQueroNotice) e depois o recado que saiu.
-        const reasoning = [markPick ? `Foto de abertura escolhida pelo ponto forte marcado ("${markPick.mark}").` : null, marks.length ? `Primeira frase pelo ponto forte "${marks[0]}".` : null, lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null, claimNotice(pieceClaims), complianceNotice(pieceCompliance)].filter(Boolean).join(' ') || null
-
-        const slot = forcedDate || loose ? { date: forcedDate ?? '', overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
-        const { data: row, error } = await admin.from('marketing_ai_test_content').insert({
-          company_id: company.id, kind, idea: item.title, caption, hashtags, cta,
-          format: media.length > 1 ? 'carrossel' : 'foto', image_url: media[0]?.url ?? null,
-          item_id: item.id, media, pillar: pillarKey, recipe, provider, planned_for: loose ? null : slot.date,
-          ...(reasoning ? { reasoning } : {}),
-          ...(slidesOut ? { slides: slidesOut } : {}),
-        }).select('id').single()
-        if (error) { skipped.push({ recipe, reason: error.message }); continue }
-        // Rótulo num UPDATE à parte e tolerante: sem a migration das colunas, a peça nasce sem rótulo mas nasce.
-        // (pillar já foi gravado acima com o pilar de conteúdo da receita = tema.)
-        if (labels.familia || labels.pilar_ss) {
-          try {
-            const { error: lerr } = await admin.from('marketing_ai_test_content').update({ ...(labels.familia ? { familia: labels.familia } : {}), ...(labels.pilar_ss ? { pilar_ss: labels.pilar_ss } : {}) }).eq('id', row!.id)
-            if (lerr) console.error('catalog-package: rótulo não gravado (migration aplicada?)', lerr.message)
-          } catch (e) { console.error('catalog-package: rótulo falhou', e) }
-        }
-        // Vínculo com a oportunidade num UPDATE à parte e tolerante (sem a coluna, a peça nasce do mesmo jeito).
-        if (opportunityId) {
-          try {
-            const { error: oerr } = await admin.from('marketing_ai_test_content').update({ opportunity_id: opportunityId }).eq('id', row!.id)
-            if (oerr) console.error('catalog-package: opportunity_id não gravado (migration aplicada?)', oerr.message)
-            else await admin.from('agent_performance').insert({ company_id: company.id, agent_role: 'cmo', task_key: 'opportunity_piece_created', task_description: `opp:${opportunityId} peça ${row!.id}`, latency_ms: 0, tokens_used: 0, success: true }) // marca que a peça existiu (a exclusão do rascunho não a apaga)
-          } catch (e) { console.error('catalog-package: opportunity_id falhou', e) }
-        }
-        await saveItemPick(admin, row!.id as string, itemPick) // UPDATE à parte e tolerante (PITFALLS)
-        await scoreTestContent(supabaseUrl, serviceKey, company.id as string, row!.id as string)
-        generated.push({ recipe, pillar: pillarKey, planned_for: slot.date, id: row!.id as string, over_capacity: slot.overCapacity })
       }
     }
 
@@ -520,7 +530,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : String(err) }, 500)
   }
-})
+}))
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
