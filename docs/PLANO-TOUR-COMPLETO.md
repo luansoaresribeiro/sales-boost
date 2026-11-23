@@ -296,7 +296,7 @@ O ffmpeg em si não é o problema: ele é o padrão da indústria, grátis e con
 | Aviso de oportunidade e de estratégia | `marketing-ai`, `strategy-generate`, `detect-opportunities` | Sim | Sim (sino, Atividade) | Não | Sim |
 | Alerta de lead novo | `hermes-lead-alert` | A confirmar | Parcial (Funil) | **Sim:** e-mail ou push. Lead não pode passar despercebido. | Só com substituto |
 | Varredura diária (Hermes) | `hermes-daily-scan` (cron 11:00) | Sim | Não | A avaliar | A avaliar |
-| **Alertas da plataforma para o dono do SalesBoost** | `platform-monitor` → `monitor_config.admin_telegram_chat_id` | **Sim** | Página Saúde da plataforma (sem aviso ativo) | **Sim** (e-mail) | **Não**, até haver substituto |
+| **Alertas da plataforma para o dono do SalesBoost** | `platform-monitor` → `monitor_config.admin_telegram_chat_id` | **Sim** | Página Saúde da plataforma (sem aviso ativo) | **Sim** (e-mail) | **Não**, até haver substituto. (23/11: o e-mail já é o canal — `sendOpsAlert`; o crédito da IA passou a ser checado de verdade, serviço `ai_credit`.) |
 | Bots antigos `marketing-bot`, `vendas-bot`, `group-manager` | `src/workers/*` (Cloudflare) | A confirmar (código antigo) | — | — | Conferir se estão publicados |
 | Relatório diário (`enzo-daily-report`, `daily-briefing`) | Sem cron em produção | Não (achado de 04/11) | — | — | Sim |
 

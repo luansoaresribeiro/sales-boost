@@ -11,6 +11,7 @@ import BusinessContextButton from './BusinessContextButton'
 import PendenciasBell from './PendenciasBell'
 import { ShowcaseProvider, useShowcase } from '../../contexts/ShowcaseContext'
 import { ShowcaseBanner, CouponModal } from './ShowcaseUi'
+import { AiPausedBanner } from './AiPausedBanner'
 import { usePendencias } from '../../lib/usePendencias'
 import { importDiagnosisAnswers } from '../../lib/onboardingV2'
 import { useSetupStatus } from '../../lib/useSetupStatus'
@@ -297,6 +298,7 @@ function DashboardShell() {
           {/* Faixa do modo vitrine + barra do celular grudadas no topo juntas. */}
           <div style={{ position: 'sticky', top: 0, zIndex: 30 }}>
             <ShowcaseBanner />
+            <AiPausedBanner />
             {isMobile && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', background: '#0E0B0A', borderBottom: `1px solid ${BORDER}` }}>
                 <button onClick={() => setMobileOpen(true)} aria-label={TX[lang].open}
