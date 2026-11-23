@@ -1182,3 +1182,10 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - **Regra:** chamada de função para função usa `fetchRetry` (`_shared/rateLimitRetry.ts`), que espera o tempo pedido
   se couber no relógio. Trabalho em lote usa `mapLimit` (no máximo 2 ao mesmo tempo). Despacho de vagas é espaçado
   (`DISPATCH_GAP_MS`) e cada vaga leva um `traceparent` próprio.
+
+## Vagas paralelas não se enxergam: reservar NO PLANO, nunca "o menos usado" na hora (C1b, 23/11)
+- As 7 vagas da semana rodam quase juntas. Escolher na geração "a dica menos usada" ou conferir "temas já gravados na
+  semana" não funciona: as outras vagas ainda não gravaram. Sintoma: a mesma pergunta do FAQ 2x na semana (Tespon 24 e 27/11).
+- Regra: tudo que precisa ser diferente entre vagas (tema, dica do FAQ, foto do tour) é decidido em `planWeekFromStrategy`,
+  de uma vez, e vai na vaga (`theme_idea`, `faq_id`, `week_reserved`). A geração só confere de novo.
+
