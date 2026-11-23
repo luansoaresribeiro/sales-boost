@@ -39,6 +39,14 @@
 **Qualidade ≠ variedade:** a nota de qualidade de cada peça (`scoreTestContent`) e as travas (número, afirmação, texto
 público) continuam valendo para qualquer ângulo novo.
 
+**Feito (C, 23/11, memória do imóvel):** ângulos na ficha (`content_rules.item_angles`: vista, localização, rotina,
+espaço, detalhe, investimento; cada um habilitado por marca ou campo do cadastro), receitas com ângulo fixo
+(`item_angle_recipes`). O pacote do imóvel escolhe o ângulo menos usado nas últimas peças do imóvel, nunca o da anterior, no
+mesmo pedido à IA (custo extra ~0), e grava `brief.memory = {angle, objective, audience, source}` + o motivo no `reasoning`.
+Público ("para quem é") só no tom. Limite conhecido: duas vagas do MESMO imóvel no mesmo despacho paralelo podem escolher o
+mesmo ângulo (o plano já evita o mesmo imóvel/receita na semana). Memórias editorial, de formatos, de desempenho e de
+oportunidades: sem mudança nesta etapa.
+
 ## Área 3 — Formatos e carrosséis
 | | |
 |---|---|

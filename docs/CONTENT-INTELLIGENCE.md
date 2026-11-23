@@ -81,6 +81,12 @@ inventadas:
 | "POV: pegou a chave" | Material real do corretor | ❌ skipped — precisa de material/autorização |
 | Reels tour com fotos reais | Higgsfield (vídeo) | ❌ ainda não existe — [MEDIA-ENGINE.md](MEDIA-ENGINE.md) P3 |
 
+## Memória por imóvel (etapa C, 23/11)
+- Cada peça de imóvel grava em `brief.memory` o **ângulo** (da ficha: `content_rules.item_angles`), o **objetivo** (família /
+  pilar da vaga) e o **público** (marcas "para quem é", só tom). Código: `_shared/itemMemory.ts`, usado no `catalog-package`.
+- A próxima peça do mesmo imóvel escolhe um ângulo **com dado real** (marca ou campo preenchido) e **diferente da anterior**;
+  receitas com ângulo próprio ("3 coisas perto" = localização, "o detalhe" = detalhe) usam o delas. Sem ângulos na ficha = como antes.
+
 ## Calendário e ocupação
 
 - Máx. 1-2 peças/dia (regra real em `creative-generate`/`catalog-package`).
