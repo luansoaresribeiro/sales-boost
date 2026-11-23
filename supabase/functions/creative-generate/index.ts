@@ -739,7 +739,9 @@ Decida o brief. Retorne APENAS um JSON:
   const visualSystemTitle = String(brief.visual_system ?? '')
 
   // Capa do carrossel em rodízio (gancho → pergunta → lista), pela quantidade de carrosséis já feitos.
-  const coverStyle = opts.deck ? pickCoverStyle((await admin.from('marketing_ai_test_content').select('id', { count: 'exact', head: true }).eq('company_id', company.id).eq('format', 'carrossel')).count ?? 0) : 'gancho'
+  // C8 (auditoria 23/11): capa pela arquitetura, não pelo rodízio — o educativo ligado a decisão (arquitetura F) abre com a
+  // pergunta real do comprador. Os outros carrosséis seguem o rodízio de antes.
+  const coverStyle = !opts.deck ? 'gancho' : opts.slotFormat && edRules.educationalFormats.includes(opts.slotFormat) ? 'pergunta' : pickCoverStyle((await admin.from('marketing_ai_test_content').select('id', { count: 'exact', head: true }).eq('company_id', company.id).eq('format', 'carrossel')).count ?? 0)
   // Decisão do QUERO em código ANTES do prompt: o CTA que o carrossel recebe de exemplo já é o seguro.
   const automation = opts.itemId ? (await admin.from('engagement_automations').select('active, message, keywords').eq('company_id', company.id).eq('item_id', opts.itemId).maybeSingle()).data : null
   const fichaCtas = await fetchFichaCtas(admin, company.vertical_key)

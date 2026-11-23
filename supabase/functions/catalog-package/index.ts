@@ -29,6 +29,7 @@ import { requirePaidAccess } from '../_shared/access.ts'
 import { beginCostOperation, trackUsage, withCostScope } from '../_shared/costScope.ts'
 import { applyQueroLock, cleanLabels, dropUnknownPilar, fetchSSPillars } from '../_shared/slotIntent.ts'
 import { decideVideoCta } from '../_shared/videoCta.ts'
+import { buildGuidedVisitSlides, buildLivingCostSlides, guidedCfgFrom, type GuidedCfg } from '../_shared/guidedVisit.ts'
 import { chooseCta, editorialRulesFrom, stripExperiential, swapCtaText, type EditorialRules } from '../_shared/editorialRules.ts'
 import { weekStartOf } from '../_shared/themeDedupe.ts'
 import { stripInternalNotes, internalNotesNotice, EMPTY_CAPTION_NOTICE } from '../_shared/internalNotes.ts'
@@ -48,7 +49,7 @@ type SupaClient = ReturnType<typeof createClient>
 interface Photo { url: string; path: string }
 interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
 interface RecipeGroup { recipes: string[]; fonte_midia: string; descricao: string }
-interface FichaConfig { itemAngles: ItemAnglesCfg | null; strengths: StrengthsCfg | null; captionFields: CaptionField[]; pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; claimCtx: { terms: string[]; context: string[] } | null; publicText: PublicTextRules | null; publicTextRule: string; currency: string; editorial: EditorialRules }
+interface FichaConfig { itemAngles: ItemAnglesCfg | null; strengths: StrengthsCfg | null; captionFields: CaptionField[]; pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; claimCtx: { terms: string[]; context: string[] } | null; publicText: PublicTextRules | null; publicTextRule: string; currency: string; editorial: EditorialRules; guided: { pt: GuidedCfg | null; en: GuidedCfg | null } }
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -75,7 +76,7 @@ async function fetchFichaConfig(admin: SupaClient, verticalKey: string | null): 
     const c = (data?.config ?? {}) as Record<string, unknown>
     if (!c.production_recipes) return null
     const disclosure = String((c.virtual_staging as { disclosure?: string } | undefined)?.disclosure ?? '').slice(0, 200)
-    return { editorial: editorialRulesFrom(c), itemAngles: itemAnglesCfgFrom(c), strengths: strengthsCfgFrom(c), captionFields: captionFieldsFrom(c, 'pt'), pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null,
+    return { editorial: editorialRulesFrom(c), guided: { pt: guidedCfgFrom(c, 'pt'), en: guidedCfgFrom(c, 'en') }, itemAngles: itemAnglesCfgFrom(c), strengths: strengthsCfgFrom(c), captionFields: captionFieldsFrom(c, 'pt'), pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null,
       // Trava de afirmação de mercado (claimLock): termos e campos de preço/quartos vêm da ficha (regra 6).
       marketClaims: ((c.opportunity_texts as { market_claims?: { pt?: unknown } } | undefined)?.market_claims?.pt as string[] | undefined)?.filter(x => typeof x === 'string' && x.trim()) ?? null,
       // Capa pelos cômodos da ficha (tour.room_priority / avoid_rooms), igual ao tour em vídeo — nunca a 1ª foto no escuro.
@@ -235,6 +236,9 @@ async function renderSlides(supabaseUrl: string, auth: RenderAuth, specs: OfferS
   for (let i = 0; i < specs.length; i += 2) out.push(...await Promise.all(specs.slice(i, i + 2).map((sl, j) => renderSlideImage(supabaseUrl, auth, sl, i + j + 1, specs.length, brand, handle))))
   return out
 }
+/** "Metrô · Antero de Quental · 300 m" — a categoria entra quando o nome sozinho não diz o que é; distância só com endereço exato. */
+const placeLinesOf = (near: { top: ReturnType<typeof topPlaces>; precise: boolean }): string[] =>
+  near.top.slice(0, 3).map(p => `${p.label.toLowerCase().split(/\s+/).some(w => w.length > 3 && p.name.toLowerCase().includes(w)) ? '' : `${p.label.split(' ')[0]} · `}${p.name}${near.precise ? ` · ${fmtDistance(p.distance_m)}` : ''}`)
 const slideLabel = (sl: OfferSlide): string => [sl.fields.title, sl.fields.text, (sl.fields.items ?? '').split('\n').join(' · '), sl.fields.cta].filter(Boolean).join(' — ') || 'Foto do imóvel'
 
 Deno.serve((req) => withCostScope(async () => {
@@ -414,6 +418,7 @@ Deno.serve((req) => withCostScope(async () => {
           let kind = 'organico'
           let provider = ''
           pieceNotes = []; pieceEmptied = false; pieceClaims = []; pieceCompliance = []
+          let guidedUsed = false, placesTxt: string[] = []
           const mem = pickAngle(ficha.itemAngles, recipe, fields, marks, angleHistory)
           angleTxt = angleLine(mem.angle, audience)
 
@@ -426,7 +431,14 @@ Deno.serve((req) => withCostScope(async () => {
             // Instagram aceita até 10 mídias no carrossel — corta aqui, não na publicação.
             // Carrossel de verdade no sistema de slides (decisão do dono, 2026-11-02): capa com a foto de maior nota + tipo/bairro/quartos/preço
             // (só o que está cadastrado) · até 4 fotos reais · slide de dados · fecho com o CTA seguro. Máx. 7. Falhou o desenho: fotos cruas, como era antes.
-            const specs = buildOfferSlides({ photos, staged: useStaged ? staged : [], fields, cta: decision.cta, rooms: markCover.rooms, locale: slideLocale })
+            // C8 (auditoria 23/11): com a ficha da "Visita guiada", o carrossel vende o motivo da visita — capa no ponto forte sem preço,
+            // 1 linha por ambiente na ordem da visita, lugares perto com distância, números uma vez e convite. Mobiliado continua no antigo.
+            const guided = !useStaged ? ficha.guided[slideLocale.lang] : null
+            if (guided && (near ??= await loadNear()).top.length) placesTxt = placeLinesOf(near!)
+            const specs = guided
+              ? buildGuidedVisitSlides({ photos, fields, cta: decision.cta, cfg: guided, strength: markPick ? { label: markPick.mark, photo: markPick.photo } : null, rooms: markCover.rooms, places: placesTxt, locale: slideLocale })
+              : buildOfferSlides({ photos, staged: useStaged ? staged : [], fields, cta: decision.cta, rooms: markCover.rooms, locale: slideLocale })
+            if (guided && specs.length) guidedUsed = true
             const urls = specs.length ? await renderSlides(supabaseUrl, auth, specs, await getBrand(), handle) : []
             const okAll = specs.length > 0 && urls[0] && urls.filter(Boolean).length >= 3
             if (okAll) {
@@ -434,9 +446,21 @@ Deno.serve((req) => withCostScope(async () => {
               media = pairs.map(x => ({ url: x.url, type: 'photo' }))
               slidesOut = pairs.map(x => ({ text: slideLabel(x.sp), image_prompt: '', image_url: x.url, layout: x.sp.fields.layout }))
             } else media = [markPick?.photo ?? photos[0], ...(useStaged ? staged : []), ...photos.filter(p => p.url !== (markPick?.photo ?? photos[0]).url)].slice(0, 10).map(p => ({ url: p.url, type: 'photo' }))
-            const c = await copy(lessonsTxt + `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}\n${fieldsLine}`)
+            const c = await copy(lessonsTxt + `Escreva a legenda de um CARROSSEL mostrando este imóvel real (as fotos já existem, escreva só o texto).${useStaged ? ' Algumas fotos foram mobiliadas virtualmente pra ajudar a imaginar o espaço — não descreva os móveis como parte do imóvel.' : ''}${guidedUsed ? ` A legenda complementa o carrossel, não repete: a 1ª linha é o motivo para visitar${markPick ? ` (o ponto forte "${markPick.mark}")` : ''}; o preço aparece no máximo uma vez; termine convidando para a visita.` : ''}\n${fieldsLine}`)
             caption = useStaged ? [c.caption, ficha.stagingDisclosure].filter(Boolean).join('\n\n') : c.caption
             hashtags = c.hashtags; cta = c.cta
+            provider = 'catalogo_real'
+          } else if (recipe === 'carrossel_custo_de_morar') {
+            // C8 (arquitetura B): só com condomínio E IPTU do cadastro. Sem os dois, não gera (nada de custo estimado).
+            const guided = ficha.guided[slideLocale.lang]
+            const specs = guided ? buildLivingCostSlides({ photos, fields, cta: decision.cta, cfg: guided, strength: markPick ? { label: markPick.mark, photo: markPick.photo } : null, rooms: markCover.rooms, locale: slideLocale, everyday: String(fields.lazer ?? '') }) : []
+            if (!specs.length) { skipped.push({ recipe, reason: 'Custo de morar precisa de condomínio e IPTU no cadastro do imóvel.' }); continue }
+            const urls = await renderSlides(supabaseUrl, auth, specs, await getBrand(), handle)
+            if (!urls.every(Boolean)) { skipped.push({ recipe, reason: 'O desenho dos slides falhou; nada foi gerado.' }); continue }
+            media = urls.map(u => ({ url: u as string, type: 'photo' }))
+            slidesOut = specs.map((sp, k) => ({ text: slideLabel(sp), image_prompt: '', image_url: urls[k] as string, layout: sp.fields.layout }))
+            const c = await copy(lessonsTxt + `Escreva a legenda de um CARROSSEL "quanto custa por mês morar aqui": use SÓ o condomínio e o IPTU do cadastro (não some, não estime outros custos, não fale de financiamento). 1ª linha = a pergunta do custo; termine oferecendo a ficha completa.\n${fieldsLine}`)
+            caption = c.caption; hashtags = c.hashtags; cta = c.cta
             provider = 'catalogo_real'
           } else if (recipe === 'post_detalhe_que_voce_nao_viu') {
             // Com ponto forte marcado que tem foto (ex.: varanda), o detalhe mostra ESSA foto, para a legenda e a imagem falarem da mesma coisa.
@@ -458,7 +482,7 @@ Deno.serve((req) => withCostScope(async () => {
               // Card de lista (template "trend" do render-format): sem emoji — a
               // fonte do card não tem esse glifo.
               // "Metrô · Antero de Quental" — a categoria entra quando o nome sozinho não diz o que é (ex.: estação de metrô).
-              const placeLines = near!.top.slice(0, 3).map(p => `${p.label.toLowerCase().split(/\s+/).some(w => w.length > 3 && p.name.toLowerCase().includes(w)) ? '' : `${p.label.split(' ')[0]} · `}${p.name}${near!.precise ? ` · ${fmtDistance(p.distance_m)}` : ''}`)
+              const placeLines = placeLinesOf(near!)
               // Sistema de slides (PR B): capa com a foto real, lista dos 3 lugares e fecho com CTA — logo e @ vêm do template 'slide'.
               const specs = buildNearbySlides({ photo: pickCoverPhoto(photos, markCover.rooms), bairro: String(fields.bairro ?? ''), places: placeLines, cta: decision.cta, locale: slideLocale })
               const urls = specs.length ? await renderSlides(supabaseUrl, auth, specs, await getBrand(), handle) : []
