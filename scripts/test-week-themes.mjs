@@ -124,4 +124,31 @@ console.log(`\n${n} ok`)
   const r2 = await plan2({ slots: [{ key: 'v1', date: '2026-11-23', hint: '' }], history: [t18], weekHistory: [t18], cfg: c, brand: 'X', ask: async () => JSON.stringify({ temas: [{ vaga: 'v1', tema: 'Quanto é o ITBI e quem paga' }] }) })
   assert.notEqual(r2.get('v1').idea, 'Quanto é o ITBI e quem paga'); ok('peça já planejada/aprovada na semana também bloqueia o mesmo assunto')
 }
+// C1b, correção 23/11 (casos reais do plano de 22/11): vagas de FAQ em paralelo e temas que se repetiam na semana.
+{
+  const { assignFaqTips } = await import('../supabase/functions/_shared/weekThemes.ts')
+  const { findRepeat, parseThemeCfg: P3 } = await import('../supabase/functions/_shared/themeDedupe.ts')
+  const mig3 = readFileSync(new URL('../supabase/migrations/20261121120000_tema_semana_assuntos.sql', import.meta.url), 'utf8')
+  const topics3 = JSON.parse(mig3.match(/\$json\$(\[.*?\])\$json\$/s)[1])
+  const add3 = JSON.parse(readFileSync(new URL('../supabase/migrations/20261123120000_tema_custos_sinonimos.sql', import.meta.url), 'utf8').match(/\$json\$(\[.*?\])\$json\$/s)[1])
+  for (const t of topics3) if (t.key === 'custos da compra') t.terms = [...new Set([...t.terms, ...add3])]
+  const c3 = P3({ theme_similarity: 0.8, theme_week_similarity: 0.6, theme_topics: topics3 })
+  const tips = [
+    { id: 'g', title: 'Quais são as formas aceitas de garantia no aluguel?', used: 0 },
+    { id: 'i', title: 'Quem paga o ITBI na compra do imóvel?', used: 1 },
+    { id: 'p', title: 'Posso comprar um imóvel por procuração?', used: 2 },
+  ]
+  const two = assignFaqTips(tips, 2, [], [], c3)
+  assert.equal(two[0].id, 'g'); assert.notEqual(two[1]?.id, 'g'); ok('2 vagas de FAQ na mesma semana: dicas diferentes (antes: garantia 2x na Tespon)')
+  const four = assignFaqTips(tips, 4, [], [], c3)
+  assert.equal(four.filter(Boolean).length, 3); assert.equal(four[3], null); ok('acabaram as dicas: a vaga fica sem dica e entra na reserva de temas')
+  const wk = ['Carrossel educativo sobre custos ocultos da compra de imóvel (ITBI e escritura)']
+  assert.ok(!assignFaqTips(tips, 3, [], wk, c3).some(t => t?.id === 'i')); ok('dica sobre ITBI não entra se a semana já tem ITBI')
+  // A3 (24 × 27) e Teste Zero (23 × 28): agora a 2ª ideia esbarra no reservado das outras vagas.
+  assert.ok(findRepeat('Carrossel educativo explicando o ITBI de forma direta', [], wk, c3)); ok('A3: ITBI de novo na semana é bloqueado')
+  assert.ok(findRepeat('Carrossel educativo sobre custos ocultos na compra de apartamento — o imposto que ninguém lembra', [], ['Revelar os custos reais que aparecem depois do preço anunciado — ITBI, escritura, cartório e taxas'], c3)); ok('Teste Zero: custos × custos na semana é bloqueado')
+  const cg = readFileSync(new URL('../supabase/functions/creative-generate/index.ts', import.meta.url), 'utf8')
+  assert.match(cg, /assignFaqTips\(/); assert.match(cg, /j\.format !== FAQ_FORMAT \|\| faqNoTip\.has\(j\)/); assert.match(cg, /\.\.\.\(opts\.weekReserved \?\? \[\]\)/); assert.match(cg, /job\.faq_id \? usable\.find/)
+  ok('plano: FAQ com dica própria, FAQ sem dica na reserva, cada vaga confere contra o reservado das outras')
+}
 console.log(`\n${n} ok (C1b incluído)`)

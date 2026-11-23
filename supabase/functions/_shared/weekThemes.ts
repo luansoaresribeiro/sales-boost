@@ -104,3 +104,23 @@ export function recipeBlocked(used: { item_id?: string | null; recipe?: string |
     return !(Number.isFinite(d) && d <= ws - cooldownWeeks * 7 * 86400000)
   })
 }
+
+/**
+ * C1b, correção de 23/11: as vagas de FAQ ("dica conferida") rodam em paralelo e cada uma pegava "a dica menos usada" —
+ * duas vagas pegavam a MESMA dica ("Quais são as formas aceitas de garantia no aluguel?" 2x na semana da Tespon). Agora o
+ * plano escolhe aqui, de uma vez, uma dica DIFERENTE por vaga: menos usada primeiro, sem repetir assunto na semana
+ * (findRepeat: janela da ficha + mesma semana, com os assuntos-chave). Vaga que fica sem dica volta `null` e entra na
+ * reserva de temas como um post comum (antes ela virava post geral sem tema reservado e repetia ITBI/custos).
+ */
+export interface FaqTip { id: string; title: string; used: number }
+export function assignFaqTips(tips: FaqTip[], slots: number, history: string[], week: string[], cfg: ThemeCfg = DEFAULT_THEME_CFG): (FaqTip | null)[] {
+  const taken = [...history], wk = [...week], used = new Set<string>()
+  const pool = [...tips].sort((a, b) => a.used - b.used)
+  const out: (FaqTip | null)[] = []
+  for (let i = 0; i < slots; i++) {
+    const t = pool.find(p => !used.has(p.id) && !findRepeat(p.title, taken, wk, cfg))
+    if (!t) { out.push(null); continue }
+    used.add(t.id); taken.push(t.title); wk.push(t.title); out.push(t)
+  }
+  return out
+}
