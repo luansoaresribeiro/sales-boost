@@ -23,6 +23,7 @@
 - **Próximo item do agente:**
   - **Frente de conteúdo:** **C1 🧪:** o plano de 15/11 perdeu posts por limite de chamadas do Supabase (causa nos logs); correção no PR do C1, conferir no domingo 22/11. C2 ✅ (16/11). Depois: C3 (construir os formatos aprovados) e C5.
   - **Frente 1:** 1.1 ✅ · 1.2 🧪 · **1.3 ✅ (print aprovado em 20/11)**. 1.3b 🧪 (exemplos no ar; falta foto de cômodo vazio) · **1.4 🔨** (D3 ✅ 20/11: o tour em partes já está no código; falta a conferência de destino e a revisão do dono) · **1.5** espera as fotos de passagem da A3 (lista entregue em 21/11).
+- **Evolução da plataforma (22/11):** auditoria das 7 áreas entregue ([AUDITORIA-EVOLUCAO](AUDITORIA-EVOLUCAO.md)); espera o OK do dono. Ordem proposta: A custos → B dashboard → C memória por imóvel → D funil → E formatos → F 2º post sem IA → G upsell. Verba US$ 5.
 - **Esperando o dono:**
   - **D6:** reserva da VPS.
   - **D7:** pitch.
