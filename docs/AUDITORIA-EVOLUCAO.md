@@ -71,6 +71,12 @@ público) continuam valendo para qualquer ângulo novo.
 **Falta:** separar na tela **gerado → aprovado → publicado → alcance → lead → conversão**, cada um com a fonte e "não
 medido" quando não houver integração. Item B: só tela e consulta, sem IA.
 
+**Feito (B, 23/11):** faixa "Da produção ao resultado" acima do "Resultado comercial" (`ContentPipeline.tsx`,
+`useContentPipeline.ts`, regra pura `src/lib/contentPipeline.ts`, teste `scripts/test-content-pipeline.mjs`): gerado →
+aprovado (por uma pessoa, sem arquivadas) → publicado (Instagram) → alcance (só das nossas publicações, com o que o
+Instagram mandou; senão "não medido") → leads → visitas, cada um com a fonte. Fora do modo demonstração. A dica de
+"Visualizações" agora diz que é a abertura da página do imóvel, não o alcance do Instagram.
+
 ## Área 7 — Custos no Owner (o maior buraco)
 | | |
 |---|---|
