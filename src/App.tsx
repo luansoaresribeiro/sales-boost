@@ -485,16 +485,20 @@ function HowItWorksSection({ lang }: { lang: Lang }) {
 ══════════════════════════════════════════════════ */
 const MOCK = {
   pt: {
-    menu: ['Dashboard', 'Reviews', 'Concorrentes', 'Relatório', 'Config'],
-    score: 'Score de Saúde · Jun 2026', login: 'Login / Cadastro', vsPrev: '↑ +12 pts vs. mês anterior', watermark: 'RELATÓRIO',
-    tags: ['Atendimento ↑', 'Preço ok', 'Espera ↓', '3 Ações do Mês'],
-    nextComp: 'Concorrente próx.', topComplaint: 'Top reclamação', waitTime: 'Tempo de espera', pctOneStar: '73% das 1★ reviews',
+    menu: ['Painel', 'Oportunidades', 'Estratégia', 'Imóveis', 'Aprovações'],
+    score: 'Resumo da semana · exemplo', lang: 'PT ▾', login: 'Entrar', vsPrev: 'Growth Score: nota de 0 a 100 do diagnóstico grátis', watermark: 'OPORTUNIDADES',
+    tags: ['Mercado', 'Oportunidade', 'Estratégia', 'Post para aprovar'],
+    items: [['Apto. Leblon', 'post para aprovar', '#FFB05A'], ['Casa Barra da Tijuca', 'tour em rascunho', '#4ade80'], ['Cobertura Ipanema', 'falta foto da varanda', '#f87171']],
+    card1: ['Sinal do mercado', 'Lançamento no bairro', 'com fonte e data'], card2: ['Oportunidade', 'Mostrar o imóvel pela vista', 'aguardando sua avaliação'],
+    stamp: 'Exemplo ilustrativo',
   },
   en: {
-    menu: ['Dashboard', 'Reviews', 'Competitors', 'Report', 'Settings'],
-    score: 'Health Score · Jun 2026', login: 'Login / Sign up', vsPrev: '↑ +12 pts vs. last month', watermark: 'REPORT',
-    tags: ['Service ↑', 'Price ok', 'Wait ↓', '3 Actions this Month'],
-    nextComp: 'Nearest competitor', topComplaint: 'Top complaint', waitTime: 'Wait time', pctOneStar: '73% of 1★ reviews',
+    menu: ['Dashboard', 'Opportunities', 'Strategy', 'Listings', 'Approvals'],
+    score: 'Weekly summary · example', lang: 'EN ▾', login: 'Sign in', vsPrev: 'Growth Score: the 0–100 score from the free diagnosis', watermark: 'OPPORTUNITIES',
+    tags: ['Market', 'Opportunity', 'Strategy', 'Post to approve'],
+    items: [['Leblon apartment', 'post to approve', '#FFB05A'], ['Barra da Tijuca house', 'tour in draft', '#4ade80'], ['Ipanema penthouse', 'balcony photo missing', '#f87171']],
+    card1: ['Market signal', 'New launch in the neighborhood', 'with source and date'], card2: ['Opportunity', 'Show the property by its view', 'waiting for your review'],
+    stamp: 'Illustrative example',
   },
 } as const
 
@@ -560,7 +564,7 @@ function ShowcaseSection({ lang }: { lang: Lang }) {
                     <div key={item} style={{ padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: i === 0 ? ORANGE : 'rgba(255,255,255,0.4)', background: i === 0 ? 'rgba(255,109,41,0.1)' : 'transparent', fontWeight: i === 0 ? 600 : 400 }}>{item}</div>
                   ))}
                   <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {[{ name: 'João Silva', stars: '★★★★★', color: '#4ade80' }, { name: 'Maria Costa', stars: '★★★★☆', color: ORANGE }, { name: 'Pedro Lima', stars: '★★★☆☆', color: '#f87171' }].map((r) => (
+                    {mk.items.map(([name, stars, color]) => ({ name, stars, color })).map((r) => (
                       <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', borderRadius: '8px', background: 'rgba(255,255,255,0.03)' }}>
                         <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(255,109,41,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: ORANGE, fontWeight: 700, flexShrink: 0 }}>{r.name[0]}</div>
                         <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -578,7 +582,7 @@ function ShowcaseSection({ lang }: { lang: Lang }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
                       <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.55)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>{mk.score}</div>
                       <div style={{ display: 'flex', gap: '5px' }}>
-                        {['Eng ▾', mk.login].map((b) => (
+                        {[mk.lang, mk.login].map((b) => (
                           <div key={b} style={{ padding: '4px 10px', borderRadius: '6px', background: 'rgba(0,0,0,0.22)', fontSize: '8px', color: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)' }}>{b}</div>
                         ))}
                       </div>
@@ -586,7 +590,8 @@ function ShowcaseSection({ lang }: { lang: Lang }) {
                     <div style={{ fontFamily: D, fontSize: '9rem', fontWeight: 900, color: 'white', lineHeight: 0.82, letterSpacing: '-0.04em' }}>87</div>
                     <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.52)', marginTop: '10px' }}>{mk.vsPrev}</div>
                     <div aria-hidden style={{ position: 'absolute', bottom: '-18px', left: '14px', fontFamily: D, fontSize: '7.5rem', fontWeight: 900, color: 'rgba(0,0,0,0.14)', lineHeight: 1, whiteSpace: 'nowrap', pointerEvents: 'none', userSelect: 'none' }}>{mk.watermark}</div>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: 'auto', position: 'relative', zIndex: 2 }}>
+                    <div style={{ marginTop: 'auto', marginBottom: '8px', alignSelf: 'flex-start', position: 'relative', zIndex: 2, fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'white', background: 'rgba(0,0,0,0.4)', padding: '3px 8px', borderRadius: '5px' }}>{mk.stamp}</div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', position: 'relative', zIndex: 2 }}>
                       {mk.tags.map((tag) => (
                         <div key={tag} style={{ padding: '5px 13px', borderRadius: '99px', fontSize: '10px', color: 'white', fontWeight: 500, background: 'rgba(0,0,0,0.24)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.13)' }}>{tag}</div>
                       ))}
@@ -594,14 +599,14 @@ function ShowcaseSection({ lang }: { lang: Lang }) {
                   </div>
                   <div style={{ position: 'absolute', right: '18px', top: '18px', width: '155px', display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 2 }}>
                     <div style={{ padding: '11px 13px', borderRadius: '11px', background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                      <div style={{ fontSize: '7px', color: 'rgba(255,255,255,0.45)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{mk.nextComp}</div>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>Bela Vista Rest.</div>
-                      <div style={{ fontSize: '9px', color: ORANGE }}>★ 4.2 · 238 reviews</div>
+                      <div style={{ fontSize: '7px', color: 'rgba(255,255,255,0.45)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{mk.card1[0]}</div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>{mk.card1[1]}</div>
+                      <div style={{ fontSize: '9px', color: ORANGE }}>{mk.card1[2]}</div>
                     </div>
                     <div style={{ padding: '11px 13px', borderRadius: '11px', background: 'rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                      <div style={{ fontSize: '7px', color: 'rgba(255,255,255,0.45)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{mk.topComplaint}</div>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>{mk.waitTime}</div>
-                      <div style={{ fontSize: '9px', color: '#f87171' }}>{mk.pctOneStar}</div>
+                      <div style={{ fontSize: '7px', color: 'rgba(255,255,255,0.45)', marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{mk.card2[0]}</div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>{mk.card2[1]}</div>
+                      <div style={{ fontSize: '9px', color: '#f87171' }}>{mk.card2[2]}</div>
                     </div>
                   </div>
                 </div>
