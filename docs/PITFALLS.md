@@ -5,6 +5,13 @@
 > Ao aprender uma armadilha nova, adicionar aqui no mesmo PR que a corrige
 > (ver [ORCHESTRATION.md](ORCHESTRATION.md)).
 
+## `GET /v1/models` não acusa crédito zerado da Anthropic — 2026-11-23
+- **O que aconteceu:** o crédito acabou às 09:01 UTC de 23/11 e toda a IA parou; o monitor (`ai_anthropic`, `GET /v1/models`)
+  seguiu "ok", porque listar modelos não gasta crédito. O aviso ia pelo Telegram, desligado desde 13/11.
+- **Correção:** serviço `ai_credit` no `platform-monitor`: pedido real de 1 token (`_shared/aiCredit.ts`), "credit balance"
+  = down → incidente crítico + e-mail ao dono (Resend, `user_roles` owner) + `feature_flags.ai_paused` (faixa na tela).
+- **Regra:** checagem de provedor pago tem que exercitar o caminho que cobra, não só a autenticação.
+
 ## Modelo do Diretor ignorado, peça sem imagem no Vault, trava só de número e custo fixo — 2026-11-07 (A.6)
 
 **Template do Diretor ignorado em silêncio.** No educativo (`opts.deck`) o código força `format: carrossel` e `template: livre` mesmo que o Diretor justifique outro modelo (ex.: "faq") no `reasoning` — e o prompt ainda pedia pra ele escolher. O brief e o texto passavam a se contradizer. Hoje `pieceGuard.resolveTemplate` grava `brief.director_template`, explica a troca no `reasoning` e o prompt avisa. Quem mexer em template: rode `scripts/test-piece-guard.mjs`.

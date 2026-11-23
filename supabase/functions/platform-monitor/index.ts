@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { tgFetch, telegramOn } from '../_shared/telegramSwitch.ts'
+import { AI_CREDIT_PROBE, aiCreditStatus, classifyAiCredit } from '../_shared/aiCredit.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -50,6 +51,18 @@ async function runCheck(admin: SupaClient, svc: ServiceRow, cfg: Config, env: Re
     const cost = (tokens / 1000) * COST_PER_1K
     if (cost >= cfg.daily_cost_alert_usd) return { status: 'degraded', latency: null, detail: `Custo de IA hoje US$ ${cost.toFixed(2)} ≥ alerta US$ ${cfg.daily_cost_alert_usd}.` }
     return { status: 'ok', latency: null, detail: `Custo de IA hoje US$ ${cost.toFixed(2)}.` }
+  }
+
+  // IA parada (23/11): pedido mínimo à Anthropic — o /v1/models não acusa crédito zerado.
+  if (t === 'ai_credit') {
+    if (!env.ANTHROPIC_API_KEY) return { status: 'down', latency: null, detail: 'IA parada: ANTHROPIC_API_KEY ausente.' }
+    const { res, ms, err } = await timedFetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify(AI_CREDIT_PROBE),
+    }, 15000)
+    const c = classifyAiCredit(res ? res.status : null, res ? await res.text().catch(() => '') : (err ?? ''))
+    return { status: aiCreditStatus(c.state), latency: ms, detail: c.detail }
   }
 
   if (t === 'agent_errors') {
@@ -136,6 +149,13 @@ function diagnose(svc: ServiceRow, r: CheckResult, recurring: number): {
     root_cause = r.detail.includes('401') ? 'Falha de autenticação com a Anthropic (ANTHROPIC_API_KEY inválida/ausente).' : r.detail.includes('429') ? 'Rate limit da Anthropic.' : 'Provedor de IA indisponível ou lento.'
     suggested_fix = r.detail.includes('401') ? 'Revisar a secret ANTHROPIC_API_KEY.' : 'Reduzir a frequência do ciclo temporariamente; tentar novamente.'
     preventive = 'Monitorar custo/limite e usar o modelo mais leve pra tarefas simples.'
+    auto_recoverable = false
+  } else if (svc.check_type === 'ai_credit') {
+    root_cause = r.detail
+    suggested_fix = r.detail.includes('crédito')
+      ? 'Recarregar o crédito em console.anthropic.com → Settings → Billing. Posts, estratégia e oportunidades voltam sozinhos na próxima rodada; o que já foi aprovado não se perde.'
+      : r.detail.includes('chave') ? 'Revisar a secret ANTHROPIC_API_KEY no Supabase.' : 'Esperar alguns minutos; se continuar, ver status.anthropic.com.'
+    preventive = 'Ligar a recarga automática no console da Anthropic e acompanhar a tela Custos.'
     auto_recoverable = false
   } else if (svc.check_type === 'vps_worker') {
     root_cause = down ? 'O estúdio de vídeo na VPS da Hostinger parou de dar sinal (servidor desligado, reiniciando ou sem internet).' : r.detail
@@ -234,6 +254,11 @@ Deno.serve(async (req) => {
       let result = await runCheck(admin, svc, cfg as Config, env)
       checked++
       await admin.from('platform_health_checks').insert({ service_key: svc.key, status: result.status, latency_ms: result.latency, detail: result.detail })
+
+      // Faixa "geração pausada" na tela do cliente: ligada só com a IA parada de vez (down), desligada quando volta.
+      if (svc.check_type === 'ai_credit' && result.status !== 'unknown') {
+        await admin.from('feature_flags').update({ enabled: result.status === 'down', updated_at: new Date().toISOString() }).eq('key', 'ai_paused')
+      }
 
       const { data: openInc } = await admin.from('platform_incidents').select('id, severity').eq('service_key', svc.key).eq('status', 'open').maybeSingle()
       const bad = result.status === 'down' || result.status === 'degraded'
