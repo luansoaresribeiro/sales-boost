@@ -21,6 +21,7 @@
  */
 import { coverRoomsWithMarks, hookLine, itemMarks, markedPhoto, strengthsCfgFrom, type StrengthsCfg } from '../_shared/strengths.ts'
 import { captionExtrasLine, captionFieldsFrom, type CaptionField } from '../_shared/captionFields.ts'
+import { angleLine, angleOfBrief, audienceOf, itemAnglesCfgFrom, pickAngle, type ItemAnglesCfg } from '../_shared/itemMemory.ts'
 import { loadLessons, lessonsBlock } from '../_shared/contentLessons.ts'
 import { buildPickReason, cleanItemPick, fetchItemCfg, availabilityOf, ownerBlockMessage, saveItemPick, type PickItem } from '../_shared/itemService.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -45,7 +46,7 @@ type SupaClient = ReturnType<typeof createClient>
 interface Photo { url: string; path: string }
 interface CatalogMeta { photos?: Photo[]; staged_photos?: Photo[]; fields?: Record<string, unknown> }
 interface RecipeGroup { recipes: string[]; fonte_midia: string; descricao: string }
-interface FichaConfig { strengths: StrengthsCfg | null; captionFields: CaptionField[]; pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; claimCtx: { terms: string[]; context: string[] } | null; publicText: PublicTextRules | null; publicTextRule: string; currency: string }
+interface FichaConfig { itemAngles: ItemAnglesCfg | null; strengths: StrengthsCfg | null; captionFields: CaptionField[]; pillars: Record<string, number>; production_recipes: Record<string, { etapa_a?: RecipeGroup; etapa_b?: RecipeGroup }>; vocabulary: Record<string, string>; stagingDisclosure: string; ctas: { sem_automacao?: unknown } | null; marketClaims: string[] | null; coverRooms: CoverRooms | null; fieldMap: { price?: string; bedrooms?: string; location?: string; money?: string[] } | null; claimCtx: { terms: string[]; context: string[] } | null; publicText: PublicTextRules | null; publicTextRule: string; currency: string }
 
 async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -72,7 +73,7 @@ async function fetchFichaConfig(admin: SupaClient, verticalKey: string | null): 
     const c = (data?.config ?? {}) as Record<string, unknown>
     if (!c.production_recipes) return null
     const disclosure = String((c.virtual_staging as { disclosure?: string } | undefined)?.disclosure ?? '').slice(0, 200)
-    return { strengths: strengthsCfgFrom(c), captionFields: captionFieldsFrom(c, 'pt'), pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null,
+    return { itemAngles: itemAnglesCfgFrom(c), strengths: strengthsCfgFrom(c), captionFields: captionFieldsFrom(c, 'pt'), pillars: (c.pillars ?? {}) as Record<string, number>, production_recipes: c.production_recipes as FichaConfig['production_recipes'], vocabulary: (c.vocabulary ?? {}) as Record<string, string>, stagingDisclosure: disclosure, ctas: c.ctas && typeof c.ctas === 'object' ? c.ctas as { sem_automacao?: unknown } : null,
       // Trava de afirmação de mercado (claimLock): termos e campos de preço/quartos vêm da ficha (regra 6).
       marketClaims: ((c.opportunity_texts as { market_claims?: { pt?: unknown } } | undefined)?.market_claims?.pt as string[] | undefined)?.filter(x => typeof x === 'string' && x.trim()) ?? null,
       // Capa pelos cômodos da ficha (tour.room_priority / avoid_rooms), igual ao tour em vídeo — nunca a 1ª foto no escuro.
@@ -319,8 +320,10 @@ Deno.serve((req) => withCostScope(async () => {
     if (!ficha.marketClaims) claims.guard = { ...claims.guard, terms: [] }
     const claimsNoNums = { ...claims }
     claims.factNums = allowedValues(facts.texts)
+    // Etapa C (23/11): o ângulo da peça (memória por imóvel) entra no MESMO pedido à IA, sem chamada nova.
+    let angleTxt = ''
     const copy = async (briefing: string) => {
-      const c = await writeCopy(anthropicKey, briefing, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`, claimPromptRule(ficha.marketClaims) + ficha.publicTextRule, String(company.language ?? '').toLowerCase().startsWith('en') ? 'en' : 'pt')
+      const c = await writeCopy(anthropicKey, briefing + angleTxt, `${intentTxt ? `\nINTENÇÃO DA ESTRATÉGIA PARA ESTA PEÇA:\n${intentTxt}\n` : ''}${decision.promptRule}\n`, claimPromptRule(ficha.marketClaims) + ficha.publicTextRule, String(company.language ?? '').toLowerCase().startsWith('en') ? 'en' : 'pt')
       const cap = stripInternalNotes(c.caption), cta = stripInternalNotes(c.cta)
       pieceNotes.push(...cap.notes, ...cta.notes)
       if (c.caption.trim() && !cap.text.trim()) pieceEmptied = true
@@ -366,6 +369,15 @@ Deno.serve((req) => withCostScope(async () => {
       return { top: topPlaces(data, cfg, 3, priorityCategories(cfg, fields)), precise: data?.precision === 'endereco' }
     }
 
+    // Etapa C (23/11): memória do imóvel — ângulos das peças anteriores do MESMO imóvel (mais nova primeiro).
+    const audience = audienceOf(ficha.itemAngles, fields)
+    const angleHistory: (string | null)[] = []
+    if (ficha.itemAngles) {
+      const { data: prev } = await admin.from('marketing_ai_test_content').select('brief').eq('company_id', company.id).eq('item_id', item.id)
+        .not('status', 'in', '(archived,rejected)').order('created_at', { ascending: false }).limit(10)
+      for (const r of (prev ?? []) as { brief: unknown }[]) angleHistory.push(angleOfBrief(r.brief))
+    }
+
     for (const [pillarKey, group] of Object.entries(ficha.production_recipes)) {
       const etapaA = group.etapa_a
       if (!etapaA || etapaA.recipes.length === 0) continue
@@ -388,6 +400,8 @@ Deno.serve((req) => withCostScope(async () => {
           let kind = 'organico'
           let provider = ''
           pieceNotes = []; pieceEmptied = false; pieceClaims = []; pieceCompliance = []
+          const mem = pickAngle(ficha.itemAngles, recipe, fields, marks, angleHistory)
+          angleTxt = angleLine(mem.angle, audience)
 
           if (recipe === 'carrossel_tour') {
             // Até 2 fotos mobiliadas virtualmente (escolhidas pelo dono) entram
@@ -489,18 +503,20 @@ Deno.serve((req) => withCostScope(async () => {
           caption = lock.caption ?? ''
           if (cta || lock.approved) cta = lock.cta ?? ''
           // Avisos pro dono: o do QUERO vem primeiro (o prefixo dele fica intacto — keepQueroNotice) e depois o recado que saiu.
-          const reasoning = [markPick ? `Foto de abertura escolhida pelo ponto forte marcado ("${markPick.mark}").` : null, marks.length ? `Primeira frase pelo ponto forte "${marks[0]}".` : null, lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null, claimNotice(pieceClaims), complianceNotice(pieceCompliance)].filter(Boolean).join(' ') || null
+          const reasoning = [mem.angle ? `Ângulo: ${mem.angle.label}${mem.source === 'receita' ? ' (o da receita)' : mem.why ? ` — ${mem.why}` : ''}.` : null, markPick ? `Foto de abertura escolhida pelo ponto forte marcado ("${markPick.mark}").` : null, marks.length ? `Primeira frase pelo ponto forte "${marks[0]}".` : null, lock.notice, internalNotesNotice(pieceNotes), pieceEmptied ? EMPTY_CAPTION_NOTICE : null, claimNotice(pieceClaims), complianceNotice(pieceCompliance)].filter(Boolean).join(' ') || null
 
           const slot = forcedDate || loose ? { date: forcedDate ?? '', overCapacity: false } : pickSlot(dates, occ, pillarKey, weight)
           const { data: row, error } = await admin.from('marketing_ai_test_content').insert({
             company_id: company.id, kind, idea: item.title, caption, hashtags, cta,
             format: media.length > 1 ? 'carrossel' : 'foto', image_url: media[0]?.url ?? null,
             item_id: item.id, media, pillar: pillarKey, recipe, provider, planned_for: loose ? null : slot.date,
+            ...(ficha.itemAngles ? { brief: { memory: { angle: mem.angle?.key ?? null, objective: labels.familia ?? labels.pilar_ss ?? pillarKey, audience, source: mem.source } } } : {}),
             ...(reasoning ? { reasoning } : {}),
             ...(slidesOut ? { slides: slidesOut } : {}),
           }).select('id').single()
           if (error) { skipped.push({ recipe, reason: error.message }); continue }
           costRef = row!.id as string
+          angleHistory.unshift(mem.angle?.key ?? null)
           // Rótulo num UPDATE à parte e tolerante: sem a migration das colunas, a peça nasce sem rótulo mas nasce.
           // (pillar já foi gravado acima com o pilar de conteúdo da receita = tema.)
           if (labels.familia || labels.pilar_ss) {
