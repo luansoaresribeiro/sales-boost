@@ -3,7 +3,7 @@
 > **Estado real (2026-11-13), que vale acima do aviso abaixo:**
 > - **No ar:**
 >   - Tour virtual contínuo (menu Tour virtual, caminhada Kling entre fotos reais, conferência de ligação v4). Cobre só parte do imóvel: 8 de 22 ambientes na Tespon.
->   - Estúdio na VPS (acabamento 9:16 + encerramento).
+>   - Estúdio de vídeo no GitHub Actions desde 23/11 (acabamento 9:16 + encerramento, rodada a cada 10 min, modo fila `studio_queue`). A VPS foi desligada (servidor `revoked`, nada apagado).
 >   - Mobiliar uma foto (`virtual-staging`).
 > - **Só especificado:** mobiliamento em vídeo, tour do imóvel inteiro (Frente 1) e motor próprio de vídeo (Frente 2). Ver
 >   [PLANO-TOUR-COMPLETO.md](PLANO-TOUR-COMPLETO.md).

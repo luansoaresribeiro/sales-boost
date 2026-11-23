@@ -26,7 +26,6 @@
 - **Evolução da plataforma (22/11):** auditoria das 7 áreas entregue ([AUDITORIA-EVOLUCAO](AUDITORIA-EVOLUCAO.md)); espera o OK do dono. Ordem proposta: A custos → B dashboard → C memória por imóvel → D funil → E formatos → F 2º post sem IA → G upsell. Verba US$ 5.
 - **Estratégia (dono, 23/11, ordem 1 → 2 → 3):** **item 1 🧪 alerta de IA parada:** o monitor faz um pedido mínimo à Anthropic a cada 10 min; crédito zerado abre incidente crítico, manda e-mail ao dono e liga a faixa "geração pausada" no painel do cliente (`feature_flags.ai_paused`). ✅ quando o dono confirmar o e-mail. Depois: item 2 (oportunidade vira ação) e item 3 (tela "O que fazer esta semana"), cada um com plano antes.
 - **Esperando o dono:**
-  - **D6:** reserva da VPS.
   - **D7:** pitch.
   - **Fotos de passagem da A3 (1.5):** o dono encaminha a lista ao corretor e avisa quando as fotos estiverem no cadastro.
   - **DA:** anúncio pago entra no modelo e no preço?
@@ -50,7 +49,7 @@
 | D3 | Tamanho máximo de cada parte do tour (proposta: ~8 passagens, ~50 s) | Dono | P1 | — | ✅ 20/11: social, íntima e lazer; até ~8 passagens e ~50 s por parte; respeitando a arquitetura real |
 | D4 | Verba de teste da Frente 1 | Dono | P0 | — | ✅ 13/11: até **US$ 15** ([DECISIONS](DECISIONS.md#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo)). O provedor de nuvem da Frente 2 continua a decidir quando ela começar |
 | D5 | Telegram: quais avisos viram e-mail; aviso para a A3 (inclui o canal do aviso de visita, ver [CONVERSION](CONVERSION.md)) | Dono | P1 | — | ✅ 16/11: Telegram desligado (flags no banco) e **a A3 foi avisada pelo dono**. ⏳ Falta decidir o canal do aviso de visita ([CONVERSION](CONVERSION.md)) |
-| D6 | VPS: quanto tempo fica de reserva depois da troca | Dono | P2 | 2.3 | ⏳ |
+| D6 | VPS: quanto tempo fica de reserva depois da troca | Dono | P2 | 2.3 | ✅ 23/11: desligada já; estúdio no GitHub |
 | D7 | **Sales Strategy** derivada do [SALES-BOOST.md](SALES-BOOST.md) (fonte oficial, 23/11): reescrever o pitch ([pitch/PITCH.md](../pitch/PITCH.md)) e a estratégia de aquisição/monetização (posicionamento de 23/11: "Real Estate Opportunity & Growth Platform", que substituiu "Technology Partner for Real Estate"); o preço do tour fica como hipótese. | Dono + Agente | P2 | — | ⏳ |
 | D7b | **Website** derivado do [SALES-BOOST.md](SALES-BOOST.md): trocar o texto do site (`src/i18n.ts`, hero "geramos mais visitas") pelo posicionamento e pelo princípio orientador, sem prometer o que é 🔨/🔭 | Agente propõe, dono aprova o texto | P1 | #217 juntado | Texto aprovado pelo dono; site no ar conferido | 🧪 23/11: texto aprovado pelo dono ("aprovar a proposta do site pode trocar") e aplicado em `src/i18n.ts` PT/EN (topo, quadro de exemplo marcado "exemplo", quem somos, 3 produtos, como funciona, plataforma, frase, pra quem é sem o "Em breve", rodapé); prints locais desktop e celular. ✅ quando o bundle no ar for conferido. 23/11: o laptop de exemplo da seção "Plataforma completa" também trocado (aprovado pelo dono: "pode trocar"), com selo "Exemplo ilustrativo". **Achado:** no celular esse laptop já aparecia cortado (antes da troca, conferido no site no ar); correção à parte |
 | DA | Anúncio pago entra no modelo comercial e no preço? (a Campanha voltou à plataforma em 13/11 noite) | Dono | P2 | — | ⏳ |
@@ -136,7 +135,7 @@
 | ID | Item | Resp. | Prior. | Depende de | Pronto quando | Status |
 |---|---|---|---|---|---|---|
 | D5 | Telegram: quais avisos viram e-mail; aviso para a A3 | Dono | P1 | D1 | Decisão registrada | ✅ 16/11 (ver a tabela de decisões acima) |
-| D6 | VPS: quanto tempo fica de reserva depois da troca | Dono | P2 | 2.3 | Decisão registrada | 🔨 23/11: o dono decidiu desligar já. Estúdio no GitHub (`video-studio.yml`, modo fila `studio_queue`); falta o secret `WORKER_TOKEN`, o teste com um tour da Tespon e o dono cancelar a VPS depois de ver o vídeo |
+| D6 | VPS: quanto tempo fica de reserva depois da troca | Dono | P2 | 2.3 | Decisão registrada | ✅ 23/11: o dono decidiu desligar já e aprovou a troca ("pode trocar") depois de ver o vídeo. Prova: trabalho `fc5f5482` montado pelo trabalhador `github-actions` (9:16, 51 s, com encerramento) em 23:15 UTC; `feature_flags.studio_queue` ligado; servidor `srv1824556` marcado `revoked` (desfazer: `status='active'` e `studio_queue` off). Falta só o dono cancelar a VPS na Hostinger |
 | 3.1 | Substitutos por e-mail (alertas da plataforma e de lead) | Agente | P1 | D5 | Alerta de teste chega | 🧪 alertas da plataforma por e-mail no #174; falta o alerta de teste chegar e o alerta de lead |
 | 3.2 | Conferir se os bots antigos (`marketing-bot`, `vendas-bot`, `group-manager`) estão publicados | Agente | P2 | — | Lista do que está no ar | ⏳ |
 | 3.3 | Desligar Telegram e VPS por flag (sem apagar) | Agente | P2 | 2.3, 3.1, **autorização** | Checklist da seção 6 do plano | **Telegram:** 🧪 #174 juntado em 16/11; `telegram_enabled` e `telegram_buddy` = desligados no banco em 16/11 (SQL). Falta a prova no log. **VPS:** ⏳ depois da Frente 2 |
