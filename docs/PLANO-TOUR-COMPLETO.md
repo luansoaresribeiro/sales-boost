@@ -398,6 +398,6 @@ Mantenho a ordem do dono, com um ajuste: a Frente 2 começa só **depois** do te
 | D3 | Tamanho máximo de cada parte do tour (proposta: ~8 passagens, ~50 s) | Define as partes e o custo |
 | D4 | Verba de teste da Frente 1: IA de visão da 1.1/1.2 (~US$ 0,30–0,80 por imóvel) + vídeo do teste. Também a Frente 2 (provedor de nuvem novo) | ✅ 13/11: até US$ 15 para a Frente 1. A Frente 2 decide quando começar |
 | D8 | Um tour pronto pode virar o post do dia (com aprovação)? | ⏳ em aberto |
-| D7 | Reescrever o pitch com o modelo novo, "Technology Partner" e sem anúncios pagos | O pitch atual está desatualizado |
+| D7 | Reescrever o pitch a partir do [SALES-BOOST.md](SALES-BOOST.md) (posicionamento de 23/11, que substituiu o "Technology Partner") | O pitch atual está desatualizado |
 | D5 | Telegram: quais avisos viram e-mail, e o aviso para a A3 | Cliente real usa |
 | D6 | O que fazer com a VPS depois da troca (manter de reserva, por quanto tempo) | Custo fixo × segurança |

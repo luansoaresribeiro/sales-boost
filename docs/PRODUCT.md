@@ -11,9 +11,10 @@
 
 - **Quem somos (operacional):** **sistema de inteligência e geração de demanda comercial para imobiliárias.** A medida
   de sucesso é **visita ao imóvel**, não quantidade de posts.
-- **Posicionamento comercial (só no site e no pitch):** "Technology Partner for Real Estate". Não substitui a definição
-  operacional.
-- **Slogan:** "Sales Boost — gerando mais visitas para o seu imóvel". Visita garantida nunca é prometida.
+- **Posicionamento (23/11):** "Sales Boost — Real Estate Opportunity & Growth Platform": "Identificamos oportunidades
+  comerciais para imobiliárias e ajudamos a transformá-las em ações." Substitui o "Technology Partner for Real Estate" e o
+  slogan "gerando mais visitas". Documento institucional (o que é, problema, público, 5 etapas, produtos, modelo, visão):
+  [SALES-BOOST.md](SALES-BOOST.md). Visita garantida nunca é prometida.
 - **Mercado:** **Brasil** (principalmente o Rio de Janeiro, em português) **e EUA, aberto em 17/11** sem a revisão
   jurídica (risco aceito pelo dono). A ficha dos EUA ainda não existe (E1). Até ela, conta dos EUA roda sem
   agendamentos automáticos. Substitui "EUA depois" de 13/11.
@@ -22,6 +23,7 @@
   - **tour virtual pago**: US$ 15 por tour é **hipótese**, e um imóvel grande custa ~US$ 14 (estimado);
   - **lead qualificado**: sem preço até haver definição e medição ([CONVERSION.md](CONVERSION.md));
   - **Boosts: em aberto.** Não confundir com o preço do tour; a unidade comercial é validada nas conversas;
+  - **hipóteses novas (23/11):** assinatura recorrente, planos com limites e pacotes premium de produção — nada decidido;
   - **anúncios pagos:** voltaram à plataforma como **Campanha** (grupo Pro do menu, 13/11 noite); se entram no preço está em aberto. Criar ou impulsionar anúncio pelo Sales Boost ainda não existe (só leitura do Meta Ads).
 - **Menu Pro e custo do grátis (dono, 13/11 noite, 3):** "Pro" **não é um plano**; é o menu das funções pagas com Boosts
   (a lista é o dono que define). A plataforma é grátis, mas cada conta custa; esse custo é controlado e recuperado pelo

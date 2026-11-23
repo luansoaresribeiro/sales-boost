@@ -1,6 +1,7 @@
 # Sales Boost
 
-**"Sales Boost — gerando mais visitas para o seu imóvel."**
+**Sales Boost — Real Estate Opportunity & Growth Platform.** "Identificamos oportunidades comerciais para imobiliárias e
+ajudamos a transformá-las em ações." O que é, para quem e como funciona: [docs/SALES-BOOST.md](docs/SALES-BOOST.md).
 
 Sistema de inteligência e geração de demanda comercial para imobiliárias. Ele:
 1. lê o mercado;

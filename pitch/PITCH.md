@@ -4,6 +4,11 @@
 > guardado no fim, sem alteração. **Preços ainda NÃO decididos** — tudo de preço abaixo é rascunho.
 > Regra: o pitch só promete o que o produto faz de verdade; o que ainda está sendo construído aparece marcado.
 
+> **Divergência (2026-11-23):** o posicionamento agora é **"Sales Boost — Real Estate Opportunity & Growth Platform"**
+> ("Identificamos oportunidades comerciais para imobiliárias e ajudamos a transformá-las em ações"), em
+> [docs/SALES-BOOST.md](../docs/SALES-BOOST.md). Ele substitui o "Technology Partner for Real Estate" e o slogan "gerando mais
+> visitas" citados abaixo. A reescrita do pitch (D7) parte desse documento.
+
 > **Divergência (2026-11-13) — este pitch está DESATUALIZADO na direção:**
 > - **Como foi escrito (02/11):** sobre um plano por quantidade de posts (US$ 19/29/59).
 > - **O que mudou desde então:**

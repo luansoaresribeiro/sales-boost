@@ -3,11 +3,13 @@
 ## 1. Quem somos
 - **Definição operacional (a que os agentes usam):** sistema de inteligência e geração de demanda comercial para
   imobiliárias. A medida de sucesso é a **visita ao imóvel**, não a quantidade de posts.
-- **Posicionamento comercial (só no site e no pitch):** "Technology Partner for Real Estate".
-- **Slogan:** "Sales Boost — gerando mais visitas para o seu imóvel". Nunca prometer visita garantida.
+- **Posicionamento (dono, 23/11):** "Sales Boost — Real Estate Opportunity & Growth Platform": "Identificamos oportunidades
+  comerciais para imobiliárias e ajudamos a transformá-las em ações." Visita garantida nunca é prometida. Documento
+  institucional: [docs/SALES-BOOST.md](docs/SALES-BOOST.md).
 - **Mercado agora:** Brasil, principalmente o Rio (ficha `imoveis_rio`, canal Instagram), e **EUA, aberto em 17/11** sem a
-  revisão jurídica (risco aceito pelo dono). A ficha dos EUA ainda não existe (E1, na PENDENCIAS).
+  revisão jurídica (risco aceito pelo dono). Ficha dos EUA (`imoveis_us`) criada em 17/11 (E1 ✅).
 - **Modelo em validação, sem preço decidido:** plataforma grátis + tour pago (US$ 15 é hipótese) + lead qualificado.
+  Assinatura, planos com limites e pacotes premium: **hipóteses novas** (23/11), nada decidido.
   **Boosts:** em aberto. **Anúncio pago:** voltou à plataforma (Campanha, grupo Pro, 13/11 noite); entrar no preço está em aberto.
 - **Pro não é plano:** é o menu das funções pagas com Boosts; **a lista é do dono, não mexer**. O grátis tem custo controlado
   e o cliente é guiado, com oferta só no contexto ([JORNADA-DO-CLIENTE](docs/JORNADA-DO-CLIENTE.md), em aprovação).

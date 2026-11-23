@@ -51,7 +51,7 @@
 | D4 | Verba de teste da Frente 1 | Dono | P0 | — | ✅ 13/11: até **US$ 15** ([DECISIONS](DECISIONS.md#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo)). O provedor de nuvem da Frente 2 continua a decidir quando ela começar |
 | D5 | Telegram: quais avisos viram e-mail; aviso para a A3 (inclui o canal do aviso de visita, ver [CONVERSION](CONVERSION.md)) | Dono | P1 | — | ✅ 16/11: Telegram desligado (flags no banco) e **a A3 foi avisada pelo dono**. ⏳ Falta decidir o canal do aviso de visita ([CONVERSION](CONVERSION.md)) |
 | D6 | VPS: quanto tempo fica de reserva depois da troca | Dono | P2 | 2.3 | ⏳ |
-| D7 | Reescrever o pitch ([pitch/PITCH.md](../pitch/PITCH.md)). Entram "Technology Partner for Real Estate" e "sem anúncios pagos"; o preço do tour fica como hipótese | Dono + Agente | P2 | — | ⏳ |
+| D7 | Reescrever o pitch ([pitch/PITCH.md](../pitch/PITCH.md)) **a partir do [SALES-BOOST.md](SALES-BOOST.md)** (posicionamento de 23/11: "Real Estate Opportunity & Growth Platform", que substituiu "Technology Partner for Real Estate"); o preço do tour fica como hipótese. **Junto:** trocar o texto do site (`src/i18n.ts`, hero "geramos mais visitas") pelo posicionamento novo — texto a aprovar pelo dono | Dono + Agente | P2 | — | ⏳ |
 | DA | Anúncio pago entra no modelo comercial e no preço? (a Campanha voltou à plataforma em 13/11 noite) | Dono | P2 | — | ⏳ |
 | D8 | Tour pronto (e cômodo mobiliado) pode virar post? | Dono | P2 | — | ✅ 13/11 (noite): **sim, como post extra**, além do post do dia, só com aprovação ([DECISIONS](DECISIONS.md#2026-11-13-noite--d8-tour-pronto-e-cômodo-mobiliado-viram-post-extra)) |
 | DC | Verba de teste da Frente de conteúdo | Dono | — | — | ✅ 13/11: até **US$ 2** |
