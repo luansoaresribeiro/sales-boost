@@ -237,6 +237,21 @@ async function main() {
   const baseUrl = process.env.SUPABASE_URL, token = process.env.WORKER_TOKEN
   if (!baseUrl || !token) { console.error('SUPABASE_URL/WORKER_TOKEN ausentes'); process.exit(1) }
   await mkdir(TMP, { recursive: true })
+  if (cmd === 'once') {
+    // Estúdio no GitHub Actions (dono, 23/11: sair da VPS): uma rodada — avisa que está vivo, monta tudo o que está na
+    // fila e termina. Sem auto-atualização (o código vem do próprio repositório a cada rodada).
+    log('estúdio (rodada única) ligado', await selfHash())
+    await api(baseUrl, token, 'heartbeat', { info: await info() })
+    const deadline = Date.now() + (Number(a1) || 40) * 60_000
+    let n = 0
+    while (Date.now() < deadline) {
+      const { job } = await api(baseUrl, token, 'claim')
+      if (!job) break
+      await processJob(baseUrl, token, job); n++
+    }
+    log(`rodada terminada: ${n} trabalho(s)`)
+    return
+  }
   log('estúdio de vídeo ligado', await selfHash())
   let lastBeat = 0, lastUpdate = Date.now()
   for (;;) {

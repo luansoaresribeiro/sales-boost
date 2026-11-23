@@ -211,6 +211,8 @@ Fluxo:
 O botão "Testar antes × depois" refaz o vídeo pronto mais recente em
 `vps-test/`, sem mexer no original.
 
+**Saída da VPS (23/11):** o mesmo estúdio roda no GitHub Actions (`.github/workflows/video-studio.yml`, `worker.mjs once`), a cada ~10 min, em modo fila (`feature_flags.studio_queue`): o tour entra na fila sem precisar de servidor online e espera até 90 min. O monitor passa a olhar a fila (trabalho > 30 min = alerta).
+
 **Vigilância:** o monitor da plataforma (`platform-monitor`, a cada 10 min)
 tem o serviço "Estúdio de vídeo (VPS Hostinger)". Com o acabamento ligado,
 se o servidor ficar 5 min sem sinal, chega "🛡️ INCIDENTE CRÍTICO" no Telegram
