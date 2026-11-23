@@ -12,6 +12,8 @@ import { useStrategySummary } from './marketingAi/useStrategySummary'
 import HubBento from './marketingAi/HubBento'
 import CommercialFunnel from './marketingAi/CommercialFunnel'
 import { useCommercialFunnel } from './marketingAi/useCommercialFunnel'
+import ContentPipeline from './marketingAi/ContentPipeline'
+import { useContentPipeline } from './marketingAi/useContentPipeline'
 import { useDecisionKpis } from './marketingAi/useDecisionKpis'
 import { useFlowSummary } from './marketingAi/useFlowSummary'
 import { useAttention } from './marketingAi/useAttention'
@@ -180,6 +182,7 @@ export default function MarketingAiHubPage() {
   const flow = useFlowSummary(company?.id)
   const { kpis: realKpis, loading: kpisLoading } = useDecisionKpis(company?.id)
   const funnel = useCommercialFunnel(company?.id, !demoMode)
+  const production = useContentPipeline(company?.id, !demoMode)
   // Não chamar usePendencias() aqui: ele abre um canal realtime com nome fixo e o DashboardLayout já abre o mesmo —
   // a 2ª inscrição derruba a tela inteira ("cannot add postgres_changes callbacks after subscribe()", 2026-10-30).
   const decisionDemo = useMemo(() => (company && demoMode ? buildDecisionDemo(company.id) : null), [company, demoMode])
@@ -224,6 +227,9 @@ export default function MarketingAiHubPage() {
       </div>
 
       {/* Resultado comercial no topo (dono, 2026-11-12): visualizações → interessados → leads → visitas, e de onde veio. */}
+      {/* Etapa B (dono, 23/11): da produção ao resultado, cada número com a fonte; fora do modo demonstração. */}
+      {!demoMode && <ContentPipeline lang={lang} loading={production.loading || funnel.loading}
+        input={{ ...production.data, instagramConnected: !!company.instagram_user_id, leads: funnel.error ? null : funnel.data?.totals.leads ?? null, visits: funnel.error ? null : funnel.data?.totals.visits ?? null }} />}
       <CommercialFunnel lang={lang} state={funnel} demo={demoMode} />
 
       {/* Bento do topo (C.1, 2026-11-07): próxima ação, aprovações, 4 indicadores, mercado, oportunidades, direcionamento e

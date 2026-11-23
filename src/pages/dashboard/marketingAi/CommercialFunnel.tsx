@@ -11,7 +11,7 @@ const TX = {
   pt: {
     title: 'Resultado comercial', win: `últimos ${FUNNEL_DAYS} dias`, views: 'Visualizações dos imóveis', interested: 'Interessados',
     leads: 'Leads recebidos', visits: 'Visitas agendadas', funnel: 'Funil', byItem: 'De onde veio · por imóvel', byPost: 'De onde veio · por publicação',
-    viewsHint: 'aberturas da página do imóvel', interestedHint: (c: number, m: number) => `${c} clique${c === 1 ? '' : 's'} no WhatsApp/DM · ${m} comentário${m === 1 ? '' : 's'} com interesse`,
+    viewsHint: 'aberturas da página do imóvel pelo link (não é o alcance do Instagram)', interestedHint: (c: number, m: number) => `${c} clique${c === 1 ? '' : 's'} no WhatsApp/DM · ${m} comentário${m === 1 ? '' : 's'} com interesse`,
     leadsHint: (f: number, i: number, o: number) => `formulário ${f} · Instagram ${i}${o ? ` · outros ${o}` : ''} — ainda sem regra de qualificação`,
     visitsHint: 'marcadas no Funil', none: 'ainda sem dados', loading: 'Carregando…', error: 'Não foi possível carregar agora.',
     empty: 'Os números aparecem quando a página do imóvel está no ar e as pessoas chegam pelo link (por exemplo, a DM do "Comente QUERO").',
@@ -21,7 +21,7 @@ const TX = {
   en: {
     title: 'Commercial results', win: `last ${FUNNEL_DAYS} days`, views: 'Property page views', interested: 'Interested',
     leads: 'Leads received', visits: 'Visits scheduled', funnel: 'Funnel', byItem: 'Where it came from · by property', byPost: 'Where it came from · by post',
-    viewsHint: 'property page opens', interestedHint: (c: number, m: number) => `${c} WhatsApp/DM click${c === 1 ? '' : 's'} · ${m} interested comment${m === 1 ? '' : 's'}`,
+    viewsHint: 'property page opens via the link (not Instagram reach)', interestedHint: (c: number, m: number) => `${c} WhatsApp/DM click${c === 1 ? '' : 's'} · ${m} interested comment${m === 1 ? '' : 's'}`,
     leadsHint: (f: number, i: number, o: number) => `form ${f} · Instagram ${i}${o ? ` · other ${o}` : ''} — no qualification rule yet`,
     visitsHint: 'set in the Funnel', none: 'no data yet', loading: 'Loading…', error: 'Could not load right now.',
     empty: 'Numbers show up once a property page is live and people arrive through its link (e.g. the "Comment WANT" DM).',
