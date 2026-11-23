@@ -62,8 +62,11 @@
     arquiteturas da auditoria **complementam** o catálogo editorial aprovado em 16/11; os cards "trend" e "problem" saem do
     setor imóveis.
   - Continua valendo: 1 post por dia, só com foto real, nenhum número sem fonte, nada publicado sem aprovação.
-- **Em aberto:** se o "sim" vale também para as 4 perguntas do fim do [CATALOGO-EDITORIAL](CATALOGO-EDITORIAL.md)
-  (a auditoria não trazia recomendação nelas). Itens C7 a C11 na [PENDENCIAS](PENDENCIAS.md).
+- **Respondido no mesmo dia (dono: "sim pode seguir"):** as 4 perguntas do [CATALOGO-EDITORIAL](CATALOGO-EDITORIAL.md)
+  ficam com as recomendações: **1a** todos os formatos; **2a** o Guia do bairro cita o nome dos lugares, sem avaliar;
+  **3a** o "Isso ou aquilo" mostra o preço quando o cadastro tem; **4a** "A pé daqui"/"Vida a pé" usa a distância em linha
+  reta com o aviso "em linha reta" agora, rota a pé de verdade depois, nunca "minutos a pé" sem rota.
+  Itens C7 a C11 na [PENDENCIAS](PENDENCIAS.md).
 
 ## 2026-11-23 (3) — Respostas curtas, sempre com o que falta do dono
 - **Dono:** "a partir de agora me dê respostas mais curtas e objetivas deixando claro o que ainda falta de mim".

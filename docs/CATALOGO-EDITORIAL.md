@@ -4,8 +4,10 @@
 > um formato só ("Vida a pé"); FAQ e educativo dividem a mesma trava de assunto; entram as arquiteturas por objetivo
 > (visita guiada, custo de morar, objeção honesta, educativo ligado a decisão, captação de imóvel, bastidor).
 
-> **Status: PROPOSTA para o dono aprovar** (item C2 da [PENDENCIAS.md](PENDENCIAS.md); decisão de 13/11 em
-> [DECISIONS.md](DECISIONS.md)). Nenhum código novo antes da aprovação. A construção é o C3.
+> **Status: APROVADO pelo dono** (16/11) e **4 perguntas respondidas em 23/11: 1a, 2a, 3a, 4a** (todos os formatos; nome
+> dos lugares sem avaliar; preço no "Isso ou aquilo" quando o cadastro tem; distância "em linha reta" agora, rota depois).
+> Decisão em [DECISIONS](DECISIONS.md#2026-11-23-4--auditoria-do-conteúdo-aprovada-objetivo-comercial-proprietários-e-c3-ampliado).
+> Construção: C3, junto com as etapas da [AUDITORIA-CONTEUDO](AUDITORIA-CONTEUDO.md).
 >
 > **Pedido do dono:** "não quero só mais templates": 8 a 10 formatos **realmente diferentes**, cada um com objetivo,
 > momento do caminho até a visita, gancho, estrutura slide a slide, dados reais, diferença visual, quando não usar e
