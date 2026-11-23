@@ -730,10 +730,12 @@ function IcpSection({ lang, onDiagClick }: { lang: Lang; onDiagClick: () => void
                   </li>
                 ))}
               </ul>
-              <div className="mb-7 pt-6" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                <h4 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: MUTED }}>{tx.secondaryLabel}</h4>
-                <p className="text-sm leading-relaxed" style={{ color: MUTED }}>{tx.secondaryText}</p>
-              </div>
+              {tx.secondaryText ? (
+                <div className="mb-7 pt-6" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                  <h4 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: MUTED }}>{tx.secondaryLabel}</h4>
+                  <p className="text-sm leading-relaxed" style={{ color: MUTED }}>{tx.secondaryText}</p>
+                </div>
+              ) : <div className="mb-7" />}
               <button onClick={onDiagClick} className="w-full py-3.5 rounded-xl font-bold text-sm transition-all" style={{ background: ORANGE, color: '#000', boxShadow: '0 8px 24px rgba(255,109,41,0.25)' }}>
                 {tx.cta}
               </button>
