@@ -30,7 +30,7 @@
 | Aprovação humana | Nada vai ao público (post, DM, resposta) sem aprovação humana. | [07/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-07--etapa-0-nenhuma-publicação-no-instagram-sem-aprovação-humana-dono) |
 | Conformidade | CRECI obrigatório para publicar. O texto público passa pela trava de proteção. | [09/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-09--etapa-1--parte-a-creci-obrigatório-para-publicar-dono-autorizada-em-0711) · [09/11](historico/DECISIONS-2026-11-01-a-09.md#2026-11-09--etapa-1--parte-b-proteção-do-texto-que-vai-ao-público-dono-autorizada-em-0711) |
 | Tour virtual | **Produto à parte** do agente de conteúdo, com fluxo e modelo comercial próprios. Pronto para cliente = **imóvel inteiro**, sem inventar passagem. Pode sair em várias partes. Vídeo do imóvel só no menu Tour virtual. Tour pronto **e cômodo mobiliado** podem virar **post extra**, além do post do dia, só com a aprovação do dono ([D8, 13/11 noite](#2026-11-13-noite--d8-tour-pronto-e-cômodo-mobiliado-viram-post-extra)). **Partes (D3, 20/11):** social, íntima e lazer, até ~8 passagens e ~50 s cada, respeitando a arquitetura real. Mobiliado nunca inventa arquitetura (trava 1.3c). | [13/11](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) · [13/11](#2026-11-13--tour-do-imóvel-inteiro-motor-próprio-e-saída-de-vpstelegram-planejamento-nada-implementado) · [11/11](#2026-11-11-noite--agente-de-conteúdo-só-com-foto-vídeo-do-imóvel-só-no-tour-virtual-avatar-em-breve) · [20/11 tarde](#2026-11-20-tarde--testes-do-tour-primeiro-na-a3-com-condições-d3-d2-trava-do-mobiliado-e-ritmo-de-trabalho) |
-| Conteúdo | O agente de conteúdo cuida **só dos posts e da estratégia editorial**, só com foto. Sem o formato "Quanto você pagaria?". Formatos novos só depois de o dono aprovar o **catálogo editorial** (8 a 10 formatos, com dado real). A Campanha saiu das abas do conteúdo e virou item do menu, no grupo **Pro** (13/11 noite). | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) · [11/11](#2026-11-11-noite--agente-de-conteúdo-só-com-foto-vídeo-do-imóvel-só-no-tour-virtual-avatar-em-breve) · [11/11](#2026-11-11-noite-3--sai-o-formato-quanto-você-pagaria) |
+| Conteúdo | O agente de conteúdo cuida **só dos posts e da estratégia editorial**, só com foto. Sem o formato "Quanto você pagaria?". Formatos novos só depois de o dono aprovar o **catálogo editorial** (8 a 10 formatos, com dado real). A Campanha saiu das abas do conteúdo e virou item do menu, no grupo **Pro** (13/11 noite). **23/11:** organizado por **6 objetivos comerciais**; **proprietários** passam a ser público (máx. 1 peça/semana no início); o C3 inclui as etapas 1 a 3 da [AUDITORIA-CONTEUDO](AUDITORIA-CONTEUDO.md). | [23/11 (4)](#2026-11-23-4--auditoria-do-conteúdo-aprovada-objetivo-comercial-proprietários-e-c3-ampliado) · [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) · [11/11](#2026-11-11-noite--agente-de-conteúdo-só-com-foto-vídeo-do-imóvel-só-no-tour-virtual-avatar-em-breve) · [11/11](#2026-11-11-noite-3--sai-o-formato-quanto-você-pagaria) |
 | Frequência de posts | O plano automático tem **exatamente 1 post por dia, 7 por semana**. DM, "Comente QUERO", stories e mensagens não contam. Faltou material para um dia: usar um formato que não depende de imóvel; nunca deixar o dia vazio nem repetir peça. "Gerar agora" é extra e continua permitido. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
 | Validação comercial | **Sem prazo** (o 17/11 saiu) e **não bloqueia** trabalho técnico aprovado. Continuam bloqueados até ela acontecer: preço do tour, Boosts, preço de lead e Fase 4. Não citar nos relatórios até o dono retomar. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
 | Verbas de teste | **Frente 1 (D4 ✅):** até US$ 15. **Frente de conteúdo:** até US$ 2. O gasto acumulado vai em cada relatório. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
@@ -44,6 +44,26 @@
 | Pontos fortes do imóvel | Marcas de pontos fortes no cadastro (e por cômodo) decidem imóvel, formato, foto, lugares perto e gancho; sem marca = como antes; IA por cômodo **não agora**; correção rápida da legenda primeiro. | [22/11](#2026-11-22--pontos-fortes-do-imóvel-c6-aprovados) |
 | Respostas ao dono | **Curtas e objetivas** (~8 linhas): feito · em andamento · **Falta de você** (sempre no fim). Detalhe técnico fica no PR. Substitui o tamanho do relatório de 13/11 (~15 linhas). | [23/11 (3)](#2026-11-23-3--respostas-curtas-sempre-com-o-que-falta-do-dono) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-23 (4) — Auditoria do conteúdo aprovada: objetivo comercial, proprietários e C3 ampliado
+- **Dono:** "tudo sim" à [AUDITORIA-CONTEUDO](AUDITORIA-CONTEUDO.md), respondendo às perguntas: (1) conteúdo para
+  proprietários entra; (2) organizar o conteúdo por objetivo comercial em vez de pilares; (3) as etapas 1 a 3 da auditoria
+  entram como parte do C3.
+- **Motivo:** a auditoria (116 peças reais, Teste Zero e Tespon) achou texto fixo vazio publicado, 57% de educativo, ~60% das
+  peças com o mesmo CTA, carrossel do imóvel sem argumento e zero conteúdo para proprietários ou de confiança.
+- **O que vale:**
+  - O conteúdo passa a ser organizado por **6 objetivos comerciais** (levar à visita, criar desejo, provar que conhece o
+    bairro, destravar a decisão, captar imóvel, gerar confiança), na ficha (regra 6). Os pilares da ficha e a família viram
+    detalhe do objetivo; o pilar de Social Selling continua no diagnóstico.
+  - **Proprietários** (quem quer vender ou alugar) passam a ser público do agente de conteúdo, com no máximo 1 peça por
+    semana no início, usando o tour como argumento. Nunca prometer prazo de venda nem preço.
+  - O C3 inclui as etapas 1 a 3 da auditoria (fim do texto vazio, teto do educativo, CTA por objetivo, honestidade
+    ampliada, carrossel do imóvel por ponto forte, "custo de morar", biblioteca do setor, nota comercial). Formatos e
+    arquiteturas da auditoria **complementam** o catálogo editorial aprovado em 16/11; os cards "trend" e "problem" saem do
+    setor imóveis.
+  - Continua valendo: 1 post por dia, só com foto real, nenhum número sem fonte, nada publicado sem aprovação.
+- **Em aberto:** se o "sim" vale também para as 4 perguntas do fim do [CATALOGO-EDITORIAL](CATALOGO-EDITORIAL.md)
+  (a auditoria não trazia recomendação nelas). Itens C7 a C11 na [PENDENCIAS](PENDENCIAS.md).
 
 ## 2026-11-23 (3) — Respostas curtas, sempre com o que falta do dono
 - **Dono:** "a partir de agora me dê respostas mais curtas e objetivas deixando claro o que ainda falta de mim".

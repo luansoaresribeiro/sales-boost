@@ -3,6 +3,12 @@
 > Como o sistema decide O QUE criar. Etapas 2-4 do ciclo (ver
 > [ARCHITECTURE.md](ARCHITECTURE.md)).
 
+> **23/11 — direção nova (vale acima do texto abaixo):** [AUDITORIA-CONTEUDO](AUDITORIA-CONTEUDO.md) aprovada pelo dono.
+> O conteúdo passa a ser organizado por **6 objetivos comerciais** (no lugar dos pilares desta página), com proprietários
+> como público. **Divergências registradas, a corrigir em C7–C11:** o modo geral do educativo publica texto fixo vazio
+> (`deckTopic.ts`); a capa gira por contagem (`pickCoverStyle`); os pilares e ganchos de mercado abaixo pedem dado que não
+> existe; a biblioteca global de ganchos é genérica.
+
 ## Ritmo
 
 > **Regra do dono (13/11, tarde) — vale acima do texto abaixo:** o plano automático tem **exatamente 1 post por dia, 7 por
