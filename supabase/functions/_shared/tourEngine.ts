@@ -160,6 +160,15 @@ const STUDIO_MAX_WAIT_MS = 48 * 3_600_000 // tour com encerramento espera o est�
 const STUDIO_MAX_FAILS = 3 // o estúdio recusou o trabalho 3 vezes (ex.: arquivo do encerramento quebrado)
 export const STUDIO_CAP = 'endcard' // o trabalhador informa em info.caps que sabe montar o encerramento
 
+// Modo fila (dono, 23/11: sair da VPS): o estúdio roda no GitHub Actions a cada ~10 min, não fica "online" o tempo todo.
+// Com feature_flags.studio_queue ligado, o trabalho entra na fila mesmo sem servidor online e espera a próxima rodada.
+const QUEUE_MAX_WAIT_MS = 90 * 60_000
+// deno-lint-ignore no-explicit-any
+export async function studioQueueMode(admin: any): Promise<boolean> {
+  const { data } = await admin.from('feature_flags').select('enabled').eq('key', 'studio_queue').maybeSingle()
+  return !!data?.enabled
+}
+
 // deno-lint-ignore no-explicit-any
 async function vpsOnline(admin: any): Promise<boolean> {
   const { data } = await admin.from('worker_nodes').select('id').eq('status', 'active')
@@ -170,7 +179,7 @@ async function vpsOnline(admin: any): Promise<boolean> {
 // deno-lint-ignore no-explicit-any
 async function vpsEnabled(admin: any): Promise<boolean> {
   const { data } = await admin.from('feature_flags').select('enabled').eq('key', 'vps_reel_finish').maybeSingle()
-  return !!data?.enabled && await vpsOnline(admin)
+  return !!data?.enabled && (await studioQueueMode(admin) || await vpsOnline(admin))
 }
 
 // Estúdio pronto pra montar com encerramento: interruptor ligado + servidor online que sabe fazer o encerramento
@@ -179,6 +188,7 @@ async function vpsEnabled(admin: any): Promise<boolean> {
 export async function studioReady(admin: any): Promise<boolean> {
   const { data: flag } = await admin.from('feature_flags').select('enabled').eq('key', 'vps_reel_finish').maybeSingle()
   if (!flag?.enabled) return false
+  if (await studioQueueMode(admin)) return true
   const { data } = await admin.from('worker_nodes').select('info').eq('status', 'active')
     .gt('last_seen_at', new Date(Date.now() - VPS_ONLINE_MS).toISOString()).limit(20)
   return ((data ?? []) as { info?: { caps?: unknown } | null }[]).some(n => Array.isArray(n.info?.caps) && (n.info!.caps as unknown[]).includes(STUDIO_CAP))
@@ -296,8 +306,10 @@ export async function advanceTour(admin: any, supabaseUrl: string, key: string, 
     const a = tour.assembly
     const { data: job } = await admin.from('media_jobs').select('status').eq('id', a.job_id).maybeSingle()
     const waited = Date.now() - new Date(a.vps_since ?? tour.updated_at).getTime()
-    const stuck = !job || job.status === 'failed' || waited > VPS_MAX_WAIT_MS ||
-      (job.status === 'queued' && waited > VPS_IDLE_FALLBACK_MS && !await vpsOnline(admin))
+    const queue = await studioQueueMode(admin)
+    const maxWait = queue ? QUEUE_MAX_WAIT_MS : VPS_MAX_WAIT_MS
+    const stuck = !job || job.status === 'failed' || waited > maxWait ||
+      (!queue && job.status === 'queued' && waited > VPS_IDLE_FALLBACK_MS && !await vpsOnline(admin))
     if (!stuck) return { status: 'processing', done: total, total }
     // Volta pra colagem antiga; a VPS não consegue mais entregar este trabalho (complete exige 'running').
     // Exceção (tour com encerramento): nunca cola sem encerramento — volta a "aguardando estúdio" (3 recusas = falha).
@@ -307,7 +319,7 @@ export async function advanceTour(admin: any, supabaseUrl: string, key: string, 
     }
     const { mode: _m, job_id: _j, vps_since: _s, ...rest } = a
     if (a.endcard) {
-      const fails = (a.vps_fails ?? 0) + (job?.status === 'failed' || waited > VPS_MAX_WAIT_MS ? 1 : 0) // estourar o tempo também conta como recusa
+      const fails = (a.vps_fails ?? 0) + (job?.status === 'failed' || waited > maxWait ? 1 : 0) // estourar o tempo também conta como recusa
       if (fails >= STUDIO_MAX_FAILS) return await failStudio({ ...rest, vps_fails: fails }, 'estúdio de vídeo recusou o trabalho 3 vezes')
       await admin.from('video_tours').update({ assembly: { ...rest, mode: 'wait_studio', vps_fails: fails }, updated_at: now() }).eq('id', tour.id).eq('status', 'assembling')
       return { status: 'processing', done: total, total, waiting: 'studio' }

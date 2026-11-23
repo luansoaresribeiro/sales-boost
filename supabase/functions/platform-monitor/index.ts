@@ -82,6 +82,17 @@ async function runCheck(admin: SupaClient, svc: ServiceRow, cfg: Config, env: Re
   if (t === 'vps_worker') {
     const { data: flag } = await admin.from('feature_flags').select('enabled').eq('key', 'vps_reel_finish').maybeSingle()
     if (!(flag as { enabled?: boolean } | null)?.enabled) return { status: 'ok', latency: null, detail: 'Acabamento desligado — vídeos saem do jeito de antes.' }
+    // Estúdio no GitHub (23/11): não fica online; o sinal de problema é trabalho parado na fila ou falhando.
+    const { data: q } = await admin.from('feature_flags').select('enabled').eq('key', 'studio_queue').maybeSingle()
+    if ((q as { enabled?: boolean } | null)?.enabled) {
+      const { count: late } = await admin.from('media_jobs').select('id', { count: 'exact', head: true }).eq('status', 'queued')
+        .lt('created_at', new Date(Date.now() - 30 * 60_000).toISOString())
+      const { count: bad } = await admin.from('media_jobs').select('id', { count: 'exact', head: true }).eq('status', 'failed')
+        .gte('updated_at', new Date(Date.now() - 60 * 60_000).toISOString())
+      if ((late ?? 0) > 0) return { status: 'down', latency: null, detail: `Estúdio no GitHub: ${late} vídeo(s) há mais de 30 min na fila.` }
+      if ((bad ?? 0) >= 2) return { status: 'degraded', latency: null, detail: `Estúdio no GitHub: ${bad} vídeos falharam na última hora.` }
+      return { status: 'ok', latency: null, detail: 'Estúdio no GitHub (roda a cada ~10 min); fila em dia.' }
+    }
     const { data: node } = await admin.from('worker_nodes').select('last_seen_at').eq('status', 'active')
       .order('last_seen_at', { ascending: false }).limit(1).maybeSingle()
     const seen = (node as { last_seen_at?: string } | null)?.last_seen_at
@@ -158,7 +169,7 @@ function diagnose(svc: ServiceRow, r: CheckResult, recurring: number): {
     preventive = 'Ligar a recarga automática no console da Anthropic e acompanhar a tela Custos.'
     auto_recoverable = false
   } else if (svc.check_type === 'vps_worker') {
-    root_cause = down ? 'O estúdio de vídeo na VPS da Hostinger parou de dar sinal (servidor desligado, reiniciando ou sem internet).' : r.detail
+    root_cause = r.detail.startsWith('Estúdio no GitHub') ? r.detail + ' Ver a aba Actions do GitHub (workflow "Estúdio de vídeo").' : down ? 'O estúdio de vídeo na VPS da Hostinger parou de dar sinal (servidor desligado, reiniciando ou sem internet).' : r.detail
     suggested_fix = 'Os vídeos continuam saindo do jeito de antes, sem acabamento — nada travou. Na Hostinger: VPS → Terminal → `sudo systemctl restart salesboost-worker`. Se não voltar em 2 min: `journalctl -u salesboost-worker -n 50` e mande o resultado pro Claude.'
     preventive = 'O serviço já reinicia sozinho se cair e liga sozinho quando a VPS reinicia.'
     auto_recoverable = false

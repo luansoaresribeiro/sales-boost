@@ -1,0 +1,41 @@
+name: Estúdio de vídeo
+
+# Substitui a VPS (dono, 23/11: "quero desligar agora… e que funcione só com as nossas funcionalidades"). O mesmo estúdio
+# (public/vps/worker.mjs: Node + ffmpeg) roda aqui a cada ~10 min: pega os tours na fila (media_jobs), monta o vídeo
+# 9:16 com transições e encerramento, sobe e termina. Precisa do secret WORKER_TOKEN (token próprio do estúdio, não é
+# chave mestra). Sem o secret, a rodada só avisa e sai sem erro. Só monta trabalho com feature_flags.studio_queue ligado
+# (antes disso a fila continua com a VPS).
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: video-studio
+  cancel-in-progress: false
+
+jobs:
+  studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      SUPABASE_URL: https://miwcxakzyforbahpnpst.supabase.co
+      WORKER_TOKEN: ${{ secrets.WORKER_TOKEN }}
+    steps:
+      - name: Sem token, nada a fazer
+        if: env.WORKER_TOKEN == ''
+        run: echo "::notice::WORKER_TOKEN não configurado — estúdio do GitHub ainda desligado."
+      - uses: actions/checkout@v4
+        if: env.WORKER_TOKEN != ''
+        with:
+          sparse-checkout: public/vps
+      - uses: actions/setup-node@v4
+        if: env.WORKER_TOKEN != ''
+        with:
+          node-version: 20
+      - name: ffmpeg
+        if: env.WORKER_TOKEN != ''
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null && ffmpeg -version | head -1
+      - name: Montar o que está na fila
+        if: env.WORKER_TOKEN != ''
+        run: node public/vps/worker.mjs once 40
