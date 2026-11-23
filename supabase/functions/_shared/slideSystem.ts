@@ -382,6 +382,12 @@ function layoutFecho(c: Ctx, f: SlideFields): string {
   return s
 }
 
+// C8 (Visita guiada, 24/11): 1 linha sobre a foto, embaixo (onde a sombra já escurece). Sem texto = foto pura, como antes.
+function layoutFotoLinha(c: Ctx, f: SlideFields): string {
+  const t = fitText(f.text || '', CW, { maxLines: 2 }, 56, 34, c.m)
+  return blockSvg(c, t, M, Math.max(BODY_TOP, BODY_BOT - t.height), c.text, true)
+}
+
 function layoutTexto(c: Ctx, f: SlideFields, first: boolean): string {
   const t = fitText(f.text || f.title || 'Seu texto aqui.', CW, { maxH: BODY_H }, first ? 76 : 62, 40, c.m, { highlight: f.highlight })
   return blockSvg(c, t, M, centerY(t.height), c.text, true)
@@ -405,7 +411,7 @@ export function svgSlideSystem(f: SlideFields, b: SlideBrand, logo: string | nul
     case 'comparacao': body = layoutComparacao(c, f); break
     case 'destaque': body = layoutDestaque(c, f); break
     case 'fecho': body = layoutFecho(c, f); break
-    case 'foto': body = ''; break
+    case 'foto': body = f.text ? layoutFotoLinha(c, f) : ''; break
     default: body = layoutTexto(c, f, page === 1)
   }
   c.maxY = Infinity   // rodapé e topo (logo, contador, arraste) sempre desenham
