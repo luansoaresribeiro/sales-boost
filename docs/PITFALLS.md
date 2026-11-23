@@ -1196,3 +1196,8 @@ navegador automático com respostas falsas do Supabase (foi assim que este erro 
 - Regra: tudo que precisa ser diferente entre vagas (tema, dica do FAQ, foto do tour) é decidido em `planWeekFromStrategy`,
   de uma vez, e vai na vaga (`theme_idea`, `faq_id`, `week_reserved`). A geração só confere de novo.
 
+
+## Alerta do monitor sem canal (23/11)
+- **Sintoma:** incidente crítico aberto, mas ninguém avisado. No log aparece `alerta sem canal (Telegram desligado e RESEND_API_KEY ausente)`.
+- **Causa:** o Telegram está desligado desde 13/11, e o segredo `RESEND_API_KEY` não existia no Supabase.
+- **Correção:** o dono criou a conta no Resend e guardou a chave em Edge Functions → Secrets. O remetente `onboarding@resend.dev` só entrega para o e-mail da própria conta do Resend, que precisa ser o mesmo do dono em `user_roles`. Para mandar a outros endereços, é preciso verificar um domínio no Resend.
