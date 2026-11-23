@@ -42,7 +42,15 @@
 | Testes na A3 | Para o tour: **primeiro na A3**, só leitura/análise e rascunho sem publicar; custo avisado antes, verba da Frente 1, backup antes de alterar, nada de original apagado ou sobrescrito, nada experimental em Aprovações visível à A3 sem ela concordar. O resto continua 🔴. | [20/11 tarde](#2026-11-20-tarde--testes-do-tour-primeiro-na-a3-com-condições-d3-d2-trava-do-mobiliado-e-ritmo-de-trabalho) |
 | Evolução da plataforma | Auditoria das 7 áreas entregue em 22/11, **execução só com o OK do dono**; 2 posts/dia **não agora** (tem custo); verba de teste US$ 5. | [22/11 (2)](#2026-11-22-2--evolução-inteligente-da-plataforma-auditoria-primeiro-2-postsdia-não-agora) |
 | Pontos fortes do imóvel | Marcas de pontos fortes no cadastro (e por cômodo) decidem imóvel, formato, foto, lugares perto e gancho; sem marca = como antes; IA por cômodo **não agora**; correção rápida da legenda primeiro. | [22/11](#2026-11-22--pontos-fortes-do-imóvel-c6-aprovados) |
+| Respostas ao dono | **Curtas e objetivas** (~8 linhas): feito · em andamento · **Falta de você** (sempre no fim). Detalhe técnico fica no PR. Substitui o tamanho do relatório de 13/11 (~15 linhas). | [23/11 (3)](#2026-11-23-3--respostas-curtas-sempre-com-o-que-falta-do-dono) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-23 (3) — Respostas curtas, sempre com o que falta do dono
+- **Dono:** "a partir de agora me dê respostas mais curtas e objetivas deixando claro o que ainda falta de mim".
+- **Motivo:** o dono se perdeu entre muitos itens e relatórios longos.
+- **Regra:** cada resposta tem até ~8 linhas, em 3 blocos: **feito** (com a prova em 1 linha), **em andamento** e
+  **Falta de você** (lista numerada, sempre no fim, mesmo vazia: "nada"). Custo só quando houver gasto. O detalhe técnico
+  fica no PR. Substitui o tamanho "~15 linhas" do relatório de 13/11 (o resto do formato continua).
 
 ## 2026-11-23 (2) — SALES-BOOST.md é a fonte oficial de verdade; princípio orientador
 

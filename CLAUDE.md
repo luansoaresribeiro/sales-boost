@@ -135,8 +135,8 @@ Pedido pontual (bug, texto de tela) não é direção: atualiza só o doc da ár
   dúvida em "o que depende de você".
 
 ## 7. Formato do relatório final (sempre)
-Português simples, ~15 linhas: o que foi feito · a **prova** (link, print, SQL, teste) · os custos e o **gasto
-acumulado** de cada verba · o que falta · o que depende do dono · "**Docs atualizados:** …" (ou "nada a atualizar").
+Português simples, **curto (~8 linhas, dono 23/11)**: feito (com a **prova** em 1 linha) · em andamento · gasto, só
+se houve · "**Docs atualizados:** …" · e **sempre no fim "Falta de você:"** em lista numerada (ou "nada").
 **PR que espera a revisão do dono:** resumo de **no máximo 6 linhas** (o que mudou, por quê, impacto, o que ele precisa
 decidir); o detalhe técnico fica no PR.
 
