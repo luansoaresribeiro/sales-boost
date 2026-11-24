@@ -133,7 +133,7 @@ vez de duplicar no CLAUDE.md.
 > fim desta seção). O preço do lead **não** está definido: primeiro a definição objetiva e a medição, depois o preço.
 > O modelo de negócio e o simulador estão em [AUDITORIA-CUSTOS.md](AUDITORIA-CUSTOS.md) e [DECISIONS.md](DECISIONS.md).
 
-**Proposta de definição de lead qualificado.** O dono manteve os 7 critérios como **proposta** em 10/11. Os prazos entre colchetes (30 e 7 dias) são **hipóteses a validar com imobiliárias**, não decisões.
+**Definição de lead qualificado: aprovada pelo dono em 24/11** ("proposta do doc"; os prazos de 30 e 7 dias passam a valer). Histórico: em 10/11 era só proposta. Os prazos entre colchetes (30 e 7 dias) são **hipóteses a validar com imobiliárias**, não decisões.
 
 | # | Critério | Como o sistema confere | Hoje |
 |---|---|---|---|
