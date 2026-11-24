@@ -16,6 +16,8 @@ import AgentConfigTab from './marketingAi/AgentConfigTab'
 import LicenseNotice from './LicenseNotice'
 import WeekApproval, { type WeekPieceRow } from './WeekApproval'
 import { weekWindow } from '../../lib/weekApproval'
+import { isOverdue } from '../../lib/rescheduleOverdue'
+import OverdueBlock, { type OverduePiece } from './OverdueBlock'
 
 const EXEC_LABEL_EN: Record<string, string> = { organico: 'Organic', cliente: 'Reply to customer', campanha: 'Campaign' }
 const RISK_EN: Record<string, string> = { high: 'high', medium: 'medium', low: 'low' }
@@ -350,8 +352,10 @@ export default function ApprovalsPage() {
   const { from: wFrom, to: wTo } = weekWindow()
   const inWeek = (p: CalPiece) => !!p.planned_for && p.planned_for >= wFrom && p.planned_for <= wTo
   const weekPieces = pieces.filter(inWeek)
-  const loose = pieces.filter(p => !inWeek(p))
-  const nothing = !loading && pending.length === 0 && content.length === 0 && loose.length === 0 && weekPieces.length === 0
+  // P2 (dono, 24/11): vencidos (data já passou) ficam num bloco próprio com "Remarcar"; não entram na lista solta.
+  const overdue = pieces.filter(p => !inWeek(p) && isOverdue(p.planned_for))
+  const loose = pieces.filter(p => !inWeek(p) && !isOverdue(p.planned_for))
+  const nothing = !loading && pending.length === 0 && content.length === 0 && loose.length === 0 && weekPieces.length === 0 && overdue.length === 0
 
   return (
     <div>
@@ -377,6 +381,11 @@ export default function ApprovalsPage() {
             {/* Lista única — ações universais dos agentes + conteúdo orgânico,
                 combinados por data, cada card já classificado (Orgânico /
                 Responder cliente / Campanha) via ExecBadge. */}
+            {companyId && (
+              <OverdueBlock companyId={companyId} lang={lang} pieces={overdue as unknown as OverduePiece[]}
+                onOpen={id => { const p = pieces.find(x => x.id === id); if (p) setOpenPiece(p) }}
+                onChanged={() => { void load() }} />
+            )}
             {companyId && (
               <WeekApproval companyId={companyId} token={token} lang={lang} reloadKey={reloadKey}
                 pieces={weekPieces as unknown as WeekPieceRow[]}
