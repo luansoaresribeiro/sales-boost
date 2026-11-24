@@ -13,6 +13,9 @@
  * dois estiver desligado, essa empresa não recebe nada naquele ciclo.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { claudeBody, MODEL_WRITE, textOf } from '../_shared/aiModels.ts'
+import { buildReportEmail, emailsReport, factLines, type ReportFacts } from '../_shared/clientReport.ts'
+import { sendOwnerEmail } from '../_shared/ownerEmail.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -61,7 +64,7 @@ Deno.serve(async (req) => {
           results.push({ company_id: company.id, ok: true, skipped: true })
           continue
         }
-        await generateReport(company, period, windowStart, admin, supabaseUrl)
+        await generateReport(company, period, windowStart, admin, supabaseUrl, (reportConfig as { email_owner_companies?: unknown } | null)?.email_owner_companies)
         results.push({ company_id: company.id, ok: true })
       } catch (err) {
         results.push({ company_id: company.id, ok: false, error: String(err) })
@@ -75,67 +78,69 @@ Deno.serve(async (req) => {
   }
 })
 
-async function generateReport(company: Record<string, unknown>, period: Period, windowStart: string, admin: ReturnType<typeof createClient>, supabaseUrl: string) {
+async function generateReport(company: Record<string, unknown>, period: Period, windowStart: string, admin: ReturnType<typeof createClient>, supabaseUrl: string, emailList?: unknown) {
   const companyId = company.id as string
   const name = company.business_name as string
   const type = (company.business_type as string | null) ?? 'negócio'
   const city = (company.city as string | null) ?? 'Brasil'
   const goal = (company.goal as string | null) ?? 'crescer'
+  const today = new Date()
+  const todayIso = today.toISOString().slice(0, 10)
 
-  const [postsRes, reviewsRes, oppsRes, agentActionsRes] = await Promise.all([
-    admin.from('posts').select('status, platform, created_at').eq('company_id', companyId).gte('created_at', windowStart),
-    admin.from('reviews').select('rating, sentiment, source, review_date').eq('company_id', companyId).gte('review_date', windowStart),
-    admin.from('opportunities').select('type, title, value_estimate, status').eq('company_id', companyId).eq('status', 'open'),
-    admin.from('agent_messages').select('content, agent_role, created_at').eq('company_id', companyId).eq('role', 'assistant').gte('created_at', windowStart),
+  // Dados reais do período (dono 24/11): tabelas que o produto usa hoje. Contagem só (head:true), nada inventado.
+  const cnt = (q: any) => q.then((r: { count: number | null }) => r.count ?? 0)
+  const [published, generated, waitingApproval, overdue, opportunitiesNew, leads, visits] = await Promise.all([
+    cnt(admin.from('posts').select('id', { count: 'exact', head: true }).eq('company_id', companyId).not('instagram_media_id', 'is', null).gte('created_at', windowStart)),
+    cnt(admin.from('marketing_ai_test_content').select('id', { count: 'exact', head: true }).eq('company_id', companyId).is('source_id', null).gte('created_at', windowStart)),
+    cnt(admin.from('marketing_ai_test_content').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'vault')),
+    cnt(admin.from('marketing_ai_test_content').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'vault').lt('planned_for', todayIso)),
+    cnt(admin.from('growth_opportunities').select('id', { count: 'exact', head: true }).eq('company_id', companyId).gte('created_at', windowStart)),
+    cnt(admin.from('leads').select('id', { count: 'exact', head: true }).eq('company_id', companyId).gte('created_at', windowStart)),
+    cnt(admin.from('leads').select('id', { count: 'exact', head: true }).eq('company_id', companyId).gte('visit_at', windowStart)),
   ])
-
-  const posts = postsRes.data ?? []
-  const reviews = reviewsRes.data ?? []
-  const opportunities = oppsRes.data ?? []
-  const agentActions = agentActionsRes.data ?? []
-
-  const postsPublished = posts.filter(p => p.status === 'publicado').length
-  const avgRating = reviews.length ? (reviews.reduce((s, r) => s + (r.rating ?? 0), 0) / reviews.length).toFixed(1) : null
-  const negativeReviews = reviews.filter(r => (r.rating ?? 5) <= 2).length
+  const facts: ReportFacts = { published, generated, waitingApproval, overdue, opportunitiesNew, leads, visits }
 
   const periodLabelPt: Record<Period, string> = { weekly: 'da última semana', monthly: 'do último mês', annual: 'do último ano' }
-  const today = new Date()
   const dateStr = today.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })
 
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!
-  const systemPrompt = `Você é o Agente Secretário do ${name} (${type} em ${city}). Objetivo do negócio: ${goal}.
-Você escreve relatórios executivos periódicos, olhando pro panorama do período (não o dia a dia), pro dono do negócio.`
+  const systemPrompt = `Você escreve, em nome da equipe Sales Boost, o relatório periódico para o cliente ${name} (${type} em ${city}). Objetivo do cliente: ${goal}.
+O relatório vai ser lido pelo cliente: tom próximo, claro e profissional, sem jargão técnico.`
 
   const userPrompt = `# Relatório ${PERIOD_LABEL[period]} — ${dateStr}
 
 Dados reais ${periodLabelPt[period]}:
-- Posts publicados: ${postsPublished} (de ${posts.length} criados no total)
-- Avaliações recebidas: ${reviews.length}${avgRating ? ` (nota média ${avgRating})` : ''}, sendo ${negativeReviews} negativas
-- Oportunidades em aberto agora: ${opportunities.length}
-- Ações dos agentes registradas: ${agentActions.length}
+${factLines(facts).map(l => `- ${l}`).join('\n')}
 
 # Sua tarefa:
-Escreva um relatório executivo ${PERIOD_LABEL[period].toLowerCase()} CONCISO (máximo 6 parágrafos curtos), só com base nos dados reais acima — nunca invente número que não está aqui. Tom: direto, orientado a resultado.
+Escreva um relatório ${PERIOD_LABEL[period].toLowerCase()} CONCISO (no máximo 5 parágrafos curtos), só com base nos dados reais acima — nunca invente número, prazo ou resultado que não está aqui. Se um número é zero, diga o que fazer para mudar (sem culpar o cliente).
 Inclua:
-1. Resumo do período (1-2 frases)
-2. Principais números e o que eles significam
-3. O que precisa de atenção
-4. Uma recomendação concreta pro próximo período
-5. Assinatura: "— Agente Secretário 🤖"`
+1. Resumo do período (1–2 frases)
+2. O que os números significam
+3. O que precisa da atenção do cliente (ex.: peças esperando aprovação)
+4. Uma recomendação concreta para o próximo período
+5. Assinatura: "— Equipe Sales Boost"`
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 900, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
+    body: JSON.stringify(claudeBody(MODEL_WRITE, { max_tokens: 900, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] })),
   })
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
   const data = await res.json()
-  const report = data.content?.[0]?.text ?? ''
+  const report = textOf(data)
 
   await admin.from('agent_messages').insert({
     company_id: companyId, role: 'assistant', agent_role: 'ceo',
-    content: `[Agente Secretário • Relatório ${PERIOD_LABEL[period]} • ${dateStr}]\n\n${report}`,
+    content: `[Relatório ${PERIOD_LABEL[period]} • ${dateStr}]\n\n${report}`,
   })
+
+  // Passo 1 (dono, 24/11): o relatório chega ao e-mail do DONO, pronto para encaminhar ao cliente. Só as contas listadas.
+  if (report && emailsReport(emailList, companyId)) {
+    const mail = buildReportEmail({ company: name, periodLabel: PERIOD_LABEL[period], dateStr, report, facts })
+    const sent = await sendOwnerEmail(admin, mail.subject, mail.text)
+    if (!sent.ok) console.error('periodic-report: e-mail ao dono falhou', companyId, sent.reason)
+  }
 
   const chatId = company.telegram_chat_id as number | null
   if (chatId) {
