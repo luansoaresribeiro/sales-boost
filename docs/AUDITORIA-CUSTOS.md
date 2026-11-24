@@ -13,6 +13,20 @@
 >
 > **v0.1** corrige a v0 (revisão do dono, 10/11). A **v1 sai em 17/11**, com custo **medido** por função (as funções do #127, que gravam o custo real, entraram no ar em 10/11).
 
+## v3 (23/11) — modelo por tipo de tarefa (economia de IA)
+- **Antes (30 dias, [medido]):**
+  - posts do plano: US$ 3,08 em 45 posts (~US$ 0,068 cada);
+  - nota de qualidade: US$ 0,27 em 23 (~US$ 0,012 cada);
+  - posts do imóvel: ~US$ 0,012 cada.
+- **Mudança:** `_shared/aiModels.ts` decide o modelo.
+  - **Escrita:** `claude-sonnet-5-5`, US$ 2 / 10 por milhão de tokens (era o Sonnet 4.6, US$ 3 / 15).
+  - **Apoio:** `claude-haiku-5-5`, US$ 0,10 / 0,50 (nota de qualidade, lições, checagem de FAQ).
+  - Os dois rodam sem raciocínio estendido.
+  - O cache das instruções fixas já existia (`cachedContent`) e continua.
+- **Exemplo [estimado]:** uma chamada de 10 mil tokens de entrada e 1 mil de saída custa US$ 0,045 no Sonnet 4.6,
+  US$ 0,030 no Sonnet 5.5 e US$ 0,0015 no Haiku 5.5 (teste `scripts/test-ai-models.mjs`).
+- **Prova:** custo por post e por nota em `agent_performance`, antes × depois. Espera a recarga dos créditos da Anthropic.
+
 ## v2 (22/11) — registro central sem duplicar (etapa A1)
 - **Uma linha por operação:** cada operação que chama a IA (1 post do imóvel, 1 nota de qualidade, 1 refação, 1 post do
   plano) grava 1 linha em `agent_performance` com `operation_id` único (o banco recusa repetir), `ref_id` (a peça),

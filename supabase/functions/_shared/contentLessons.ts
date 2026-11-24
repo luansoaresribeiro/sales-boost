@@ -12,6 +12,7 @@
 // (content-test) e reescreve as regras. Regra é sobre COMO escrever/montar
 // (estilo, repetição, foto, tom) — nunca um "fato" (o avaliador erra fato:
 // já disse que a estação Antero de Quental não existe, e existe).
+import { claudeBody, textOf, MODEL_SUPPORT } from './aiModels.ts'
 type SupaClient = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export const LESSONS_ROLE = 'conteudo_licoes'
@@ -85,12 +86,12 @@ Responda SÓ em JSON: {"lessons":["...","..."]}`
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 800, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify(claudeBody(MODEL_SUPPORT, { max_tokens: 800, messages: [{ role: 'user', content: prompt }] })),
       signal: AbortSignal.timeout(60_000),
     })
     if (!res.ok) { console.error('relearn: IA recusou', res.status); return { lessons: current, changed: false } }
     const data = await res.json()
-    const raw = String(data.content?.[0]?.text ?? '')
+    const raw = textOf(data)
     const obj = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)) as { lessons?: unknown }
     lessons = (Array.isArray(obj.lessons) ? obj.lessons : []).map(x => String(x).trim().slice(0, 160)).filter(Boolean).slice(0, MAX_LESSONS)
   } catch (e) { console.error('relearn falhou', e); return { lessons: current, changed: false } }

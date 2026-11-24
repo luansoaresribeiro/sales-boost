@@ -52,6 +52,7 @@ import { blocks, checkPassages } from '../_shared/passageCheck.ts'
 import { studioReady } from '../_shared/tourEngine.ts'
 import { chooseTour, fetchTourCfg, planTours, previousCaptions, type TourPlan } from '../_shared/tourSlot.ts'
 import { fetchRetry, mapLimit } from '../_shared/rateLimitRetry.ts'
+import { claudeBody, textOf, MODEL_WRITE } from '../_shared/aiModels.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -176,12 +177,12 @@ async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1400
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: cachedContent(prompt, cachePrefix) }] }),
+    body: JSON.stringify(claudeBody(MODEL_WRITE, { max_tokens: maxTokens, messages: [{ role: 'user', content: cachedContent(prompt, cachePrefix) }] })),
   })
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
   const data = await res.json()
-  track?.add('claude-sonnet-4-6', data.usage)   // custo real (A.6): tokens da resposta → aiCost.ts
-  return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+  track?.add(MODEL_WRITE, data.usage)   // custo real (A.6): tokens da resposta → aiCost.ts
+  return textOf(data).replace(/```(?:json)?\n?/g, '').trim()
 }
 
 function parseObj(raw: string): Record<string, unknown> {

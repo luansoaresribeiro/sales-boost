@@ -2,7 +2,7 @@
  * content-test — Área de Testes (QC) da seção Conteúdo.
  *
  * Gera posts de teste com o MESMO motor de geração que o ciclo automático do
- * marketing-ai usa em produção (mesmo modelo claude-sonnet-4-6, mesmo formato
+ * marketing-ai usa em produção (mesmo modelo de escrita, `_shared/aiModels.ts`, mesmo formato
  * de prompt de Content Intelligence, mesma função de imagem generate-image),
  * mas grava numa tabela isolada (marketing_ai_test_content) — nunca na fila
  * principal (marketing_ai_content). Assim a automação nunca enxerga os testes.
@@ -18,6 +18,7 @@ import { requirePaidAccess } from '../_shared/access.ts'
 import { autoRedoEligible, newNumbers } from '../_shared/autoRedo.ts'
 import { stripPieceTexts } from '../_shared/internalNotes.ts'
 import { beginCostOperation, trackUsage, withCostScope } from '../_shared/costScope.ts'
+import { claudeBody, textOf, MODEL_WRITE, MODEL_SUPPORT } from '../_shared/aiModels.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -58,16 +59,16 @@ function defaultConfig(company: Company): Config {
   }
 }
 
-async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1500): Promise<string> {
+async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1500, model = MODEL_WRITE): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify(claudeBody(model, { max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })),
   })
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
   const data = await res.json()
-  trackUsage('claude-sonnet-4-6', data.usage)   // etapa A: soma na operação (nota/refação/geração) desta requisição
-  return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+  trackUsage(model, data.usage)   // etapa A: soma na operação (nota/refação/geração) desta requisição
+  return textOf(data).replace(/```(?:json)?\n?/g, '').trim()
 }
 
 // Analista VISUAL usa a imagem de verdade (Claude com visão) — baixa e
@@ -85,22 +86,22 @@ async function fetchImageBase64(url: string): Promise<{ data: string; mediaType:
   } catch { return null }
 }
 
-async function callClaudeVision(anthropicKey: string, prompt: string, image: { data: string; mediaType: string }, maxTokens = 300): Promise<string> {
+async function callClaudeVision(anthropicKey: string, prompt: string, image: { data: string; mediaType: string }, maxTokens = 300, model = MODEL_SUPPORT): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6', max_tokens: maxTokens,
+    body: JSON.stringify(claudeBody(model, {
+      max_tokens: maxTokens,
       messages: [{ role: 'user', content: [
         { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } },
         { type: 'text', text: prompt },
       ] }],
-    }),
+    })),
   })
   if (!res.ok) throw new Error(`Claude vision error: ${await res.text()}`)
   const data = await res.json()
-  trackUsage('claude-sonnet-4-6', data.usage)
-  return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+  trackUsage(model, data.usage)
+  return textOf(data).replace(/```(?:json)?\n?/g, '').trim()
 }
 
 function parseJsonArray<T>(raw: string): T[] {
@@ -207,7 +208,7 @@ NÃO reduza a nota por: escolha de estilo, gíria, tom mais informal ou ousado, 
 
 Retorne APENAS um JSON: {"score":0,"comment":"1 frase curta — o que está bom, ou o que especificamente não fecha, se houver"}`
 
-  const raw = await callClaude(anthropicKey, prompt, 400)
+  const raw = await callClaude(anthropicKey, prompt, 400, MODEL_SUPPORT)   // nota de qualidade = apoio (modelo barato)
   const parsed = parseJsonLoose<{ score?: number; comment?: string }>(raw)
   const score = Math.max(0, Math.min(100, Math.round(Number(parsed.score ?? 100))))
   const scores: Scores = { coherence: { score, comment: String(parsed.comment ?? '') } }

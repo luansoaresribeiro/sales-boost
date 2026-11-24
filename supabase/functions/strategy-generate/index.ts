@@ -70,6 +70,7 @@ import { hasPaidAccess, requirePaidAccess } from '../_shared/access.ts'
 import { setupMissing } from '../_shared/setupReady.ts'
 import { parseSSConfig, type SSConfig } from '../_shared/socialSelling.ts'
 import { approvePatch, discardPatch, finishPlan, isPendingProposal, proposalOf, refreshPatch, repeatsDiscarded, type ProposalMeta } from '../_shared/strategyLock.ts'
+import { claudeBody, textOf, MODEL_WRITE } from '../_shared/aiModels.ts'
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 type SupaClient = ReturnType<typeof createClient>
@@ -312,12 +313,12 @@ async function callClaude(anthropicKey: string, prompt: string, maxTokens = 2400
   const t0 = Date.now()
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST', headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify(claudeBody(MODEL_WRITE, { max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })),
   })
   if (!res.ok) throw new Error(`Claude: ${await res.text()}`)
   const data = await res.json()
   if (cost) await recordCost(cost, data.usage, Date.now() - t0)
-  return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+  return textOf(data).replace(/```(?:json)?\n?/g, '').trim()
 }
 function parseObj(raw: string): Record<string, unknown> {
   try { return JSON.parse(raw) } catch { /* */ }
@@ -337,7 +338,7 @@ function parseObj(raw: string): Record<string, unknown> {
 const CALL_TIMEOUT_MS = 130_000
 // Grava o custo REAL de 1 chamada (tokens da resposta da Anthropic). Nunca derruba a geração.
 async function recordCost(c: CostCtx, usage: Usage | undefined, latencyMs: number): Promise<void> {
-  const MODEL_ID = 'claude-sonnet-4-6'
+  const MODEL_ID = MODEL_WRITE
   await logAiCost(c.admin, { companyId: c.companyId, role: 'estrategia_ia', taskKey: 'ai_text_strategy', description: `Estratégia · ${c.kind} (texto da IA)`, tokens: totalTokens(breakdownOf(usage)), costUsd: anthropicCostUsd(MODEL_ID, usage), latencyMs, breakdown: breakdownOf(usage) })
 }
 async function callClaudeStep(
@@ -349,7 +350,7 @@ async function callClaudeStep(
       const t0 = Date.now()
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST', headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: tokens, messages: [{ role: 'user', content: cachedContent(prompt, opts.cachePrefix) }] }),
+        body: JSON.stringify(claudeBody(MODEL_WRITE, { max_tokens: tokens, messages: [{ role: 'user', content: cachedContent(prompt, opts.cachePrefix) }] })),
         // Teto por chamada abaixo dos 150s da execução (2026-11-03): antes, uma resposta lenta deixava a execução
         // morrer calada e a estratégia presa em 'generating' (Teste Zero). Agora vira 'failed' com motivo claro.
         signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
@@ -357,7 +358,7 @@ async function callClaudeStep(
       if (!res.ok) { console.error(`callClaudeStep ${label}: Claude respondeu ${res.status}`); return null }
       const data = await res.json()
       if (opts.cost) await recordCost(opts.cost, data.usage, Date.now() - t0)   // cada tentativa paga conta (inclusive a repetida)
-      const text = (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+      const text = textOf(data).replace(/```(?:json)?\n?/g, '').trim()
       const stopReason = String(data.stop_reason ?? '')
       return { text, stopReason }
     } catch (e) { console.error(`callClaudeStep ${label}: erro de rede ou tempo esgotado:`, e); return null }

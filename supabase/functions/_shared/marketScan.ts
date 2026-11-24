@@ -9,6 +9,7 @@
 // (`config.market_hashtags`), nunca hardcoded por setor (regra 6).
 
 // deno-lint-ignore no-explicit-any
+import { claudeBody, textOf, MODEL_WRITE } from './aiModels.ts'
 type Any = any
 
 const APIFY = 'https://api.apify.com/v2'
@@ -24,7 +25,7 @@ const RUN_TIMEOUT_MS = 4 * 60 * 1000
 // ("posts com 3-4 curtidas") e citou bio de concorrente que não lemos — fere a
 // regra de nunca inventar número. Pra ganhar tempo, os textos ficaram mais
 // curtos (menos texto = resposta mais rápida). Testado 2026-10-10.
-const INSIGHTS_MODEL = 'claude-sonnet-4-6'
+const INSIGHTS_MODEL = MODEL_WRITE
 const DAY = 864e5
 
 export const MARKET_SCAN_MONTHLY_CAP = Number(Deno.env.get('MARKET_SCAN_MONTHLY_CAP') ?? '150') || 150
@@ -243,10 +244,10 @@ Responda SÓ JSON: {"descobertas":[{"titulo":"","texto":""}],"ideias":[{"titulo"
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST', headers: { 'x-api-key': ctx.anthropicKey!, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: INSIGHTS_MODEL, max_tokens: 900, messages: [{ role: 'user', content: prompt }] }), signal: AbortSignal.timeout(60_000),
+      body: JSON.stringify(claudeBody(INSIGHTS_MODEL, { max_tokens: 900, messages: [{ role: 'user', content: prompt }] })), signal: AbortSignal.timeout(60_000),
     })
     if (!r.ok) { console.log('[market] claude', r.status); return null }
-    const t = String((await r.json())?.content?.[0]?.text ?? '')
+    const t = textOf(await r.json())
     const j = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1))
     // Corta em fim de palavra (com reticências) se o modelo passar do tamanho pedido.
     const s = (v: unknown, n: number) => { const t = String(v ?? '').trim(); if (t.length <= n) return t; const c = t.slice(0, n - 1); return `${c.slice(0, c.lastIndexOf(' ') > n / 2 ? c.lastIndexOf(' ') : c.length).replace(/[\s,.;:—-]+$/, '')}…` }

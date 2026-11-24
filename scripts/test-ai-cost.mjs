@@ -41,7 +41,7 @@ const strat = readFileSync(new URL('../supabase/functions/strategy-generate/inde
 const cre = readFileSync(new URL('../supabase/functions/creative-generate/index.ts', import.meta.url), 'utf8')
 assert.doesNotMatch(strat, /ESTIMATED_COST_USD|cost_usd: 0\.15|generate: 0\.15/); assert.match(strat, /recordCost\(opts\.cost/); assert.match(strat, /'estrategia_ia'/)
 assert.equal((strat.match(/cost: \{ admin, companyId/g) ?? []).length, 4, 'partes 1, 2, 3 e refresh passam o contexto de custo')
-assert.match(cre, /ai_text_content/); assert.match(cre, /track\?\.add\('claude-sonnet-4-6', data\.usage\)/)
+assert.match(cre, /ai_text_content/); assert.match(cre, /track\?\.add\(MODEL_WRITE, data\.usage\)/)
 ok('strategy-generate: custo real por chamada (sem o US$ 0,15 fixo); creative-generate: 1 linha por peça com os tokens medidos')
 
 // ── 3) estratégia sem custo interno ──────────────────────────────────────────

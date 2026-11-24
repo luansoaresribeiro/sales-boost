@@ -36,6 +36,7 @@
 | Verbas de teste | **Frente 1 (D4 ✅):** até US$ 15. **Frente de conteúdo:** até US$ 2. O gasto acumulado vai em cada relatório. | [13/11 tarde](#2026-11-13-tarde--decisões-do-dono-frequência-catálogo-editorial-revisão-de-prs-verbas-e-frente-de-conteúdo) |
 | VPS e Telegram | **Telegram desligado** (decidido em 13/11, ligado no banco em 16/11; interruptor `feature_flags.telegram_enabled`, **sem apagar**: dá para religar). A aba "Notificações" de Configurações saiu da tela em 19/11 (código e preferências ficam). Alertas da plataforma por **e-mail**. A A3 precisa ser avisada. **VPS sai (23/11, substitui "VPS fica até a Frente 2"):** o mesmo estúdio de vídeo passa a rodar no GitHub Actions (modo fila, `studio_queue`); o dono cancela a VPS **depois** de ver o vídeo de teste. | [13/11 noite](#2026-11-13-noite-2--telegram-desligado-hoje-vps-depois-campanha-volta-com-anúncio-pago-grupo-pro-no-menu) · [23/11 (5)](#2026-11-23-5--vps-desligada-estúdio-de-vídeo-no-github) |
 | Menu Pro | **"Pro" NÃO é um plano.** É um menu que reúne as funções pagas com Boosts (hoje: Tour virtual, Campanha, Business Progress). **Quem entra no Pro é o dono que define; o agente não mexe nessa lista.** Enquanto o Boost não tiver unidade e preço, o Pro mostra e explica as funções, **sem cobrar**. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
+| Modelo da IA | **Por tipo de tarefa** (`_shared/aiModels.ts`): **escrita** (legenda, estratégia, oportunidades, mercado) no Claude Sonnet 5.5; **apoio** (nota de qualidade, lições, checagens) no Claude Haiku 5.5. Os dois sem raciocínio estendido. A API da Claude continua sendo o motor (qualidade do texto vende); recarga automática recomendada. | [23/11 (6)](#2026-11-23-6--frente-de-fechamento-e-modelo-mais-barato-nas-tarefas-de-apoio) |
 | Custo do grátis | A plataforma é grátis, mas cada conta custa (estratégia, mercado, posts). O custo do grátis **precisa ser controlado** e é recuperado pelo que é pago (hoje, principalmente o tour). **Regras propostas, não implementadas** até o dono aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md): teto de US$ 8/mês por conta grátis, conta parada não gera a semana inteira, estratégia completa 1×/semana, **o post do dia nunca é cortado**. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Jornada do cliente | O cliente é **guiado desde a 1ª entrada**. O upsell é **contextual**: aparece quando o cliente acabou de ver valor, só com dado real, e leva ao Pro com a função certa aberta. Conteúdo descobre o imóvel que interessa; o tour aprofunda esse imóvel até a visita. Código só depois de o dono aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md), 1 PR por item. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Liga dos Sonhos | Nunca tocar, nem ler. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
@@ -44,6 +45,25 @@
 | Pontos fortes do imóvel | Marcas de pontos fortes no cadastro (e por cômodo) decidem imóvel, formato, foto, lugares perto e gancho; sem marca = como antes; IA por cômodo **não agora**; correção rápida da legenda primeiro. | [22/11](#2026-11-22--pontos-fortes-do-imóvel-c6-aprovados) |
 | Respostas ao dono | **Curtas e objetivas** (~8 linhas): feito · em andamento · **Falta de você** (sempre no fim). Detalhe técnico fica no PR. Substitui o tamanho do relatório de 13/11 (~15 linhas). | [23/11 (3)](#2026-11-23-3--respostas-curtas-sempre-com-o-que-falta-do-dono) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-23 (6) — Frente de fechamento e modelo mais barato nas tarefas de apoio
+- **Palavras do dono:** "vamos planejar uma frente eficiente para fechar todos estes pontos" e "sim gostei do fato de usar o
+  modelo mais barato em coisas menos importantes".
+- **Frente de fechamento.** Uma onda por vez, 1 PR por item:
+  - onda 0: economia de IA e Hermes;
+  - onda 1: conteúdo C3/C9 → C10 → C11;
+  - onda 2: tour 1.4/1.5;
+  - onda 3: oportunidade → ação, tela "O que fazer esta semana" e jornada.
+
+  O que só depende do dono anda em paralelo (créditos, conversas com imobiliárias, decisões D5/D7/DA/E2).
+- **Modelo da IA por tarefa.**
+  - **Escrita:** Claude Sonnet 5.5, que substitui o Sonnet 4.6 e é mais barato por token.
+  - **Apoio** (nota de qualidade, lições, checagens): Claude Haiku 5.5.
+  - Funções com conversa e ferramentas (chat, Telegram, WhatsApp) ficam como estão até medir.
+- **Motivo:**
+  - o texto é o que o cliente vê, então a escrita continua no modelo forte;
+  - o apoio não aparece ao cliente e custa ~20x menos no Haiku;
+  - meta de −30% no custo por post, medido depois da recarga de créditos.
 
 ## 2026-11-23 (5) — VPS desligada; estúdio de vídeo no GitHub
 - **Dono:** "quero desligar agora, mas quero que depois de eu desligar a gente ainda consiga testar e validar o tour

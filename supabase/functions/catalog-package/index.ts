@@ -38,6 +38,7 @@ import { buildNearbySlides, buildOfferSlides, pickCoverPhoto, type CoverRooms, t
 import { allowedValues } from '../_shared/numberGuard.ts'
 import { complianceNotice, cutPublicText, publicTextPromptRule, publicTextRules, type PublicTextRules } from '../_shared/compliance.ts'
 import { claimPromptRule, captionRewritePrompt, claimCtx, claimNotice, cutClaims, cutHashtags, itemFacts, lockText } from '../_shared/claimLock.ts'
+import { claudeBody, textOf, MODEL_WRITE } from '../_shared/aiModels.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -55,12 +56,12 @@ async function callClaude(anthropicKey: string, prompt: string, maxTokens = 700)
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify(claudeBody(MODEL_WRITE, { max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })),
   })
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
   const data = await res.json()
-  trackUsage('claude-sonnet-4-6', data.usage)   // etapa A: custo real da peça (cada chamada soma na operação da peça)
-  return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+  trackUsage(MODEL_WRITE, data.usage)   // etapa A: custo real da peça (cada chamada soma na operação da peça)
+  return textOf(data).replace(/```(?:json)?\n?/g, '').trim()
 }
 function parseObj(raw: string): Record<string, unknown> {
   try { return JSON.parse(raw) } catch { /* */ }
