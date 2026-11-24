@@ -1,7 +1,7 @@
 name: PR checks
 
 # Roda em todo PR pro main. Não publica nada — só confere se o código
-# compila (checagem de tipos + build) e passa no lint. Deploy é feito pela integração Git
+# compila (checagem de tipos + build), passa no lint e nos testes automáticos (scripts/test-*.mjs). Deploy é feito pela integração Git
 # da Cloudflare (Workers Builds) depois do merge aprovado pelo dono.
 on:
   pull_request:
@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'   # 22: roda os testes .ts com --experimental-strip-types
           cache: 'npm'
 
       - name: Install dependencies
@@ -32,3 +32,12 @@ jobs:
       # Só erros travam o PR; avisos (dívida antiga) aparecem no log.
       - name: Lint
         run: npm run lint
+
+      # Testes automáticos das regras (puros, sem rede nem banco). Antes só rodavam quando alguém lembrava.
+      - name: Testes automáticos
+        run: |
+          fail=0
+          for f in scripts/test-*.mjs; do
+            if node --experimental-strip-types "$f" > /tmp/out.log 2>&1; then echo "ok  $f"; else echo "FALHOU  $f"; tail -20 /tmp/out.log; fail=1; fi
+          done
+          exit $fail
