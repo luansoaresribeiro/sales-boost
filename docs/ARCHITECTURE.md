@@ -224,7 +224,7 @@ preservada aqui pra não se perder na reorganização dos docs.
 O Hermes (a VPS externa) não tem identidade própria — só "veste" o
 prompt/ferramentas que o `hermes-proxy` manda a cada mensagem. Quem executa
 de verdade (criar post, salvar lead) é sempre o `hermes-proxy` (Supabase),
-nunca o Hermes. **Hermes (`HERMES_URL`) hoje é instável** (502/timeout
+nunca o Hermes. **Hermes (`HERMES_URL`) ficou sem servidor em 24/11** (a VPS `srv1824556` foi cancelada; os alertas do monitor foram desligados, ver DECISIONS 24/11). Antes disso já era **instável** (502/timeout
 observados) — por isso o Telegram foi deliberadamente mantido fora desse
 caminho (`telegram-chat` fala direto com a Claude, sem passar pelo Hermes).
 

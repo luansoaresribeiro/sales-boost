@@ -46,6 +46,17 @@
 | Respostas ao dono | **Curtas e objetivas** (~8 linhas): feito · em andamento · **Falta de você** (sempre no fim). Detalhe técnico fica no PR. Substitui o tamanho do relatório de 13/11 (~15 linhas). | [23/11 (3)](#2026-11-23-3--respostas-curtas-sempre-com-o-que-falta-do-dono) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
 
+## 2026-11-24 — Alertas do Hermes desligados
+- **Palavras do dono:** "pode desligar os alertas do hermes".
+- **Motivo:** o Hermes (`HERMES_URL`) roda na VPS `srv1824556`, cancelada na Hostinger em 23/11. O produto não depende
+  dele:
+  - nenhuma das 7 contas tem o módulo antigo "Agentes" ligado;
+  - nenhum agendamento chama o Hermes;
+  - o `run_strategy` do Marketing AI já registra "Hermes fora do ar" e segue.
+- **O que foi feito:** `platform_services.enabled = false` em `hermes_vps` e `edge_hermes_proxy`, e o incidente aberto
+  desses serviços foi fechado. Nada foi apagado: código, funções e dados continuam.
+- **Desfazer:** `enabled = true` nos 2 serviços.
+
 ## 2026-11-23 (6) — Frente de fechamento e modelo mais barato nas tarefas de apoio
 - **Palavras do dono:** "vamos planejar uma frente eficiente para fechar todos estes pontos" e "sim gostei do fato de usar o
   modelo mais barato em coisas menos importantes".
