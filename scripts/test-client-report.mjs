@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 // Roda: node --experimental-strip-types scripts/test-client-report.mjs
 // Relatório do cliente chega ao e-mail do dono, pronto para encaminhar (dono 24/11). Só números reais.
-import { buildReportEmail, emailsReport, factLines } from '../supabase/functions/_shared/clientReport.ts'
+import { buildReportEmail, emailsReport, factLines, reportCompanies } from '../supabase/functions/_shared/clientReport.ts'
 let n = 0; const ok = (m) => { n++; console.log('ok -', m) }
 
 const facts = { published: 2, generated: 7, waitingApproval: 12, overdue: 7, opportunitiesNew: 3, leads: 0, visits: 0 }
@@ -24,4 +24,7 @@ assert.ok(!/from\('opportunities'\)|from\('reviews'\)|status === 'publicado'/.te
 assert.ok(/sendOwnerEmail\(/.test(src) && !/to: \[?company/.test(src)); ok('e-mail vai ao dono, nunca ao cliente')
 const helper = readFileSync(new URL('../supabase/functions/_shared/ownerEmail.ts', import.meta.url), 'utf8')
 assert.ok(/eq\('role', 'owner'\)/.test(helper)); ok('destinatário = dono (user_roles owner)')
+assert.deepEqual(reportCompanies([A3]), [A3]); assert.deepEqual(reportCompanies([]), []); assert.deepEqual(reportCompanies(null), []); ok('só gera relatório para as contas da lista')
+assert.deepEqual(reportCompanies([A3], 'outra-conta'), []); assert.deepEqual(reportCompanies([A3], A3), [A3]); ok('company_id fora da lista é ignorado')
+assert.ok(/\.in\('id', list\)/.test(src) && !/eq\('active', true\)/.test(src)); ok('a função não lê mais todas as contas')
 console.log(`\n${n} testes ok`)

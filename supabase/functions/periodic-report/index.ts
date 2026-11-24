@@ -14,7 +14,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { claudeBody, MODEL_WRITE, textOf } from '../_shared/aiModels.ts'
-import { buildReportEmail, emailsReport, factLines, type ReportFacts } from '../_shared/clientReport.ts'
+import { buildReportEmail, emailsReport, factLines, reportCompanies, type ReportFacts } from '../_shared/clientReport.ts'
 import { sendOwnerEmail } from '../_shared/ownerEmail.ts'
 
 const cors = {
@@ -48,10 +48,11 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: true, reason: `Relatório ${PERIOD_LABEL[period]} está desligado no Agents Control Center.` })
     }
 
-    let query = admin.from('companies').select('id, business_name, business_type, city, goal, telegram_chat_id, notification_prefs')
-    if (body.company_id) query = query.eq('id', body.company_id)
-    else query = query.eq('active', true)
-    const { data: companies } = await query
+    // Dono, 24/11: "pode parar de gerar relatório para as outras contas". Só as contas da lista (opt-in) — a Liga dos
+    // Sonhos e qualquer conta fora dela nunca são lidas. Um company_id fora da lista também é ignorado.
+    const list = reportCompanies((reportConfig as { email_owner_companies?: unknown } | null)?.email_owner_companies, body.company_id)
+    if (!list.length) return json({ ok: true, processed: 0, reason: 'Nenhuma conta na lista de relatórios.' })
+    const { data: companies } = await admin.from('companies').select('id, business_name, business_type, city, goal, telegram_chat_id, notification_prefs').in('id', list)
     if (!companies || companies.length === 0) return json({ ok: true, processed: 0 })
 
     const windowStart = new Date(Date.now() - PERIOD_DAYS[period] * 24 * 60 * 60 * 1000).toISOString()

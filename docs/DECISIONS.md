@@ -58,8 +58,8 @@
   vencidas, oportunidades, leads e visitas. Ele é escrito para o cliente e assinado "Equipe Sales Boost".
 - **Passo 2 (depois, com autorização):** botão "Aprovar e enviar ao cliente", com o domínio getsaleboost.com
   verificado no Resend. Mexe no DNS, então é 🔴.
-- **Achado a decidir:** a geração do relatório roda para **todas** as contas, inclusive a Liga dos Sonhos. Isso já era
-  assim antes desta mudança. O e-mail é só para a lista; desligar a geração das outras contas espera o dono.
+- **Contas fora da lista:** o dono decidiu "pode parar de gerar relatório para as outras contas". A função lê e gera só
+  as contas da lista, e a Liga dos Sonhos não é mais lida. Antes, gerava para todas as contas ativas.
 
 ## 2026-11-24 — Alertas do Hermes desligados
 - **Palavras do dono:** "pode desligar os alertas do hermes".

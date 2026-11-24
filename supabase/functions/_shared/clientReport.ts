@@ -48,3 +48,9 @@ export function buildReportEmail(a: { company: string; periodLabel: string; date
 export function emailsReport(list: unknown, companyId: string): boolean {
   return Array.isArray(list) && list.includes(companyId)
 }
+
+/** Contas que geram relatório: só as da lista do dono; com company_id explícito, só se ele estiver na lista. */
+export function reportCompanies(list: unknown, companyId?: string | null): string[] {
+  const ids = Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : []
+  return companyId ? ids.filter(x => x === companyId) : ids
+}
