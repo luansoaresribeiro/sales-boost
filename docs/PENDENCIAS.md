@@ -29,6 +29,7 @@
 - **Relatório do cliente por e-mail ao dono (passo 1, dono 24/11) 🧪:** sai na segunda às 11h UTC (8h de Brasília). ✅ quando o dono receber o 1º (precisa de crédito da Anthropic). Só as contas da lista geram relatório (dono, 24/11; a Liga dos Sonhos não é mais lida).
 - **Lembrete das aprovações paradas (dono, 24/11) 🧪:** e-mail diário ao dono (depois das 9h, no máximo 1 por dia) com os posts vencidos e os que esperam aprovação nos próximos 7 dias, só das contas em `monitor_config.approval_digest_companies` (hoje só a A3; o cliente não recebe nada). ✅ quando o dono confirmar o 1º e-mail.
 - **Plano dos 5 pontos (dono, 24/11 (2)):** P1 testes no GitHub (#231) → P2 ciclo da A3 (lembrete #232 + bloco "Passou da data" em Aprovações) → P3 lead qualificado + "visita marcada" → P4 pagamento em dia (7 dias de tolerância; contas antigas liberadas) → P5 créditos (dono). Depois volta a frente de conteúdo.
+- **P2b — bloco "Passou da data" em Aprovações (dono, 24/11) 🧪:** os posts esperando aprovação com data já passada saem da lista solta e ganham um bloco próprio com "Remarcar para os próximos dias livres" (1 post por dia, começando amanhã, só muda a data; `src/lib/rescheduleOverdue.ts`, 8 testes). ✅ com o print no ar e a A3 remarcando os 7 vencidos.
 - **Esperando o dono:**
   - **D7:** pitch.
   - **Fotos de passagem da A3 (1.5):** o dono encaminha a lista ao corretor e avisa quando as fotos estiverem no cadastro.
