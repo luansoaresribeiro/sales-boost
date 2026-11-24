@@ -15,9 +15,10 @@
 // mostra a seção antiga "Pronto pra gerar conversas?").
 
 // deno-lint-ignore no-explicit-any
+import { claudeBody, textOf, MODEL_WRITE } from './aiModels.ts'
 type Any = any
 
-const MODEL = 'claude-sonnet-4-6' // o mesmo das "descobertas" do mercado (marketScan.ts)
+const MODEL = MODEL_WRITE // o mesmo das "descobertas" do mercado (marketScan.ts)
 export const SOCIAL_SELLING_MONTHLY_CAP = Number(Deno.env.get('SOCIAL_SELLING_MONTHLY_CAP') ?? '300') || 300
 
 export interface SSCategory { key: string; name: string; hint: string }
@@ -118,10 +119,10 @@ Responda SÓ JSON: {"posts":[{"n":1,"c":""}],"pilares":{"<chave>":""},"resposta"
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST', headers: { 'x-api-key': ctx.anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 1800, messages: [{ role: 'user', content: prompt }] }), signal: AbortSignal.timeout(60_000),
+      body: JSON.stringify(claudeBody(MODEL, { max_tokens: 1800, messages: [{ role: 'user', content: prompt }] })), signal: AbortSignal.timeout(60_000),
     })
     if (!r.ok) { console.log('[social-selling] claude', r.status); return null }
-    const t = String((await r.json())?.content?.[0]?.text ?? '')
+    const t = textOf(await r.json())
     j = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1))
   } catch (e) { console.log('[social-selling] falhou', String(e)); return null }
 

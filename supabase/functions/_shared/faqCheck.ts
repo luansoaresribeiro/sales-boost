@@ -10,6 +10,7 @@
 // - O POST feito com a dica continua precisando da aprovação do dono (regra 1).
 // Tudo que é de setor (categorias, temas, domínios oficiais) vive na ficha
 // (`config.faq`, regra 6).
+import { claudeBody, textOf, MODEL_WRITE, MODEL_SUPPORT } from './aiModels.ts'
 type Admin = { from: (t: string) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export interface FaqConfig {
@@ -32,7 +33,7 @@ export interface FaqCheck {
 export interface FaqMeta { category?: string; origin?: 'ia' | 'dono'; check?: FaqCheck; used_count?: number }
 export interface FaqRow { id: string; title: string; content: string; meta: FaqMeta | null }
 
-const MODEL = 'claude-sonnet-4-6'
+const MODEL = MODEL_WRITE
 
 export async function fetchFaqConfig(admin: Admin, verticalKey: string | null): Promise<FaqConfig | null> {
   if (!verticalKey || verticalKey === 'generico') return null
@@ -94,18 +95,18 @@ export function isDue(meta: FaqMeta | null | undefined, now = Date.now()): boole
   return !!c && (c.status === 'conferida' || c.status === 'corrigida') && !!c.next_check_at && Date.parse(c.next_check_at) <= now
 }
 
-export const CHEAP_MODEL = 'claude-haiku-4-5-20251001'
+export const CHEAP_MODEL = MODEL_SUPPORT
 // `onUsage` (opcional, A.6): recebe model + usage da resposta pra quem quiser medir o custo real (aiCost.ts). Sem ele, igual a antes.
 export async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1200, model = MODEL, onUsage?: (model: string, usage: { input_tokens?: number; output_tokens?: number } | undefined) => void): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify(claudeBody(model, { max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })),
   })
   if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`)
   const data = await res.json()
   try { onUsage?.(model, data.usage) } catch { /* medir custo nunca derruba a chamada */ }
-  return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+  return textOf(data).replace(/```(?:json)?\n?/g, '').trim()
 }
 export function parseJson<T>(raw: string, fallback: T): T {
   try { return JSON.parse(raw) as T } catch { /* */ }

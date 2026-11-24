@@ -37,6 +37,7 @@ import { fitsCap } from '../_shared/spendCap.ts'
 import { generateOpportunityPieces, type Dispatch } from '../_shared/opportunityPiecesRun.ts'
 import { PUBLIC_ACTIONS, getPublicPageState, handlePublicPage, publicCtxFrom, setPublicPage } from '../_shared/publicPageRun.ts'
 import type { Usage } from '../_shared/aiCost.ts'
+import { claudeBody, textOf, MODEL_WRITE } from '../_shared/aiModels.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -161,11 +162,11 @@ async function callClaude(anthropicKey: string, prompt: string, maxTokens = 1200
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify(claudeBody(MODEL_WRITE, { max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })),
   })
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
   const data = await res.json()
-  return (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim()
+  return textOf(data).replace(/```(?:json)?\n?/g, '').trim()
 }
 
 // Mesma Claude/modelo das outras actions, mas devolvendo também os tokens (custo vai pra agent_performance).
@@ -173,13 +174,13 @@ async function callClaudeWithUsage(anthropicKey: string, prompt: string, maxToke
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify(claudeBody(MODEL_WRITE, { max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })),
     signal: AbortSignal.timeout(100_000), // abaixo do teto de 150s da function (PITFALLS)
   })
   if (!res.ok) throw new Error(`Claude error: ${(await res.text()).slice(0, 300)}`)
   const data = await res.json()
   // usage/model: viram dólares e a separação do cache em agent_performance (medição 10/11). `tokens` segue igual (entrada + saída).
-  return { text: (data.content?.[0]?.text ?? '').replace(/```(?:json)?\n?/g, '').trim(), tokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0), usage: data.usage ?? undefined, model: String(data.model ?? 'claude-sonnet-4-6') }
+  return { text: textOf(data).replace(/```(?:json)?\n?/g, '').trim(), tokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0), usage: data.usage ?? undefined, model: String(data.model ?? MODEL_WRITE) }
 }
 
 function parseJsonArray<T>(raw: string): T[] {
@@ -605,11 +606,11 @@ ${contextBlock}`
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 800, system: systemPrompt, messages }),
+    body: JSON.stringify(claudeBody(MODEL_WRITE, { max_tokens: 800, system: systemPrompt, messages })),
   })
   if (!res.ok) throw new Error(`Claude error: ${await res.text()}`)
   const data = await res.json()
-  const reply = data.content?.[0]?.text ?? ''
+  const reply = textOf(data)
 
   await admin.from('marketing_ai_messages').insert({ company_id: company.id, role: 'assistant', content: reply })
   return { reply }

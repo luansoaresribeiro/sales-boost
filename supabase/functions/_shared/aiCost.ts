@@ -10,6 +10,9 @@
 export const PRICE_PER_MTOK: Record<string, { in: number; out: number }> = {
   'claude-sonnet-4-6': { in: 3, out: 15 },
   'claude-haiku-4-5': { in: 1, out: 5 },
+  // Economia de IA (23/11): escrita no Sonnet 5.5, apoio no Haiku 5.5 (preço de lista; Haiku até 100 mil tokens por pedido).
+  'claude-sonnet-5-5': { in: 2, out: 10 },
+  'claude-haiku-5-5': { in: 0.1, out: 0.5 },
 }
 const DEFAULT_PRICE = PRICE_PER_MTOK['claude-sonnet-4-6']
 
