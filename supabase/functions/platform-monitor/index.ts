@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { tgFetch, telegramOn } from '../_shared/telegramSwitch.ts'
 import { AI_CREDIT_PROBE, aiCreditStatus, classifyAiCredit } from '../_shared/aiCredit.ts'
+import { buildApprovalDigest, digestDue, todayBRT, type DigestRow } from '../_shared/approvalDigest.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -16,6 +17,7 @@ interface Config {
   enabled: boolean; auto_recovery: boolean; notify_telegram: boolean; admin_telegram_chat_id: string | null
   latency_warn_ms: number; latency_crit_ms: number; error_rate_warn: number; error_rate_crit: number
   daily_cost_alert_usd: number; incident_retention_days: number
+  approval_digest_companies?: string[] | null; approval_digest_sent_on?: string | null
 }
 interface CheckResult { status: Status; latency: number | null; detail: string }
 
@@ -219,6 +221,24 @@ async function sendOpsAlert(admin: any, cfg: Config, env: { TELEGRAM_BOT_TOKEN?:
   } catch (e) { console.error('platform-monitor: e-mail de alerta falhou', e) }
 }
 
+async function sendApprovalDigest(admin: any, cfg: Config, env: { TELEGRAM_BOT_TOKEN?: string }) {
+  const ids = (cfg.approval_digest_companies ?? []).filter(x => typeof x === 'string').slice(0, 20)
+  const today = todayBRT()
+  const in7 = new Date(Date.parse(`${today}T12:00:00Z`) + 7 * 86400_000).toISOString().slice(0, 10)
+  const rows: DigestRow[] = []
+  for (const id of ids) {
+    const { data: co } = await admin.from('companies').select('business_name').eq('id', id).maybeSingle()
+    const { data: late } = await admin.from('marketing_ai_test_content').select('planned_for').eq('company_id', id).eq('status', 'vault').lt('planned_for', today).order('planned_for', { ascending: true }).limit(50)
+    const { count: next } = await admin.from('marketing_ai_test_content').select('id', { count: 'exact', head: true }).eq('company_id', id).eq('status', 'vault').gte('planned_for', today).lte('planned_for', in7)
+    const lateRows = (late ?? []) as { planned_for: string | null }[]
+    rows.push({ name: String((co as { business_name?: string } | null)?.business_name ?? 'Conta'), overdue: lateRows.length, nextDays: next ?? 0, oldestOverdue: lateRows[0]?.planned_for ?? null })
+  }
+  const text = buildApprovalDigest(rows)
+  if (text) await sendOpsAlert(admin, cfg, env, text)
+  // Marca o dia mesmo sem e-mail (nada parado), para não consultar de novo a cada 10 min.
+  await admin.from('monitor_config').update({ approval_digest_sent_on: today }).eq('id', true)
+}
+
 async function sendTelegram(token: string, chatId: string, text: string) {
   try {
     await tgFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -309,6 +329,11 @@ Deno.serve(async (req) => {
           await sendOpsAlert(admin, cfg as Config, env, `✅ SERVIÇO RECUPERADO\n${svc.name} voltou a funcionar normalmente.\n\nStatus atual: ${result.detail ?? 'OK'}${result.latency ? ` (${result.latency}ms)` : ''}`)
         }
       }
+    }
+
+    // Lembrete diário das aprovações paradas (dono, 24/11): só para o dono, só nas contas listadas na config.
+    if (isCron && digestDue({ companies: cfg.approval_digest_companies, sentOn: cfg.approval_digest_sent_on ?? null })) {
+      try { await sendApprovalDigest(admin, cfg as Config, env) } catch (e) { console.error('platform-monitor: lembrete de aprovações falhou', e) }
     }
 
     // Retenção: limpa incidentes resolvidos antigos e checagens antigas.
