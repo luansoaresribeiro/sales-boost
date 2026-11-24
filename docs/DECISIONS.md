@@ -37,6 +37,7 @@
 | VPS e Telegram | **Telegram desligado** (decidido em 13/11, ligado no banco em 16/11; interruptor `feature_flags.telegram_enabled`, **sem apagar**: dá para religar). A aba "Notificações" de Configurações saiu da tela em 19/11 (código e preferências ficam). Alertas da plataforma por **e-mail**. A A3 precisa ser avisada. **VPS sai (23/11, substitui "VPS fica até a Frente 2"):** o mesmo estúdio de vídeo passa a rodar no GitHub Actions (modo fila, `studio_queue`); o dono cancela a VPS **depois** de ver o vídeo de teste. | [13/11 noite](#2026-11-13-noite-2--telegram-desligado-hoje-vps-depois-campanha-volta-com-anúncio-pago-grupo-pro-no-menu) · [23/11 (5)](#2026-11-23-5--vps-desligada-estúdio-de-vídeo-no-github) |
 | Menu Pro | **"Pro" NÃO é um plano.** É um menu que reúne as funções pagas com Boosts (hoje: Tour virtual, Campanha, Business Progress). **Quem entra no Pro é o dono que define; o agente não mexe nessa lista.** Enquanto o Boost não tiver unidade e preço, o Pro mostra e explica as funções, **sem cobrar**. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Modelo da IA | **Por tipo de tarefa** (`_shared/aiModels.ts`): **escrita** (legenda, estratégia, oportunidades, mercado) no Claude Sonnet 5.5; **apoio** (nota de qualidade, lições, checagens) no Claude Haiku 5.5. Os dois sem raciocínio estendido. A API da Claude continua sendo o motor (qualidade do texto vende); recarga automática recomendada. | [23/11 (6)](#2026-11-23-6--frente-de-fechamento-e-modelo-mais-barato-nas-tarefas-de-apoio) |
+| Relatórios dos clientes | Chegam ao **e-mail do dono**, prontos para encaminhar (passo 1); só contas em `report_config.email_owner_companies`. Envio direto ao cliente só no passo 2, com autorização. | [24/11 (3)](#2026-11-24-3--relatórios-dos-clientes-enviados-pelo-dono-por-e-mail) |
 | Custo do grátis | A plataforma é grátis, mas cada conta custa (estratégia, mercado, posts). O custo do grátis **precisa ser controlado** e é recuperado pelo que é pago (hoje, principalmente o tour). **Regras propostas, não implementadas** até o dono aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md): teto de US$ 8/mês por conta grátis, conta parada não gera a semana inteira, estratégia completa 1×/semana, **o post do dia nunca é cortado**. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Jornada do cliente | O cliente é **guiado desde a 1ª entrada**. O upsell é **contextual**: aparece quando o cliente acabou de ver valor, só com dado real, e leva ao Pro com a função certa aberta. Conteúdo descobre o imóvel que interessa; o tour aprofunda esse imóvel até a visita. Código só depois de o dono aprovar o [JORNADA-DO-CLIENTE](JORNADA-DO-CLIENTE.md), 1 PR por item. | [13/11 noite, 3](#2026-11-13-noite-3--jornada-do-cliente-custo-do-grátis-onboarding-guiado-upsell-contextual-e-menu-pro) |
 | Liga dos Sonhos | Nunca tocar, nem ler. | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
@@ -45,6 +46,20 @@
 | Pontos fortes do imóvel | Marcas de pontos fortes no cadastro (e por cômodo) decidem imóvel, formato, foto, lugares perto e gancho; sem marca = como antes; IA por cômodo **não agora**; correção rápida da legenda primeiro. | [22/11](#2026-11-22--pontos-fortes-do-imóvel-c6-aprovados) |
 | Respostas ao dono | **Curtas e objetivas** (~8 linhas): feito · em andamento · **Falta de você** (sempre no fim). Detalhe técnico fica no PR. Substitui o tamanho do relatório de 13/11 (~15 linhas). | [23/11 (3)](#2026-11-23-3--respostas-curtas-sempre-com-o-que-falta-do-dono) |
 | Documentação | Todo pedido de direção atualiza os docs no mesmo trabalho (DECISIONS → PENDENCIAS → CLAUDE.md → doc da área → histórico). | [13/11](#2026-11-13--decisões-do-dono-identidade-mercado-modelo-d1-autonomia-e-documentação) |
+
+## 2026-11-24 (3) — Relatórios dos clientes enviados pelo dono, por e-mail
+- **Palavras do dono:** "Os relatórios devem ser enviados pelo dono por e-mail" e "sim, para os clientes, começa pelo passo 1".
+- **Passo 1 (agora):**
+  - o relatório periódico (semanal na segunda, mensal, anual) de cada cliente da lista `report_config.email_owner_companies`
+    (hoje só a A3) chega ao **e-mail do dono**, pronto para encaminhar;
+  - o dono revisa e encaminha;
+  - o cliente não recebe nada direto.
+- **O relatório passa a usar os números reais do produto:** posts publicados, peças criadas e esperando aprovação,
+  vencidas, oportunidades, leads e visitas. Ele é escrito para o cliente e assinado "Equipe Sales Boost".
+- **Passo 2 (depois, com autorização):** botão "Aprovar e enviar ao cliente", com o domínio getsaleboost.com
+  verificado no Resend. Mexe no DNS, então é 🔴.
+- **Achado a decidir:** a geração do relatório roda para **todas** as contas, inclusive a Liga dos Sonhos. Isso já era
+  assim antes desta mudança. O e-mail é só para a lista; desligar a geração das outras contas espera o dono.
 
 ## 2026-11-24 — Alertas do Hermes desligados
 - **Palavras do dono:** "pode desligar os alertas do hermes".
